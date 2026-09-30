@@ -1,48 +1,30 @@
-import assert from "node:assert/strict";
+export { withHeldLock as withHeldDispatch } from "../../client/testing/lock-contention.mjs";
 
-// Delay the real guard's dispatch callback while it owns the usage lock. The
-// contender polls real filesystem ownership, but its acquisition clock advances
-// virtually: no sleep or scheduling race determines whether it gets state_busy.
-export async function withHeldDispatch(t, dispatch, contend) {
-  const entered = Promise.withResolvers(), release = Promise.withResolvers();
-  const holder = dispatch(async () => {
-    entered.resolve();
-    await release.promise;
-    return { operation: Promise.resolve({ terminated: true }) };
-  });
-  await Promise.race([entered.promise, holder.then(() => {
-    throw new Error("holder did not enter the lock");
-  })]);
-  let clock = Date.now(), elapsed = 0;
-  const timers = new Map();
-  const originalClear = globalThis.clearTimeout;
-  const now = t.mock.method(Date, "now", () => clock);
-  // Mock only globals used by the lock/hook, leaving HTTP and child-process
-  // internals on their own timers. Hook deadlines use the same virtual clock.
-  const timeout = t.mock.method(globalThis, "setTimeout", (callback, ms, ...args) => {
-    const timer = {};
-    timers.set(timer, { at: clock + ms, callback: () => callback(...args) });
-    if (ms === 10) queueMicrotask(() => {
-      elapsed += ms;
-      clock += ms;
-      for (const [token, event] of timers) if (event.at <= clock) {
-        timers.delete(token);
-        event.callback();
-      }
-    });
-    return timer;
-  });
-  const clear = t.mock.method(globalThis, "clearTimeout", (timer) => {
-    if (!timers.delete(timer)) originalClear(timer);
-  });
-  try {
-    return await contend();
-  } finally {
-    timeout.mock.restore();
-    clear.mock.restore();
-    now.mock.restore();
-    release.resolve();
-    assert.equal((await holder).ok, true);
-    assert.ok(elapsed >= 250, `holder delayed for ${elapsed} virtual ms`);
-  }
+import assert from "node:assert/strict";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+// Observe the work that Promise.race leaves running after a hook deadline.
+// Only this isolated source copy gains a join handle; behavior/imports are real.
+export async function observedHook(directory) {
+  const original = new URL("../hook.mjs", import.meta.url);
+  const source = await readFile(original, "utf8");
+  const call = "processHook(input,{clientOptions,targetId,launch},\n" +
+    "      ()=>expired || now()-start>=budget)";
+  assert.equal(source.split(call).length, 2, "hook work observation seam must match once");
+  const instrumented = source.replace(call, `observeHookWork(${call})`)
+    .replace(/from (['"])(\.\.?\/[^'"]+)\1/g,
+      (_, quote, specifier) => `from ${quote}${new URL(specifier, original).href}${quote}`);
+  const path = join(directory, "observed-hook.mjs");
+  await writeFile(path, instrumented + `
+const hookWork = new Set();
+function observeHookWork(work) {
+  hookWork.add(work);
+  work.then(() => hookWork.delete(work), () => hookWork.delete(work));
+  return work;
+}
+export async function drainHookWork() { await Promise.all([...hookWork]); }
+`, { mode: 0o600 });
+  return import(pathToFileURL(path).href);
 }

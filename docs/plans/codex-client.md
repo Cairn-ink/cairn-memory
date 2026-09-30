@@ -2233,6 +2233,130 @@ HTTP/child-process timers. The complete final suites have zero skipped,
 cancelled or failed cases. No hosted/model enablement, release/version changes,
 push or PR is part of this follow-up.
 
+CX-3 contention-class follow-up (2026-10-01, SE-5 merge base `a5317cd`): CI's
+second failure was the A9 atomic-cap test assuming every concurrent reserve
+acquires the 250 ms usage lock. The contract remains "All automatic handlers
+catch errors and exit 0" (433), "if this fails, do not launch" (652–653), and
+"Only a later hook for that same host session that supplies the authorized
+source may retry" (658–659). Usage additionally requires "Guard state/reservations
+survive restart" (887), and "Unknown billing is not refunded" (889–890).
+An acquisition failure executes no locked mutation: a busy reserve grants and
+bills nothing; a busy dispatch starts nothing and retains the previously billed
+reservation. A later eligible attempt can retry. These are test-model retries,
+not a product retry loop. No product code or default timeout changes are needed.
+
+The audit followed every `stateLock`/`withFileLock` caller, including indirect
+identity, pause/control, capture and fixture-generator callers, then inspected
+`Promise.all`, parallel child hooks and reserve/dispatch operations. Decisions
+below retain each test's original assertions; an existing generous timeout is
+kept only for an invariant that does not test the acquisition deadline.
+
+| Test / concurrent operation | Choice and invariant |
+| --- | --- |
+| `runtime-usage`: A9 shared atomic cap, three reserves | Hold the first usage publication using the existing write observer and a Promise gate. All other initial reserves must reject with exact `state_busy` under virtual time; join the whole wave, then retry each later eligible reserve. Still exactly two grants, one `concurrency_limited`, `used=2`, two reservations with the exact granted IDs across restart, then the third daily grant and daily-cap refusal. Busy attempts cannot add bills. |
+| `runtime-usage`: A9 simultaneous dispatch and injected termination | Apply the same forced-busy/later-attempt model to both reserves and dispatches. Both operations remain active together until cancellation. Still exactly two starts, cap refusal, `termination_unconfirmed`, the exact cancellation ID set, zero reservations after confirmed termination and `used=2` without refunds or duplicate starts. |
+| `sequences`: eight seeded independent history oracles | Keep the earlier gate and virtual clock plus exact busy outcomes in `allSettled`. Busy changes neither admission nor cursor progress; subsequent authorized attempts preserve unique delivery and project attribution. The shared helper replaces the identical Codex-only helper. |
+| `state-busy`: worker reserve, worker dispatch, Stop preparation | Keep all three real locked-operation gates and virtual time. No send/cursor advance or Stop launch while busy; pending text is admitted once later under the original project, with unchanged accounting. |
+| `round2`: held usage lock cannot turn quota into timeout | Replace the 400 ms sleep and `setImmediate` race with explicit dispatch-completion, holder-entry and release Promises. The real holder remains live through refuse and release, each exhausting 250 virtual ms (500 total). Preserve quota intent/reset, zero acceptance and no second transport call when the later attempt latches the refusal. Other injected `state_busy` refusal rows already have deterministic stubs. |
+| `gates`: A5 live identity publication lock / hook deadline | Promise-gated real holder; virtual lock polls in both the parent and actual hook child. Assert exactly 750 virtual ms, `{}`, unavailable status, child exit 0, no launch and no cursor. Release only after both attempts have returned. A guarded isolated copy observes the real `processHook` Promise, so `finally` joins the actual work left by `Promise.race` before assertions/fixture removal. A second identity probe can return before the original publisher cleans up and is not a join. No shipped source changes or cleanup sleeps. |
+| `capture-lock`: live lock never age-reaped | Static live owner cannot release during acquisition. Virtual polls assert exactly 60 ms, no entry and retained ownership. |
+| `capture-lock`: dead owner recovered without unlinking successor | Recovery, not timeout, is the invariant. Use the existing test option `timeoutMs: 30_000` for both sequential acquisitions instead of 500; preserve both entries and final lock removal. No runtime default changes. |
+| `pairing`: unknown same-namespace liveness; macOS boot tolerance | Static owner fixtures remain live/unknown for the entire operation. Virtual polls assert exactly 30 / 20 ms and exact `setup_busy`, unchanged owner, no unsafe reaping and unchanged Windows refusal. |
+| `pairing`: fresh standalone under busy coordination | The fixture contains a live setup owner, but `resolveClient` is a read path and does not acquire that setup lock. Keep exact standalone/project-ID and no-registration assertions; its `timeoutMs` cannot create a lock race. |
+| `pairing`: same-client contenders (18 children per client) | Keep existing 5,000 ms identity publication timeout and exact ID/HMAC/restart/deletion assertions. Read paths never acquire the short setup lock. |
+| `pairing`: two concurrent unpaired clients | Keep existing 5,000 ms identity publication timeout and the invariant that readers create no install registration. |
+| `pairing`: >16 mixed processes, restart/loss/restore | Keep the 20-child waves and exact same-project IDs. Established paired identities are read, not republished; setup/repair is sequential. |
+| Plugin `identity`: 32 concurrent first uses | Keep existing 5,000 ms publication timeout and exact persistent project ID; all owners are the live test process. |
+| Plugin `identity`: 16 independent processes | Keep existing 5,000 ms publication timeout. Each child reports its ID after publication/cleanup, then waits on stdin EOF. Join all ID results before releasing and joining any children, in `finally`; only then perform the original restart probe, exact two-file inventory, fingerprint and private-mode assertions. This tests atomic identity publication independently of process death/reaping. A stale owner probe followed by early owner exit can legitimately elect a permanent reaper marker; file-lock.mjs deliberately retains those markers. The original ungated Node 24 `npm test` exposed that race (400/401 passed, exit 1). No file-count assertion is relaxed or recovery behavior changed. |
+| Plugin `identity`: 32 telemetry initializations | Atomic link election rather than a polling file lock; preserve one telemetry ID distinct from the project key. |
+| Plugin `pause-capture`: two same-session workers | Keep existing 30,000 ms session-lock acquisition and exact one send/one cursor advancement. The network response delay exercises simultaneous workers, not a busy deadline. |
+| `pairing`: paired pause fencing; plugin `pause-capture`: pause during request; plugin `recall`: delayed injection after pause/resume | Requests use explicit response gates. Control locks are released before waiting; pause takes no held session/request lock. Keep exact generation fencing, one initiated request/no later batches and zero stale injection. |
+| `paired-hooks`: delayed Claude recall / second-client pause | The loopback reply has an explicit Promise gate. Recall waits outside the control lock; the completed second-client pause precedes reply release and injection. Keep child exit 0 and exact empty stdout/stderr. |
+| `paired-hooks`: detached launcher handoff / refused recall attempts | The launched worker owns a session cursor lock; subsequent invalid bindings are refused before acquisition and cannot send. Keep CLI binding propagation and exact no-additional-request assertions. This is a handoff test, not concurrent acquisition of the same lock. |
+| `main-golden`, parity and fixture-generator: parallel hooks/launchers | Keep the existing guarded 30,000 ms control-lock seam in isolated base/candidate copies (`goldenControlTimeout`); shipped limits remain unchanged. Exact golden bodies, outputs and 12-call multiset remain required. |
+
+Sequential legacy observations, profile/conflict injections at an awaited
+`beforeSetupLock` boundary, and concurrent key/control **reads** do not contend
+for these locks. Independent test files use separate fixture roots. The opt-in
+host feasibility worker already reports `cursor_busy` on its bounded acquisition;
+offline selftests use fake hosts and do not run that worker. No real hosts or
+provider calls were enabled for this audit.
+
+Failing-first evidence for this second follow-up: the unmodified 43-case affected
+selection passed under CPU contention on both Node versions (exit 0 / 0), so
+pressure alone is not a deterministic reproduction of CI's exit 1. With the
+first real reserve publication gated, retaining the original `Promise.all` for
+the other reserves deterministically threw `state_busy` on both versions
+(one selected A9 case, exit 1 / 1). The corrected test uses the same forced
+contention and preserves the exact cap, restart and billing assertions.
+
+Intermediate checks are retained, not counted as final qualification. The first
+Node 22 combined check exited 1 because a quota holder raced dispatch cleanup
+and consumed 700 rather than 500 virtual ms; joining dispatch completion fixed
+that seam. Subsequent 43-case checks exited 0 / 0. The first full Codex pressure
+run exited 0 (136 cases, 307.582 seconds including supervision). Two ordinary
+Node 22 Codex runs exited 0 / 0, but the third exited 1 in A5 workspace cleanup,
+after its deadline assertions passed. Removing the old cleanup sleep exposed
+the second identity probe returning before the original publisher completed.
+The isolated source observer now joins that actual raced work in `finally`;
+its single-case pressure check exited 0. A scratch wrapper was mistakenly invoked
+without execute permission (126), then all invocations used `sh` successfully.
+Earlier 13-case indirect pressure checks, the exact-deadline check and the
+three-case pairing busy check all exited 0. After the work-join correction,
+Node 24's final `npm test` exposed the separate-process identity inventory race
+described above (exit 1); the child lifetime gate fixes the test assumption.
+Every invocation/code is retained
+in `.scratch/state-busy-class/results.log`.
+
+CPU pressure uses four `nice -n 10` busy-loop processes and the foreground suite
+pinned to the same allowed CPU. Each burner signals readiness through a pipe;
+there is no warm-up sleep. The supervisor joins the suite, records CPU ticks,
+then terminates/joins the burners (expected SIGTERM return codes `-15` each).
+After the work-join correction, the full 136-case Codex pressure runs exited
+0 / 0, taking 241.405 / 275.311 seconds including supervision. The four burners
+consumed 53.49–53.53 / 58.39–58.44 CPU seconds each. The 43-case affected selection,
+entire 54-case pairing test file and single delayed paired-recall case also
+passed under this pressure on both versions (all exit 0). This establishes
+slow-runner evidence without increasing shipped limits or using timed sleeps to
+decide lock outcomes.
+
+Final qualification for this second follow-up uses Node 22.16.0 / 24.15.0,
+verified from each invocation's `node --version`. All suites run in the
+foreground, sequentially, with synthetic data, a separate temporary HOME per
+invocation (HOME = CAIRN_TEST_REAL_HOME), CI=1, compile caching disabled, and
+TMPDIR/TMP/TEMP/npm cache inside the non-UUID worktree scratch path
+`.scratch/state-busy-class`. `npm test` retains CI's default concurrency.
+The identity lifetime change affects only the plugin test helper, so the already
+qualified Codex/client/pairing suites are unchanged; both complete `npm test`
+runs were repeated after that final change. No final suite has failed, skipped
+or cancelled cases.
+
+| Command / evidence | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| Unmodified 43-case affected selection under CPU pressure | 0 | 0 |
+| Gated original A9 `Promise.all` reproduction, one case | 1 | 1 |
+| Corrected forced-busy A9 in 43-case affected pressure selection | 0 | 0 |
+| Full `pairing.test.mjs` under CPU pressure, 54 cases | 0 | 0 |
+| Delayed paired recall under CPU pressure, one case | 0 | 0 |
+| Full `test:codex` under CPU pressure, 136 cases | 0 | 0 |
+| Final gated `identity.test.mjs` under CPU pressure, 5 cases | 0 | 0 |
+| Final `test:codex`, 136 cases, three runs | 0 / 0 / 0 | 0 / 0 / 0 |
+| Codex runtimes (seconds) | 59.696 / 53.903 / 60.315 | 54.103 / 51.043 / 55.994 |
+| `test:client`, 5 cases | 0 | 0 |
+| `test:pairing`, 270 cases | 0 | 0 |
+| Final CI-shape `npm test`, 401 cases | 0 | 0 |
+| Final npm runtimes (seconds) | 349.753 | 271.727 |
+| `validate` | 0 | 0 |
+
+The last Node 22 43-case pressure check also includes the original post-deadline
+identity recovery assertion after joining hook work (exit 0). The additional
+Node 24 gated identity pressure check exited 0. `git diff --check` exits 0.
+All intermediate failed assumptions (quota gate, A5 cleanup, identity reaper
+inventory), expected failing-first results and the wrapper's 126 are retained
+alongside every successful invocation in `results.log` and its full logs.
+Only tests, test helpers and this handoff changed; no product code, runtime
+defaults, versions/releases, push or PR is part of the follow-up.
+
 The coordinator qualified `579c441` (the round-3 head plus `test:codex` and
 `test:client`) in the complete matrix, each command sequential with HOME =
 CAIRN_TEST_REAL_HOME = scratch: on Node 22.16.0 and 24.15.0, `npm test`,
