@@ -37,7 +37,9 @@ test('D1/D2 attempt diagnostics retain the first 64 and count every outcome and 
       .reduce((sum, item) => sum + (item.actualMicroUsd ?? 0), 0));
     assert.equal(summary.unknownActualCount, Math.floor(count / 2));
     if (count) assert.deepEqual(summary.stages[0], { stage: 'stage-0', outcome: 'failed',
-      reservedMicroUsd: 1, actualMicroUsd: 2 });
+      reservedMicroUsd: 1, actualMicroUsd: 2, transportTermination: null });
+    assert.equal(summary.terminationUnavailableCount, count);
+    assert.ok(Object.values(summary.terminationCounts).every(value => value === 0));
     if (count >= 5) {
       assert.deepEqual(summary.stages.slice(1, 5).map(item =>
         [item.outcome, item.actualMicroUsd]), [

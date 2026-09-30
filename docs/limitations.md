@@ -1043,6 +1043,17 @@ localizes an evidence-sufficiency miss without proving the fact was never
 stored or identifying a model root cause. The frozen 6/6 completion and
 common-resolution feasibility gate failed, so a fixed-30 expansion is blocked.
 
+The [M1a optional adapter phase observer](plans/capture-write-phase-observability.md)
+can distinguish future adapter preparation, provider count transport/body,
+generation transport/body and output validation in an isolated invocation. It
+cannot reconstruct the historical N7 phase from these aggregate results,
+measure earlier core planning or later SQLite commit, prove provider
+cancellation/billing, or make a multistage capture reliable. Extraction timeout
+prevents a new memory commit in its synthetic control, while a classification
+timeout after successful extraction leaves an admitted source-backed memory
+with failed initial placement. No timeout, model/context budget, or indexed
+map limit was changed, and the fixed-30 evaluation remains blocked.
+
 Actual accounting added 1,935 guarded requests and 10,621,743 microUSD of
 conservative reservation. Known usage estimates were 2,452,595 microUSD for
 1,417 rows; 518 costs remain unknown, and none of the requests is pending.
@@ -1064,6 +1075,71 @@ qualification, default MOC navigation,
 source fidelity or installed MCP/Hermes reliability. A larger cohort requires
 a new frozen selection and resource check after the failed feasibility gate,
 not reuse of these six.
+
+## Mixed-runner phase tails are bounded observations
+
+The [M1b source-runner diagnostic](plans/mixed-phase-tail-diagnostics.md) is
+opt-in for 1–30 frozen cases. It keeps the last 64 adapter events per entered
+Cairn arm, plus counts of admitted and omitted events. The tail may begin in
+the middle of an invocation and supplies no invocation correlation or complete
+concurrent timeline. Default reports and existing model/attempt samples are
+unchanged. No extra Mem0 timing is inferred from this Cairn-only field.
+
+The observer excludes earlier core planning, local map work and SQLite commit.
+An aborted phase is not proof of provider cancellation or billing; missing
+events do not mean zero elapsed work. The unchanged 500,000-node / 32 MiB
+report envelope passes a complete 30-case high-diagnostic synthetic control,
+not every possible combination of historical provenance maxima. Diagnostic
+mode rejects larger rosters before consumption; omitted mode retains its old
+250-case preparation limit and report behavior.
+
+The runner imports checkout Cairn modules. Native-local fake-HTTP tests exercise
+installed Mem0, but do not establish installed Cairn behavior, semantic quality,
+long-write reliability or historical N7's cause. Any later paid paired run needs
+a separately reviewed installed coordinator, a frozen observation mode and the
+existing cumulative budget authority. Previous failures and costs are unchanged.
+
+## Installed long-write diagnostic did not clear completion or semantic gates
+
+The [one-shot M1c result](evidence/installed-phase-long-write.md) used installed
+Cairn core/adapter and contained native Mem0 on two new synthetic 32-batch
+histories. Cairn completed and answered only one case: its first case stopped
+after five complete batches and a partial sixth with nonretryable
+`classification_failed`; 26 batches were not run and no partial-memory answer
+was produced. Mem0 completed both. At fixed N=2 per arm and common-resolved
+N=1, the unmodified automatic judgments were Cairn 1/0/1 and Mem0 1/1/0
+correct/incorrect/unresolved. The unresolved Cairn arm is not a wrong answer.
+
+Both second-case answers were automatically marked correct. Against the frozen
+source, the Cairn answer falsely denies the earlier adopted decision; the Mem0
+answer may reverse why changed transport calls for reconfirmation. These are
+primary/worker agent assessments, not independent human adjudication. Positive
+automatic grades therefore cannot establish a broad semantic pass. The
+primary's exact-window audit found the earlier adoption passage stored but
+absent from the two selected and packed receipts; the candidate visibility,
+selection or ranking cause remains unproven. The first Cairn tail contains
+completed classification transport and output-validation phases, with no
+observed timeout, but does not prove the remaining adapter, core or application
+reason for failure or the historical N7 cause. The primary reports 358 new requests,
+2,019,151 microUSD reserved, 392,454 microUSD in known estimates and 79
+unknown actual costs, with zero pending. Reservation is not an invoice and
+known estimates are not total spend. The primary's fresh read-only audit
+authenticated the parent, verified the unchanged original prefix and matched
+all 358 new ledger rows to guarded attempts; it was not independent review and
+made no ledger writes. Diagnose the classification refusal after the observed
+output-validation boundary and
+evidence/adoption preservation in a separately frozen packet; consumed-case
+replay, fixed-30 expansion, raw-retention growth and MCP/Hermes conclusions
+do not follow.
+
+The [M1d classification-boundary diagnosis](plans/classification-application-boundary.md)
+found that LongMemEval reporting previously converted the trusted core code
+`moc_title_conflict` to generic `classification_failed`. Reporting now retains
+that specific code. A synthetic repeated-topic proposal reproduces the M1c
+report's partial-capture, completed-adapter and empty-diagnostic fingerprint,
+but the missing paid classification plan prevents attributing M1c to that
+collision. This reporting fix does not repair MOC classification, retry the
+failed batch or reclassify or rescore the frozen result.
 
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
@@ -1265,9 +1341,62 @@ and `core/test/classification-budget.test.mjs` use the test counter.
 counter is shaped like a padded o200k count but is not a provider tokenizer. The
 small-recall parity fixture was frozen from main `3a1c17d`.
 
+## Prospective M1e classification follow-up fixture
+
+The new synthetic packet has two separate 16-session, 512-user-turn histories:
+one records an adopted workshop rack being replaced by a later adopted rack
+with a stated reason; the other records an adopted cold-chain dock whose
+supporting power premise later ceased to apply, with no replacement adopted.
+Source-only indexed-evidence preparation reports 32 batches and 512 windows
+per case, and the canonical mixed preflight marks both ready. The separately
+stored answer key is held in another module. The pure conditional ceiling for both
+cases is 16,982 requests and 3,326,968 microUSD (US$3.326968), under the
+predeclared 4,000,000 microUSD (US$4) new reservation limit while protecting
+30,000,000 microUSD (US$30) of the original 200,000,000 microUSD (US$200).
+
+At the prospective prelaunch checkpoint, these checks established fixture
+shape, source separation and preparation only; no model had been called or
+answer graded. This source-backed diagnostic packet is not an official
+benchmark. The [contract and verification record](plans/installed-classification-followup.md)
+preserve that checkpoint and the later closure record.
+
+## M1e installed classification follow-up result
+
+The [one-shot M1e report](evidence/installed-classification-followup.md) records
+two completed ingestions, answers and judgments per arm, fixed N=2 and
+common-resolved N=2. Automatic correct/incorrect/unresolved were Cairn 2/0/0
+and Mem0 1/1/0. Both Cairn cases completed all 32 batches; the primary separately
+found 32 admissions and 32 `applied` initial-classification journal entries per
+case. No classification failure was observed, but unchanged engine bytes and
+different cases do not establish a repair of prior classification or timeout
+failures; their causes remain unproven.
+
+The primary found all eight required source windows stored as exact receipts.
+Workshop recall selected prior adoption, replacement and reaffirmation; the
+replacement passage also carries the HVAC reason. Logistics selected only its
+final reconfirmation window, leaving stored earlier-adoption, explicit
+power-removal and unadopted-proposal windows unselected. All selected receipts
+were packed. The observed logistics loss precedes packing; candidate visibility,
+selection or ranking as its cause remains unknown. Four of eight exact windows
+selected is not a semantic-coverage percentage.
+
+Agent reading found finer omissions despite Cairn's positive grades: its
+workshop answer does not explicitly give the original clearance rationale or
+link current status to reaffirmation; logistics answers omit explicit power
+removal and the dock-six proposal. This preserves the finite completion pass
+while leaving strict source/rubric coverage open. The explicit bounded-keyset,
+source-evidence/bounded-source-scan route does not validate default MOC
+navigation, reliability, lightweight resource fit, installed MCP/Hermes,
+comparative superiority or an official score. Diagnose candidate visibility,
+selection and ranking on new synthetic cases before changing engine or prompts;
+no fixed-30 expansion, consumed-case replay/retuning or raw-retention increase
+follows.
+
 ## Where the evidence lives
 
 - [Model input budgets and packing](model-input-budgets.md)
+- [Prospective M1e classification follow-up fixture](#prospective-m1e-classification-follow-up-fixture)
+- [M1e installed classification follow-up result](evidence/installed-classification-followup.md)
 - [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)
 - [Decision confirmation and whole-episode context cost](#decision-confirmation-hides-whole-episode-context)
 - [Claude plugin 0.1.1 privacy filter](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)
@@ -1284,3 +1413,93 @@ small-recall parity fixture was frozen from main `3a1c17d`.
 - [Integration inventory](source-reliability-integration.md)
 - [First live evidence](evidence/first-live-evidence.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
+
+## Offline recall stage witnesses are boundary observations
+
+The [M1g recall witness](plans/recall-stage-witness.md) is an evaluation-only,
+bounded, ephemeral facade, not paid-generation wiring or a product API. It
+records opaque reference/receipt membership at select/rank adapter boundaries;
+public summaries contain finite aggregates. Adapter-returned references are not
+individually core-accepted references, and a successful whole recall establishes
+only chain completion. Missing observations after overflow, projection failure,
+plain close, bypass or skipped packed pages remain partial/unknown, not absent.
+Reference visibility does not prove source-preview completeness; receipt
+membership does not prove full excerpt or semantic coverage. Rank-input loss
+alone cannot distinguish fetch from packing. Synthetic parity/loss controls do
+not establish the cause of earlier paid omissions, and no consumed case is
+replayed or rescored by this seam. Raw custom IDs exist only in bounded private
+lookup state until disposal; no source/query/namespace text or raw errors are
+emitted. Model identity changes, so tested frozen OpenAI compatibility is not
+universal transparency for arbitrary timing-sensitive or hostile models.
+Disposal clears private mappings and witness events while retaining bounded
+aggregates and the observation enum; a failed pending call remains partial
+after disposal. Final offline gates on both exact Node versions include this
+controlled lifecycle regression, with interrupted and superseded verification
+recorded in the plan. At this authoring checkpoint, independent fixed-head
+review and CI were pending; final review and CI delivery status is recorded on
+the PR. These results establish synthetic mechanics only.
+
+## Optional mixed-runner recall observation
+
+The [mixed witness contract](plans/mixed-recall-witness.md) connects the existing
+facade to the actual mixed runner's Cairn adapter/core only when the caller
+explicitly requests `recallWitness: 'bounded-v1'` for 1–30 prepared cases.
+Its Cairn diagnostic retains scalar counts and finite enums; it never exports
+the facade, private lookup methods, opaque tokens, reference IDs, source text,
+question text, labels or provider error text. The observation closes when
+recall returns, before provenance checking and answer calls. Cleanup clears
+private mappings/events on successful, failed, interrupted and thrown paths;
+the report preserves historical retained-call counts and the actual disposed
+flag. Preflight-only arms create no witness. Pre-recall ingestion failures
+retain an unknown recall outcome rather than claiming an observed empty recall.
+
+Counts describe repeated boundary observations of references/receipts, not
+unique memories, relevance, complete history or semantic coverage. Adapter
+returns remain distinct from core acceptance. Complete-map selection bypasses
+the select model and remains unobservable; an empty completed recall, a failed
+recall and an unstarted recall have distinct outcomes. Overflow, projection
+failure and incomplete calls preserve uncertainty. Aggregate counts cannot
+identify a missing target passage, distinguish fetch loss from rank packing,
+or measure model judgment quality. This change repairs no retrieval behavior.
+
+Offline paired mixed controls exercise actual Cairn/OpenAI and contained pinned
+native Mem0 against fake HTTP for successful, empty-capture, empty-rank,
+ingestion-failure, duplicate-rank rejection, recall-timeout and later
+answer-failure outcomes. They capture original HTTP body strings and verify
+their serialization before comparing order/counts, answers, accounting and
+unchanged final scoring. Fresh independent stores create different generated
+identifiers: a consistent bijection collected from each owned closed SQLite
+store applies only to exact memory/receipt identity fields, generated
+memory-ID schema enums and known generated metadata time fields. These native
+comparisons establish equality after that normalization, not raw wire-byte
+equality across independent stores. Source/query/answer prose stays exact,
+including UUID/date-looking literals and prose containing generated metadata
+values; mutation controls demonstrate such changes remain visible. Wall-clock
+phase values are excluded from equality, while phase/outcome/count diagnostics
+remain checked. Existing actual adapter/core controls additionally
+exercise same-namespace navigation loss with an explicitly scripted counter,
+genuine rank-budget omission with measured independently fetchable source
+units, configured witness overflow, projection failure, unchanged tokenizer
+calls and signal/receiver/result identity. These preconditions are synthetic
+mechanics, not explanations of retained paid omissions or new semantic scores.
+Native roots are containment prerequisites for synthetic stores/ledgers only.
+No provider key, corpus, operational ledger or paid call is used by these gates.
+
+## Prospective mixed transport classification
+
+The [native failure diagnostic](plans/native-failure-diagnosis.md) retains finite
+guard-owned transport categories in process-local mixed attempts and bounded
+per-ordinal reports, including counts of failures beyond the first 64 stages.
+Legacy, missing or malformed classification remains unavailable. These fields
+distinguish transport, response validation and authenticated deadline branches;
+they do not identify an upstream actor or prove physical cancellation, accepted
+billing or semantic quality. Accounting settlement failures remain separate.
+
+Synthetic installed-native controls preserve unknown/full-reservation global
+halts for transport and malformed-response failures, and local continuation
+for authenticated deadlines and definite singleton embedding 503s. They neither
+repair the earlier stopped run nor assign its generic halt a retrospective
+category. No consumed case is replayed or rescored. This is a prospective local
+diagnostic with unchanged requests, budget, caps, isolation, retries, models and
+timeouts; it grants no paid launch, default MOC/MCP/Hermes acceptance, competitor
+parity or quality-score claim.

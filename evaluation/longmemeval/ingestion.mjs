@@ -35,6 +35,7 @@ const SAFE_CAPTURE_ERROR_CODES = new Set([
   'index_revision_conflict',
   'invalid_input',
   'invalid_model_output',
+  'moc_title_conflict',
   'model_cancelled',
   'model_not_configured',
   'model_timeout',

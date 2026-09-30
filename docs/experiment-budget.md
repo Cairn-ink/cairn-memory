@@ -222,6 +222,17 @@ uncertain storage outcome instead of assuming it is safe to replay.
 
 ## Remaining gate
 
+`transitionEmbeddingExperimentBudgetCaps` is an existing-only embedding-schema
+operation for exactly 200,000,000→300,000,000 micro-USD and an increasing finite
+request cap. It takes exact old/new configurations, a settled checkpoint, its
+old history hash and a synchronous authorization callback. Both caps change in
+one transaction; every historical rowid, outcome, cost and reservation remains.
+`projectEmbeddingBudgetCapsPrefix` requires a ledger-issued snapshot and returns
+both cap-bound prefix hashes plus an authentic old snapshot containing only the
+checkpoint prefix. This historical projection is a lineage witness, not a grant
+to dispatch or a replacement for inspecting the current ledger. Cloned snapshots
+are refused. The old same-money request-cap helper is unchanged.
+
 A separate [experiment HTTP guard](experiment-request-guard.md) now connects
 this ledger to explicitly injected, bounded host/Cairn transports and verifies
 them with fake HTTP. The ledger API itself remains accounting-only; the new
