@@ -20,7 +20,9 @@ test('A1 actual hook → worker → loopback body, output and private state excl
     {type:'event_msg',payload:{type:'user_message',message:'MIRROR_CANARY'}},
     {type:'compacted',payload:{message:'COMPACTION_CANARY'}},
   ].map(jsonl).join('');
-  const text=header()+exclusions+item(`Prefer diagrams. ${secret}`)+item('Understood.',1,'assistant',
+  const spanning=JSON.parse(item('Prefer notes. sk-'+'B'.repeat(20),2));
+  spanning.payload.item.content.push({type:'text',text:'SPLIT_SECRET_CANARY',text_elements:[]});
+  const text=header()+exclusions+JSON.stringify(spanning)+'\n'+item(`Prefer diagrams. ${secret}`)+item('Understood.',1,'assistant',
     {phase:'final_answer',memory_citation:{text:'CITATION_CANARY'}});
   const f=await fixture(t,{text});
   const bodies=[];
@@ -65,6 +67,7 @@ test('A1 rejects NUL, malformed Unicode, empty and redaction-only strings; joins
   for(const text of ['\0','\ud800',' ','sk-'+'X'.repeat(24),'sk-'+'X'.repeat(24)+' sk-'+'Y'.repeat(24)])
     assert.equal(normalizeBlocks([text]).reason,'invalid_text');
   assert.equal(normalizeBlocks(['Prefer notes. sk-','Z'.repeat(30)]).content,'Prefer notes. [REDACTED]');
+  assert.equal(normalizeBlocks(['Prefer notes. sk-'+'Z'.repeat(20),'SPLIT_SECRET_CANARY']).reason,'invalid_text');
 });
 
 test('A1 exact serialized JSON byte bound splits before the canonical unit bound',async t=>{

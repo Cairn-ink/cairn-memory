@@ -11,6 +11,10 @@ export function normalizeBlocks(blocks) {
   if (blocks.some(x => typeof x !== 'string' || !x.isWellFormed() || x.includes('\0')))
     return { reason: 'invalid_text' };
   const full = canonical(blocks.map(x => redactSecrets(x.normalize('NFKC'))).join(''));
+  // A token spanning blocks may already have lost its prefix to block redaction.
+  // Refuse that ambiguous record instead of sending its unrecognizable suffix.
+  if (full !== canonical(blocks.map(x => x.normalize('NFKC')).join('')))
+    return { reason: 'invalid_text' };
   if (!full || /^\[REDACTED\](?: \[REDACTED\])*$/u.test(full)) return { reason: 'invalid_text' };
   let content = '';
   for (const point of full) {
