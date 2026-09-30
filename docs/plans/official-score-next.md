@@ -237,3 +237,111 @@ requires review/rerun; these are not accepted live hashes):
 | prepare-official-six.test.mjs | 3dc910b84bc960b408ec32c4a58ba0a6b9163d8bce5a854b307d7976d3aa4bea |
 | source-only.synthetic.test.mjs | 1b4f304d6a266edccf4dd29fd48db881d31447f1708115eaee7f498a514aeb4a |
 | verify-inventory.mjs | 47240828cada7913a667ba0030ad86c7eca70ef2dcff1b1c9ae305d3bdc0acfe |
+
+## CI integration correction contract
+
+Candidate `a37b964` passed both nonauthor review axes and primary offline/native
+gates, but first CI run36671809985 failed experiment-budget24 before the new
+v3 test ran: `ERR_MODULE_NOT_FOUND: tiktoken`. The pure ledger job intentionally
+does not install isolated OpenAI dependencies. The new test imports the HTTP
+request guard, so registration in that dependency-free suite was wrong.
+Primary reproduced exactly in a clean isolated worktree at this candidate:
+`node tools/testing/run.mjs evaluation/experiment-budget/test/budget-v3.test.mjs`,
+1failed/0passed,38.442159ms (Node24.15). No actual ledger/paid call occurred.
+
+- C301: move only v3 integration test registration from pure experiment-budget
+  to existing experiment-request-guard, which already installs locked OpenAI
+  dependencies in CI. Keep the dedicated v3 command. Do not alter CI to weaken
+  gates, add adapter dependency to the pure ledger job, skip any v3 assertion
+  or change production modules, pricing, authority or evaluation selection.
+- C302: add a dependency-free generic regression asserting the v3 test runs
+  exactly once in the HTTP-guard suite and never in the pure ledger suite.
+  Observe this regression red before correcting registration.
+- C303: both runtimes pass the pure65 ledger cases in the fresh checkout
+  BEFORE installing any adapter dependencies; after the existing locked
+  isolated install, full311 guard cases including all19 v3 cases, dedicated19,
+  generic tests, JSON and both ledger/guard demos pass. Primary reruns key paths.
+  Preserve the original CI failure; obtain both review axes on corrected fixed
+  head and green latest-head CI before ready delivery or actual ledger operation.
+
+One bounded actual GPT-6.1 Sol/high worker owns package registration, the new
+generic regression and this evidence section in isolated `budget-v3-ci-routing`.
+No production source, workflow, original tests, actual inputs, helpers or other
+worktrees may change. Primary owns integration, commits/reviews, updating the
+operational wrapper's fixed head and final approved-pin acceptance. Other
+candidate changes are documentation/test routing only; the running native
+evidence remains linked to the unchanged production file hashes.
+
+## CI routing correction worker evidence
+
+Actual GPT-6.1 Sol/high worker `/root/budget300_impl61`; isolated worktree
+`budget-v3-ci-routing`, branch `test/budget-v3-ci-routing`, fixed base
+`a37b96467f1384360ef99babf792baee4f8753bf`. Changes are limited to package
+registration, the dependency-free generic registration regression and this
+evidence section. Primary's original CI failure/reproduction above is retained.
+
+C301 entrypoint trace: `.github/workflows/ci.yml` experiment-budget job
+(lines124–135) runs `npm run test:experiment-budget` without installing adapter
+dependencies. The HTTP-guard job (lines137–151) installs locked OpenAI
+dependencies first. The v3 test imports `request-guard.mjs`, which imports
+`adapters/openai/index.mjs`, which statically imports `tiktoken`. Moving the
+existing v3 test argument to that guard job fixes the prerequisite mismatch;
+the dedicated command and every v3 assertion remain unchanged. No workflow or
+production source change was made.
+
+C302 red-before-fix: `node tools/testing/run.mjs
+plugins/cairn-memory/test/benchmark-suite-registration.test.mjs` failed 0/1 on
+Node22.16/24.15, respectively 39.425246/41.336751ms test duration (88/99ms
+command wall time), because the pure ledger script included v3. After the exact
+registration move, the same dependency-free regression passed1/1 on each
+runtime, 37.772519/41.217704ms test duration (86/100ms command wall time).
+The regression also requires v3 exactly once in the guard script and preserves
+the exact dedicated focused command.
+
+C303 prerequisite isolation: before any adapter install, actual
+`npm run test:experiment-budget` passed65/65, zero skips, on both runtimes.
+Node22 test duration8262.385328ms, command8394ms; Node24 duration8263.077352ms,
+command8395ms. The isolated adapter's node_modules directory was absent at
+both start and end of both runs. Only afterward, locked
+`npm ci --prefix adapters/openai --ignore-scripts` passed (one package,
+zero audit findings; observed command0.51827885s); no manifest/lock change.
+All test commands use the owned runner and sanitized PATH/Node flags,
+with no application environment/key forwarded. No provider or operational
+ledger/capability call occurred.
+
+Final affected gates, all exit0 with zero test skips (observed command wall
+milliseconds; Node runtime binaries pinned under `.nvm/versions/node/`):
+
+| Command | Node22.16.0 | Node24.15.0 |
+| --- | --- | --- |
+| `npm run test:experiment-budget` before install | 65/65; 8394ms | 65/65; 8395ms |
+| `npm run test:experiment-request-guard` | 311/311; 30074ms | 311/311; 29863ms |
+| `npm run test:benchmark-budget-v3` | 19/19; 15379ms | 19/19; 14790ms |
+| `npm test` | 132/132; 3417ms | 132/132; 3821ms |
+| `npm run test:workspace-lifecycle` | 25/25; 14832ms | 25/25; 14966ms |
+| `npm run validate` | pass; 92ms | pass; 101ms |
+| `npm run demo:experiment-budget` | pass; 148ms | pass; 158ms |
+| `npm run demo:experiment-request-guard` | pass; 467ms | pass; 444ms |
+| `node <pinned-local-cli> plugin validate .` | pass; 650ms | pass; 631ms |
+| `node <pinned-local-cli> plugin validate ./plugins/cairn-memory --strict` | pass; 660ms | pass; 647ms |
+
+The read-only CLI is pinned Claude2.1.260 at
+`/home/chichieh/Github/cairn-memory-worktrees/installed-classification-followup/tools/plugin-validation/node_modules/@anthropic-ai/claude-code/cli-wrapper.cjs`;
+commands validate this correction worktree. Registration change needs no
+production/native evidence rewrite. `git diff --exit-code HEAD -- evaluation
+core adapters .github` and `git diff --check` pass; old tests, production,
+dependencies and workflows are unchanged. Primary inspected and accepted the
+exact package diff and dependency-free regression before final worker handoff.
+
+Frozen code SHA256:
+
+- `package.json`:
+  `995a8e1bd93cbd47f20e643c3e184656c07b58b5cd975dfa943a28cd47ef2ea1`
+- `plugins/cairn-memory/test/benchmark-suite-registration.test.mjs`:
+  `10f7aba6bde12eb900564cad1d6ac1b02d4fac38d9427644a6ae35af3b524630`
+
+Worker freezes exactly those two files and this plan, then stops writes.
+Commits/integration, personal acceptance, both corrected fixed-head nonauthor
+reviews and fresh latest-head CI are primary-owned and unrun by this worker.
+No commits, push, merge, actual inputs/private helpers or other-worktree writes
+occurred. Worker token/cost telemetry and whole-task elapsed time are unknown.
