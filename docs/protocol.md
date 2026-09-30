@@ -377,7 +377,7 @@ The tuple `(authenticated user, client, event_id)` is an idempotency key. Concur
 
 Only `user` and `assistant` text belongs in `messages`. Unknown fields are rejected. Automatic results must remain `personal` or `project` private and carry origin `agent-inferred` plus at least one Source Receipt.
 
-A `202` response with `processing: true` means another request owns the short processing lease. The client must not advance its local transcript cursor and may retry later.
+A `200` or `202` response with `processing: true` means another request owns the short processing lease. The client must not advance its local transcript cursor and may retry later.
 
 ### `POST /api/memory/recall`
 
@@ -759,8 +759,10 @@ receipt/idempotency checks remain client enablement gates.
 
 HTTP 200 recall returns `{memories:[...]}` with the existing origin, confidence
 and complete receipts. HTTP 200 capture acknowledges `{duplicate,memoryCount}`;
-optional `processing:false` is also an acknowledgement. `processing:true` denotes
-unfinished work, never acknowledgement or permission to advance the cursor.
+optional `processing:false` is also an acknowledgement. A schema-valid capture
+reply with `processing:true` on HTTP 200 **or 202** denotes unfinished work,
+never acknowledgement or permission to advance the cursor. A 202 without that
+processing reply is not an acknowledgement.
 Both routes refuse quota with HTTP 429 and exactly
 `{"error":"quota_reached","resetAt":"2026-10-02T00:00:00Z"}` or
 `{"error":"quota_reached"}`. Unknown fields, success fields, memories and
@@ -773,34 +775,56 @@ and local clocks cannot supply a guessed reset. Refusal bodies on a success
 status, and success bodies on 429, are invalid replies.
 
 A verified refusal leaves the pending capture range, event identity and cursor
-unchanged. Its target-wide durable latch suppresses recall and capture retries
-across Claude, Codex and restarts. An explicit resume at/after a known reset (or
-explicitly with an unknown reset) grants one eligible request. A repeat refusal
-closes the latch again. An uncertain, failed or processing probe does not grant
-more attempts. A successful probe reopens the gate. Quota resume never changes target,
-auth mode, counters or the pause generation. The plugin script's `resume-quota`
-is quota-only; `resume` while globally paused resumes only that pause, preserving
-the quota gate. When already active, `resume` grants the eligible quota attempt. Unrecognized 429 closes an
-`invalid_reply` gate until explicit resume; it is never success or automatic
-polling. This is the plan's explicit upgraded-Claude D1 quota/concurrency exception;
+unchanged. Each target has separate durable **recall** and **capture** gates,
+shared across Claude, Codex and restarts. A recall refusal never gates capture;
+a capture refusal never gates recall. Explicit `resume` also resumes the local
+pause and grants one eligible attempt to each refused operation at/after its
+validated reset (or explicitly with unknown reset). An operation still before
+its reset remains refused. Resume preserves the pause generation and pending
+capture bytes; the existing pause EOF barrier still applies to paused history.
+
+Only a resumed attempt has an in-flight marker: owner PID, unique token and
+finite deadline, with its pre-attempt refusal retained. A dead owner or expired
+deadline restores that refusal; another resume may grant a fresh attempt. Normal
+requests leave the operation open, so SIGTERM/SIGKILL cannot turn an uncertain
+request into a permanent gate. Locks cover only state reads/transitions, never
+network I/O. Recall may send while capture is in flight, and normal open requests
+retain their existing concurrency. Late replies cannot clear a newer refusal,
+cooldown or probe. A completed processing/unavailable/error probe restores its
+refusal; validated acknowledgement reopens only its own operation.
+
+An unrecognized 429 is **unavailable**, never acknowledgement. It persists a
+per-operation cooldown: integer Retry-After seconds or a valid HTTP-date,
+capped at 24 hours; otherwise five minutes. A valid zero/past delay has a minimum
+one-second cooldown, preventing immediate retry. The cooldown expires by itself;
+`resume` clears it immediately. Retry-After is not a guessed quota reset and does
+not populate resetAt. A verified quota refusal always uses the validated body
+reset, regardless of headers. Corrupt state fails closed with
+`quota_state_invalid`; status tells the user to run `resume`, which repairs a
+regular owned gate file to open, reports the repair and exits zero. It cannot
+repair unsafe file types, symlinks or ownership/permission failures.
+
+This is the plan's explicit upgraded-Claude D1 quota/concurrency exception;
 0.1 Claude request bytes and frozen retry batches remain unchanged.
 
-| Prior gate | Event | Network requests | Next gate | Capture cursor |
-| --- | --- | --- | --- | --- |
-| open | dispatch starts / interruption before reply | 1 | unconfirmed durably | unchanged |
-| open | verified 429 | 1 | quota_reached | unchanged |
-| open | resume-quota (even while paused) | 0 | open; pause unchanged | unchanged |
-| quota_reached | either client's hook / restart | 0 | quota_reached | unchanged |
-| quota_reached | resume before validated reset | 0 | quota_reached | unchanged |
-| quota_reached | eligible explicit resume | 0 | one attempt available | unchanged |
-| one attempt available | either endpoint starts | 1 | attempt consumed durably | unchanged |
-| open / one attempt available | local pause changes before final dispatch | 0 | prior gate restored | unchanged |
-| attempt consumed | verified 429 | 0 additional | quota_reached | unchanged |
-| attempt consumed | processing / unavailable / error / interruption | 0 additional | attempt consumed | unchanged |
-| attempt consumed | validated acknowledgement | 0 additional | open | acknowledgement only |
-| open | unrecognized 429 | 1 | invalid_reply | unchanged |
-| invalid_reply | hook / restart | 0 | invalid_reply | unchanged |
-| invalid_reply / attempt consumed | explicit eligible resume | 0 | one attempt available | unchanged |
+| Row | Prior operation | Event | Network | Next operation | Capture cursor |
+| --- | --- | --- | --- | --- | --- |
+| R01 | open | normal request / interrupted request | eligible request | open | ack only |
+| R02 | open | verified 429 | 1 | quota_reached for this operation | unchanged |
+| R03 | quota_reached | either client's hook / restart | 0 | quota_reached | unchanged |
+| R04 | quota_reached | resume before reset | 0 | quota_reached | unchanged |
+| R05 | quota_reached | eligible resume (both operations independently) | 0 | ready | unchanged |
+| R06 | ready | eligible request | 1 | in_flight with pre-attempt refusal | unchanged |
+| R07 | in_flight | owner dead / deadline elapsed | 0 | pre-attempt refusal | unchanged |
+| R08 | in_flight | processing / unavailable / error | 0 additional | pre-attempt refusal | unchanged |
+| R09 | in_flight | validated acknowledgement | 0 additional | open | ack only |
+| R10 | open / matching probe | unrecognized 429 | 1 | cooldown for this operation | unchanged |
+| R11 | cooldown | hook before expiry | 0 | cooldown | unchanged |
+| R12 | cooldown | expiry / resume | next eligible request / 0 | open | unchanged |
+| R13 | corrupt | status / resume | 0 | invalid with repair hint / repaired open | unchanged |
+| R14 | capture in flight | recall hook | recall sends | recall unchanged unless its own refusal | unchanged |
+| R15 | newer gate/probe | old completion | 0 additional | newer state retained | ack only |
+| R16 | ready | local pause/abort prevents dispatch | 0 | ready | unchanged |
 
 ### Session-start v1
 
