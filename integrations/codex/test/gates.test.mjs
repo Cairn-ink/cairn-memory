@@ -9,6 +9,7 @@ import { readHookInput,handleHook,workerFromHandoff } from '../hook.mjs';
 import { withSourceReadObserver } from '../source.mjs';
 import { setPaused,readControlState } from '../../client/control-state.mjs';
 import { cursorPath,validateCursor,publishCursor } from '../cursor.mjs';
+import { clientProjectId } from '../../client/pairing.mjs';
 
 test('A4 partial lines and appends preserve frozen IDs and coverage',async t=>{
   const first=header()+Array.from({length:50},(_,i)=>item(`Human ${i}`,i)).join('');
@@ -120,4 +121,19 @@ test('A5 local scripted success beyond 30 seconds stays within the unchanged loc
   }};
   const result=await runWorker(f.binding,{guard:f.guard,transport,mode:'local-stub'});
   assert.ok(performance.now()-began>=30000);assert.equal(result.status,'idle');assert.ok(result.state.accepted>0);
+});
+
+test('SessionStart establishes a resumed EOF boundary with one tail byte and zero context/model calls',async t=>{
+  const f=await fixture(t),clientOptions={client:'codex',home:f.home,root:f.root,usesClaude:false,env:{}};
+  f.binding.projectId=await clientProjectId(clientOptions,'/synthetic');
+  await runWorker(f.binding,{guard:f.guard,transport:f.transport});
+  await setPaused(f.root,true);await appendFile(f.path,item('Written while paused'));await setPaused(f.root,false);
+  let bytes=0,launches=0;
+  const result=await withSourceReadObserver(({start,end})=>bytes+=end-start,
+    ()=>handleHook({hook_event_name:'SessionStart',session_id:session,cwd:'/synthetic',transcript_path:f.path},
+      {clientOptions,targetId:f.binding.targetId,launch:()=>launches++}));
+  assert.equal(result.output,'');assert.equal(result.status,'pause_boundary');assert.equal(bytes,1);assert.equal(launches,0);
+  await appendFile(f.path,item('Human after SessionStart'));
+  await runWorker(f.binding,{guard:f.guard,transport:f.transport});
+  assert.deepEqual([...f.receiver.values()].flatMap(x=>x.messages.map(m=>m.content)),['Human after SessionStart']);
 });

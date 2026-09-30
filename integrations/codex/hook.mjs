@@ -1,7 +1,7 @@
 import { isAbsolute } from 'node:path';
 import { resolveClient, clientProjectId } from '../client/pairing.mjs';
 import { readControlState } from '../client/control-state.mjs';
-import { prepareCapture, runWorker } from './worker.mjs';
+import { prepareCapture, runWorker, establishPauseBoundary } from './worker.mjs';
 import { FORMAT } from './parser.mjs';
 
 const EVENTS = new Set(['SessionStart','UserPromptSubmit','Stop','PreCompact','SessionEnd']);
@@ -47,10 +47,10 @@ export async function handleHook(input,{clientOptions,targetId,launch,now=Date.n
     const control=await readControlState(resolved.root);
     if (control.paused) return {output:output(),status:'paused'};
     if (hook.path===null) return {output:output(),status:'source_unavailable'};
-    if (['SessionStart','UserPromptSubmit'].includes(event))
-      return {output:'',status:'context_unavailable'};
+    if (event==='UserPromptSubmit') return {output:'',status:'context_unavailable'};
     const projectId=await clientProjectId(options,hook.cwd);
     const binding={root:resolved.root,targetId,projectId,sessionId:hook.sessionId,path:hook.path};
+    if (event==='SessionStart') return {output:'',status:(await establishPauseBoundary(binding)).status};
     const prepared=await prepareCapture(binding);
     if (prepared.status!=='pending' || now()-start>=750) return {output:output(),status:prepared.status};
     // serialize a closed, content-free handoff; never copy hook extras into it

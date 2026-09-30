@@ -142,6 +142,34 @@ async function prepared(binding, options, action) {
 }
 
 export const prepareCapture = (binding, options={}) => prepared(binding,options);
+// SessionStart needs a pause boundary, not a transcript parse/history upload.
+export async function establishPauseBoundary(binding,options={}) {
+  const cp=cursorPath(binding.root,binding.targetId,binding.sessionId);
+  await checkedPath(binding.root,{directory:true});
+  return stateLock(cp.replace(/\.json$/,'.lock'),async()=>{
+    const control=await readControlState(binding.root),previous=await readCursor(cp);
+    if(control.paused || !control.valid) return {status:'paused'};
+    if(previous && ['unsupported_format','invalid_reply'].includes(previous.status)) return {status:previous.status};
+    if((previous && previous.generation===control.generation) || (!previous && control.generation==='initial'))
+      return {status:'context_unavailable'};
+    const opaque=hash(binding.targetId,binding.projectId,wireBinding(binding).sessionId);
+    if(previous && previous.binding!==opaque) throw new Error('cursor_binding_mismatch');
+    const source=await openSource(binding.path);
+    try {
+      const stat=await source.stat(),id=fileId(stat,binding.path);
+      const replaced=previous && (previous.file!==id || stat.size<previous.offset);
+      const s=!previous || replaced?initialCursor(opaque,id,control.generation):structuredClone(previous);
+      if(replaced) s.epoch=previous.epoch+1;
+      const reason=replaced?'source_changed':'pause_boundary';
+      s.skipped[reason]+=stat.size-s.offset;s.offset=stat.size;s.observedEnd=stat.size;
+      s.generation=control.generation;s.pending=null;s.notBefore=0;s.status=reason;
+      const tail=stat.size?await readBytes(source,stat.size-1,stat.size):Buffer.alloc(0);
+      s.discard=stat.size>0 && tail[0]!==10;s.discardReason=s.discard?reason:null;
+      s.anchor=stat.size?{start:stat.size-1,end:stat.size,digest:hash(tail)}:null;
+      await publishCursor(cp,s,previous);return {status:reason,state:s};
+    } finally {await source.close();}
+  },options);
+}
 export function resetCapture(binding, {hostsStopped,confirm,...options}={}) {
   if (hostsStopped!==true || confirm!==true) throw new Error('reset_requires_stopped_workers');
   return prepared(binding,{...options,reset:true});
