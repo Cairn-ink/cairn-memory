@@ -5,7 +5,7 @@ import { fixture, header, item } from "./helpers.mjs";
 import { runWorker, prepareCapture, resetCapture, establishPauseBoundary } from "../worker.mjs";
 import { setPaused } from "../../client/control-state.mjs";
 import { cursorPath } from "../cursor.mjs";
-import { assertEveryMutation, closedValues } from "./table-contract.mjs";
+import { assertEveryMutation, closedValues } from "../../client/test/table-contract.mjs";
 import { withWriteObserver } from "../../client/private-state.mjs";
 
 const factValues = {

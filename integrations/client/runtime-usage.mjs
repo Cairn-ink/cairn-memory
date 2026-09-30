@@ -11,6 +11,7 @@ const refusals = new Set([
   "quota_signal_unavailable",
   "plan_threshold",
   "worker_liveness_unknown",
+  "policy_conflict",
 ]);
 const thresholds = {
   five_hour: 0.95,
@@ -27,6 +28,21 @@ const closed = (x, keys) =>
   Object.keys(x).length === keys.length &&
   Object.keys(x).every((k) => keys.includes(k));
 const time = (x) => x === null || (Number.isSafeInteger(x) && x >= 0 && x <= 8640000000000000);
+const owners = ["shared", "claude", "codex"];
+const validPolicy = (p) =>
+  closed(p, ["cap", "concurrency", "mode"]) &&
+  integer(p.cap) &&
+  p.cap >= 1 &&
+  integer(p.concurrency) &&
+  p.concurrency >= 1 &&
+  p.concurrency <= 32 &&
+  ["api-key", "plan", "hosted"].includes(p.mode);
+const samePolicy = (a, b) =>
+  a?.cap === b.cap && a?.concurrency === b.concurrency && a?.mode === b.mode;
+const conflict = (s) => {
+  const declarations = Object.values(s.policies);
+  return declarations.some((p) => !samePolicy(p, declarations[0]));
+};
 
 export function validateUsage(s) {
   if (
@@ -44,8 +60,9 @@ export function validateUsage(s) {
       "signalAt",
       "resumePermits",
       "pendingPolicy",
+      "policies",
     ]) ||
-    s.version !== 2 ||
+    s.version !== 3 ||
     !/^\d{4}-\d{2}-\d{2}$/.test(s.day) ||
     !integer(s.used) ||
     !integer(s.cap) ||
@@ -53,6 +70,7 @@ export function validateUsage(s) {
     s.used > s.cap ||
     !integer(s.concurrency) ||
     s.concurrency < 1 ||
+    s.concurrency > 32 ||
     !["api-key", "plan", "hosted"].includes(s.mode) ||
     !Array.isArray(s.reservations) ||
     s.reservations.length > s.concurrency ||
@@ -62,6 +80,15 @@ export function validateUsage(s) {
     !time(s.resetAt) ||
     !time(s.signalAt) ||
     ![null, 0, 1].includes(s.resumePermits)
+  )
+    throw new Error("usage_state_invalid");
+  if (
+    !s.policies ||
+    typeof s.policies !== "object" ||
+    Array.isArray(s.policies) ||
+    Object.entries(s.policies).some(
+      ([owner, policy]) => !owners.includes(owner) || !validPolicy(policy),
+    )
   )
     throw new Error("usage_state_invalid");
   if (
@@ -126,12 +153,14 @@ export function createRuntimeGuard({
   mode,
   dailyCap,
   concurrency = 2,
+  client = "shared",
   now = Date.now,
   liveness,
   signalMaxAgeMs = 300000,
 }) {
   if (
     !/^[a-f0-9]{64}$/.test(targetId) ||
+    !owners.includes(client) ||
     !["api-key", "plan", "hosted"].includes(mode) ||
     !integer(concurrency) ||
     concurrency < 1 ||
@@ -143,7 +172,7 @@ export function createRuntimeGuard({
   const path = join(root, "usage", `${targetId}.json`);
   // All publications, including dispatch intent, pass this single validated writer.
   const publish = (s) => privateWrite(path, JSON.stringify(validateUsage(s)));
-  async function operation(change) {
+  async function operation(change, scheduling = false) {
     if (!integer(dailyCap) || dailyCap < 1)
       return { ok: false, code: "automatic_cap_unconfigured" };
     await checkedPath(root, { directory: true });
@@ -159,7 +188,7 @@ export function createRuntimeGuard({
           const value =
             raw === undefined
               ? {
-                  version: 2,
+                  version: 3,
                   day,
                   used: 0,
                   cap: dailyCap,
@@ -172,6 +201,7 @@ export function createRuntimeGuard({
                   signalAt: null,
                   resumePermits: null,
                   pendingPolicy: null,
+                  policies: {},
                 }
               : JSON.parse(raw);
           if (value.version === 1) {
@@ -195,6 +225,26 @@ export function createRuntimeGuard({
             value.version = 2;
             value.pendingPolicy = null;
           }
+          if (value.version === 2) {
+            const keys = [
+              "version",
+              "day",
+              "used",
+              "cap",
+              "concurrency",
+              "mode",
+              "reservations",
+              "windows",
+              "refusal",
+              "resetAt",
+              "signalAt",
+              "resumePermits",
+              "pendingPolicy",
+            ];
+            if (!closed(value, keys)) throw new Error("usage_state_invalid");
+            value.version = 3;
+            value.policies = {};
+          }
           s = validateUsage(value);
         } catch {
           throw new Error("usage_state_invalid");
@@ -208,12 +258,13 @@ export function createRuntimeGuard({
             s.resetAt = null;
           }
         }
-        applyPolicy(s);
-        if (s.cap !== dailyCap || s.concurrency !== concurrency || s.mode !== mode) {
-          const same =
-            s.pendingPolicy?.cap === dailyCap &&
-            s.pendingPolicy?.concurrency === concurrency &&
-            s.pendingPolicy?.mode === mode;
+        const requested = { cap: dailyCap, concurrency, mode };
+        s.policies[client] = requested;
+        const conflicting = conflict(s);
+        // Reverts cancel the proposal BEFORE a new UTC day can activate it.
+        if (conflicting || samePolicy(s, requested)) s.pendingPolicy = null;
+        else {
+          const same = samePolicy(s.pendingPolicy, requested);
           if (!same)
             s.pendingPolicy = {
               cap: dailyCap,
@@ -222,7 +273,17 @@ export function createRuntimeGuard({
               day: new Date(Date.parse(`${s.day}T00:00:00Z`) + 86400000).toISOString().slice(0, 10),
             };
         }
-        const result = await change(s, live, currentTime);
+        if (
+          conflicting &&
+          !["quota_reached", "plan_threshold", "daily_cap_reached"].includes(s.refusal)
+        )
+          s.refusal = "policy_conflict";
+        else if (!conflicting && s.refusal === "policy_conflict") s.refusal = "none";
+        applyPolicy(s);
+        const result =
+          conflicting && scheduling
+            ? { ok: false, code: "policy_conflict" }
+            : await change(s, live, currentTime);
         // This sole write site enforces counter/cap invariants even after a refusal.
         await publish(s);
         return result;
@@ -241,7 +302,8 @@ export function createRuntimeGuard({
   }
   function applyPolicy(s) {
     const policy = s.pendingPolicy;
-    if (!policy || policy.day > s.day || s.reservations.length > policy.concurrency) return;
+    if (conflict(s) || !policy || policy.day > s.day || s.reservations.length > policy.concurrency)
+      return;
     if (s.used > policy.cap) return; // No counter is ever reset merely to fit a new policy.
     s.cap = policy.cap;
     s.mode = policy.mode;
@@ -329,7 +391,7 @@ export function createRuntimeGuard({
             ? "quota_signal_unavailable"
             : "none";
         return { ok: true, id, code: s.refusal };
-      }),
+      }, true),
     dispatch: (id, start) =>
       operation(async (s, live, t) => {
         const r = s.reservations.find((r) => r.id === id);
@@ -356,7 +418,7 @@ export function createRuntimeGuard({
         // start returns a dispatch descriptor; its network/model promise is NOT awaited under this
         // lock.
         return { ok: true, dispatch: await start() };
-      }),
+      }, true),
     release: (id, { terminated = false, accepted = false } = {}) =>
       operation((s) => {
         if (!terminated) return { ok: false, code: "termination_unconfirmed" };
@@ -426,7 +488,12 @@ export function createRuntimeGuard({
         )
           s.resumePermits = 1;
         return { ok: true, previous };
-      }),
-    status: () => operation((s) => ({ ok: true, state: structuredClone(s) })),
+      }, true),
+    status: () =>
+      operation((s) => ({
+        ok: !conflict(s),
+        ...(conflict(s) ? { code: "policy_conflict" } : {}),
+        state: structuredClone(s),
+      })),
   };
 }
