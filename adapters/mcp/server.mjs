@@ -44,14 +44,23 @@ async function classifyUnfiledMemories({ core, namespace, model, refs }) {
 export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
-    'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient']);
+    'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes']);
   const { path, namespace, model } = options;
   const client = options.client ?? 'cairn-local-mcp', sessionId = options.sessionId ?? 'explicit-tool';
   if (!clientKey.safeParse(client).success || !id.safeParse(sessionId).success ||
       (Object.hasOwn(options, 'readClient') && !clientKey.safeParse(options.readClient).success)) throw new Error('invalid_mcp_configuration');
   const readClient = options.readClient;
-  const episodesAccess = Object.hasOwn(options, 'sessionEpisodesAccess');
-  if (episodesAccess && options.sessionEpisodesAccess !== 'episode-v1') throw new Error('invalid_mcp_configuration');
+  const generationConfigured = Object.hasOwn(options, 'sessionEpisodes');
+  if (generationConfigured) {
+    object(options.sessionEpisodes, ['mode', 'draftEveryBatches']);
+    const batches = options.sessionEpisodes.draftEveryBatches ?? 8;
+    if (options.sessionEpisodes.mode !== 'episode-v1' || !Number.isSafeInteger(batches) || batches < 2 || batches > 16 ||
+        options.captureQualification !== 'source-bound-v2' || options.captureEvidence !== 'staged-v1') throw new Error('invalid_mcp_configuration');
+  }
+  // Configuration only: the submitted-capture tool is not a trusted episode producer.
+  // Never pass sessionEpisodes to the core used for capture_memory.
+  const episodesAccess = generationConfigured || Object.hasOwn(options, 'sessionEpisodesAccess');
+  if (Object.hasOwn(options, 'sessionEpisodesAccess') && options.sessionEpisodesAccess !== 'episode-v1') throw new Error('invalid_mcp_configuration');
   const recoveryConfigured = Object.hasOwn(options, 'classificationRecovery');
   if (recoveryConfigured && options.classificationRecovery !== 'guarded-v1') throw new Error('invalid_mcp_configuration');
   const recallContextConfigured = Object.hasOwn(options, 'recallContext');

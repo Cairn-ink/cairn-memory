@@ -97,3 +97,48 @@ test('64 KiB list budgets return whole-record prefixes and reject an oversized f
   }
   fails(await call(h, 'list_session_episodes', range), 'context_item_too_large');
 });
+
+test('CLI flags validate strict access/generation and N2..16 before opening the store', async t => {
+  const { parseConfiguration } = await import('../cli.mjs');
+  const { createCairnServer } = await import('../server.mjs');
+  const { existsSync } = await import('node:fs');
+  const f = workspace(t), base = ['--db', f.path, '--owner', namespace.ownerId];
+  const generation = ['--capture-qualification', 'source-bound-v2', '--capture-evidence', 'staged-v1', '--session-episodes', 'episode-v1'];
+  for (const n of [2, 8, 16]) assert.equal(parseConfiguration([...base, ...generation, '--session-episodes-draft-batches', String(n)]).sessionEpisodes.draftEveryBatches, n);
+  assert.equal(parseConfiguration([...base, ...generation]).sessionEpisodes.draftEveryBatches, 8);
+  for (const flags of [['--session-episodes-access', 'wrong'], ['--session-episodes', 'episode-v1'],
+    ['--session-episodes-draft-batches', '8'], ...['1', '17', '2.0', '02', 'NaN'].map(n => [...generation, '--session-episodes-draft-batches', n]),
+    ['--session-episodes-access', 'episode-v1', '--session-episodes-access', 'episode-v1'], ['--client', 'bad client']]) {
+    assert.throws(() => parseConfiguration([...base, ...flags])); assert.equal(existsSync(f.path), false);
+  }
+  for (const config of [{ sessionEpisodesAccess: null }, { sessionEpisodes: { mode: 'episode-v1' } },
+    { sessionEpisodes: { mode: 'episode-v1', draftEveryBatches: 1 }, captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1' }]) {
+    assert.throws(() => createCairnServer({ path: f.path, namespace, ...config })); assert.equal(existsSync(f.path), false);
+  }
+});
+
+test('real keyless CLI access and generation config start without capture/interpretation side effects', async t => {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const { existsSync } = await import('node:fs');
+  const f = workspace(t), cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
+  const modes = [['--session-episodes-access', 'episode-v1'], ['--capture-qualification', 'source-bound-v2',
+    '--capture-evidence', 'staged-v1', '--session-episodes', 'episode-v1']];
+  for (const flags of modes) {
+    const checked = spawnSync(process.execPath, ['--import', 'data:text/javascript,globalThis.fetch=()=>{process.exit(91)}', cli,
+      '--check-config', '--db', f.path, '--owner', namespace.ownerId, ...flags], { encoding: 'utf8', env: { HOME: f.home, OPENAI_API_KEY: '' } });
+    assert.equal(checked.status, 0, checked.stderr); const config = JSON.parse(checked.stdout);
+    assert.equal(config.sessionEpisodesAccess, 'episode-v1'); assert.equal(config.episodeGenerationEnabled, false);
+    assert.equal(config.databaseOpened, false); assert.equal(config.providerContacted, false);
+  }
+  assert.equal(existsSync(f.path), false);
+  const h = await episodeHost(t, f.path, { home: f.home, cli: true, flags: modes[0] });
+  assert.equal((await h.client.listTools()).tools.some(tool => tool.name === 'capture_memory'), false);
+  ok(await call(h, 'read_session_start_context')); ok(await call(h, 'list_session_episodes', range));
+  await h.close();
+  const configured = await episodeHost(t, f.path, { home: f.home, cli: true, flags: modes[1] });
+  fails(await call(configured, 'capture_memory', { batchId: 'synthetic-submission', messages: [{ role: 'user', content: 'Synthetic submitted text' }] }), 'model_not_configured');
+  await configured.close();
+  const db = new DatabaseSync(f.path); t.after(() => db.close());
+  for (const table of ['session_episodes', 'episode_events', 'episode_attempts']) assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0);
+});
