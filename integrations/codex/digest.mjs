@@ -3,9 +3,19 @@ import { join } from "node:path";
 import { privateRead, privateWrite } from "../client/private-state.mjs";
 
 // Independent owner-private key: never expose it in cursor, handoff or request.
-export async function transcriptDigest(binding) {
+export async function transcriptDigest(binding, { repair = false } = {}) {
   const path = join(binding.root, "codex-digest-key");
-  let key = await privateRead(path, { missing: true });
+  let key;
+  try {
+    key = await privateRead(path, { missing: true });
+  } catch (error) {
+    if (!repair || error.message !== "state_too_large") throw error;
+    key = "";
+  }
+  if (repair && key !== undefined && !/^[a-f0-9]{64}$/.test(key)) {
+    await privateWrite(path, randomBytes(32).toString("hex"));
+    key = await privateRead(path);
+  }
   if (key === undefined) {
     await privateWrite(path, randomBytes(32).toString("hex"), { exclusive: true });
     key = await privateRead(path);

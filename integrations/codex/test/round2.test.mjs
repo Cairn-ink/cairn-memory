@@ -109,6 +109,7 @@ test("v1 cursor starts a keyed EOF epoch without replay", async (t) => {
   delete legacy.quotaRefusal;
   delete legacy.skipped.binding_changed;
   delete legacy.skipped.digest_migrated;
+  delete legacy.skipped.digest_key_reset;
   legacy.anchor.digest = "0".repeat(64);
   await writeFile(cursorPath(f.root, f.binding.targetId, session), JSON.stringify(legacy));
   await appendFile(f.path, item("Before migration", 1));

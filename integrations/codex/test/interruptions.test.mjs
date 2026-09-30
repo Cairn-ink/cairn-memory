@@ -72,6 +72,7 @@ test(
             delete value.quotaRefusal;
             delete value.skipped.binding_changed;
             delete value.skipped.digest_migrated;
+            delete value.skipped.digest_key_reset;
             await writeFile(
               cursorPath(f.root, f.binding.targetId, f.binding.sessionId),
               JSON.stringify(value),

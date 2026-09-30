@@ -38,6 +38,10 @@ const factValues = {
     "digest-migration",
     "latch-failure",
     "refused-binding",
+    "late-binding",
+    "invalid-binding",
+    "digest-key-reset",
+    "unconfigured-latch",
   ],
   batch: ["first", "middle", "last"],
   mode: ["hosted-stub", "local-stub"],
@@ -69,6 +73,7 @@ const results = {
     "state_reset",
     "superseded",
     "digest_migrated",
+    "digest_key_reset",
   ],
 };
 const plan = await readFile(
@@ -98,8 +103,8 @@ const rows = section
     };
   });
 test("table is closed and every row generates a test", () => {
-  assert.equal(rows.length, 33);
-  assert.equal(new Set(rows.map((x) => x.id)).size, 33);
+  assert.equal(rows.length, 37);
+  assert.equal(new Set(rows.map((x) => x.id)).size, 37);
   assert.throws(() => facts({ batc: "first" }));
   assert.throws(() => facts({ batch: "frist" }));
 });
@@ -116,6 +121,8 @@ for (const row of rows)
       });
     if (row.f.state !== "fresh") await run(); // known excluded header, with byte coverage
     const initial = await f.cursor();
+    let unchanged = initial;
+    let handoff;
     let addition = item("Prefer concise notes.");
     if (
       ["timeout", "refusal"].includes(row.f.event) ||
@@ -171,17 +178,36 @@ for (const row of rows)
       delete legacy.quotaRefusal;
       delete legacy.skipped.binding_changed;
       delete legacy.skipped.digest_migrated;
+      delete legacy.skipped.digest_key_reset;
       await writeFile(
         cursorPath(f.root, f.binding.targetId, f.binding.sessionId),
         JSON.stringify(legacy),
       );
     }
-    if (row.f.event === "latch-failure") {
+    if (["latch-failure", "unconfigured-latch"].includes(row.f.event)) {
       f.fail("refusal");
-      f.guard.refuse = async () => {
-        throw new Error("state_busy");
-      };
+      f.guard.refuse =
+        row.f.event === "unconfigured-latch"
+          ? async () => ({ ok: false, code: "automatic_cap_unconfigured" })
+          : async () => {
+              throw new Error("state_busy");
+            };
     }
+    if (row.f.event === "late-binding") {
+      handoff = { binding: { ...f.binding }, byteEnd: Buffer.byteLength(await readFile(f.path)) };
+      f.binding.projectId = "c".repeat(64);
+      await establishPauseBoundary(f.binding);
+      unchanged = await f.cursor();
+      await appendFile(f.path, item("B first", 100));
+    }
+    if (row.f.event === "invalid-binding") {
+      f.fail("bad");
+      await run();
+      f.clear();
+      f.binding.projectId = "c".repeat(64);
+    }
+    if (row.f.event === "digest-key-reset")
+      await writeFile(`${f.root}/codex-digest-key`, "corrupt");
     let result;
     if (row.f.event === "crash") {
       let hit = false;
@@ -197,8 +223,14 @@ for (const row of rows)
         ),
       );
       result = await run();
-    } else if (row.f.event === "reset-binding")
+    } else if (["reset-binding", "digest-key-reset"].includes(row.f.event))
       result = await resetCapture(f.binding, { hostsStopped: true, confirm: true });
+    else if (row.f.event === "late-binding")
+      result = await runWorker(handoff.binding, {
+        guard: f.guard,
+        transport: f.transport,
+        byteEnd: handoff.byteEnd,
+      });
     else if (row.f.event === "start-binding") result = await establishPauseBoundary(f.binding);
     else if (row.f.event === "late-worker") result = await run({ byteEnd: 0 });
     else result = await run();
@@ -214,6 +246,7 @@ for (const row of rows)
         "reset-binding",
         "start-binding",
         "digest-migration",
+        "digest-key-reset",
         "replace",
         "truncate",
         "mutate",
@@ -228,6 +261,7 @@ for (const row of rows)
         "reset-binding": "state_reset",
         "start-binding": "binding_changed",
         "digest-migration": "digest_migrated",
+        "digest-key-reset": "digest_key_reset",
         replace: "source_changed",
         truncate: "source_changed",
         mutate: "source_changed",
@@ -240,16 +274,26 @@ for (const row of rows)
       } else assert.equal(s.epoch, initial.epoch);
       observed.cursor = "eof";
     } else if (
-      ["timeout", "processing", "lost", "bad-reply", "refusal", "latch-failure"].includes(
-        row.f.event,
-      )
+      [
+        "timeout",
+        "processing",
+        "lost",
+        "bad-reply",
+        "refusal",
+        "latch-failure",
+        "invalid-binding",
+        "unconfigured-latch",
+      ].includes(row.f.event)
     ) {
       assert.ok(s.pending);
       observed.cursor = "batch-start";
     } else if (
-      ["partial", "missing", "pause", "unsupported", "late-worker"].includes(row.f.event)
+      ["partial", "missing", "pause", "unsupported", "late-worker", "late-binding"].includes(
+        row.f.event,
+      )
     ) {
-      assert.equal(s.offset, initial.offset);
+      assert.equal(s.offset, unchanged.offset);
+      if (row.f.event === "late-binding") assert.deepEqual(s, unchanged);
       observed.cursor = "unchanged";
     } else if (["finish", "last-hook", "new-session"].includes(row.f.event)) {
       assert.equal(
@@ -263,8 +307,8 @@ for (const row of rows)
       assert.equal(s.offset, Buffer.byteLength(await readFile(f.path)));
       observed.cursor = row.f.event === "crash" ? "retry-end" : "end";
     }
-    if (result.status === "unsupported_format") {
-      assert.equal(s.status, "unsupported_format");
+    if (["unsupported_format", "invalid_reply"].includes(result.status)) {
+      assert.equal(s.status, result.status);
       const calls = f.calls.length;
       await run();
       assert.equal(f.calls.length, calls);
@@ -282,6 +326,29 @@ for (const row of rows)
       observed,
       results,
     );
+    if (row.f.event === "late-binding") {
+      await run();
+      const bodies = [...f.receiver.values()];
+      assert.deepEqual(
+        bodies.map((body) => body.project_id),
+        [f.binding.projectId],
+      );
+      assert.deepEqual(
+        bodies.flatMap((body) => body.messages.map((m) => m.content)),
+        ["B first"],
+      );
+    }
+    if (row.f.event === "invalid-binding") {
+      const before = await f.stateBytes();
+      assert.equal((await establishPauseBoundary(f.binding)).status, "invalid_reply");
+      assert.equal(await f.stateBytes(), before);
+    }
+    if (row.f.event === "unconfigured-latch") {
+      assert.equal(s.quotaRefusal.latched, false);
+      const calls = f.calls.length;
+      await run();
+      assert.equal(f.calls.length, calls);
+    }
     if (row.f.event === "refused-binding") {
       assert.equal(s.quotaRefusal.latched, false);
       const calls = f.calls.length;
@@ -300,7 +367,12 @@ for (const row of rows)
       f.clear();
       if (row.f.event === "refusal") await f.guard.resume();
       // explicit repair/reset required, no automatic retry
-      if (["bad-reply", "latch-failure"].includes(row.f.event)) return;
+      if (
+        ["bad-reply", "latch-failure", "invalid-binding", "unconfigured-latch"].includes(
+          row.f.event,
+        )
+      )
+        return;
       await run();
       const replay = f.calls[ids.length];
       assert.equal(replay.event_id, ids.at(-1));

@@ -14,6 +14,7 @@ export const REASONS = [
   "state_reset",
   "binding_changed",
   "digest_migrated",
+  "digest_key_reset",
 ];
 export const STATUSES = [
   "idle",
@@ -42,6 +43,8 @@ export const STATUSES = [
   "superseded",
   "reservation_invalidated",
   "reservation_already_dispatched",
+  "digest_key_reset",
+  "policy_conflict",
 ];
 const int = (x) => Number.isSafeInteger(x) && x >= 0;
 const digest = (x) => typeof x === "string" && /^[a-f0-9]{64}$/.test(x);
@@ -175,7 +178,9 @@ export async function readCursor(path, { recover = false } = {}) {
     if (value.version === 1) {
       const current = initialCursor(value.binding, value.file, value.generation);
       const oldKeys = Object.keys(current).filter((k) => k !== "quotaRefusal");
-      const oldReasons = REASONS.filter((k) => !["binding_changed", "digest_migrated"].includes(k));
+      const oldReasons = REASONS.filter(
+        (k) => !["binding_changed", "digest_migrated", "digest_key_reset"].includes(k),
+      );
       if (!closed(value, oldKeys) || !closed(value.skipped, oldReasons))
         throw new Error("cursor_state_invalid");
       const migrated = validateCursor({
@@ -186,6 +191,14 @@ export async function readCursor(path, { recover = false } = {}) {
       });
       return { ...migrated, version: 1 }; // EOF epoch migration requires an authorized source.
     }
+    if (
+      value.version === 2 &&
+      closed(
+        value.skipped,
+        REASONS.filter((reason) => reason !== "digest_key_reset"),
+      )
+    )
+      value.skipped.digest_key_reset = 0;
     return validateCursor(value);
   } catch {
     if (recover) return null;
@@ -204,9 +217,13 @@ export async function publishCursor(path, next, previous) {
     previous &&
     next.epoch !== previous.epoch &&
     (next.epoch !== previous.epoch + 1 ||
-      !["source_changed", "state_reset", "binding_changed", "digest_migrated"].includes(
-        next.status,
-      ))
+      ![
+        "source_changed",
+        "state_reset",
+        "binding_changed",
+        "digest_migrated",
+        "digest_key_reset",
+      ].includes(next.status))
   )
     throw new Error("cursor_epoch_invalid");
   await privateWrite(path, JSON.stringify(next));

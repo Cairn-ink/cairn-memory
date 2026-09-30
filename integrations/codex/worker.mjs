@@ -91,6 +91,24 @@ async function prepared(binding, options, action) {
         prior = structuredClone(s);
       };
       const control = await readControlState(root);
+      const opaque = hash(targetId, projectId, wireBinding(binding).sessionId);
+      if (
+        options.byteEnd !== undefined &&
+        (!Number.isSafeInteger(options.byteEnd) || options.byteEnd < 0)
+      )
+        throw new Error("invalid_byte_end");
+      if (
+        !options.reset &&
+        options.byteEnd !== undefined &&
+        s &&
+        (s.binding !== opaque || options.byteEnd < s.offset)
+      )
+        return { status: "superseded", state: s };
+      if (
+        !options.reset &&
+        (s?.status === "invalid_reply" || (s?.status === "digest_key_reset" && !s.anchor))
+      )
+        return { status: s.status, state: s };
       if (!options.reset && (control.paused || !control.valid))
         return { status: "paused", state: s };
       let file;
@@ -109,9 +127,14 @@ async function prepared(binding, options, action) {
         const size = stat.size;
         const end = options.byteEnd === undefined ? size : Math.min(options.byteEnd, size);
         if (!Number.isSafeInteger(end) || end < 0) throw new Error("invalid_byte_end");
-        const id = fileId(stat, path),
-          opaque = hash(targetId, projectId, wireBinding(binding).sessionId);
-        const digest = await transcriptDigest(binding);
+        const id = fileId(stat, path);
+        let digest;
+        try {
+          digest = await transcriptDigest(binding);
+        } catch (error) {
+          if (!options.reset || !["digest_key_invalid", "state_too_large"].includes(error.message))
+            throw error;
+        }
         if (!s) s = initialCursor(opaque, id, control.generation);
         async function boundary(reason, newEpoch = false) {
           const quotaRefusal = s.quotaRefusal;
@@ -134,7 +157,9 @@ async function prepared(binding, options, action) {
           s.status = reason;
           s.unconfirmedTail = true;
           const start = Math.max(0, size - 256);
-          s.anchor = { start, end: size, digest: digest(await readBytes(file, start, size)) };
+          s.anchor = digest
+            ? { start, end: size, digest: digest(await readBytes(file, start, size)) }
+            : null;
           await save();
           return { status: reason, state: s };
         }
@@ -143,9 +168,26 @@ async function prepared(binding, options, action) {
             control.paused || !control.valid
               ? "legacy-" + hash("paused-reset", control.generation)
               : control.generation;
+          const sameBoundary =
+            prior?.version === 2 &&
+            s.binding === opaque &&
+            s.file === id &&
+            s.offset === size &&
+            s.generation === generation &&
+            !s.pending;
+          if (!digest || (s.status === "digest_key_reset" && !s.anchor)) {
+            // Publish content-free EOF intent BEFORE replacing the corrupt root key.
+            if (!(sameBoundary && s.status === "digest_key_reset" && !s.anchor))
+              await boundary("digest_key_reset", true);
+            digest ??= await transcriptDigest(binding, { repair: true });
+            const start = Math.max(0, size - 256);
+            s.anchor = { start, end: size, digest: digest(await readBytes(file, start, size)) };
+            await save();
+            return { status: "digest_key_reset", state: s };
+          }
           if (
             prior?.version === 2 &&
-            s.status === "state_reset" &&
+            ["state_reset", "digest_key_reset"].includes(s.status) &&
             s.binding === opaque &&
             s.file === id &&
             s.offset === size &&
@@ -154,7 +196,7 @@ async function prepared(binding, options, action) {
             s.anchor &&
             digest(await readBytes(file, s.anchor.start, s.anchor.end)) === s.anchor.digest
           )
-            return { status: "state_reset", state: s };
+            return { status: s.status, state: s };
           return await boundary("state_reset", true);
         }
         if (s.version === 1) return await boundary("digest_migrated", true);
@@ -230,6 +272,7 @@ async function prepared(binding, options, action) {
                       "state_reset",
                       "binding_changed",
                       "digest_migrated",
+                      "digest_key_reset",
                       "excluded",
                     ].includes(s.status)
                   ? s.status
@@ -272,6 +315,11 @@ export async function establishPauseBoundary(binding, options = {}) {
       const control = await readControlState(binding.root),
         previous = await readCursor(cp);
       if (control.paused || !control.valid) return { status: "paused" };
+      if (
+        previous?.status === "invalid_reply" ||
+        (previous?.status === "digest_key_reset" && !previous.anchor)
+      )
+        return { status: previous.status, state: previous };
       const opaque = hash(binding.targetId, binding.projectId, wireBinding(binding).sessionId);
       const changed = previous && previous.binding !== opaque;
       const migration = previous?.version === 1;
@@ -369,8 +417,8 @@ export async function runWorker(
   return prepared(binding, options, async ({ s, save, batches, records, bytes, stat, digest }) => {
     if (s.quotaRefusal && !s.quotaRefusal.latched) {
       try {
-        await guard.refuse({ resetAt: s.quotaRefusal.resetAt });
-        s.quotaRefusal.latched = true;
+        const latch = await guard.refuse({ resetAt: s.quotaRefusal.resetAt });
+        s.quotaRefusal.latched = latch?.code === "quota_reached";
       } catch {
         /* Keep the durable refusal intent; never dispatch before its latch. */
       }
@@ -483,8 +531,11 @@ export async function runWorker(
             s.status = "quota_reached";
             await save();
             try {
-              await guard.refuse({ code: reply.code, resetAt: s.quotaRefusal.resetAt });
-              s.quotaRefusal.latched = true;
+              const latch = await guard.refuse({
+                code: reply.code,
+                resetAt: s.quotaRefusal.resetAt,
+              });
+              s.quotaRefusal.latched = latch?.code === "quota_reached";
             } catch {
               /* The cursor retains the refusal even if the usage lock is busy. */
             }
