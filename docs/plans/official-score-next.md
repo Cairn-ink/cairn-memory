@@ -127,8 +127,11 @@ operational helper code, not just worker summaries.
   That test-only correction lets later reruns use owned null/synthetic pins
   after the primary fills the actual approved module, without actual-data reads.
 - Primary personally reruns the complete combined real-core/native fake HTTP
-  gate on both Node22.16/24.15. At this authoring checkpoint these runs remain
-  active; they are not yet claimed as passes.
+  gate on both Node22.16/24.15. Both passed32/32 with zero skips, respectively
+  212,948.153509ms / 212,103.983546ms. Commands used the owned test runner,
+  cleared application environment and the unchanged pinned native roots.
+  Runtime code matches committed `b533ab8` / plan-only descendant `f4e52f0`;
+  no runtime implementation changed while these processes were running.
 - Private production helper SHA256: preparer
   `bd918d31d0b73379fcd15af4849d0ce67509c8badd1b9871110146e45d6bd02b`,
   coordinator `d32613c8d6feabc5ce1fc4bdddfcab725633a81c0dec468e2727331c18e35f90`,
