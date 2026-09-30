@@ -957,7 +957,7 @@ client/session and namespace authority. Optional `readClient` restricts range an
 episode-ID operations; tool client filters can only narrow it. Startup context
 uses the core's cross-client groups in the exact namespace.
 
-`--session-episodes-access episode-v1` is keyless access without capture,
+`--session-episodes-access episode-v1` is keyless access without capture or
 interpretation. Automatic tag proposals can occur through explicit keep's normal
 episode-mode extraction. Generation flags require source-bound-v2 and
 staged-v1, validate N=2–16/default 8, and record configuration only pending a
@@ -1093,6 +1093,10 @@ an SE package's allowed paths. No merge, push or PR is authorized by this packet
   episode-ID operations narrow by client; startup context remains cross-client
   within the exact namespace. Future hosts must not present this flag as a
   namespace-wide memory access boundary.
+- **SE-5 re-review note:** `remember_memory` with `procedural:{anchors}` replaces an
+  existing tag (another host's, or a model-origin one) without a tag-revision
+  check, as the plan allows remember to tag. A later core change can guard it
+  with `expectedTagRevision`; until then the docs say so.
 
 Non-goals: hosted behavior, UI, commitments, shared scope, automatic capture for
 additional unsupported clients, complete archives/backfill, cross-store identity

@@ -440,7 +440,7 @@ Enable local reads and management without a key:
 node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-user --project project-id --session-episodes-access episode-v1
 ```
 
-This adds the tools below. Access alone does not enable capture, staging,
+This adds the tools below. Access alone does not enable capture, staging or
 interpretation. Automatic procedural proposals can occur through explicit keep's
 normal episode-mode extraction. Reads never process a pending queue or call a
 provider. Normal CLI startup supplies the existing local
@@ -544,6 +544,7 @@ The single explicit receipt is the canonical normalized/redacted content itself;
 anchors address that exact text, not metadata. Supply 1–4 valid spans (receiptIndex
 must be 0), without splitting a surrogate pair. Positive tags do not prove a habit
 or entailment. Omit `procedural` to preserve an existing tag when re-remembering;
+supplied anchors replace an existing tag without a tag-revision check, and
 `procedural:null` is rejected. `set_procedural_memory` uses retained receipt anchors
 `{receiptId,digest,start,end}`; null clears it. It guards memory and independent tag
 revisions and changes only tag metadata/read epoch, preserving content, receipts,
