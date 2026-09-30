@@ -2156,8 +2156,13 @@ worktree TMPDIR/cache. No real transcripts, credentials or memory roots are used
 | Runtime | Three complete CX-3 runs (seconds) | Exit codes | Generator seconds |
 | --- | --- | --- | --- |
 | Node 22.16.0 | 43.301, 42.488, 43.040 | 0, 0, 0 | 43.135, 42.347, 42.888 |
-| Node 24.15.0 | qualification in progress | pending | pending |
+| Node 24.15.0 | 41.926, 42.430, 42.417 | 0, 0, 0 | 41.791, 42.290, 42.280 |
 
 The full matrix is not rerun; the coordinator must qualify this round's final
 HEAD and update test:codex to include every CX-3 test file. The CX-6 limitations
 handoff and installed/native-host/model qualification boundaries remain unchanged.
+
+All six final invocations passed 133/133, with no failures or skips. They
+cover 48 seeded sequences/3072 main operations and 444 exhaustive interruption
+points (74 per invocation). The complete packet passes git diff --check, exit 0.
+Scratch and logs are removed after recording these results.
