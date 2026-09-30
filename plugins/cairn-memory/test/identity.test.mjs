@@ -6,23 +6,51 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { installId, opaqueProjectId } from "../lib/identity.mjs";
+import { deferred } from "../../../integrations/client/testing/deferred.mjs";
 
 const identityUrl = new URL("../lib/identity.mjs", import.meta.url).href;
 
-function childIdentity(dir, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["--input-type=module", "-e",
+function startChildIdentity(dir, cwd) {
+  const ready = deferred();
+  let child;
+  const completed = new Promise((resolve, reject) => {
+    child = spawn(process.execPath, ["--input-type=module", "-e",
       `import { opaqueProjectId } from ${JSON.stringify(identityUrl)};
+       const released = new Promise(resolve => process.stdin.once('end', resolve));
+       process.stdin.resume();
        const options = { home: process.argv[1] };
-       process.stdout.write(await opaqueProjectId(process.argv[1], process.argv[2], options));`,
-      dir, cwd], { stdio: ["ignore", "pipe", "pipe"] });
+       console.log(await opaqueProjectId(process.argv[1], process.argv[2], options));
+       await released;`,
+      dir, cwd], { stdio: ["pipe", "pipe", "pipe"] });
     let output = "";
     let errors = "";
-    child.stdout.on("data", chunk => output += chunk);
+    child.stdout.on("data", chunk => {
+      output += chunk;
+      if (output.includes("\n")) ready.resolve(output.trim());
+    });
     child.stderr.on("data", chunk => errors += chunk);
-    child.on("error", reject);
-    child.on("close", code => code === 0 ? resolve(output) : reject(new Error(errors)));
+    child.stdin.on("error", error => { ready.reject(error); reject(error); });
+    child.on("error", error => { ready.reject(error); reject(error); });
+    child.on("close", code => {
+      if (code === 0) { ready.resolve(output.trim()); resolve(); }
+      else { const error = new Error(errors); ready.reject(error); reject(error); }
+    });
   });
+  // Observe failures immediately even while the caller waits for the ID wave.
+  completed.catch(() => {});
+  return { id: ready.promise, completed, release: () => child.stdin.end() };
+}
+
+async function releaseChildren(children) {
+  for (const child of children) child.release();
+  const results = await Promise.allSettled(children.map(child => child.completed));
+  for (const result of results) if (result.status === "rejected") throw result.reason;
+}
+
+async function childIdentity(dir, cwd) {
+  const child = startChildIdentity(dir, cwd);
+  try { return await child.id; }
+  finally { await releaseChildren([child]); }
 }
 
 test("concurrent first use retains one project identity", async () => {
@@ -36,7 +64,12 @@ test("concurrent first use retains one project identity", async () => {
 
 test("separate processes initialize the same persistent key", async () => {
   const dir = await mkdtemp(join(tmpdir(), "cairn-key-processes-"));
-  const ids = await Promise.all(Array.from({ length: 16 }, () => childIdentity(dir, "/project/a")));
+  // Keep every owner alive until ALL identity operations have returned. Process
+  // exit/reaping is separate from the atomic publication invariant tested here.
+  const children = Array.from({ length: 16 }, () => startChildIdentity(dir, "/project/a"));
+  let ids;
+  try { ids = await Promise.all(children.map(child => child.id)); }
+  finally { await releaseChildren(children); }
   assert.equal(new Set(ids).size, 1);
   assert.equal(await opaqueProjectId(dir, "/project/a", { home: dir }), ids[0]);
   assert.deepEqual((await readdir(dir)).sort(), ["created-by", "project-key"]);

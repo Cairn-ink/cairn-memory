@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { usageFixture as setup } from "./runtime-helpers.mjs";
 import { createRuntimeGuard, validateUsage } from "../runtime-usage.mjs";
 import { withWriteObserver } from "../private-state.mjs";
+import { concurrentUsage } from "../testing/lock-contention.mjs";
 
 test(
   "A9 one shared atomic cap for Claude/Codex and all sessions; reservations and billing " +
@@ -14,12 +15,16 @@ test(
     const f = await setup(t, { dailyCap: 3 });
     const claude = createRuntimeGuard(f.config),
       codex = createRuntimeGuard(f.config);
-    const [a, b, c] = await Promise.all([claude.reserve(), codex.reserve(), claude.reserve()]);
+    const [a, b, c] = await concurrentUsage(t, [
+      () => claude.reserve(), () => codex.reserve(), () => claude.reserve(),
+    ]);
     assert.equal([a, b, c].filter((x) => x.ok).length, 2);
     assert.equal([a, b, c].find((x) => !x.ok).code, "concurrency_limited");
     const state = (await createRuntimeGuard(f.config).status()).state;
     assert.equal(state.used, 2);
     assert.equal(state.reservations.length, 2);
+    assert.deepEqual(new Set(state.reservations.map((r) => r.id)),
+      new Set([a, b, c].filter((p) => p.ok).map((p) => p.id)));
     for (const r of state.reservations) await f.guard.release(r.id, { terminated: true });
     assert.equal((await f.guard.reserve()).ok, true);
     assert.equal((await codex.reserve()).code, "daily_cap_reached");
@@ -36,7 +41,7 @@ test(
     const f = await setup(t, { mode: "plan" }),
       claude = createRuntimeGuard(f.config),
       codex = createRuntimeGuard(f.config);
-    const permits = await Promise.all([claude.reserve(), codex.reserve()]);
+    const permits = await concurrentUsage(t, [() => claude.reserve(), () => codex.reserve()]);
     const active = new Map();
     let calls = 0;
     const start = (id) => {
@@ -55,8 +60,8 @@ test(
       active.set(id, controller);
       return { operation };
     };
-    const dispatches = await Promise.all(
-      permits.map((p, i) => (i ? codex : claude).dispatch(p.id, () => start(p.id))),
+    const dispatches = await concurrentUsage(t,
+      permits.map((p, i) => () => (i ? codex : claude).dispatch(p.id, () => start(p.id))),
     );
     assert.equal(dispatches.filter((x) => x.ok).length, 2);
     assert.equal(active.size, 2);
