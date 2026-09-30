@@ -1,0 +1,1385 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { spawn } from "node:child_process";
+import {
+  mkdir,
+  writeFile,
+  readFile,
+  readdir,
+  chmod,
+  symlink,
+  unlink,
+  stat,
+  rm,
+} from "node:fs/promises";
+import { join } from "node:path";
+import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
+import {
+  resolveClient,
+  clientProjectId,
+  initializePairing,
+  completePairing,
+  stateLocations,
+  detectClients,
+  localLiveness,
+  parsePairingRecord,
+  resetIdentity,
+} from "../pairing.mjs";
+import { projectKey } from "../identity.mjs";
+import { privateWrite } from "../private-state.mjs";
+import { captureCursorPath, writeCaptureCursor } from "../capture-cursor.mjs";
+import { readControlState, setPaused, startIfActive, runIfActive } from "../control-state.mjs";
+
+const moduleURL = new URL("../pairing.mjs", import.meta.url).href;
+const key = "12345678-1234-4234-8234-123456789abc";
+async function fixture(t, extra = {}) {
+  const workspace = createTestWorkspace(t, { prefix: "cx2-pairing-" });
+  const home = join(workspace.path, "home");
+  await mkdir(home, { mode: 0o700 });
+  return {
+    home,
+    temporary: workspace.path,
+    env: { HOME: home },
+    standardClaudeOrigin: true,
+    claudeProfileRoot: join(home, ".cairn-memory"),
+    ...extra,
+  };
+}
+async function expectDisabled(promise, status) {
+  const result = await promise;
+  assert.equal(result.enabled, false);
+  assert.equal(result.status, status);
+  return result;
+}
+async function seed(root) {
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  await writeFile(join(root, "project-key"), `${key}\n`, { mode: 0o600 });
+}
+async function registered(options, clients) {
+  await privateWrite(stateLocations(options).install, JSON.stringify({ version: 1, clients }));
+}
+async function paired(t, extra = {}) {
+  const options = await fixture(t, {
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+    ...extra,
+  });
+  const pending = await initializePairing(options);
+  const result = await completePairing({
+    ...options,
+    configured: { claude: true, codex: true },
+  });
+  assert.equal(pending.status, "binding_pending");
+  assert.equal(result.status, "paired");
+  return { ...options, pairingRecord: result.pairingRecord };
+}
+async function child(options, { client = "claude", code, env = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        code ??
+          `import {clientProjectId} from ${JSON.stringify(moduleURL)}; console.log(await clientProjectId(${JSON.stringify({ ...options, client, usesClaude: false })}, '/synthetic/project'));`,
+      ],
+      {
+        env: {
+          PATH: process.env.PATH,
+          HOME: options.home,
+          TMPDIR: process.env.TMPDIR,
+          NODE_OPTIONS: process.env.NODE_OPTIONS,
+          CAIRN_TEST_REAL_HOME: process.env.CAIRN_TEST_REAL_HOME,
+          CLAUDE_PLUGIN_DATA: options.env.CLAUDE_PLUGIN_DATA ?? "",
+          ...env,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let stdout = "",
+      stderr = "";
+    proc.stdout.on("data", (b) => (stdout += b));
+    proc.stderr.on("data", (b) => (stderr += b));
+    proc.on("error", reject);
+    proc.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr }));
+  });
+}
+
+test("fresh single clients, same-client contenders, restart, deletion and exact HMAC scope", async (t) => {
+  for (const client of ["claude", "codex"]) {
+    const options = await fixture(t, { client, usesClaude: false });
+    const results = await Promise.all(
+      Array.from({ length: 18 }, () => child(options, { client })),
+    );
+    assert.ok(
+      results.every((result) => result.code === 0),
+      JSON.stringify(results),
+    );
+    assert.equal(new Set(results.map((result) => result.stdout)).size, 1);
+    const id = results[0].stdout;
+    assert.equal(await clientProjectId(options, "/synthetic/project"), id);
+    assert.notEqual(await clientProjectId(options, "/synthetic/Project"), id);
+    const root = (await resolveClient(options)).root;
+    await unlink(join(root, "project-key"));
+    assert.notEqual(await clientProjectId(options, "/synthetic/project"), id);
+  }
+});
+
+test("concurrent unpaired clients never register from read paths", async (t) => {
+  const options = await fixture(t);
+  await Promise.all(["claude", "codex"].map((client) => child(options, { client })));
+  await assert.rejects(readFile(stateLocations(options).install), { code: "ENOENT" });
+});
+
+test("known released plugin path and legacy default key need adoption for Codex", async (t) => {
+  for (const known of ["knownClaudeRoot", "defaultRoot"]) {
+    const options = await fixture(t);
+    const root = stateLocations(options)[known];
+    await seed(root);
+    assert.equal(
+      (await resolveClient({
+        ...options, client: "codex", usesClaude: true, initialize: true,
+      })).enabled,
+      false,
+    );
+    assert.equal(await readFile(join(root, "project-key"), "utf8"), `${key}\n`);
+    const claude = { ...options, env: { HOME: options.home, CLAUDE_PLUGIN_DATA: root } };
+    assert.equal((await resolveClient(claude)).enabled, true);
+    assert.ok(await clientProjectId(claude, "/synthetic/project"));
+  }
+});
+
+test("undetermined origins ask before any writes; yes requires adoption; no allows fresh", async (t) => {
+  for (const origin of ["inline", "synced", "relocated"]) {
+    const options = await fixture(t, {
+      standardClaudeOrigin: false,
+      origin,
+      hostsStopped: true,
+      consent: { claude: true, codex: true },
+    });
+    assert.equal((await initializePairing(options)).status, "claude_confirmation_needed");
+    assert.deepEqual(await readdir(options.home), []);
+    assert.equal(
+      (await initializePairing({ ...options, usesClaude: true })).status,
+      "pairing_needed",
+    );
+    assert.deepEqual(await readdir(options.home), []);
+    assert.equal(
+      (await initializePairing({ ...options, usesClaude: false })).status,
+      "binding_pending",
+    );
+  }
+});
+
+test("two established keys retain separate IDs and both expose conflict", async (t) => {
+  const options = await fixture(t, { client: "codex", usesClaude: false });
+  const codexId = await clientProjectId(options, "/synthetic/project");
+  const root = stateLocations(options).knownClaudeRoot;
+  await seed(root);
+  const claude = {
+    ...options,
+    client: "claude",
+    env: { HOME: options.home, CLAUDE_PLUGIN_DATA: root },
+  };
+  const claudeId = await clientProjectId(claude, "/synthetic/project");
+  await registered(options, {
+    codex: { root: stateLocations(options).defaultRoot, state: "established" },
+    claude: { root, profileRoot: root, state: "established" },
+  });
+  assert.notEqual(claudeId, codexId);
+  for (const input of [options, claude]) {
+    const binding = await resolveClient(input);
+    assert.equal(binding.status, "pairing_needed");
+    assert.equal(binding.enabled, true);
+  }
+  const consent = { claude: true, codex: true };
+  await initializePairing({
+    ...options,
+    claudeProfileRoot: root,
+    root,
+    adopt: true,
+    consent,
+    hostsStopped: true,
+  });
+  const ready = await completePairing({
+    ...options,
+    claudeProfileRoot: root,
+    configured: consent,
+    hostsStopped: true,
+  });
+  assert.equal(
+    await clientProjectId(
+      { ...options, pairingRecord: ready.pairingRecord },
+      "/synthetic/project",
+    ),
+    claudeId,
+  );
+  assert.equal(
+    await readFile(join(stateLocations(options).defaultRoot, "project-key"), "utf8")
+      .then((s) => s.trim())
+      .then((s) => s.length),
+    36,
+  );
+});
+
+test("legacy gap: only Claude cursors count, preserve root despite new plugin data, confirmation adopts", async (t) => {
+  for (const evidence of [false, true]) {
+    const options = await fixture(t, { client: "codex", usesClaude: false });
+    const id = await clientProjectId(options, "/synthetic/project");
+    await registered(options, {
+      codex: { root: stateLocations(options).defaultRoot, state: "established" },
+    });
+    const root = stateLocations(options).defaultRoot;
+    // Shared writes must not establish Claude.
+    await setPaused(root, true);
+    await setPaused(root, false);
+    await privateWrite(join(root, "install-id"), `${key}\n`);
+    if (evidence)
+      await writeCaptureCursor(captureCursorPath(root, "synthetic-claude"), { offset: 0 });
+    const newRoot = join(options.home, "new-plugin-data");
+    const claude = {
+      ...options,
+      client: "claude",
+      env: { HOME: options.home, CLAUDE_PLUGIN_DATA: newRoot },
+    };
+    const result = await resolveClient({ ...claude, initialize: true });
+    assert.equal(result.status, "pairing_needed");
+    assert.equal(result.enabled, evidence);
+    if (evidence) {
+      assert.equal(result.root, root);
+      assert.equal(await clientProjectId(claude, "/synthetic/project"), id);
+      assert.equal((await resolveClient(options)).status, "pairing_needed");
+    }
+    await assert.rejects(stat(join(newRoot, "project-key")), { code: "ENOENT" });
+    await assert.rejects(stat(join(newRoot, ".cairn-memory-profile", "legacy.json")), {
+      code: "ENOENT",
+    });
+    const consent = { claude: true, codex: true };
+    await initializePairing({
+      ...options,
+      env: claude.env,
+      claudeProfileRoot: newRoot,
+      adopt: true,
+      hostsStopped: true,
+      consent,
+    });
+    const ready = await completePairing({
+      ...options,
+      claudeProfileRoot: newRoot,
+      hostsStopped: true,
+      configured: consent,
+    });
+    assert.equal(
+      await clientProjectId(
+        { ...claude, pairingRecord: ready.pairingRecord },
+        "/synthetic/project",
+      ),
+      id,
+    );
+  }
+});
+
+test("joint pending guard, >16 mixed processes, restart, loss and original-key restore", async (t) => {
+  const options = await paired(t);
+  const runs = async () =>
+    Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        child(options, { client: i % 2 ? "claude" : "codex" }),
+      ),
+    );
+  const first = await runs();
+  const restarted = await runs();
+  assert.ok(
+    [...first, ...restarted].every((result) => result.code === 0),
+    JSON.stringify([...first, ...restarted]),
+  );
+  assert.equal(new Set([...first, ...restarted].map((result) => result.stdout)).size, 1);
+  const root = stateLocations(options).defaultRoot;
+  const bytes = await readFile(join(root, "project-key"));
+  await unlink(join(root, "project-key"));
+  for (const client of ["claude", "codex"])
+    assert.equal(
+      (await resolveClient({ ...options, client, usesClaude: false })).status,
+      "paired_key_missing",
+    );
+  await writeFile(join(root, "project-key"), bytes, { mode: 0o600 });
+  assert.equal(await clientProjectId(options, "/synthetic/project"), first[0].stdout);
+});
+
+test("crash checkpoints keep joint clients pending and retry reuses the published winner", async (t) => {
+  for (const checkpoint of [
+    "binding-written",
+    "temporary-written",
+    "published",
+    "initialized",
+  ]) {
+    const options = await fixture(t, {
+      hostsStopped: true,
+      consent: { claude: true, codex: true },
+    });
+    const result = await child(options, {
+      code: `import {initializePairing} from ${JSON.stringify(moduleURL)};
+      await initializePairing({...${JSON.stringify(options)}, checkpoint: async stage => {if(stage === ${JSON.stringify(checkpoint)}) process.exit(73);}});`,
+    });
+    assert.equal(result.code, 73, result.stderr);
+    let published;
+    try {
+      published = await readFile(
+        join(stateLocations(options).defaultRoot, "project-key"),
+        "utf8",
+      );
+    } catch (error) {
+      assert.equal(error.code, "ENOENT");
+    }
+    const metadata = await readFile(stateLocations(options).install, "utf8").catch(
+      () => undefined,
+    );
+    if (metadata)
+      for (const client of ["claude", "codex"])
+        assert.equal((await resolveClient({ ...options, client, usesClaude: false })).enabled, false);
+    const pending = await initializePairing({ ...options, adopt: !metadata && !!published });
+    if (published)
+      assert.equal(await readFile(join(pending.root, "project-key"), "utf8"), published);
+    await completePairing({ ...options, configured: options.consent });
+    assert.ok(
+      await clientProjectId(
+        { ...options, pairingRecord: pending.pairingRecord },
+        "/synthetic/project",
+      ),
+    );
+  }
+});
+
+test("exclusive key publication reads winner, syncs, and cleans only owned temporary files", async (t) => {
+  const options = await fixture(t);
+  const root = stateLocations(options).defaultRoot;
+  await mkdir(root, { mode: 0o700 });
+  await writeFile(join(root, ".foreign.tmp"), "retained", { mode: 0o600 });
+  const winner = await projectKey(root, {
+    home: options.home,
+    checkpoint: async (stage) => {
+      if (stage === "temporary-written")
+        await writeFile(join(root, "project-key"), `${key}\n`, { mode: 0o600, flag: "wx" });
+    },
+  });
+  assert.equal(winner, key);
+  assert.deepEqual((await readdir(root)).sort(), [".foreign.tmp", "project-key"]);
+});
+
+test("successful probes recover crashed publication without reviving a deleted staged key", async (t) => {
+  for (const action of ["probe", "delete", "marked-delete"]) {
+    const options = await fixture(t);
+    const root = stateLocations(options).defaultRoot;
+    const privateURL = new URL("../private-state.mjs", import.meta.url).href;
+    const result = await child(options, {
+      code: `
+        import {projectKey} from ${JSON.stringify(moduleURL)};
+        import {withWriteObserver} from ${JSON.stringify(privateURL)};
+        await withWriteObserver(({path}) => {
+          if (path === ${JSON.stringify(join(root, "project-key"))}) process.exit(86);
+        }, () => projectKey(${JSON.stringify(root)}, {home:${JSON.stringify(options.home)}}));
+      `,
+    });
+    assert.equal(result.code, 86, result.stderr);
+    const published = (await readFile(join(root, "project-key"), "utf8")).trim();
+    assert.ok(await stat(join(root, ".project-key.pending")));
+    assert.ok(await stat(join(root, ".project-key.lock")));
+    if (action !== "probe") await unlink(join(root, "project-key"));
+    if (action === "marked-delete") {
+      await privateWrite(join(root, "paired-root"), '{"version":1,"paired":true}');
+      await assert.rejects(projectKey(root, { home: options.home }), /paired_key_missing/);
+      await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
+      continue;
+    }
+    const winner = await projectKey(root, { home: options.home });
+    if (action === "probe") assert.equal(winner, published);
+    else assert.notEqual(winner, published, "staging cannot authorize restoring a deleted key");
+    for (const name of [".project-key.pending", ".project-key.lock"])
+      await assert.rejects(stat(join(root, name)), { code: "ENOENT" });
+    assert.equal(await projectKey(root, { home: options.home }), winner);
+  }
+});
+
+test("coordination paths, missing home refusal, temporary standalone fallback", async (t) => {
+  const options = await fixture(t);
+  const paths = stateLocations(options);
+  assert.equal(paths.install, join(options.home, ".cairn-memory-clients/install.json"));
+  assert.equal(paths.pairing, join(options.home, ".cairn-memory-clients/pairing.json"));
+  assert.equal(paths.lock, join(options.home, ".cairn-memory-clients/setup.lock"));
+  assert.equal(
+    stateLocations({ ...options, env: { CLAUDE_PLUGIN_DATA: join(options.home, "plugin") } })
+      .install,
+    paths.install,
+  );
+  const fallback = { ...options, home: "", env: {} };
+  assert.ok(await clientProjectId(fallback, "/synthetic/project"));
+  assert.equal(
+    stateLocations(fallback).coordination,
+    join(options.temporary, ".cairn-memory-clients"),
+  );
+  for (const home of ["", "relative"])
+    await assert.rejects(
+      initializePairing({ ...options, home }),
+      /pairing_requires_durable_home/,
+    );
+  assert.deepEqual(await readdir(options.home), []);
+});
+
+test("option parsing, delivery and worker environment cannot override the binding", async (t) => {
+  const options = await paired(t);
+  assert.deepEqual(parsePairingRecord(["--pairing-record", options.pairingRecord]), {
+    pairingRecord: options.pairingRecord,
+    rest: [],
+  });
+  for (const args of [
+    ["--pairing-record"],
+    ["--pairing-record", "relative"],
+    ["--pairing-record", options.pairingRecord, "--pairing-record", options.pairingRecord],
+  ])
+    assert.throws(() => parsePairingRecord(args));
+  const delivered = {
+    ...options,
+    pairingRecord: undefined,
+    env: { HOME: options.home, CLAUDE_PLUGIN_OPTION_PAIRING_RECORD: options.pairingRecord },
+  };
+  const binding = await resolveClient(delivered);
+  assert.equal(binding.workerEnv.CAIRN_MEMORY_STATE_DIR, binding.root);
+  await expectDisabled(
+    resolveClient({
+      ...options,
+      env: { ...options.env, CAIRN_MEMORY_STATE_DIR: join(options.home, "other") },
+    }),
+    "state_dir_mismatch",
+  );
+  await expectDisabled(
+    resolveClient({ ...options, pairingRecord: join(options.home, "other.json") }),
+    "pairing_record_mismatch",
+  );
+  assert.equal((await resolveClient({ ...options, pairingRecord: undefined })).enabled, false);
+});
+
+test("permissions, owner seam, malformed state and symlinks fail closed", async (t) => {
+  for (const target of ["root", "key", "coordination", "install", "pairing", "lock"]) {
+    const options = await paired(t);
+    const paths = stateLocations(options);
+    const path = {
+      root: paths.defaultRoot,
+      key: join(paths.defaultRoot, "project-key"),
+      coordination: paths.coordination,
+      install: paths.install,
+      pairing: paths.pairing,
+      lock: paths.lock,
+    }[target];
+    if (target === "lock")
+      await privateWrite(
+        path,
+        JSON.stringify({ pid: process.pid, token: "11111111-1111-4111-8111-111111111111" }),
+      );
+    await chmod(path, target === "root" || target === "coordination" ? 0o755 : 0o644);
+    if (["coordination", "install", "pairing"].includes(target)) {
+      await expectDisabled(resolveClient(options), "pairing_record_missing");
+    } else {
+      if (target === "lock")
+        await assert.rejects(
+          completePairing({ ...options, configured: options.consent }),
+          /state_permissions|state_unreadable/,
+        );
+      else await expectDisabled(resolveClient(options), "state_unreadable");
+    }
+    await assert.rejects(
+      completePairing({ ...options, configured: options.consent }),
+      /state_permissions|state_unreadable/,
+    );
+  }
+  for (const target of ["root", "key", "coordination", "install", "pairing", "lock"]) {
+    const options = await fixture(t);
+    const paths = stateLocations(options);
+    await mkdir(paths.defaultRoot, { mode: 0o700 });
+    await mkdir(paths.coordination, { mode: 0o700 });
+    const path = {
+      root: paths.defaultRoot,
+      key: join(paths.defaultRoot, "project-key"),
+      coordination: paths.coordination,
+      install: paths.install,
+      pairing: paths.pairing,
+      lock: paths.lock,
+    }[target];
+    if (["root", "coordination"].includes(target)) await rm(path, { recursive: true });
+    await symlink(join(options.home, "missing"), path);
+    await assert.rejects(
+      initializePairing({
+        ...options,
+        hostsStopped: true,
+        consent: { claude: true, codex: true },
+      }),
+      /state_symlink|state_unreadable/,
+    );
+  }
+  const options = await fixture(t);
+  await seed(stateLocations(options).defaultRoot);
+  await writeFile(join(stateLocations(options).defaultRoot, "project-key"), "invalid");
+  await assert.rejects(clientProjectId(options, "/synthetic/project"), /invalid_identity/);
+});
+
+test("foreign PID namespace is rejected before calling kill or reaping", async (t) => {
+  const options = await fixture(t);
+  const paths = stateLocations(options);
+  const liveness = await localLiveness();
+  await privateWrite(
+    paths.lock,
+    JSON.stringify({
+      pid: 2147483647,
+      token: "11111111-1111-4111-8111-111111111111",
+      namespace: "foreign",
+    }),
+  );
+  let calls = 0;
+  await assert.rejects(
+    initializePairing({
+      ...options,
+      hostsStopped: true,
+      consent: { claude: true, codex: true },
+      liveness: {
+        namespace: liveness.namespace,
+        isAlive() {
+          calls++;
+          return false;
+        },
+      },
+    }),
+    /pid_namespace_unverified/,
+  );
+  assert.equal(calls, 0);
+  assert.ok(await stat(paths.lock));
+  assert.deepEqual(
+    (await readdir(paths.coordination)).filter((name) => name.includes("reap")),
+    [],
+  );
+});
+
+test("paired pause: either client fences waiting dispatch and delayed injection across restart", async (t) => {
+  const options = await paired(t);
+  const claude = await resolveClient(options);
+  const codex = await resolveClient({ ...options, client: "codex", usesClaude: false });
+  assert.equal(claude.root, codex.root);
+  const old = await readControlState(claude.root);
+  let release;
+  const started = await startIfActive(
+    claude.root,
+    old.generation,
+    () => new Promise((resolve) => (release = resolve)),
+  );
+  await setPaused(codex.root, true);
+  release("late recall");
+  await started.operation;
+  assert.equal(
+    await runIfActive(claude.root, old.generation, () => assert.fail("stale injection")),
+    false,
+  );
+  assert.equal(
+    (await startIfActive(claude.root, old.generation, () => assert.fail("stale dispatch")))
+      .started,
+    false,
+  );
+  const paused = await readControlState(codex.root);
+  await setPaused(claude.root, false);
+  assert.equal(
+    (await readControlState(
+      (await resolveClient({ ...options, client: "codex", usesClaude: false })).root,
+    )).generation,
+    paused.generation,
+  );
+  assert.notEqual(paused.generation, old.generation);
+});
+
+test("explicit reset retains old root, changes scope, starts paused and requires fresh adoption", async (t) => {
+  const options = await paired(t);
+  const oldRoot = stateLocations(options).defaultRoot;
+  const oldId = await clientProjectId(options, "/synthetic/project");
+  await unlink(join(oldRoot, "project-key"));
+  const root = join(options.home, "reset-root");
+  await assert.rejects(
+    resetIdentity({ ...options, root, primaryClient: "codex" }),
+    /confirmation_required/,
+  );
+  const reset = await resetIdentity({
+    ...options,
+    root,
+    primaryClient: "codex",
+    confirmIdentityReset: true,
+  });
+  assert.match(reset.disclosure, /no longer addressable/);
+  assert.ok(await stat(oldRoot));
+  const single = { ...options, pairingRecord: undefined, client: "codex", usesClaude: false };
+  const newId = await clientProjectId(single, "/synthetic/project");
+  assert.notEqual(newId, oldId);
+  assert.equal((await readControlState(root)).paused, true);
+  assert.equal((await resolveClient({ ...single, client: "claude" })).enabled, false);
+  const pending = await initializePairing({ ...single, root, adopt: true });
+  await completePairing({ ...single, configured: options.consent });
+  assert.equal(
+    await clientProjectId(
+      { ...single, client: "claude", pairingRecord: pending.pairingRecord },
+      "/synthetic/project",
+    ),
+    newId,
+  );
+});
+
+test("wrong owner and unreadable/corrupt coordination disable pairs, never freshness", async (t) => {
+  const options = await paired(t);
+  const assertDisabled = async () => {
+    await expectDisabled(resolveClient(options), "pairing_record_missing");
+  };
+  const getuid = process.getuid;
+  try {
+    process.getuid = () => getuid() + 1;
+    await expectDisabled(resolveClient(options), "binding_history_invalid");
+  } finally {
+    process.getuid = getuid;
+  }
+  const path = stateLocations(options).install;
+  await chmod(path, 0o000);
+  await assertDisabled();
+  await chmod(path, 0o600);
+  await writeFile(path, "{");
+  await assertDisabled();
+});
+
+test("unknown liveness never reaps a same-namespace owner", async (t) => {
+  const options = await fixture(t);
+  const paths = stateLocations(options);
+  const { namespace } = await localLiveness();
+  const owner = { pid: 2147483647, token: "11111111-1111-4111-8111-111111111111", namespace };
+  await privateWrite(paths.lock, JSON.stringify(owner));
+  await assert.rejects(
+    initializePairing({
+      ...options,
+      hostsStopped: true,
+      consent: { claude: true, codex: true },
+      timeoutMs: 30,
+      liveness: { namespace, isAlive: () => undefined },
+    }),
+    /setup_busy/,
+  );
+  assert.deepEqual(JSON.parse(await readFile(paths.lock)), owner);
+});
+
+test("missing initialized key during pending configuration never regenerates", async (t) => {
+  const options = await fixture(t, {
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  });
+  const pending = await initializePairing(options);
+  await unlink(join(pending.root, "project-key"));
+  assert.equal((await initializePairing(options)).status, "paired_key_missing");
+  assert.equal(
+    (await completePairing({ ...options, configured: options.consent })).status,
+    "paired_key_missing",
+  );
+  await assert.rejects(stat(join(pending.root, "project-key")), { code: "ENOENT" });
+});
+
+test("temporary legacy adoption copies without clobber under stopped-worker setup lock", async (t) => {
+  const options = await fixture(t, {
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  });
+  const source = join(options.temporary, "old-temporary-root");
+  await seed(source);
+  const root = join(options.home, "durable");
+  await assert.rejects(
+    initializePairing({ ...options, root: source, adopt: true }),
+    /temporary_pairing_root/,
+  );
+  const pending = await initializePairing({ ...options, root, adopt: true, adoptFrom: source });
+  assert.equal(await readFile(join(source, "project-key"), "utf8"), `${key}\n`);
+  assert.equal(await readFile(join(root, "project-key"), "utf8"), `${key}\n`);
+  await completePairing({ ...options, configured: options.consent });
+  assert.equal(
+    (await resolveClient({ ...options, pairingRecord: pending.pairingRecord })).root,
+    root,
+  );
+});
+
+test("surviving pairing record prevents reinitialization after install metadata and key loss", async (t) => {
+  const options = await paired(t);
+  const paths = stateLocations(options);
+  await unlink(paths.install);
+  await unlink(join(paths.defaultRoot, "project-key"));
+  await assert.rejects(initializePairing(options), /pairing_record_mismatch/);
+  assert.equal((await resolveClient(options)).enabled, false);
+  await assert.rejects(stat(join(paths.defaultRoot, "project-key")), { code: "ENOENT" });
+});
+
+test("unsupported hard-link publication never returns a tentative project ID", async (t) => {
+  const options = await fixture(t);
+  const root = stateLocations(options).defaultRoot;
+  const identity = new URL("../identity.mjs", import.meta.url).href;
+  const result = await child(options, {
+    code: `
+    import fs from 'node:fs/promises';
+    import {syncBuiltinESMExports} from 'node:module';
+    import assert from 'node:assert/strict';
+    fs.link = async () => { throw Object.assign(new Error('unsupported'), {message:'state_unreadable', detail:'ENOTSUP'}); };
+    syncBuiltinESMExports();
+    const {opaqueProjectId} = await import(${JSON.stringify(identity)});
+    const options = {home:${JSON.stringify(options.home)}};
+    await assert.rejects(opaqueProjectId(${JSON.stringify(root)}, '/synthetic/project', options),
+      {message:'state_unreadable', detail:'ENOTSUP'});
+  `,
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(await readdir(root), []);
+});
+
+test("contention permits fresh standalone; degraded coordination requires an existing key", async (t) => {
+  for (const kind of ["busy", "permissions", "symlink"]) {
+    const options = await fixture(t);
+    const paths = stateLocations(options);
+    if (kind === "busy") {
+      const live = await localLiveness();
+      await privateWrite(
+        paths.lock,
+        JSON.stringify({
+          pid: process.pid,
+          token: "11111111-1111-4111-8111-111111111111",
+          namespace: live.namespace,
+          boot: live.boot,
+        }),
+      );
+    } else if (kind === "permissions") {
+      await privateWrite(paths.install, JSON.stringify({ version: 1, clients: {} }));
+      await chmod(paths.coordination, 0o755);
+    } else {
+      const target = join(options.home, "host-coordination");
+      await mkdir(target);
+      await writeFile(join(target, "install.json"), "{}");
+      await symlink(target, paths.coordination);
+    }
+    const binding = await resolveClient({ ...options, timeoutMs: 20 });
+    if (kind === "busy") {
+      assert.equal(binding.status, "single");
+      assert.equal(binding.detail, undefined, "contention is not unreadable coordination");
+      assert.ok(await clientProjectId(options, "/synthetic/project", binding));
+    } else {
+      assert.equal(binding.status, "pairing_needed");
+      assert.equal(binding.enabled, false);
+      assert.equal(binding.detail, "coordination unreadable");
+      await assert.rejects(readFile(join(paths.defaultRoot, "project-key")), {
+        code: "ENOENT",
+      });
+      await seed(paths.defaultRoot);
+      const existing = await resolveClient(options);
+      assert.equal(existing.status, "standalone_unregistered");
+      assert.equal(existing.createKey, false);
+      assert.ok(await clientProjectId(options, "/synthetic/project", existing));
+    }
+    if (kind === "busy") await assert.rejects(stat(paths.install), { code: "ENOENT" });
+  }
+});
+
+test("established hooks only read metadata even with a live setup owner", async (t) => {
+  const options = await fixture(t);
+  const id = await clientProjectId(options, "/synthetic/project");
+  const paths = stateLocations(options);
+  await registered(options, {
+    claude: { root: paths.defaultRoot, profileRoot: paths.defaultRoot, state: "established" },
+  });
+  const before = await stat(paths.install);
+  // Deliberately malformed lock: a normal bound hook must not inspect or alter it.
+  await privateWrite(paths.lock, "busy");
+  for (let i = 0; i < 12; i++)
+    assert.equal(await clientProjectId(options, "/synthetic/project"), id);
+  const after = await stat(paths.install);
+  assert.equal(after.ino, before.ino);
+  assert.equal(after.mtimeMs, before.mtimeMs);
+  assert.equal(await readFile(paths.lock, "utf8"), "busy");
+});
+
+test("durable pairing survives reboot and lock recovery checks boot before PID namespace", async (t) => {
+  for (const platform of ["linux", "darwin"]) {
+    const namespace = platform === "darwin" ? "darwin" : "pid:[first]";
+    const firstBoot = platform === "darwin" ? 100000 : "boot-first";
+    const secondBoot = platform === "darwin" ? 200000 : "boot-second";
+    const options = await paired(t, {
+      liveness: { namespace, boot: firstBoot, platform, isAlive: () => true },
+    });
+    const id = await clientProjectId(options, "/synthetic/project");
+    const paths = stateLocations(options);
+    assert.equal("namespace" in JSON.parse(await readFile(paths.pairing)), false);
+    assert.equal("boot" in JSON.parse(await readFile(paths.pairing)), false);
+    await privateWrite(
+      paths.lock,
+      JSON.stringify({
+        pid: process.pid,
+        token: "11111111-1111-4111-8111-111111111111",
+        namespace,
+        boot: firstBoot,
+      }),
+    );
+    let calls = 0;
+    const rebooted = {
+      ...options,
+      liveness: {
+        namespace: platform === "darwin" ? namespace : "pid:[second]",
+        boot: secondBoot,
+        platform,
+        isAlive: () => {
+          calls++;
+          return true;
+        },
+      },
+    };
+    assert.equal(await clientProjectId(rebooted, "/synthetic/project"), id);
+    assert.equal(
+      (await completePairing({ ...rebooted, configured: options.consent })).enabled,
+      true,
+    );
+    assert.equal(calls, 0, "old boot must not probe a recycled PID");
+    await assert.rejects(stat(paths.lock), { code: "ENOENT" });
+  }
+});
+
+test("macOS boot estimate tolerance preserves a live lock and Windows setup is unsupported", async (t) => {
+  const options = await fixture(t, {
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  });
+  const paths = stateLocations(options);
+  const owner = {
+    pid: process.pid,
+    token: "11111111-1111-4111-8111-111111111111",
+    namespace: "darwin",
+    boot: 100000,
+  };
+  await privateWrite(paths.lock, JSON.stringify(owner));
+  await assert.rejects(
+    initializePairing({
+      ...options,
+      timeoutMs: 20,
+      liveness: { namespace: "darwin", boot: 101000, isAlive: () => true },
+    }),
+    /setup_busy/,
+  );
+  assert.deepEqual(JSON.parse(await readFile(paths.lock)), owner);
+  await assert.rejects(
+    initializePairing({ ...options, liveness: await localLiveness({ platform: "win32" }) }),
+    /pairing_platform_unsupported/,
+  );
+  const mac = await localLiveness({ platform: "darwin" });
+  assert.equal(mac.namespace, "darwin");
+  assert.ok(Number.isFinite(mac.boot));
+  assert.equal(mac.isAlive(process.pid), true);
+});
+
+test("strict pairing permits host-owned symlink ancestors and absent getuid", async (t) => {
+  const options = await fixture(t, {
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  });
+  const alias = join(options.temporary, "home-alias");
+  await symlink(options.home, alias);
+  const getuid = process.getuid;
+  try {
+    process.getuid = undefined;
+    const input = {
+      ...options,
+      home: alias,
+      claudeProfileRoot: join(alias, ".cairn-memory"),
+      env: { HOME: alias },
+    };
+    const pending = await initializePairing(input);
+    await completePairing({ ...input, configured: options.consent });
+    assert.ok(
+      await clientProjectId(
+        { ...input, pairingRecord: pending.pairingRecord },
+        "/synthetic/project",
+      ),
+    );
+  } finally {
+    process.getuid = getuid;
+  }
+});
+
+test("registration failure preserves legacy evidence and explicit plugin-key precedence", async (t) => {
+  const options = await fixture(t);
+  const paths = stateLocations(options);
+  await seed(paths.defaultRoot);
+  await writeCaptureCursor(captureCursorPath(paths.defaultRoot, "legacy"), { offset: 1 });
+  await mkdir(paths.coordination, { mode: 0o755 });
+  const plugin = join(options.home, "plugin");
+  const input = { ...options, env: { HOME: options.home, CLAUDE_PLUGIN_DATA: plugin } };
+  assert.equal((await resolveClient(input)).root, paths.defaultRoot);
+  await seed(plugin);
+  assert.equal((await resolveClient(input)).root, plugin);
+  assert.equal(
+    (
+      await resolveClient({
+        ...input,
+        env: { ...input.env, CAIRN_MEMORY_STATE_DIR: paths.defaultRoot },
+      })
+    ).root,
+    plugin,
+  );
+});
+
+test("a second profile stays standalone when the registered profile pairs", async (t) => {
+  const options = await fixture(t);
+  const a = {
+    ...options,
+    env: { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "profile-a") },
+  };
+  const b = {
+    ...options,
+    env: { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "profile-b") },
+  };
+  const aId = await clientProjectId(a, "/synthetic/project");
+  const bId = await clientProjectId(b, "/synthetic/project");
+  assert.notEqual(aId, bId);
+  const defaultId = await clientProjectId(options, "/synthetic/project");
+  assert.notEqual(defaultId, aId);
+  assert.notEqual(defaultId, bId);
+  assert.equal((await resolveClient(options)).status, "single");
+  assert.equal((await resolveClient(b)).status, "single");
+  await setPaused(a.env.CLAUDE_PLUGIN_DATA, true);
+  assert.equal((await readControlState(b.env.CLAUDE_PLUGIN_DATA)).paused, false);
+  const setup = {
+    ...a,
+    claudeProfileRoot: a.env.CLAUDE_PLUGIN_DATA,
+    adopt: true,
+    root: a.env.CLAUDE_PLUGIN_DATA,
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  };
+  const pending = await initializePairing(setup);
+  await completePairing({ ...setup, configured: setup.consent });
+  assert.equal(
+    await clientProjectId({ ...a, pairingRecord: pending.pairingRecord }, "/synthetic/project"),
+    aId,
+  );
+  assert.equal(await clientProjectId(b, "/synthetic/project"), bId);
+  const inherited = { ...b, pairingRecord: pending.pairingRecord };
+  await expectDisabled(resolveClient(inherited), "pairing_record_mismatch");
+  await expectDisabled(
+    resolveClient({ ...b, pairingRecord: join(options.home, "wrong.json") }),
+    "pairing_record_mismatch",
+  );
+});
+
+test("a different default profile follows standalone root selection", async (t) => {
+  const options = await fixture(t);
+  const env = { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "profile-a") };
+  const setup = {
+    ...options,
+    env,
+    claudeProfileRoot: env.CLAUDE_PLUGIN_DATA,
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  };
+  const pending = await initializePairing(setup);
+  await completePairing({ ...setup, configured: setup.consent });
+  assert.ok(
+    await clientProjectId(
+      { ...setup, pairingRecord: pending.pairingRecord },
+      "/synthetic/project",
+    ),
+  );
+  assert.equal((await resolveClient(options)).status, "standalone_unregistered");
+});
+
+test("Claude reset preserves its profile through standalone resolution and re-pairing", async (t) => {
+  const input = await fixture(t);
+  const profile = join(input.home, "profile-a");
+  const options = {
+    ...input,
+    claudeProfileRoot: profile,
+    env: { HOME: input.home, CLAUDE_PLUGIN_DATA: profile },
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  };
+  const first = await initializePairing(options);
+  await completePairing({ ...options, configured: options.consent });
+  const oldId = await clientProjectId({ ...options, pairingRecord: first.pairingRecord }, "/p");
+  const root = join(input.home, "reset-root");
+  await resetIdentity({
+    ...options,
+    root,
+    primaryClient: "claude",
+    confirmIdentityReset: true,
+  });
+  assert.equal((await detectClients(options)).install.clients.claude.profileRoot, profile);
+  assert.equal((await resolveClient(options)).root, root);
+  assert.equal((await readControlState(root)).paused, true);
+  const newId = await clientProjectId(options, "/p");
+  assert.notEqual(newId, oldId);
+  const pending = await initializePairing({ ...options, root, adopt: true });
+  await completePairing({ ...options, configured: options.consent });
+  assert.equal((await detectClients(options)).install.clients.claude.profileRoot, profile);
+  for (const client of ["claude", "codex"]) {
+    const paired = { ...options, client, usesClaude: false, pairingRecord: pending.pairingRecord };
+    assert.equal(await clientProjectId(paired, "/p"), newId);
+    assert.equal((await readControlState((await resolveClient(paired)).root)).paused, true);
+  }
+});
+
+test("external setup uses a confirmed standard profile or requires an explicit root", async (t) => {
+  const options = await fixture(t, {
+    claudeProfileRoot: undefined,
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  });
+  assert.equal(
+    (
+      await initializePairing({
+        ...options,
+        standardClaudeOrigin: false,
+        usesClaude: false,
+      })
+    ).status,
+    "claude_profile_root_required",
+  );
+  assert.deepEqual(await readdir(options.home), []);
+  const pending = await initializePairing(options);
+  await completePairing({ ...options, configured: options.consent });
+  const profile = stateLocations(options).knownClaudeRoot;
+  const claude = {
+    ...options,
+    pairingRecord: pending.pairingRecord,
+    env: { HOME: options.home, CLAUDE_PLUGIN_DATA: profile },
+  };
+  const codex = {
+    ...options, client: "codex", usesClaude: false, pairingRecord: pending.pairingRecord,
+  };
+  assert.equal((await resolveClient(claude)).status, "paired");
+  assert.equal(await clientProjectId(claude, "/p"), await clientProjectId(codex, "/p"));
+  await setPaused((await resolveClient(codex)).root, true);
+  assert.equal((await readControlState((await resolveClient(claude)).root)).paused, true);
+  await expectDisabled(
+    resolveClient({
+      ...claude,
+      env: { HOME: options.home, CLAUDE_PLUGIN_DATA: join(options.home, "other") },
+    }),
+    "pairing_record_mismatch",
+  );
+});
+
+test("registered default-root cursors never move a fresh plugin-data profile", async (t) => {
+  const options = await fixture(t);
+  const root = (await resolveClient({ ...options, initialize: true })).root;
+  await registered(options, { claude: { root, profileRoot: root, state: "established" } });
+  await writeCaptureCursor(captureCursorPath(root, "registered"), { offset: 12 });
+  const other = {
+    ...options,
+    env: {
+      HOME: options.home,
+      CLAUDE_PLUGIN_DATA: join(options.home, "profile-b"),
+    },
+  };
+  assert.equal((await resolveClient(other)).root, other.env.CLAUDE_PLUGIN_DATA);
+  assert.notEqual(await clientProjectId(options, "/p"), await clientProjectId(other, "/p"));
+  await setPaused(root, true);
+  assert.equal((await readControlState(other.env.CLAUDE_PLUGIN_DATA)).paused, false);
+});
+
+test("explicit external profile participates in key detection and adoption", async (t) => {
+  const options = await fixture(t, {
+    standardClaudeOrigin: false,
+    usesClaude: true,
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  });
+  const profile = join(options.home, "custom-profile");
+  await seed(profile);
+  const setup = { ...options, claudeProfileRoot: profile, root: profile };
+  assert.equal((await initializePairing(setup)).status, "existing_key_requires_adoption");
+  assert.deepEqual((await detectClients(setup)).keys, [profile]);
+  const pending = await initializePairing({ ...setup, adopt: true });
+  await completePairing({ ...setup, configured: setup.consent });
+  const host = {
+    ...setup,
+    pairingRecord: pending.pairingRecord,
+    env: { HOME: options.home, CLAUDE_PLUGIN_DATA: profile },
+  };
+  assert.equal((await resolveClient(host)).status, "paired");
+  assert.equal((await detectClients(setup)).install.clients.claude.profileRoot, profile);
+  await assert.rejects(
+    initializePairing({
+      ...setup,
+      adopt: true,
+      claudeProfileRoot: join(options.home, "different-profile"),
+    }),
+    /claude_profile_mismatch/,
+  );
+});
+
+test("setup rejects active and retired profile conflicts before and inside the lock", async (t) => {
+  for (const retired of [false, true]) {
+    await t.test(retired ? "retired" : "active", async (t) => {
+      const options = await paired(t);
+      let root = stateLocations(options).defaultRoot;
+      if (retired) {
+        root = join(options.home, "reset-root");
+        await resetIdentity({
+          ...options,
+          root,
+          primaryClient: "codex",
+          confirmIdentityReset: true,
+        });
+      }
+      const path = stateLocations(options).install;
+      const before = await readFile(path, "utf8");
+      const profile = join(options.home, "other-profile");
+      await assert.rejects(
+        initializePairing({ ...options, root, adopt: true, claudeProfileRoot: profile }),
+        /claude_profile_mismatch/,
+      );
+      assert.equal(await readFile(path, "utf8"), before, "pre-lock conflict writes nothing");
+      const liveness = await localLiveness();
+      let rechecked = false;
+      const input = {
+        ...options,
+        root,
+        adopt: true,
+        liveness,
+        beforeSetupLock: async () => {
+          const changed = JSON.parse(before);
+          const binding = retired ? changed.retired.at(-1).claude : changed.clients.claude;
+          binding.profileRoot = profile;
+          await privateWrite(path, JSON.stringify(changed));
+          rechecked = true;
+        },
+      };
+      await assert.rejects(initializePairing(input), { message: "claude_profile_mismatch" });
+      assert.equal(rechecked, true, "conflict introduced at lock boundary");
+      const after = JSON.parse(await readFile(path, "utf8"));
+      assert.equal(
+        (retired ? after.retired.at(-1).claude : after.clients.claude).profileRoot,
+        profile,
+        "setup never overwrites concurrent ownership",
+      );
+    });
+  }
+});
+
+test("retired markers remain private and fail closed after metadata loss", async (t) => {
+  for (const damage of ["intact", "permissions", "corruption", "symlink", "directory"]) {
+    await t.test(damage, async (t) => {
+      const options = await paired(t);
+      const paths = stateLocations(options);
+      await resetIdentity({
+        ...options,
+        root: join(options.home, "reset"),
+        primaryClient: "codex",
+        confirmIdentityReset: true,
+      });
+      const marker = join(paths.defaultRoot, "retired");
+      assert.equal((await stat(marker)).mode & 0o777, 0o600);
+      if (damage === "permissions") await chmod(marker, 0o644);
+      if (damage === "corruption") await writeFile(marker, "{");
+      if (damage === "symlink") {
+        const target = join(options.home, "marker-target");
+        await privateWrite(target, JSON.stringify({ version: 1, retired: true }));
+        await unlink(marker);
+        await symlink(target, marker);
+      }
+      if (damage === "directory") {
+        await unlink(marker);
+        await mkdir(marker);
+      }
+      await unlink(paths.install);
+      const binding = await resolveClient({ ...options, pairingRecord: undefined });
+      assert.equal(binding.enabled, false);
+      assert.equal(binding.status, "pairing_record_missing");
+    });
+  }
+});
+
+test("setup refuses retired roots before and after lock acquisition", async (t) => {
+  const options = await paired(t);
+  const paths = stateLocations(options);
+  await resetIdentity({
+    ...options,
+    root: join(options.home, "reset"),
+    primaryClient: "codex",
+    confirmIdentityReset: true,
+  });
+  const before = await readFile(paths.install, "utf8");
+  for (const root of [undefined, paths.defaultRoot]) {
+    const result = await initializePairing({ ...options, root, adopt: true });
+    assert.equal(result.status, "retired_root");
+    assert.equal(result.enabled, false);
+    assert.equal(await readFile(paths.install, "utf8"), before);
+  }
+  const root = join(options.home, "reset");
+  assert.equal(
+    (
+      await initializePairing({
+        ...options,
+        root,
+        adopt: true,
+        adoptFrom: paths.defaultRoot,
+      })
+    ).status,
+    "retired_root",
+  );
+  assert.equal(await readFile(paths.install, "utf8"), before);
+  const result = await initializePairing({
+    ...options,
+    root,
+    adopt: true,
+    beforeSetupLock: () =>
+      privateWrite(join(root, "retired"), JSON.stringify({ version: 1, retired: true })),
+  });
+  assert.equal(result.status, "retired_root");
+  assert.equal(await readFile(paths.install, "utf8"), before);
+});
+
+test("degraded identity reads cannot replace a key lost after resolution", async (t) => {
+  const options = await paired(t);
+  const paths = stateLocations(options);
+  const root = join(options.home, "separate-profile");
+  await projectKey(root, { home: options.home });
+  await chmod(paths.coordination, 0o755);
+  const input = {
+    ...options,
+    pairingRecord: undefined,
+    env: { ...options.env, CLAUDE_PLUGIN_DATA: root },
+  };
+  const binding = await resolveClient(input);
+  assert.equal(binding.enabled, true);
+  assert.equal(binding.createKey, false);
+  assert.equal(binding.detail, "coordination unreadable");
+  await unlink(join(root, "project-key"));
+  await assert.rejects(clientProjectId(input, "/p", binding), /standalone_key_missing/);
+  await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
+});
+
+test("retirement needs a present entry in an owned selected directory", async (t) => {
+  for (const kind of ["absent", "file", "unreadable", "foreign-owner"]) {
+    await t.test(kind, async (t) => {
+      const options = await fixture(t);
+      const paths = stateLocations(options);
+      if (kind === "file") await writeFile(paths.defaultRoot, "not a root");
+      if (kind === "unreadable") await mkdir(paths.defaultRoot, { mode: 0 });
+      if (kind === "foreign-owner") {
+        await seed(paths.defaultRoot);
+        await mkdir(join(paths.defaultRoot, "retired"));
+      }
+      const getuid = process.getuid;
+      try {
+        if (kind === "foreign-owner") process.getuid = () => getuid() + 1;
+        const binding = await resolveClient(options);
+        assert.equal(binding.enabled, !["file", "unreadable"].includes(kind), kind);
+        if (["file", "unreadable"].includes(kind)) {
+          assert.equal(binding.status, "state_unreadable");
+          assert.equal(binding.detail, kind === "file" ? "ENOTDIR" : "EACCES");
+        } else if (kind !== "foreign-owner")
+          assert.equal(binding.detail, undefined, "absent coordination is not degraded");
+      } finally {
+        process.getuid = getuid;
+        if (kind === "unreadable") await chmod(paths.defaultRoot, 0o700);
+      }
+    });
+  }
+});
+
+test("completion cannot activate a root marked after initialization", async (t) => {
+  const options = await fixture(t, {
+    hostsStopped: true,
+    consent: { claude: true, codex: true },
+  });
+  await initializePairing(options);
+  const paths = stateLocations(options);
+  const before = await readFile(paths.install, "utf8");
+  await privateWrite(
+    join(paths.defaultRoot, "retired"),
+    JSON.stringify({
+      version: 1,
+      retired: true,
+    }),
+  );
+  assert.equal(
+    (
+      await completePairing({
+        ...options,
+        configured: options.consent,
+      })
+    ).status,
+    "retired_root",
+  );
+  assert.equal(await readFile(paths.install, "utf8"), before);
+  assert.equal(JSON.parse(before).shared.ready, false);
+});
+
+test("read resolution never takes a registration lock or replaces retired ownership", async (t) => {
+  const options = await fixture(t);
+  const paths = stateLocations(options);
+  const owner = {
+    root: join(options.home, "former-pair"),
+    profileRoot: join(options.home, "other-profile"),
+    state: "established",
+  };
+  await privateWrite(
+    paths.install,
+    JSON.stringify({ version: 1, clients: {}, retired: [{ claude: owner }] }),
+  );
+  const before = await readFile(paths.install, "utf8");
+  const binding = await resolveClient({
+    ...options,
+    beforeSetupLock: () => assert.fail("read path must not lock"),
+  });
+  assert.equal(binding.status, "standalone_unregistered");
+  assert.equal(await readFile(paths.install, "utf8"), before);
+});
+
+test("unsupported registration leaves coordination absent and standalone can create its key", async (t) => {
+  const options = await fixture(t);
+  const paths = stateLocations(options);
+  const binding = await resolveClient({
+    ...options,
+    liveness: { platform: "win32", namespace: undefined, boot: undefined },
+  });
+  assert.equal(binding.enabled, true);
+  assert.equal(binding.status, "single");
+  assert.equal(binding.detail, undefined);
+  await assert.rejects(stat(paths.coordination), { code: "ENOENT" });
+  assert.ok(await clientProjectId(options, "/p", binding));
+  assert.ok(await readFile(join(paths.defaultRoot, "project-key")));
+});
+
+test("durable adoption copies are refused and reset cannot reuse a retired root", async (t) => {
+  const options = await paired(t);
+  const oldRoot = stateLocations(options).defaultRoot;
+  await assert.rejects(
+    initializePairing({
+      ...options,
+      root: join(options.home, "copy"),
+      adopt: true,
+      adoptFrom: oldRoot,
+    }),
+    /adopt_from_requires_temporary_root/,
+  );
+  const fresh = join(options.home, "reset");
+  await resetIdentity({
+    ...options,
+    root: fresh,
+    primaryClient: "codex",
+    confirmIdentityReset: true,
+  });
+  await initializePairing({ ...options, root: fresh, adopt: true });
+  await completePairing({ ...options, configured: options.consent });
+  const before = await readFile(stateLocations(options).install, "utf8");
+  assert.equal(
+    (
+      await resetIdentity({
+        ...options,
+        root: oldRoot,
+        primaryClient: "claude",
+        confirmIdentityReset: true,
+      })
+    ).status,
+    "retired_root",
+  );
+  assert.equal(await readFile(stateLocations(options).install, "utf8"), before);
+});

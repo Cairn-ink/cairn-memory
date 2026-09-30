@@ -648,8 +648,7 @@ confirmed; the full reservation remains pending and paid work halts.
 Only failed settlement records additionally retain
 `settlementFailure: {operation: 'record_outcome', category}`. The category is
 exactly `ledger_busy`, `invalid_ledger`, `ledger_closed`,
-`configuration_mismatch` or the fallback `ledger_failed`. Successful records
-keep their previous shape. This process-local diagnostic is not a core, MCP,
+`configuration_mismatch` or the fallback `ledger_failed`. This process-local diagnostic is not a core, MCP,
 HTTP or hosted telemetry field and does not alter thrown/public errors.
 The privacy boundary excludes exception messages, stacks, SQL, IDs, provider
 content and arbitrary properties; tests exercise injected private exception
@@ -661,6 +660,29 @@ historical binding. The guard does not run or contain a native child, hold keys,
 verify the declared artifact
 hashes against an installation, grant a paid launch or measure quality. See
 [its acceptance contract](plans/mixed-source-pair-guard.md).
+
+Mixed attempt snapshots add `transportTermination`, initially null and later
+set only from the guard's own observed branch: `response`, `http_failure`,
+`invalid_response`, `deadline`, `cancelled`, `case_sealed`, `external_abort`,
+`transport_failure`, `body_failure`, `usage_bound_exceeded`, `invalid_payload`
+or `other_failure`. A transport error's arbitrary code/message, a caller's
+abort reason and provider body/header cannot supply the category. Existing
+outcome/cost accounting and error/continuation behavior are unchanged. A
+response category can coexist with null outcome/actual and a failed durable
+settlement; it does not establish an accepted charge or success. Detached
+snapshots stay frozen, and earlier in-flight snapshots remain null after a
+later settlement.
+
+The existing per-ordinal mixed generation summary includes the safely projected
+category in its first 64 retained stages, fixed `terminationCounts` across all
+matching attempts and `terminationUnavailableCount` for missing/null/invalid
+categories. Category accessors, coercion and `toJSON` are not executed; arbitrary
+strings are not retained. Thus late failures remain visible without increasing
+the stage prefix or exporting attempt IDs. These private observations describe
+guard branches, not historical upstream causes or physical provider
+cancellation. Neither a category nor pending-zero accounting supplies retry,
+resume or local-isolation authority. See the
+[prospective diagnostic contract](plans/native-failure-diagnosis.md).
 
 The explicit evaluation-only `indexed-evidence-v1` comparison profile binds
 `comparisonProfile`, `captureSourcePolicy: 'indexed-evidence-v1'` and

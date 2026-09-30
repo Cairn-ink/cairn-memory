@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { captureEvent } from "../lib/capture-event.mjs";
 import { normalizeEndpoint } from "../lib/config.mjs";
+import { resolveClient, parsePairingRecord } from "../lib/pairing.mjs";
 import { readControlState } from "../lib/control-state.mjs";
 
-const dataDir =
-  process.env.CLAUDE_PLUGIN_DATA ?? join(homedir() || tmpdir(), ".cairn-memory");
+let dataDir;
+let workerEnv;
 const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN ?? "";
 
 if (!token) process.exit(0);
@@ -20,6 +19,15 @@ try {
 } catch {
   process.exit(0);
 }
+try {
+  const { pairingRecord, rest } = parsePairingRecord(process.argv.slice(2));
+  if (rest.length) throw new Error("unexpected_arguments");
+  const binding = await resolveClient({ client: "claude", pairingRecord });
+  if (!binding.enabled) process.exit(0);
+  dataDir = binding.root;
+  workerEnv = binding.workerEnv;
+  if (pairingRecord) workerEnv.CLAUDE_PLUGIN_OPTION_PAIRING_RECORD = pairingRecord;
+} catch { process.exit(0); }
 const control = await readControlState(dataDir);
 if (control.paused) process.exit(0);
 
@@ -43,7 +51,7 @@ try {
     [fileURLToPath(new URL("./hook.mjs", import.meta.url)), "capture-detached"],
     {
       detached: true,
-      env: process.env,
+      env: workerEnv,
       stdio: ["pipe", "ignore", "ignore"],
       windowsHide: true,
     },

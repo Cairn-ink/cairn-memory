@@ -345,3 +345,170 @@ Commits/integration, personal acceptance, both corrected fixed-head nonauthor
 reviews and fresh latest-head CI are primary-owned and unrun by this worker.
 No commits, push, merge, actual inputs/private helpers or other-worktree writes
 occurred. Worker token/cost telemetry and whole-task elapsed time are unknown.
+
+## I1–I4 main integration after the stopped fresh six
+
+Public main advanced through client-pairing PR306 to
+36b18814105967342110af87759bf3a8e0081d2a. PR305 consequently reports a content
+conflict even though its old head had21 green checks. Old green evidence is not
+current integration acceptance. Preserve the immutable evaluated cd01c486 runtime
+and its private operators/results; it is not updated in place.
+
+Primary has made one bounded integration takeover under the worktree workflow:
+new worktree official-score-observed, branch test/official-score-observed, starts
+at cd01c486f28af43c0b2ce04630ecc2bbb859e6b5 and merges the exact main SHA above.
+Only package.json has an actual conflict. Preserve both intents: budget-v3 stays
+in the adapter-equipped guard suite, and the two new pairing/golden scripts stay
+registered. No algorithm, API, pairing or benchmark policy change is invented.
+
+- I1: record both exact parents and inspect source commits/configuration. Resolve
+  only the identified package hunk; auto-merged CHANGELOG/privacy/CI keep both
+  parties' sections/jobs. No root/worktree historical cleanup or user edits.
+- I2: generic JSON/plugin validation, suite-registration regression, both
+  Node22.16/24.15 pairing and golden checks, and all affected contributor gates
+  pass on the combined candidate. Preserve failed evidence rather than claim
+  an old runtime result applies to integration. New public dependencies install
+  only through existing locked isolated maintainer packages; no publication.
+- I3: integrate the separately authored R1–R6 diagnostic-only fix after its
+  worker freeze; personally inspect/rerun combined key paths, then commit and
+  obtain both independent fixed-diff review axes. Candidate/base and exact
+  commands/results must be retained. No old paid output regrading or replay.
+- I4: update the existing PR305 rather than add a competing cumulative-stack
+  PR, explicitly describe integration and new observation scope, and monitor
+  all latest-head checks including the newly added pairing matrix. The remote
+  reviewed head must match and be mergeable. This plan authorizes no merge,
+  release/deploy or paid launch. Fresh paid readiness remains a separate
+  prospective source-only acceptance, immutable inventory, original ledger and
+  latest audited exposure-union gate.
+
+The original fresh-six completed writing and answering in both arms for three
+cases, then halted at a Mem0 embedding attempt before scoring. Its cause cannot
+be recovered from the generic retained code. All six are consumed; no official
+score or conditional30 gate pass. The diagnostic repair observes future guarded
+branches without relaxing the existing global halt policy. This is not a
+retrieval/reliability quality acceptance or a claim of competitor parity.
+
+### Retained integration red and narrow primary correction
+
+The first merged Node22 canonical npm test:401/402 pass, one failure,
+244325.132657ms. Pairing gates likewise retain one failure in each version,
+including Node22 269/270,172159.874979ms. The failure is the CX-2 guard test's
+literal comparison to immutable base-scripts-3a1c17d9.json: its old request-guard
+command lacks the accepted budget-v3 registration. It is not a model/native
+failure. A canonical Node24 focused replay through the client home guard,
+`node integrations/client/testing/run.mjs --test-name-pattern='thin guard entry'
+integrations/client/test/pairing-guards.test.mjs`, reproduced exactly that
+failure in206.723572ms, zero skips. This establishes a tight red signal.
+
+Primary's bounded integration correction changes only that exact comparison:
+the request-guard command must equal the frozen command plus the one exact
+budget-v3 path, once; all other non-client commands remain byte-identical.
+The historical fixture is not edited, the existing v3 registration regression
+still asserts once-in-guard/absent-in-pure-ledger, and no runtime/client behavior
+is changed. No test is skipped or removed. The new expected addition is an
+explicit accepted continuation, not permission for arbitrary script drift.
+Full corrected combined checks and independent review remain required.
+
+
+### Primary combined acceptance before candidate freeze
+
+Primary mechanically transferred exactly the frozen worker's11 allowed files
+into official-score-observed using apply_patch; the five retained worker SHA256s
+(plan, guard, pure projector, generation summary and probe) match byte-for-byte.
+Only the narrow primary comparison correction above changes client test code.
+The resolved package preserves v3 exactly once, all pairing/golden commands,
+main plugin/marketplace0.1.2 and both parties' CI/privacy/CHANGELOG sections.
+No original evaluated worktree or private predecessor was edited.
+
+Both canonical focused thin-entry replays passed: Node22.16 1/1,
+179.216065ms; Node24.15 1/1,198.090108ms. The v3 registration regression also
+passed1/1 on both,35.1081/37.033505ms. Failed original integrated evidence
+above remains retained and explained; no tests or fixture rows were skipped.
+
+Primary inspected current CONTRIBUTING, package/CI registration, client home
+guard and the actual production/test/doc diff, then personally ran the combined
+matrix below. All28 commands per runtime exited0. Every test summary reports
+zero failure/cancellation/skip. Wall times are command milliseconds under
+concurrent acceptance load, not provider latency or a product performance claim.
+
+| Gate | Reported test count or command | Node22.16 wall ms | Node24.15 wall ms |
+| --- | --- | --- | --- |
+| test | 402 | 239638 | 243647 |
+| test:pairing | 270 | 156800 | 157233 |
+| test:pairing:golden | command | 41372 | 43619 |
+| validate | command | 50 | 55 |
+| test:workspace-lifecycle | 25 | 18931 | 19303 |
+| test:experiment-budget | 65 | 9404 | 10625 |
+| demo:experiment-budget | command | 199 | 201 |
+| test:experiment-request-guard | 313 | 36828 | 34683 |
+| demo:experiment-request-guard | command | 580 | 525 |
+| test:longmemeval | 212 | 11677 | 11108 |
+| demo:longmemeval-ingestion | command | 327 | 316 |
+| demo:longmemeval-comparison | command | 332 | 351 |
+| demo:longmemeval-public | command | 443 | 438 |
+| demo:longmemeval-mixed | command | 499 | 461 |
+| test:mem0-native-gateway | 45 | 40142 | 39428 |
+| test:mem0-native-local | 9 | 19157 | 19057 |
+| test:mixed-native-local | 32 | 251736 | 249906 |
+| probe-full | 1 | 20381 | 19798 |
+| probe-fast | 1 | 6610 | 6338 |
+| test:openai | 330 | 152696 | 149664 |
+| demo:openai-offline | command | 1676 | 913 |
+| test:mcp | 91 | 13338 | 11428 |
+| test:installed-phase-live:offline | 4 | 746 | 950 |
+| test:installed-classification-followup:offline | 6 | 1248 | 1224 |
+| test:long-history | 5 | 48388 | 43611 |
+| test:long-history-live:offline | 3 | 1525 | 819 |
+| prepare-cache | command | 2178 | 1954 |
+| test:artifact | 87 | 113585 | 112898 |
+
+Exact runtime pins are /home/chichieh/.nvm/versions/node/v22.16.0/bin/node and
+/home/chichieh/.nvm/versions/node/v24.15.0/bin/node. Each parent used env-i,
+PATH set to that version's bin:/usr/bin:/bin and NODE_DISABLE_COMPILE_CACHE=1.
+The first19-command matrix additionally set only the documented synthetic
+CAIRN_MEM0_NATIVE_VENV_ROOT=/tmp/cairn-mem0-preflight.vDNO3z/venv and
+CAIRN_MEM0_NATIVE_PYTHON_ROOT=/home/chichieh/.local/share/uv/python/cpython-3.11.12-linux-x86_64-gnu.
+No application environment or provider key was forwarded.
+
+Commands for named npm gates are exactly their current package.json script
+values, with --test-reporter=spec immediately after run.mjs for test mode.
+Generic/client gates therefore use integrations/client/testing/run.mjs, not a
+bypass of the home guard. Utility/demo node scripts run as
+node tools/testing/run.mjs --script <their existing script path>; pairing golden
+preserves its own --script mode and --verify argument. The two nested adapter
+commands are npm test --prefix adapters/openai and npm test --prefix adapters/mcp.
+The extra explicit commands were:
+
+```sh
+node tools/testing/run.mjs --test-reporter=spec evaluation/longmemeval/testing/native-failure-diagnosis.test.mjs
+CAIRN_NATIVE_FAILURE_REQUIRE_CLASSIFICATION=1 node tools/testing/run.mjs --test-reporter=spec evaluation/longmemeval/testing/native-failure-diagnosis.test.mjs
+node tools/testing/run.mjs --script packaging/prepare-cache.mjs
+node tools/testing/run.mjs --test-reporter=spec packaging/test/*.test.mjs
+```
+
+The cache step retains its disclosed public npm-registry metadata requests;
+it is not a model request, publication or production operation. Only the existing
+locked isolated dependency sets were installed; no lock changed. Missing
+scripts/README.md in this public repository is recorded, not substituted with
+an invented operational guide; contributor-documented test/cache utilities
+were inspected before execution.
+
+Locked Claude2.1.260 marketplace and strict-plugin validations passed on each
+Node parent, using a fresh owned config and disabled nonessential traffic.
+Both current owned-parent residue probes additionally passed: native-success
+exit0/residue0; missing-roots exit1 invalid_artifact_root/residue0; actual
+subprocess success/assertion/setup checks exit0/residue0. They used the same
+three-mode witness commands in the R plan, with prefix cairn-observed-cleanup-.
+No historical temp directories or unrelated wiki files were removed or changed.
+
+The repaired real installed-native diagnostic distinguishes transport_failure,
+invalid_response and deadline3/3 in full mode,2/2 in fast mode. Unknown/full
+reservation/global halt and authenticated local continuation remain exactly
+as predeclared. This verifies future observation, not the actual earlier cause.
+
+Next freeze is the scoped local merge candidate with exact parents cd01c486 and
+36b18814. Both independent nonauthor GPT-6.1 Sol/high review axes must inspect
+that committed candidate against main36b18814 before any branch push. Reviews
+and latest-head CI are still pending at this acceptance record. Public PR305
+will be updated rather than duplicated; there is no merge/release/deployment
+permission in this packet and no semantic-score/default-MOC acceptance.

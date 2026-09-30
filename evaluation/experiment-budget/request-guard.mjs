@@ -3790,7 +3790,8 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
     const record = { attemptId, stage, ledgerChannel, model, endpoint, reservedMicroUsd,
       outcome: null, actualMicroUsd: null, observedActualMicroUsd: null,
       inputTokens: null, outputTokens: null,
-      ordinal: scope.ordinal, phase: scope.phase, arm: scope.arm };
+      ordinal: scope.ordinal, phase: scope.phase, arm: scope.arm,
+      transportTermination: null };
     records.push(record);
     inFlightIds.add(attemptId);
     inFlight += 1;
@@ -3810,7 +3811,8 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
     const controller = new AbortController();
     let termination = null;
     let settled = false;
-    const settle = (outcome, actualMicroUsd, inputTokens = null, outputTokens = null) => {
+    const settle = (outcome, actualMicroUsd, inputTokens = null, outputTokens = null,
+      transportTermination = 'other_failure') => {
       if (settled) return;
       settled = true;
       // A priced observation survives a failed B4 write, but cannot masquerade
@@ -3818,6 +3820,7 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
       record.observedActualMicroUsd = actualMicroUsd;
       record.inputTokens = inputTokens;
       record.outputTokens = outputTokens;
+      record.transportTermination = transportTermination;
       try { ledger.recordOutcome(actualMicroUsd === null
         ? { attemptId: record.attemptId, outcome }
         : { attemptId: record.attemptId, outcome, actualMicroUsd }); }
@@ -3888,7 +3891,7 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
         }, () => {});
         response = await raceAbort(pending, controller.signal);
       } catch {
-        settle('unknown', null);
+        settle('unknown', null, null, null, termination ?? 'other_failure');
         if (['deadline', 'cancelled'].includes(termination)) {
           fail(termination === 'cancelled' ? 'case_cancelled' : 'case_deadline_exceeded');
         }
@@ -3896,7 +3899,8 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
         fail('transport_failed');
       }
       if (!(response instanceof Response)) {
-        settle('unknown', null); halted = true; fail('transport_failed');
+        settle('unknown', null, null, null, 'invalid_response');
+        halted = true; fail('transport_failed');
       }
       let bytes;
       try { bytes = await readBounded(response, channel.maxResponseBytes, controller.signal, () => {
@@ -3904,7 +3908,7 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
       }); }
       catch {
         if (termination === null) termination = 'body_failure';
-        settle('unknown', null);
+        settle('unknown', null, null, null, termination);
         if (['deadline', 'cancelled'].includes(termination)) {
           fail(termination === 'cancelled' ? 'case_cancelled' : 'case_deadline_exceeded');
         }
@@ -3912,11 +3916,11 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
         fail('transport_failed');
       }
       if (response.redirected) {
-        settle('unknown', null); halted = true; fail('http_failed');
+        settle('unknown', null, null, null, 'http_failure'); halted = true; fail('http_failed');
       }
       if (response.status < 200 || response.status >= 300) {
         if (mem0 && kind === 'embedding' && response.status >= 500 && response.status < 600) {
-          settle('failed', null);
+          settle('failed', null, null, null, 'http_failure');
           guardedVerify();
           if (requestRecord.itemCount > 1) {
             return new Response('{"error":{"message":"embedding_batch_failed"}}', {
@@ -3925,7 +3929,7 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
           sealScope(scope, 'embedding_singleton_failed');
           fail('http_failed');
         }
-        settle('failed', null); halted = true; fail('http_failed');
+        settle('failed', null, null, null, 'http_failure'); halted = true; fail('http_failed');
       }
       if (mem0) {
         let inspected;
@@ -3933,10 +3937,13 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
           inspected = inspectMem0WireResponse(requestRecord,
             new TextDecoder('utf-8', { fatal: true }).decode(bytes));
         } catch {
-          settle('unknown', null); halted = true; fail('invalid_response');
+          settle('unknown', null, null, null, 'invalid_response');
+          halted = true; fail('invalid_response');
         }
         settle(inspected.usageWithinBounds && inspected.payloadValid ? 'succeeded' : 'failed',
-          inspected.actualMicroUsd, inspected.inputTokens, inspected.outputTokens);
+          inspected.actualMicroUsd, inspected.inputTokens, inspected.outputTokens,
+          !inspected.usageWithinBounds || inspected.actualMicroUsd > reservedMicroUsd
+            ? 'usage_bound_exceeded' : !inspected.payloadValid ? 'invalid_payload' : 'response');
         if (halted || !inspected.usageWithinBounds) {
           halted = true;
           fail('usage_bound_exceeded');
@@ -3951,12 +3958,16 @@ function constructMixedSourcePairGuard({ ledger: ledgerConfiguration, policy, be
         json = parseResponseJson(bytes, kind === 'cairnCount');
         usage = parseUsage(json, kind, channel, requestedOutputTokens, true);
       } catch {
-        settle('unknown', null); halted = true; fail('invalid_response');
+        settle('unknown', null, null, null, 'invalid_response');
+        halted = true; fail('invalid_response');
       }
       if (kind === 'cairnCount' && !usage.withinBounds) {
-        settle('unknown', null); halted = true; fail('invalid_response');
+        settle('unknown', null, null, null, 'invalid_response');
+        halted = true; fail('invalid_response');
       }
-      settle(usage.withinBounds ? 'succeeded' : 'failed', usage.actualMicroUsd);
+      settle(usage.withinBounds ? 'succeeded' : 'failed', usage.actualMicroUsd, null, null,
+        !usage.withinBounds || usage.actualMicroUsd > reservedMicroUsd
+          ? 'usage_bound_exceeded' : 'response');
       if (halted || !usage.withinBounds) { halted = true; fail('usage_bound_exceeded'); }
       return new Response(bytes, { status: response.status, statusText: response.statusText,
         headers: response.headers });

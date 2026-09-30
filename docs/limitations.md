@@ -1484,3 +1484,22 @@ calls and signal/receiver/result identity. These preconditions are synthetic
 mechanics, not explanations of retained paid omissions or new semantic scores.
 Native roots are containment prerequisites for synthetic stores/ledgers only.
 No provider key, corpus, operational ledger or paid call is used by these gates.
+
+## Prospective mixed transport classification
+
+The [native failure diagnostic](plans/native-failure-diagnosis.md) retains finite
+guard-owned transport categories in process-local mixed attempts and bounded
+per-ordinal reports, including counts of failures beyond the first 64 stages.
+Legacy, missing or malformed classification remains unavailable. These fields
+distinguish transport, response validation and authenticated deadline branches;
+they do not identify an upstream actor or prove physical cancellation, accepted
+billing or semantic quality. Accounting settlement failures remain separate.
+
+Synthetic installed-native controls preserve unknown/full-reservation global
+halts for transport and malformed-response failures, and local continuation
+for authenticated deadlines and definite singleton embedding 503s. They neither
+repair the earlier stopped run nor assign its generic halt a retrospective
+category. No consumed case is replayed or rescored. This is a prospective local
+diagnostic with unchanged requests, budget, caps, isolation, retries, models and
+timeouts; it grants no paid launch, default MOC/MCP/Hermes acceptance, competitor
+parity or quality-score claim.

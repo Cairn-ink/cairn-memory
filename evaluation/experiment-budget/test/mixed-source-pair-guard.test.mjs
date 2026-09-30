@@ -231,6 +231,7 @@ test('X8/X9 Mem0 generation sends canonical chat and embedding, then shared stag
   assert.equal(guard.caseOutcomes().scopes.length, 4);
   assert.equal(guard.quotaSnapshot().phaseUsed.generation.requests, 3);
   assert.equal(guard.quotaSnapshot().phaseUsed.scoring.requests, 2);
+  assert.ok(guard.attempts().every(entry => entry.transportTermination === 'response'));
   guard.close();
 });
 
@@ -409,6 +410,7 @@ test('X9/X10 known-priced invalid payload seals one arm, next arm works, scoring
   assert.deepEqual(first, { status: 'failed', reason: 'invalid_payload', value: null });
   assert.equal(guard.attempts()[0].actualMicroUsd, 3);
   assert.equal(guard.attempts()[0].outcome, 'failed');
+  assert.equal(guard.attempts()[0].transportTermination, 'invalid_payload');
   assert.equal(guard.quotaSnapshot().phaseUsed.generation.reservedMicroUsd, 16_308);
   const second = await guard.withCaseScope(capability.schedule[1], async () => {
     assert.equal((await guard.answerFetch(f.benchmarkExtension.stages.answer.endpoint,
@@ -637,6 +639,8 @@ test('X10 invalid model/usage and known priced usage bound globally halt without
     assert.equal(attempt.reservedMicroUsd, 16_308);
     assert.equal(attempt.outcome, variant === 'bound' ? 'failed' : 'unknown');
     assert.equal(attempt.actualMicroUsd, variant === 'bound' ? 13_110 : null);
+    assert.equal(attempt.transportTermination,
+      variant === 'bound' ? 'usage_bound_exceeded' : 'invalid_response');
     await assert.rejects(guard.withCaseScope(capability.schedule[2], async () => {}),
       rejected('paid_work_halted'));
     guard.close();
@@ -659,6 +663,7 @@ test('X10 embedding singleton 5xx seals case and cannot present native success',
   assert.equal(physical, 1);
   assert.deepEqual(guard.attempts().map(entry => [entry.outcome, entry.actualMicroUsd]),
     [['failed', null]]);
+  assert.equal(guard.attempts()[0].transportTermination, 'http_failure');
   guard.close();
 });
 
@@ -709,6 +714,7 @@ test('X9 trusted revoke aborts in-flight, fences stale ALS descendants and does 
   assert.equal(physical, 2);
   assert.equal(guard.attempts()[0].outcome, 'unknown');
   assert.equal(guard.attempts()[0].actualMicroUsd, null);
+  assert.equal(guard.attempts()[0].transportTermination, 'cancelled');
   guard.close();
 });
 
@@ -730,6 +736,7 @@ test('X9/X10 real core deadline isolates case; spoofed error code globally halts
       { ...request(chat()), signal }), rejected('case_deadline_exceeded'));
   }).then(result => assert.deepEqual(result, { status: 'failed', reason: 'deadline', value: null }));
   await assert.rejects(model, /model_timeout/u);
+  assert.equal(guard.attempts()[0].transportTermination, 'deadline');
   const next = await guard.withCaseScope(capability.schedule[1], async () => {});
   assert.equal(next.status, 'completed');
   guard.close();
@@ -783,6 +790,8 @@ test('X10 first ambiguous transport/body cause remains global despite later revo
     assert.equal(guard.isHalted(), true);
     assert.equal(guard.attempts()[0].outcome, 'unknown');
     assert.equal(guard.attempts()[0].actualMicroUsd, null);
+    assert.equal(guard.attempts()[0].transportTermination,
+      mode === 'body' ? 'body_failure' : 'transport_failure');
     assert.equal(guard.caseOutcomes().scopes.length, 0);
     await assert.rejects(guard.withCaseScope(capability.schedule[1], async () => {}),
       rejected('paid_work_halted'));
@@ -853,10 +862,11 @@ test('B2/B3 mixed settlement waits for short child reader once and keeps success
   const attempt = guard.attempts()[0];
   assert.deepEqual(Object.keys(attempt), ['attemptId', 'stage', 'ledgerChannel', 'model', 'endpoint',
     'reservedMicroUsd', 'outcome', 'actualMicroUsd', 'observedActualMicroUsd', 'inputTokens', 'outputTokens',
-    'ordinal', 'phase', 'arm']);
+    'ordinal', 'phase', 'arm', 'transportTermination']);
   assert.deepEqual([attempt.reservedMicroUsd, attempt.actualMicroUsd, attempt.observedActualMicroUsd,
     attempt.inputTokens, attempt.outputTokens], [10, 10, 10, 470, 0]);
   assert.equal(attempt.outcome, 'succeeded');
+  assert.equal(attempt.transportTermination, 'response');
   const state = guard.getState();
   assert.equal(state.requestCount, f.snapshot.requestCount + 1);
   assert.equal(state.reservedMicroUsd, f.snapshot.reservedMicroUsd + 10);
@@ -880,6 +890,7 @@ test('B2/B3 mixed settlement times out on held child reader, retaining priced pe
   assert.equal(physical, 1); assert.equal(guard.isHalted(), true);
   const attempt = guard.attempts()[0];
   assert.deepEqual(attempt.settlementFailure, { operation: 'record_outcome', category: 'ledger_busy' });
+  assert.equal(attempt.transportTermination, 'response', 'observation is not durable acceptance');
   assert.equal(Object.isFrozen(attempt), true);
   assert.equal(Object.isFrozen(attempt.settlementFailure), true);
   assert.deepEqual([attempt.reservedMicroUsd, attempt.observedActualMicroUsd, attempt.inputTokens,
@@ -918,6 +929,7 @@ test('B2/B4 arbitrary settlement exception details are replaced by the closed fa
     }), rejected('callback_failed'));
     const attempt = guard.attempts()[0];
     assert.deepEqual(attempt.settlementFailure, { operation: 'record_outcome', category: 'ledger_failed' });
+    assert.equal(attempt.transportTermination, 'response');
     assert.equal(attempt.outcome, null); assert.equal(attempt.actualMicroUsd, null);
     assert.equal(guard.isHalted(), true);
     assert.equal(physical, 1); assert.equal(commits, 1);
@@ -962,7 +974,7 @@ test('X7/X12 in-flight foreign rowid mutation fences bound settlement and global
 test('X9 concurrency, closure and bounded source-free snapshots', async t => {
   const f = fixture(t);
   const capability = authorizeMixedSourcePairCapability(f.options);
-  let release;
+  let release, pendingSnapshot;
   let entered;
   const started = new Promise(resolve => { entered = resolve; });
   let physical = 0;
@@ -978,6 +990,11 @@ test('X9 concurrency, closure and bounded source-free snapshots', async t => {
     const first = guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint,
       request(embedding(['a'])));
     await started;
+    pendingSnapshot = guard.attempts();
+    assert.equal(pendingSnapshot[0].transportTermination, null);
+    assert.equal(pendingSnapshot[0].outcome, null);
+    assert.equal(Object.isFrozen(pendingSnapshot), true);
+    assert.equal(Object.isFrozen(pendingSnapshot[0]), true);
     await assert.rejects(guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint,
       request(embedding(['b']))), rejected('guard_busy'));
     await assert.rejects(guard.withCaseScope(capability.schedule[2], async () => {}),
@@ -989,12 +1006,78 @@ test('X9 concurrency, closure and bounded source-free snapshots', async t => {
   assert.equal(outcome.status, 'completed');
   assert.equal(physical, 1);
   assert.equal(guard.caseScopeSnapshot().status, 'completed');
+  assert.equal(pendingSnapshot[0].transportTermination, null, 'detached in-flight snapshot stays unknown');
   const publicText = JSON.stringify([guard.caseOutcomes(), guard.quotaSnapshot(),
     guard.caseScopeSnapshot()]);
   assert.equal(publicText.includes(questionId), false);
   assert.equal(publicText.includes('Synthetic'), false);
   assert.equal(Object.isFrozen(guard.quotaSnapshot().scopes), true);
   guard.close();
+  assert.equal(guard.attempts()[0].transportTermination, 'response');
+  assert.equal(Object.isFrozen(guard.attempts()[0]), true);
   await assert.rejects(guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint,
     request(embedding(['a']))), rejected('guard_closed'));
+});
+
+test('R1/R4 forged exception codes, abort reasons and response sentinels cannot classify a deadline',
+  async t => {
+    for (const mode of ['forged-error', 'non-response', 'external-abort', 'malformed-sentinels']) {
+      const f = fixture(t, { executionId: `classification-${mode}` });
+      const capability = authorizeMixedSourcePairCapability(f.options);
+      const external = new AbortController();
+      let entered;
+      const started = new Promise(resolve => { entered = resolve; });
+      const guard = create(f, capability, (_url, options) => {
+        if (mode === 'forged-error') throw Object.assign(Error('PRIVATE_ERROR_SENTINEL'),
+          { code: 'case_deadline_exceeded', transportTermination: 'deadline' });
+        if (mode === 'non-response') return { transportTermination: 'deadline' };
+        if (mode === 'malformed-sentinels') return new Response('PRIVATE_BODY_SENTINEL',
+          { headers: { 'x-private': 'PRIVATE_HEADER_SENTINEL' } });
+        entered();
+        return new Promise((_resolve, reject) => options.signal.addEventListener('abort',
+          () => reject(Error('PRIVATE_ABORT_SENTINEL')), { once: true }));
+      });
+      try {
+        await guard.withCaseScope(capability.schedule[0], async () => {});
+        await assert.rejects(guard.withCaseScope(capability.schedule[1], async () => {
+          const pending = guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint,
+            { ...request(embedding(['a'])), signal: external.signal });
+          if (mode === 'external-abort') { await started; external.abort('deadline'); }
+          await pending;
+        }), rejected('callback_failed'));
+        const observed = guard.attempts()[0];
+        assert.equal(observed.transportTermination, mode === 'forged-error' ? 'transport_failure'
+          : mode === 'external-abort' ? 'external_abort' : 'invalid_response');
+        assert.equal(observed.outcome, 'unknown');
+        assert.equal(observed.actualMicroUsd, null);
+        assert.equal(observed.reservedMicroUsd, 1);
+        assert.equal(guard.getState().attempts.filter(row => row.outcome === null).length, 0);
+        assert.equal(guard.isHalted(), true);
+        assert.equal(JSON.stringify(guard.attempts()).includes('SENTINEL'), false);
+      } finally { guard.close(); }
+    }
+  });
+
+test('R1/R4 unawaited work at scope closure is case_sealed and remains a global halt', async t => {
+  const f = fixture(t), capability = authorizeMixedSourcePairCapability(f.options);
+  let entered, pending;
+  const started = new Promise(resolve => { entered = resolve; });
+  const guard = create(f, capability, (_url, options) => {
+    entered();
+    return new Promise((_resolve, reject) => options.signal.addEventListener('abort',
+      () => reject(Error('PRIVATE_CLOSE_SENTINEL')), { once: true }));
+  });
+  try {
+    await guard.withCaseScope(capability.schedule[0], async () => {});
+    await assert.rejects(guard.withCaseScope(capability.schedule[1], async () => {
+      pending = guard.mem0EmbeddingFetch(mem0WireProfile().embedding.endpoint, request(embedding(['a'])));
+      pending.catch(() => {});
+      await started;
+    }), rejected('paid_work_halted'));
+    await assert.rejects(pending, rejected('transport_failed'));
+    assert.equal(guard.attempts()[0].transportTermination, 'case_sealed');
+    assert.equal(guard.attempts()[0].outcome, 'unknown');
+    assert.equal(guard.isHalted(), true);
+    assert.equal(guard.getState().attempts.filter(row => row.outcome === null).length, 0);
+  } finally { guard.close(); }
 });

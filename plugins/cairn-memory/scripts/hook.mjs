@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 import { open, stat } from "node:fs/promises";
-import { homedir, platform, tmpdir } from "node:os";
-import { join } from "node:path";
+import { platform } from "node:os";
 import { captureEvent } from "../lib/capture-event.mjs";
 import {
   captureCursorPath,
@@ -10,7 +9,7 @@ import {
   writeCaptureCursor,
 } from "../lib/capture-cursor.mjs";
 import { captureEventId, transcriptWindow } from "../lib/transcript.mjs";
-import { installId, opaqueProjectId } from "../lib/identity.mjs";
+import { installId } from "../lib/identity.mjs";
 import { normalizeEndpoint } from "../lib/config.mjs";
 import {
   readControlState,
@@ -21,6 +20,7 @@ import {
 import { withFileLock } from "../lib/file-lock.mjs";
 import { createJsonPoster } from "../lib/http.mjs";
 import { prepareRecallQuery } from "../lib/recall-query.mjs";
+import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
 import { VERSION } from "../lib/version.mjs";
 
 const action = process.argv[2] ?? "status";
@@ -30,8 +30,9 @@ const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN ?? "";
 const telemetryEnabled = !/^(?:0|false|no|off)$/i.test(
   process.env.CLAUDE_PLUGIN_OPTION_TELEMETRY ?? "true",
 );
-const dataDir =
-  process.env.CLAUDE_PLUGIN_DATA ?? join(homedir() || tmpdir(), ".cairn-memory");
+let dataDir;
+let clientOptions;
+let binding;
 let endpoint;
 let post;
 try {
@@ -80,7 +81,7 @@ async function recall(hookInput) {
   if (query === undefined) return;
   const control = await readControlState(dataDir);
   if (control.paused) return;
-  const projectId = await opaqueProjectId(dataDir, hookInput.cwd);
+  const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
   const started = await startIfActive(dataDir, control.generation, () =>
     post(
       "/api/memory/recall",
@@ -242,7 +243,7 @@ async function captureLocked(hookInput, statePath, generation) {
     });
   }
 
-  const projectId = await opaqueProjectId(dataDir, hookInput.cwd);
+  const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
   for (let index = 0; index < window.length; index += 24) {
     const batch = window.slice(index, index + 24);
     const messages = batch
@@ -290,30 +291,50 @@ async function control() {
     return;
   }
   const state = await readControlState(dataDir);
+  const note = binding.status === "pairing_needed"
+    ? "; pairing_needed (existing client active)"
+    : binding.status === "standalone_unregistered" ? "; standalone_unregistered" : "";
   process.stdout.write(
-    `Cairn automatic memory: ${state.paused ? "paused" : "active"}; telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; credential: ${token ? "configured" : "missing"}.\n`,
+    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}` +
+    `${binding.detail ? "; " + binding.detail : ""}; ` +
+    `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; ` +
+    `credential: ${token ? "configured" : "missing"}.\n`,
   );
 }
 
 try {
-  if (["status", "pause", "resume"].includes(action)) {
-    await control();
-  } else {
-    const hookInput = await input();
-    if (action === "start") await telemetry("plugin_started");
-    else if (action === "recall") await recall(hookInput);
-    else if (["capture", "capture-detached"].includes(action)) {
-      const requestedGeneration =
-        typeof hookInput.capture_generation === "string"
-          ? hookInput.capture_generation
-          : undefined;
-      // Detached work must retain its launch generation. Missing or malformed
-      // handoffs cannot silently adopt the generation active at execution time.
-      if (action !== "capture-detached" || requestedGeneration !== undefined) {
-        await capture(hookInput, requestedGeneration);
-      }
+  const { pairingRecord } = parsePairingRecord(process.argv.slice(3));
+  clientOptions = { client: "claude", pairingRecord };
+  binding = await resolveClient(clientOptions);
+  if (!binding.enabled) {
+    if (["status", "pause", "resume"].includes(action)) {
+      process.stdout.write(
+        `Cairn automatic memory: ${binding.status}` +
+        `${binding.detail ? "; " + binding.detail : ""}.\n`,
+      );
+      if (action !== "status") process.exitCode = 1;
     }
-    else await control();
+  } else {
+    dataDir = binding.root;
+    if (["status", "pause", "resume"].includes(action)) {
+      await control();
+    } else {
+      const hookInput = await input();
+      if (action === "start") await telemetry("plugin_started");
+      else if (action === "recall") await recall(hookInput);
+      else if (["capture", "capture-detached"].includes(action)) {
+        const requestedGeneration =
+          typeof hookInput.capture_generation === "string"
+            ? hookInput.capture_generation
+            : undefined;
+        // Detached work must retain its launch generation. Missing or malformed
+        // handoffs cannot silently adopt the generation active at execution time.
+        if (action !== "capture-detached" || requestedGeneration !== undefined) {
+          await capture(hookInput, requestedGeneration);
+        }
+      }
+      else await control();
+    }
   }
 } catch (error) {
   // Hooks are deliberately fail-open. Never emit an error or non-zero status

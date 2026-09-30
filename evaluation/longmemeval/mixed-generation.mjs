@@ -8,6 +8,8 @@ import { openMemoryCore } from '../../core/contract.mjs';
 import { checkedMem0NativeArtifact } from '../experiment-budget/mem0-native-artifact.mjs';
 import { checkedMem0NativeConfiguration, runMem0NativeCase } from '../experiment-budget/mem0-native-gateway.mjs';
 import { mem0WireProfile } from '../experiment-budget/mem0-wire.mjs';
+import { MIXED_TRANSPORT_TERMINATIONS,
+  projectMixedTransportTermination } from '../experiment-budget/mixed-transport-observation.mjs';
 import { benchmarkStagePolicy } from '../live/public-pilot.mjs';
 import { experimentPolicy } from '../live/session.mjs';
 import { createRecallWitness } from '../long-history/recall-witness.mjs';
@@ -342,16 +344,22 @@ const RETAINED_ATTEMPT_STAGE_LIMIT = 64;
 
 export function summarizeAttemptsForOrdinal(attempts, ordinal) {
   const summary = { requests: 0, reservedMicroUsd: 0, knownActualMicroUsd: 0,
-    unknownActualCount: 0, retainedStageCount: 0, omittedStageCount: 0, stages: [] };
+    unknownActualCount: 0, retainedStageCount: 0, omittedStageCount: 0, stages: [],
+    terminationCounts: Object.fromEntries(MIXED_TRANSPORT_TERMINATIONS.map(value => [value, 0])),
+    terminationUnavailableCount: 0 };
   for (const item of attempts) {
     if (item.ordinal !== ordinal) continue;
+    const transportTermination = projectMixedTransportTermination(item);
+    if (transportTermination === null) summary.terminationUnavailableCount++;
+    else summary.terminationCounts[transportTermination]++;
     summary.requests++;
     summary.reservedMicroUsd += item.reservedMicroUsd;
     summary.knownActualMicroUsd += item.actualMicroUsd ?? 0;
     if (item.actualMicroUsd === null) summary.unknownActualCount++;
     if (summary.stages.length < RETAINED_ATTEMPT_STAGE_LIMIT) {
       summary.stages.push({ stage: item.stage, outcome: item.outcome,
-        reservedMicroUsd: item.reservedMicroUsd, actualMicroUsd: item.actualMicroUsd });
+        reservedMicroUsd: item.reservedMicroUsd, actualMicroUsd: item.actualMicroUsd,
+        transportTermination });
     }
   }
   summary.retainedStageCount = summary.stages.length;
