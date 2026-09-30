@@ -2049,13 +2049,21 @@ remain synthetic stub gates, with no installed or hosted enablement.
 | Runtime | Three CX-3 runs (seconds) | Exit codes | Generator seconds |
 | --- | --- | --- | --- |
 | Node 22.16.0 | 49.864, 42.509, 42.063 | 0, 0, 0 | 49.728, 42.362, 41.922 |
-| Node 24.15.0 | qualification in progress | pending | pending |
+| Node 24.15.0 | 41.781, 42.302, 42.308 | 0, 0, 0 | 41.639, 42.159, 42.168 |
 
 The invocation includes both `runtime-usage.test.mjs` and the new
 `runtime-policy.test.mjs`, using the command in the Codex README. Commands
 are foreground/sequential with explicit scratch HOME = CAIRN_TEST_REAL_HOME,
 worktree TMPDIR/cache and no real session/credential/memory access. The full
 matrix is delegated to the coordinator and is not rerun in round 2.
+All six final invocations passed 115/115, with zero failures or skips. They
+exercise 48 seeded sequences/3072 operations and 300 exhaustive interruption
+points in total. Final repetitions include W33 and the five-boundary refusal
+regression; the earlier 113-case repetitions are superseded by these results.
+The current packet and working edits pass git diff --check (exit 0). Scratch
+and its logs are removed after recording the final results. The coordinator
+must qualify this round's final HEAD with its full matrix and add test:codex/CI;
+the complete passing matrix on 7b7ce787 remains historical coordinator evidence.
 
 Creator metadata cannot qualify a newer resumed writer: Codex does not append
 new session_meta on resume. CX-5 must independently qualify the installed host;
