@@ -187,3 +187,36 @@ test("review repro: a 400ms held usage lock cannot turn quota into timeout", asy
   await runWorker(f.binding, { guard: f.guard, transport });
   assert.equal((await f.guard.status()).state.resetAt, resetAt);
 });
+
+test("quota intent survives every EOF boundary before a failed latch is retried", async (t) => {
+  for (const boundary of ["binding", "source", "pause", "session-start", "reset"]) {
+    const f = await fixture(t, { text: header() + item("Refused old source") });
+    const refuse = f.guard.refuse;
+    f.guard.refuse = async () => {
+      throw new Error("state_busy");
+    };
+    f.fail("refusal");
+    const run = () => runWorker(f.binding, { guard: f.guard, transport: f.transport });
+    assert.equal((await run()).status, "quota_reached");
+    const intent = (await f.cursor()).quotaRefusal;
+    f.clear();
+    if (["binding", "session-start"].includes(boundary)) f.binding.projectId = "c".repeat(64);
+    if (boundary === "source") await writeFile(f.path, header());
+    if (boundary === "pause") {
+      await setPaused(f.root, true);
+      await setPaused(f.root, false);
+    }
+    if (boundary === "reset") await resetCapture(f.binding, { hostsStopped: true, confirm: true });
+    else if (boundary === "session-start") await establishPauseBoundary(f.binding);
+    else await run();
+    assert.deepEqual((await f.cursor()).quotaRefusal, intent, boundary);
+    await appendFile(f.path, item("New source after refusal", 10));
+    assert.equal((await run()).status, "quota_reached", boundary);
+    assert.equal(f.calls.length, 1, boundary);
+    f.guard.refuse = refuse;
+    assert.equal((await run()).status, "quota_reached");
+    await f.guard.resume();
+    await run();
+    assert.equal(f.receiver.size, 1);
+  }
+});

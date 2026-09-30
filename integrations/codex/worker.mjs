@@ -114,6 +114,7 @@ async function prepared(binding, options, action) {
         const digest = await transcriptDigest(binding);
         if (!s) s = initialCursor(opaque, id, control.generation);
         async function boundary(reason, newEpoch = false) {
+          const quotaRefusal = s.quotaRefusal;
           if (newEpoch) {
             s = initialCursor(opaque, id, control.generation);
             s.epoch = (prior?.epoch ?? randomBytes(6).readUIntBE(0, 6)) + 1;
@@ -126,7 +127,7 @@ async function prepared(binding, options, action) {
               ? "legacy-" + hash("paused-reset", control.generation)
               : control.generation;
           s.pending = null;
-          s.quotaRefusal = null;
+          s.quotaRefusal = quotaRefusal;
           s.notBefore = 0;
           s.discard = size > 0 && (await readBytes(file, size - 1, size))[0] !== 10;
           s.discardReason = s.discard ? reason : null;
@@ -312,7 +313,7 @@ export async function establishPauseBoundary(binding, options = {}) {
         s.observedEnd = stat.size;
         s.generation = control.generation;
         s.pending = null;
-        s.quotaRefusal = null;
+        s.quotaRefusal = previous?.quotaRefusal ?? null;
         s.notBefore = 0;
         s.status = reason;
         const tail = stat.size

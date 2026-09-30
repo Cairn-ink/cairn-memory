@@ -37,6 +37,7 @@ const factValues = {
     "start-binding",
     "digest-migration",
     "latch-failure",
+    "refused-binding",
   ],
   batch: ["first", "middle", "last"],
   mode: ["hosted-stub", "local-stub"],
@@ -97,8 +98,8 @@ const rows = section
     };
   });
 test("table is closed and every row generates a test", () => {
-  assert.equal(rows.length, 32);
-  assert.equal(new Set(rows.map((x) => x.id)).size, 32);
+  assert.equal(rows.length, 33);
+  assert.equal(new Set(rows.map((x) => x.id)).size, 33);
   assert.throws(() => facts({ batc: "first" }));
   assert.throws(() => facts({ batch: "frist" }));
 });
@@ -151,7 +152,18 @@ for (const row of rows)
     if (row.f.event === "unsupported")
       await writeFile(f.path, header({ cli_version: "0.999.0" }) + addition);
     if (row.f.event === "missing") await unlink(f.path);
-    if (["binding-change", "reset-binding", "start-binding"].includes(row.f.event))
+    if (row.f.event === "refused-binding") {
+      f.fail("refusal");
+      f.guard.refuse = async () => {
+        throw new Error("state_busy");
+      };
+      await run();
+      f.clear();
+      assert.equal((await f.cursor()).quotaRefusal.latched, false);
+    }
+    if (
+      ["binding-change", "reset-binding", "start-binding", "refused-binding"].includes(row.f.event)
+    )
       f.binding.projectId = "c".repeat(64);
     if (row.f.event === "digest-migration") {
       const legacy = await f.cursor();
@@ -198,6 +210,7 @@ for (const row of rows)
     if (
       [
         "binding-change",
+        "refused-binding",
         "reset-binding",
         "start-binding",
         "digest-migration",
@@ -211,6 +224,7 @@ for (const row of rows)
       assert.equal(s.pending, null);
       const reason = {
         "binding-change": "binding_changed",
+        "refused-binding": "binding_changed",
         "reset-binding": "state_reset",
         "start-binding": "binding_changed",
         "digest-migration": "digest_migrated",
@@ -268,6 +282,13 @@ for (const row of rows)
       observed,
       results,
     );
+    if (row.f.event === "refused-binding") {
+      assert.equal(s.quotaRefusal.latched, false);
+      const calls = f.calls.length;
+      await appendFile(f.path, item("After refused rebind", 100));
+      assert.equal((await run()).status, "quota_reached");
+      assert.equal(f.calls.length, calls);
+    }
     if (row.cursor === "batch-start") {
       const acknowledged = row.f.batch === "first" ? 0 : row.f.batch === "middle" ? 24 : 48;
       const end = Buffer.byteLength(
