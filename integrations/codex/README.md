@@ -12,6 +12,9 @@ and the [design contract](../../docs/plans/codex-client.md#cx-3-primary-format-p
 Only flat paginated `cli`/`exec` sessions with exact metadata version 0.157.1 are
 qualified. Legacy, fork, inherited and subagent layouts refuse. This is no general
 version-range promise. Fixtures are synthetic, authored from Rust types.
+The metadata version describes the file's creator: Codex does not emit new
+metadata on resume. Installed launchers must independently qualify the current
+host before enabling capture; a newer resumed writer is not qualified by this pin.
 
 The installed launcher must call `resolveClient({client:'codex', usesClaude,
 home, root, pairingRecord, ...})` with installation-supplied options; `usesClaude`
@@ -47,7 +50,8 @@ unknown final tails remain visible. An authorized later hook may retry the same
 pending range. Loss of that source records `source_unavailable`; a new session
 cannot recover it. Replacement/truncation/mutation/path changes establish EOF
 with a gap. A changed project binding (including resume in another cwd) creates
-a new EOF epoch with `binding_changed`; old text is never sent under the new project. Pause-generation changes establish EOF and discard spanning lines.
+a new EOF epoch with `binding_changed`; old text is never sent under the new
+project. Pause-generation changes establish EOF and discard spanning lines.
 
 The injected transport must provide idempotent admission by event ID, return an
 exact `{status:'complete'|'duplicate'|'empty'|'processing', eventId}` descriptor,
@@ -62,8 +66,9 @@ retains its reservation until confirmed termination. Local uncertainty has a
 Corrupt cursors fail closed during automatic work. With workers stopped, restore
 a trusted private backup or use the explicit EOF reset below. Reset also recovers
 a changed binding, unsupported format or corrupt JSON, with an authorized readable
-source; unsafe ownership/permissions still refuse. For a stopped cursor, `resetCapture(binding,{hostsStopped:true,
-confirm:true})` deliberately establishes EOF and records `state_reset`. This
+source; unsafe ownership/permissions still refuse. For a stopped cursor,
+`resetCapture(binding,{hostsStopped:true,confirm:true})` deliberately establishes
+EOF and records `state_reset`. This
 does not replay old bytes. Runtime-guard corruption similarly needs a trusted
 backup; unknown reservations need verified termination. Explicit quota resume
 cannot clear global pause, known reset/daily caps or grant source access.
@@ -72,10 +77,13 @@ Run the new suites with an explicit synthetic HOME, worktree TMPDIR/npm cache:
 
 ```sh
 node integrations/client/testing/run.mjs integrations/codex/test/*.test.mjs \
-  integrations/client/test/runtime-usage.test.mjs
+  integrations/client/test/runtime-usage.test.mjs \
+  integrations/client/test/runtime-policy.test.mjs
 ```
 
-The decision table generates 25 cases and rejects misspelled fact keys/values.
+The worker table generates 32 cases; the usage policy table generates six cases.
+Both reject misspelled facts and assert every result column with a closed vocabulary.
+Mutating any result cell, even to another valid value, must fail its test.
 The seeded history oracle and exhaustive durable-write interruptions supplement
 those examples. No real host, subscription, credentials or session files are used.
 

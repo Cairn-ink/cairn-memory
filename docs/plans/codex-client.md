@@ -2009,3 +2009,50 @@ Node22.16/24 CI wiring after this round, as for pairing. Context/model/hosted
 integration remains disabled. The coordinator reports the complete 11-command
 matrix passed on 7b7ce787 on Node22/24, plus npm test/validate on Node20; those are
 coordinator evidence, not new implementation-worker executions in this round.
+
+### CX-3 round 2 qualification
+
+The reviewer cwd repro was run first against 7b7ce787: 0/3 passed, exit 1.
+The identical synthetic repro then passed 3/3, exit 0. The permanent round-2
+suite has ten cases, including the actual 400 ms usage-lock reproduction, which
+preserves quota_reached/resetAt and retries the latch before further dispatch.
+
+W26–W32 add seven worker cases; P01–P06 add six usage-window cases. Together
+the tables have 38 rows/38 generated cases plus two schema checks. Every result
+cell is tested against unknown and alternative legal mutations. The complete
+CX-3 invocation has 113 cases: parser 20, worker table 33, privacy 4, gates 12,
+round-2 regressions 10, sequences 8, interruption 1, usage 18 and policy table 7.
+
+The independent oracle now includes resume-cwd, using real project IDs derived
+from synthetic cwd changes. Its ten operations are append, replacement,
+truncation, malformed lines, pause, resume, worker crash, lost reply, concurrent
+Claude/Codex dispatch and resume in another cwd. Seeds remain 1, 7, 42, 91,
+12345, 65537, 49374 and 3405691582, with 64 steps each (512 per invocation).
+All invariants are asserted after every step, including while paused.
+
+Exhaustive real worker interruption fixtures cover 40 publication points:
+prepare 3, capture 17, pause-boundary 1, SessionStart 1, replacement 1,
+oversized 3, binding-change 1, digest-migration 1, reset 1 and refusal 11.
+Reset retry at the same EOF is idempotent. The usage fixture additionally
+covers ten publication points. Each k-th-write retry reaches the uninterrupted
+semantic end state; uncertain billing stays conservatively charged.
+
+All touched JavaScript uses double quotes and lines at most 100 columns;
+the reported unused imports are removed. The 31-second local success gate
+advances an injected clock rather than sleeping in real time. A1/A4/A5/A9
+remain synthetic stub gates, with no installed or hosted enablement.
+
+| Runtime | Three CX-3 runs (seconds) | Exit codes | Generator seconds |
+| --- | --- | --- | --- |
+| Node 22.16.0 | 44.303, 40.910, 47.043 | 0, 0, 0 | 44.172, 40.785, 46.695 |
+| Node 24.15.0 | qualification in progress | pending | pending |
+
+The invocation includes both `runtime-usage.test.mjs` and the new
+`runtime-policy.test.mjs`, using the command in the Codex README. Commands
+are foreground/sequential with explicit scratch HOME = CAIRN_TEST_REAL_HOME,
+worktree TMPDIR/cache and no real session/credential/memory access. The full
+matrix is delegated to the coordinator and is not rerun in round 2.
+
+Creator metadata cannot qualify a newer resumed writer: Codex does not append
+new session_meta on resume. CX-5 must independently qualify the installed host;
+CX-6 records this limitation with the other retained offline boundaries.
