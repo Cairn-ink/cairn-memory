@@ -78,7 +78,12 @@ export async function resumeHostedQuota(target, { now = Date.now() } = {}) {
   if (!Number.isFinite(now)) throw new Error("invalid_time");
   return gateLock(target, async (state, save) => {
     if (state.mode === "open") return { status: "active" };
-    if (state.resetAt !== null && now < Date.parse(state.resetAt)) return gateReply(state);
+    if (state.resetAt !== null) {
+      const fraction = /\.(\d+)/.exec(state.resetAt)?.[1] ?? "";
+      // Date.parse truncates fractions beyond milliseconds. Do not resume early.
+      const boundary = Date.parse(state.resetAt) + (/[1-9]/.test(fraction.slice(3)) ? 1 : 0);
+      if (now < boundary) return gateReply(state);
+    }
     // Repeated resume while a permit is already ready does not multiply it.
     await save({ ...state, mode: "ready" });
     return { status: "ready", resetAt: state.resetAt };

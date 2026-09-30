@@ -766,7 +766,9 @@ Both routes refuse quota with HTTP 429 and exactly
 `{"error":"quota_reached"}`. Unknown fields, success fields, memories and
 acknowledgements are forbidden in a refusal. `resetAt` must be a finite, valid
 UTC RFC 3339 instant, with `Z` or `+00:00`, optional fractional seconds and no
-calendar overflow or leap second. Missing reset means **reset unknown**; headers
+calendar overflow or leap second. Missing reset means **reset unknown**; sub-millisecond reset fractions are rounded up
+for eligibility against a millisecond clock, preserving the original displayed
+time. Headers
 and local clocks cannot supply a guessed reset. Refusal bodies on a success
 status, and success bodies on 429, are invalid replies.
 

@@ -267,3 +267,16 @@ for (const probe of [false, true]) {
     assert.equal((await hostedQuotaStatus(f.target)).mode, prior);
   });
 }
+
+
+test("sub-millisecond reset fractions cannot permit an early resume", async (t) => {
+  const f = await fixture(t);
+  const resetAt = "2026-10-02T00:00:00.0001Z";
+  f.respond(429, { error: "quota_reached", resetAt });
+  await f.codex.capture(batch, binding, "synthetic-event");
+  assert.equal((await resumeHostedQuota(f.target, { now: Date.parse(resetAt) })).status,
+    "quota_reached");
+  assert.equal((await hostedQuotaStatus(f.target)).resetAt, resetAt);
+  assert.equal((await resumeHostedQuota(f.target, { now: Date.parse(resetAt) + 1 })).status, "ready");
+  assert.equal(f.requests.length, 1);
+});
