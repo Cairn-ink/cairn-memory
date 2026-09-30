@@ -111,14 +111,15 @@ test('A9 closed finite state schema rejects corruption, typos, secrets and unsaf
   await writeFile(f.guard.path,'{broken');await assert.rejects(f.guard.reserve(),/usage_state_invalid/);
 });
 
-test('A9 exhaustive interruption: every durable write in reserve/release/refuse/resume/observe',async t=>{
+test('A9 exhaustive interruption: every durable write in reserve/dispatch/release/refuse/resume/observe',async t=>{
   let points=0;
-  for(const operation of ['reserve','release','refuse','resume','observe']) {
+  for(const operation of ['reserve','dispatch','release','refuse','resume','observe']) {
     async function scenario(crashAt) {
       const f=await setup(t),id=randomUUID();
-      if(operation==='release') await f.guard.reserve({id});
+      if(['release','dispatch'].includes(operation)) await f.guard.reserve({id});
       if(operation==='resume') await f.guard.refuse();
-      const call=()=>operation==='reserve'?f.guard.reserve({id}):operation==='release'?f.guard.release(id,{terminated:true}):
+      const call=()=>operation==='reserve'?f.guard.reserve({id}):operation==='dispatch'?f.guard.dispatch(id,()=>({})):
+        operation==='release'?f.guard.release(id,{terminated:true}):
         operation==='observe'?f.guard.observe({observedAt:f.now(),windows:[]}):f.guard[operation]();
       let writes=0;
       try {await withWriteObserver(()=>{if(++writes===crashAt)throw new Error('interruption');},call);}
@@ -130,4 +131,40 @@ test('A9 exhaustive interruption: every durable write in reserve/release/refuse/
     for(let k=1;k<=baseline.writes;k++) {points++;const retried=await scenario(k);assert.deepEqual(retried.state,baseline.state);}
   }
   t.diagnostic(`runtime interruption points=${points}`);
+});
+
+test('A9 one reservation can dispatch only once; refusal invalidates older unstarted permits across resume',async t=>{
+  const f=await setup(t),p=await f.guard.reserve();let calls=0;
+  await f.guard.dispatch(p.id,()=>{calls++;return {};});
+  assert.equal((await f.guard.dispatch(p.id,()=>{calls++;return {};})).code,'reservation_already_dispatched');
+  assert.equal(calls,1);await f.guard.release(p.id,{terminated:true});
+  const old=await f.guard.reserve();await f.guard.refuse();await f.guard.resume();
+  const fresh=await f.guard.reserve();
+  assert.equal((await f.guard.dispatch(old.id,()=>{calls++;return {};})).code,'reservation_invalidated');
+  assert.equal((await f.guard.dispatch(fresh.id,()=>{calls++;return {};})).ok,true);
+  assert.equal(calls,2);
+});
+
+test('A9 reservation crossing UTC midnight charges the dispatch day and cannot bypass its cap',async t=>{
+  const f=await setup(t,{dailyCap:1}),old=await f.guard.reserve();f.advance(86400000);
+  await f.guard.dispatch(old.id,()=>({}));assert.equal((await f.guard.status()).state.used,1);
+  assert.equal((await f.guard.reserve()).code,'daily_cap_reached');
+  const other=await setup(t,{dailyCap:1}),pending=await other.guard.reserve();other.advance(86400000);
+  await other.guard.reserve();let calls=0;
+  assert.equal((await other.guard.dispatch(pending.id,()=>{calls++;return {};})).code,'daily_cap_reached');
+  assert.equal(calls,0);assert.equal((await other.guard.status()).state.used,1);
+});
+
+test('A9 refused resume at capacity preserves quota latch; explicit resume recovers a dead uncertain attempt',async t=>{
+  const f=await setup(t,{liveness:{boot:'synthetic',namespace:'synthetic',isAlive:pid=>pid===process.pid}});
+  const a=await f.guard.reserve(),b=await f.guard.reserve();await f.guard.refuse();
+  assert.equal((await f.guard.resume()).code,'concurrency_limited');
+  assert.equal((await f.guard.status()).state.refusal,'quota_reached');
+  await f.guard.release(a.id,{terminated:true});await f.guard.release(b.id,{terminated:true});
+  await f.guard.resume();const attempt=await f.guard.reserve();
+  const state=(await f.guard.status()).state;state.reservations.find(r=>r.id===attempt.id).pid=999999;
+  await writeFile(f.guard.path,JSON.stringify(state),{mode:0o600});
+  assert.equal((await f.guard.resume()).ok,true);
+  assert.equal((await f.guard.status()).state.used,3); // no uncertain-billing refund
+  assert.equal((await f.guard.reserve()).ok,true);
 });

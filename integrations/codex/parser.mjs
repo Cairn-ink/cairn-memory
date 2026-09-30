@@ -57,6 +57,7 @@ export function parseLine(bytes, { sessionId, wireSessionId, epoch, start, end }
   for (const part of item.content) {
     if (part?.type === (user ? 'text' : 'Text')) {
       if (!keys(part, user ? ['type','text','text_elements'] : ['type','text']) || typeof part.text !== 'string') unsupported();
+      if (user && part.text_elements!==undefined && !Array.isArray(part.text_elements)) unsupported();
       // Rich markers/attachments have not been qualified; exclude their whole record.
       if (user && part.text_elements?.length) return excluded('rich_input');
       texts.push(part.text);

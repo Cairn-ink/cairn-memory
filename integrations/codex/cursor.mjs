@@ -8,7 +8,7 @@ export const REASONS = ['non_conversation','malformed','oversized','rich_input',
 export const STATUSES = ['idle','pending','partial_tail','excluded','timeout','processing','invalid_reply',
   'quota_reached','paused','pause_boundary','source_changed','source_unavailable','unsupported_format',
   'batch_limit','concurrency_limited','daily_cap_reached','automatic_cap_unconfigured','plan_threshold',
-  'worker_liveness_unknown','deadline','state_reset'];
+  'worker_liveness_unknown','deadline','state_reset','reservation_invalidated','reservation_already_dispatched'];
 const int = x => Number.isSafeInteger(x) && x >= 0;
 const digest = x => typeof x === 'string' && /^[a-f0-9]{64}$/.test(x);
 const closed = (x,keys) => x && typeof x === 'object' && !Array.isArray(x) &&

@@ -22,10 +22,11 @@ export function validateUsage(s) {
       !time(s.resetAt) || !time(s.signalAt) || ![null,0,1].includes(s.resumePermits)) throw new Error('usage_state_invalid');
   const tokens = new Set();
   for (const r of s.reservations) {
-    if (!closed(r,['id','pid','boot','namespace','day']) || typeof r.id !== 'string' ||
+    if (!closed(r,['id','pid','boot','namespace','day','started','valid']) || typeof r.id !== 'string' ||
         !/^[a-f0-9-]{36}$/.test(r.id) || tokens.has(r.id) || !integer(r.pid) || r.pid < 1 ||
         !['string','number'].includes(typeof r.boot) || (typeof r.boot === 'number' && !Number.isFinite(r.boot)) ||
-        typeof r.namespace !== 'string' || !r.namespace || !/^\d{4}-\d{2}-\d{2}$/.test(r.day))
+        typeof r.namespace !== 'string' || !r.namespace || !/^\d{4}-\d{2}-\d{2}$/.test(r.day) ||
+        typeof r.started!=='boolean' || typeof r.valid!=='boolean')
       throw new Error('usage_state_invalid');
     tokens.add(r.id);
   }
@@ -50,6 +51,8 @@ export function createRuntimeGuard({ root, targetId, mode, dailyCap, concurrency
       !integer(concurrency) || concurrency < 1 || concurrency > 32 ||
       !integer(signalMaxAgeMs) || signalMaxAgeMs < 1) throw new Error('invalid_usage_config');
   const path = join(root,'usage',`${targetId}.json`);
+  // All publications, including dispatch intent, pass this single validated writer.
+  const publish=s=>privateWrite(path,JSON.stringify(validateUsage(s)));
   async function operation(change) {
     if (!integer(dailyCap) || dailyCap < 1) return { ok:false, code:'automatic_cap_unconfigured' };
     await checkedPath(root, { directory: true });
@@ -68,31 +71,39 @@ export function createRuntimeGuard({ root, targetId, mode, dailyCap, concurrency
       if (day > s.day) { s.day = day; s.used = 0; }
       const result = await change(s, live, currentTime);
       // This sole write site enforces counter/cap invariants even after a refusal.
-      await privateWrite(path, JSON.stringify(validateUsage(s)));
+      await publish(s);
       return result;
     }, { liveness });
   }
   function deny(s, code, resetAt = null) {
     s.refusal = code; s.resetAt = resetAt;
-    if (['quota_reached','plan_threshold','daily_cap_reached'].includes(code)) s.resumePermits=null;
+    if (['quota_reached','plan_threshold','daily_cap_reached'].includes(code)) {
+      s.resumePermits=null;
+      for(const r of s.reservations) if(!r.started) r.valid=false;
+    }
     return {ok:false,code,resetAt};
   }
   function threshold(s, t) {
     return s.windows.filter(w => w.resetAt > t && (w.utilization >= thresholds[w.name] ||
       (w.utilization >= .85 && w.resetAt - t <= 900000)));
   }
-  function eligibility(s, live, t) {
+  function recoverReservations(s,live) {
     for (const r of [...s.reservations]) {
       let alive;
       try { alive = ownerAlive(r, live); } catch { alive = undefined; }
       if (alive === false) s.reservations = s.reservations.filter(x => x.id !== r.id);
       else if (alive !== true) return deny(s,'worker_liveness_unknown');
     }
+    return null;
+  }
+  function eligibility(s, live, t) {
+    if (['quota_reached','plan_threshold','daily_cap_reached'].includes(s.refusal))
+      return {ok:false,code:s.refusal,resetAt:s.resetAt};
+    const recovery=recoverReservations(s,live);
+    if(recovery) return recovery;
     if (s.used >= s.cap) return deny(s,'daily_cap_reached', Date.parse(`${s.day}T00:00:00Z`)+86400000);
     const reached = mode === 'plan' ? threshold(s,t) : [];
     if (reached.length) return deny(s,'plan_threshold',Math.max(...reached.map(w=>w.resetAt)));
-    if (['quota_reached','plan_threshold','daily_cap_reached'].includes(s.refusal))
-      return {ok:false,code:s.refusal,resetAt:s.resetAt};
     if (s.resumePermits===0) return {ok:false,code:'quota_reached',resetAt:s.resetAt};
     if (s.reservations.length >= s.concurrency) return deny(s,'concurrency_limited');
     return null;
@@ -103,8 +114,10 @@ export function createRuntimeGuard({ root, targetId, mode, dailyCap, concurrency
       if (typeof id!=='string' || !/^[a-f0-9-]{36}$/.test(id)) throw new Error('invalid_reservation_id');
       const existing=s.reservations.find(r=>r.id===id);
       if (existing) {
+        if (existing.started) return {ok:false,code:'reservation_already_dispatched'};
         if (['quota_reached','plan_threshold','daily_cap_reached'].includes(s.refusal))
           return {ok:false,code:s.refusal};
+        if (!existing.valid) return {ok:false,code:'reservation_invalidated'};
         // Only retry a reservation whose caller has not dispatched yet.
         // A new model call (including uncertain retry) MUST use a new id.
         if (existing.pid!==process.pid && ownerAlive(existing,live)!==false)
@@ -116,7 +129,7 @@ export function createRuntimeGuard({ root, targetId, mode, dailyCap, concurrency
       if (refused) return refused;
       s.used++;
       if (s.resumePermits===1) s.resumePermits=0;
-      s.reservations.push({id,pid:process.pid,boot:live.boot,namespace:live.namespace,day:s.day});
+      s.reservations.push({id,pid:process.pid,boot:live.boot,namespace:live.namespace,day:s.day,started:false,valid:true});
       s.refusal = mode === 'plan' && (s.signalAt === null || t-s.signalAt > signalMaxAgeMs)
         ? 'quota_signal_unavailable' : 'none';
       return {ok:true,id,code:s.refusal};
@@ -124,10 +137,20 @@ export function createRuntimeGuard({ root, targetId, mode, dailyCap, concurrency
     dispatch: (id,start) => operation(async (s,live,t) => {
       const r=s.reservations.find(r=>r.id===id);
       if (!r || r.pid!==process.pid || ownerAlive(r,live)!==true) return {ok:false,code:'worker_liveness_unknown'};
+      if (r.started) return {ok:false,code:'reservation_already_dispatched'};
       if (['quota_reached','plan_threshold','daily_cap_reached'].includes(s.refusal))
         return {ok:false,code:s.refusal};
+      if (!r.valid) return {ok:false,code:'reservation_invalidated'};
       const reached=mode==='plan'?threshold(s,t):[];
       if (reached.length) return deny(s,'plan_threshold',Math.max(...reached.map(w=>w.resetAt)));
+      if (r.day!==s.day) {
+        if(s.used>=s.cap) return deny(s,'daily_cap_reached',Date.parse(`${s.day}T00:00:00Z`)+86400000);
+        s.used++;r.day=s.day;
+      }
+      r.started=true;
+      // Persist consumption BEFORE invoking the single call. A crash cannot
+      // dispatch twice with one permit. Uncertain consumption is never refunded.
+      await publish(s);
       // start returns a dispatch descriptor; its network/model promise is NOT awaited under this lock.
       return {ok:true,dispatch:await start()};
     }),
@@ -155,11 +178,25 @@ export function createRuntimeGuard({ root, targetId, mode, dailyCap, concurrency
     resume: () => operation((s,live,t) => {
       if (s.resetAt !== null && t < s.resetAt) return {ok:false,code:s.refusal,resetAt:s.resetAt};
       const previous = s.refusal;
+      const previousReset=s.resetAt,previousPermits=s.resumePermits;
+      const recovery=recoverReservations(s,live);
+      if(recovery) {
+        if(['quota_reached','plan_threshold','daily_cap_reached'].includes(previous)) {
+          s.refusal=previous;s.resetAt=previousReset;s.resumePermits=previousPermits;
+        }
+        return recovery;
+      }
       if (s.resumePermits===0 && s.reservations.length) return {ok:false,code:'quota_reached'};
       if (s.resumePermits===0) s.resumePermits=1;
       s.refusal = 'none'; s.resetAt = null;
       const refused = eligibility(s,live,t);
-      if (refused) return refused;
+      if (refused) {
+        if (['quota_reached','plan_threshold','daily_cap_reached'].includes(previous) &&
+            ['concurrency_limited','worker_liveness_unknown'].includes(refused.code)) {
+          s.refusal=previous;s.resetAt=previousReset;s.resumePermits=previousPermits;
+        }
+        return refused;
+      }
       if (s.resumePermits===0 || ['quota_reached','plan_threshold','daily_cap_reached'].includes(previous)) s.resumePermits=1;
       return {ok:true,previous};
     }),
