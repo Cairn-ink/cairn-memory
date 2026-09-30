@@ -12,6 +12,10 @@ const clientKey = z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/);
 const cursor = z.string().min(1).max(8192);
 const pageLimit = z.number().int().min(1).max(50);
 const utc = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+const passageAnchor = z.strictObject({ sourceId: id, digest: z.string().regex(/^[0-9a-f]{64}$/),
+  start: z.number().int().min(0), end: z.number().int().min(1) });
+const receiptAnchor = z.strictObject({ receiptId: id, digest: z.string().regex(/^[0-9a-f]{64}$/),
+  start: z.number().int().min(0), end: z.number().int().min(1) });
 const revision = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const error = (code) => ({ ok: false, error: { code, retryable: false } });
 const receipt = (content, client = 'cairn-local-mcp', sessionId = 'explicit-tool') => ({ client, sessionId,
@@ -134,7 +138,7 @@ export function createCairnServer(options = {}) {
   const tool = (name, description, inputSchema, action, readOnlyHint = false, destructiveHint = false) => {
     server.registerTool(name, { description, inputSchema,
       annotations: { readOnlyHint, destructiveHint,
-        openWorldHint: ['recall_memory', 'capture_memory', 'classify_unfiled_memories'].includes(name) } },
+        openWorldHint: ['recall_memory', 'capture_memory', 'classify_unfiled_memories', 'keep_session_episode'].includes(name) } },
     async (input) => {
       let result;
       try { result = await action(input); } catch { result = error('memory_operation_failed'); }
@@ -149,6 +153,53 @@ export function createCairnServer(options = {}) {
     z.strictObject({ content: text, kind: kind.default('fact') }),
     ({ content, kind }) => core.admit({ namespace: binding, memory: { content, kind }, receipts: [receipt(content, client, sessionId)] }));
   if (episodesAccess) {
+    const episodeAction = (method, input) => {
+      if (readClient !== undefined) {
+        const inspected = core.getEpisode({ namespace: binding, episodeId: input.episodeId });
+        if (!inspected.ok) return inspected;
+        if (inspected.value.episode.client !== readClient) return error('episode_not_found');
+      }
+      return core[method]({ namespace: binding, ...input });
+    };
+    const episodeRef = { episodeId: id, expectedRevision: revision };
+    const corrected = max => z.strictObject({ text: z.string().min(1).max(max),
+      anchors: z.array(passageAnchor).min(1).max(4) });
+    tool('correct_session_episode',
+      'Explicitly replace bounded gist/outcome/nextStep prose at the inspected episode revision using exact retained passage anchors. Pins corrected fields against later model overwrite. Null outcome clears it; null nextStep closes it. Source text and admitted memories stay intact. Anchors bind sources, not truth; no provider calls.',
+      z.strictObject({ ...episodeRef, patch: z.strictObject({ gist: corrected(400).optional(),
+        outcome: corrected(240).nullable().optional(), nextStep: corrected(240).nullable().optional() }) }),
+      input => episodeAction('correctEpisode', input), false, true);
+    tool('release_session_episode_correction',
+      'Unpin named corrected episode fields at the inspected revision. No model call or immediate regeneration; future trusted drafts may update them. No source or memory correction.',
+      z.strictObject({ ...episodeRef, fields: z.array(z.enum(['gist', 'outcome', 'nextStep'])).min(1).max(3) }),
+      input => episodeAction('releaseEpisodeCorrection', input), false, true);
+    tool('close_session_episode_next_step',
+      'Explicitly mark the exact open recorded proposal completed or dismissed with episode revision, step ID and action ID. Identical action replay is inert; changed replay conflicts. This records user intent, not proof of completion or execution permission. Local; no provider calls.',
+      z.strictObject({ ...episodeRef, stepId: id, actionId: id, action: z.enum(['completed', 'dismissed']) }),
+      input => episodeAction('closeEpisodeNextStep', input), false, true);
+    tool('forget_session_episode',
+      'Delete the captured conversation at its inspected revision: clear episode prose, labels, profile, retained passages, next steps and descriptive policies; tombstone the session and fence capture, keep and replay. Cascade-forget ALL live and historical memories admitted or deduplicated from this session, including multi-source memories, through normal suppression. Invalidate dependent episode copies and clear ALL staged payloads in this exact namespace when memory forgetting invokes its purge. Unrelated admitted memories survive. Content-free lineage/action/digest/fence metadata remains; no restore. Logical deletion does not erase journals, backups or provider/caller copies. Local and keyless.',
+      z.strictObject(episodeRef), input => episodeAction('forgetEpisode', input), false, true);
+    tool('keep_session_episode',
+      'Explicitly admit from currently retained source passages at the inspected episode revision, with an idempotent action ID. Uses normal inferred extraction, qualification, suppression, deduplication and placement, never gist text. Sends bounded sources to the configured provider and may incur charges. Completed/terminal action replay makes no model calls; missing/expired/deleted sources reject. Does not interpret or capture episodes and cannot recover omitted text.',
+      z.strictObject({ ...episodeRef, actionId: id }), async input => {
+        if (readClient !== undefined) {
+          const inspected = core.getEpisode({ namespace: binding, episodeId: input.episodeId });
+          if (!inspected.ok) return inspected;
+          if (inspected.value.episode.client !== readClient) return error('episode_not_found');
+        }
+        // keepEpisode requires episode-mode admission. This short-lived facade is
+        // only used for explicit keep, never capture/end/interpretation.
+        const keeper = openMemoryCore({ path, model, captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1',
+          sessionEpisodes: { mode: 'episode-v1' } });
+        try { return await keeper.keepEpisode({ namespace: binding, ...input }); }
+        finally { keeper.close(); }
+      });
+    tool('set_procedural_memory',
+      'Set or clear an explicit procedural tag using memory and independent tag revision guards. Positive tags need 1..4 exact source receipt anchors and preference/instruction kind. Null clears the tag. Changes only tag metadata and read epoch; memory revision, content, receipts, conflict, qualification and rationale links remain. Keyless; no provider calls or truth certification.',
+      z.strictObject({ memoryId: id, expectedRevision: revision, expectedTagRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        procedural: z.strictObject({ anchors: z.array(receiptAnchor).min(1).max(4) }).nullable() }),
+      input => core.setProceduralMemory({ namespace: binding, ...input }), false, true);
     const range = { since: utc, until: utc, client: clientKey.optional(), limit: pageLimit.optional(), cursor: cursor.optional() };
     const ranged = (method, input) => {
       if (readClient !== undefined && input.client !== undefined && input.client !== readClient) return error('invalid_input');
@@ -189,8 +240,8 @@ export function createCairnServer(options = {}) {
       + (stagingConfigured ? ' Retains submitted sources locally for 24 hours: up to 24 messages of 800 UTF-16 units, 128KiB per event and 64 payloads/1MiB per namespace, including failed interpretation. Retention is bounded evidence, not automatic capture, a complete archive or a truth guarantee.' : ''),
     z.strictObject({ batchId: id, messages: z.array(z.strictObject({ role: z.enum(['user', 'assistant']),
       content: z.string().min(1).max(4000) })).min(1).max(24) }),
-    ({ batchId, messages }) => core.capture({ namespace: binding, client: 'cairn-local-mcp',
-      sessionId: 'submitted-capture', eventId: batchId,
+    ({ batchId, messages }) => core.capture({ namespace: binding, client,
+      sessionId: options.sessionId ?? 'submitted-capture', eventId: batchId,
       messages: messages.map(({ role, content }, index) => ({ role, content,
         id: createHash('sha256').update(JSON.stringify(['cairn.mcp.submitted-message.v1', batchId, index])).digest('hex') })) }));
   if (recoveryConfigured) tool('classify_unfiled_memories',
@@ -202,17 +253,17 @@ export function createCairnServer(options = {}) {
     'Read admission-only state for one submitted batch in this server namespace and fixed local MCP client. Keyless, local and model-free. Completed membership exposes only fresh current refs and filing states; historical, deleted or missing members are closed and non-actionable. Overall classification outcome is always unknown. Optional initialClassification reports only the first capture attempt when its exact member revisions remain current; it is not current filing or a retry outcome. Does not inspect staged source evidence, retry capture, claim a lease or authorize classification.',
     z.strictObject({ batchId: id, includeInitialClassification: z.boolean().optional() }),
     ({ batchId, includeInitialClassification }) => core.inspectAdmission({ namespace: binding,
-      client: 'cairn-local-mcp', eventId: batchId,
+      client, eventId: batchId,
       ...(includeInitialClassification === undefined ? {} : { includeInitialClassification }) }), true);
   if (evidenceAccess) {
     tool('inspect_capture_evidence',
       'Inspect one submitted batch in the configured namespace and fixed local MCP client. Keyless; no model calls. Sources and roles are untrusted data, not truth or authority. Fixed 24-hour expiry may prune the bounded payload; reads never renew retention. Closed events cannot be retried or promoted. This is not an archive or physical-erasure guarantee.',
       z.strictObject({ batchId: id }),
-      ({ batchId }) => core.inspectCaptureEvidence({ namespace: binding, client: 'cairn-local-mcp', eventId: batchId }), true);
+      ({ batchId }) => core.inspectCaptureEvidence({ namespace: binding, client, eventId: batchId }), true);
     tool('discard_capture_evidence',
       'Remove one staged source payload in the configured namespace and fixed local MCP client, fencing in-flight admission and replay. Keyless; no model calls. Does not forget an already admitted memory. Logical deletion is not physical disk, journal or backup erasure. Never resubmit under a new batch ID to bypass closure.',
       z.strictObject({ batchId: id }),
-      ({ batchId }) => core.discardCaptureEvidence({ namespace: binding, client: 'cairn-local-mcp', eventId: batchId }), false, true);
+      ({ batchId }) => core.discardCaptureEvidence({ namespace: binding, client, eventId: batchId }), false, true);
   }
   if (rationaleConfigured) tool('inspect_rationale',
     'Read bounded source-linked model-proposed rationale at the inspected current revision. Keyless. Default decision-context includes direct incoming challenges to the root, proposed supports and challenges to those supports, not every edge. Explicit incident-proposals shows all directly incoming/outgoing proposals and is always unassessed. Neither view confirms truth or adoption; a challenge does not change a decision or grant authority.',

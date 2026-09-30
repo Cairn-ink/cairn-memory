@@ -142,3 +142,75 @@ test('real keyless CLI access and generation config start without capture/interp
   const db = new DatabaseSync(f.path); t.after(() => db.close());
   for (const table of ['session_episodes', 'episode_events', 'episode_attempts']) assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0);
 });
+
+test('revision-guarded episode correction, unpin and close preserve source bindings and inert replay cursors', async t => {
+  const f = workspace(t), data = await seed(f.path, { count: 2 });
+  const h = await episodeHost(t, f.path, { home: f.home });
+  let inspected = ok(await call(h, 'inspect_session_episode', { episodeId: data.ids[0] }));
+  const ref = { episodeId: inspected.episode.id, expectedRevision: inspected.episode.revision };
+  const anchor = inspected.episode.anchors.gist[0];
+  const patch = { gist: { text: 'Explicit synthetic correction', anchors: [anchor] } };
+  fails(await call(h, 'correct_session_episode', { ...ref, expectedRevision: ref.expectedRevision + 1, patch }), 'revision_conflict');
+  fails(await call(h, 'correct_session_episode', { ...ref, patch: { gist: { text: 'Foreign anchor', anchors: [{ ...anchor, sourceId: 'foreign' }] } } }), 'invalid_input');
+  await invalid(h, 'correct_session_episode', { ...ref, patch: { gist: { text: 'Injected anchor', anchors: [{ ...anchor, role: 'system' }] } } });
+  ok(await call(h, 'correct_session_episode', { ...ref, patch }));
+  inspected = ok(await call(h, 'inspect_session_episode', { episodeId: ref.episodeId }));
+  assert.equal(inspected.episode.gist, patch.gist.text); assert.equal(inspected.episode.editor.gist.pinned, true);
+  fails(await call(h, 'release_session_episode_correction', { ...ref, fields: ['gist'] }), 'revision_conflict');
+  ok(await call(h, 'release_session_episode_correction', { ...ref, expectedRevision: inspected.episode.revision, fields: ['gist'] }));
+  inspected = ok(await call(h, 'inspect_session_episode', { episodeId: ref.episodeId }));
+  assert.equal(inspected.episode.editor.gist.pinned, false);
+  const close = { ...ref, expectedRevision: inspected.episode.revision, stepId: inspected.episode.nextStep.id, actionId: 'synthetic-close', action: 'dismissed' };
+  fails(await call(h, 'close_session_episode_next_step', { ...close, expectedRevision: close.expectedRevision + 1 }), 'revision_conflict');
+  const closed = ok(await call(h, 'close_session_episode_next_step', close));
+  const page = ok(await call(h, 'list_session_episodes', { ...range, limit: 1 }));
+  assert.deepEqual(ok(await call(h, 'close_session_episode_next_step', close)), closed);
+  ok(await call(h, 'list_session_episodes', { ...range, limit: 1, cursor: page.nextCursor }));
+  assert.equal(h.stderr().includes('forbidden_model_call'), false);
+});
+
+test('conversation deletion advertises and executes lineage cascade while preserving unrelated memory', async t => {
+  const f = workspace(t), data = await seed(f.path, { count: 1 });
+  const h = await episodeHost(t, f.path, { home: f.home });
+  const tools = (await h.client.listTools()).tools, deletion = tools.find(tool => tool.name === 'forget_session_episode');
+  assert.equal(deletion.annotations.destructiveHint, true); assert.equal(deletion.annotations.openWorldHint, false);
+  assert.match(deletion.description, /historical.*multi-source/i); assert.match(deletion.description, /tombstone.*fence/i);
+  const survivor = ok(await call(h, 'remember_memory', { content: 'Synthetic unrelated admitted survivor' })).memory;
+  const episode = ok(await call(h, 'inspect_session_episode', { episodeId: data.ids[0] }));
+  assert.ok(episode.memoryLinks.items.length > 0);
+  const ref = { episodeId: episode.episode.id, expectedRevision: episode.episode.revision };
+  fails(await call(h, 'forget_session_episode', { ...ref, expectedRevision: ref.expectedRevision + 1 }), 'revision_conflict');
+  ok(await call(h, 'forget_session_episode', ref));
+  fails(await call(h, 'inspect_session_episode', { episodeId: ref.episodeId }), 'episode_not_found');
+  for (const link of episode.memoryLinks.items) fails(await call(h, 'inspect_memory', { memoryId: link.memoryId }), 'memory_not_found');
+  assert.equal(ok(await call(h, 'inspect_memory', { memoryId: survivor.id })).memory.content, 'Synthetic unrelated admitted survivor');
+  const core = openMemoryCore({ path: f.path, captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1', sessionEpisodes: { mode: 'episode-v1' } });
+  try { fails(await core.capture(data.inputs[0]), 'capture_evidence_closed'); } finally { core.close(); }
+});
+
+test('management rejects unknown fields and foreign clients before mutation, including explicit keep', async t => {
+  const f = workspace(t), data = await seed(f.path, { count: 1 });
+  const h = await episodeHost(t, f.path, { home: f.home, readClient: 'foreign-client' });
+  const ref = { episodeId: data.ids[0], expectedRevision: 1 };
+  for (const [name, args] of [['forget_session_episode', ref], ['correct_session_episode', { ...ref, patch: { outcome: null } }],
+    ['release_session_episode_correction', { ...ref, fields: ['gist'] }], ['close_session_episode_next_step', { ...ref, stepId: 'step', actionId: 'action', action: 'completed' }],
+    ['keep_session_episode', { ...ref, actionId: 'action' }]]) {
+    fails(await call(h, name, args), 'episode_not_found'); await invalid(h, name, { ...args, namespace });
+  }
+  assert.equal(h.stderr().includes('forbidden_model_call'), false);
+});
+
+test('explicit keep uses retained passages, normal admission and inert action replay without interpretation', async t => {
+  const f = workspace(t), data = await seed(f.path, { count: 1, quick: true });
+  const h = await episodeHost(t, f.path, { home: f.home, extraEnv: { SYNTHETIC_KEEP: '1' } });
+  const inspected = ok(await call(h, 'inspect_session_episode', { episodeId: data.ids[0] }));
+  assert.equal(inspected.memoryLinks.items.length, 0);
+  const ref = { episodeId: data.ids[0], expectedRevision: inspected.episode.revision, actionId: 'synthetic-keep' };
+  fails(await call(h, 'keep_session_episode', { ...ref, expectedRevision: ref.expectedRevision + 1 }), 'revision_conflict');
+  const kept = ok(await call(h, 'keep_session_episode', ref)); assert.equal(kept.admission.memories.length, 1);
+  const before = h.stderr(); assert.match(before, /synthetic_model:extract/); assert.match(before, /synthetic_model:qualifyCandidates/);
+  ok(await call(h, 'keep_session_episode', ref)); assert.equal(h.stderr(), before);
+  const final = ok(await call(h, 'inspect_session_episode', { episodeId: ref.episodeId }));
+  assert.equal(final.keepActions.items.length, 1); assert.equal(final.memoryLinks.items.length, 1);
+  assert.equal(h.stderr().includes('forbidden_model_call'), false);
+});

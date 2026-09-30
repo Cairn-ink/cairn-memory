@@ -64,8 +64,11 @@ export async function seed(path, { ns = namespace, count = 3, client = 'syntheti
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   globalThis.fetch = () => assert.fail('Provider transport forbidden');
-  const model = { countTokens: text => Math.ceil(text.length / 4) };
+  const model = process.env.SYNTHETIC_KEEP === '1'
+    ? rationaleModel(method => process.stderr.write('synthetic_model:' + method + '\n'))
+    : { countTokens: text => Math.ceil(text.length / 4) };
   for (const method of ['extract', 'qualifyCandidates', 'classify', 'interpretEpisode', 'select', 'rank']) {
+    if (process.env.SYNTHETIC_KEEP === '1' && ['extract', 'qualifyCandidates', 'classify'].includes(method)) continue;
     model[method] = () => { process.stderr.write('forbidden_model_call\n'); assert.fail('Model generation forbidden'); };
   }
   const server = createCairnServer({ path: process.argv[2], namespace: JSON.parse(process.argv[3]), model,
