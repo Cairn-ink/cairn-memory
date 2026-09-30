@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { appendFile, writeFile, rename } from "node:fs/promises";
 import { fixture, header, item } from "./helpers.mjs";
-import { runWorker } from "../worker.mjs";
+import { runWorker, prepareCapture, establishPauseBoundary } from "../worker.mjs";
 import { setPaused } from "../../client/control-state.mjs";
 import { createRuntimeGuard } from "../../client/runtime-usage.mjs";
 import { clientProjectId } from "../../client/pairing.mjs";
@@ -22,13 +22,14 @@ const ops = [
   "lost",
   "concurrent",
   "resume-cwd",
+  "late-handoff",
 ];
 for (const seed of seeds)
   test(`seeded independent history oracle seed=${seed}, 64 operations`, async (t) => {
     const began = performance.now(),
       f = await fixture(t),
       random = seeded(seed),
-      oracle = new HistoryOracle(header());
+      oracle = new HistoryOracle(header(), f.binding.projectId);
     const endpoint = await receiverServer(f);
     const claude = createRuntimeGuard({
       root: f.root,
@@ -66,7 +67,33 @@ for (const seed of seeds)
           { client: "codex", home: f.home, root: f.root, usesClaude: false, env: {} },
           `/synthetic/cwd-${seed}-${step}`,
         );
-        oracle.apply(op);
+        oracle.apply(op, { projectId: f.binding.projectId });
+        const text = `Before resumed hook ${seed}-${step}`;
+        const bytes = item(text, step);
+        await appendFile(f.path, bytes);
+        oracle.apply("append", { bytes: Buffer.byteLength(bytes), text });
+      } else if (op === "late-handoff") {
+        const old = { ...f.binding };
+        const pending = item(`Pending old handoff ${seed}-${step}`, step);
+        await appendFile(f.path, pending);
+        oracle.apply("handoff-pending", { bytes: Buffer.byteLength(pending) });
+        const byteEnd = oracle.bytes;
+        await prepareCapture(old);
+        f.binding.projectId = await clientProjectId(
+          { client: "codex", home: f.home, root: f.root, usesClaude: false, env: {} },
+          `/synthetic/late-${seed}-${step}`,
+        );
+        oracle.apply(op, { projectId: f.binding.projectId });
+        await establishPauseBoundary(f.binding);
+        oracle.hook();
+        const text = `B first ${seed}-${step}`,
+          bytes = item(text, step);
+        await appendFile(f.path, bytes);
+        oracle.apply("append", { bytes: Buffer.byteLength(bytes), text });
+        const before = await f.stateBytes();
+        const late = await runWorker(old, { guard: f.guard, transport: f.transport, byteEnd });
+        assert.ok(["superseded", "paused"].includes(late.status));
+        assert.equal(await f.stateBytes(), before);
       } else if (op === "replace") {
         const bytes = header() + item(`Generated replacement ${seed}-${step}`);
         await writeFile(f.path + ".new", bytes);

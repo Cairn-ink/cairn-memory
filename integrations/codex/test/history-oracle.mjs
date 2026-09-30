@@ -1,7 +1,7 @@
 // Independent model: operation-history byte positions and human texts only.
 // No imports from production. JSONL lengths here come from the fixture history.
 export class HistoryOracle {
-  constructor(initial) {
+  constructor(initial, projectId) {
     this.bytes = Buffer.byteLength(initial);
     this.offset = 0;
     this.paused = false;
@@ -10,9 +10,19 @@ export class HistoryOracle {
     this.epoch = 0;
     this.history = [];
     this.sourceChanged = false;
+    this.projectId = projectId;
   }
-  apply(op, { bytes = 0, text = null, size = null, previousOffset = this.offset } = {}) {
-    this.history.push({ op, bytes, text, size });
+  apply(
+    op,
+    {
+      bytes = 0,
+      text = null,
+      size = null,
+      previousOffset = this.offset,
+      projectId = this.projectId,
+    } = {},
+  ) {
+    this.history.push({ op, bytes, text, size, projectId });
     if (op === "pause") {
       this.paused = true;
       this.barrier = true;
@@ -22,7 +32,8 @@ export class HistoryOracle {
       this.paused = false;
       return;
     }
-    if (op === "resume-cwd") {
+    if (["resume-cwd", "late-handoff"].includes(op)) {
+      this.projectId = projectId;
       this.sourceChanged = true;
       return;
     }
@@ -38,7 +49,7 @@ export class HistoryOracle {
     }
     this.bytes += bytes;
     if (!this.paused && !this.barrier && !this.sourceChanged && text !== null)
-      this.expected.push(text);
+      this.expected.push({ text, projectId: this.projectId });
   }
   hook() {
     if (this.paused) return;
@@ -50,13 +61,16 @@ export class HistoryOracle {
     this.offset = this.bytes;
   }
   assert(assert, state, bodies) {
-    const actual = bodies.flatMap((x) => x.messages.map((m) => m.content));
-    assert.deepEqual(
-      actual.slice().sort(),
-      this.expected.slice().sort(),
-      JSON.stringify(this.history),
+    const actual = bodies.flatMap((body) =>
+      body.messages.map((m) => ({ text: m.content, projectId: body.project_id })),
     );
-    assert.equal(new Set(actual).size, actual.length, "no text admitted twice");
+    const sorted = (entries) => entries.map((entry) => JSON.stringify(entry)).sort();
+    assert.deepEqual(sorted(actual), sorted(this.expected), JSON.stringify(this.history));
+    assert.equal(
+      new Set(actual.map((entry) => entry.text)).size,
+      actual.length,
+      "no text admitted twice",
+    );
     if (state) {
       assert.equal(state.offset, this.offset, "history-derived cursor");
       assert.equal(state.epoch, this.epoch, "history-derived epoch");

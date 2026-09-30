@@ -22,6 +22,7 @@ test(
       "binding-change",
       "digest-migration",
       "reset",
+      "digest-key-reset",
       "refusal",
     ]) {
       async function scenario(crashAt = 0) {
@@ -79,11 +80,16 @@ test(
             );
           } else f.binding.projectId = "c".repeat(64);
         }
+        if (operation === "digest-key-reset") {
+          await run();
+          await appendFile(f.path, item("After corrupt key", 61));
+          await writeFile(`${f.root}/codex-digest-key`, "corrupt");
+        }
         const child = await childAttempt(f, {
           crashAt,
           prepare: operation === "prepare",
           boundary: operation === "session-start",
-          reset: operation === "reset",
+          reset: ["reset", "digest-key-reset"].includes(operation),
           endpoint,
           byteEnd,
         });
@@ -91,7 +97,7 @@ test(
           // Real crash left process-owned locks/reservations; verified dead-PID retry reaps them.
           if (operation === "prepare") await prepareCapture(f.binding);
           else if (operation === "session-start") await establishPauseBoundary(f.binding);
-          else if (operation === "reset")
+          else if (["reset", "digest-key-reset"].includes(operation))
             await resetCapture(f.binding, { hostsStopped: true, confirm: true });
           else await run();
         }
