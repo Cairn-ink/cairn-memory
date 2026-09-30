@@ -551,6 +551,7 @@ permitted only to an idempotent receiver. Nothing here enables a hosted target.
 | W30 | `{"state":"stale","event":"start-binding"}` | eof | 0 | idle | binding_changed |
 | W31 | `{"event":"digest-migration"}` | eof | 0 | idle | digest_migrated |
 | W32 | `{"event":"latch-failure"}` | batch-start | 0 | pending | quota_reached |
+| W33 | `{"state":"pending","event":"refused-binding"}` | eof | 0 | idle | binding_changed |
 <!-- codex-worker-table:end -->
 
 The single cursor publication site validates a closed schema, finite counters,
@@ -1974,9 +1975,12 @@ new EOF binding epoch, reset precedence, superseded handoff and SessionStart pat
 W31 migrates v1 bare transcript digests by deliberately starting a new EOF epoch
 with digest_migrated. W32 preserves quota_reached/resetAt if the shared latch fails;
 its persisted refusal intent is retried before any subsequent model dispatch.
+W33 preserves that target-wide refusal intent across a binding EOF epoch.
+Source, pause and stopped-reset boundaries preserve it as well: skipping source
+bytes never authorizes clearing a quota refusal or an uncertain reservation.
 
 Facts additionally admit binding-change, reset-binding, late-worker, start-binding,
-digest-migration and latch-failure. All result columns have closed vocabularies.
+digest-migration, latch-failure and refused-binding. All result columns are closed.
 Cursor: end, eof, retry-end, unchanged, batch-start, batch-end, old-unchanged.
 Sent: integers 0–3. Worker: idle, pending, disabled. Refusal: the literal finite
 values used in W01–W32. Tests derive all four observed results independently of
