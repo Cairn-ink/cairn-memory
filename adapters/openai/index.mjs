@@ -369,11 +369,16 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
   return Object.freeze({ contextWindow, countTokens, ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
     ...(episode ? { interpretEpisode: request => invoke('interpretEpisode', request),
       episodeMetadata: Object.freeze({ adapter: 'openai', model: episode.model, profile: episode.model }) } : {}),
-    ...(qualificationInputMode === 'adaptive-text-catalog-v1'
-      ? { fitsQualificationRequest: (request) => {
-        const prepared = prepareQualificationRequest(request);
-        return prepared.localTokens <= 6000 && prepared.countBodyTokens <= 6000;
-      } } : {}),
+    // Core plans qualification by this exact wire measurement, which includes the
+    // pool instructions and strict schema that core's own count cannot see.
+    // Without the opt-in catalog mode, a catalog-form request cannot be sent.
+    fitsQualificationRequest: (request) => {
+      if (qualificationInputMode !== 'adaptive-text-catalog-v1' && Object.hasOwn(request?.input ?? {}, 'inputMode')) {
+        return false;
+      }
+      const prepared = prepareQualificationRequest(request);
+      return prepared.localTokens <= 6000 && prepared.countBodyTokens <= 6000;
+    },
     extract: (request) => invoke('extract', request),
     qualify: (request) => invoke('qualify', request),
     qualifyCandidates: (request) => invoke('qualifyCandidates', request),

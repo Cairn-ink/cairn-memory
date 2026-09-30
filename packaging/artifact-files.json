@@ -38,6 +38,7 @@
   "core/model-budget.mjs",
   "core/model-call.mjs",
   "core/model-diagnostics.mjs",
+  "core/model-packing.mjs",
   "core/ordered-capture-schema.mjs",
   "core/ordered-capture-storage.mjs",
   "core/ordered-capture.mjs",

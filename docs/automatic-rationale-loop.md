@@ -86,8 +86,9 @@ still invalidate them. This does not validate the proposals' meaning.
 
 `rationale-evidence` supports current memories only and conflicts with
 `includeQualification: true`. The full root and linked-source graph counts toward
-the existing 4000-token fetch / 6000-token rank-input bounds. Oversized context
-fails explicitly rather than silently dropping reasons or challenges. Cursors
+the existing 4000-token fetch / 6000-token rank-input bounds. A candidate whose
+graph cannot fit is left out of ranking whole and reported in `recallTruncated`;
+reasons and challenges are never trimmed from a graph. Cursors
 bind the selected mode. The final atomic read verifies all candidate graphs
 after the last callback, including unselected roots and linked sources.
 

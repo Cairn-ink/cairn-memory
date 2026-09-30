@@ -8,7 +8,8 @@ import test from 'node:test';
 import { countOpenAITokens, createOpenAIModel } from '../../../adapters/openai/index.mjs';
 import { qualificationPoolWire } from '../../../adapters/openai/test/qualification-pool-wire.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
-import { qualifyCandidateItems } from '../../../core/qualification-candidates.mjs';
+import { createQualificationCandidateSnapshot, qualifyCandidateItems } from '../../../core/qualification-candidates.mjs';
+import { standardInlineQualificationPrompt } from '../../../core/qualification-candidates-prompt.mjs';
 import { createExperimentBudget } from '../../experiment-budget/index.mjs';
 import { authorizeBenchmarkExtension, authorizeBenchmarkRequestAllowance,
   authorizeBenchmarkBudgetExtension, authorizeQualifiedSourcePairCapability,
@@ -279,7 +280,7 @@ test('D2 item, candidate, and evidence dimensions isolate qualification request 
   const oneSource = await capture(t, { size: 114, turnCount: 4,
     extractionItems: 4, candidateSources: 1 });
   const full = await capture(t, { size: 114, turnCount: 4, extractionItems: 4 });
-  const localRefusal = await capture(t, { size: 800, turnCount: 4, extractionItems: 5 });
+  const planned = await capture(t, { size: 800, turnCount: 4, extractionItems: 5 });
   const qualification = (trace) => trace.calls.find((call) =>
     call.route === 'count' && call.method === 'cairn_qualifyCandidates');
   assert.equal(qualification(threeItems).qualification.itemCount, 3);
@@ -301,51 +302,89 @@ test('D2 item, candidate, and evidence dimensions isolate qualification request 
   assert.deepEqual(full.bounds, { coreAndAdapterLocalTokens: 6_000,
     guardCountMaxInputTokens: 7_024, guardGenerationMaxInputTokens: 7_024,
     guardInputTokenFraming: 1_024, modelContextWindow: 1_047_576 });
-  assert.equal(qualification(localRefusal), undefined);
-  assert.equal(localRefusal.qualificationRequests.length, 0);
-  assert.equal(localRefusal.result?.error.code, 'context_budget_exceeded');
-  assert.equal(localRefusal.halted, false);
+  // Five 800-unit items no longer refuse: each is planned into its own request
+  // within the local and guard bounds, and the capture commits.
+  const plannedCounts = planned.calls.filter((call) => call.route === 'count'
+    && call.method === 'cairn_qualifyCandidates');
+  assert.equal(planned.qualificationRequests.length, 5);
+  assert.ok(planned.qualificationRequests.every((request) => request.input.items.length === 1));
+  assert.deepEqual(plannedCounts.map((call) => [call.inputTokens, call.localTokens]), Array(5).fill([4_036, 3_109]));
+  assert.equal(planned.result?.ok, true, JSON.stringify(planned.result));
+  assert.equal(planned.result.value.qualificationTruncated, undefined);
+  assert.equal(planned.stored.length, 5);
+  assert.equal(planned.halted, false);
 });
 
-test('D2 oversized indexed extraction still refuses without admission or guard halt', async (t) => {
+test('D2 an oversized indexed qualification batch is planned per item without guard halt', async (t) => {
   const trace = await capture(t, { size: 600, turnCount: 4, extractionItems: 4,
     followupSize: 40 });
-  assert.equal(trace.result?.error.code, 'context_budget_exceeded', JSON.stringify(trace));
+  assert.equal(trace.result?.ok, true, JSON.stringify(trace.result));
+  assert.equal(trace.result.value.qualificationTruncated, undefined);
   assert.equal(trace.halted, false, JSON.stringify(trace));
   assert.equal(trace.followupResult?.ok, true, JSON.stringify(trace));
-  assert.equal(trace.failedMemoryCount, 0);
+  assert.equal(trace.failedMemoryCount, 4);
   assert.deepEqual(trace.calls.map((call) => call.method), [
     'cairn_extract', 'cairn_extract',
+    ...Array(8).fill('cairn_qualifyCandidates'),
+    'cairn_classify', 'cairn_classify',
     'cairn_extract', 'cairn_extract', 'cairn_qualifyCandidates', 'cairn_qualifyCandidates',
     'cairn_classify', 'cairn_classify',
   ]);
-  assert.equal(trace.qualificationRequests.length, 1);
-  assert.equal(trace.stored.length, 0);
+  assert.deepEqual(trace.qualificationRequests.map((request) => request.input.items.length), [1, 1, 1, 1, 4]);
+  assert.ok(trace.calls.every((call) => call.route !== 'count' || call.inputTokens <= 7_024));
+  assertColdStoredEvidence(trace);
 });
 
-test('E4 maximum 5×4×800 qualifier refuses before any HTTP', async () => {
-  let requests = 0;
-  const model = createOpenAIModel({ apiKey: 'synthetic-only', fetchImpl: () => {
-    requests++; return assert.fail('Maximum source qualification must refuse locally');
-  } });
-  await assert.rejects(qualifyCandidateItems(model, capacityItems(5)), { code: 'context_budget_exceeded' });
-  assert.equal(requests, 0);
+// A fake provider for bare qualification calls: exact local counts, and a
+// pool-wire answer citing each item's first shown candidate.
+function poolProvider() {
+  const counted = []; let generations = 0;
+  const fetchImpl = async (url, options) => {
+    const body = JSON.parse(options.body);
+    if (url.endsWith('/input_tokens')) {
+      counted.push(countOpenAITokens(JSON.stringify(body)));
+      return Response.json({ object: 'response.input_tokens', input_tokens: counted.at(-1) });
+    }
+    generations += 1;
+    const input = JSON.parse(body.input[0].content[0].text);
+    const empty = { value: null, evidenceIndices: [] };
+    const unknown = { value: 'unknown', evidenceIndices: [] };
+    const output = qualificationPoolWire(input, { qualifications: input.items.map((entry) => ({
+      itemIndex: entry.itemIndex, subject: empty, property: empty, scope: empty, applies: empty,
+      value: { value: null, evidenceIndices: [entry.candidates[0].candidateIndex] },
+      attribution: unknown, commitment: unknown })) });
+    return Response.json({ id: 'resp_synthetic', object: 'response', model: body.model, status: 'completed',
+      error: null, incomplete_details: null, output: [{ id: 'msg_synthetic', type: 'message', role: 'assistant',
+        status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output), annotations: [] }] }],
+      usage: { input_tokens: counted.at(-1), output_tokens: 100, total_tokens: counted.at(-1) + 100 } });
+  };
+  return { counted, fetchImpl, generations: () => generations };
+}
+
+test('E4 maximum 5×4×800 qualification is planned per item within the adapter wire bound', async () => {
+  const provider = poolProvider();
+  const model = createOpenAIModel({ apiKey: 'synthetic-only', fetchImpl: provider.fetchImpl });
+  const report = {};
+  const qualified = await qualifyCandidateItems(model, capacityItems(5), undefined, undefined, false, report);
+  assert.equal(provider.generations(), 5);
+  assert.ok(provider.counted.every((tokens) => tokens <= 7_024), JSON.stringify(provider.counted));
+  assert.deepEqual(report, { itemsShortened: 0, itemsUnqualified: 0 });
+  assert.ok(qualified.every((item) => item.qualification.anchors.length > 0));
 });
 
-test('E4 full qualifier wire refuses locally when partial core request still fits', async () => {
-  let requests = 0; let seen; const events = [];
+test('E4 the adapter fit check plans around its full wire when the core count alone would fit', async () => {
+  const provider = poolProvider(); const events = [];
   const base = createOpenAIModel({ apiKey: 'synthetic-only', onDiagnostic: event => events.push(event),
-    fetchImpl: () => { requests++; return assert.fail('Complete wire must refuse before HTTP'); } });
-  const model = Object.freeze({ ...base, qualifyCandidates: request => {
-    seen = request; return base.qualifyCandidates(request);
-  } });
-  await assert.rejects(qualifyCandidateItems(model, capacityItems(2)), { code: 'context_budget_exceeded' });
-  assert.ok(seen);
-  assert.ok(countOpenAITokens(JSON.stringify({ system: seen.system, input: seen.input,
-    maxOutputTokens: 1024 })) <= 6_000);
-  assert.equal(requests, 0);
-  assert.ok(events.some(event => event.stage === 'qualifyCandidates' && event.layer === 'adapter'
-    && event.reason === 'request_bounds'));
+    fetchImpl: provider.fetchImpl });
+  const model = Object.freeze({ ...base });
+  const whole = { system: standardInlineQualificationPrompt,
+    input: createQualificationCandidateSnapshot(capacityItems(2)).input, maxOutputTokens: 1024 };
+  assert.ok(countOpenAITokens(JSON.stringify(whole)) <= 6_000, 'the core count alone would send both items');
+  assert.equal(model.fitsQualificationRequest(whole), false, 'the full pool wire does not fit');
+  const qualified = await qualifyCandidateItems(model, capacityItems(2));
+  assert.equal(provider.generations(), 2);
+  assert.equal(qualified.length, 2);
+  assert.ok(!events.some(event => event.reason === 'request_bounds'));
 });
 
 test('E4 four cited candidates compile and cold-store exact source receipts', async (t) => {

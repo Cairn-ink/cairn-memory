@@ -7,6 +7,12 @@ import { emitDiagnostic } from './model-diagnostics.mjs';
 const coreDeadlineSignals = new WeakSet();
 export const isCoreModelDeadlineSignal = (signal) => coreDeadlineSignals.has(signal);
 
+// Every core call's counted input envelope. Planners measure this exact text.
+export const MODEL_INPUT_TOKENS = 6000;
+export const MODEL_OUTPUT_TOKENS = 1024;
+export const modelRequestText = (system, input) =>
+  JSON.stringify({ system, input, maxOutputTokens: MODEL_OUTPUT_TOKENS });
+
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
   { validateFresh = () => {}, failureCode = 'recall_failed', deadline } = {}) {
@@ -34,8 +40,8 @@ export async function callModel(model, method, system, input,
   check();
   if (typeof model?.[method] !== 'function') reject('model_not_configured');
   if (!Number.isSafeInteger(model.contextWindow) || model.contextWindow < 8192) reject('context_budget_exceeded');
-  const request = { system, input, maxOutputTokens: 1024 };
-  if (tokens(JSON.stringify(request)) > 6000) reject('context_budget_exceeded');
+  const request = { system, input, maxOutputTokens: MODEL_OUTPUT_TOKENS };
+  if (tokens(modelRequestText(system, input)) > MODEL_INPUT_TOKENS) reject('context_budget_exceeded');
   check();
   validateFresh();
   check();

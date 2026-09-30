@@ -69,6 +69,17 @@ input ≤6000 tokens, output ≤1024, with 1024 reserved for framing. Missing/in
 counting fails explicitly. The classifier has a 30-second deadline and passes an
 AbortSignal; late output cannot commit anything.
 
+A classification request that does not fit is packed, not refused. The topic
+catalog grows with a person's topics, so memory bodies are first cut to a common
+prefix of at least 120 code points, marked `contentShortened: true`, with the
+catalog complete. Only if that cannot fit is the catalog's tail left out, which
+sends `mapExhausted:false` and so forbids `newL1`. Placement is validated
+against the topics actually sent. The result then carries
+`classificationTruncated: {memoriesShortened, catalogItemsOmitted}`, which
+capture copies into its `classification` outcome, and `basedOn.mapExhausted`
+reflects the catalog the model saw. Requests that fit are sent unchanged. See
+[model input budgets](model-input-budgets.md).
+
 The [optional OpenAI adapter](openai-provider.md) now implements this port outside
 core, with separate dependencies and offline transport verification. It is not
 selected by default and has not passed live-provider or semantic-quality gates.
