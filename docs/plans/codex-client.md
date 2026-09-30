@@ -2116,3 +2116,48 @@ add preserved/conflict. All columns remain independently asserted and closed.
 The client policy suite uses shared client fixture/table helpers and imports no
 Codex test helper. Package.json/CI remain coordinator-owned: test:codex must
 include both runtime-usage.test.mjs and runtime-policy.test.mjs.
+
+### CX-3 round 3 qualification
+
+All round-3 fixes are covered by the complete direct invocation, including
+runtime-policy.test.mjs; package.json/CI are intentionally unchanged. P07–P09
+replace the failing-first 0/3 repro with three passing revert cases. P10 prevents
+disagreeing named clients from swapping policy across successive UTC days and
+verifies alignment preserves a quota latch. Usage v1/v2 migration retains charged
+reservations and refusals. Client fixture/table helpers have moved into the shared
+client test tree; runtime-policy imports no Codex test helper.
+
+Worker rows W34–W37 cover superseded old-binding handoffs, sticky invalid_reply,
+corrupt digest-key EOF reset and an unconfigured refusal latch. The complete
+hook/handoff sequence sends A text under A, then B first/B second under B, with
+no old binding reversion. Empty, malformed and oversized corrupt keys all recover
+through the documented reset. Reset is idempotent after completion.
+
+The tables now contain 47 rows/47 generated cases plus two schema checks.
+The complete invocation has 133 cases: parser 20, worker table 38, privacy 4,
+gates 12, round-2 regressions 11, round-3 regressions 7, sequences 8, worker
+interruption 1, runtime usage 18 and runtime policy 14. Every result cell stays
+closed and independently asserted. The independent oracle checks text/project
+pairs and adds late-handoff to its eleven generated operation types. It also
+writes text after cwd change before the next hook. Eight existing seeds each
+execute 64 main steps (512 per invocation).
+
+Exhaustive worker interruption coverage is 43 publication points, adding the
+three digest-key-reset writes to round 2's 40. Usage covers ten points; policy
+revert/alignment covers 21 (cap 5, concurrency 5, mode 5, conflict 6). Each
+interrupted operation's same retry reaches the uninterrupted semantic end state;
+uncertain billing stays charged.
+
+The initial focused guard check briefly overlapped with scratch-only formatter
+installation. Subsequent focused checks and all final qualification commands are
+foreground and sequential, with HOME = CAIRN_TEST_REAL_HOME = scratch HOME and
+worktree TMPDIR/cache. No real transcripts, credentials or memory roots are used.
+
+| Runtime | Three complete CX-3 runs (seconds) | Exit codes | Generator seconds |
+| --- | --- | --- | --- |
+| Node 22.16.0 | RESULTS_NODE22 | 0, 0, 0 | GENERATOR_NODE22 |
+| Node 24.15.0 | qualification in progress | pending | pending |
+
+The full matrix is not rerun; the coordinator must qualify this round's final
+HEAD and update test:codex to include every CX-3 test file. The CX-6 limitations
+handoff and installed/native-host/model qualification boundaries remain unchanged.
