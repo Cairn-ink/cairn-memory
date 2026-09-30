@@ -2177,6 +2177,62 @@ every file in `integrations/codex/test/` and the `runtime-*` client tests, and
 adds `test:client` for CX-1's parity and fixture-generator tests, which no script
 ran before; CI runs both on Node 22.16.0 and 24.
 
+CX-3 `state_busy` follow-up (2026-10-01, base `b593338`): the #310 Ubuntu
+failure was an oracle assumption, not a changed lock contract. The existing
+contract says "acquisition <=250 ms" (line 600), "All automatic handlers catch
+errors and exit 0, with `{}` for Stop" (433), and "if this fails, do not launch"
+for pre-launch cursor persistence (652–653). It requires all other authorized
+bytes to remain visibly pending (571–577), advances batches only on a validated
+terminal acknowledgement (608–610), and permits retry only at a later authorized
+hook for that same session (658–661). A5 expressly includes lock/state failures
+(984). These rules admit a contended operation failing with `state_busy`: no
+send or cursor advance; Stop returns `{}` without launch. A successful later
+authorized attempt admits pending text once under its original project binding;
+without such an attempt, final coverage can remain incomplete. A reserved grant
+still counts as used even if dispatch is busy; termination allows release, not
+a billing refund (887–894).
+
+The seeded oracle now accepts only the exact `state_busy` rejection from
+concurrent reserve/dispatch, accounts for successful starts independently, and
+separates pending text from admitted text. Every seed's first concurrent step
+holds a real dispatch lock with a Promise gate until the other dispatch exhausts
+the unchanged 250 ms acquisition window. Test-local `Date.now`/poll timer mocks
+advance virtual time; filesystem ownership remains real. The holder is released
+in `finally`, after mocks are restored. No runtime code or timeout changed.
+Three additional regressions cover worker reserve, worker dispatch and Stop
+cursor preparation; they assert no send/cursor advance while busy, retained
+pending state, eventual unique admission with the correct project, preserved
+usage accounting, and no extra send on another eligible attempt. The oracle also
+rejects an early admission or cursor advance during the busy attempt.
+
+Failing-first: with the holder gate injected but the original `Promise.all`
+dispatch assumption retained, seed 1 deterministically threw `state_busy` on
+both Node 22.16.0 and 24.15.0 (one case, exit 1 each). The corrected oracle passes
+that contended seed on both versions (exit 0 each). All commands ran in the
+foreground, sequentially, with synthetic fixture data, a separate temporary
+HOME per matrix invocation, HOME = CAIRN_TEST_REAL_HOME, CI=1, compile caching
+disabled, and TMPDIR/TMP/TEMP/npm cache under the non-UUID worktree path
+`.scratch/state-busy`. `npm test` used the CI script with its default concurrency.
+
+| Command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| Deterministic seed-1 reproduction before oracle fix | 1 | 1 |
+| Deterministic seed-1 reproduction after fix | 0 | 0 |
+| Final `npm run test:codex`, 136 cases per run, three runs | 0 / 0 / 0 | 0 / 0 / 0 |
+| Final Codex runtimes (seconds) | 48.282 / 45.951 / 46.301 | 44.401 / 51.518 / 52.467 |
+| `npm test`, 401 cases | 0 | 0 |
+| `npm run validate` | 0 | 0 |
+| `npm run test:client`, 5 cases | 0 | 0 |
+
+Earlier Node 22 sanity checks also passed: two full 136-case Codex runs (0/0)
+and two three-case busy regression invocations (0/0). An intermediate experiment
+with Node's built-in mock timers stalled the HTTP/child-process fixture and was
+interrupted (130), then removed; it is not one of the six final runs. The final
+seam mocks only the globals used by the lock and hook and preserves native
+HTTP/child-process timers. The complete final suites have zero skipped,
+cancelled or failed cases. No hosted/model enablement, release/version changes,
+push or PR is part of this follow-up.
+
 The coordinator qualified `579c441` (the round-3 head plus `test:codex` and
 `test:client`) in the complete matrix, each command sequential with HOME =
 CAIRN_TEST_REAL_HOME = scratch: on Node 22.16.0 and 24.15.0, `npm test`,

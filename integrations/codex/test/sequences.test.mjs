@@ -9,6 +9,7 @@ import { clientProjectId } from "../../client/pairing.mjs";
 import { HistoryOracle, seeded } from "./history-oracle.mjs";
 
 import { receiverServer, childAttempt } from "./process-harness.mjs";
+import { withHeldDispatch } from "./lock-contention.mjs";
 
 const seeds = [1, 7, 42, 91, 12345, 65537, 0xc0de, 0xcafebabe].map((x) => x >>> 0);
 const ops = [
@@ -105,34 +106,49 @@ for (const seed of seeds)
       } else if (op === "concurrent") {
         // Independent usage model remembers grants/termination, never reads expected counters from
         // production.
-        const attempts = await Promise.allSettled([
-          claude.reserve(),
-          codex.reserve(),
-          claude.reserve(),
-        ]);
+        // The first concurrent step always exercises the CI failure, regardless
+        // of runner speed. Other steps still exercise ordinary mixed contention.
+        const forceBusy = step === 8;
+        const attempts = forceBusy
+          ? [
+              { status: "fulfilled", value: await claude.reserve() },
+              { status: "fulfilled", value: await codex.reserve() },
+            ]
+          : await Promise.allSettled([claude.reserve(), codex.reserve(), claude.reserve()]);
         for (const result of attempts.filter((x) => x.status === "rejected"))
-          assert.match(result.reason.message, /state_busy/);
-        const grants = attempts.filter((x) => x.status === "fulfilled").map((x) => x.value);
-        const granted = grants.filter((x) => x.ok).length;
-        assert.ok(granted <= 2);
-        usageCalls += granted;
+          assert.equal(result.reason.message, "state_busy");
+        const grants = attempts
+          .filter((x) => x.status === "fulfilled" && x.value.ok)
+          .map((x) => x.value);
+        assert.ok(grants.length <= 2);
+        if (forceBusy) assert.equal(grants.length, 2);
+        usageCalls += grants.length;
         assert.equal((await f.guard.status()).state.used, usageCalls);
         let starts = 0;
-        const dispatches = await Promise.all(
-          grants
-            .filter((x) => x.ok)
-            .map((grant, i) =>
-              (i ? codex : claude).dispatch(grant.id, () => {
-                starts++;
-                return { operation: Promise.resolve({ terminated: true }) };
-              }),
-            ),
-        );
-        assert.equal(starts, granted);
-        assert.ok(dispatches.every((x) => x.ok));
-        await Promise.all(dispatches.map((x) => x.dispatch.operation));
-        for (const grant of grants.filter((x) => x.ok))
-          await f.guard.release(grant.id, { terminated: true });
+        const start = () => {
+          starts++;
+          return { operation: Promise.resolve({ terminated: true }) };
+        };
+        const dispatches = forceBusy
+          ? await withHeldDispatch(
+              t,
+              (hold) => claude.dispatch(grants[0].id, async () => { starts++; return hold(); }),
+              () => Promise.allSettled([codex.dispatch(grants[1].id, start)]),
+            )
+          : await Promise.allSettled(
+              grants.map((grant, i) => (i ? codex : claude).dispatch(grant.id, start)),
+            );
+        const busy = dispatches.filter((x) => x.status === "rejected");
+        for (const result of busy) assert.equal(result.reason.message, "state_busy");
+        const sent = dispatches.filter((x) => x.status === "fulfilled").map((x) => x.value);
+        assert.ok(sent.every((x) => x.ok));
+        assert.equal(starts, grants.length - busy.length);
+        await Promise.all(sent.map((x) => x.dispatch.operation));
+        if (forceBusy) assert.equal(busy.length, 1);
+        for (const result of busy) oracle.hook(result.reason.message);
+        // A busy dispatch consumed no call; grants still count and are released
+        // only once their callers are known to have terminated. Never refund used.
+        for (const grant of grants) await f.guard.release(grant.id, { terminated: true });
         oracle.apply(op);
       } else {
         const text = `Human preference ${seed}-${step}`;
