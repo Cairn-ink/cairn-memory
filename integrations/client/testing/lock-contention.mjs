@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { withWriteObserver } from "../private-state.mjs";
+import { deferred } from "./deferred.mjs";
 
 // Only globals used by hook/lock code are mocked, never HTTP/child internals.
 // Polls advance logical time; filesystem ownership and writes stay real.
@@ -36,7 +37,7 @@ export async function withLockClock(t, work, { pollMs = 10 } = {}) {
 }
 
 export async function withHeldLock(t, dispatch, contend) {
-  const entered = Promise.withResolvers(), release = Promise.withResolvers();
+  const entered = deferred(), release = deferred();
   const holder = dispatch(async () => {
     entered.resolve();
     await release.promise;
@@ -59,7 +60,7 @@ export async function withHeldLock(t, dispatch, contend) {
 // Freeze the first real publication while it owns the usage lock. The other
 // operations must exhaust acquisition before publication can finish.
 export async function withUsageContention(t, first, contend) {
-  const entered = Promise.withResolvers(), release = Promise.withResolvers();
+  const entered = deferred(), release = deferred();
   let held = false;
   const holder = withWriteObserver(async ({ path, kind }) => {
     if (!held && kind === "write" && path.includes("/usage/") && path.endsWith(".json")) {

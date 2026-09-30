@@ -1,4 +1,5 @@
 import { withLockClock } from "../../client/testing/lock-contention.mjs";
+import { deferred } from "../../client/testing/deferred.mjs";
 import { stateLock } from "../../client/state-lock.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -165,8 +166,8 @@ test("failed shared refusal latch retains reset and retries before dispatch", as
 test("review repro: a held usage lock cannot turn quota into timeout", async (t) => {
   const f = await fixture(t, { text: header() + item("Refused while locked") });
   const resetAt = Date.now() + 60000;
-  const entered = Promise.withResolvers(), release = Promise.withResolvers();
-  const dispatchFinished = Promise.withResolvers();
+  const entered = deferred(), release = deferred();
+  const dispatchFinished = deferred();
   const guard = { ...f.guard, dispatch: async (...args) => {
     const result = await f.guard.dispatch(...args);
     dispatchFinished.resolve();

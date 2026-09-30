@@ -6,11 +6,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { installId, opaqueProjectId } from "../lib/identity.mjs";
+import { deferred } from "../../../integrations/client/testing/deferred.mjs";
 
 const identityUrl = new URL("../lib/identity.mjs", import.meta.url).href;
 
 function startChildIdentity(dir, cwd) {
-  const ready = Promise.withResolvers();
+  const ready = deferred();
   let child;
   const completed = new Promise((resolve, reject) => {
     child = spawn(process.execPath, ["--input-type=module", "-e",

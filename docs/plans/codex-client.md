@@ -2365,6 +2365,42 @@ CAIRN_TEST_REAL_HOME = scratch: on Node 22.16.0 and 24.15.0, `npm test`,
 0; Node 20 `npm test` and `validate` exit 0; `test:codex` from a depth-1 clone
 exits 0; `git diff --check` exits 0.
 
+Node 20 compatibility follow-up (PR #311, base `8155674`): replace all eight
+test calls to `Promise.withResolvers` with one test-only `deferred()` helper in
+`integrations/client/testing/deferred.mjs`. The shared lock gates, round-2
+reproduction and plugin identity tests can all import it across their existing
+test boundaries. Promise gates, virtual time, assertions and product defaults
+are unchanged. The complete diff since the coordinator's `a5317cd` merge was
+searched and inspected for other APIs newer than Node 20; none remain in the
+added JavaScript.
+
+Foreground sequential verification used fresh synthetic HOMEs, an npm cache
+and TMPDIR inside this worktree. The requested Node 20 binary reports
+`v20.20.2`; Node 22 reports `v22.16.0`.
+
+| Command | Runtime | Exit |
+| --- | --- | --- |
+| `npm test` | Node 20.20.2 | 1 |
+| `npm run validate` | Node 20.20.2 | 0 |
+| `npm test` | Node 22.16.0 | 1 |
+| `npm run test:codex` | Node 22.16.0 | 1 |
+| `npm run test:client` | Node 22.16.0 | 1 |
+| Deferred pending / resolve / reject smoke check | Node 20.20.2 | 0 |
+| Direct `runtime-usage.test.mjs`, 18 cases | Node 20.20.2 | 0 |
+| `git diff --check` | final diff | 0 |
+
+The complete suites are **not qualified** in this follow-up environment. Its
+restricted sandbox rejects local socket operations used by Node child-process
+pipes: diagnostics record `shutdown` and `getsockname` returning `EPERM`.
+An independent `spawnSync` probe reproduces the failure with `/bin/echo` and
+a Node child, without loading repository code. Both Node versions consequently
+lose child output or report file-level suite failures; these are not passing
+case counts. The Node 20 direct usage suite exercises the changed lock gates
+successfully. Raw logs, all diagnostic exits and the API audit are retained in
+`logs/node20-deferred/`. Rerun the requested full suites in an environment that
+permits local child-process pipes before claiming CI qualification. No product
+code, default timeout, version/release files or global Promise polyfill changed.
+
 Below-bar follow-ups, each with its owner:
 
 1. **SessionStart on resume (CX-5, before install).** The oracle and W34 expect
