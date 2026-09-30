@@ -55,6 +55,19 @@ jobs:
       # Parity with the released 0.1.1 client (checked-in fixture plus its sources at 3a1c17d9).
       - run: npm run test:pairing:golden
 
+  codex:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['22.16.0', 24]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      # CX-3: parser, cursor/worker decision table, history oracle, interruptions and gates A1/A4/A5/A9.
+      - run: npm run test:codex
+
   core:
     runs-on: ubuntu-latest
     strategy:
