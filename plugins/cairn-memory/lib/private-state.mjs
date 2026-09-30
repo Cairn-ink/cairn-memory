@@ -102,10 +102,11 @@ export async function syncDirectory(path) {
 export async function privateWrite(
   path,
   bytes,
-  { exclusive = false, checkpoint = async () => {}, ownerId = process.getuid?.() } = {},
+  { exclusive = false, checkpoint = async () => {}, ownerId = process.getuid?.(),
+    portable = false } = {},
 ) {
-  await privateDirectory(dirname(path), { ownerId });
-  await checkedPath(path, { missing: true, ownerId });
+  await privateDirectory(dirname(path), { ownerId, portable });
+  await checkedPath(path, { missing: true, ownerId, portable });
   const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
   const file = await open(temporary, "wx", 0o600);
   try {
@@ -123,7 +124,9 @@ export async function privateWrite(
         if (error.code !== "EEXIST") throw error;
       }
     } else await rename(temporary, path);
-    await syncDirectory(dirname(path));
+    // Native Windows has no portable directory fsync. Its released standalone
+    // publication contract uses the flushed file and atomic rename instead.
+    if (!(portable && process.platform === "win32")) await syncDirectory(dirname(path));
     await checkpoint("published");
     await notifyWrite(path);
   } finally {

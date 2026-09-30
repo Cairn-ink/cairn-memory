@@ -11,7 +11,9 @@ import { conforms, utcInstant, classifyHostedReply, parseSessionStartRequest }
 export { classifyHostedReply } from "./hosted-contract.mjs";
 // Files created by this process belong to its effective UID. Existing legacy
 // root ownership policy stays with binding discovery, not this new gate.
-const ownerOptions = () => ({ ownerId: process.geteuid?.() ?? process.getuid?.() });
+const ownerOptions = () => ({
+  ownerId: process.geteuid?.() ?? process.getuid?.(), portable: true,
+});
 const routes = new Set(["/api/memory/recall", "/api/memory/capture"]);
 const acknowledged = new Set(["complete", "duplicate", "empty"]);
 const modes = new Set(["open", "quota_reached", "invalid_reply", "ready", "consumed", "unconfirmed"]);

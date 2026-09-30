@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdir, readFile, writeFile, symlink } from "node:fs/promises";
+import { mkdir, readFile, writeFile, symlink, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import { readControlState, setPaused, startIfActive } from "../control-state.mjs";
@@ -279,4 +279,25 @@ test("sub-millisecond reset fractions cannot permit an early resume", async (t) 
   assert.equal((await hostedQuotaStatus(f.target)).resetAt, resetAt);
   assert.equal((await resumeHostedQuota(f.target, { now: Date.parse(resetAt) + 1 })).status, "ready");
   assert.equal(f.requests.length, 1);
+});
+
+
+test("standalone Windows uses portable metadata; POSIX still rejects unsafe modes", async (t) => {
+  const f = await fixture(t);
+  await f.claude.capture(batch, binding, "synthetic-event");
+  const directory = join(f.options.root, "hosted-quota");
+  await chmod(directory, 0o777); // Synthetic Windows stat cannot express POSIX private modes.
+  const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+  try {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    f.respond(429, { error: "quota_reached" });
+    assert.equal((await f.claude.capture(batch, binding, "synthetic-event")).status, "quota_reached");
+    assert.equal((await createHostedTransport({ ...f.options, client: "claude" })
+      .recall("synthetic")).status, "quota_reached");
+    assert.equal(f.requests.length, 2);
+  } finally {
+    Object.defineProperty(process, "platform", descriptor);
+  }
+  assert.equal((await f.claude.recall("synthetic")).status, "unavailable");
+  assert.equal(f.requests.length, 2);
 });

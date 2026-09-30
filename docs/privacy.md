@@ -489,7 +489,12 @@ session ID. The digest binds the configured endpoint within the owner-bound root
 installer-supplied target ID), is sensitive identity metadata, not anonymization.
 Credential rotation does not reopen the gate. The fallback conservatively gates
 all credentials for that endpoint within the root; account migration needs setup.
-Paired clients must share both root and target identity. A refusal preserves
+Paired clients must share both root and target identity. Native Windows
+standalone uses the existing portable creator/publication policy: request 0600,
+rely on host ACLs, flush the file and rename atomically without POSIX directory
+fsync. It does not enable Windows pairing or promise power-loss durability.
+Linux/WSL enforces 0700/0600 and directory sync. Windows fixtures are simulated
+on Linux; they are not native Windows acceptance. A refusal preserves
 pending cursor/event identity across restarts and suppresses both endpoints.
 Status shows validated reset or “reset unknown”. Explicit quota resume grants
 one attempt without changing the shared pause or discarding pending bytes.

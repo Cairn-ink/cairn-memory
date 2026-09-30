@@ -31,7 +31,6 @@ try {
 const control = await readControlState(dataDir);
 if (control.paused) process.exit(0);
 
-
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 let event;
