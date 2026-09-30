@@ -485,8 +485,10 @@ Upgraded Claude honors the shared hosted quota gate as the explicit D1 exception
 The selected private root retains `hosted-quota/<target digest>.json` and its
 process-owned lock/recovery files. The 0600 record contains only version, a finite
 gate state and validated reset/null; no conversation, raw error, credential or
-session ID. The digest binds the configured endpoint and credential (or an
+session ID. The digest binds the configured endpoint within the owner-bound root (or an
 installer-supplied target ID), is sensitive identity metadata, not anonymization.
+Credential rotation does not reopen the gate. The fallback conservatively gates
+all credentials for that endpoint within the root; account migration needs setup.
 Paired clients must share both root and target identity. A refusal preserves
 pending cursor/event identity across restarts and suppresses both endpoints.
 Status shows validated reset or “reset unknown”. Explicit quota resume grants

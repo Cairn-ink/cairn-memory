@@ -4,7 +4,8 @@ import { HOSTED_SCHEMAS } from "./hosted-schemas.mjs";
 // UTC RFC 3339, finite calendar instant. Date.parse alone normalizes February 30.
 export function utcInstant(value) {
   if (typeof value !== "string") return false;
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|\+00:00)$/.exec(value);
+  const pattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|\+00:00)$/;
+  const match = pattern.exec(value);
   if (!match || !Number.isFinite(Date.parse(value))) return false;
   const [, year, month, day, hour, minute, second] = match.map(Number);
   const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
@@ -67,7 +68,9 @@ export function conforms(name, value) {
           !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(input)) return false;
     }
     if (typeof input === "number" &&
-        (input < (schema.minimum ?? -Infinity) || input > (schema.maximum ?? Infinity))) return false;
+        (input < (schema.minimum ?? -Infinity) || input > (schema.maximum ?? Infinity))) {
+      return false;
+    }
     return true;
   }
   return check(root, value);
@@ -85,6 +88,7 @@ export function parsePauseState(value) {
 
 export function parseSessionStartResponse(value, request = { version: 1 }, limits = {}) {
   const input = parseSessionStartRequest(request);
+  if (typeof limits.countTokens !== "function") throw new Error("invalid_reply");
   if (!conforms("session-start-response", value)) throw new Error("invalid_reply");
   const groups = value.groups;
   if (Object.values(groups).some((g) => g.returned !== g.items.length) ||

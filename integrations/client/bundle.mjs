@@ -27,7 +27,7 @@ export const CLIENT_MODULES = Object.freeze({
 });
 
 export const HOSTED_SCHEMA_NAMES = Object.freeze([
-  'capture-request', 'capture-response', 'recall-response',
+  'capture-request', 'capture-response', 'recall-request', 'recall-response',
   'session-start-request', 'session-start-response', 'pause-state',
 ]);
 export async function schemaModule() {

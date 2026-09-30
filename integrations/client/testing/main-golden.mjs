@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, symlink, chmod, cp } from "node:fs/promises
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { VERSION } from "../../../plugins/cairn-memory/lib/version.mjs";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import { observeHosted } from "../test/observe-legacy.mjs";
 export const BASE = "3a1c17d9c888b28e878f5e2d8de0180d9b49fa4e";
@@ -41,6 +42,12 @@ async function goldenControlTimeout(plugin) {
     throw new Error("golden_control_lock_shape_changed");
   }
   await writeFile(path, source.replaceAll("timeoutMs: 250,", "timeoutMs: 30_000,"));
+  // The explicit D1 shared concurrency exception serializes candidate requests.
+  // Widen only acquisition in this isolated parity copy, as with control above;
+  // production contention/refusal behavior has separate transport tests.
+  const transport = join(plugin, "lib/http.mjs");
+  const http = await readFile(transport, "utf8");
+  await writeFile(transport, http.replace("timeoutMs: 150,", "timeoutMs: 30_000,"));
 }
 export async function observeStandalone(plugin) {
   await goldenControlTimeout(plugin);
@@ -379,7 +386,7 @@ export function candidateGolden(base) {
   for (const variant of expected) {
     variant.requestBytes = variant.requestBytes.replaceAll(
       '\\"version\\":\\"0.1.1\\"',
-      '\\"version\\":\\"0.1.2\\"',
+      `\\"version\\":\\"${VERSION}\\"`,
     );
     // Coordinator's round-10 tie-break: local 0.1.2 history is not first use.
     // These remain actual-base fixtures, but are refusal tests rather than parity.

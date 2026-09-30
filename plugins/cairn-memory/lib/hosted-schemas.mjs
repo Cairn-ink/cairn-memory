@@ -113,6 +113,34 @@ export const HOSTED_SCHEMAS = {
       }
     ]
   },
+  "recall-request": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/recall-request.schema.json",
+    "title": "Cairn Memory recall request",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "query"
+    ],
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "project_id": {
+        "type": "string",
+        "minLength": 16,
+        "maxLength": 128
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 12,
+        "default": 6
+      }
+    }
+  },
   "recall-response": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/recall-response.schema.json",

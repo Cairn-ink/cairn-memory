@@ -15,7 +15,8 @@ const golden = JSON.parse(await readFile(new URL('./fixtures/claude-hosted-93e52
 test('frozen base 93e52b7 source hashes match untouched shared modules', async () => {
   assert.equal(golden.base, '93e52b7afb298d728cb4831c34bbda6dcf750704');
   for (const [source, original] of Object.entries(CLIENT_MODULES)) {
-    if (['identity.mjs', 'file-lock.mjs', 'control-state.mjs', 'pairing.mjs', 'private-state.mjs'].includes(source)) continue;
+    if (!Object.hasOwn(golden.sourceHashes, `plugins/cairn-memory/lib/${original}`)) continue;
+    if (['transport-hosted.mjs', 'identity.mjs', 'file-lock.mjs', 'control-state.mjs', 'pairing.mjs', 'private-state.mjs'].includes(source)) continue;
     const bytes = await readFile(join(client, source));
     assert.equal(createHash('sha256').update(bytes).digest('hex'),
       golden.sourceHashes[`plugins/cairn-memory/lib/${original}`], source);

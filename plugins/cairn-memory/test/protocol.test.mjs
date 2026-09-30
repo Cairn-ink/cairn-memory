@@ -58,10 +58,14 @@ test("plain HTTP is restricted to explicit loopback development hosts", () => {
 
 // Exercise the published schemas used by the installed plugin, not today's
 // hosted service's divergent refusals. Fixtures have no operational data.
-import { conforms, utcInstant, parseSessionStartRequest, parseSessionStartResponse,
+import { conforms, utcInstant, parseSessionStartRequest, parseSessionStartResponse as parseResponse,
   parsePauseState, classifyHostedReply } from "../lib/hosted-contract.mjs";
 import { HOSTED_SCHEMAS } from "../lib/hosted-schemas.mjs";
 import { sessionContext, group, instant } from "./hosted-fixtures.mjs";
+
+const parseSessionStartResponse = (value, request, limits = {}) =>
+  parseResponse(value, request, { countTokens: () => 100, ...limits });
+
 
 for (const name of Object.keys(HOSTED_SCHEMAS)) {
   test(`${name}: bundled schema equals published source`, async () => {
@@ -258,4 +262,20 @@ test("schema interpreter keyword inventory is closed", () => {
 test("legacy recall timestamps retain RFC 3339 offset acceptance", () => {
   const source = HOSTED_SCHEMAS["recall-response"].$defs.memory.properties;
   assert.equal(source.createdAt.pattern, undefined);
+});
+
+
+test("session-start requires a trusted token counter before acknowledging context", () => {
+  assert.throws(() => parseResponse(sessionContext()), /invalid_reply/);
+});
+test("session-start preserves procedural tags and rejects unbound next-step evidence", () => {
+  const value = sessionContext();
+  value.groups.procedural.items[0].procedural = {
+    tagRevision: 1, procedural: true, origin: "explicit", anchors: [{
+      receiptId: "receipt", digest: "a".repeat(64), start: 0, end: 10,
+    }],
+  };
+  assert.equal(parseSessionStartResponse(value), value);
+  value.groups.nextSteps.items[0].nextStep.anchors[0].sourceId = "missing";
+  assert.throws(() => parseSessionStartResponse(value), /invalid_reply/);
 });

@@ -775,14 +775,17 @@ unchanged. Its target-wide durable latch suppresses recall and capture retries
 across Claude, Codex and restarts. An explicit resume at/after a known reset (or
 explicitly with an unknown reset) grants one eligible request. A repeat refusal
 closes the latch again. An uncertain, failed or processing probe does not grant
-more attempts. A successful probe reopens the gate. Resume never changes target,
-auth mode, counters or the pause generation. Unrecognized 429 closes an
+more attempts. A successful probe reopens the gate. Quota resume never changes target,
+auth mode, counters or the pause generation. The plugin script's `resume-quota`
+is quota-only; `resume` while globally paused resumes only that pause, preserving
+the quota gate. When already active, `resume` grants the eligible quota attempt. Unrecognized 429 closes an
 `invalid_reply` gate until explicit resume; it is never success or automatic
 polling. This is the plan's explicit upgraded-Claude D1 quota/concurrency exception;
 0.1 Claude request bytes and frozen retry batches remain unchanged.
 
 | Prior gate | Event | Network requests | Next gate | Capture cursor |
 | --- | --- | --- | --- | --- |
+| open | dispatch starts / interruption before reply | 1 | unconfirmed durably | unchanged |
 | open | verified 429 | 1 | quota_reached | unchanged |
 | quota_reached | either client's hook / restart | 0 | quota_reached | unchanged |
 | quota_reached | resume before validated reset | 0 | quota_reached | unchanged |
@@ -838,6 +841,8 @@ fulfilled/dropped/deleted/unclaimed or inaccessible items cannot appear. Team
 membership/ownership, not public readability, grants meeting-action access.
 Framing and receipts are untrusted recollection, never execution permission.
 
+A client parser requires a trusted local counter implementing the same token
+contract; absent or invalid counters cannot acknowledge session context.
 One budget covers the **entire serialized success**, including framing,
 namespace, metadata and receipts: requested tokens (local o200k count with the
 conservative 1.15 multiplier), requested UTF-16 units, and 24,000 UTF-8 bytes.

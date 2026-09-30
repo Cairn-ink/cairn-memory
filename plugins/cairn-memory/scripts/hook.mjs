@@ -18,7 +18,8 @@ import {
   startIfActive,
 } from "../lib/control-state.mjs";
 import { withFileLock } from "../lib/file-lock.mjs";
-import { createJsonPoster } from "../lib/http.mjs";
+import { createJsonPoster, hostedQuotaStatus, hostedTargetId, resumeHostedQuota }
+  from "../lib/http.mjs";
 import { prepareRecallQuery } from "../lib/recall-query.mjs";
 import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
 import { VERSION } from "../lib/version.mjs";
@@ -35,6 +36,7 @@ let clientOptions;
 let binding;
 let endpoint;
 let post;
+let quotaTarget;
 try {
   endpoint = normalizeEndpoint(configuredEndpoint);
   post = createJsonPoster({ endpoint, token });
@@ -285,17 +287,41 @@ async function control() {
     process.stdout.write("Cairn automatic memory is paused.\n");
     return;
   }
-  if (action === "resume") {
+  if (action === "resume" || action === "resume-quota") {
+    const pause = await readControlState(dataDir);
+    if (action === "resume" && pause.paused) {
+      await setPaused(dataDir, false);
+      const quota = await hostedQuotaStatus(quotaTarget);
+      process.stdout.write(quota.mode === "open" ? "Cairn automatic memory is active.\n" :
+        "Cairn automatic memory is active; quota gate is unchanged.\n");
+      return;
+    }
+    const gate = await resumeHostedQuota(quotaTarget);
+    if (gate.status === "quota_reached") {
+      process.stdout.write(`Cairn quota_reached; ${gate.resetAt ?? "reset unknown"}.\n`);
+      return;
+    }
+    if (!["active", "ready"].includes(gate.status)) throw new Error("quota_gate_unavailable");
+    if (gate.status === "ready") {
+      process.stdout.write(
+        "Cairn quota resume permits one eligible attempt; pause is unchanged.\n",
+      );
+      return;
+    }
+    // Quota-only resume must not rotate the pause generation or skip pending text.
     await setPaused(dataDir, false);
     process.stdout.write("Cairn automatic memory is active.\n");
     return;
   }
   const state = await readControlState(dataDir);
+  const quota = await hostedQuotaStatus(quotaTarget);
+  const quotaNote = quota.mode === "open" ? "" :
+    `; ${quota.mode === "consumed" ? "quota_reached" : quota.mode}; ${quota.reset}`;
   const note = binding.status === "pairing_needed"
     ? "; pairing_needed (existing client active)"
     : binding.status === "standalone_unregistered" ? "; standalone_unregistered" : "";
   process.stdout.write(
-    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}` +
+    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}${quotaNote}` +
     `${binding.detail ? "; " + binding.detail : ""}; ` +
     `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; ` +
     `credential: ${token ? "configured" : "missing"}.\n`,
@@ -307,7 +333,7 @@ try {
   clientOptions = { client: "claude", pairingRecord };
   binding = await resolveClient(clientOptions);
   if (!binding.enabled) {
-    if (["status", "pause", "resume"].includes(action)) {
+    if (["status", "pause", "resume", "resume-quota"].includes(action)) {
       process.stdout.write(
         `Cairn automatic memory: ${binding.status}` +
         `${binding.detail ? "; " + binding.detail : ""}.\n`,
@@ -316,7 +342,11 @@ try {
     }
   } else {
     dataDir = binding.root;
-    if (["status", "pause", "resume"].includes(action)) {
+    if (endpoint.startsWith("http")) {
+      quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
+      post = createJsonPoster({ endpoint, token, ...quotaTarget });
+    }
+    if (["status", "pause", "resume", "resume-quota"].includes(action)) {
       await control();
     } else {
       const hookInput = await input();
@@ -339,7 +369,7 @@ try {
 } catch (error) {
   // Hooks are deliberately fail-open. Never emit an error or non-zero status
   // that could block a prompt or make normal Claude Code work noisy.
-  if (["status", "pause", "resume"].includes(action)) {
+  if (["status", "pause", "resume", "resume-quota"].includes(action)) {
     process.stderr.write(`Cairn automatic memory control failed (${error?.message ?? "unknown"}).\n`);
     process.exitCode = 1;
   }
