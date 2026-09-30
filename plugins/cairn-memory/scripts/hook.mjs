@@ -77,6 +77,14 @@ async function telemetry(event) {
   ).catch(() => {});
 }
 
+// Recheck the existing local barrier after asynchronous quota-state work.
+// The network start itself stays synchronous under the control lock.
+async function dispatchActive(generation, start) {
+  const dispatch = await startIfActive(dataDir, generation, start);
+  if (!dispatch.started) throw new Error("dispatch_not_started");
+  return dispatch.operation;
+}
+
 async function recall(hookInput) {
   if (!token) return;
   const query = prepareRecallQuery(hookInput.prompt);
@@ -88,7 +96,7 @@ async function recall(hookInput) {
     post(
       "/api/memory/recall",
       { query, project_id: projectId, limit: 6 },
-      2_000,
+      2_000, true, (start) => dispatchActive(control.generation, start),
     ),
   );
   if (!started.started) return;
@@ -263,7 +271,7 @@ async function captureLocked(hookInput, statePath, generation) {
           project_id: projectId,
           messages,
         },
-        25_000,
+        25_000, true, (start) => dispatchActive(generation, start),
       ),
     );
     if (!started.started) throw new Error("capture_paused");

@@ -3,6 +3,7 @@ import test from "node:test";
 import { mkdir, readFile, writeFile, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
+import { readControlState, setPaused, startIfActive } from "../control-state.mjs";
 import { withWriteObserver } from "../private-state.mjs";
 import { createJsonPoster, createHostedTransport, hostedQuotaStatus, hostedTargetId,
   resumeHostedQuota, classifyHostedReply } from "../transport-hosted.mjs";
@@ -237,3 +238,32 @@ test("invalid shared requests and already aborted work do not consume resume", a
   assert.equal((await hostedQuotaStatus(f.target)).mode, "ready");
   assert.equal(f.requests.length, 1);
 });
+
+
+for (const probe of [false, true]) {
+  test(`pause during quota persistence prevents final dispatch (probe=${probe})`, async (t) => {
+    const f = await fixture(t);
+    if (probe) {
+      f.respond(429, { error: "quota_reached" });
+      await f.codex.capture(batch, binding, "synthetic-event");
+      await resumeHostedQuota(f.target);
+    }
+    const calls = f.requests.length;
+    const prior = (await hostedQuotaStatus(f.target)).mode;
+    const control = await readControlState(f.options.root);
+    let paused = false;
+    const post = createJsonPoster(f.options);
+    const dispatch = async (start) => {
+      const attempt = await startIfActive(f.options.root, control.generation, start);
+      if (!attempt.started) throw new Error("dispatch_not_started");
+      return attempt.operation;
+    };
+    await withWriteObserver(async ({ path, kind }) => {
+      if (!paused && kind === "write" && path.endsWith(".json")) {
+        paused = true; await setPaused(f.options.root, true);
+      }
+    }, () => assert.rejects(post(capture, {}, 1000, true, dispatch), /capture_unavailable/));
+    assert.equal(f.requests.length, calls);
+    assert.equal((await hostedQuotaStatus(f.target)).mode, prior);
+  });
+}

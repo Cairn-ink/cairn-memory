@@ -6,6 +6,7 @@ import '../../../integrations/client/test/main-golden.test.mjs';
 import '../../../integrations/client/test/paired-hooks.test.mjs';
 // Keep shared parity in the existing npm test gate without changing root scripts.
 import '../../../integrations/client/test/parity.test.mjs';
+import '../../../integrations/client/test/transport-hosted.test.mjs';
 import '../../../integrations/client/test/fixture-generator.test.mjs';
 import assert from 'node:assert/strict';
 import { appendFile, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';

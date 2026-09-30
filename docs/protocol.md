@@ -791,6 +791,7 @@ polling. This is the plan's explicit upgraded-Claude D1 quota/concurrency except
 | quota_reached | resume before validated reset | 0 | quota_reached | unchanged |
 | quota_reached | eligible explicit resume | 0 | one attempt available | unchanged |
 | one attempt available | either endpoint starts | 1 | attempt consumed durably | unchanged |
+| open / one attempt available | local pause changes before final dispatch | 0 | prior gate restored | unchanged |
 | attempt consumed | verified 429 | 0 additional | quota_reached | unchanged |
 | attempt consumed | processing / unavailable / error / interruption | 0 additional | attempt consumed | unchanged |
 | attempt consumed | validated acknowledgement | 0 additional | open | acknowledgement only |

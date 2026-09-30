@@ -93,7 +93,9 @@ async function guardedReply(target, attempt) {
       // refusal fails later, a restart still cannot reopen the gate.
       await save({ ...state, mode: probe ? "consumed" : "unconfirmed" });
       const reply = await attempt();
-      if (reply.status === "quota_reached") {
+      if (reply.notStarted) {
+        await save(state);
+      } else if (reply.status === "quota_reached") {
         await save({ version: 1, mode: "quota_reached", resetAt: reply.resetAt });
       } else if (reply.stopRetries) {
         await save({ version: 1, mode: "invalid_reply", resetAt: null });
@@ -112,16 +114,17 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
   if (!["claude", "codex"].includes(client)) throw new Error("invalid_client");
   const target = root !== undefined ? { root, targetId: targetId ?? hostedTargetId({ endpoint, token }) } : null;
 
-  async function request(path, body, timeoutMs, authenticated = true, limits, signal) {
+  async function request(path, body, timeoutMs, authenticated = true, limits, signal, dispatch) {
     if (authenticated && !token) throw new Error("missing_token");
     const headers = { "content-type": "application/json" };
     if (authenticated) headers.authorization = `Bearer ${token}`;
-    const response = await fetch(`${baseUrl}${path}`, {
+    const start = () => fetch(`${baseUrl}${path}`, {
       method: "POST", headers, body: JSON.stringify(body),
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) :
         AbortSignal.timeout(timeoutMs),
       ...(client === "codex" ? { redirect: "error" } : {}),
     });
+    const response = await (dispatch ? dispatch(start) : start());
     if (!routes.has(path) && path !== "/api/memory/session-start") {
       if (!response.ok) throw new Error(`http_${response.status}`);
       if (response.status === 204) return null;
@@ -131,19 +134,22 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
     try { value = await response.json(); } catch { value = null; }
     return classifyHostedReply(path, response.status, value, body, limits);
   }
-  async function reply(path, body, timeoutMs, limits, signal) {
+  async function reply(path, body, timeoutMs, limits, signal, dispatch) {
     if (!token || signal?.aborted) return { status: "unavailable" };
     const attempt = async () => {
-      try { return await request(path, body, timeoutMs, true, limits, signal); }
-      catch { return { status: "unavailable" }; }
+      try { return await request(path, body, timeoutMs, true, limits, signal, dispatch); }
+      catch (error) {
+        return { status: "unavailable", ...(error.message === "dispatch_not_started" ?
+          { notStarted: true } : {}) };
+      }
     };
     return target && routes.has(path) ? guardedReply(target, attempt) : attempt();
   }
-  const post = async (path, body, timeoutMs, authenticated = true) => {
+  const post = async (path, body, timeoutMs, authenticated = true, dispatch) => {
     if (!routes.has(path) && path !== "/api/memory/session-start") {
       return request(path, body, timeoutMs, authenticated);
     }
-    const result = await reply(path, body, timeoutMs);
+    const result = await reply(path, body, timeoutMs, undefined, undefined, dispatch);
     if (result.status === "quota_reached") {
       const error = new Error("quota_reached"); error.resetAt = result.resetAt; throw error;
     }
