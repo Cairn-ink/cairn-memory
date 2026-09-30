@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { fixture,header,item } from './helpers.mjs';
 import { runWorker,prepareCapture } from '../worker.mjs';
 import { setPaused } from '../../client/control-state.mjs';
+import { createRuntimeGuard } from '../../client/runtime-usage.mjs';
 import { HistoryOracle,seeded } from './history-oracle.mjs';
 
 import { receiverServer,childAttempt } from './process-harness.mjs';
@@ -16,6 +17,8 @@ const ops=['append','replace','truncate','malformed','pause','resume','crash','l
 for(const seed of seeds) test(`seeded independent history oracle seed=${seed}, 64 operations`,async t=>{
   const began=performance.now(),f=await fixture(t),random=seeded(seed),oracle=new HistoryOracle(header());
   const endpoint=await receiverServer(f);
+  const claude=createRuntimeGuard({root:f.root,targetId:f.binding.targetId,mode:'api-key',dailyCap:10000});
+  const codex=createRuntimeGuard({root:f.root,targetId:f.binding.targetId,mode:'api-key',dailyCap:10000});
   let usageCalls=0;
   const originalCapture=f.transport.capture;
   f.transport.capture=async body=>{usageCalls++;return originalCapture(body);};
@@ -33,13 +36,20 @@ for(const seed of seeds) test(`seeded independent history oracle seed=${seed}, 6
     } else if(op==='truncate') {await writeFile(f.path,header());oracle.apply(op,{size:Buffer.byteLength(header())});}
     else if(op==='concurrent') {
       // Independent usage model remembers grants/termination, never reads expected counters from production.
-      const attempts=await Promise.allSettled([f.guard.reserve(),f.guard.reserve(),f.guard.reserve()]);
+      const attempts=await Promise.allSettled([claude.reserve(),codex.reserve(),claude.reserve()]);
       for(const result of attempts.filter(x=>x.status==='rejected')) assert.match(result.reason.message,/state_busy/);
       const grants=attempts.filter(x=>x.status==='fulfilled').map(x=>x.value);
       const granted=grants.filter(x=>x.ok).length;
       assert.ok(granted<=2);
       usageCalls+=granted;
       assert.equal((await f.guard.status()).state.used,usageCalls);
+      let starts=0;
+      const dispatches=await Promise.all(grants.filter(x=>x.ok).map((grant,i)=>(i?codex:claude).dispatch(grant.id,()=>{
+        starts++;return {operation:Promise.resolve({terminated:true})};
+      })));
+      assert.equal(starts,granted);
+      assert.ok(dispatches.every(x=>x.ok));
+      await Promise.all(dispatches.map(x=>x.dispatch.operation));
       for(const grant of grants.filter(x=>x.ok)) await f.guard.release(grant.id,{terminated:true});
       oracle.apply(op);
     } else {

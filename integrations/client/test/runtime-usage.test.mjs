@@ -31,6 +31,35 @@ test('A9 one shared atomic cap for Claude/Codex and all sessions; reservations a
   assert.equal((await stat(join(f.home,'usage'))).mode&0o777,0o700);
 });
 
+test('A9 simultaneous Claude/Codex dispatch and injected termination protect one target across sessions',async t=>{
+  const f=await setup(t,{mode:'plan'}),claude=createRuntimeGuard(f.config),codex=createRuntimeGuard(f.config);
+  const permits=await Promise.all([claude.reserve(),codex.reserve()]);
+  const active=new Map();let calls=0;
+  const start=id=>{
+    const controller=new AbortController();calls++;
+    const operation=new Promise(resolve=>controller.signal.addEventListener('abort',()=>{
+      active.delete(id);resolve({terminated:true});
+    },{once:true}));
+    active.set(id,controller);return {operation};
+  };
+  const dispatches=await Promise.all(permits.map((p,i)=>(i?codex:claude).dispatch(p.id,()=>start(p.id))));
+  assert.equal(dispatches.filter(x=>x.ok).length,2);assert.equal(active.size,2);assert.equal(calls,2);
+  assert.equal((await createRuntimeGuard(f.config).reserve()).code,'concurrency_limited');
+  assert.equal((await claude.release(permits[0].id)).code,'termination_unconfirmed');
+  const refusal=await f.guard.observe({observedAt:f.now(),windows:[{
+    name:'five_hour',utilization:.95,resetAt:f.now()+3600000}]});
+  assert.deepEqual(new Set(refusal.cancel),new Set(permits.map(p=>p.id)));
+  assert.equal((await codex.reserve()).code,'plan_threshold');
+  for(const id of refusal.cancel) active.get(id).abort();
+  for(let i=0;i<dispatches.length;i++) {
+    const result=await dispatches[i].dispatch.operation;
+    await f.guard.release(permits[i].id,{terminated:result.terminated});
+  }
+  const state=(await f.guard.status()).state;
+  assert.equal(active.size,0);assert.equal(state.reservations.length,0);assert.equal(state.used,2);
+  assert.equal((await f.guard.resume()).ok,false);assert.equal(calls,2);
+});
+
 test('A9 unknown termination and liveness deny; dead owners reaped without refund; no age reaping',async t=>{
   let alive=true;
   const live={boot:'synthetic-boot',namespace:'synthetic-ns',isAlive:()=>alive};

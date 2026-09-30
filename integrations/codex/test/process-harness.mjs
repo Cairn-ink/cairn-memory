@@ -16,10 +16,10 @@ export async function receiverServer(f) {
   f.ws.defer(()=>new Promise(r=>server.close(r)));
   return `http://127.0.0.1:${server.address().port}/capture`;
 }
-export async function childAttempt(f,{crashAt=0,prepare=false,endpoint,byteEnd}={}) {
+export async function childAttempt(f,{crashAt=0,prepare=false,boundary=false,endpoint,byteEnd}={}) {
   endpoint??=await receiverServer(f);
   const cfg=join(f.ws.path,'crash-config.json');
-  await writeFile(cfg,JSON.stringify({binding:f.binding,crashAt,prepare,endpoint,byteEnd}),{mode:0o600});
+  await writeFile(cfg,JSON.stringify({binding:f.binding,crashAt,prepare,boundary,endpoint,byteEnd}),{mode:0o600});
   const child=spawn(process.execPath,[new URL('./crash-stub.mjs',import.meta.url).pathname,cfg],{stdio:['ignore','pipe','pipe'],env:process.env});
   let raw='',stderr='';child.stdout.on('data',x=>raw+=x);child.stderr.on('data',x=>stderr+=x);
   const exit=await new Promise((r,j)=>{child.once('error',j);child.once('close',r);});

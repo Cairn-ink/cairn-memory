@@ -569,11 +569,12 @@ delivery claim. Refusal leaves the frozen event identity unchanged.
 Tests generated from every row run against synthetic files and an independent
 receiver. A seeded operation-history oracle models append, replacement,
 truncation, malformed lines, pause/resume, crashes at every state write, lost
-replies and mixed Claude/Codex reservations without invoking production parsing,
+replies and mixed Claude/Codex dispatch without invoking production parsing,
 cursor or guard helpers to derive expectations. It checks coverage, admission
 uniqueness, pause fencing and cap conservation after every step. Interruption
 fixtures enumerate every durable write of prepare, dispatch/acknowledgement,
-pause-boundary, replacement and usage reserve/release/refusal/resume; retry must
+pause-boundary (including the one-byte SessionStart path), replacement, oversized
+discard and usage reserve/dispatch/release/refusal/resume/observe; retry must
 reach the uninterrupted semantic state (opaque random IDs are compared by their
 stable bindings). The source authorization is supplied anew by each hook; cursors
 contain no path/session/text queue and a new session never drains an old cursor.

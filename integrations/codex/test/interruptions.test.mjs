@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { appendFile,writeFile,rename } from 'node:fs/promises';
 import { fixture,header,item } from './helpers.mjs';
-import { runWorker,prepareCapture } from '../worker.mjs';
+import { runWorker,prepareCapture,establishPauseBoundary } from '../worker.mjs';
 import { setPaused } from '../../client/control-state.mjs';
 import { childAttempt,receiverServer } from './process-harness.mjs';
 
 test('exhaustive real process interruption at every durable write, same authorized retry',async t=>{
   const began=performance.now();let points=0;
-  for(const operation of ['prepare','capture','pause-boundary','replacement','oversized']) {
+  for(const operation of ['prepare','capture','pause-boundary','session-start','replacement','oversized']) {
     async function scenario(crashAt=0) {
       const text=header()+Array.from({length:50},(_,i)=>item(`Preference ${i}`,i)).join('');
       const f=await fixture(t,{text});
@@ -16,7 +16,7 @@ test('exhaustive real process interruption at every durable write, same authoriz
       let byteEnd;
       const run=()=>runWorker(f.binding,{guard:f.guard,transport:f.transport,byteEnd});
       if(operation==='capture') await prepareCapture(f.binding);
-      if(operation==='pause-boundary') {
+      if(['pause-boundary','session-start'].includes(operation)) {
         await run();await setPaused(f.root,true);await appendFile(f.path,item('Paused text',60));await setPaused(f.root,false);
       }
       if(operation==='replacement') {
@@ -27,10 +27,12 @@ test('exhaustive real process interruption at every durable write, same authoriz
         await run();await appendFile(f.path,'x'.repeat(1100000));
         byteEnd=(await f.cursor()).offset+1048576-262144-1024;
       }
-      const child=await childAttempt(f,{crashAt,prepare:operation==='prepare',endpoint,byteEnd});
+      const child=await childAttempt(f,{crashAt,prepare:operation==='prepare',boundary:operation==='session-start',endpoint,byteEnd});
       if(child.exit===87) {
         // Real crash left process-owned locks/reservations; verified dead-PID retry reaps them.
-        if(operation==='prepare') await prepareCapture(f.binding);else await run();
+        if(operation==='prepare') await prepareCapture(f.binding);
+        else if(operation==='session-start') await establishPauseBoundary(f.binding);
+        else await run();
       }
       const state=await f.cursor();
       const usage=(await f.guard.status()).state;

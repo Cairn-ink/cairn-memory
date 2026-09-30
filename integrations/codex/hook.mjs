@@ -56,7 +56,13 @@ export async function handleHook(input,{clientOptions,targetId,launch,now=Date.n
     // serialize a closed, content-free handoff; never copy hook extras into it
     const handoff={client:'codex',parser:FORMAT,sessionId:hook.sessionId,path:hook.path,cwd:hook.cwd,
       generation:control.generation,byteEnd:prepared.state.pending.end,endIntent:event==='SessionEnd'};
-    await launch(JSON.stringify(handoff),resolved.workerEnv);
+    let launchTimer;
+    try {
+      // Waiting for child/model startup cannot consume the host's hook budget.
+      await Promise.race([launch(JSON.stringify(handoff),resolved.workerEnv),
+        new Promise((_,reject)=>{launchTimer=setTimeout(()=>reject(new Error('launch_deadline')),
+          Math.max(0,750-(now()-start)));})]);
+    } finally {clearTimeout(launchTimer);}
     return {output:output(),status:'launched'};
   } catch { return {output:output(),status:'capture_unavailable'}; }
 }

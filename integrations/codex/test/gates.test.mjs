@@ -10,6 +10,7 @@ import { withSourceReadObserver } from '../source.mjs';
 import { setPaused,readControlState } from '../../client/control-state.mjs';
 import { cursorPath,validateCursor,publishCursor } from '../cursor.mjs';
 import { clientProjectId } from '../../client/pairing.mjs';
+import { createRuntimeGuard } from '../../client/runtime-usage.mjs';
 
 test('A4 partial lines and appends preserve frozen IDs and coverage',async t=>{
   const first=header()+Array.from({length:50},(_,i)=>item(`Human ${i}`,i)).join('');
@@ -136,4 +137,32 @@ test('SessionStart establishes a resumed EOF boundary with one tail byte and zer
   await appendFile(f.path,item('Human after SessionStart'));
   await runWorker(f.binding,{guard:f.guard,transport:f.transport});
   assert.deepEqual([...f.receiver.values()].flatMap(x=>x.messages.map(m=>m.content)),['Human after SessionStart']);
+});
+
+test('A9 stalled fake headless startup never extends the 750ms hook wait',async t=>{
+  const f=await fixture(t,{text:header()+item('Bounded startup')});let launches=0;
+  const began=performance.now();
+  const result=await handleHook({hook_event_name:'Stop',session_id:session,cwd:'/synthetic',transcript_path:f.path},
+    {clientOptions:{home:f.home,root:f.root,usesClaude:false,env:{}},targetId:f.binding.targetId,
+      launch:()=>{launches++;return new Promise(()=>{});}});
+  assert.equal(result.output,'{}');assert.equal(result.status,'capture_unavailable');assert.equal(launches,1);
+  assert.ok(performance.now()-began<1100);assert.equal(f.calls.length,0);
+  assert.ok((await f.cursor()).pending);assert.equal((await f.cursor()).accepted,0);
+});
+
+test('A9 mid-batch daily refusal and repeated resume preserve pending identity until the next UTC day',async t=>{
+  const f=await fixture(t,{text:header()+Array.from({length:50},(_,i)=>item(`Human ${i}`,i)).join('')});
+  let clock=Date.parse('2026-09-30T12:00:00Z');
+  f.guard=createRuntimeGuard({root:f.root,targetId:f.binding.targetId,mode:'hosted',dailyCap:2,now:()=>clock});
+  const run=()=>runWorker(f.binding,{guard:f.guard,transport:f.transport});
+  assert.equal((await run()).status,'daily_cap_reached');
+  const state=await f.cursor(),pendingId=state.pending.batches[state.pending.next].eventId;
+  for(let i=0;i<4;i++) {
+    assert.equal((await f.guard.resume()).ok,false);assert.equal((await run()).status,'daily_cap_reached');
+    assert.equal((await f.cursor()).offset,state.offset);
+  }
+  assert.equal(f.calls.length,2);clock+=86400000;
+  assert.equal((await f.guard.resume()).ok,true);await run();
+  assert.equal(f.calls[2].event_id,pendingId);assert.equal(f.receiver.size,3);
+  assert.equal((await f.cursor()).offset,Buffer.byteLength(await readFile(f.path)));
 });

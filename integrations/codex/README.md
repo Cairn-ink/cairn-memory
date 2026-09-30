@@ -22,6 +22,9 @@ a bounded direct stdin pipe, ignore worker stdout/stderr, use no shell and pass
 only the closed handoff. Never pass tokens or expanded hook input. Recall and
 SessionStart context remain unavailable here. Callers catch automatic-hook
 errors and exit 0; explicit controls report failures.
+`handleHook` bounds its wait for the supplied launcher by the remaining 750 ms;
+the launcher must enforce its own process/pipe lifetime. SessionStart establishes
+a stale pause generation's EOF using only the last byte, without history parsing.
 
 `prepareCapture(binding)` durably freezes a content-free pending manifest before
 launch. `runWorker(binding,{transport,guard,mode})` revalidates the supplied source
