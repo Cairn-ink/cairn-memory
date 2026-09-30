@@ -671,7 +671,8 @@ capture integration. See
 [storage API shapes](storage-contract.md#episode-management-and-procedural-tags-se-1)
 and [atomic v17 migration](local-store.md#episode-storage-foundation-se-1).
 Debounced capture/interpretation and keep are implemented through an injected port;
-provider schemas and MCP exposure remain separate work.
+provider schemas and local MCP access are implemented separately (SE-4/SE-5);
+trusted automatic producer wiring remains separate work.
 No hosted defaults or telemetry change; automatic prompt changes require episode
 mode. Every open eagerly upgrades older committed formats to v17; hosts must
 stop/drain older connections first. Explicit procedural tags are independent
@@ -695,3 +696,35 @@ uses `index_revision_conflict` for changed epochs and `revision_conflict` for
 changed identities/evidence. Explicit step closure has exact step/revision/action
 replay guards and does not grant execution permission. Source deletion invalidates
 its descriptive evidence. Core episode generation remains opt-in.
+
+### Local MCP session episodes (SE-5)
+
+The local stdio adapter now exposes the core's bounded episode/time/startup reads
+and revision-guarded management with `--session-episodes-access episode-v1`.
+See [tool shapes and startup binding](standalone-mcp.md#session-episodes-and-startup-context-se-5).
+Namespaces never come from tool arguments; optional startup read-client filters
+can only be narrowed. Inspection and episode actions enforce that filter too.
+Startup context follows the exact namespace's cross-client core contract.
+Strict nested schemas, read-only hints and untrusted-data result framing apply.
+Existing input/output transport caps remain unchanged.
+
+Core UTC range/page/64-KiB budgets, signed opaque cursors and budget markers pass
+through unchanged. Pagination mutations return `cursor_stale`; stale management
+uses `revision_conflict`. Completed no-op replay preserves cursors. Startup is a
+local count/read with complete sourced items and its exact interpretation/no-
+execution-permission warning, never generation or queue draining. MCP and host
+prompt overhead are outside core budgets.
+
+Explicit procedural remember tags use 1–4 anchors into the sole canonical explicit
+text receipt (`receiptIndex:0`) and require preference/instruction kind, regardless
+of episode mode. Retained-receipt tag edits guard memory and independent tag
+revisions; they preserve content/receipts and relationship evidence. Conversation
+deletion describes and executes its source/lineage/suppression cascade; it is not
+physical erasure. Explicit keep invokes normal retained-source admission, may
+contact the configured provider, and does not interpret or capture episodes.
+
+`--session-episodes episode-v1` with v2 qualification/staged-v1 and an optional
+2–16 draft count (default 8) records generation configuration only. The submitted-
+capture facade stays in legacy mode until a separately reviewed trusted producer
+binds real lifecycle authority. Access alone never enables capture/interpretation.
+No hosted HTTP schema, default or producer contract is widened.

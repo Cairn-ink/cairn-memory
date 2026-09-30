@@ -947,6 +947,49 @@ are fake HTTP and synthetic keys are assembled from fragments. The artifact
 allowlist already includes every runtime module/prompt used here, so it needs no
 new entry. These checks do not establish real-model fidelity or provider framing.
 
+### SE-5 implementation and verification
+
+Local MCP now exposes `list_session_episodes`, `list_memories_by_time`,
+`inspect_session_episode` and `read_session_start_context`, delegating strict
+namespace-bound core inputs and preserving signed cursors, finite errors,
+whole-record budgets and exact untrusted framing. Startup snapshots receipt
+client/session and namespace authority. Optional `readClient` restricts range and
+episode-ID operations; tool client filters can only narrow it. Startup context
+uses the core's cross-client groups in the exact namespace.
+
+`--session-episodes-access episode-v1` is keyless access without capture,
+interpretation or automatic tags. Generation flags require source-bound-v2 and
+staged-v1, validate N=2–16/default 8, and record configuration only pending a
+trusted producer. Submitted capture retains legacy mode. Explicit keep uses a
+short-lived episode-mode admission facade exclusively for retained-source keep;
+it never calls capture/end/interpretation. Other management operations are local,
+revision-guarded correction/unpin/closure/deletion and procedural sidecar edits.
+Deletion describes the live/historical/multi-source memory suppression and source
+consumer cascade. Explicit procedural remember works independently in both modes
+with receiptIndex 0 anchors into canonical explicit text.
+
+| MCP responsibility / gates | Synthetic tests |
+| --- | --- |
+| Strict nested schemas, authority and read-client narrowing; E1/E9/E11 | `adapters/mcp/test/episodes.test.mjs`: discovery, injected fields, foreign clients/owners, guarded ID actions |
+| UTC ranges, event/receipt disagreement, unknown intervals and half-open edges; E9 | `episodes.test.mjs`: range/page limits, exact 366-day acceptance and time semantics |
+| Signed cursors, cold restart, no-op replay and mutation staleness; E9/E11 | `episodes.test.mjs`: both range operations preserve replay cursors and return cursor_stale after mutation |
+| Whole-record 64 KiB pages, startup budgets and untrusted framing; E9/E10 | `episodes.test.mjs` plus `procedural.test.mjs`: prefix budgets, context_item_too_large, complete sourced groups and group switches |
+| Revision guards, correction pins, step replay, deletion and explicit keep; E7/E8/E10 | `episodes.test.mjs`: stale and foreign anchors, unpin, inert closure/keep replay, deletion lineage and unrelated survivor |
+| Explicit procedural remember and independent tags; E10 | `adapters/mcp/test/procedural.test.mjs`: both access modes, exact receipt/digest, invalid kind/foreign/surrogate anchors, nonempty conflict/qualification/rationale preservation |
+| Access/configuration do not generate/capture episodes; E3/E11 | `episodes.test.mjs`: keyless actual CLI, check-config without store/provider, scripted submitted capture with generation configuration leaves no episode rows or automatic tags |
+| Installed module/prompt completeness and actual cold stdio; E11 | `packaging/test/session-episodes.test.mjs`: installed public core seeds a synthetic episode; access-only installed CLI reads sources/startup/explicit tags and deletes the conversation |
+
+The runtime artifact allowlist already contains all used modules/prompts; no new
+runtime path is shipped. No hosted schema, producer wiring, CI or version change,
+provider default, paid call or semantic-quality claim is added. SE-5 hands
+`adapters/mcp/cli.mjs` to HMA after its review/integration.
+
+At the implementation milestone, Node 22.16 passed root `npm test` 401/401,
+`validate`, MCP 110/110 (19 new MCP cases) and the new installed-artifact case.
+The earlier full-core invocation was interrupted by model capacity before an exit
+status; it is not counted as verification. The final two-runtime matrix is recorded
+below after completion.
+
 ### Cross-plan shared files
 
 `docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,

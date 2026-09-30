@@ -2,6 +2,14 @@
 
 ## Unreleased — model calls fit their budgets
 
+- Local MCP episode access now provides keyless session/time reads, sourced startup
+  context and revision-guarded correction, closure, unpinning and conversation
+  deletion with its memory/source cascade. Explicit keep uses retained-source
+  admission. Procedural remember accepts exact receipt anchors in either mode.
+  Episode generation flags record configuration only pending a trusted producer;
+  access alone never enables capture or interpretation. Hosted schemas and
+  versions are unchanged.
+
 - Recall no longer fails with `context_budget_exceeded` because a person has
   many or long memories. `select` and `rank` requests are packed to the
   6,000-token input limit, measured with the adapter's own `countTokens` over
