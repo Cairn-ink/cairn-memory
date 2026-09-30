@@ -3,6 +3,45 @@
 This library coordinates local identity and controls; it does not install hosts, execute models,
 change targets, or implement a Codex transcript adapter.
 
+CX-3 adds disabled shared-profile and runtime-guard building blocks. They are
+explicitly excluded from the released Claude bundle until CX-4/LAC publish their
+installed wiring. The Codex adapter and its synthetic gates live in
+[`integrations/codex`](../codex/README.md). Existing Claude modules remain byte-identical.
+
+`createRuntimeGuard({root,targetId,mode,dailyCap,...})` uses one opaque installed
+target ID for both clients and every session, under the resolved private root.
+Missing daily caps refuse automatic work. Each model call obtains `reserve()`,
+then calls `dispatch(id,start)` exactly once; dispatch durably consumes that
+permit before calling the supplied start descriptor. Await the descriptor's
+model promise outside the guard lock and call `release(id,{terminated:true})`
+only after confirmed termination. Do not nest permits or reuse one for another
+model call. A reserved call crossing UTC midnight also counts against its dispatch
+day. Refusals invalidate older unstarted permits; resume authorizes one fresh
+attempt and cannot revive them. Accepted completion can clear the single-attempt
+gate through `release(id,{terminated:true,accepted:true})`. Uncertain billing is
+never refunded. An id supplied to `reserve({id})` is only for retrying a reservation
+before dispatch, never retrying a model call. Window observations return reservation
+IDs to cancel; HMA/LAC must perform and verify termination, retaining uncertain slots.
+
+Changes to `dailyCap`, `mode` or `concurrency` take effect from the next UTC day.
+The current day's counts and uncertain reservations stay charged. Lowered
+concurrency waits for excess live calls to terminate before allowing new dispatch.
+Both clients must receive the same installed policy. A daily-cap refusal clears
+on the next eligible UTC day; quota and plan refusals still require explicit resume.
+Reverting a change to the active policy clears its pending proposal before any
+UTC rollover can activate it.
+
+Installed adapters must pass `client: "claude"` or `client: "codex"` to
+`createRuntimeGuard`. The default `"shared"` keeps the installation-wide
+calibration API compatible. Usage v3 retains v1/v2 counters, reservations and
+quota latches, adding at most three closed numeric/enum policy declarations.
+Disagreeing declarations return `policy_conflict` from reserve, dispatch and
+resume; status returns the inspectable state with `ok:false`. They cannot activate
+or alternate proposals. Release and refusal latching remain available. Explicit
+installer repair aligns every stored declaration, including removed clients or
+a legacy `"shared"` owner, by calling its guard with the selected policy. This
+recovers without erasing usage history or clearing quota latches.
+
 `detectClients(options)` performs read-only checks. `stateLocations(options)` returns exact
 coordination paths independent of `CLAUDE_PLUGIN_DATA`. Production callers normally omit `home`,
 `temporary`, `env` and `liveness`; these are injection seams for isolated fixtures. Setup passes
