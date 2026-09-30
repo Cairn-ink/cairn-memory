@@ -502,6 +502,21 @@ const validMemoryRef = (value) => exactResponseObject(value, ['id', 'revision'])
   && Number.isSafeInteger(value.revision)
   && value.revision >= 1;
 
+// This optional producer diagnostic must survive cloning without evaluating
+// accessors or losing nonenumerable/symbol properties at the response boundary.
+const exactDataObject = (value, keys) => isPlainObject(value)
+  && Reflect.ownKeys(value).length === keys.length
+  && keys.every((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor?.enumerable === true && Object.hasOwn(descriptor, 'value');
+  });
+
+const validClassificationTruncated = (value) => exactDataObject(value,
+  ['memoriesShortened', 'catalogItemsOmitted'])
+  && Number.isSafeInteger(value.memoriesShortened) && value.memoriesShortened >= 0
+  && Number.isSafeInteger(value.catalogItemsOmitted) && value.catalogItemsOmitted >= 0
+  && (value.memoriesShortened > 0 || value.catalogItemsOmitted > 0);
+
 const validMemoryIds = (value) => Array.isArray(value)
   && Object.keys(value).length === value.length
   && value.every(validCoreIdentifier);
@@ -576,7 +591,10 @@ const classifyCaptureResponse = (response, mode, expectedMetadata) => {
   const skipped = exactResponseObject(classification, ['status', 'reason'])
     && classification.status === 'skipped'
     && ['empty', 'already_filed'].includes(classification.reason);
-  const applied = exactResponseObject(classification, ['status', 'memoryRevisions', 'indexRevision'])
+  const hasTruncation = Object.hasOwn(classification, 'classificationTruncated');
+  const applied = exactDataObject(classification, ['status', 'memoryRevisions', 'indexRevision',
+    ...(hasTruncation ? ['classificationTruncated'] : [])])
+    && (!hasTruncation || validClassificationTruncated(classification.classificationTruncated))
     && classification.status === 'applied'
     && Array.isArray(classification.memoryRevisions)
     && Object.keys(classification.memoryRevisions).length === classification.memoryRevisions.length

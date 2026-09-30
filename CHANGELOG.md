@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — ingestion classification metadata
+
+- LongMemEval ingestion accepts and retains supported optional
+  `classificationTruncated` metadata on applied capture results. Malformed
+  metadata remains unknown; genuine classification failures remain partial and
+  stop later batches. See the [contract diagnosis](docs/plans/ingestion-classification-metadata.md).
+
 ## Unreleased — model calls fit their budgets
 
 - Recall no longer fails with `context_budget_exceeded` because a person has
