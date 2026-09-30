@@ -7,7 +7,7 @@ const help = `Cairn Memory — local stdio MCP developer preview
 Usage:
   cairn-memory --help
   cairn-memory --check-config --db PATH --owner ID [--project ID]
-  cairn-memory --db PATH --owner ID [--project ID]
+  cairn-memory --db PATH --owner ID [--project ID] [--client KEY] [--session ID] [--read-client KEY]
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-deadline-ms 120000
@@ -83,7 +83,8 @@ recall_memory contextMode rationale-evidence includes linked unverified evidence
 Save only on actual user intent. Remembered consent is not execution authority.
 --session-episodes-access episode-v1 adds keyless episode reads and management,
 including read_session_start_context with the local o200k_base tokenizer.
-Access alone never enables capture, retention, automatic procedural tags or interpretation.
+Access alone never enables capture, retention or interpretation. Explicit keep can
+propose automatic procedural tags through normal episode-mode extraction.
 --session-episodes episode-v1 requires source-bound-v2 qualification and staged-v1
 evidence. It records generation configuration only, pending a trusted session producer;
 submitted capture stays in legacy mode. --session-episodes-draft-batches defaults

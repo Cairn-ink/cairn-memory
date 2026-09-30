@@ -34,6 +34,7 @@ test('procedural remember rejects metadata-only, foreign, oversized and split-co
     { content, kind: 'preference', procedural: { anchors: [{ receiptIndex: 0, start: 0, end: 1, digest: 'forged' }] } },
     { content, kind: 'preference', procedural: { anchors: [{ receiptIndex: 0, start: 0, end: 1 }], origin: 'model' } },
     { content, kind: 'preference', procedural: true },
+    { content, kind: 'preference', procedural: null },
   ]) await invalid(h, 'remember_memory', args);
   for (const args of [
     { content, kind: 'fact', procedural: procedural(content) },
@@ -43,6 +44,26 @@ test('procedural remember rejects metadata-only, foreign, oversized and split-co
     { content, kind: 'instruction', procedural: { anchors: [{ receiptIndex: 0, start: 0, end: 1000 }] } },
   ]) fails(await call(h, 'remember_memory', args), 'invalid_input');
   assert.deepEqual(ok(await call(h, 'inspect_memory')).memories, []);
+});
+
+test('re-remembering cannot clear a revision-guarded procedural tag from another host', async t => {
+  const f = workspace(t), a = await episodeHost(t, f.path, { home: f.home }),
+    b = await episodeHost(t, f.path, { home: f.home });
+  const content = 'Synthetic instruction shared across hosts';
+  const memory = ok(await call(a, 'remember_memory', { content, kind: 'instruction' })).memory;
+  const source = ok(await call(a, 'inspect_memory', { memoryId: memory.id })).receipts[0];
+  const anchor = { receiptId: source.id, digest: createHash('sha256').update(source.excerpt).digest('hex'),
+    start: 0, end: source.excerpt.length };
+  ok(await call(a, 'set_procedural_memory', { memoryId: memory.id, expectedRevision: memory.revision,
+    expectedTagRevision: 0, procedural: { anchors: [anchor] } }));
+  const tagged = ok(await call(a, 'inspect_memory', { memoryId: memory.id })).procedural;
+  assert.equal(tagged.procedural, true); assert.equal(tagged.tagRevision, 1);
+
+  await invalid(b, 'remember_memory', { content, kind: 'instruction', procedural: null });
+  assert.deepEqual(ok(await call(a, 'inspect_memory', { memoryId: memory.id })).procedural, tagged);
+  const remembered = ok(await call(b, 'remember_memory', { content, kind: 'instruction' })).memory;
+  assert.equal(remembered.id, memory.id);
+  assert.deepEqual(ok(await call(a, 'inspect_memory', { memoryId: memory.id })).procedural, tagged);
 });
 
 test('tag-only changes guard independent revisions and preserve memory content, receipts and evidence links', async t => {
