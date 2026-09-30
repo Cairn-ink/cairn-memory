@@ -7,6 +7,7 @@ export class HistoryOracle {
     this.paused = false;
     this.barrier = false;
     this.expected = [];
+    this.pending = [];
     this.epoch = 0;
     this.history = [];
     this.sourceChanged = false;
@@ -49,16 +50,27 @@ export class HistoryOracle {
     }
     this.bytes += bytes;
     if (!this.paused && !this.barrier && !this.sourceChanged && text !== null)
-      this.expected.push({ text, projectId: this.projectId });
+      this.pending.push({ text, projectId: this.projectId });
   }
-  hook() {
+  hook(outcome = "complete") {
+    if (outcome === "state_busy") {
+      this.history.push({ op: "hook", outcome });
+      return; // No admission or cursor movement; the same authorized hook can retry.
+    }
+    if (outcome !== "complete") throw new Error("unknown_oracle_outcome");
     if (this.paused) return;
     if (this.sourceChanged) {
       this.epoch++;
       this.sourceChanged = false;
+      this.pending = [];
     }
-    if (this.barrier) this.barrier = false;
+    if (this.barrier) {
+      this.barrier = false;
+      this.pending = [];
+    }
     this.offset = this.bytes;
+    this.expected.push(...this.pending);
+    this.pending = [];
   }
   assert(assert, state, bodies) {
     const actual = bodies.flatMap((body) =>

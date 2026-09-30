@@ -1,3 +1,5 @@
+import { withLockClock } from "../../client/testing/lock-contention.mjs";
+import { deferred } from "../../client/testing/deferred.mjs";
 import { stateLock } from "../../client/state-lock.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -161,31 +163,47 @@ test("failed shared refusal latch retains reset and retries before dispatch", as
   assert.equal((await f.cursor()).offset, state.offset);
 });
 
-test("review repro: a 400ms held usage lock cannot turn quota into timeout", async (t) => {
+test("review repro: a held usage lock cannot turn quota into timeout", async (t) => {
   const f = await fixture(t, { text: header() + item("Refused while locked") });
   const resetAt = Date.now() + 60000;
-  let holding;
+  const entered = deferred(), release = deferred();
+  const dispatchFinished = deferred();
+  const guard = { ...f.guard, dispatch: async (...args) => {
+    const result = await f.guard.dispatch(...args);
+    dispatchFinished.resolve();
+    return result;
+  } };
+  let holding, calls = 0;
   const transport = {
     terminated: () => true,
     capture: async () => {
-      await new Promise((resolve) => setImmediate(resolve));
-      let entered;
-      const ready = new Promise((resolve) => (entered = resolve));
+      calls++;
+      // A reply arrives after dispatch publication/cleanup. Join that exact
+      // boundary instead of hoping setImmediate runs after filesystem awaits.
+      await dispatchFinished.promise;
       holding = stateLock(f.guard.path.replace(/\.json$/, ".lock"), async () => {
-        entered();
-        await new Promise((resolve) => setTimeout(resolve, 400));
+        entered.resolve();
+        await release.promise;
       });
-      await ready;
+      await entered.promise;
       return { status: "refused", code: "quota_reached", resetAt };
     },
   };
-  const result = await runWorker(f.binding, { guard: f.guard, transport });
-  await holding;
-  assert.equal(result.status, "quota_reached");
-  assert.equal(result.state.quotaRefusal.resetAt, resetAt);
-  assert.equal(result.state.quotaRefusal.latched, false);
-  assert.equal(result.state.accepted, 0);
+  try {
+    await withLockClock(t, async (clock) => {
+      const result = await runWorker(f.binding, { guard, transport });
+      assert.equal(clock.elapsed(), 500, "both refuse and release exhaust 250 ms while holder stays live");
+      assert.equal(result.status, "quota_reached");
+      assert.equal(result.state.quotaRefusal.resetAt, resetAt);
+      assert.equal(result.state.quotaRefusal.latched, false);
+      assert.equal(result.state.accepted, 0);
+    });
+  } finally {
+    release.resolve();
+    await holding;
+  }
   await runWorker(f.binding, { guard: f.guard, transport });
+  assert.equal(calls, 1);
   assert.equal((await f.guard.status()).state.resetAt, resetAt);
 });
 
