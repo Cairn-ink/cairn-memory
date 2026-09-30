@@ -987,8 +987,37 @@ provider default, paid call or semantic-quality claim is added. SE-5 hands
 At the implementation milestone, Node 22.16 passed root `npm test` 401/401,
 `validate`, MCP 110/110 (19 new MCP cases) and the new installed-artifact case.
 The earlier full-core invocation was interrupted by model capacity before an exit
-status; it is not counted as verification. The final two-runtime matrix is recorded
-below after completion.
+status; it is not counted as verification. Final sequential verification passed on Node **22.16.0 and 24.15.0**, with
+`HOME = CAIRN_TEST_REAL_HOME` set to the same worktree scratch home and
+TMPDIR/npm cache under the worktree (no UUID paths):
+
+| Command | Cases on each runtime | Exit on 22.16 / 24.15 |
+| --- | --- | --- |
+| `npm test` (CI home-guard shape) | 401/401 | 0 / 0 |
+| `npm run validate` | JSON and unchanged 0.1.2 version consistency | 0 / 0 |
+| `npm run test:mcp` | 110/110 | 0 / 0 |
+| `npm run test:core` (unchanged uncapped runner) | 1136/1136 | 0 / 0 |
+| `npm run test:artifact` | 87/87 | 0 / 0 |
+| `npm run test:openai` | 310/310 | 0 / 0 |
+| `npm run test:workspace-lifecycle` | 25/25 | 0 / 0 |
+| `node tools/testing/run.mjs --script packaging/prepare-cache.mjs` | Public registry metadata only | 0 / 0 |
+| `node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs` | Fresh isolated dependency/cache/offline artifact regression | 0 / 0 |
+
+The nine separate commands `npm run demo:store`, `demo:capture`, `demo:admission`,
+`demo:moc`, `demo:recall`, `demo:history`, `demo:episodes`, `demo:session-context`
+and `demo:openai-offline` each exited 0 on both runtimes. All fixtures, homes,
+databases and ports were synthetic; no key or paid call was used. There are
+19 new MCP cases and one new installed-artifact case, included in the suite
+counts above. No skipped or cancelled tests were counted as passes.
+
+Initial development-only failures were corrected before the matrix: two seed/
+budget fixture expectations, an incomplete scripted model context-window fixture,
+and a scratch npm wrapper pointing to a nonexistent npm module. The initial
+worktree-local update-ref could not create HEAD.lock; plumbing updates use the
+writable common git directory while retaining the isolated GIT_INDEX_FILE.
+The earlier capacity-interrupted core invocation has no observed exit status
+and is excluded; its complete rerun passed. No semantic-fidelity, trusted-producer
+compatibility or paid-pilot acceptance is claimed.
 
 ### Cross-plan shared files
 
