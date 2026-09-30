@@ -430,3 +430,39 @@ passed. The primary's fixed commit, two independent nonauthor Standards/Spec
 reviews, PR against main and latest-head CI remain pending. No merge, release,
 deployment, scored result, paid replay or explanation of any paid failure is
 claimed by these offline acceptance results.
+
+### Primary correction authorization after independent review
+
+The fixed candidate 6ac0bc21e82354f4e6dd7062caf040ff3858d095 received
+independent Spec PASS with no actionable findings. Independent Standards found
+one documented requirement: CONTRIBUTING requires a changelog entry for the
+observable ingestion correction. Primary accepts this finding; the offline
+harness behavior is observable even though no public core or release changes.
+The initial four-file delivery boundary is therefore extended narrowly to add
+one compact Unreleased entry in CHANGELOG.md. The bounded original author may
+change that file and append correction evidence here only. Existing code,
+tests, limitations and all paid/runtime/protocol bytes remain unchanged.
+No release/version bump is warranted or authorized. Primary will personally
+inspect this documentation correction, rerun affected documentation/JSON/scope
+checks, freeze a new candidate and rerun both independent review axes against
+the same original base. Earlier reviews do not pass the new candidate.
+
+### First independent-review documentation correction
+
+For prior candidate `6ac0bc21e82354f4e6dd7062caf040ff3858d095`, independent
+Spec reported PASS with zero actionable findings; independent Standards
+reported one missing changelog entry required by CONTRIBUTING. Primary accepted
+the finding and explicitly extended the author boundary to CHANGELOG.md plus
+this evidence append only. The author read that authorization fully and added
+one compact Unreleased subsection describing supported optional diagnostic
+acceptance/retention, unknown malformed metadata and genuine partial failures
+that stop later batches. No version bump, release, default behavior, correctness,
+score or paid-cause claim was added.
+
+This first review correction is documentation-only, not a failed implementation
+round. Existing implementation, tests and limitation bytes remain unchanged at
+their recorded hashes; the author made no git/install/test/discovery or other-file
+changes. Primary's affected documentation/JSON/scope checks, new fixed commit and
+both independent review axes are pending. Reviews against the prior candidate
+do not count as passes for the new SHA. Implementation correction rounds remain
+zero; the earlier documentation wording clarification remains separately recorded.
