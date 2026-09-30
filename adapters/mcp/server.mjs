@@ -50,14 +50,15 @@ export function createCairnServer(options = {}) {
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes']);
   const { path, namespace, model } = options;
-  const client = options.client ?? 'cairn-local-mcp', sessionId = options.sessionId ?? 'explicit-tool';
+  const client = Object.hasOwn(options, 'client') ? options.client : 'cairn-local-mcp';
+  const sessionId = Object.hasOwn(options, 'sessionId') ? options.sessionId : 'explicit-tool';
   if (!clientKey.safeParse(client).success || !id.safeParse(sessionId).success ||
       (Object.hasOwn(options, 'readClient') && !clientKey.safeParse(options.readClient).success)) throw new Error('invalid_mcp_configuration');
   const readClient = options.readClient;
   const generationConfigured = Object.hasOwn(options, 'sessionEpisodes');
   if (generationConfigured) {
     object(options.sessionEpisodes, ['mode', 'draftEveryBatches']);
-    const batches = options.sessionEpisodes.draftEveryBatches ?? 8;
+    const batches = Object.hasOwn(options.sessionEpisodes, 'draftEveryBatches') ? options.sessionEpisodes.draftEveryBatches : 8;
     if (options.sessionEpisodes.mode !== 'episode-v1' || !Number.isSafeInteger(batches) || batches < 2 || batches > 16 ||
         options.captureQualification !== 'source-bound-v2' || options.captureEvidence !== 'staged-v1') throw new Error('invalid_mcp_configuration');
   }
@@ -149,9 +150,12 @@ export function createCairnServer(options = {}) {
       return { content: [{ type: 'text', text: encoded }], isError: !result.ok };
     });
   };
-  tool('remember_memory', 'Explicitly save one private memory with a source receipt. No automatic capture.',
-    z.strictObject({ content: text, kind: kind.default('fact') }),
-    ({ content, kind }) => core.admit({ namespace: binding, memory: { content, kind }, receipts: [receipt(content, client, sessionId)] }));
+  tool('remember_memory', 'Explicitly save one private memory with a source receipt. No automatic capture. Optional procedural tag works independently of episode mode, only for preference/instruction, with 1..4 code-point-safe UTF-16 anchors into the canonical explicit receipt text (receiptIndex 0). Metadata alone is not evidence; tags do not prove recurrence, truth or execution permission.',
+    z.strictObject({ content: text, kind: kind.default('fact'), procedural: z.strictObject({ anchors: z.array(
+      z.strictObject({ receiptIndex: z.literal(0), start: z.number().int().min(0), end: z.number().int().min(1) })
+    ).min(1).max(4) }).nullable().optional() }),
+    ({ content, kind, procedural }) => core.admit({ namespace: binding, memory: { content, kind }, receipts: [receipt(content, client, sessionId)],
+      ...(procedural === undefined ? {} : { procedural }) }));
   if (episodesAccess) {
     const episodeAction = (method, input) => {
       if (readClient !== undefined) {

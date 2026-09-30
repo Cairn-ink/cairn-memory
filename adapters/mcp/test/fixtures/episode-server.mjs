@@ -15,10 +15,13 @@ export const namespace = { ownerId: 'synthetic-se5', scope: 'project', projectId
 export const range = { since: '2026-01-01T00:00:00.000Z', until: '2027-01-01T00:00:00.000Z' };
 export const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 export const fails = (result, code) => { assert.equal(result.ok, false, JSON.stringify(result)); assert.equal(result.error.code, code); };
+const workspaces = new Map();
 export function workspace(t) {
   const ws = createTestWorkspace(t, { prefix: 'se5-mcp-' });
   const home = join(ws.path, 'home'); mkdirSync(home);
-  return { ws, home, path: join(ws.path, 'synthetic.sqlite') };
+  const path = join(ws.path, 'synthetic.sqlite'); workspaces.set(path, ws);
+  ws.defer(() => workspaces.delete(path));
+  return { ws, home, path };
 }
 export async function episodeHost(t, path, { home, readClient, ns = namespace, cli = false, flags = [], extraEnv = {} } = {}) {
   assert.ok(home, 'Tests must pass home explicitly');
@@ -29,7 +32,9 @@ export async function episodeHost(t, path, { home, readClient, ns = namespace, c
     env: { HOME: home, OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1', ...extraEnv }, stderr: 'pipe' });
   let stderr = ''; transport.stderr.on('data', chunk => { stderr += chunk; });
   const client = new Client({ name: 'synthetic-episode-client', version: '1.0.0' });
-  t.after(() => client.close()); await client.connect(transport);
+  const ws = workspaces.get(path);
+  if (ws) ws.defer(() => client.close()); else t.after(() => client.close());
+  await client.connect(transport);
   return { client, close: () => client.close(), stderr: () => stderr };
 }
 export async function call(host, name, args = {}) {
@@ -72,7 +77,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     model[method] = () => { process.stderr.write('forbidden_model_call\n'); assert.fail('Model generation forbidden'); };
   }
   const server = createCairnServer({ path: process.argv[2], namespace: JSON.parse(process.argv[3]), model,
-    sessionEpisodesAccess: 'episode-v1', ...(process.argv[4] ? { readClient: process.argv[4] } : {}) });
+    sessionEpisodesAccess: 'episode-v1', ...JSON.parse(process.env.SYNTHETIC_OPTIONS ?? '{}'), ...(process.argv[4] ? { readClient: process.argv[4] } : {}) });
   const handle = serveStdio(() => server, { transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 65536 }) });
   process.stdin.once('end', () => { void handle.close(); });
   process.once('SIGTERM', () => { void handle.close(); });
