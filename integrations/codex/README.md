@@ -81,7 +81,7 @@ node integrations/client/testing/run.mjs integrations/codex/test/*.test.mjs \
   integrations/client/test/runtime-policy.test.mjs
 ```
 
-The worker table generates 32 cases; the usage policy table generates six cases.
+The worker table generates 33 cases; the usage policy table generates six cases.
 Both reject misspelled facts and assert every result column with a closed vocabulary.
 Mutating any result cell, even to another valid value, must fail its test.
 The seeded history oracle and exhaustive durable-write interruptions supplement

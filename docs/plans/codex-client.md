@@ -1983,7 +1983,7 @@ Facts additionally admit binding-change, reset-binding, late-worker, start-bindi
 digest-migration, latch-failure and refused-binding. All result columns are closed.
 Cursor: end, eof, retry-end, unchanged, batch-start, batch-end, old-unchanged.
 Sent: integers 0–3. Worker: idle, pending, disabled. Refusal: the literal finite
-values used in W01–W32. Tests derive all four observed results independently of
+values used in W01–W33. Tests derive all four observed results independently of
 expected cells, assert their concrete cursor/worker properties, and reject both
 unknown values and alternate valid mutations in every result column.
 
@@ -2018,14 +2018,14 @@ coordinator evidence, not new implementation-worker executions in this round.
 
 The reviewer cwd repro was run first against 7b7ce787: 0/3 passed, exit 1.
 The identical synthetic repro then passed 3/3, exit 0. The permanent round-2
-suite has ten cases, including the actual 400 ms usage-lock reproduction, which
+suite has eleven cases, including the actual 400 ms usage-lock reproduction, which
 preserves quota_reached/resetAt and retries the latch before further dispatch.
 
-W26–W32 add seven worker cases; P01–P06 add six usage-window cases. Together
-the tables have 38 rows/38 generated cases plus two schema checks. Every result
+W26–W33 add eight worker cases; P01–P06 add six usage-window cases. Together
+the tables have 39 rows/39 generated cases plus two schema checks. Every result
 cell is tested against unknown and alternative legal mutations. The complete
-CX-3 invocation has 113 cases: parser 20, worker table 33, privacy 4, gates 12,
-round-2 regressions 10, sequences 8, interruption 1, usage 18 and policy table 7.
+CX-3 invocation has 115 cases: parser 20, worker table 34, privacy 4, gates 12,
+round-2 regressions 11, sequences 8, interruption 1, usage 18 and policy table 7.
 
 The independent oracle now includes resume-cwd, using real project IDs derived
 from synthetic cwd changes. Its ten operations are append, replacement,
@@ -2048,7 +2048,7 @@ remain synthetic stub gates, with no installed or hosted enablement.
 
 | Runtime | Three CX-3 runs (seconds) | Exit codes | Generator seconds |
 | --- | --- | --- | --- |
-| Node 22.16.0 | 44.303, 40.910, 47.043 | 0, 0, 0 | 44.172, 40.785, 46.695 |
+| Node 22.16.0 | 49.864, 42.509, 42.063 | 0, 0, 0 | 49.728, 42.362, 41.922 |
 | Node 24.15.0 | qualification in progress | pending | pending |
 
 The invocation includes both `runtime-usage.test.mjs` and the new
