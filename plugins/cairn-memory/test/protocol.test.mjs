@@ -85,7 +85,7 @@ for (const endpoint of ["recall", "capture"]) {
   test(`${endpoint}: success is separate from quota refusal`, () => {
     assert.equal(conforms(name, success), true);
     assert.notEqual(classifyHostedReply(path, 200, success).status, "quota_reached");
-    assert.equal(classifyHostedReply(path, 429, success).status, "error");
+    assert.equal(classifyHostedReply(path, 429, success).status, "unavailable");
     assert.equal(classifyHostedReply(path, 200, { error: "quota_reached" }).status, "error");
   });
   for (const resetAt of validResets) {
@@ -101,7 +101,7 @@ for (const endpoint of ["recall", "capture"]) {
     test(`${endpoint}: rejects invalid reset ${JSON.stringify(resetAt)}`, () => {
       const value = { error: "quota_reached", resetAt };
       assert.equal(conforms(name, value), false);
-      assert.equal(classifyHostedReply(path, 429, value).status, "error");
+      assert.equal(classifyHostedReply(path, 429, value).status, "unavailable");
     });
   }
   for (const extra of [{ memories: [] }, { duplicate: false }, { processing: true },
@@ -278,4 +278,18 @@ test("session-start preserves procedural tags and rejects unbound next-step evid
   assert.equal(parseSessionStartResponse(value), value);
   value.groups.nextSteps.items[0].nextStep.anchors[0].sourceId = "missing";
   assert.throws(() => parseSessionStartResponse(value), /invalid_reply/);
+});
+
+for (const [status, processing, expected] of [[200, true, "processing"],
+  [202, true, "processing"], [202, false, "error"], [202, undefined, "error"]]) {
+  test(`capture HTTP ${status} processing=${processing} -> ${expected}`, () => {
+    const value = { duplicate: false, memoryCount: 0,
+      ...(processing === undefined ? {} : { processing }) };
+    assert.equal(classifyHostedReply("/api/memory/capture", status, value).status, expected);
+  });
+}
+test("202 processing remains strict and does not admit recall success or unknown fields", () => {
+  assert.equal(classifyHostedReply("/api/memory/recall", 202, { memories: [] }).status, "error");
+  assert.equal(classifyHostedReply("/api/memory/capture", 202,
+    { duplicate: false, memoryCount: 0, processing: true, extra: true }).status, "error");
 });

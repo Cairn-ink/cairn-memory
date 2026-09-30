@@ -13,9 +13,15 @@ Breaking hosted protocol release (CX-4):
   truncation and the combined budget; publish shared hosted pause state,
   generation and resume-barrier semantics. Lifecycle consumption remains CX-5's.
 - Upgraded Claude and the shared hosted transport retain pending capture state,
-  persist target-wide refusals across clients/restarts and serialize dispatch.
+  persist operation-scoped refusals across clients/restarts. State locks never
+  span network I/O; normal retries survive interrupted hooks, and resumed probes
+  restore their refusal after owner death or deadline expiry.
   Status shows the validated reset or “reset unknown”; explicit quota resume
-  permits one attempt. Unrecognized 429 stops hook-driven network retries.
+  permits one attempt per eligible operation and repairs corrupt state.
+  Unrecognized 429 is unavailable with a persisted per-operation cooldown:
+  validated Retry-After capped at 24 hours, otherwise five minutes; cooldowns
+  expire automatically and resume clears them.
+  Capture processing accepts HTTP 200 and 202 without advancing the cursor.
   Existing Claude payload bytes, frozen batches and event IDs remain unchanged
   under the explicit D1 quota/concurrency exception.
 

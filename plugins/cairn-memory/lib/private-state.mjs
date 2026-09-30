@@ -19,7 +19,7 @@ export async function notifyWrite(path, kind = "write") {
 // unsupported there, and all coordination/binding paths retain strict checks.
 export async function checkedPath(
   path,
-  { directory = false, missing = false, portable = false, ownerId = process.getuid?.() } = {},
+  { directory = false, missing = false, portable = false } = {},
 ) {
   if (!isAbsolute(path) || resolve(path) !== path) throw new Error("invalid_state_path");
   // Ancestors belong to the host/user (for example macOS /var or ~/.claude).
@@ -37,7 +37,7 @@ export async function checkedPath(
   if (directory ? !info.isDirectory() : !info.isFile()) {
     throw new Error("invalid_state_type");
   }
-  if (ownerId !== undefined && info.uid !== ownerId) {
+  if (typeof process.getuid === "function" && info.uid !== process.getuid()) {
     throw new Error("state_owner");
   }
   if (
@@ -49,20 +49,18 @@ export async function checkedPath(
   return info;
 }
 
-export async function privateDirectory(path, options = {}) {
-  if (!(await checkedPath(path, { ...options, directory: true, missing: true }))) {
+export async function privateDirectory(path) {
+  if (!(await checkedPath(path, { directory: true, missing: true }))) {
     await mkdir(path, { recursive: true, mode: 0o700 });
     await notifyWrite(path, "directory");
   }
-  await checkedPath(path, { ...options, directory: true });
+  await checkedPath(path, { directory: true });
 }
-export async function privateRead(
-  path, { missing = false, portable = false, ownerId = process.getuid?.() } = {},
-) {
+export async function privateRead(path, { missing = false, portable = false } = {}) {
   // Atomic metadata replacement can race the read-only discovery preceding a
   // setup lock. Retry a changed inode, but never relax ownership or permissions.
   for (let attempt = 0; attempt < 8; attempt++) {
-    const before = await checkedPath(path, { missing, portable, ownerId });
+    const before = await checkedPath(path, { missing, portable });
     if (!before) return undefined;
     let file;
     try {
@@ -79,7 +77,7 @@ export async function privateRead(
       if (after.ino !== before.ino || after.dev !== before.dev) continue;
       if (
         !after.isFile() ||
-        (ownerId !== undefined && after.uid !== ownerId) ||
+        (typeof process.getuid === "function" && after.uid !== process.getuid()) ||
         (!(portable && process.platform === "win32") && (after.mode & 0o777) !== 0o600)
       )
         throw new Error("state_changed");
@@ -102,11 +100,10 @@ export async function syncDirectory(path) {
 export async function privateWrite(
   path,
   bytes,
-  { exclusive = false, checkpoint = async () => {}, ownerId = process.getuid?.(),
-    portable = false } = {},
+  { exclusive = false, checkpoint = async () => {} } = {},
 ) {
-  await privateDirectory(dirname(path), { ownerId, portable });
-  await checkedPath(path, { missing: true, ownerId, portable });
+  await privateDirectory(dirname(path));
+  await checkedPath(path, { missing: true });
   const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
   const file = await open(temporary, "wx", 0o600);
   try {
@@ -124,9 +121,7 @@ export async function privateWrite(
         if (error.code !== "EEXIST") throw error;
       }
     } else await rename(temporary, path);
-    // Native Windows has no portable directory fsync. Its released standalone
-    // publication contract uses the flushed file and atomic rename instead.
-    if (!(portable && process.platform === "win32")) await syncDirectory(dirname(path));
+    await syncDirectory(dirname(path));
     await checkpoint("published");
     await notifyWrite(path);
   } finally {

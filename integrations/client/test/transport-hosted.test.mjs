@@ -30,10 +30,10 @@ async function fixture(t) {
   globalThis.fetch = async (url, wire) => {
     requests.push({ url, ...wire, body: JSON.parse(wire.body) });
     if (response.throw) throw new Error("synthetic network failure");
-    return Response.json(response.body, { status: response.status });
+    return Response.json(response.body, { status: response.status, headers: response.headers });
   };
   workspace.defer(() => { globalThis.fetch = original; });
-  return { options, target, requests, respond: (status, body) => { response = { status, body }; },
+  return { options, target, requests, respond: (status, body, headers) => { response = { status, body, headers }; },
     fail: () => { response = { throw: true }; },
     claude: createHostedTransport({ ...options, client: "claude" }),
     codex: createHostedTransport(options) };
@@ -45,15 +45,17 @@ const classification = [
   [capture, 200, { duplicate: false, memoryCount: 0 }, "empty"],
   [capture, 200, { ...ack, processing: true }, "processing"],
   [capture, 200, { ...ack, extra: true }, "error"],
+  [capture, 202, { ...ack, processing: true }, "processing"],
+  [capture, 202, ack, "error"],
   [capture, 204, null, "error"],
   [capture, 200, refusal, "error"],
   [capture, 429, refusal, "quota_reached"],
   [recall, 429, { error: "quota_reached" }, "quota_reached"],
   [recall, 200, { memories: [] }, "complete"],
   [recall, 200, { memories: [], extra: true }, "error"],
-  [recall, 429, { error: "legacy", code: "daily_quota_memory_recall" }, "error"],
-  [capture, 429, ack, "error"],
-  [recall, 429, { error: "quota_reached", resetAt: "2026-02-30T00:00:00Z" }, "error"],
+  [recall, 429, { error: "legacy", code: "daily_quota_memory_recall" }, "unavailable"],
+  [capture, 429, ack, "unavailable"],
+  [recall, 429, { error: "quota_reached", resetAt: "2026-02-30T00:00:00Z" }, "unavailable"],
   [recall, 503, { error: "synthetic" }, "unavailable"],
   [capture, 404, null, "unavailable"],
   [capture, 401, null, "error"],
@@ -64,240 +66,231 @@ for (const [path, status, body, expected] of classification) {
   });
 }
 
-// Closed decision table, published in docs/protocol.md before implementation.
-// Each row independently asserts network calls, durable gate and result.
-const rows = [
-  { id: "Q01", event: "refuse", expected: [1, "quota_reached", "quota_reached"] },
-  { id: "Q02", event: "restart", expected: [0, "quota_reached", "quota_reached"] },
-  { id: "Q03", event: "early-resume", expected: [0, "quota_reached", "quota_reached"] },
-  { id: "Q04", event: "resume", expected: [0, "ready", "ready"] },
-  { id: "Q05", event: "repeat-refusal", expected: [1, "quota_reached", "quota_reached"] },
-  { id: "Q06", event: "processing", expected: [1, "consumed", "processing"] },
-  { id: "Q07", event: "unavailable", expected: [1, "consumed", "unavailable"] },
-  { id: "Q08", event: "error", expected: [1, "consumed", "error"] },
-  { id: "Q09", event: "ack", expected: [1, "open", "complete"] },
-  { id: "Q10", event: "unknown-429", expected: [1, "invalid_reply", "error"] },
-  { id: "Q11", event: "unknown-restart", expected: [0, "invalid_reply", "error"] },
-  { id: "Q12", event: "unknown-resume", expected: [0, "ready", "ready"] },
-];
-for (const row of rows) {
-  test(`${row.id}: ${row.event}`, async (t) => {
-    const f = await fixture(t);
-    let result;
-    if (["unknown-429", "unknown-restart", "unknown-resume"].includes(row.event)) {
-      f.respond(429, { error: "legacy", code: "daily_quota_memory_capture" });
-      if (row.event !== "unknown-429") await f.claude.capture(batch, binding, "synthetic-event");
-    } else if (row.event !== "refuse") {
-      f.respond(429, refusal);
-      await f.codex.capture(batch, binding, "synthetic-event");
-    } else f.respond(429, refusal);
-    const baseline = f.requests.length;
-    if (row.event === "early-resume" || row.event === "resume") {
-      result = await resumeHostedQuota(f.target, {
-        now: Date.parse(row.event === "early-resume" ? "2026-10-01T00:00:00Z" : resetAt),
-      });
-    } else if (row.event === "unknown-resume") {
-      result = await resumeHostedQuota(f.target);
-    } else {
-      if (["repeat-refusal", "processing", "unavailable", "error", "ack"].includes(row.event)) {
-        await resumeHostedQuota(f.target, { now: Date.parse(resetAt) });
-        if (row.event === "processing") f.respond(200, { ...ack, processing: true });
-        if (row.event === "unavailable") f.fail();
-        if (row.event === "error") f.respond(200, { extra: true });
-        if (row.event === "ack") f.respond(200, ack);
-      }
-      const client = row.event.includes("restart") ? createHostedTransport(f.options) : f.claude;
-      result = await client.capture(batch, binding, "synthetic-event");
-    }
-    assert.deepEqual([f.requests.length - baseline, (await hostedQuotaStatus(f.target)).mode,
-      result.status], row.expected);
-  });
+// R01–R16 are published before these state transitions.
+const op = async (f, operation = "capture") => (await hostedQuotaStatus(f.target)).operations[operation];
+const captureBatch = (port) => port.capture(batch, binding, "synthetic-event");
+const statePath = (f) => join(f.target.root, "hosted-quota", `${f.target.targetId}.json`);
+async function refuse(f, operation = "capture", value = { error: "quota_reached" }) {
+  f.respond(429, value);
+  await (operation === "capture" ? captureBatch(f.claude) : f.claude.recall("synthetic"));
 }
 
-test("refusal spans both endpoints/clients and restart; resume permits one attempt", async (t) => {
-  const f = await fixture(t); f.respond(429, { error: "quota_reached" });
-  f.codex = createHostedTransport({ ...f.options, token: "other-synthetic-token" });
-  assert.equal((await f.claude.recall("synthetic", binding)).status, "quota_reached");
-  assert.equal((await f.codex.capture(batch, binding, "synthetic-event")).status, "quota_reached");
-  assert.equal((await createHostedTransport(f.options).recall("synthetic")).status, "quota_reached");
-  assert.equal(f.requests.length, 1);
-  assert.equal((await hostedQuotaStatus(f.target)).reset, "reset unknown");
-  await resumeHostedQuota(f.target); await resumeHostedQuota(f.target);
-  f.respond(429, refusal);
-  await f.codex.capture(batch, binding, "synthetic-event");
-  await f.claude.recall("synthetic", binding);
+test("R01 normal unavailable request never leaves a permanent gate", async (t) => {
+  const f = await fixture(t); f.fail();
+  assert.equal((await captureBatch(f.codex)).status, "unavailable");
+  assert.equal((await op(f)).mode, "open");
+  f.respond(200, ack);
+  assert.equal((await captureBatch(createHostedTransport(f.options))).status, "complete");
   assert.equal(f.requests.length, 2);
-  assert.deepEqual(f.requests[1].body, { client: "codex", event_id: "synthetic-event",
-    session_id: binding.sessionId, project_id: binding.projectId, messages: batch });
-  const state = await readFile(join(f.target.root, "hosted-quota", `${f.target.targetId}.json`), "utf8");
-  assert.equal(state, JSON.stringify({ version: 1, mode: "quota_reached", resetAt }));
 });
-test("only one client can consume a resumed attempt while the other contends", async (t) => {
-  const f = await fixture(t); f.respond(429, refusal);
-  await f.claude.capture(batch, binding, "synthetic-event");
+for (const operation of ["capture", "recall"]) {
+  test(`R02/R03 ${operation} refusal spans clients and restart, leaves other bucket open`, async (t) => {
+    const f = await fixture(t); await refuse(f, operation);
+    const restarted = createHostedTransport({ ...f.options, token: "rotated-synthetic-token" });
+    assert.equal((await (operation === "capture" ? captureBatch(restarted) :
+      restarted.recall("synthetic"))).status, "quota_reached");
+    f.respond(200, operation === "capture" ? { memories: [] } : ack);
+    assert.equal((await (operation === "capture" ? restarted.recall("synthetic") :
+      captureBatch(restarted))).status, "complete");
+    assert.equal(f.requests.length, 2);
+    assert.equal((await op(f, operation)).reset, "reset unknown");
+  });
+}
+test("R04/R05 resume checks each validated reset and grants one permit to every eligible bucket", async (t) => {
+  const f = await fixture(t);
+  await refuse(f, "capture", refusal); await refuse(f, "recall", { error: "quota_reached" });
+  const early = await resumeHostedQuota(f.target, { now: Date.parse(resetAt) - 1 });
+  assert.equal(early.operations.capture.status, "quota_reached");
+  assert.equal(early.operations.recall.status, "ready");
+  const eligible = await resumeHostedQuota(f.target, { now: Date.parse(resetAt) });
+  assert.equal(eligible.operations.capture.status, "ready");
+  assert.equal(eligible.operations.recall.status, "ready");
   await resumeHostedQuota(f.target, { now: Date.parse(resetAt) });
+  f.respond(429, { error: "quota_reached" });
+  await captureBatch(f.codex); await f.claude.recall("synthetic");
+  await captureBatch(f.claude); await createHostedTransport(f.options).recall("synthetic");
+  assert.equal(f.requests.length, 4);
+});
+test("R06 only one client consumes a resumed operation; lock is free during its network wait", async (t) => {
+  const f = await fixture(t); await refuse(f); await resumeHostedQuota(f.target);
   let release; let entered;
   const begun = new Promise((resolve) => { entered = resolve; });
   const pending = new Promise((resolve) => { release = resolve; });
-  globalThis.fetch = async () => { f.requests.push({}); entered(); await pending;
-    return Response.json(refusal, { status: 429 }); };
-  const first = f.codex.capture(batch, binding, "synthetic-event");
-  await begun;
-  assert.equal((await hostedQuotaStatus(f.target)).mode, "consumed");
-  assert.equal((await f.claude.recall("synthetic")).status, "unavailable");
-  release(); await first;
-  assert.equal((await f.claude.recall("synthetic")).status, "quota_reached");
-  assert.equal(f.requests.length, 2);
+  globalThis.fetch = async (url) => {
+    f.requests.push({ url });
+    if (url.endsWith("recall")) return Response.json({ memories: [] });
+    entered(); await pending; return Response.json({ error: "quota_reached" }, { status: 429 });
+  };
+  const first = captureBatch(f.codex); await begun;
+  try {
+    assert.equal((await op(f)).mode, "in_flight");
+    assert.equal((await captureBatch(f.claude)).status, "quota_reached");
+    assert.equal((await f.claude.recall("synthetic")).status, "complete");
+    assert.equal(f.requests.length, 3);
+  } finally { release(); await first; }
+  assert.equal((await op(f)).mode, "quota_reached");
 });
-test("interruption and failed refusal publication leave a durable closed gate", async (t) => {
-  const f = await fixture(t); f.respond(429, refusal);
-  await withWriteObserver(({ path, kind }) => {
-    if (kind === "write" && path.endsWith(".json")) throw new Error("synthetic interruption");
-  }, () =>
-    f.codex.capture(batch, binding, "synthetic-event"));
-  assert.equal(f.requests.length, 0);
-  assert.equal((await hostedQuotaStatus(f.target)).mode, "unconfirmed");
-  await resumeHostedQuota(f.target);
-  let writes = 0;
-  await withWriteObserver(() => { if (++writes === 2) throw new Error("synthetic interruption"); },
-    () => f.claude.capture(batch, binding, "synthetic-event"));
-  assert.equal((await createHostedTransport(f.options).recall("synthetic")).status, "quota_reached");
-  assert.equal(f.requests.length, 1);
+test("R07 expired live-owner probe restores refusal and fences its late acknowledgement", async (t) => {
+  const f = await fixture(t); await refuse(f); await resumeHostedQuota(f.target);
+  let release; let entered;
+  const begun = new Promise((resolve) => { entered = resolve; });
+  const pending = new Promise((resolve) => { release = resolve; });
+  globalThis.fetch = async () => { entered(); await pending; return Response.json(ack); };
+  const first = captureBatch(f.codex); await begun;
+  const state = JSON.parse(await readFile(statePath(f), "utf8"));
+  state.operations.capture.attempt.deadline = 0;
+  await writeFile(statePath(f), JSON.stringify(state), { mode: 0o600 });
+  try {
+    assert.equal((await op(f)).mode, "quota_reached");
+    await resumeHostedQuota(f.target);
+    assert.equal((await op(f)).mode, "ready");
+  } finally { release(); await first; }
+  assert.equal((await op(f)).mode, "ready");
 });
-test("a consumed attempt remains closed after restart and requires explicit resume", async (t) => {
-  const f = await fixture(t); f.respond(429, { error: "quota_reached" });
-  await f.codex.capture(batch, binding, "synthetic-event");
-  await resumeHostedQuota(f.target); f.fail();
-  await f.claude.capture(batch, binding, "synthetic-event");
-  await createHostedTransport(f.options).recall("synthetic");
-  assert.equal(f.requests.length, 2);
-  await resumeHostedQuota(f.target); f.respond(200, ack);
-  assert.equal((await f.codex.capture(batch, binding, "synthetic-event")).status, "complete");
-  assert.equal((await hostedQuotaStatus(f.target)).mode, "open");
-});
-test("corrupt private gate suppresses dispatch and cannot be cleared by a hook", async (t) => {
-  const f = await fixture(t);
-  const dir = join(f.options.root, "hosted-quota"); await mkdir(dir, { mode: 0o700 });
-  await writeFile(join(dir, `${f.target.targetId}.json`), "{", { mode: 0o600 });
-  assert.equal((await f.codex.capture(batch, binding, "synthetic-event")).status, "unavailable");
-  assert.equal(f.requests.length, 0);
-});
-test("target identity survives credential rotation and isolates configured endpoints", () => {
-  const options = { endpoint: "https://synthetic.invalid/", token: "synthetic-token" };
-  assert.equal(hostedTargetId(options), hostedTargetId({ ...options, endpoint: "https://synthetic.invalid" }));
-  assert.equal(hostedTargetId(options), hostedTargetId({ ...options, token: "other-synthetic" }));
-  assert.notEqual(hostedTargetId(options), hostedTargetId({ endpoint: "https://other.invalid" }));
-});
-test("Codex rejects redirects and Claude preserves its request options and discriminator", async (t) => {
-  const f = await fixture(t);
-  await f.codex.capture(batch, binding, "synthetic-event");
-  await f.claude.capture(batch, binding, "synthetic-event");
-  assert.equal(f.requests[0].redirect, "error");
-  assert.equal(f.requests[1].redirect, undefined);
-  assert.equal(f.requests[1].body.client, "claude-code");
-});
-test("JSON poster does not acknowledge malformed success or unrecognized 429", async (t) => {
-  const f = await fixture(t);
-  const post = createJsonPoster(f.options);
-  f.respond(200, { accepted: true });
-  await assert.rejects(post(capture, {}, 1000), /invalid_reply/);
-  f.respond(429, { error: "legacy" });
-  await assert.rejects(post(capture, {}, 1000), /invalid_reply/);
-  const count = f.requests.length;
-  await assert.rejects(post(recall, {}, 1000), /invalid_reply/);
-  assert.equal(f.requests.length, count);
-});
-test("session-start parser is available without enabling lifecycle hooks or spending quota", async (t) => {
-  const f = await fixture(t); f.respond(429, refusal);
-  await f.codex.capture(batch, binding, "synthetic-event");
-  f.respond(200, sessionContext());
-  const result = await f.codex.sessionStart({ version: 1 }, { countTokens: () => 100 });
-  assert.equal(result.status, "complete");
-  assert.equal((await hostedQuotaStatus(f.target)).mode, "quota_reached");
-});
-
-
-test("released standalone root aliases and fresh resume retain compatibility", async (t) => {
-  const f = await fixture(t);
-  const alias = join(f.options.home, "alias"); await symlink(f.options.root, alias);
-  const port = createHostedTransport({ ...f.options, root: alias });
-  assert.equal((await port.capture(batch, binding, "synthetic-event")).status, "complete");
-  const fresh = { root: join(f.options.home, "new-root"), targetId: f.target.targetId };
-  assert.equal((await resumeHostedQuota(fresh)).status, "active");
-});
-
-
-test("invalid shared requests and already aborted work do not consume resume", async (t) => {
-  const f = await fixture(t); f.respond(429, { error: "quota_reached" });
-  await f.codex.capture(batch, binding, "synthetic-event"); await resumeHostedQuota(f.target);
-  assert.equal((await f.codex.recall("", binding)).status, "error");
-  assert.equal((await f.codex.capture([], binding, "synthetic-event")).status, "error");
-  const abort = new AbortController(); abort.abort();
-  assert.equal((await f.codex.capture(batch, binding, "synthetic-event", abort.signal)).status,
-    "unavailable");
-  assert.equal((await hostedQuotaStatus(f.target)).mode, "ready");
-  assert.equal(f.requests.length, 1);
-});
-
-
-for (const probe of [false, true]) {
-  test(`pause during quota persistence prevents final dispatch (probe=${probe})`, async (t) => {
-    const f = await fixture(t);
-    if (probe) {
-      f.respond(429, { error: "quota_reached" });
-      await f.codex.capture(batch, binding, "synthetic-event");
-      await resumeHostedQuota(f.target);
-    }
-    const calls = f.requests.length;
-    const prior = (await hostedQuotaStatus(f.target)).mode;
-    const control = await readControlState(f.options.root);
-    let paused = false;
-    const post = createJsonPoster(f.options);
-    const dispatch = async (start) => {
-      const attempt = await startIfActive(f.options.root, control.generation, start);
-      if (!attempt.started) throw new Error("dispatch_not_started");
-      return attempt.operation;
-    };
-    await withWriteObserver(async ({ path, kind }) => {
-      if (!paused && kind === "write" && path.endsWith(".json")) {
-        paused = true; await setPaused(f.options.root, true);
-      }
-    }, () => assert.rejects(post(capture, {}, 1000, true, dispatch), /capture_unavailable/));
-    assert.equal(f.requests.length, calls);
-    assert.equal((await hostedQuotaStatus(f.target)).mode, prior);
+for (const [status, body, expected] of [[200, { ...ack, processing: true }, "processing"],
+  [202, { ...ack, processing: true }, "processing"], [503, {}, "unavailable"],
+  [200, { extra: true }, "error"], [429, { error: "quota_reached" }, "quota_reached"]]) {
+  test(`R08 resume result ${status}/${expected} leaves refusal and preserves pending`, async (t) => {
+    const f = await fixture(t); await refuse(f); await resumeHostedQuota(f.target);
+    f.respond(status, body);
+    assert.equal((await captureBatch(f.codex)).status, expected);
+    assert.equal((await op(f)).mode, "quota_reached");
+    await captureBatch(f.claude); assert.equal(f.requests.length, 2);
   });
 }
-
-
-test("sub-millisecond reset fractions cannot permit an early resume", async (t) => {
-  const f = await fixture(t);
-  const resetAt = "2026-10-02T00:00:00.0001Z";
-  f.respond(429, { error: "quota_reached", resetAt });
-  await f.codex.capture(batch, binding, "synthetic-event");
-  assert.equal((await resumeHostedQuota(f.target, { now: Date.parse(resetAt) })).status,
-    "quota_reached");
-  assert.equal((await hostedQuotaStatus(f.target)).resetAt, resetAt);
-  assert.equal((await resumeHostedQuota(f.target, { now: Date.parse(resetAt) + 1 })).status, "ready");
-  assert.equal(f.requests.length, 1);
+test("R09 verified acknowledgement reopens only its probe operation", async (t) => {
+  const f = await fixture(t); await refuse(f); await refuse(f, "recall");
+  await resumeHostedQuota(f.target); f.respond(200, ack);
+  assert.equal((await captureBatch(f.codex)).status, "complete");
+  assert.equal((await op(f)).mode, "open");
+  assert.equal((await op(f, "recall")).mode, "ready");
 });
 
-
-test("standalone Windows uses portable metadata; POSIX still rejects unsafe modes", async (t) => {
-  const f = await fixture(t);
-  await f.claude.capture(batch, binding, "synthetic-event");
-  const directory = join(f.options.root, "hosted-quota");
-  await chmod(directory, 0o777); // Synthetic Windows stat cannot express POSIX private modes.
-  const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
-  try {
-    Object.defineProperty(process, "platform", { value: "win32" });
-    f.respond(429, { error: "quota_reached" });
-    assert.equal((await f.claude.capture(batch, binding, "synthetic-event")).status, "quota_reached");
-    assert.equal((await createHostedTransport({ ...f.options, client: "claude" })
-      .recall("synthetic")).status, "quota_reached");
+import { retryAfterDelay } from "../hosted-contract.mjs";
+const clock = Date.parse("2026-10-01T00:00:00Z");
+for (const [header, delay] of [[undefined, 300000], ["invalid", 300000], ["-2", 300000],
+  ["1.5", 300000], ["60", 60000], ["0", 1000], ["999999", 86400000],
+  [new Date(clock + 90000).toUTCString(), 90000],
+  [new Date(clock + 172800000).toUTCString(), 86400000],
+  [new Date(clock - 1000).toUTCString(), 1000], ["2026-10-02T00:00:00Z", 300000],
+  ["Wed, 30 Feb 2026 00:00:00 GMT", 300000]]) {
+  test(`R10 Retry-After ${header ?? "absent"} -> ${delay}ms`, () => {
+    assert.equal(retryAfterDelay(header, clock), delay);
+  });
+}
+for (const header of [undefined, "invalid", "60", "999999"]) {
+  test(`R10/R11 cooldown persists per operation across clients/restart (${header})`, async (t) => {
+    const f = await fixture(t);
+    const before = Date.now();
+    f.respond(429, { error: "legacy", code: "daily_quota_memory_recall" },
+      header === undefined ? {} : { "retry-after": header });
+    assert.equal((await f.codex.recall("synthetic")).status, "unavailable");
+    const gate = await op(f, "recall");
+    assert.equal(gate.mode, "cooldown"); assert.equal(gate.resetAt, null);
+    const expected = retryAfterDelay(header);
+    assert.ok(gate.until >= before + expected && gate.until <= Date.now() + expected);
+    await createHostedTransport(f.options).recall("synthetic");
+    await f.claude.recall("synthetic"); assert.equal(f.requests.length, 1);
+    f.respond(200, ack); assert.equal((await captureBatch(f.claude)).status, "complete");
     assert.equal(f.requests.length, 2);
-  } finally {
-    Object.defineProperty(process, "platform", descriptor);
-  }
-  assert.equal((await f.claude.recall("synthetic")).status, "unavailable");
-  assert.equal(f.requests.length, 2);
+  });
+}
+test("R12 cooldown auto-expires and resume also clears it", async (t) => {
+  const f = await fixture(t); f.respond(429, { error: "legacy" }, { "retry-after": "1" });
+  await captureBatch(f.codex);
+  const realNow = Date.now; const until = (await op(f)).until;
+  try {
+    Date.now = () => until - 1;
+    await captureBatch(f.claude); assert.equal(f.requests.length, 1);
+    Date.now = () => until;
+    f.respond(200, ack); assert.equal((await captureBatch(f.claude)).status, "complete");
+  } finally { Date.now = realNow; }
+  f.respond(429, { error: "legacy" }); await f.claude.recall("synthetic");
+  assert.equal((await resumeHostedQuota(f.target)).status, "active");
+  f.respond(200, { memories: [] });
+  assert.equal((await f.codex.recall("synthetic")).status, "complete");
+  assert.equal(f.requests.length, 4);
+});
+for (const bytes of ["{", JSON.stringify({ version: 999 }),
+  JSON.stringify({ version: 2, operations: { capture: {} } })]) {
+  test(`R13 corrupt state fails closed, resume repairs regular owned file (${bytes})`, async (t) => {
+    const f = await fixture(t); await captureBatch(f.codex);
+    await writeFile(statePath(f), bytes, { mode: 0o600 });
+    assert.equal((await captureBatch(f.claude)).status, "unavailable");
+    assert.equal((await hostedQuotaStatus(f.target)).repairHint, "run resume");
+    assert.equal((await resumeHostedQuota(f.target)).status, "repaired");
+    assert.equal((await captureBatch(f.claude)).status, "complete");
+    assert.equal(f.requests.length, 2);
+  });
+}
+test("R14 recall sends while a normal capture is in flight", async (t) => {
+  const f = await fixture(t); let release; let entered;
+  const begun = new Promise((resolve) => { entered = resolve; });
+  const pending = new Promise((resolve) => { release = resolve; });
+  globalThis.fetch = async (url) => {
+    f.requests.push({ url });
+    if (url.endsWith("recall")) return Response.json({ memories: [] });
+    entered(); await pending; return Response.json(ack);
+  };
+  const capture = captureBatch(f.codex); await begun;
+  try {
+    assert.equal((await f.claude.recall("synthetic")).status, "complete");
+    assert.equal(f.requests.length, 2);
+  } finally { release(); await capture; }
+});
+test("R15 late normal success cannot clear another request's verified refusal", async (t) => {
+  const f = await fixture(t); let release; let entered; let calls = 0;
+  const begun = new Promise((resolve) => { entered = resolve; });
+  const pending = new Promise((resolve) => { release = resolve; });
+  globalThis.fetch = async () => {
+    if (++calls === 1) { entered(); await pending; return Response.json(ack); }
+    return Response.json({ error: "quota_reached" }, { status: 429 });
+  };
+  const first = captureBatch(f.codex); await begun;
+  try { await captureBatch(f.claude); }
+  finally { release(); await first; }
+  assert.equal((await op(f)).mode, "quota_reached");
+});
+test("R16 local pause during probe publication prevents dispatch and preserves permit", async (t) => {
+  const f = await fixture(t); await refuse(f); await resumeHostedQuota(f.target);
+  const control = await readControlState(f.options.root); let paused = false;
+  const post = createJsonPoster(f.options);
+  const dispatch = async (start) => {
+    const attempt = await startIfActive(f.options.root, control.generation, start);
+    if (!attempt.started) throw new Error("dispatch_not_started");
+    return attempt.operation;
+  };
+  await withWriteObserver(async ({ path }) => {
+    if (!paused && path === statePath(f)) { paused = true; await setPaused(f.options.root, true); }
+  }, () => assert.rejects(post(capture, {}, 1000, true, dispatch), /capture_unavailable/));
+  assert.equal(f.requests.length, 1);
+  assert.equal((await op(f)).mode, "ready");
+});
+test("sub-millisecond reset fractions cannot permit early resume", async (t) => {
+  const f = await fixture(t); const reset = "2026-10-02T00:00:00.0001Z";
+  await refuse(f, "capture", { error: "quota_reached", resetAt: reset });
+  assert.equal((await resumeHostedQuota(f.target, { now: Date.parse(reset) })).operations.capture.status,
+    "quota_reached");
+  assert.equal((await resumeHostedQuota(f.target, { now: Date.parse(reset) + 1 })).status, "ready");
+});
+test("Codex rejects redirects and Claude preserves its options/discriminator", async (t) => {
+  const f = await fixture(t); await captureBatch(f.codex); await captureBatch(f.claude);
+  assert.equal(f.requests[0].redirect, "error"); assert.equal(f.requests[1].redirect, undefined);
+  assert.equal(f.requests[1].body.client, "claude-code");
+});
+test("session-start remains quota-free without enabling lifecycle hooks", async (t) => {
+  const f = await fixture(t); await refuse(f); f.respond(200, sessionContext());
+  assert.equal((await f.codex.sessionStart({ version: 1 }, { countTokens: () => 100 })).status, "complete");
+  assert.equal((await op(f)).mode, "quota_reached");
+});
+test("released root aliases, fresh resume and aborted requests retain compatibility", async (t) => {
+  const f = await fixture(t); const alias = join(f.options.home, "alias");
+  await symlink(f.options.root, alias);
+  assert.equal((await captureBatch(createHostedTransport({ ...f.options, root: alias }))).status, "complete");
+  assert.equal((await resumeHostedQuota({ ...f.target, root: join(f.options.home, "fresh") })).status, "active");
+  await refuse(f); await resumeHostedQuota(f.target);
+  const abort = new AbortController(); abort.abort();
+  assert.equal((await f.codex.capture(batch, binding, "synthetic-event", abort.signal)).status, "unavailable");
+  assert.equal((await op(f)).mode, "ready");
+  assert.equal((await f.codex.recall("")).status, "error");
 });

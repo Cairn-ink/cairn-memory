@@ -295,40 +295,29 @@ async function control() {
     process.stdout.write("Cairn automatic memory is paused.\n");
     return;
   }
-  if (action === "resume" || action === "resume-quota") {
-    const pause = await readControlState(dataDir);
-    if (action === "resume" && pause.paused) {
-      await setPaused(dataDir, false);
-      const quota = await hostedQuotaStatus(quotaTarget);
-      process.stdout.write(quota.mode === "open" ? "Cairn automatic memory is active.\n" :
-        "Cairn automatic memory is active; quota gate is unchanged.\n");
-      return;
-    }
-    const gate = await resumeHostedQuota(quotaTarget);
-    if (gate.status === "quota_reached") {
-      process.stdout.write(`Cairn quota_reached; ${gate.resetAt ?? "reset unknown"}.\n`);
-      return;
-    }
-    if (!["active", "ready"].includes(gate.status)) throw new Error("quota_gate_unavailable");
-    if (gate.status === "ready") {
-      process.stdout.write(
-        "Cairn quota resume permits one eligible attempt; pause is unchanged.\n",
-      );
-      return;
-    }
-    // Quota-only resume must not rotate the pause generation or skip pending text.
-    if (action === "resume-quota") {
-      process.stdout.write("Cairn quota gate is active; pause is unchanged.\n");
-      return;
-    }
+  if (action === "resume") {
+    const gate = quotaTarget ? await resumeHostedQuota(quotaTarget) : { status: "active" };
+    if (gate.status === "unavailable") throw new Error("quota_gate_unavailable");
     await setPaused(dataDir, false);
-    process.stdout.write("Cairn automatic memory is active.\n");
+    if (gate.status === "repaired") {
+      process.stdout.write("Cairn quota state repaired to open; automatic memory is active.\n");
+      return;
+    }
+    const notices = Object.entries(gate.operations ?? {}).filter(([, value]) => value.status !== "active")
+      .map(([operation, value]) => `${operation}: ${value.status === "ready" ?
+        "one eligible attempt" : value.status === "quota_reached" ?
+        "quota_reached; " + (value.resetAt ?? "reset unknown") : value.status}`);
+    process.stdout.write("Cairn automatic memory is active." +
+      (notices.length ? " " + notices.join("; ") : "") + "\n");
     return;
   }
   const state = await readControlState(dataDir);
-  const quota = await hostedQuotaStatus(quotaTarget);
-  const quotaNote = quota.mode === "open" ? "" :
-    `; ${quota.mode === "consumed" ? "quota_reached" : quota.mode}; ${quota.reset}`;
+  const quota = quotaTarget ? await hostedQuotaStatus(quotaTarget) : { mode: "open" };
+  const quotaNote = quota.mode === "invalid" ? "; quota_state_invalid; run resume to repair" :
+    quota.mode === "unavailable" || quota.status === "unavailable" ? "; quota gate unavailable" :
+    Object.entries(quota.operations ?? {}).filter(([, gate]) => gate.mode !== "open")
+      .map(([operation, gate]) => `; ${operation}: ${gate.mode}; ${gate.mode === "cooldown" ?
+        "retry after " + new Date(gate.until).toISOString() : gate.reset}`).join("");
   const note = binding.status === "pairing_needed"
     ? "; pairing_needed (existing client active)"
     : binding.status === "standalone_unregistered" ? "; standalone_unregistered" : "";
@@ -345,7 +334,7 @@ try {
   clientOptions = { client: "claude", pairingRecord };
   binding = await resolveClient(clientOptions);
   if (!binding.enabled) {
-    if (["status", "pause", "resume", "resume-quota"].includes(action)) {
+    if (["status", "pause", "resume"].includes(action)) {
       process.stdout.write(
         `Cairn automatic memory: ${binding.status}` +
         `${binding.detail ? "; " + binding.detail : ""}.\n`,
@@ -358,7 +347,7 @@ try {
       quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
       post = createJsonPoster({ endpoint, token, ...quotaTarget });
     }
-    if (["status", "pause", "resume", "resume-quota"].includes(action)) {
+    if (["status", "pause", "resume"].includes(action)) {
       await control();
     } else {
       const hookInput = await input();
@@ -381,7 +370,7 @@ try {
 } catch (error) {
   // Hooks are deliberately fail-open. Never emit an error or non-zero status
   // that could block a prompt or make normal Claude Code work noisy.
-  if (["status", "pause", "resume", "resume-quota"].includes(action)) {
+  if (["status", "pause", "resume"].includes(action)) {
     process.stderr.write(`Cairn automatic memory control failed (${error?.message ?? "unknown"}).\n`);
     process.exitCode = 1;
   }

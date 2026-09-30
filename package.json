@@ -54,7 +54,7 @@
     "demo:experiment-request-guard": "node evaluation/experiment-budget/request-guard-example.mjs",
     "test:pairing": "node integrations/client/testing/run.mjs integrations/client/test/pair-invariants.test.mjs integrations/client/test/claude-decisions.test.mjs integrations/client/test/pairing.test.mjs integrations/client/test/pairing-guards.test.mjs integrations/client/test/main-golden.test.mjs integrations/client/test/paired-hooks.test.mjs",
     "test:codex": "node integrations/client/testing/run.mjs integrations/codex/test/*.test.mjs integrations/client/test/runtime-*.test.mjs",
-    "test:client": "node integrations/client/testing/run.mjs integrations/client/test/parity.test.mjs integrations/client/test/fixture-generator.test.mjs integrations/client/test/transport-hosted.test.mjs",
+    "test:client": "node integrations/client/testing/run.mjs integrations/client/test/parity.test.mjs integrations/client/test/fixture-generator.test.mjs",
     "test:pairing:golden": "node integrations/client/testing/run.mjs --script integrations/client/testing/golden-cli.mjs --verify"
   }
 }

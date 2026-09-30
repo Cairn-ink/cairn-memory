@@ -1,25 +1,27 @@
-import { lstat, mkdir, realpath } from "node:fs/promises";
-import { createHash } from "node:crypto";
-import { join, resolve } from "node:path";
+import { constants } from "node:fs";
+import { lstat, mkdir, realpath, open, rename, unlink } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { dirname, join, resolve } from "node:path";
 import { normalizeEndpoint } from "./config.mjs";
-import { privateDirectory, privateRead, privateWrite, checkedPath } from "./private-state.mjs";
+import { notifyWrite } from "./private-state.mjs";
 import { withFileLock } from "./file-lock.mjs";
 import { conforms, utcInstant, classifyHostedReply, parseSessionStartRequest }
   from "./hosted-contract.mjs";
 
 export { classifyHostedReply } from "./hosted-contract.mjs";
-// Files created by this process belong to its effective UID. Existing legacy
-// root ownership policy stays with binding discovery, not this new gate.
-const ownerOptions = () => ({
-  ownerId: process.geteuid?.() ?? process.getuid?.(), portable: true,
-});
 const routes = new Set(["/api/memory/recall", "/api/memory/capture"]);
 const acknowledged = new Set(["complete", "duplicate", "empty"]);
-const modes = new Set(["open", "quota_reached", "invalid_reply", "ready", "consumed", "unconfirmed"]);
+const operations = ["recall", "capture"];
+const modes = new Set(["open", "quota_reached", "ready", "in_flight", "cooldown"]);
+const freshOperation = () => ({ mode: "open", resetAt: null, until: null, attempt: null });
+const freshState = () => ({ version: 2, operations: {
+  recall: freshOperation(), capture: freshOperation(),
+} });
+const refusal = (resetAt) => ({ ...freshOperation(), mode: "quota_reached", resetAt });
+const exactKeys = (value, keys) => value !== null && typeof value === "object" &&
+  !Array.isArray(value) && Object.keys(value).sort().join(",") === keys.sort().join(",");
 
-// Installation supplies one owner-bound target across clients. This fallback
-// conservatively binds one endpoint within the owner-bound root. Credential
-// rotation or two credentials for the same owner cannot bypass a quota latch.
+// Credential rotation must not erase the owner's operation gates.
 export function hostedTargetId({ endpoint }) {
   return createHash("sha256").update(JSON.stringify([
     "cairn-hosted-target-v1", normalizeEndpoint(endpoint),
@@ -31,87 +33,220 @@ function quotaPaths({ root, targetId }) {
   const state = join(directory, `${targetId}.json`);
   return { directory, state, lock: state + ".lock" };
 }
-async function readGate(path) {
-  const bytes = await privateRead(path, { ...ownerOptions(), missing: true });
-  if (bytes === undefined) return { version: 1, mode: "open", resetAt: null };
-  const value = JSON.parse(bytes);
-  if (!value || Object.keys(value).sort().join(",") !== "mode,resetAt,version" ||
-      value.version !== 1 || !modes.has(value.mode) ||
-      (value.resetAt !== null && !utcInstant(value.resetAt))) {
+
+// Gate files use the existing standalone creator/publication policy locally;
+// no private-state API or binding/root ownership policy is widened. POSIX gate
+// leaves are private and creator-owned; Windows relies on the host's ACLs.
+async function checkGatePath(path, directory = false) {
+  let info;
+  try { info = await lstat(path); }
+  catch (error) { if (error.code === "ENOENT") return undefined; throw error; }
+  if (info.isSymbolicLink() || (directory ? !info.isDirectory() : !info.isFile())) {
+    throw new Error("invalid_quota_path");
+  }
+  const owner = process.geteuid?.() ?? process.getuid?.();
+  if (owner !== undefined && info.uid !== owner) throw new Error("state_owner");
+  if (process.platform !== "win32" && (info.mode & 0o777) !== (directory ? 0o700 : 0o600)) {
+    throw new Error("state_permissions");
+  }
+  return info;
+}
+async function gateRead(path) {
+  for (let retry = 0; retry < 8; retry++) {
+    const before = await checkGatePath(path);
+    if (!before) return undefined;
+    let file;
+    try { file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); }
+    catch (error) { if (error.code === "ENOENT") return undefined; throw error; }
+    try {
+      const after = await file.stat();
+      if (after.ino !== before.ino || after.dev !== before.dev) continue;
+      if (after.size > 64 * 1024) throw new Error("quota_state_invalid");
+      return await file.readFile("utf8");
+    } finally { await file.close(); }
+  }
+  throw new Error("state_changed");
+}
+async function gateWrite(path, state) {
+  await checkGatePath(path);
+  const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
+  const file = await open(temporary, "wx", 0o600);
+  try {
+    try { await file.writeFile(JSON.stringify(state)); await file.sync(); }
+    finally { await file.close(); }
+    await rename(temporary, path);
+    await notifyWrite(path);
+  } finally {
+    await unlink(temporary).catch((error) => { if (error.code !== "ENOENT") throw error; });
+  }
+}
+function validOperation(value) {
+  if (!exactKeys(value, ["mode", "resetAt", "until", "attempt"]) || !modes.has(value.mode) ||
+      (value.resetAt !== null && !utcInstant(value.resetAt))) return false;
+  if (value.mode === "open" && value.resetAt !== null) return false;
+  if (value.mode === "cooldown") {
+    if (value.resetAt !== null || !Number.isSafeInteger(value.until) || value.until < 0) return false;
+  } else if (value.until !== null) return false;
+  if (value.mode === "in_flight") {
+    const a = value.attempt;
+    return exactKeys(a, ["pid", "token", "deadline"]) && Number.isSafeInteger(a.pid) && a.pid > 0 &&
+      typeof a.token === "string" && /^[a-f0-9-]{36}$/.test(a.token) &&
+      Number.isSafeInteger(a.deadline) && a.deadline >= 0;
+  }
+  return value.attempt === null;
+}
+async function readGate(path, now) {
+  const bytes = await gateRead(path);
+  if (bytes === undefined) return freshState();
+  let value;
+  try { value = JSON.parse(bytes); } catch { throw new Error("quota_state_invalid"); }
+  // The prepared round-1 files were target-wide. Retain verified refusals,
+  // but never preserve an uncertain normal request as a permanent refusal.
+  if (exactKeys(value, ["version", "mode", "resetAt"]) && value.version === 1 &&
+      ["open", "quota_reached", "ready", "consumed", "unconfirmed", "invalid_reply"].includes(value.mode) &&
+      (value.resetAt === null || utcInstant(value.resetAt))) {
+    const state = freshState();
+    for (const operation of operations) {
+      if (["quota_reached", "consumed", "ready"].includes(value.mode)) {
+        state.operations[operation] = refusal(value.resetAt);
+        if (value.mode === "ready") state.operations[operation].mode = "ready";
+      } else if (value.mode === "invalid_reply") {
+        state.operations[operation] = { ...freshOperation(), mode: "cooldown", until: now + 300_000 };
+      }
+    }
+    return state;
+  }
+  if (!exactKeys(value, ["version", "operations"]) || value.version !== 2 ||
+      !exactKeys(value.operations, operations) || !operations.every((op) => validOperation(value.operations[op]))) {
     throw new Error("quota_state_invalid");
   }
   return value;
 }
-const gateReply = (state) => state.mode === "unconfirmed" ? { status: "unavailable" } :
-  state.mode === "quota_reached" || state.mode === "consumed" ?
-  { status: "quota_reached", resetAt: state.resetAt } :
-  { status: "error", code: "invalid_reply", stopRetries: true };
-
-export async function hostedQuotaStatus(target) {
-  try {
-    const state = await readGate(quotaPaths(target).state);
-    return { ...state, reset: state.resetAt ?? "reset unknown" };
-  } catch { return { version: 1, mode: "unavailable", resetAt: null, reset: "reset unknown" }; }
+function ownerAlive(pid) {
+  try { process.kill(pid, 0); return true; }
+  catch (error) { return error.code !== "ESRCH"; }
 }
-async function gateLock(target, work) {
-  const paths = quotaPaths(target);
-  // Released standalone roots may have host-created 0755 directory modes;
-  // the new gate subdirectory and all files still require 0700/0600.
-  await mkdir(resolve(target.root), { recursive: true, mode: 0o700 });
-  const owner = await lstat(await realpath(resolve(target.root)));
-  if (!owner.isDirectory()) {
-    throw new Error("invalid_state_root");
+function recover(state, now) {
+  for (const operation of operations) {
+    const gate = state.operations[operation];
+    if (gate.mode === "in_flight" &&
+        (gate.attempt.deadline <= now || !ownerAlive(gate.attempt.pid))) {
+      state.operations[operation] = refusal(gate.resetAt);
+    } else if (gate.mode === "cooldown" && gate.until <= now) {
+      state.operations[operation] = freshOperation();
+    }
   }
-  await privateDirectory(paths.directory, ownerOptions());
+}
+const gateReply = (gate) => gate.mode === "cooldown" ?
+  { status: "unavailable", code: "rate_limited", cooldownUntil: gate.until } :
+  { status: "quota_reached", resetAt: gate.resetAt };
+
+async function gateLock(target, work, { repair = false, now = Date.now() } = {}) {
+  const paths = quotaPaths(target);
+  await mkdir(resolve(target.root), { recursive: true, mode: 0o700 });
+  const root = await realpath(resolve(target.root));
+  if (!(await lstat(root)).isDirectory()) throw new Error("invalid_state_root");
+  await mkdir(paths.directory, { recursive: true, mode: 0o700 });
+  await checkGatePath(paths.directory, true);
   let result;
   const acquired = await withFileLock(paths.lock, async () => {
-    result = await work(await readGate(paths.state), async (state) => {
-      await privateWrite(paths.state, JSON.stringify(state), ownerOptions());
-    });
-  }, { timeoutMs: 150, pollMs: 10,
-    validatePath: (path) => checkedPath(path, { ...ownerOptions(), missing: true }),
-    read: (path) => privateRead(path, { ...ownerOptions(), missing: true }),
-  });
+    let state; let repaired = false;
+    try { state = await readGate(paths.state, now); }
+    catch (error) {
+      if (!repair || error.message !== "quota_state_invalid") throw error;
+      state = freshState(); repaired = true;
+      await gateWrite(paths.state, state);
+    }
+    const before = JSON.stringify(state);
+    recover(state, now);
+    // Persist migration and stale recovery once, inside the short state lock.
+    const disk = await gateRead(paths.state);
+    if (disk !== undefined && (JSON.stringify(state) !== before ||
+        JSON.parse(disk).version === 1)) await gateWrite(paths.state, state);
+    result = await work(state, () => gateWrite(paths.state, state), repaired);
+  }, { timeoutMs: 2_000, pollMs: 10, validatePath: checkGatePath, read: gateRead });
   return acquired ? result : { status: "unavailable" };
 }
 
+export async function hostedQuotaStatus(target) {
+  try {
+    return await gateLock(target, (state) => ({ ...state,
+      mode: operations.every((op) => state.operations[op].mode === "open") ? "open" : "limited",
+      operations: Object.fromEntries(operations.map((op) => [op, {
+        ...state.operations[op], reset: state.operations[op].resetAt ?? "reset unknown",
+      }])),
+    }));
+  } catch (error) {
+    return { version: 2, mode: error.message === "quota_state_invalid" ? "invalid" : "unavailable",
+      code: error.message, repairHint: error.message === "quota_state_invalid" ? "run resume" : null };
+  }
+}
+function resetBoundary(value) {
+  const fraction = /\.(\d+)/.exec(value)?.[1] ?? "";
+  return Date.parse(value) + (/[1-9]/.test(fraction.slice(3)) ? 1 : 0);
+}
 export async function resumeHostedQuota(target, { now = Date.now() } = {}) {
-  if (!Number.isFinite(now)) throw new Error("invalid_time");
-  return gateLock(target, async (state, save) => {
-    if (state.mode === "open") return { status: "active" };
-    if (state.resetAt !== null) {
-      const fraction = /\.(\d+)/.exec(state.resetAt)?.[1] ?? "";
-      // Date.parse truncates fractions beyond milliseconds. Do not resume early.
-      const boundary = Date.parse(state.resetAt) + (/[1-9]/.test(fraction.slice(3)) ? 1 : 0);
-      if (now < boundary) return gateReply(state);
+  if (!Number.isSafeInteger(now)) throw new Error("invalid_time");
+  return gateLock(target, async (state, save, repaired) => {
+    const outcomes = {};
+    for (const operation of operations) {
+      const gate = state.operations[operation];
+      if (gate.mode === "cooldown") state.operations[operation] = freshOperation();
+      else if (["quota_reached", "ready"].includes(gate.mode)) {
+        if (gate.resetAt !== null && now < resetBoundary(gate.resetAt)) {
+          outcomes[operation] = { status: "quota_reached", resetAt: gate.resetAt }; continue;
+        }
+        gate.mode = "ready";
+      }
+      outcomes[operation] = { status: state.operations[operation].mode === "open" ? "active" :
+        state.operations[operation].mode === "ready" ? "ready" : "busy" };
     }
-    // Repeated resume while a permit is already ready does not multiply it.
-    await save({ ...state, mode: "ready" });
-    return { status: "ready", resetAt: state.resetAt };
-  });
+    await save();
+    return { status: repaired ? "repaired" : Object.values(outcomes).some((o) => o.status === "ready") ?
+      "ready" : Object.values(outcomes).some((o) => o.status === "quota_reached") ? "quota_reached" :
+      Object.values(outcomes).some((o) => o.status === "busy") ? "busy" : "active",
+      operations: outcomes };
+  }, { repair: true, now });
 }
 
-async function guardedReply(target, attempt) {
+async function guardedReply(target, operation, timeoutMs, attempt) {
   try {
-    return await gateLock(target, async (state, save) => {
-      if (!["open", "ready"].includes(state.mode)) return gateReply(state);
-      const probe = state.mode === "ready";
-      // Publish an uncertain attempt before every dispatch. If persisting a
-      // refusal fails later, a restart still cannot reopen the gate.
-      await save({ ...state, mode: probe ? "consumed" : "unconfirmed" });
-      const reply = await attempt();
-      if (reply.notStarted) {
-        await save(state);
-      } else if (reply.status === "quota_reached") {
-        await save({ version: 1, mode: "quota_reached", resetAt: reply.resetAt });
-      } else if (reply.stopRetries) {
-        await save({ version: 1, mode: "invalid_reply", resetAt: null });
-      } else if (acknowledged.has(reply.status) || !probe) {
-        await save({ version: 1, mode: "open", resetAt: null });
-      }
-      return reply;
+    const reservation = await gateLock(target, async (state, save) => {
+      const gate = state.operations[operation];
+      if (!["open", "ready"].includes(gate.mode)) return { blocked: gateReply(gate) };
+      if (gate.mode === "open") return { token: null };
+      const token = randomUUID();
+      gate.mode = "in_flight";
+      gate.attempt = { pid: process.pid, token, deadline: Date.now() + timeoutMs + 1000 };
+      await save();
+      return { token };
     });
-  } catch { return { status: "unavailable" }; }
+    if (reservation.blocked) return reservation.blocked;
+    if (!Object.hasOwn(reservation, "token")) return reservation;
+    // No filesystem gate lock is held across dispatch, body reads or timeout.
+    const reply = await attempt();
+    if (reservation.token === null && !["quota_reached", "rate_limited"].includes(reply.code ?? reply.status)) {
+      return reply;
+    }
+    const transition = await gateLock(target, async (state, save) => {
+      const gate = state.operations[operation];
+      const matching = reservation.token !== null && gate.mode === "in_flight" &&
+        gate.attempt.token === reservation.token;
+      if (reservation.token !== null && !matching) return true;
+      if (reply.status === "quota_reached") {
+        state.operations[operation] = refusal(reply.resetAt);
+      } else if (reply.code === "rate_limited") {
+        if (!matching && !["open", "cooldown"].includes(gate.mode)) return true;
+        state.operations[operation] = { ...freshOperation(), mode: "cooldown",
+          until: Math.max(gate.until ?? 0, Date.now() + reply.cooldownMs) };
+      } else if (matching) {
+        state.operations[operation] = reply.notStarted ? { ...refusal(gate.resetAt), mode: "ready" } :
+          acknowledged.has(reply.status) ? freshOperation() : refusal(gate.resetAt);
+      }
+      await save(); return true;
+    });
+    return transition === true ? reply : { status: "unavailable" };
+  } catch (error) { return { status: "unavailable", code: error.message }; }
 }
 
 // The legacy JSON poster retains its original return API; memory routes now
@@ -139,7 +274,8 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
     }
     let value;
     try { value = await response.json(); } catch { value = null; }
-    return classifyHostedReply(path, response.status, value, body, limits);
+    return classifyHostedReply(path, response.status, value, body, limits,
+      response.headers.get("retry-after"));
   }
   async function reply(path, body, timeoutMs, limits, signal, dispatch) {
     if (!token || signal?.aborted) return { status: "unavailable" };
@@ -150,7 +286,7 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
           { notStarted: true } : {}) };
       }
     };
-    return target && routes.has(path) ? guardedReply(target, attempt) : attempt();
+    return target && routes.has(path) ? guardedReply(target, path.endsWith("recall") ? "recall" : "capture", timeoutMs, attempt) : attempt();
   }
   const post = async (path, body, timeoutMs, authenticated = true, dispatch) => {
     if (!routes.has(path) && path !== "/api/memory/session-start") {

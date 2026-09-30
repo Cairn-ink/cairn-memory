@@ -141,14 +141,34 @@ export function parseSessionStartResponse(value, request = { version: 1 }, limit
   return value;
 }
 
-export function classifyHostedReply(path, status, value, request, limits) {
+// Retry-After is a rate-limit delay, not evidence of a quota reset.
+export function retryAfterDelay(value, now = Date.now()) {
+  const day = 24 * 60 * 60 * 1000;
+  const fallback = 5 * 60 * 1000;
+  if (typeof value !== "string") return fallback;
+  const text = value.trim();
+  let delay;
+  if (/^\d+$/.test(text)) delay = Number(text) * 1000;
+  else {
+    const instant = Date.parse(text);
+    if (!Number.isFinite(instant) || new Date(instant).toUTCString() !== text) return fallback;
+    delay = instant - now;
+  }
+  return Math.max(1000, Math.min(day, delay));
+}
+
+export function classifyHostedReply(path, status, value, request, limits, retryAfter) {
   if (status === 429) {
     if (["/api/memory/recall", "/api/memory/capture"].includes(path) &&
         conforms(path.endsWith("recall") ? "recall-response" : "capture-response", value) &&
         value.error === "quota_reached") {
       return { status: "quota_reached", resetAt: value.resetAt ?? null };
     }
-    return { status: "error", code: "invalid_reply", stopRetries: true };
+    return { status: "unavailable", code: "rate_limited", cooldownMs: retryAfterDelay(retryAfter) };
+  }
+  if (status === 202 && path === "/api/memory/capture" &&
+      conforms("capture-response", value) && value.processing === true) {
+    return { status: "processing", memoryCount: value.memoryCount };
   }
   if (status === 404 || status === 503) return { status: "unavailable" };
   if (status !== 200) return { status: "error", code: "http_error" };

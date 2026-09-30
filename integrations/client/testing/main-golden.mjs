@@ -42,12 +42,7 @@ async function goldenControlTimeout(plugin) {
     throw new Error("golden_control_lock_shape_changed");
   }
   await writeFile(path, source.replaceAll("timeoutMs: 250,", "timeoutMs: 30_000,"));
-  // The explicit D1 shared concurrency exception serializes candidate requests.
-  // Widen only acquisition in this isolated parity copy, as with control above;
-  // production contention/refusal behavior has separate transport tests.
-  const transport = join(plugin, "lib/http.mjs");
-  const http = await readFile(transport, "utf8");
-  await writeFile(transport, http.replace("timeoutMs: 150,", "timeoutMs: 30_000,"));
+
 }
 export async function observeStandalone(plugin) {
   await goldenControlTimeout(plugin);

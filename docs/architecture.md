@@ -123,9 +123,10 @@ separate gates; no upstream listing or endorsement is implied.
 
 The shared hosted transport validates distinct acknowledgement, processing,
 quota-refusal, unavailable and error outcomes. Its owner-private target gate
-serializes hosted recall/capture across the paired clients, persists quota and
-unrecognized-429 refusals, and durably consumes an explicit one-attempt resume
-before dispatch. The distributed Claude plugin uses this same bundled code.
+coordinates separate recall/capture gates across paired clients. Short locks
+cover state transitions only. Verified quota refusals persist; unrecognized 429
+starts a bounded cooldown. Normal retries survive interruption; resumed probes
+use stale-safe owner/deadline markers and one permit per operation. The distributed Claude plugin uses this same bundled code.
 Capture advances only on a validated acknowledgement. Claude's 0.1 request
 payloads remain unchanged under the explicit quota/concurrency D1 exception.
 
