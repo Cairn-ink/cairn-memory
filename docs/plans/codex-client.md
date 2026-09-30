@@ -1874,3 +1874,85 @@ and HOME history deleted together, can erase all durable ownership evidence. The
 undetectable deletions are follow-ups under the round-12 severity bar, not blockers.
 Read resolution never registers, so the old registration-attempt/busy branch has no
 reachable table row. Creator publication supplies first-client evidence instead.
+
+
+### CX-3 offline qualification, 2026-09-30
+
+The package supplies disabled parser/cursor/worker/guard building blocks and
+synthetic A1/A4/A5/A9 gates. It enables no hosted transport, installed hook,
+context injection or real model. Linux/WSL2 5.15.167.4 was tested. Non-Linux source
+traversal, installed HMA/LAC termination/latency, real-host context authority and
+release cap calibration remain their assigned owners' gates.
+
+The 100 ms overall deadline in the unknown-termination fixture could expire
+under suite contention before its child started. The fixture now gives setup
+5 s while retaining the 30 ms request timeout, asserts exactly one child start,
+and checks that unknown termination retains the permit and advances no bytes.
+The handler also bounds binding/key/preparation/launch together (750 ms capture,
+2.5 s disabled context events), fences late launch, and tests a real exit-0 hook
+process while a live identity publication lock remains held. Installed callers
+must flush and exit after the bounded result, without waiting for late identity
+completion. No Claude capture/bundle runtime bytes changed.
+
+The closed decision table has 25 rows/25 generated cases plus one schema check.
+The complete CX-3 invocation has 89 cases: parser 20, table 26, privacy 4, gates
+12, seeded sequences 8, worker interruption 1 and runtime usage 18. Each of six
+consecutive invocations passed all 89 cases, with no skips/failures. Commands used
+`node integrations/client/testing/run.mjs integrations/codex/test/*.test.mjs
+integrations/client/test/runtime-usage.test.mjs`, foreground and sequential, with
+HOME = CAIRN_TEST_REAL_HOME = the worktree scratch HOME and worktree TMPDIR/cache.
+No real sessions, credentials, memory directories or models were accessed.
+
+| Runtime | Three complete invocations (seconds) | Exit codes | Generator seconds per invocation |
+| --- | --- | --- | --- |
+| Node 22.16.0 | 36.54, 37.61, 36.98 | 0, 0, 0 | 36.305, 37.427, 36.794 |
+| Node 24.15.0 | 37.4, 37.06, 37.13 | 0, 0, 0 | 37.203, 36.864, 36.918 |
+
+The independent operation-history oracle uses seeds 1, 7, 42, 91, 12345, 65537,
+49374 and 3405691582, 64 operations each (512/invocation; 3072 across six runs).
+Operations are append, replacement, truncation, malformed lines, pause, resume,
+actual worker crash, lost reply and concurrent Claude/Codex dispatch. Expected
+admissions/offsets/epochs/billing derive from history, not production helpers.
+
+Exhaustive interruptions cover 25 real worker process publication points:
+prepare 2, capture/ack 17, pause boundary 1, one-byte SessionStart 1, replacement
+1 and oversized discard 3. The usage fixture covers 10 reserve/dispatch/release/
+refuse/resume/observe publication points. All k-th-publication retries reached the
+uninterrupted semantic end state; uncertain billing remains conservatively charged.
+Each full invocation repeats all 35 points (210 across the six invocations).
+
+Retained full-matrix results below are actual exits from earlier invocations;
+subsequent changes only affected Codex hook/test code and this documentation.
+The final coordinator instruction stopped full-matrix work and delegated remaining
+rows to chunked runs. A blank completion is not success.
+
+| Command | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| npm ci --prefix adapters/openai | 0 | 0 |
+| npm ci --prefix adapters/mcp | 0 | 0 |
+| prepare-cache (runner --script packaging/prepare-cache.mjs) | 0 | 0 |
+| npm test (CI shape, explicit scratch HOME) | 0 | 0 |
+| npm run validate | 0 | 0 |
+| npm run test:core | 0 | 0 |
+| npm run test:pairing | 0 | 0 |
+| npm run test:pairing:golden | 0 | coordinator pending |
+| npm run test:artifact | 0 | 0 |
+| npm run test:mcp | 0 | coordinator pending |
+| npm run test:openai | 0 | coordinator pending |
+| CX-3 suites, three complete runs | 0 / 0 / 0 | 0 / 0 / 0 |
+| npm run demo:capture | 0 | coordinator pending |
+| git diff --check (entire packet tree and current edits) | 0 | 0 |
+
+Initial Node22 npm-test bundle inventory failures were fixed by the explicit
+uninstalled-module exclusion; its rerun passed 401 cases. Initial cache/artifact
+failures were test-environment setup: packaging sanitizes the npm child environment.
+The successful reruns used copied exact-version Node binaries under worktree
+scratch and an npm wrapper supplying explicit scratch cache/HOME; no packaging
+code changed. Artifact passed 86 cases on each version; core passed 1136 and
+pairing 270 on each version. The old Node22 CX-3 timing failure is superseded by
+the six passing repetitions above.
+
+Coordinator still runs Node24 golden/MCP/OpenAI/demo:capture, applicable Node20
+shared bundle checks (never importing core), and any additional CI chunks it
+requires. Native host/model, hosted service and installed HMA/LAC acceptance are
+not established by these stubs. Scratch/logs are removed after recording results.
