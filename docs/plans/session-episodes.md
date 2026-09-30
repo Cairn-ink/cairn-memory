@@ -947,6 +947,120 @@ are fake HTTP and synthetic keys are assembled from fragments. The artifact
 allowlist already includes every runtime module/prompt used here, so it needs no
 new entry. These checks do not establish real-model fidelity or provider framing.
 
+### SE-5 implementation and verification
+
+Local MCP now exposes `list_session_episodes`, `list_memories_by_time`,
+`inspect_session_episode` and `read_session_start_context`, delegating strict
+namespace-bound core inputs and preserving signed cursors, finite errors,
+whole-record budgets and exact untrusted framing. Startup snapshots receipt
+client/session and namespace authority. Optional `readClient` restricts range and
+episode-ID operations; tool client filters can only narrow it. Startup context
+uses the core's cross-client groups in the exact namespace.
+
+`--session-episodes-access episode-v1` is keyless access without capture or
+interpretation. Automatic tag proposals can occur through explicit keep's normal
+episode-mode extraction. Generation flags require source-bound-v2 and
+staged-v1, validate N=2–16/default 8, and record configuration only pending a
+trusted producer. Submitted capture retains legacy mode. Explicit keep uses a
+short-lived episode-mode admission facade exclusively for retained-source keep;
+it never calls capture/end/interpretation. Other management operations are local,
+revision-guarded correction/unpin/closure/deletion and procedural sidecar edits.
+Deletion describes the live/historical/multi-source memory suppression and source
+consumer cascade. Explicit procedural remember works independently in both modes
+with receiptIndex 0 anchors into canonical explicit text.
+
+| MCP responsibility / gates | Synthetic tests |
+| --- | --- |
+| Strict nested schemas, authority and read-client narrowing; E1/E9/E11 | `adapters/mcp/test/episodes.test.mjs`: discovery, injected fields, foreign clients/owners, guarded ID actions |
+| UTC ranges, event/receipt disagreement, unknown intervals and half-open edges; E9 | `episodes.test.mjs`: range/page limits, exact 366-day acceptance and time semantics |
+| Signed cursors, cold restart, no-op replay and mutation staleness; E9/E11 | `episodes.test.mjs`: both range operations preserve replay cursors and return cursor_stale after mutation |
+| Whole-record 64 KiB pages, startup budgets and untrusted framing; E9/E10 | `episodes.test.mjs` plus `procedural.test.mjs`: prefix budgets, context_item_too_large, complete sourced groups and group switches |
+| Revision guards, correction pins, step replay, deletion and explicit keep; E7/E8/E10 | `episodes.test.mjs`: stale and foreign anchors, unpin, inert closure/keep replay, deletion lineage and unrelated survivor |
+| Explicit procedural remember and independent tags; E10 | `adapters/mcp/test/procedural.test.mjs`: both access modes, exact receipt/digest, invalid kind/foreign/surrogate anchors, nonempty conflict/qualification/rationale preservation |
+| Access/configuration do not generate/capture episodes; E3/E11 | `episodes.test.mjs`: keyless actual CLI, check-config without store/provider, scripted submitted capture with generation configuration leaves no episode rows or automatic tags |
+| Installed module/prompt completeness and actual cold stdio; E11 | `packaging/test/session-episodes.test.mjs`: installed public core seeds a synthetic episode; access-only installed CLI reads sources/startup/explicit tags and deletes the conversation |
+
+The runtime artifact allowlist already contains all used modules/prompts; no new
+runtime path is shipped. No hosted schema, producer wiring, CI or version change,
+provider default, paid call or semantic-quality claim is added. SE-5 hands
+`adapters/mcp/cli.mjs` to HMA after its review/integration.
+
+At the implementation milestone, Node 22.16 passed root `npm test` 401/401,
+`validate`, MCP 110/110 (19 new MCP cases) and the new installed-artifact case.
+The earlier full-core invocation was interrupted by model capacity before an exit
+status; it is not counted as verification. Final sequential verification passed on Node **22.16.0 and 24.15.0**, with
+`HOME = CAIRN_TEST_REAL_HOME` set to the same worktree scratch home and
+TMPDIR/npm cache under the worktree (no UUID paths):
+
+| Command | Cases on each runtime | Exit on 22.16 / 24.15 |
+| --- | --- | --- |
+| `npm test` (CI home-guard shape) | 401/401 | 0 / 0 |
+| `npm run validate` | JSON and unchanged 0.1.2 version consistency | 0 / 0 |
+| `npm run test:mcp` | 110/110 | 0 / 0 |
+| `npm run test:core` (unchanged uncapped runner) | 1136/1136 | 0 / 0 |
+| `npm run test:artifact` | 87/87 | 0 / 0 |
+| `npm run test:openai` | 310/310 | 0 / 0 |
+| `npm run test:workspace-lifecycle` | 25/25 | 0 / 0 |
+| `node tools/testing/run.mjs --script packaging/prepare-cache.mjs` | Public registry metadata only | 0 / 0 |
+| `node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs` | Fresh isolated dependency/cache/offline artifact regression | 0 / 0 |
+
+The nine separate commands `npm run demo:store`, `demo:capture`, `demo:admission`,
+`demo:moc`, `demo:recall`, `demo:history`, `demo:episodes`, `demo:session-context`
+and `demo:openai-offline` each exited 0 on both runtimes. All fixtures, homes,
+databases and ports were synthetic; no key or paid call was used. There are
+19 new MCP cases and one new installed-artifact case, included in the suite
+counts above. No skipped or cancelled tests were counted as passes.
+
+Initial development-only failures were corrected before the matrix: two seed/
+budget fixture expectations, an incomplete scripted model context-window fixture,
+and a scratch npm wrapper pointing to a nonexistent npm module. The initial
+worktree-local update-ref could not create HEAD.lock; plumbing updates use the
+writable common git directory while retaining the isolated GIT_INDEX_FILE.
+The earlier capacity-interrupted core invocation has no observed exit status
+and is excluded; its complete rerun passed. No semantic-fidelity, trusted-producer
+compatibility or paid-pilot acceptance is claimed.
+
+#### SE-5 Round-1 review fixes and verification
+
+Built on coordinator merge `d15cc88`. `remember_memory` now accepts only an
+anchored procedural object or omission; null cannot clear a tag through
+unguarded admission. Clearing remains the revision-guarded
+`set_procedural_memory` operation. A two-host regression sets a tag through that
+operation, rejects the second host's null remember, then re-remembers the same
+content with the field omitted and verifies the entire tag remains unchanged.
+The strict-rejection test also checks null on a new memory without admission.
+
+Before changing the server, both Node 22.16.0 and 24.15.0 ran the procedural
+suite against `d15cc88` with the added regressions: 4/6 passed, 2 failed, exit 1.
+The failures were strict null rejection and the two-host sequence. After removing
+only remember's nullable schema, both runtimes passed 6/6, exit 0; guarded tag
+clearing still passes its existing test.
+
+Explicit keep now reuses `episodeAction`'s read-client guard before opening its
+short-lived facade. Three existing tool descriptions name the configured client;
+CLI Usage includes client/session/read-client flags. The plan does not prohibit
+automatic procedural proposals during explicit episode-mode keep, so the docs
+and help now state that exception instead of changing core behavior. Changelog
+records null rejection and rejoins the existing tight list. Review notes 3, 4
+and 7 remain unchanged and are recorded below as follow-ups.
+
+All commands ran sequentially in the foreground with synthetic data, explicit
+fixture homes, `HOME = CAIRN_TEST_REAL_HOME`, and worktree-local TMPDIR/npm cache
+without UUID paths. No provider key or paid call was used. Public npm dependency
+installs and cache preparation each exited 0 on Node 22.16.0.
+
+| Round-1 command | Cases on each runtime | Exit on 22.16 / 24.15 |
+| --- | --- | --- |
+| `npm run test:mcp` | 111/111 (one additional case) | 0 / 0 |
+| `npm run test:artifact` | 87/87 | 0 / 0 |
+| `npm test` (CI home-guard shape) | 401/401 | 0 / 0 |
+| `npm run validate` | JSON and unchanged 0.1.2 version consistency | 0 / 0 |
+| `npm run demo:episodes` | Synthetic lifecycle and keep | 0 / 0 |
+| `npm run demo:session-context` | Synthetic startup/range/closure | 0 / 0 |
+
+No skipped or cancelled tests count as passes. `git diff --check` passed with
+exit 0. No runtime module was added, so the artifact allowlist stays unchanged.
+
 ### Cross-plan shared files
 
 `docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,
@@ -972,6 +1086,17 @@ an SE package's allowed paths. No merge, push or PR is authorized by this packet
 - **Entry disclosure:** the one-brain client must disclose durable selected-passage
   retention when enabling capture; how private UI communicates that remains with
   its owner. Existing staging opt-in must not silently acquire permanent retention.
+- **SE-5 review notes 3/4:** retain existing test database `t.after` teardown and
+  dynamic builtin imports in this round. A later test-style cleanup can align
+  them with `workspace.defer` and sibling static imports.
+- **SE-5 review note 7:** retain the documented read-client boundary: range and
+  episode-ID operations narrow by client; startup context remains cross-client
+  within the exact namespace. Future hosts must not present this flag as a
+  namespace-wide memory access boundary.
+- **SE-5 re-review note:** `remember_memory` with `procedural:{anchors}` replaces an
+  existing tag (another host's, or a model-origin one) without a tag-revision
+  check, as the plan allows remember to tag. A later core change can guard it
+  with `expectedTagRevision`; until then the docs say so.
 
 Non-goals: hosted behavior, UI, commitments, shared scope, automatic capture for
 additional unsupported clients, complete archives/backfill, cross-store identity

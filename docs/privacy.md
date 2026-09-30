@@ -426,3 +426,46 @@ key. Replays cannot close a different step or advance a read epoch. Descriptive
 closure evidence remains source-bound and is cleared by source invalidation or
 conversation deletion. Schema v17 adds read indexes only; these indexes add no
 new source text or retention policy. Existing file, journal and backup limits apply.
+
+### Local MCP episode access and explicit tags (SE-5)
+
+Local stdio exposes sensitive episode prose, retained passages, time/client
+metadata, memory lineage and sourced startup context only in the exact startup
+namespace. Tool arguments cannot change owner/scope/project, receipt client or
+session authority. Optional read-client configuration restricts time ranges and
+all episode-ID actions; per-call client only narrows it. Startup context retains
+the core's namespace-wide cross-client groups; the read-client flag is not a
+general memory access boundary. Process configuration and database-file access
+remain trusted local authority, not authentication against the file owner.
+
+Access-only startup enables no capture, retention, interpretation or telemetry.
+Automatic tags can be proposed only through an explicit keep request. Reads use
+local token counting and never invoke provider generation.
+Selected passages already retained by a trusted producer can persist without an
+age TTL. Explicit keep is the only episode-management request that sends retained
+text through episode-mode extraction/qualification/admission to a separately
+configured model, including source-anchored model-origin procedural proposals;
+it may incur charges and cannot retract prior provider copies. Generation flags
+are configuration only until trusted producer binding; submitted capture remains
+in legacy mode, even with that configuration present.
+
+Strict schemas and bounded UTC/page/cursor/core-envelope budgets prevent authority
+injection and unbounded responses. Mutation-stale cursors and revision guards
+preserve freshness; no-op replay is inert. Returned instructions, steps, roles and
+background remain untrusted data, never execution permission. Read-only/closed-
+world MCP hints describe read operations; hints themselves do not enforce trust.
+Startup framing explicitly warns that episodes are interpretations, not verified
+facts/current assertions; returned background adds its inferred/unverified warning.
+
+Procedural remember is explicit intent independent of episode generation. Its
+anchors address the canonical explicit text receipt and require preference or
+instruction kind. Metadata alone is not evidence. Tag-only edits preserve
+conflict/rationale/qualification links and memory revisions, but do not certify
+recurrence or semantics. Episode corrections pin sourced prose without changing
+source text/admitted memories. Conversation deletion clears descriptive fields,
+retained passages and steps, tombstones/fences the session, suppresses all derived
+live/historical memories including multi-source deduplication, and invalidates
+source consumers. Unrelated admitted memories survive; existing namespace-wide
+staged purges and content-free replay fences remain. Neither forgetting nor
+redaction guarantees physical erasure of journals, free pages, backups or prior
+provider/caller copies. Hosted schemas/defaults and paid-pilot boundaries are unchanged.
