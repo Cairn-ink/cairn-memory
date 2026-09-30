@@ -23,6 +23,12 @@ never refunded. An id supplied to `reserve({id})` is only for retrying a reserva
 before dispatch, never retrying a model call. Window observations return reservation
 IDs to cancel; HMA/LAC must perform and verify termination, retaining uncertain slots.
 
+Changes to `dailyCap`, `mode` or `concurrency` take effect from the next UTC day.
+The current day's counts and uncertain reservations stay charged. Lowered
+concurrency waits for excess live calls to terminate before allowing new dispatch.
+Both clients must receive the same installed policy. A daily-cap refusal clears
+on the next eligible UTC day; quota and plan refusals still require explicit resume.
+
 `detectClients(options)` performs read-only checks. `stateLocations(options)` returns exact
 coordination paths independent of `CLAUDE_PLUGIN_DATA`. Production callers normally omit `home`,
 `temporary`, `env` and `liveness`; these are injection seams for isolated fixtures. Setup passes

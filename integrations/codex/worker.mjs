@@ -137,7 +137,25 @@ async function prepared(binding, options, action) {
           await save();
           return { status: reason, state: s };
         }
-        if (options.reset) return await boundary("state_reset", true);
+        if (options.reset) {
+          const generation =
+            control.paused || !control.valid
+              ? "legacy-" + hash("paused-reset", control.generation)
+              : control.generation;
+          if (
+            prior?.version === 2 &&
+            s.status === "state_reset" &&
+            s.binding === opaque &&
+            s.file === id &&
+            s.offset === size &&
+            s.generation === generation &&
+            !s.pending &&
+            s.anchor &&
+            digest(await readBytes(file, s.anchor.start, s.anchor.end)) === s.anchor.digest
+          )
+            return { status: "state_reset", state: s };
+          return await boundary("state_reset", true);
+        }
         if (s.version === 1) return await boundary("digest_migrated", true);
         if (s.binding !== opaque) return await boundary("binding_changed", true);
         if (["unsupported_format", "invalid_reply"].includes(s.status))
@@ -176,7 +194,8 @@ async function prepared(binding, options, action) {
           bytes = await readBytes(file, s.pending.start, s.pending.end);
           if (digest(bytes) !== s.pending.digest) return await boundary("source_changed", true);
           scanned = scan(bytes, s.pending.start, binding, s.epoch, s.discard, s.discardReason);
-          // discard applies only at the pending start; acknowledgement stores its final value on completion.
+          // discard applies only at the pending start; acknowledgement stores its final value on
+          // completion.
           batches = planBatches(
             scanned.records,
             wireBinding(binding),
@@ -204,7 +223,14 @@ async function prepared(binding, options, action) {
             s.status =
               start < end
                 ? "partial_tail"
-                : ["pause_boundary", "source_changed", "state_reset", "excluded"].includes(s.status)
+                : [
+                      "pause_boundary",
+                      "source_changed",
+                      "state_reset",
+                      "binding_changed",
+                      "digest_migrated",
+                      "excluded",
+                    ].includes(s.status)
                   ? s.status
                   : "idle";
             await save();
@@ -380,7 +406,8 @@ export async function runWorker(
           return { status: s.status, state: s };
         }
         await beforeDispatch?.(b);
-        // Re-open the authorized name just before sending; file replacement cannot reuse the frozen range.
+        // Re-open the authorized name just before sending; file replacement cannot reuse the frozen
+        // range.
         const check = await openSource(binding.path);
         try {
           const current = await check.stat();

@@ -1,7 +1,7 @@
 // Real process interruption at every durable helper publication, under real locks.
 import { readFile } from "node:fs/promises";
 import { writeSync } from "node:fs";
-import { runWorker, prepareCapture, establishPauseBoundary } from "../worker.mjs";
+import { runWorker, prepareCapture, establishPauseBoundary, resetCapture } from "../worker.mjs";
 import { withWriteObserver } from "../../client/private-state.mjs";
 import { createRuntimeGuard } from "../../client/runtime-usage.mjs";
 const config = JSON.parse(await readFile(process.argv[2], "utf8"));
@@ -43,10 +43,12 @@ await withWriteObserver(
     if (writes === config.crashAt) process.exit(87);
   },
   () =>
-    config.boundary
-      ? establishPauseBoundary(config.binding)
-      : config.prepare
-        ? prepareCapture(config.binding, { byteEnd: config.byteEnd })
-        : runWorker(config.binding, { transport, guard, byteEnd: config.byteEnd }),
+    config.reset
+      ? resetCapture(config.binding, { hostsStopped: true, confirm: true })
+      : config.boundary
+        ? establishPauseBoundary(config.binding)
+        : config.prepare
+          ? prepareCapture(config.binding, { byteEnd: config.byteEnd })
+          : runWorker(config.binding, { transport, guard, byteEnd: config.byteEnd }),
 );
 writeSync(1, JSON.stringify({ total: writes }) + "\n");

@@ -1,3 +1,4 @@
+import { stateLock } from "../../client/state-lock.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { appendFile, writeFile, readFile, stat } from "node:fs/promises";
@@ -157,4 +158,32 @@ test("failed shared refusal latch retains reset and retries before dispatch", as
   assert.equal(calls, 1);
   assert.equal((await f.guard.status()).state.resetAt, resetAt);
   assert.equal((await f.cursor()).offset, state.offset);
+});
+
+test("review repro: a 400ms held usage lock cannot turn quota into timeout", async (t) => {
+  const f = await fixture(t, { text: header() + item("Refused while locked") });
+  const resetAt = Date.now() + 60000;
+  let holding;
+  const transport = {
+    terminated: () => true,
+    capture: async () => {
+      await new Promise((resolve) => setImmediate(resolve));
+      let entered;
+      const ready = new Promise((resolve) => (entered = resolve));
+      holding = stateLock(f.guard.path.replace(/\.json$/, ".lock"), async () => {
+        entered();
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      });
+      await ready;
+      return { status: "refused", code: "quota_reached", resetAt };
+    },
+  };
+  const result = await runWorker(f.binding, { guard: f.guard, transport });
+  await holding;
+  assert.equal(result.status, "quota_reached");
+  assert.equal(result.state.quotaRefusal.resetAt, resetAt);
+  assert.equal(result.state.quotaRefusal.latched, false);
+  assert.equal(result.state.accepted, 0);
+  await runWorker(f.binding, { guard: f.guard, transport });
+  assert.equal((await f.guard.status()).state.resetAt, resetAt);
 });

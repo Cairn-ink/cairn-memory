@@ -353,7 +353,8 @@ export function createRuntimeGuard({
         // Persist consumption BEFORE invoking the single call. A crash cannot
         // dispatch twice with one permit. Uncertain consumption is never refunded.
         await publish(s);
-        // start returns a dispatch descriptor; its network/model promise is NOT awaited under this lock.
+        // start returns a dispatch descriptor; its network/model promise is NOT awaited under this
+        // lock.
         return { ok: true, dispatch: await start() };
       }),
     release: (id, { terminated = false, accepted = false } = {}) =>
