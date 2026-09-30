@@ -12,6 +12,10 @@ export async function notifyWrite(path, kind = "write") {
   await writeObservers.getStore()?.({ path, kind });
 }
 
+// History-free Windows standalone must retain 0.1.1 behavior (codex-client.md,
+// CX-2 resolved permission rules). Native Windows cannot enforce POSIX 0600 modes;
+// portable reads are limited to standalone creator/publication files. Pairing stays
+// unsupported there, and all coordination/binding paths retain strict checks.
 export async function checkedPath(
   path,
   { directory = false, missing = false, portable = false } = {},

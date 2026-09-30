@@ -47,7 +47,7 @@ const rows = section
     };
   });
 const schema = {
-  creator: ["claude", "codex", "invalid"],
+  creator: ["claude", "codex", "invalid", "unreadable"],
   home: ["usable", "dev-null", "file", "unsearchable"],
   coord: [
     "absent",
@@ -283,13 +283,14 @@ for (const row of table.rows) {
           ? "{"
           : JSON.stringify({
               version: 1,
-              client: f.creator ?? "codex",
+              client: f.creator === "unreadable" ? "codex" : f.creator ?? "codex",
               fingerprint: createHmac("sha256", creatorKey)
                 .update("cairn-memory:binding:v1")
                 .digest("hex"),
             }),
       );
     }
+    if (f.creator === "unreadable") await chmod(join(creatorRoot, "created-by"), 0o644);
     if (f.resetPending) install.resetPending = { root: bound, client: "claude" };
     if (f.shared !== "none") {
       install.shared = {

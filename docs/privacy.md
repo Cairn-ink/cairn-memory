@@ -97,11 +97,10 @@ active as `standalone_unregistered`, with separate detail `coordination unreadab
 Otherwise memory is disabled with `pairing_needed`; a lost locally recorded standalone
 key in an unmarked root reports `standalone_key_missing`, never `paired_key_missing`.
 
-Explicit setup records adopted scope in the private profile-local `binding.json`,
-not `legacy.json`. Binding history contains the root and a non-secret fingerprint,
+Explicit setup records adopted scope in the private profile-local `binding.json`.
+Binding history contains the root and a non-secret fingerprint,
 never a key or conversation. With absent or degraded coordination it refuses with
-`pairing_record_missing` until repair or an explicit reset to a new root. Older
-`legacy.json` records remain read-only compatibility input; no current path writes one.
+`pairing_record_missing` until repair or an explicit reset to a new root.
 Initialization, adoption, completion, reset destinations and repair publish a private
 `paired-root` marker in the shared
 root. Its positive presence, valid or invalid, permanently excludes cursor-based legacy
@@ -128,8 +127,9 @@ Pairing supports Linux within one PID namespace and macOS; Windows pairing is
 unsupported. Boot identity affects stale setup locks, never durable pair validity.
 On macOS, a wall-clock step over two seconds during a lock hold can make a live
 owner look stale; lock holds are short and native host behavior is still to verify.
-Crash recovery may leave private temporary or lock-recovery files; only a
-process's own temporary file is cleaned automatically.
+Crash recovery may leave private temporary or lock-recovery files. Successful
+key probes clean publication staging and recover dead publication locks; other
+cleanup remains limited to a process's own temporary files.
 
 Pairing requires consent and stopped hosts/workers. Newcomers remain disabled with
 `pairing_needed`; established conflicting clients keep their own existing keys.
@@ -168,6 +168,66 @@ during initialization may leave an unreferenced `.*.tmp` file with mode `0600`;
 it is not sent to the service. Do not delete or replace a valid `project-key`:
 doing so changes the scope used to retrieve existing project memories.
 
+At a marked root, a profile sharing its own existing key and pause never claims or changes
+registration through hooks or reads; only explicit setup/pairing may register it. Readable
+coordination also prevents minting at a recorded pair root when deletion removed its marker.
+Codex's paired binding stores the same non-secret identity fingerprint in `install.json` and
+refuses `binding_identity_mismatch` before sending if the key changed. Fingerprints are local
+metadata and are never transmitted. Explicit setup validates its preconditions before durable
+writes and rolls back caught failures; a failed operation preserves files, modes and markers.
+Stopped-host original-backup repair checks the saved fingerprint inside the private key write.
+
+Explicit setup owns registration for both clients. Hooks and resolve/status never write
+`install.json`. Existing own-root sharing also leaves registration untouched. Readable pair
+ownership includes fingerprint-bound client roots, reset destinations and retired roots;
+a missing marker never makes these roots eligible for key creation. The shared mint gate
+also protects identity-facade calls. Only original-backup repair may restore such a key.
+
+Root identity uses real paths and device/inode, so symlink aliases cannot be new reset
+identities. Reset accepts only a new path or an empty directory; otherwise it reports
+`reset_destination_not_new`. Initialization at an existing key reports
+`existing_key_requires_adoption` until the caller explicitly adopts it.
+
+Private entry probes distinguish present, absent and unknown. ENOENT proves absence;
+ENOTDIR does so only for a known controlled regular-file parent. Unknown selected state
+refuses with a named status such as `state_unreadable`, keeping the system error in detail.
+Unusable HOME and unrelated damaged paths keep history-free standalone parity. Invalid
+repair history reports `binding_history_invalid`; invalid backup arguments report
+`invalid_original_key`. Failed explicit operations restore files and modes, except for
+legitimate setup-lock ownership and crashed-owner recovery artifacts.
+
+Codex also keeps private non-secret binding history at
+`<HOME>/.cairn-memory-profile/binding.json`. It retains current and retired pair roots,
+so losing both coordination and a root cannot authorize a replacement key or legacy
+adoption. Invalid history fails closed. Hooks and status never register either client.
+
+### Identity creation and crash recovery
+
+The key publisher records its creator in private `created-by` JSON (0600): version,
+client (`claude` or `codex`) and a non-secret identity fingerprint. It is creation
+evidence, not registration. A newcomer Claude beside a Codex-created standalone
+root needs explicit pairing, with either set or unset plugin data; it sends nothing
+and mints nothing. The established client reports `pairing_needed` when another
+client is declared or detected; Codex-only use explicitly sets `usesClaude: false`
+and stays `single`. Unreadable creator evidence reports `state_unreadable`.
+Older keys without a creator record keep the legacy rules. Publication durably
+stages the secret and creator intent before linking the key under `.project-key.lock`.
+A retry keeps any published winner. A successful key probe or publication removes
+leftover staging and recovers a dead publication owner; live publishers retain
+ownership. A missing key is never restored from staging: creation must pass the
+normal mint gate, or explicit repair must supply the original backup. Read paths
+never write creator records or registration.
+
+Interrupted setup is retried with the same explicit call. Pending initialization
+reuses its winner without demanding adoption; pending reset to the same root skips
+the fresh-destination test. A matching reset receipt permits a zero-write retry,
+returning `identity_reset`, `alreadyComplete: true`, `writes: 0`, and the disclosure.
+Later setup operations supersede it atomically with their install-record write;
+reset to the current root then refuses with `identity_reset_requires_new_root`.
+Initialization retains the original pause flag across its barrier.
+Unreadable key probes refuse with `state_unreadable`, rather than treating the key
+as absent or skipping retirement.
+
 ## Controls and residual risk
 
 | Risk | Control | Residual risk |
@@ -199,10 +259,7 @@ still receives the aliased request's personal text and ordinary network metadata
 
 ## Disable automatic behavior
 
-Run `/cairn-memory:pause` to pause both automatic capture and recall, and `/cairn-memory:resume`
-to restore them. Disable telemetry independently in plugin configuration. Uninstalling the
-plugin stops future local processing; use `forget_memory` or the hosted memory UI when available
-to remove already stored Memories.
+Run `/cairn-memory:pause` to pause both automatic capture and recall, and `/cairn-memory:resume` to restore them. Disable telemetry independently in plugin configuration. Uninstalling the plugin stops future local processing; use `forget_memory` or the hosted memory UI when available to remove already stored Memories.
 
 Pause creates a persistent generation barrier. Workers from an earlier
 generation cannot send later batches after the barrier. A request already
@@ -369,53 +426,3 @@ key. Replays cannot close a different step or advance a read epoch. Descriptive
 closure evidence remains source-bound and is cleared by source invalidation or
 conversation deletion. Schema v17 adds read indexes only; these indexes add no
 new source text or retention policy. Existing file, journal and backup limits apply.
-
-At a marked root, a profile sharing its own existing key and pause never claims or changes
-registration through hooks or reads; only explicit setup/pairing may register it. Readable
-coordination also prevents minting at a recorded pair root when deletion removed its marker.
-Codex's paired binding stores the same non-secret identity fingerprint in `install.json` and
-refuses `binding_identity_mismatch` before sending if the key changed. Fingerprints are local
-metadata and are never transmitted. Explicit setup validates its preconditions before durable
-writes and rolls back caught failures; a failed operation preserves files, modes and markers.
-Stopped-host original-backup repair checks the saved fingerprint inside the private key write.
-
-Explicit setup owns registration for both clients. Hooks and resolve/status never write
-`install.json`. Existing own-root sharing also leaves registration untouched. Readable pair
-ownership includes fingerprint-bound client roots, reset destinations and retired roots;
-a missing marker never makes these roots eligible for key creation. The shared mint gate
-also protects identity-facade calls. Only original-backup repair may restore such a key.
-
-Root identity uses real paths and device/inode, so symlink aliases cannot be new reset
-identities. Reset accepts only a new path or an empty directory; otherwise it reports
-`reset_destination_not_new`. Initialization at an existing key reports
-`existing_key_requires_adoption` until the caller explicitly adopts it.
-
-Private entry probes distinguish present, absent and unknown. ENOENT proves absence;
-ENOTDIR does so only for a known controlled regular-file parent. Unknown selected state
-refuses with a named status such as `state_unreadable`, keeping the system error in detail.
-Unusable HOME and unrelated damaged paths keep history-free standalone parity. Invalid
-repair history reports `binding_history_invalid`; invalid backup arguments report
-`invalid_original_key`. Failed explicit operations restore files and modes, except for
-legitimate setup-lock ownership and crashed-owner recovery artifacts.
-
-Codex also keeps private non-secret binding history at
-`<HOME>/.cairn-memory-profile/binding.json`. It retains current and retired pair roots,
-so losing both coordination and a root cannot authorize a replacement key or legacy
-adoption. Invalid history fails closed. Hooks and status never register either client.
-
-The key publisher records its creator in private `created-by` JSON (0600): version,
-client (`claude` or `codex`) and a non-secret identity fingerprint. It is ownership
-evidence, not registration. A newcomer Claude beside a Codex-created standalone
-root needs explicit pairing, with either set or unset plugin data; it sends nothing
-and mints nothing. The established client continues with `pairing_needed`. Older
-keys without a creator record keep the legacy rules. Publication first durably
-stages the key in private `.project-key.pending`, then the creator intent, then
-links the key. A retry reuses the staged winner. Standalone publishers serialize
-this transaction with `.project-key.lock`; read paths never write creator records.
-
-Interrupted setup is retried with the same explicit call. Pending initialization
-reuses its winner without demanding adoption; pending reset to the same root skips
-the fresh-destination test. Reset retains a completion receipt for a retry after
-its final write. Initialization retains the original pause flag across its barrier.
-Unreadable key probes refuse with `state_unreadable`, rather than treating the key
-as absent or skipping retirement.

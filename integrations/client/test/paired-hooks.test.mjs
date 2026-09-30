@@ -101,7 +101,7 @@ const row = (id, content = id) =>
   JSON.stringify({ type: "user", uuid: id, message: { content } }) + "\n";
 test("paired Claude and scripted second client discard unseen sessions and split lines after pause/restart", async (t) => {
   const f = await setup(t);
-  const codex = await resolveClient({ ...f.options, client: "codex" });
+  const codex = await resolveClient({ ...f.options, client: "codex", usesClaude: false });
   const transcript = join(f.workspace.path, "transcript.jsonl");
   const event = {
     session_id: "synthetic-session",
@@ -116,7 +116,7 @@ test("paired Claude and scripted second client discard unseen sessions and split
   assert.equal(f.requests.length, 1);
   assert.equal(
     f.requests[0].body.project_id,
-    await clientProjectId({ ...f.options, client: "codex" }, event.cwd),
+    await clientProjectId({ ...f.options, client: "codex", usesClaude: false }, event.cwd),
   );
   await setPaused(codex.root, true);
   await appendFile(transcript, row("paused"));
@@ -161,7 +161,7 @@ test(
       prompt: "A synthetic question",
     });
     await waiting;
-    const codex = await resolveClient({ ...f.options, client: "codex" });
+    const codex = await resolveClient({ ...f.options, client: "codex", usesClaude: false });
     await setPaused(codex.root, true);
     release({
       memories: [
@@ -234,6 +234,7 @@ test("newcomer Claude without evidence is fail-open and sends nothing", async (t
       home,
       env: { HOME: home },
       client: "codex",
+      usesClaude: false,
       standardClaudeOrigin: true,
       usesClaude: false,
     },

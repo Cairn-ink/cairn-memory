@@ -126,11 +126,10 @@ adoption record naming an existing default-root key. An eligible unretired root 
 disabled with `pairing_needed`; a lost locally recorded standalone key in an unmarked root reports
 `standalone_key_missing`, never `paired_key_missing`.
 
-Explicit setup records adopted scope in the private profile-local `binding.json`,
-not `legacy.json`. Binding history contains the root and a non-secret fingerprint,
+Explicit setup records adopted scope in the private profile-local `binding.json`.
+Binding history contains the root and a non-secret fingerprint,
 never a key or conversation. With absent or degraded coordination it refuses with
-`pairing_record_missing` until repair or an explicit reset to a new root. Older
-`legacy.json` records remain read-only compatibility input; no current path writes one.
+`pairing_record_missing` until repair or an explicit reset to a new root.
 Initialization, adoption, completion, reset destinations and repair publish
 a private `paired-root` marker in the shared root. Its positive presence, valid or invalid,
 permanently excludes cursor-based legacy adoption of that root, including after coordination loss.
@@ -185,19 +184,15 @@ Codex also keeps private non-secret binding history at
 so losing both coordination and a root cannot authorize a replacement key or legacy
 adoption. Invalid history fails closed. Hooks and status never register either client.
 
-The key publisher records its creator in private `created-by` JSON (0600): version,
-client (`claude` or `codex`) and a non-secret identity fingerprint. It is ownership
-evidence, not registration. A newcomer Claude beside a Codex-created standalone
-root needs explicit pairing, with either set or unset plugin data; it sends nothing
-and mints nothing. The established client continues with `pairing_needed`. Older
-keys without a creator record keep the legacy rules. Publication first durably
-stages the key in private `.project-key.pending`, then the creator intent, then
-links the key. A retry reuses the staged winner. Standalone publishers serialize
-this transaction with `.project-key.lock`; read paths never write creator records.
+Creator evidence and publication recovery follow the canonical
+[local-state policy](../../docs/privacy.md#identity-creation-and-crash-recovery).
 
 Interrupted setup is retried with the same explicit call. Pending initialization
 reuses its winner without demanding adoption; pending reset to the same root skips
-the fresh-destination test. Reset retains a completion receipt for a retry after
-its final write. Initialization retains the original pause flag across its barrier.
+the fresh-destination test. A matching reset receipt permits a zero-write retry,
+returning `identity_reset`, `alreadyComplete: true`, `writes: 0`, and the disclosure.
+Later setup operations supersede it atomically with their install-record write;
+reset to the current root then refuses with `identity_reset_requires_new_root`.
+Initialization retains the original pause flag across its barrier.
 Unreadable key probes refuse with `state_unreadable`, rather than treating the key
 as absent or skipping retirement.

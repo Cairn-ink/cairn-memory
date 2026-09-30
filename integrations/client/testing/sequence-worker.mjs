@@ -276,7 +276,7 @@ for (let index = 0; index < sequences.length; index++) {
           option = undefined;
         } else if (["initialize", "adopt"].includes(operation)) {
           if (operation === "adopt" && !(await exists(join(activeRoot, "paired-root")))) {
-            await projectKey(activeRoot);
+            await projectKey(activeRoot, { home });
             // Genuine default-root adoption with existing Claude cursors.
             await fsp.mkdir(join(activeRoot, "sessions"), { mode: 0o700 });
             await fsp.writeFile(
@@ -354,12 +354,12 @@ for (let index = 0; index < sequences.length; index++) {
           }
           result = await call(() =>
             operation === "facade-project-id"
-              ? identity.opaqueProjectId(activeRoot, "/synthetic/sequence")
+              ? identity.opaqueProjectId(activeRoot, "/synthetic/sequence", { home })
               : identity.projectKey(
                   target,
                   operation === "facade-original-key"
-                    ? { originalKey: "22222222-2222-4222-8222-222222222222" }
-                    : undefined,
+                    ? { originalKey: "22222222-2222-4222-8222-222222222222", home }
+                    : { home },
                 ),
           );
         } else if (operation === "repair-invalid") {
@@ -501,6 +501,7 @@ for (let index = 0; index < sequences.length; index++) {
               home,
               root: target,
               client: "codex",
+              usesClaude: true,
               env: { HOME: home },
               initialize: true,
               standardClaudeOrigin: true,

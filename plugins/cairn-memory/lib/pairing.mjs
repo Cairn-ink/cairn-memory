@@ -33,7 +33,7 @@ import { withFileLock } from "./file-lock.mjs";
 
 import { setPaused, readControlState } from "./control-state.mjs";
 
-async function randomIdFile(dataDir, filename, { create = true, client = "claude" } = {}) {
+async function randomIdFile(dataDir, filename, { create = true, client = "claude", home } = {}) {
   const path = join(dataDir, filename);
   async function readIdentity() {
     const entry = await probeEntry(path, {
@@ -49,6 +49,7 @@ async function randomIdFile(dataDir, filename, { create = true, client = "claude
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
       throw new Error(`invalid_identity: ${filename}`);
     }
+    if (filename === "project-key") await cleanupKeyPublication(resolve(dataDir));
     return value;
   }
   try {
@@ -57,7 +58,7 @@ async function randomIdFile(dataDir, filename, { create = true, client = "claude
     if (error.code !== "ENOENT") throw error;
   }
   if (filename === "project-key") {
-    await publishProjectKey(dataDir, { create, strict: false, client });
+    await publishProjectKey(dataDir, { create, strict: false, client, home });
     return readIdentity();
   }
   if (!create) throw new Error("standalone_key_missing");
@@ -199,6 +200,7 @@ async function publishProjectKey(
     client = "claude",
   } = {},
 ) {
+  // Preserve 0.1.1's empty plugin-data error rather than resolving it to cwd.
   if (dataDir === "" && !strict) await mkdir(dataDir, { recursive: true });
   dataDir = resolve(dataDir);
   if (!CLIENTS.includes(client)) fail("invalid_client");
@@ -217,8 +219,10 @@ async function publishProjectKey(
   const marker = await markerProbe(dataDir, "paired-root");
   if (marker.state === "unknown") failUnreadable(marker.code);
   const coordination = await probeCoordination(stateLocations({ home: home ?? homedir() }));
-  if (coordination.coordination === "degraded" && capability !== repairCapability)
+  if (coordination.coordination === "degraded" && capability !== repairCapability) {
+    if (!create) fail(strict ? "paired_key_missing" : "standalone_key_missing");
     failUnreadable(coordination.detail);
+  }
   if (coordination.durableHistory?.state === "invalid") fail("binding_history_invalid");
   const recorded = await containsRoot(recordedPairRoots(coordination), dataDir);
   if (marker.state === "present" || recorded) {
@@ -240,40 +244,38 @@ async function publishProjectKey(
       read: () => readFile(keyPath, "utf8"),
     });
     if (existing.state === "unknown") failUnreadable(existing.code);
-    if (existing.state === "present") return; // EEXIST reads the winner, never rewrites it.
+    if (existing.state === "present") {
+      await cleanupKeyPublication(dataDir);
+      return; // EEXIST reads the winner, never rewrites it.
+    }
     const pendingPath = join(dataDir, ".project-key.pending");
     const staged = await probeEntry(pendingPath, {
       read: () => privateRead(pendingPath, { missing: true, portable: !strict }),
     });
     if (staged.state === "unknown") failUnreadable(staged.code);
-    let value;
     if (staged.state === "present") {
-      try {
-        value = JSON.parse(staged.value);
-      } catch {
-        failUnreadable("invalid_key_publication");
-      }
-      if (value.version !== 1 || !CLIENTS.includes(value.client) || !validKey(value.key))
-        failUnreadable("invalid_key_publication");
-      if (originalKey !== undefined && value.key !== originalKey) fail("repair_key_conflict");
-    } else {
-      const prior = await creatorRecord(dataDir);
-      if (prior.state === "unknown") failUnreadable(prior.code);
-      if (
-        (marker.state === "present" || recorded) &&
-        prior.state === "present" &&
-        capability !== repairCapability
-      )
-        fail("paired_key_missing");
-      value = {
-        version: 1,
-        client: prior.value?.client ?? client,
-        key: originalKey ?? randomUUID(),
-      };
-      await writeIdentityFile(pendingPath, JSON.stringify(value), { strict });
+      // Staging is intent, never authority to restore a deleted key. Recheck the
+      // ordinary mint gate above and publish a new value (or the explicit backup).
+      await unlink(pendingPath);
+      await notifyWrite(pendingPath, "unlink");
     }
+    const prior = await creatorRecord(dataDir);
+    if (prior.state === "unknown") failUnreadable(prior.code);
+    if (
+      (marker.state === "present" || recorded) &&
+      prior.state === "present" &&
+      capability !== repairCapability &&
+      capability !== creationCapability
+    )
+      fail("paired_key_missing");
+    const value = {
+      version: 1,
+      client: prior.value?.client ?? client,
+      key: originalKey ?? randomUUID(),
+    };
+    await writeIdentityFile(pendingPath, JSON.stringify(value), { strict });
     // Creator intent is durable before the key becomes visible. Both are published
-    // under the mint lock; a crash leaves the exact winner in the private staging file.
+    // under the mint lock; only the linked project-key establishes a winner.
     await writeIdentityFile(
       join(dataDir, "created-by"),
       JSON.stringify({
@@ -299,7 +301,9 @@ async function publishProjectKey(
         await notifyWrite(join(dataDir, "created-by"), "unlink");
       }
     }
-    await unlink(pendingPath);
+    await unlink(pendingPath).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
     await notifyWrite(pendingPath, "unlink");
   };
   if (strict) await privateDirectory(dataDir);
@@ -315,6 +319,45 @@ async function publishProjectKey(
       if (winner.state !== "present") fail("key_publication_busy");
     }
   }
+}
+
+// A successful key probe may remove interrupted publication artifacts. A live
+// publisher owns its staging file; only an absent or definitively dead lock permits
+// cleanup. No staging value is ever used to restore a deleted project-key.
+async function cleanupKeyPublication(root) {
+  const pendingPath = join(root, ".project-key.pending");
+  const lockPath = join(root, ".project-key.lock");
+  const pending = await probeEntry(pendingPath);
+  const lock = await probeEntry(lockPath, {
+    read: () => privateRead(lockPath, { missing: true, portable: true }),
+  });
+  if (pending.state === "unknown") failUnreadable(pending.code);
+  if (lock.state === "unknown") failUnreadable(lock.code);
+  if (pending.state === "absent" && lock.state === "absent") return;
+  const cleanup = async () => {
+    if ((await privateRead(pendingPath, { missing: true, portable: true })) !== undefined) {
+      await unlink(pendingPath).catch((error) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+      await notifyWrite(pendingPath, "unlink");
+    }
+  };
+  if (lock.state === "absent") return cleanup();
+  let owner;
+  try {
+    owner = JSON.parse(lock.value);
+  } catch {
+    failUnreadable("invalid_key_publication_lock");
+  }
+  if (!Number.isSafeInteger(owner.pid) || owner.pid <= 0)
+    failUnreadable("invalid_key_publication_lock");
+  try {
+    process.kill(owner.pid, 0);
+    return;
+  } catch (error) {
+    if (error.code !== "ESRCH") return;
+  }
+  await withFileLock(lockPath, cleanup, { timeoutMs: 250, pollMs: 10 });
 }
 
 async function writeIdentityFile(path, bytes, { strict, exclusive = false, checkpoint } = {}) {
@@ -347,6 +390,7 @@ async function creatorRecord(root) {
   root = resolve(root);
   const parent = await probeEntry(root, { read: () => stat(root) });
   if (parent.state === "present" && !owned(parent.value)) return { state: "absent" };
+  const existence = await probeEntry(join(root, "created-by"));
   const entry = await probeEntry(join(root, "created-by"), {
     read: () => privateRead(join(root, "created-by"), { missing: true, portable: true }),
   });
@@ -375,7 +419,8 @@ async function creatorRecord(root) {
       return { state: "unknown", code: "invalid_key_publication", error };
     }
   }
-  if (entry.state !== "present") return entry;
+  if (entry.state !== "present")
+    return { ...entry, present: existence.state === "present" };
   try {
     const value = JSON.parse(entry.value);
     if (
@@ -386,7 +431,7 @@ async function creatorRecord(root) {
       throw new Error("invalid_creator_record");
     return { state: "present", value };
   } catch (error) {
-    return { state: "unknown", code: "invalid_creator_record", error };
+    return { state: "unknown", code: "invalid_creator_record", error, present: true };
   }
 }
 
@@ -452,6 +497,7 @@ async function projectKeyImpl(
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) {
     throw new Error("invalid_identity: project-key");
   }
+  await cleanupKeyPublication(dataDir);
   return key;
 }
 
@@ -599,7 +645,8 @@ function validateInstall(value) {
       receipt &&
       (!absolute(receipt.root) ||
         !CLIENTS.includes(receipt.client) ||
-        (receipt.initialized !== undefined && typeof receipt.initialized !== "boolean"))
+        (receipt.initialized !== undefined && typeof receipt.initialized !== "boolean") ||
+        (receipt.profileRoot !== undefined && !absolute(receipt.profileRoot)))
     )
       fail("invalid_install");
   }
@@ -672,6 +719,7 @@ async function keyPresent(root, { strict = false } = {}) {
   if (entry.state === "unknown") failUnreadable(entry.code);
   if (entry.state === "absent" || entry.value === undefined) return false;
   if (!validKey(entry.value.trim())) fail("invalid_identity: project-key");
+  await cleanupKeyPublication(resolve(root));
   return true;
 }
 
@@ -716,7 +764,17 @@ async function detectClientsImpl(options = {}) {
     const entry = await probeEntry(join(root, "project-key"), {
       read: () => readFile(join(root, "project-key"), "utf8"),
     });
-    if (entry.state === "unknown") failUnreadable(entry.code);
+    if (entry.state === "unknown") {
+      const usedRoots = [
+        options.root ?? locations.defaultRoot,
+        options.adoptFrom,
+        options.claudeProfileRoot ??
+          (options.env ?? process.env).CLAUDE_PLUGIN_DATA ??
+          (options.standardClaudeOrigin ? locations.knownClaudeRoot : undefined),
+        ...recordedPairRoots(coordination),
+      ].filter(Boolean);
+      if (!options.setup || (await containsRoot(usedRoots, root))) failUnreadable(entry.code);
+    }
     if (entry.state === "present" && validKey(entry.value.trim())) keys.push(root);
   }
   return { ...coordination, locations, install, record, keys };
@@ -915,6 +973,10 @@ async function setupTransaction(options, work) {
         });
     }
     try {
+      // A later setup supersedes the reset receipt before its first state change.
+      // The existing rollback restores it when that operation fails.
+      if (snapshot.install.lastReset && operation !== "reset")
+        await saveInstall(locations, snapshot.install);
       const result = await work(snapshot, liveness);
       await options.checkpoint?.("before-commit");
       if (
@@ -929,8 +991,10 @@ async function setupTransaction(options, work) {
     }
   });
 }
-const saveInstall = (locations, install) =>
-  privateWrite(locations.install, JSON.stringify(validateInstall(install)));
+const saveInstall = (locations, install, { resetReceipt = false } = {}) => {
+  if (!resetReceipt) delete install.lastReset;
+  return privateWrite(locations.install, JSON.stringify(validateInstall(install)));
+};
 const disabled = (status = "pairing_needed", detail) => ({
   status,
   enabled: false,
@@ -1188,6 +1252,7 @@ async function rootFacts(root, { strict = false, evidence = false, metadataOnly 
     root,
     creator: creator.value?.client,
     creatorState: creator.state,
+    creatorPresent: creator.present,
     creatorError: creator.code,
     usable,
     markerState: [retiredEntry, sharedEntry].some((entry) => entry.state === "unknown")
@@ -1437,6 +1502,11 @@ function resolveClaudeBindingImpl(facts) {
     if (facts.install.clients.codex && !facts.bound.key) return stop();
     return select(facts.bound, true, facts.install.clients.codex ? "pairing_needed" : "single");
   }
+  if (
+    facts.default?.creatorState === "unknown" &&
+    (facts.default.keyState === "present" || facts.default.creatorPresent)
+  )
+    return stop("state_unreadable", facts.default.creatorError);
   const codexCreated =
     facts.default?.creator === "codex" &&
     !facts.default.sharedMarker &&
@@ -1482,7 +1552,8 @@ async function resolveClaudeClient(options) {
       ...(options.env ?? process.env),
       CAIRN_MEMORY_STATE_DIR: binding.root,
     };
-    if (options.initialize) await identityForBinding(binding, "claude");
+    if (options.initialize)
+      await identityForBinding(binding, "claude", undefined, stateLocations(options).home);
   }
   return binding;
 }
@@ -1492,13 +1563,15 @@ async function resolveClientImpl(options = {}) {
   const client = options.client ?? "claude";
   if (!CLIENTS.includes(client)) fail("invalid_client");
   if (client === "claude") return resolveClaudeClient(options);
+  if (typeof options.usesClaude !== "boolean") fail("uses_claude_required");
   const snapshot = await detectClients(options);
   let binding = await selectCodexBinding(options, snapshot, options.pairingRecord || undefined);
-  if (binding.enabled && options.initialize) await identityForBinding(binding, client);
+  if (binding.enabled && options.initialize)
+    await identityForBinding(binding, client, undefined, stateLocations(options).home);
   return binding;
 }
 
-async function identityForBinding(binding, client, cwd = "initialization") {
+async function identityForBinding(binding, client, cwd = "initialization", home) {
   if (binding.expectedFingerprint) {
     const key = await projectKey(binding.root, { create: false });
     if (identityFingerprint(key) !== binding.expectedFingerprint) fail("binding_identity_mismatch");
@@ -1508,10 +1581,10 @@ async function identityForBinding(binding, client, cwd = "initialization") {
     binding.root,
     cwd,
     binding.paired || client !== "claude"
-      ? { strict: true, create: !binding.paired, client }
+      ? { strict: true, create: !binding.paired, client, home }
       : binding.createKey === false
-        ? { create: false }
-        : undefined,
+        ? { create: false, home }
+        : { home },
   );
   if (!binding.paired) {
     const creator = await creatorRecord(binding.root);
@@ -1531,7 +1604,7 @@ async function clientProjectIdImpl(options, cwd, binding) {
   if (!cwd) return undefined;
   binding ??= await resolveClient(options);
   if (!binding.enabled) fail(binding.status);
-  return identityForBinding(binding, options.client ?? "claude", cwd);
+  return identityForBinding(binding, options.client ?? "claude", cwd, stateLocations(options).home);
 }
 
 /** CX-7 API: no host execution. Caller obtains consent and stops hosts/workers. */
@@ -1746,6 +1819,10 @@ async function completePairingImpl(options = {}) {
   );
 }
 
+const RESET_DISCLOSURE =
+  "Old project memories are no longer addressable by the new identity; " +
+  "the second client requires explicit adoption. Resume starts at EOF.";
+
 /** Explicit stopped-worker identity reset; old roots and memories are retained. */
 async function resetIdentityImpl(options = {}) {
   if (
@@ -1770,13 +1847,30 @@ async function resetIdentityImpl(options = {}) {
     initial.install.lastReset &&
     (await sameRoot(initial.install.lastReset.root, options.root)) &&
     initial.install.lastReset.client === options.primaryClient &&
+    (await sameRoot(
+      initial.install.lastReset.profileRoot ?? claudeRegistration(initial.install)?.profileRoot,
+      profileRoot,
+    )) &&
     initialHistory.state === "valid" &&
     (await sameRoot(initialHistory.root, options.root)) &&
     (await keyPresent(options.root, { strict: true })) &&
     identityFingerprint(await projectKey(options.root, { create: false })) ===
       initialHistory.fingerprint
   )
-    return { status: "identity_reset", root: options.root };
+    return {
+      status: "identity_reset",
+      root: options.root,
+      alreadyComplete: true,
+      writes: 0,
+      disclosure: RESET_DISCLOSURE,
+    };
+  if (
+    !initial.install.resetPending &&
+    initial.install.retired?.length &&
+    initialHistory.state === "valid" &&
+    (await sameRoot(initialHistory.root, options.root))
+  )
+    fail("identity_reset_requires_new_root");
   const retry =
     initial.install.resetPending &&
     (await sameRoot(initial.install.resetPending.root, options.root));
@@ -1877,7 +1971,11 @@ async function resetIdentityImpl(options = {}) {
       await notifyWrite(locations.pairing, "unlink");
       const resetInstall = {
         version: 1,
-        lastReset: { root: options.root, client: options.primaryClient },
+        lastReset: {
+          root: options.root,
+          client: options.primaryClient,
+          profileRoot,
+        },
         retired,
         clients: {
           [options.primaryClient]: {
@@ -1895,13 +1993,11 @@ async function resetIdentityImpl(options = {}) {
         install: resetInstall,
         home: locations.home,
       });
-      await saveInstall(locations, resetInstall);
+      await saveInstall(locations, resetInstall, { resetReceipt: true });
       return {
         status: "identity_reset",
         root: options.root,
-        disclosure:
-          "Old project memories are no longer addressable by the new identity; " +
-          "the second client requires explicit adoption. Resume starts at EOF.",
+        disclosure: RESET_DISCLOSURE,
       };
     },
   );

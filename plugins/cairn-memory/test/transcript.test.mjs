@@ -83,12 +83,12 @@ test("project identity uses a never-transmitted key separate from telemetry", as
   const dir = await mkdtemp(join(tmpdir(), "cairn-identity-test-"));
   const cwd = "/Users/private/common-project-name";
   const telemetryId = await installId(dir);
-  const projectId = await opaqueProjectId(dir, cwd);
+  const projectId = await opaqueProjectId(dir, cwd, { home: dir });
   const guessUsingTransmittedId = createHmac("sha256", telemetryId)
     .update(cwd)
     .digest("hex");
   assert.notEqual(projectId, guessUsingTransmittedId);
-  assert.equal(await opaqueProjectId(dir, cwd), projectId);
+  assert.equal(await opaqueProjectId(dir, cwd, { home: dir }), projectId);
 });
 
 test("capture hook redacts locally before constructing the HTTP body", async (t) => {

@@ -81,7 +81,7 @@ async function child(options, { client = "claude", code, env = {} } = {}) {
         "--input-type=module",
         "-e",
         code ??
-          `import {clientProjectId} from ${JSON.stringify(moduleURL)}; console.log(await clientProjectId(${JSON.stringify({ ...options, client })}, '/synthetic/project'));`,
+          `import {clientProjectId} from ${JSON.stringify(moduleURL)}; console.log(await clientProjectId(${JSON.stringify({ ...options, client, usesClaude: false })}, '/synthetic/project'));`,
       ],
       {
         env: {
@@ -137,7 +137,9 @@ test("known released plugin path and legacy default key need adoption for Codex"
     const root = stateLocations(options)[known];
     await seed(root);
     assert.equal(
-      (await resolveClient({ ...options, client: "codex", initialize: true })).enabled,
+      (await resolveClient({
+        ...options, client: "codex", usesClaude: true, initialize: true,
+      })).enabled,
       false,
     );
     assert.equal(await readFile(join(root, "project-key"), "utf8"), `${key}\n`);
@@ -296,7 +298,10 @@ test("joint pending guard, >16 mixed processes, restart, loss and original-key r
   const bytes = await readFile(join(root, "project-key"));
   await unlink(join(root, "project-key"));
   for (const client of ["claude", "codex"])
-    assert.equal((await resolveClient({ ...options, client })).status, "paired_key_missing");
+    assert.equal(
+      (await resolveClient({ ...options, client, usesClaude: false })).status,
+      "paired_key_missing",
+    );
   await writeFile(join(root, "project-key"), bytes, { mode: 0o600 });
   assert.equal(await clientProjectId(options, "/synthetic/project"), first[0].stdout);
 });
@@ -331,7 +336,7 @@ test("crash checkpoints keep joint clients pending and retry reuses the publishe
     );
     if (metadata)
       for (const client of ["claude", "codex"])
-        assert.equal((await resolveClient({ ...options, client })).enabled, false);
+        assert.equal((await resolveClient({ ...options, client, usesClaude: false })).enabled, false);
     const pending = await initializePairing({ ...options, adopt: !metadata && !!published });
     if (published)
       assert.equal(await readFile(join(pending.root, "project-key"), "utf8"), published);
@@ -351,6 +356,7 @@ test("exclusive key publication reads winner, syncs, and cleans only owned tempo
   await mkdir(root, { mode: 0o700 });
   await writeFile(join(root, ".foreign.tmp"), "retained", { mode: 0o600 });
   const winner = await projectKey(root, {
+    home: options.home,
     checkpoint: async (stage) => {
       if (stage === "temporary-written")
         await writeFile(join(root, "project-key"), `${key}\n`, { mode: 0o600, flag: "wx" });
@@ -358,6 +364,40 @@ test("exclusive key publication reads winner, syncs, and cleans only owned tempo
   });
   assert.equal(winner, key);
   assert.deepEqual((await readdir(root)).sort(), [".foreign.tmp", "project-key"]);
+});
+
+test("successful probes recover crashed publication without reviving a deleted staged key", async (t) => {
+  for (const action of ["probe", "delete", "marked-delete"]) {
+    const options = await fixture(t);
+    const root = stateLocations(options).defaultRoot;
+    const privateURL = new URL("../private-state.mjs", import.meta.url).href;
+    const result = await child(options, {
+      code: `
+        import {projectKey} from ${JSON.stringify(moduleURL)};
+        import {withWriteObserver} from ${JSON.stringify(privateURL)};
+        await withWriteObserver(({path}) => {
+          if (path === ${JSON.stringify(join(root, "project-key"))}) process.exit(86);
+        }, () => projectKey(${JSON.stringify(root)}, {home:${JSON.stringify(options.home)}}));
+      `,
+    });
+    assert.equal(result.code, 86, result.stderr);
+    const published = (await readFile(join(root, "project-key"), "utf8")).trim();
+    assert.ok(await stat(join(root, ".project-key.pending")));
+    assert.ok(await stat(join(root, ".project-key.lock")));
+    if (action !== "probe") await unlink(join(root, "project-key"));
+    if (action === "marked-delete") {
+      await privateWrite(join(root, "paired-root"), '{"version":1,"paired":true}');
+      await assert.rejects(projectKey(root, { home: options.home }), /paired_key_missing/);
+      await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
+      continue;
+    }
+    const winner = await projectKey(root, { home: options.home });
+    if (action === "probe") assert.equal(winner, published);
+    else assert.notEqual(winner, published, "staging cannot authorize restoring a deleted key");
+    for (const name of [".project-key.pending", ".project-key.lock"])
+      await assert.rejects(stat(join(root, name)), { code: "ENOENT" });
+    assert.equal(await projectKey(root, { home: options.home }), winner);
+  }
 });
 
 test("coordination paths, missing home refusal, temporary standalone fallback", async (t) => {
@@ -520,7 +560,7 @@ test("foreign PID namespace is rejected before calling kill or reaping", async (
 test("paired pause: either client fences waiting dispatch and delayed injection across restart", async (t) => {
   const options = await paired(t);
   const claude = await resolveClient(options);
-  const codex = await resolveClient({ ...options, client: "codex" });
+  const codex = await resolveClient({ ...options, client: "codex", usesClaude: false });
   assert.equal(claude.root, codex.root);
   const old = await readControlState(claude.root);
   let release;
@@ -544,8 +584,9 @@ test("paired pause: either client fences waiting dispatch and delayed injection 
   const paused = await readControlState(codex.root);
   await setPaused(claude.root, false);
   assert.equal(
-    (await readControlState((await resolveClient({ ...options, client: "codex" })).root))
-      .generation,
+    (await readControlState(
+      (await resolveClient({ ...options, client: "codex", usesClaude: false })).root,
+    )).generation,
     paused.generation,
   );
   assert.notEqual(paused.generation, old.generation);
@@ -569,7 +610,7 @@ test("explicit reset retains old root, changes scope, starts paused and requires
   });
   assert.match(reset.disclosure, /no longer addressable/);
   assert.ok(await stat(oldRoot));
-  const single = { ...options, pairingRecord: undefined, client: "codex" };
+  const single = { ...options, pairingRecord: undefined, client: "codex", usesClaude: false };
   const newId = await clientProjectId(single, "/synthetic/project");
   assert.notEqual(newId, oldId);
   assert.equal((await readControlState(root)).paused, true);
@@ -683,7 +724,9 @@ test("unsupported hard-link publication never returns a tentative project ID", a
     fs.link = async () => { throw Object.assign(new Error('unsupported'), {message:'state_unreadable', detail:'ENOTSUP'}); };
     syncBuiltinESMExports();
     const {opaqueProjectId} = await import(${JSON.stringify(identity)});
-    await assert.rejects(opaqueProjectId(${JSON.stringify(root)}, '/synthetic/project'), {message:'state_unreadable', detail:'ENOTSUP'});
+    const options = {home:${JSON.stringify(options.home)}};
+    await assert.rejects(opaqueProjectId(${JSON.stringify(root)}, '/synthetic/project', options),
+      {message:'state_unreadable', detail:'ENOTSUP'});
   `,
   });
   assert.equal(result.code, 0, result.stderr);
@@ -974,7 +1017,7 @@ test("Claude reset preserves its profile through standalone resolution and re-pa
   await completePairing({ ...options, configured: options.consent });
   assert.equal((await detectClients(options)).install.clients.claude.profileRoot, profile);
   for (const client of ["claude", "codex"]) {
-    const paired = { ...options, client, pairingRecord: pending.pairingRecord };
+    const paired = { ...options, client, usesClaude: false, pairingRecord: pending.pairingRecord };
     assert.equal(await clientProjectId(paired, "/p"), newId);
     assert.equal((await readControlState((await resolveClient(paired)).root)).paused, true);
   }
@@ -1005,7 +1048,9 @@ test("external setup uses a confirmed standard profile or requires an explicit r
     pairingRecord: pending.pairingRecord,
     env: { HOME: options.home, CLAUDE_PLUGIN_DATA: profile },
   };
-  const codex = { ...options, client: "codex", pairingRecord: pending.pairingRecord };
+  const codex = {
+    ...options, client: "codex", usesClaude: false, pairingRecord: pending.pairingRecord,
+  };
   assert.equal((await resolveClient(claude)).status, "paired");
   assert.equal(await clientProjectId(claude, "/p"), await clientProjectId(codex, "/p"));
   await setPaused((await resolveClient(codex)).root, true);
@@ -1194,7 +1239,7 @@ test("degraded identity reads cannot replace a key lost after resolution", async
   const options = await paired(t);
   const paths = stateLocations(options);
   const root = join(options.home, "separate-profile");
-  await projectKey(root);
+  await projectKey(root, { home: options.home });
   await chmod(paths.coordination, 0o755);
   const input = {
     ...options,

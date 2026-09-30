@@ -2,12 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdir, readFile, unlink, writeFile, stat, chmod, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import * as pairing from "../pairing.mjs";
 import * as sourceIdentity from "../identity.mjs";
 import * as builtIdentity from "../../../plugins/cairn-memory/lib/identity.mjs";
 import { snapshotHome } from "../testing/sequence-snapshot.mjs";
+import { privateWrite } from "../private-state.mjs";
 import { opaqueProjectId, projectKey } from "../identity.mjs";
 import { exerciseInterruptions, INTERRUPTION_OPERATIONS } from "../testing/interruption-cases.mjs";
 import { SEQUENCE_SEEDS, generateSequences, OPERATIONS } from "../testing/sequences.mjs";
@@ -56,7 +58,7 @@ for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
     };
     let extra = {};
     if (operation.name === "adopt") {
-      await projectKey(root);
+      await projectKey(root, { home });
       await mkdir(join(root, "sessions"), { mode: 0o700 });
       await writeFile(join(root, "sessions", "a".repeat(64) + ".json"), '{"offset":1}', {
         mode: 0o600,
@@ -76,7 +78,7 @@ for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
         };
       if (operation.name === "repair") {
         extra = {
-          originalKey: await projectKey(root, { create: false }),
+          originalKey: await projectKey(root, { create: false, home }),
           confirmKeyRepair: true,
         };
         await unlink(join(root, "project-key"));
@@ -88,6 +90,16 @@ for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
       "binding.json",
     );
     const historyBefore = await stat(historyPath).catch(() => undefined);
+    const installPath = join(home, ".cairn-memory-clients/install.json");
+    const priorInstall = JSON.parse(
+      await readFile(installPath, "utf8").catch(() => '{"version":1,"clients":{}}'),
+    );
+    priorInstall.lastReset = {
+      root,
+      client: "claude",
+      profileRoot: options.env.CLAUDE_PLUGIN_DATA,
+    };
+    await privateWrite(installPath, JSON.stringify(priorInstall));
     const result = await operation.run({ ...options, ...extra });
     assert.ok(result.root, result.status);
     if (historyBefore)
@@ -114,13 +126,17 @@ for (const operation of pairing.PAIR_ROOT_OPERATIONS) {
     const install = JSON.parse(
       await readFile(join(home, ".cairn-memory-clients/install.json"), "utf8"),
     );
+    if (operation.name === "reset") {
+      assert.equal(install.lastReset.root, result.root);
+      assert.equal(install.lastReset.profileRoot, options.env.CLAUDE_PLUGIN_DATA);
+    } else assert.equal(install.lastReset, undefined, `${operation.name} supersedes receipt`);
     if (install.clients.codex)
       assert.equal(
         install.clients.codex.fingerprint,
         binding.fingerprint,
         "P: Codex uses the same fingerprint helper",
       );
-    assert.equal(JSON.stringify(binding).includes(await projectKey(result.root)), false);
+    assert.equal(JSON.stringify(binding).includes(await projectKey(result.root, { home })), false);
     assert.deepEqual(JSON.parse(await readFile(join(result.root, "paired-root"), "utf8")), {
       version: 1,
       paired: true,
@@ -146,11 +162,11 @@ test("invariant K guards both strict and legacy publication; only original-key r
     consent: { claude: true, codex: true },
   };
   const { root } = await pairing.initializePairing(options);
-  const originalKey = await projectKey(root, { create: false });
+  const originalKey = await projectKey(root, { create: false, home });
   await unlink(join(root, "project-key"));
   for (const strict of [false, true])
-    await assert.rejects(opaqueProjectId(root, "/synthetic", { strict }), /paired_key_missing/);
-  await assert.rejects(opaqueProjectId(`${root}/missing/..`, "/synthetic"), /paired_key_missing/);
+    await assert.rejects(opaqueProjectId(root, "/synthetic", { strict, home }), /paired_key_missing/);
+  await assert.rejects(opaqueProjectId(`${root}/missing/..`, "/synthetic", { home }), /paired_key_missing/);
   assert.equal((await pairing.initializePairing(options)).status, "paired_key_missing");
   await assert.rejects(readFile(join(root, "project-key")), { code: "ENOENT" });
   await assert.rejects(
@@ -169,7 +185,7 @@ test("invariant K guards both strict and legacy publication; only original-key r
     originalKey,
     confirmKeyRepair: true,
   });
-  assert.equal(await projectKey(root), originalKey);
+  assert.equal(await projectKey(root, { home }), originalKey);
 });
 
 test("201 random sequences and 48 scripted fixtures enforce P, K, b, b-prime, identity and containment", async (t) => {
@@ -185,7 +201,7 @@ test("201 random sequences and 48 scripted fixtures enforce P, K, b, b-prime, id
   const workspace = createTestWorkspace(t, { prefix: "cx2-sequences-" });
   const child = spawn(
     process.execPath,
-    [new URL("../testing/sequence-worker.mjs", import.meta.url).pathname, workspace.path],
+    [fileURLToPath(new URL("../testing/sequence-worker.mjs", import.meta.url)), workspace.path],
     {
       env: {
         ...process.env,
@@ -259,10 +275,16 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
       "key-mode",
       "root-lost",
       "coordination-lost",
+      "uses-claude-missing",
+      "codex-only-repeat",
+      "unrelated-default-file",
+      "unrelated-default-mode",
+      "completed-reset",
+      "receipt-retry",
     ].includes(damage) ||
       (operation === "interrupt" && INTERRUPTION_OPERATIONS.includes(damage)),
   );
-  assert.ok(["unchanged", "new-marked-binding", "same-end-state"].includes(effect));
+  assert.ok(["unchanged", "new-marked-binding", "same-end-state", "no-registration"].includes(effect));
   test(`operation table ${id}: ${operation} with ${damage}`, async (t) => {
     const workspace = createTestWorkspace(t, {
       prefix: "cx2-operation-table-",
@@ -286,7 +308,15 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
       consent: { claude: true, codex: true },
       configured: { claude: true, codex: true },
     };
-    if (damage === "no-claude" || (operation === "initialize" && damage === "pre-keyed"))
+    const fresh = [
+      "uses-claude-missing",
+      "codex-only-repeat",
+      "unrelated-default-file",
+      "unrelated-default-mode",
+    ].includes(damage);
+    if (fresh) {
+      // No setup: these rows exercise first use or an unrelated default root.
+    } else if (damage === "no-claude" || (operation === "initialize" && damage === "pre-keyed"))
       await pairing.resolveClient({
         ...options,
         client: "codex",
@@ -298,9 +328,9 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
       await pairing.completePairing(options);
     }
     const binding = join(profile, ".cairn-memory-profile/binding.json");
-    const originalKey = ["no-claude", "pre-keyed"].includes(damage)
+    const originalKey = fresh || ["no-claude", "pre-keyed"].includes(damage)
       ? "33333333-3333-4333-8333-333333333333"
-      : await projectKey(root, { create: false });
+      : await projectKey(root, { create: false, home });
 
     if (damage === "json") await writeFile(binding, "{");
     if (damage === "mode") await chmod(binding, 0o644);
@@ -340,10 +370,48 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
     }
     if (damage === "coordination-lost")
       await rm(join(home, ".cairn-memory-clients"), { recursive: true });
+    if (damage.startsWith("unrelated-default-")) {
+      const unused = join(home, ".cairn-memory");
+      if (damage === "unrelated-default-file") await writeFile(unused, "unrelated file");
+      else {
+        await mkdir(unused, { mode: 0o700 });
+        workspace.defer(() => chmod(unused, 0o700));
+        await chmod(unused, 0);
+      }
+    }
+    if (["completed-reset", "receipt-retry"].includes(damage)) {
+      await pairing.resetIdentity({
+        ...options,
+        root: destination,
+        primaryClient: operation.includes("codex") ? "codex" : "claude",
+        confirmIdentityReset: true,
+      });
+      if (damage === "completed-reset") {
+        await pairing.initializePairing({ ...options, root: destination, adopt: true });
+        assert.equal((await pairing.detectClients(options)).install.lastReset, undefined);
+        await pairing.completePairing({ ...options, root: destination });
+      }
+    }
     const before = await snapshotHome(home);
     let result, failure;
     try {
-      if (operation.startsWith("reset"))
+      if (damage === "uses-claude-missing") {
+        for (const usesClaude of [null, 0, "false"])
+          await assert.rejects(
+            pairing.resolveClient({ ...options, client: "codex", usesClaude }),
+            { message: "uses_claude_required" },
+          );
+        result = await pairing.resolveClient({ ...options, client: "codex" });
+      } else if (damage === "codex-only-repeat") {
+        const input = { ...options, client: "codex", usesClaude: false, initialize: true };
+        const ids = [];
+        for (let i = 0; i < 3; i++) {
+          result = await pairing.resolveClient(input);
+          assert.equal(result.status, "single");
+          ids.push(await pairing.clientProjectId(input, "/synthetic/codex-only", result));
+        }
+        assert.equal(new Set(ids).size, 1);
+      } else if (operation.startsWith("reset"))
         result = await pairing.resetIdentity({
           ...options,
           root: destination,
@@ -360,6 +428,7 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
         result = await pairing.resolveClient({
           ...options,
           client: "codex",
+          usesClaude: false,
           pairingRecord: join(home, ".cairn-memory-clients/pairing.json"),
         });
       else if (operation === "facade")
@@ -376,7 +445,16 @@ for (const [id, operation, damage, outcome, effect] of operationRows) {
     }
     if (failure) assert.equal(failure.constructor, Error);
     assert.equal(failure?.message ?? result?.status, outcome);
+    if (damage === "receipt-retry") {
+      assert.equal(result.alreadyComplete, true);
+      assert.equal(result.writes, 0);
+      assert.match(result.disclosure, /no longer addressable/);
+    }
     if (effect === "unchanged") assert.deepEqual(await snapshotHome(home), before);
+    else if (effect === "no-registration")
+      await assert.rejects(readFile(join(home, ".cairn-memory-clients/install.json")), {
+        code: "ENOENT",
+      });
     else {
       assert.equal(await stat(join(result.root, "paired-root")).then(() => true), true);
       assert.equal(JSON.parse(await readFile(binding, "utf8")).root, result.root);
@@ -401,7 +479,7 @@ test("caught write failures roll back each explicit binding operation", async (t
     };
     let extra = {};
     if (operation.name === "adopt") {
-      await projectKey(root);
+      await projectKey(root, { home });
       extra.adopt = true;
     } else if (operation.name !== "initialize") {
       await pairing.initializePairing(options);
@@ -413,7 +491,7 @@ test("caught write failures roll back each explicit binding operation", async (t
         };
       if (operation.name === "repair") {
         extra = {
-          originalKey: await projectKey(root, { create: false }),
+          originalKey: await projectKey(root, { create: false, home }),
           confirmKeyRepair: true,
         };
         await unlink(join(root, "project-key"));

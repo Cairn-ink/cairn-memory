@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { cp, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createHmac } from "node:crypto";
 import { resolveClient, clientProjectId } from "../pairing.mjs";
 import { snapshotHome } from "./sequence-snapshot.mjs";
@@ -16,7 +17,7 @@ export const INTERRUPTION_OPERATIONS = Object.freeze([
   "reset-codex",
   "repair",
 ]);
-const worker = new URL("./interruption-worker.mjs", import.meta.url).pathname;
+const worker = fileURLToPath(new URL("./interruption-worker.mjs", import.meta.url));
 const fingerprint = (key) =>
   createHmac("sha256", key).update("cairn-memory:binding:v1").digest("hex");
 const optional = async (path) =>
@@ -190,7 +191,15 @@ export async function exerciseInterruptions(parent, operation, { source, onlyPoi
           );
         }
       }
-      assert.deepEqual(await snapshotHome(home), beforeReads, "read paths never register or write");
+      // A successful probe may clean crashed key-publication staging/ownership.
+      // All identity, binding, registration and control bytes must remain untouched.
+      const withoutPublication = (entries) =>
+        entries.filter((entry) => !/(?:^|\/)\.project-key\.(?:pending$|lock(?:$|\.))/.test(entry.path));
+      assert.deepEqual(
+        withoutPublication(await snapshotHome(home)),
+        withoutPublication(beforeReads),
+        "read paths never register or change durable identity/control state",
+      );
     }
     const beforeRetry = await snapshotHome(home);
     const retried = await run({ home, operation, source });
@@ -198,6 +207,13 @@ export async function exerciseInterruptions(parent, operation, { source, onlyPoi
       assert.deepEqual(await snapshotHome(home), beforeRetry, "F: refused retry preserves state");
     assert.equal(retried.code, 0, `${operation} write ${k}: ${JSON.stringify(retried)}`);
     assert.equal(retried.final.result.status, expectedStatus, `${operation} write ${k}`);
+    if (operation.startsWith("reset-") && k === points && !source) {
+      assert.equal(retried.final.result.alreadyComplete, true);
+      assert.equal(retried.final.result.writes, 0);
+      assert.equal(retried.final.count, 0);
+      assert.match(retried.final.result.disclosure, /no longer addressable/);
+      assert.deepEqual(await snapshotHome(home), beforeRetry, "final reset retry writes nothing");
+    }
     for (const [root, key] of visible)
       assert.equal(
         await optional(join(root, "project-key")),

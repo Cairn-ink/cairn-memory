@@ -76,9 +76,8 @@
   directories, symlinked ancestors and platforms without POSIX owner APIs.
   Without 0.1.2 profile history, absent coordination retains normal first-use
   behavior; unreadable existing
-  coordination never mints a key. It preserves existing profile keys or a
-  validated compatibility adoption history. Current explicit adoption writes binding
-  history and refuses when coordination is lost.
+  coordination never mints a key. It preserves existing profile keys. Current
+  explicit adoption writes binding history and refuses when coordination is lost.
   Shared-root markers prevent fresh profiles from inferring legacy use after
   coordination loss; cursor evidence also requires a valid default key. Absolute
   plugin-data roots are canonicalized by explicit setup; relative/empty roots never register.
@@ -95,7 +94,11 @@
   both coordination and the root are lost; only explicit recovery can change identity.
 - Record key creators privately, so Codex-first newcomers require pairing without
   read-time registration. Interrupted initialization and reset can be retried with
-  the same call, preserving the published identity and pause state.
+  the same call, preserving the published identity and pause state. A live reset
+  receipt returns a zero-write success with disclosure; later setup supersedes it,
+  so stale repeats to the current root refuse. Successful key
+  probes clean crash staging and dead publication locks without restoring deleted keys.
+  Codex-only resolution requires an explicit `usesClaude: false`.
 
 ## 0.1.1 — Claude plugin: stop sending machine-generated transcript records
 

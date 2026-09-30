@@ -273,8 +273,8 @@ refuses an undetermined/non-absolute home before any writes or host execution;
 its paths never use this fallback. Pairing requires the same durable home.
 Both hosts resolve the same coordination location; no per-host alternate registry.
 Explicit setup writes profile-local `binding.json` with the adopted root and a
-non-secret fingerprint. `legacy.json` is compatibility input only, never written
-by current code. Binding history refuses when coordination is absent or degraded.
+non-secret fingerprint. `legacy.json` is an unreleased synthetic fixture format;
+no release wrote it and current setup never writes it. Binding history refuses when coordination is absent or degraded.
 Normal hooks perform read-only detection. Take the setup lock and recheck only
 for explicit setup registration, joint initialization, adoption or reset. Established
 hooks never rewrite/fsync `install.json`. Explicit setup uses a bounded lock wait and
@@ -1331,11 +1331,10 @@ active as `standalone_unregistered`, with separate detail `coordination unreadab
 Otherwise memory is disabled with `pairing_needed`; a lost locally recorded standalone
 key in an unmarked root reports `standalone_key_missing`, never `paired_key_missing`.
 
-Explicit setup records adopted scope in the private profile-local `binding.json`,
-not `legacy.json`. Binding history contains the root and a non-secret fingerprint,
+Explicit setup records adopted scope in the private profile-local `binding.json`.
+Binding history contains the root and a non-secret fingerprint,
 never a key or conversation. With absent or degraded coordination it refuses with
-`pairing_record_missing` until repair or an explicit reset to a new root. Older
-`legacy.json` records remain read-only compatibility input; no current path writes one.
+`pairing_record_missing` until repair or an explicit reset to a new root.
 Initialization, adoption, completion, reset destinations and repair publish a private
 `paired-root` marker in the shared
 root. Its positive presence, valid or invalid, permanently excludes cursor-based legacy
@@ -1426,7 +1425,8 @@ existence in an owned directory; its contents are irrelevant. Marker probes use 
 lexically normalized directory as key publication, including relative paths with `..`.
 A missing ancestor canceled by `..` must never hide a marker at the publication target.
 
-The old profile-local adoption record `legacy.json` is read-only compatibility input.
+The profile-local `legacy.json` format exists only in unreleased synthetic fixtures.
+No released install wrote it; current setup records adoption in `binding.json`.
 Current adoption writes `binding.json`, which refuses absent or degraded coordination;
 older validated adoption history can preserve its existing, unretired default key
 while degraded. Ordinary existing profile keys retain precedence.
@@ -1473,22 +1473,32 @@ hygiene findings are recorded as follow-ups rather than release blockers.
 
 ### Creator ownership and crash retries (CX-2 round 13)
 
-A private `created-by` record in a newly minted key root names its creator, `claude`
-or `codex`, and its non-secret identity fingerprint. Key publication durably prepares
-both values before publishing the key; an interrupted publication retains a private
-staged key so retry reuses the winner. This is creation evidence, never registration.
-A pre-existing key without the record retains the earlier decision rows. Codex creator
-evidence supplies the `codex` fact in N01–N07 even without install metadata. A keyless
-Claude newcomer, including a set plugin-data profile, cannot mint beside that evidence.
-An already established Claude key keeps working; newly added Codex remains disabled.
+Creator publication and recovery use the canonical
+[local-state policy](../privacy.md#identity-creation-and-crash-recovery).
+Creator evidence supplies the `codex` fact in N01–N07 even without install metadata.
+A pre-existing key without the record retains the earlier decision rows.
 
 Only explicit setup registers. Read paths never attempt registration or wait for its
 lock, so the old `registrationAttempt`/`busy` branch has no reachable row.
+History-free Windows standalone retains 0.1.1 behavior (S07). Portable private
+reads skip POSIX mode comparisons only for standalone creator/publication files,
+which native Windows cannot enforce; pairing remains unsupported and coordination
+and binding history remain strict.
+Codex resolution requires an explicit boolean `usesClaude`; omission or a non-boolean
+refuses with `uses_claude_required`. With `usesClaude: false`, repeated Codex-only
+resolution stays `single`. Setup probes only fail closed for roots it actually uses;
+an unrelated damaged default root cannot block a new explicit shared destination.
 
 Initialization records pending intent before publishing a new key. Retry of that
 intent does not require adoption. Reset records its pending destination before any
 new-root write, and a same-root retry skips the fresh-destination check. A completed
-reset retains a receipt so interruption after its last write is also retryable.
+reset retains a receipt naming the root, primary client and Claude profile. Before any
+later setup operation writes state, it supersedes this receipt in the same install-record
+write. A matching retry while the receipt remains returns `identity_reset`,
+`alreadyComplete: true`, `writes: 0`, and the original disclosure, with no writes or
+identity change. Initialization/adoption, completion, repair and another reset invalidate
+it; repeating reset to the current root afterwards refuses with
+`identity_reset_requires_new_root`. A refused setup operation rolls back receipt changes.
 Pause-barrier intent preserves the original pause flag across an interrupted rotation.
 Unknown key probes refuse with `state_unreadable`; reset never treats uncertainty as
 absence or skips retirement because of a failed check. Interruption fixtures stop after
@@ -1654,6 +1664,8 @@ Defaults (each row overrides only the listed facts):
 | O03 | no | pre-existing Claude profile keeps its own key beside Codex creator evidence | `{"default":"key","creator":"codex","profileKey":true}` | `{"root":"profile","status":"pairing_needed","createKey":true,"enabled":true,"requests":1,"mint":false,"register":false}` | — |
 | O04 | no | Claude creator alone does not imply another client | `{"creator":"claude","profileKey":true}` | `{"root":"profile","status":"single","createKey":true,"enabled":true,"requests":1,"mint":false,"register":false}` | — |
 | O05 | no | invalid selected creator evidence refuses | `{"creator":"invalid","profileKey":true}` | `{"root":null,"status":"state_unreadable","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false,"detail":"invalid_creator_record"}` | — |
+| O06 | no | unreadable Codex creator evidence also gates a fresh plugin-data profile | `{"default":"key","creator":"unreadable"}` | `{"root":null,"status":"state_unreadable","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false,"detail":"state_permissions"}` | — |
+| O07 | no | a present unreadable default creator refuses even beside an existing profile key | `{"default":"key","creator":"unreadable","profileKey":true}` | `{"root":null,"status":"state_unreadable","createKey":false,"enabled":false,"requests":0,"mint":false,"register":false,"detail":"state_permissions"}` | — |
 <!-- claude-resolution-table:end -->
 
 ### Explicit operation decision table (CX-2 round 11)
@@ -1714,6 +1726,14 @@ binding authorizes this intentional new identity; invalid history refuses before
 | J07 | interrupt | adopt-temporary | binding_pending | same-end-state |
 | J08 | reset | key-mode | state_unreadable | unchanged |
 | J09 | detect | key-mode | state_unreadable | unchanged |
+| H01 | codex | uses-claude-missing | uses_claude_required | unchanged |
+| H02 | codex | codex-only-repeat | single | no-registration |
+| H03 | initialize | unrelated-default-file | binding_pending | new-marked-binding |
+| H04 | initialize | unrelated-default-mode | binding_pending | new-marked-binding |
+| H05 | reset | completed-reset | identity_reset_requires_new_root | unchanged |
+| H06 | reset | receipt-retry | identity_reset | unchanged |
+| H07 | reset-codex-custom | receipt-retry | identity_reset | unchanged |
+| H08 | reset-codex-custom | completed-reset | identity_reset_requires_new_root | unchanged |
 <!-- pairing-operation-table:end -->
 
 When a pair root has been deleted, root identity normalizes its missing suffix against
@@ -1727,20 +1747,16 @@ bound roots. Retargeting a host profile alias therefore becomes another profile;
 a delivered record refuses, and no delivered option preserves that profile's own
 standalone key and pause. Standalone root selection itself remains unchanged.
 
-The key publisher records its creator in private `created-by` JSON (0600): version,
-client (`claude` or `codex`) and a non-secret identity fingerprint. It is ownership
-evidence, not registration. A newcomer Claude beside a Codex-created standalone
-root needs explicit pairing, with either set or unset plugin data; it sends nothing
-and mints nothing. The established client continues with `pairing_needed`. Older
-keys without a creator record keep the legacy rules. Publication first durably
-stages the key in private `.project-key.pending`, then the creator intent, then
-links the key. A retry reuses the staged winner. Standalone publishers serialize
-this transaction with `.project-key.lock`; read paths never write creator records.
+Creator evidence and publication recovery follow the canonical
+[local-state policy](../privacy.md#identity-creation-and-crash-recovery).
 
 Interrupted setup is retried with the same explicit call. Pending initialization
 reuses its winner without demanding adoption; pending reset to the same root skips
-the fresh-destination test. Reset retains a completion receipt for a retry after
-its final write. Initialization retains the original pause flag across its barrier.
+the fresh-destination test. A matching reset receipt permits a zero-write retry,
+returning `identity_reset`, `alreadyComplete: true`, `writes: 0`, and the disclosure.
+Later setup operations supersede it atomically with their install-record write;
+reset to the current root then refuses with `identity_reset_requires_new_root`.
+Initialization retains the original pause flag across its barrier.
 Unreadable key probes refuse with `state_unreadable`, rather than treating the key
 as absent or skipping retirement.
 
