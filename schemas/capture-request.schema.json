@@ -4,12 +4,34 @@
   "title": "Cairn Memory capture request",
   "type": "object",
   "additionalProperties": false,
-  "required": ["client", "event_id", "session_id", "messages"],
+  "required": [
+    "client",
+    "event_id",
+    "session_id",
+    "messages"
+  ],
   "properties": {
-    "client": { "const": "claude-code" },
-    "event_id": { "type": "string", "minLength": 8, "maxLength": 200 },
-    "session_id": { "type": "string", "minLength": 1, "maxLength": 200 },
-    "project_id": { "type": "string", "minLength": 16, "maxLength": 128 },
+    "client": {
+      "enum": [
+        "claude-code",
+        "codex"
+      ]
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 200
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 128
+    },
     "messages": {
       "type": "array",
       "minItems": 1,
@@ -17,11 +39,28 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "role", "content"],
+        "required": [
+          "id",
+          "role",
+          "content"
+        ],
         "properties": {
-          "id": { "type": "string", "minLength": 1, "maxLength": 200 },
-          "role": { "enum": ["user", "assistant"] },
-          "content": { "type": "string", "minLength": 1, "maxLength": 20000 }
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          }
         }
       }
     }

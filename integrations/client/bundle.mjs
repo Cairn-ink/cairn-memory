@@ -13,6 +13,8 @@ export const DEFERRED_CLIENT_MODULES = Object.freeze([
 ]);
 export const CLIENT_MODULES = Object.freeze({
   'capture-cursor.mjs': 'capture-cursor.mjs',
+  'hosted-contract.mjs': 'hosted-contract.mjs',
+  'hosted-schemas.mjs': 'hosted-schemas.mjs',
   'config.mjs': 'config.mjs',
   'control-state.mjs': 'control-state.mjs',
   'file-lock.mjs': 'file-lock.mjs',
@@ -24,7 +26,25 @@ export const CLIENT_MODULES = Object.freeze({
   'transport-hosted.mjs': 'http.mjs',
 });
 
+export const HOSTED_SCHEMA_NAMES = Object.freeze([
+  'capture-request', 'capture-response', 'recall-response',
+  'session-start-request', 'session-start-response', 'pause-state',
+]);
+export async function schemaModule() {
+  const schemas = {};
+  for (const name of HOSTED_SCHEMA_NAMES) {
+    schemas[name] = JSON.parse(await readFile(
+      new URL(`../../schemas/${name}.schema.json`, import.meta.url), 'utf8'));
+  }
+  return '// Frozen from schemas/ by integrations/client/bundle.mjs. Do not edit.\n' +
+    'export const HOSTED_SCHEMAS = ' + JSON.stringify(schemas, null, 2) + ';\n';
+}
 export async function bundleClient({ check = false, target = destination } = {}) {
+  const schemas = await schemaModule();
+  const schemaPath = join(source, 'hosted-schemas.mjs');
+  if (check) {
+    if (await readFile(schemaPath, 'utf8') !== schemas) throw new Error('hosted_schemas_stale');
+  } else await writeFile(schemaPath, schemas);
   const names = (await readdir(source)).filter(name => name.endsWith('.mjs') && name !== 'bundle.mjs').sort();
   if (JSON.stringify(names) !== JSON.stringify([...Object.keys(CLIENT_MODULES), ...DEFERRED_CLIENT_MODULES].sort())) {
     throw new Error('client_bundle_module_map_mismatch');
