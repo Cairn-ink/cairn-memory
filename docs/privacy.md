@@ -438,11 +438,13 @@ the core's namespace-wide cross-client groups; the read-client flag is not a
 general memory access boundary. Process configuration and database-file access
 remain trusted local authority, not authentication against the file owner.
 
-Access-only startup enables no capture, retention, interpretation, automatic tags
-or telemetry. Reads use local token counting and never invoke provider generation.
+Access-only startup enables no capture, retention, interpretation or telemetry.
+Automatic tags can be proposed only through an explicit keep request. Reads use
+local token counting and never invoke provider generation.
 Selected passages already retained by a trusted producer can persist without an
 age TTL. Explicit keep is the only episode-management request that sends retained
-text through extraction/qualification/admission to a separately configured model;
+text through episode-mode extraction/qualification/admission to a separately
+configured model, including source-anchored model-origin procedural proposals;
 it may incur charges and cannot retract prior provider copies. Generation flags
 are configuration only until trusted producer binding; submitted capture remains
 in legacy mode, even with that configuration present.

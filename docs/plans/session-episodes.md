@@ -958,7 +958,8 @@ episode-ID operations; tool client filters can only narrow it. Startup context
 uses the core's cross-client groups in the exact namespace.
 
 `--session-episodes-access episode-v1` is keyless access without capture,
-interpretation or automatic tags. Generation flags require source-bound-v2 and
+interpretation. Automatic tag proposals can occur through explicit keep's normal
+episode-mode extraction. Generation flags require source-bound-v2 and
 staged-v1, validate N=2–16/default 8, and record configuration only pending a
 trusted producer. Submitted capture retains legacy mode. Explicit keep uses a
 short-lived episode-mode admission facade exclusively for retained-source keep;
@@ -1019,6 +1020,47 @@ The earlier capacity-interrupted core invocation has no observed exit status
 and is excluded; its complete rerun passed. No semantic-fidelity, trusted-producer
 compatibility or paid-pilot acceptance is claimed.
 
+#### SE-5 Round-1 review fixes and verification
+
+Built on coordinator merge `d15cc88`. `remember_memory` now accepts only an
+anchored procedural object or omission; null cannot clear a tag through
+unguarded admission. Clearing remains the revision-guarded
+`set_procedural_memory` operation. A two-host regression sets a tag through that
+operation, rejects the second host's null remember, then re-remembers the same
+content with the field omitted and verifies the entire tag remains unchanged.
+The strict-rejection test also checks null on a new memory without admission.
+
+Before changing the server, both Node 22.16.0 and 24.15.0 ran the procedural
+suite against `d15cc88` with the added regressions: 4/6 passed, 2 failed, exit 1.
+The failures were strict null rejection and the two-host sequence. After removing
+only remember's nullable schema, both runtimes passed 6/6, exit 0; guarded tag
+clearing still passes its existing test.
+
+Explicit keep now reuses `episodeAction`'s read-client guard before opening its
+short-lived facade. Three existing tool descriptions name the configured client;
+CLI Usage includes client/session/read-client flags. The plan does not prohibit
+automatic procedural proposals during explicit episode-mode keep, so the docs
+and help now state that exception instead of changing core behavior. Changelog
+records null rejection and rejoins the existing tight list. Review notes 3, 4
+and 7 remain unchanged and are recorded below as follow-ups.
+
+All commands ran sequentially in the foreground with synthetic data, explicit
+fixture homes, `HOME = CAIRN_TEST_REAL_HOME`, and worktree-local TMPDIR/npm cache
+without UUID paths. No provider key or paid call was used. Public npm dependency
+installs and cache preparation each exited 0 on Node 22.16.0.
+
+| Round-1 command | Cases on each runtime | Exit on 22.16 / 24.15 |
+| --- | --- | --- |
+| `npm run test:mcp` | 111/111 (one additional case) | 0 / 0 |
+| `npm run test:artifact` | 87/87 | 0 / 0 |
+| `npm test` (CI home-guard shape) | 401/401 | 0 / 0 |
+| `npm run validate` | JSON and unchanged 0.1.2 version consistency | 0 / 0 |
+| `npm run demo:episodes` | Synthetic lifecycle and keep | 0 / 0 |
+| `npm run demo:session-context` | Synthetic startup/range/closure | 0 / 0 |
+
+No skipped or cancelled tests count as passes. `git diff --check` passed with
+exit 0. No runtime module was added, so the artifact allowlist stays unchanged.
+
 ### Cross-plan shared files
 
 `docs/protocol.md`, `docs/privacy.md`, `packaging/artifact-files.json`,
@@ -1044,6 +1086,13 @@ an SE package's allowed paths. No merge, push or PR is authorized by this packet
 - **Entry disclosure:** the one-brain client must disclose durable selected-passage
   retention when enabling capture; how private UI communicates that remains with
   its owner. Existing staging opt-in must not silently acquire permanent retention.
+- **SE-5 review notes 3/4:** retain existing test database `t.after` teardown and
+  dynamic builtin imports in this round. A later test-style cleanup can align
+  them with `workspace.defer` and sibling static imports.
+- **SE-5 review note 7:** retain the documented read-client boundary: range and
+  episode-ID operations narrow by client; startup context remains cross-client
+  within the exact namespace. Future hosts must not present this flag as a
+  namespace-wide memory access boundary.
 
 Non-goals: hosted behavior, UI, commitments, shared scope, automatic capture for
 additional unsupported clients, complete archives/backfill, cross-store identity

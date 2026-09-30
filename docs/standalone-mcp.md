@@ -441,8 +441,9 @@ node adapters/mcp/cli.mjs --db /absolute/path/to/memory.sqlite --owner local-use
 ```
 
 This adds the tools below. Access alone does not enable capture, staging,
-interpretation or automatic procedural proposals. Reads never process a pending
-queue or call a provider. Normal CLI startup supplies the existing local
+interpretation. Automatic procedural proposals can occur through explicit keep's
+normal episode-mode extraction. Reads never process a pending queue or call a
+provider. Normal CLI startup supplies the existing local
 `o200k_base` counter for startup context. Programmatic hosts supply
 `model: {countTokens}`; an unavailable/invalid counter returns
 `token_count_unavailable`. `--check-config` opens no database and contacts no
@@ -542,7 +543,8 @@ without episode access, for `preference` or `instruction` only:
 The single explicit receipt is the canonical normalized/redacted content itself;
 anchors address that exact text, not metadata. Supply 1–4 valid spans (receiptIndex
 must be 0), without splitting a surrogate pair. Positive tags do not prove a habit
-or entailment. `set_procedural_memory` uses retained receipt anchors
+or entailment. Omit `procedural` to preserve an existing tag when re-remembering;
+`procedural:null` is rejected. `set_procedural_memory` uses retained receipt anchors
 `{receiptId,digest,start,end}`; null clears it. It guards memory and independent tag
 revisions and changes only tag metadata/read epoch, preserving content, receipts,
 conflict, qualification and rationale links. Content correction/forget clears
