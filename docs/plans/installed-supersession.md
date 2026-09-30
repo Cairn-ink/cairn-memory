@@ -1,6 +1,9 @@
 # Installed explicit supersession
 
-Fixed base: `1bc7f932870d39b0109df4bfb85741af4965270d`. Worktree:
+Historical source-construction base: `1bc7f932870d39b0109df4bfb85741af4965270d`.
+Current delivery/review base: `50741cda56a5d9a0b50b1bccbf8071b40c444097`.
+Main-sync integration tested: `ce21588811a057c56bad12d0a92db9442b3b8ae7`.
+Worktree:
 `/home/chichieh/Github/cairn-memory-worktrees/installed-supersession`, branch
 `feat/installed-supersession`. Implementation owner: bounded worker, requested
 and actual GPT-6.1 Sol, reasoning high. Token/cost and elapsed measurements are
@@ -69,10 +72,10 @@ profiles, real provider keys, live calls or current benchmark are in scope.
 
 | Entrypoint | Dependent checks | Owner/evidence |
 | --- | --- | --- |
-| `createCairnServer` option and registration | Configuration, SDK schema/inventory, guards/lifecycle, existing MCP suites | Primary focused18 both Nodes and full120 Node24 accepted; worker full120 Node22 passed |
-| CLI parse/help/check-config | Configuration, real stdio cold restart, installed executable | Primary focused18 both Nodes and installed artifact88 Node24 accepted |
-| Hermes config/setup/schema/inventory | Existing provider tests and new history canonical test | Primary full32 Node24 accepted; worker full32 Node22 passed after precise boundary clarification |
-| Hermes bridge flags/key/timeout | Actual installed MCP calls, profile binding, key canary | Primary inspected native atomicity and reproduced pinned SDK seam; full32 Node24 accepted |
+| `createCairnServer` option and registration | Configuration, SDK schema/inventory, guards/lifecycle, existing MCP suites | Primary integrated-head focused 18 + full 120 on both Nodes; sync logs 01/07/10/16 |
+| CLI parse/help/check-config | Configuration, real stdio cold restart, installed executable | Primary integrated-head focused 18 on both Nodes, including installed history test; sync logs 01/10 |
+| Hermes config/setup/schema/inventory | Existing provider tests and new history canonical test | Primary integrated-head full 32 on both Nodes; sync logs 09/18 |
+| Hermes bridge flags/key/timeout | Actual installed MCP calls, profile binding, key canary | Primary integrated-head full 32 on both Nodes; earlier precise native seam proof retained |
 | Retention and qualification docs | Protocol, standalone setup, Hermes setup, changelog | Primary identified/reconciled dependent-doc claims; scoped diff checked; final audit/reviews recorded separately |
 
 ## Evidence
@@ -382,6 +385,78 @@ mutation. Both diagnostic records remain at
 `primary-logs/12-original-proof-failure.json` and
 `primary-logs/12-corrected-proof.json`; this verification-harness assumption is
 not a product failure. No private operational evidence is included here.
+
+## Main-sync integrated-head acceptance
+
+The source-construction base above remains historical. Primary reports initial
+candidate `eea72db2b6d90592dfde5d37124da4f7ca19e059` passed both independent
+Standards/Spec reviews with 0 findings and all 25 remote checks for PR 313. Strict
+branch protection nevertheless requires current main. Primary's ordinary local
+branch merge of main `50741cda56a5d9a0b50b1bccbf8071b40c444097` produced
+`ce21588811a057c56bad12d0a92db9442b3b8ae7`, without conflict/source rewrite.
+It integrated 15 existing main client/Codex test/docs/helper files only: no core,
+MCP, Hermes, packaging, runtime, dependencies, configuration or gate changes.
+At the integration checkpoint, the feature diff against current main remained
+the same 14 paths, 1416 insertions/9 deletions, before this plan-only evidence append.
+Primary revalidated all 93 shipped bytes/current-source mappings and all 8 frozen
+runtime/test hashes; the worker independently rechecked those 8 unchanged hashes.
+
+Earlier reviews/remote green checks belong to the earlier HEAD, not acceptance
+of this integrated or later delivery HEAD. Primary personally reran 18 affected
+acceptance commands serially on the exact integration SHA above. The worker
+read actual `testedHead`, `cmd`, exit/timing/truncation records and combined logs
+under `/tmp/cairn-history-final-verification-Qzz2LS/sync-logs/`.
+The ordered exact command manifest is `01.result.json` through `18.result.json`;
+full outputs are their corresponding `.combined.log` files. All 18 records have
+the integration SHA, exit 0 and `truncated: false`. Command 18 was absent at the
+initial read; the worker used bounded 20s waits and did not edit this plan or claim
+all-complete until its actual 32-test result and cleanup report existed.
+
+Each command uses the same sanitized prefix recorded earlier with its exact
+Node 22.16.0 or 24.15.0 binary. Paired log numbers below list Node 22 then Node 24;
+each observed wall-time pair corresponds in that order.
+
+| Logs 22 / 24 | Command after sanitized prefix | Node 22 / 24 result | Observed ms 22 / 24 |
+| --- | --- | --- | --- |
+| 01 / 10 | Focused command recorded above, explicit concurrency 1/TAP | 18/18 each | 16996 / 13357 |
+| 02 / 11 | `taskset -c 0 npm test` | 401/401 each | 221638 / 200224 |
+| 03 / 12 | `taskset -c 0 npm run test:pairing` | 270/270 each | 200892 / 237812 |
+| 04 / 13 | `taskset -c 0 npm run test:pairing:golden` | Released golden verification, exit 0 each | 49442 / 57076 |
+| 05 / 14 | `taskset -c 0 npm run test:codex` | 136/136 each | 76845 / 76831 |
+| 06 / 15 | `taskset -c 0 npm run test:client` | 5/5 each | 1089 / 1079 |
+| 07 / 16 | `taskset -c 0 npm run test:mcp` | 120/120 each | 88491 / 76978 |
+| 08 / 17 | `npm run validate` | JSON/version valid each | 381 / 365 |
+| 09 / 18 | Exact six-file canonical wrapper in each result manifest | 32/32 each, retries 0, owned scratch removed | 172953 / 435302 |
+
+The native wrappers use the same inspected final artifact, exact Node executable,
+all six Hermes test files, `-j 1 --file-retries 0` and explicit pytest basetemp
+inside new owned `sync-22.16.0-final-` / `sync-24.15.0-final-` parents. Both logs
+report 32 passed, 0 failed and `owned canonical scratch removed: true`, after
+canonical child groups settled. Native runner time is 167.2s / 152.3s; the observed
+outer 435302ms for Node 24 includes waiting/polling overhead and is not native or
+product wall time. Other observer timings likewise include supervision/monitoring
+overhead and support no performance claim.
+
+The earlier full Node 22/24 artifact 88, lifecycle 25, plugin validation, clean-cache
+and history-demo evidence remains historical, source-identical verification.
+Those unaffected full gates were not rerun after this main sync and are not
+claimed as integrated-head executions; the focused installed history test was
+rerun on both Nodes. New delivery freeze, both independent review axes and full
+latest-head remote CI remain pending; all remote checks will rerun on that final
+HEAD. Protocol/engine files are unchanged by the sync or this evidence append.
+
+Separate baseline H3 observation: original main CI 36771787774 reported later
+normal classification `failed` rather than `applied` in the 1500ms deadline test.
+The bounded Node 22 diagnostic at the earlier feature HEAD ran 3 isolated cases,
+one CPU 0 baseline and 8 concurrent same-test cases: 12/12 passed, no exact symptom
+reproduced. All owned runner/test parents and the throwaway harness were removed;
+exact evidence remains under
+`/tmp/cairn-history-final-verification-Qzz2LS/ci-h3-diagnosis/`.
+This remains an unresolved CI observation, not a confirmed timing cause or a
+fixed source bug. No causal hypotheses/probes/source fix were asserted after
+the non-reproduction. No private trial paths/data/keys or operational records
+are included in this plan. This worker edited only the plan and ran no tests,
+provider/API calls, commits, pushes or branch operations for the sync packet.
 
 Cleanup evidence: final focused fixtures register cleanup immediately, close
 SDK clients/servers/SQLite handles and explicitly verify owned installed cleanup;
