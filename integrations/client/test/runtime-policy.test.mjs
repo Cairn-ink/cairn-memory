@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { createRuntimeGuard } from "../runtime-usage.mjs";
 import { usageFixture } from "./runtime-helpers.mjs";
 import { assertEveryMutation, closedValues } from "./table-contract.mjs";
+import { withWriteObserver } from "../private-state.mjs";
 
 const plan = await readFile(
   new URL("../../../docs/plans/codex-client.md", import.meta.url),
@@ -197,3 +198,91 @@ for (const row of rows)
     }
     assertEveryMutation(row.expected, observed, vocabulary);
   });
+
+for (const version of [1, 2]) {
+  test(`usage v${version} migration retains charged reservations and quota refusal`, async (t) => {
+    const f = await usageFixture(t);
+    const permit = await f.guard.reserve();
+    const resetAt = f.now() + 60000;
+    await f.guard.refuse({ resetAt });
+    const before = (await f.guard.status()).state;
+    const legacy = { ...before, version };
+    delete legacy.policies;
+    if (version === 1) delete legacy.pendingPolicy;
+    await writeFile(f.guard.path, JSON.stringify(legacy));
+    const after = (await f.guard.status()).state;
+    assert.equal(after.version, 3);
+    assert.equal(after.used, 1);
+    assert.deepEqual(after.reservations, before.reservations);
+    assert.equal(after.refusal, "quota_reached");
+    assert.equal(after.resetAt, resetAt);
+    assert.equal((await f.guard.reserve()).code, "quota_reached");
+    await f.guard.release(permit.id, { terminated: true });
+    f.advance(60000);
+    assert.equal((await f.guard.resume()).ok, true);
+    assert.equal((await f.guard.reserve()).ok, true);
+  });
+}
+
+test("policy reverts and conflict alignment recover after every publication", async (t) => {
+  let points = 0;
+  for (const kind of ["cap", "concurrency", "mode", "conflict"]) {
+    async function scenario(crashAt = 0) {
+      const f = await usageFixture(t);
+      let clock = f.now();
+      const active = {
+        ...f.config,
+        dailyCap: 3,
+        concurrency: 1,
+        mode: kind === "mode" ? "plan" : "api-key",
+        now: () => clock,
+        client: kind === "conflict" ? "claude" : "shared",
+      };
+      const original = createRuntimeGuard(active);
+      const patch = {
+        cap: { dailyCap: 50 },
+        concurrency: { concurrency: 8 },
+        mode: { mode: "api-key" },
+        conflict: { client: "codex", dailyCap: 50 },
+      }[kind];
+      const changed = createRuntimeGuard({ ...active, ...patch });
+      const aligned = createRuntimeGuard({ ...active, client: "codex" });
+      const actions = [
+        () => original.status(),
+        () => changed.status(),
+        () => original.status(),
+        () => {
+          clock = f.now() + 86400000;
+          return original.status();
+        },
+      ];
+      if (kind === "conflict") actions.push(() => aligned.status());
+      let writes = 0;
+      for (const action of actions) {
+        try {
+          await withWriteObserver(() => {
+            writes++;
+            if (writes === crashAt) throw new Error("policy interruption");
+          }, action);
+        } catch (error) {
+          assert.equal(error.message, "policy interruption");
+          await action();
+        }
+      }
+      const state = (await original.status()).state;
+      assert.equal(state.cap, 3);
+      assert.equal(state.concurrency, 1);
+      assert.equal(state.mode, active.mode);
+      assert.equal(state.pendingPolicy, null);
+      assert.equal(state.refusal, "none");
+      return { writes, state };
+    }
+    const baseline = await scenario();
+    for (let k = 1; k <= baseline.writes; k++) {
+      points++;
+      assert.deepEqual((await scenario(k)).state, baseline.state, `${kind} write ${k}`);
+    }
+    t.diagnostic(`${kind} policy interruption points=${baseline.writes}`);
+  }
+  t.diagnostic(`policy interruption points=${points}`);
+});

@@ -60,23 +60,26 @@ test("review sequence: delayed A hook worker preserves B's first and second turn
   );
 });
 
-test("invalid reply survives Stop and SessionStart under another project until reset", async (t) => {
-  const f = await fixture(t, { text: header() + item("Bad receiver") });
-  const run = () => runWorker(f.binding, { guard: f.guard, transport: f.transport });
-  f.fail("bad");
-  await run();
-  const before = await f.stateBytes();
-  f.binding.projectId = "c".repeat(64);
-  f.clear();
-  assert.equal((await run()).status, "invalid_reply");
-  assert.equal((await establishPauseBoundary(f.binding)).status, "invalid_reply");
-  assert.equal(await f.stateBytes(), before);
-  assert.equal(f.calls.length, 1);
-  await resetCapture(f.binding, { hostsStopped: true, confirm: true });
-  await appendFile(f.path, item("After explicit repair", 1));
-  await run();
-  assert.equal(f.receiver.size, 1);
-});
+test(
+  "invalid reply survives Stop and SessionStart under " + "another project until reset",
+  async (t) => {
+    const f = await fixture(t, { text: header() + item("Bad receiver") });
+    const run = () => runWorker(f.binding, { guard: f.guard, transport: f.transport });
+    f.fail("bad");
+    await run();
+    const before = await f.stateBytes();
+    f.binding.projectId = "c".repeat(64);
+    f.clear();
+    assert.equal((await run()).status, "invalid_reply");
+    assert.equal((await establishPauseBoundary(f.binding)).status, "invalid_reply");
+    assert.equal(await f.stateBytes(), before);
+    assert.equal(f.calls.length, 1);
+    await resetCapture(f.binding, { hostsStopped: true, confirm: true });
+    await appendFile(f.path, item("After explicit repair", 1));
+    await run();
+    assert.equal(f.receiver.size, 1);
+  },
+);
 
 for (const corrupt of ["", "not-a-key", "x".repeat(65537)]) {
   test(`stopped reset recreates corrupt digest key (${corrupt.length} bytes) at EOF`, async (t) => {
