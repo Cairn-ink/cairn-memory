@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { call, episodeHost, fails, invalid, ok, workspace } from './fixtures/episode-server.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { openMemoryCore } from '../../../core/contract.mjs';
+import { call, episodeHost, fails, invalid, namespace, ok, workspace } from './fixtures/episode-server.mjs';
 
 const procedural = content => ({ anchors: [{ receiptIndex: 0, start: 0, end: content.length }] });
 for (const access of [false, true]) test(`explicit procedural remember with receipt anchors works with episode access ${access}`, async t => {
@@ -47,6 +49,23 @@ test('tag-only changes guard independent revisions and preserve memory content, 
   const f = workspace(t), h = await episodeHost(t, f.path, { home: f.home });
   const content = 'Synthetic standing instruction';
   const memory = ok(await call(h, 'remember_memory', { content, kind: 'instruction' })).memory;
+  const core = openMemoryCore({ path: f.path });
+  try { ok(core.admit({ namespace, memory: { content: 'Synthetic conflicting instruction', kind: 'instruction' },
+    receipts: [{ client: 'synthetic', sessionId: 'explicit-test', eventId: 'conflicting', role: 'user', excerpt: 'Synthetic conflicting instruction' }],
+    conflictHints: [{ memoryId: memory.id, expectedRevision: memory.revision, relation: 'contradicts' }] })); }
+  finally { core.close(); }
+  const db = new DatabaseSync(f.path); t.after(() => db.close());
+  const source = ok(await call(h, 'inspect_memory', { memoryId: memory.id })).receipts[0];
+  const hash = text => createHash('sha256').update(text).digest('hex');
+  db.prepare(`INSERT INTO memory_qualifications(memory_id,version,bound_revision,content_digest,attribution,commitment,anchor_count)
+    VALUES(?,1,?,?,'direct','adopted',1)`).run(memory.id, memory.revision, hash(content));
+  db.prepare('INSERT INTO qualification_anchors VALUES(?,0,?,?,0,6,?)').run(memory.id, source.id, hash(source.excerpt), '["attribution","commitment"]');
+  const boundDigest = hash(JSON.stringify({ id: source.id, role: source.role, excerpt: source.excerpt }));
+  db.prepare("INSERT INTO rationale_edges VALUES(?,?,?,?,'supports-decision',?,?,?,?)")
+    .run(memory.id, memory.revision, memory.id, memory.revision, source.id, source.id, boundDigest, boundDigest);
+  const snapshot = () => ['memory_conflicts', 'memory_qualifications', 'qualification_anchors', 'rationale_edges']
+    .map(table => db.prepare(`SELECT * FROM ${table}`).all());
+  const links = snapshot(); assert.ok(links.every(rows => rows.length > 0));
   const before = ok(await call(h, 'inspect_memory', { memoryId: memory.id }));
   const receipt = before.receipts[0], anchor = { receiptId: receipt.id, digest: createHash('sha256').update(receipt.excerpt).digest('hex'), start: 0, end: receipt.excerpt.length };
   const args = { memoryId: memory.id, expectedRevision: memory.revision, expectedTagRevision: 0, procedural: { anchors: [anchor] } };
@@ -54,6 +73,7 @@ test('tag-only changes guard independent revisions and preserve memory content, 
   fails(await call(h, 'set_procedural_memory', args), 'revision_conflict');
   await invalid(h, 'set_procedural_memory', { ...args, expectedTagRevision: 1, namespace: 'forged' });
   const tagged = ok(await call(h, 'inspect_memory', { memoryId: memory.id }));
+  assert.deepEqual(snapshot(), links);
   assert.deepEqual(tagged.memory, before.memory); assert.deepEqual(tagged.receipts, before.receipts);
   for (const key of ['placements', 'conflicts', 'qualification', 'rationale']) assert.deepEqual(tagged[key], before[key]);
   ok(await call(h, 'set_procedural_memory', { ...args, expectedTagRevision: 1, procedural: null }));

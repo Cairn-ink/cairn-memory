@@ -47,7 +47,7 @@ export async function invalid(host, name, args) {
   try { assert.equal((await host.client.callTool({ name, arguments: args })).isError, true); }
   catch (error) { if (error instanceof assert.AssertionError) throw error; assert.match(String(error), /invalid|validation|required|unrecognized/i); }
 }
-export async function seed(path, { ns = namespace, count = 3, client = 'synthetic-a', quick = false, text = 'Synthetic 中文 😀 source. Review this proposal.' } = {}) {
+export async function seed(path, { ns = namespace, count = 3, client = 'synthetic-a', quick = false, occurredAt = '2026-09-01T12:00:00.000Z', text = 'Synthetic 中文 😀 source. Review this proposal.' } = {}) {
   const model = { ...rationaleModel(), interpretEpisode: request => {
     const sourceIndex = request.input.classificationTarget[0];
     const field = value => ({ value, anchors: [{ sourceIndex, start: 0, end: request.input.sources[sourceIndex].text.length }] });
@@ -61,7 +61,7 @@ export async function seed(path, { ns = namespace, count = 3, client = 'syntheti
     for (let n = 0; n < count; n++) {
       const input = { namespace: ns, client, sessionId: 'private-session-' + n, eventId: client + '-event-' + n,
         episodeContext: { clientLabel: 'Synthetic client', generation: 'initial', origin: 'ordinary' },
-        messages: [{ id: 'message-' + n, role: 'user', content: text + ' ' + client + ' ' + n, occurredAt: '2026-09-01T12:00:00.000Z' }] };
+        messages: [{ id: 'message-' + n, role: 'user', content: text + ' ' + client + ' ' + n, occurredAt }] };
       ids.push(ok(await core.capture(input)).episode.id); inputs.push(input);
     }
     return { ids, inputs };

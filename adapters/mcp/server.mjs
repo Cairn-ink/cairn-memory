@@ -54,7 +54,9 @@ export function createCairnServer(options = {}) {
   const sessionId = Object.hasOwn(options, 'sessionId') ? options.sessionId : 'explicit-tool';
   if (!clientKey.safeParse(client).success || !id.safeParse(sessionId).success ||
       (Object.hasOwn(options, 'readClient') && !clientKey.safeParse(options.readClient).success)) throw new Error('invalid_mcp_configuration');
+  identifier(sessionId);
   const readClient = options.readClient;
+  const captureSessionId = Object.hasOwn(options, 'sessionId') ? sessionId : 'submitted-capture';
   const generationConfigured = Object.hasOwn(options, 'sessionEpisodes');
   if (generationConfigured) {
     object(options.sessionEpisodes, ['mode', 'draftEveryBatches']);
@@ -245,7 +247,7 @@ export function createCairnServer(options = {}) {
     z.strictObject({ batchId: id, messages: z.array(z.strictObject({ role: z.enum(['user', 'assistant']),
       content: z.string().min(1).max(4000) })).min(1).max(24) }),
     ({ batchId, messages }) => core.capture({ namespace: binding, client,
-      sessionId: options.sessionId ?? 'submitted-capture', eventId: batchId,
+      sessionId: captureSessionId, eventId: batchId,
       messages: messages.map(({ role, content }, index) => ({ role, content,
         id: createHash('sha256').update(JSON.stringify(['cairn.mcp.submitted-message.v1', batchId, index])).digest('hex') })) }));
   if (recoveryConfigured) tool('classify_unfiled_memories',

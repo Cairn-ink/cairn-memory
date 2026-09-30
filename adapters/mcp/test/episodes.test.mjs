@@ -214,3 +214,31 @@ test('explicit keep uses retained passages, normal admission and inert action re
   assert.equal(final.keepActions.items.length, 1); assert.equal(final.memoryLinks.items.length, 1);
   assert.equal(h.stderr().includes('forbidden_model_call'), false);
 });
+
+test('generation configuration never wires submitted capture to interpretation or automatic procedural proposals', async t => {
+  const f = workspace(t), h = await episodeHost(t, f.path, { home: f.home, extraEnv: {
+    SYNTHETIC_KEEP: '1', SYNTHETIC_OPTIONS: JSON.stringify({ captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1',
+      sessionEpisodes: { mode: 'episode-v1', draftEveryBatches: 2 } }),
+  } });
+  ok(await call(h, 'capture_memory', { batchId: 'synthetic-config-only', messages: [{ role: 'user', content: 'Synthetic explicit submission with episode configuration.' }] }));
+  assert.match(h.stderr(), /synthetic_model:extract/); assert.equal(h.stderr().includes('forbidden_model_call'), false);
+  const db = new DatabaseSync(f.path); t.after(() => db.close());
+  for (const table of ['session_episodes', 'episode_events', 'episode_attempts', 'procedural_tags']) assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0);
+});
+
+test('event/receipt disagreement and unknown intervals retain explicit markers and half-open boundaries', async t => {
+  const f = workspace(t), data = await seed(f.path, { count: 1 });
+  await seed(f.path, { count: 1, client: 'unknown-time', occurredAt: null });
+  const h = await episodeHost(t, f.path, { home: f.home });
+  const events = ok(await call(h, 'list_session_episodes', range));
+  assert.deepEqual(events.items.map(item => item.id), data.ids); assert.equal(events.unknownEventIntervals, 'excluded');
+  const receipts = ok(await call(h, 'list_session_episodes', { ...range, timeBasis: 'receipt' }));
+  assert.equal(receipts.items.length, 2); assert.ok(receipts.items.some(item => item.eventTimeCoverage === 'unknown'));
+  const at = '2026-09-01T12:00:00.000Z';
+  assert.equal(ok(await call(h, 'list_session_episodes', { since: '2026-09-01T00:00:00.000Z', until: at })).items.length, 0);
+  assert.equal(ok(await call(h, 'list_session_episodes', { since: at, until: '2026-09-02T00:00:00.000Z' })).items.length, 1);
+  const receiptTime = events.items[0].firstReceivedAt;
+  const small = { since: receiptTime, until: new Date(Date.parse(receiptTime) + 1).toISOString() };
+  assert.equal(ok(await call(h, 'list_session_episodes', small)).items.length, 0);
+  assert.ok(ok(await call(h, 'list_session_episodes', { ...small, timeBasis: 'receipt' })).items.some(item => item.id === data.ids[0]));
+});
