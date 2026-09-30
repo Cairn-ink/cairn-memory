@@ -109,7 +109,7 @@ async function prepared(binding, options, action) {
         return await boundary('pause_boundary');
       if (s.pending && options.byteEnd!==undefined && options.byteEnd<s.pending.end)
         return {status:'pending',state:s};
-      s.observedEnd=Math.max(s.observedEnd,end); s.unconfirmedTail=true;
+      s.observedEnd=Math.max(s.observedEnd,size); s.unconfirmedTail=true;
       let bytes, scanned, batches;
       if (s.pending) {
         bytes=await readBytes(file,s.pending.start,s.pending.end);
@@ -126,7 +126,9 @@ async function prepared(binding, options, action) {
         catch { s.status='unsupported_format'; await save(); return {status:s.status,state:s}; }
         batches=planBatches(scanned.records,wireBinding(binding),s.epoch,start,scanned.end);
         if (!batches.length) {
-          s.status=start<end?'partial_tail':'idle'; await save(); return {status:s.status,state:s};
+          s.status=start<end?'partial_tail':
+            ['pause_boundary','source_changed','state_reset','excluded'].includes(s.status)?s.status:'idle';
+          await save(); return {status:s.status,state:s};
         }
         s.pending={start,end:scanned.end,digest:hash(bytes.subarray(0,scanned.end-start)),
           batches:batches.map(b=>({end:b.end,eventId:b.eventId})),next:0,discard:scanned.discard,discardReason:scanned.discardReason};
