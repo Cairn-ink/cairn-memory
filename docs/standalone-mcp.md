@@ -116,6 +116,7 @@ someone who can edit your process configuration or read your database file.
 | inspect_capture_admission (opt-in only) | batchId, optional includeInitialClassification boolean | Keyless admission status, bounded fresh member refs and optional initial capture-attempt status; overall classification stays unknown |
 | classify_unfiled_memories (opt-in only) | refs: 1–5 unique memoryId/revision pairs | Explicit, guarded model classification and placement of current unfiled memories |
 | correct_memory | memoryId, expectedRevision, content, optional kind | Compare-and-set correction with a new explicit receipt |
+| supersede_memory (opt-in only) | memoryId, expectedRevision, replacement containing content/kind, sourceExcerpt | Explicit adopted update retaining the predecessor and its sources as historical |
 | forget_memory | memoryId, expectedRevision | Compare-and-set logical deletion and suppression |
 
 Remember/correct text is limited to 600 characters; kind defaults to fact.
@@ -127,6 +128,56 @@ Tool results carry the core success/error envelope as JSON text. Memory content
 and receipts are explicitly untrusted data, not instructions for the client.
 Tool receipt text is the supplied assertion, not proof that the assertion is true
 or an authenticated transcript of what a human said.
+
+### Explicit adopted updates and retained history
+
+Start with `--history-updates explicit-v1`, or set
+`historyUpdates: 'explicit-v1'` on `createCairnServer`, to add exactly one local,
+keyless `supersede_memory` tool. This setting is independent of capture, episodes,
+classification and source-snapshot settings. Append it to the installed
+executable's MCP `stdio.args` when using an installed preview. Omit it and restart
+to restore the existing inventory. `--check-config` validates the option without
+opening storage or contacting a provider.
+
+Inspect the existing memory and revision, then submit an actual adopted update
+to the same subject, property and scope:
+
+```json
+{"memoryId":"id-from-inspection","expectedRevision":1,"replacement":{"content":"The project review is Monday.","kind":"fact"},"sourceExcerpt":"I have adopted Monday for the project review."}
+```
+
+Both replacement fields are required; content is at most 600 UTF-16 units and
+kind uses the existing enum. `sourceExcerpt` is required, nonblank and at most
+800 UTF-16 units. Existing core NFKC/whitespace normalization and secret
+redaction apply. Both content and excerpt must be well-formed Unicode; lone
+UTF-16 surrogates are refused, not silently replaced. Existing tools are unchanged.
+If the canonical excerpt exceeds 800 units, the call rejects
+instead of silently truncating it. The caller supplies the recorded evidence,
+never a generated reason. Submitted evidence is an unverified claim, not an
+authenticated transcript, semantic truth or permission. A proposal or merely
+later document does not establish adoption. Validation cannot certify meaning,
+and this tool makes no automatic currentness or temporal inference.
+
+Successful supersession retains the predecessor's ID/content/original receipts
+as historical and creates or uses a successor with the supplied update receipt.
+After restarting with the same database/namespace, inspect the predecessor and
+follow `supersession.replacement.memoryId`, checking its revisions, currentness,
+`receiptIds` and `evidenceAvailable`. Use `states: ["active"]` to list current
+records and `states: ["historical"]` for predecessors; the existing omitted-states
+listing includes both. These views are retained evidence, not event-time/as-of
+truth or a complete revision archive. Later correction/forgetting can make bound
+update evidence unavailable; report that rather than inventing a reason or
+restoring old state. Unrelated memories survive.
+
+Use `correct_memory` for an in-place repair: it keeps the same ID, replaces old
+receipts and creates no history. Stale, foreign, historical, invalid, suppressed
+and conflicting replacements retain the core's atomic guards. Qualified old or
+new records return `qualified_transition_required`; the trusted qualified-history
+workflow is outside this limited profile. Never correct first to bypass that
+fence. Forgetting one record has its existing logical-deletion semantics, not
+secure erasure or deletion of every linked record. Old historical sources remain
+intentionally retained, including local journal/backup limitations. No model
+request, retry, telemetry or cloud field is added.
 
 ### Explicit classification of unfiled memories
 
@@ -206,8 +257,10 @@ ID inspection retains the old body/receipts and bounded replacement references.
 Historical does not mean current: recall excludes these records, correction is
 rejected, and forgetting remains available at the inspected revision. Supersession
 is not deletion or secure erasure; historical evidence remains until separately
-forgotten. No new supersede tool or passive capture is added to MCP. The opt-in
-submitted capture tool below does not establish chronology or retire memories.
+forgotten. The independent [explicit history-update profile](#explicit-adopted-updates-and-retained-history)
+adds a local `supersede_memory` wrapper; absent that opt-in, the existing MCP
+inventory is unchanged. No passive capture is added. The opt-in submitted
+capture tool below does not establish chronology or retire memories.
 Stop all old-runtime processes/connections, including idle readers, before the
 v8 database upgrade; mixed-version coexistence is unsupported.
 

@@ -7,8 +7,48 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { parseConfiguration } from '../cli.mjs';
 import { createCairnServer } from '../server.mjs';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { existsSync } from 'node:fs';
 
 const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
+
+test('IS1 history configuration is independent, strict and syntax-only, preserving all episode flags', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-history-config-' });
+  const path = join(workspace.path, 'memory.sqlite');
+  const flags = ['--db', path, '--owner', 'synthetic-owner'];
+  assert.equal(Object.hasOwn(parseConfiguration(flags), 'historyUpdates'), false);
+  assert.equal(Object.hasOwn(JSON.parse(run(['--check-config', ...flags]).stdout), 'historyUpdates'), false);
+  const base = { path, namespace: { ownerId: 'synthetic-owner', scope: 'personal', projectId: null } };
+  for (const historyUpdates of [undefined, null, false, '', 'other', 'EXPLICIT-V1', {}, []]) {
+    assert.throws(() => createCairnServer({ ...base, historyUpdates }), /invalid_mcp_configuration/);
+    assert.equal(existsSync(path), false);
+  }
+  for (const tail of [[], ['other'], ['null'], ['explicit-v1', '--history-updates', 'explicit-v1']]) {
+    assert.throws(() => parseConfiguration([...flags, '--history-updates', ...tail]));
+    const result = run(['--check-config', ...flags, '--history-updates', ...tail]);
+    assert.equal(result.status, 1); assert.equal(result.stdout, ''); assert.equal(existsSync(path), false);
+  }
+  const episodes = ['--capture-qualification', 'source-bound-v2', '--capture-evidence', 'staged-v1',
+    '--session-episodes', 'episode-v1', '--session-episodes-draft-batches', '4',
+    '--session-episodes-access', 'episode-v1', '--client', 'synthetic-client', '--session', 'synthetic-session',
+    '--read-client', 'synthetic-client', '--capture-deadline-ms', '120000',
+    '--classification-recovery', 'guarded-v1', '--recall-context', 'source-evidence'];
+  const ordinary = parseConfiguration([...flags, ...episodes]);
+  assert.deepEqual(parseConfiguration([...flags, ...episodes, '--history-updates', 'explicit-v1']),
+    { ...ordinary, historyUpdates: 'explicit-v1' });
+  for (const key of ['', 'synthetic-key']) {
+    const result = run(['--check-config', ...flags, '--history-updates', 'explicit-v1'], key);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.historyUpdates, 'explicit-v1');
+    assert.equal(report.databaseOpened, false); assert.equal(report.providerContacted, false);
+    assert.equal(report.automaticCapture, false); assert.equal(existsSync(path), false);
+    assert.ok(!result.stdout.includes('synthetic-key'));
+  }
+  assert.match(run(['--help']).stdout, /--history-updates explicit-v1/);
+  const inherited = Object.assign(Object.create({ historyUpdates: 'unsupported' }), base);
+  const server = createCairnServer(inherited); workspace.defer(() => server.close());
+});
 function run(args, key = '') {
   const forbidProvider = 'data:text/javascript,globalThis.fetch=()=>{process.exit(91)}';
   return spawnSync(process.execPath, ['--import', forbidProvider, cli, ...args], { encoding: 'utf8', timeout: 5000,
