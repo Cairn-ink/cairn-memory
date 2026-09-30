@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { withFileLock } from "./file-lock.mjs";
+import { notifyWrite } from "./private-state.mjs";
 
 const INITIAL_GENERATION = "initial";
 const GENERATION_PATTERN = /^(?:initial|[a-f0-9-]{36}|legacy-[a-f0-9]{64})$/;
@@ -87,13 +88,14 @@ async function writeState(path, state) {
       },
     );
     await rename(temporary, path);
+    await notifyWrite(path);
   } finally {
     await unlink(temporary).catch(() => {});
   }
 }
 
 /** Atomically change pause state while preserving the pause generation. */
-export async function setPaused(dataDir, paused) {
+export async function setPaused(dataDir, paused, { rotate = false } = {}) {
   const controlPaths = paths(dataDir);
   let updated;
   const acquired = await withFileLock(
@@ -101,7 +103,7 @@ export async function setPaused(dataDir, paused) {
     async () => {
       const current = await readControlState(dataDir);
       const generation = paused
-        ? current.paused && current.valid
+        ? current.paused && current.valid && !rotate
           ? current.generation
           : randomUUID()
         : current.paused && current.valid
@@ -113,10 +115,12 @@ export async function setPaused(dataDir, paused) {
       await writeState(controlPaths.state, updated);
       if (paused) {
         await writeFile(controlPaths.legacyPause, "paused\n", { mode: 0o600 });
+        await notifyWrite(controlPaths.legacyPause);
       } else {
         await unlink(controlPaths.legacyPause).catch((error) => {
           if (error?.code !== "ENOENT") throw error;
         });
+        await notifyWrite(controlPaths.legacyPause, "unlink");
       }
     },
     { timeoutMs: 2_000, pollMs: 25 },

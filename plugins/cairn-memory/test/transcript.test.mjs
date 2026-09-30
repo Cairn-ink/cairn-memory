@@ -7,6 +7,7 @@ import { spawn } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import { installId, opaqueProjectId } from "../lib/identity.mjs";
 import { redactSecrets } from "../lib/redact.mjs";
 import {
@@ -82,12 +83,12 @@ test("project identity uses a never-transmitted key separate from telemetry", as
   const dir = await mkdtemp(join(tmpdir(), "cairn-identity-test-"));
   const cwd = "/Users/private/common-project-name";
   const telemetryId = await installId(dir);
-  const projectId = await opaqueProjectId(dir, cwd);
+  const projectId = await opaqueProjectId(dir, cwd, { home: dir });
   const guessUsingTransmittedId = createHmac("sha256", telemetryId)
     .update(cwd)
     .digest("hex");
   assert.notEqual(projectId, guessUsingTransmittedId);
-  assert.equal(await opaqueProjectId(dir, cwd), projectId);
+  assert.equal(await opaqueProjectId(dir, cwd, { home: dir }), projectId);
 });
 
 test("capture hook redacts locally before constructing the HTTP body", async (t) => {
@@ -143,6 +144,7 @@ test("capture hook redacts locally before constructing the HTTP body", async (t)
         CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
         CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
         CLAUDE_PLUGIN_DATA: join(dir, "data"),
+        HOME: join(dir, "home"),
       },
       stdio: ["pipe", "pipe", "pipe"],
     },
@@ -201,6 +203,7 @@ test("detached capture survives after its short-lived launcher exits", async (t)
         CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
         CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
         CLAUDE_PLUGIN_DATA: join(dir, "data"),
+        HOME: join(dir, "home"),
       },
       stdio: ["pipe", "pipe", "pipe"],
     },
@@ -226,13 +229,16 @@ test("detached capture survives after its short-lived launcher exits", async (t)
   await assert.rejects(access(join(dir, "data", "queue")));
 });
 
-test("a recall outage fails open with a successful, silent hook exit", async () => {
+test("a recall outage fails open with a successful, silent hook exit", async (t) => {
+  const workspace = createTestWorkspace(t, { prefix: "cairn-outage-home-" });
   const child = spawn(
     process.execPath,
     [fileURLToPath(new URL("../scripts/hook.mjs", import.meta.url)), "recall"],
     {
       env: {
         ...process.env,
+        HOME: workspace.path,
+        CLAUDE_PLUGIN_DATA: undefined,
         CLAUDE_PLUGIN_OPTION_API_ENDPOINT: "http://127.0.0.1:9",
         CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
         CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",

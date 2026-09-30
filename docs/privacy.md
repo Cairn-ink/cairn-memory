@@ -27,15 +27,130 @@ The service may retain durable Memory text and bounded redacted Source Receipts.
 
 ## Local state
 
-By default the plugin stores control state under `~/.cairn-memory/`:
+Ordinary standalone use selects `CLAUDE_PLUGIN_DATA` when supplied, otherwise
+`~/.cairn-memory/` (the released temporary fallback applies only to a falsy home).
+The legacy-gap adoption described below retains the already-used default root.
+An explicitly paired plugin uses the recorded durable shared root:
 
 - `install-id`: random id used only for anonymous lifecycle telemetry;
 - `project-key`: separate random secret used to derive opaque project ids and never transmitted;
+- `created-by`: private client-creator record and non-secret identity fingerprint;
+- `.project-key.pending`: private staged secret during crash-safe key publication;
+- `.project-key.lock`: publication ownership and recovery files;
 - `control.json`: content-free pause state and generation barrier;
+- `paired-root`: private 0600 JSON (`{"version":1,"paired":true}`) recording shared
+  root history, published with the same owner/symlink checks as other private state;
 - `paused`: compatibility marker also honored as a pause;
 - `sessions/*.json`: byte cursors, pending retry bounds, generation, and incomplete-line discard state,
   keyed by a hash of the Claude session id;
 - process-owned lock files coordinating control changes and session capture.
+
+Version 0.1.2 also stores coordination metadata under
+`~/.cairn-memory-clients/`, independently of `CLAUDE_PLUGIN_DATA`:
+
+- `install.json`: version, established/pending client/root bindings and the
+  registered Claude profile root, initialization and configuration progress;
+  explicit resets retain invalidated binding metadata and Claude profile ownership;
+- `pairing.json`: version, absolute shared root, participating clients, record ID,
+  initialize/adopt policy;
+- `setup.lock` and token-specific owner/recovery files: process ownership for
+  registration, key eligibility and pairing, including boot/PID-namespace identity.
+
+The coordination directory is 0700 and its files are 0600. Owners, permissions
+and symlinks of Cairn-owned components are validated; host-owned ancestors use
+`realpath`, and owner checks are skipped without `getuid`. Metadata contains
+local paths but no project keys, credentials or conversation text, and is never
+included in telemetry. Standalone use retains the falsy-home temporary fallback
+for these paths; setup and pairing require a specified absolute durable home.
+
+Every binding operation also writes private
+`<profileRoot>/.cairn-memory-profile/binding.json` (0600 inside a 0700 directory),
+containing version, profile root, bound root and a non-secret identity fingerprint.
+It contains no key or conversation data and is never transmitted. Both reset primaries
+rewrite it to the new root. Clearing an option does not remove it; CX-2 has no leave API.
+With binding history, missing, empty or untrusted coordination disables memory with
+`pairing_record_missing`, with no key creation or requests. Invalid binding history also
+refuses. Trusted coordination with a different identity reports `binding_identity_mismatch`.
+If both the key and coordination are lost, explicitly call `resetIdentity` with the affected
+`claudeProfileRoot`, a new durable `root`, `primaryClient`, `confirmIdentityReset: true`, and
+`hostsStopped: true`. Valid binding history authorizes this intentional new scope.
+
+A `paired-root` entry prevents every ordinary key-creation path from replacing a lost
+key, including standalone access to that same root. Only explicit original-backup repair
+may restore it. An unset-plugin-data profile still shares an existing default-root key
+and pause when it has no conflicting binding history. A never-paired profile whose own
+root differs from the pair root cannot use that identity or change its pause. For state
+carrying 0.1.2 history, these invariants take precedence over standalone parity.
+
+Cursor-based legacy adoption requires a valid `project-key`, Claude-only cursor
+evidence, no active or retired Claude registration, and no `paired-root` entry.
+Garbage keys and directories named `project-key` do not qualify.
+
+For profiles without 0.1.2 binding or legacy history, absent coordination preserves
+normal 0.1.1 first use, including an unusable HOME, a missing path, ENOTDIR, or a
+non-directory/foreign coordination entry. Degraded means an
+owned coordination directory cannot be listed, or its existing records cannot be read or
+trusted. It never creates a project key or infers adoption from Claude cursors. Without
+a delivered record, it uses an existing profile key, or a validated profile-local
+adoption record naming an existing default-root key. An eligible unretired root remains
+active as `standalone_unregistered`, with separate detail `coordination unreadable`.
+Otherwise memory is disabled with `pairing_needed`; a lost locally recorded standalone
+key in an unmarked root reports `standalone_key_missing`, never `paired_key_missing`.
+
+Explicit setup records adopted scope in the private profile-local `binding.json`.
+Binding history contains the root and a non-secret fingerprint,
+never a key or conversation. With absent or degraded coordination it refuses with
+`pairing_record_missing` until repair or an explicit reset to a new root.
+Initialization, adoption, completion, reset destinations and repair publish a private
+`paired-root` marker in the shared
+root. Its positive presence, valid or invalid, permanently excludes cursor-based legacy
+adoption of that root, including after coordination loss. It does not pause or disable
+an otherwise entitled client. A fresh profile gets its own key after loss; an explicitly
+delivered missing record still reports `pairing_record_missing`. An existing profile key
+takes precedence. With readable coordination, only the registered profile follows its
+binding; another profile stays standalone. Unsupported registration on Windows adds no
+unregistered status note. An unrelated damaged default root does not prevent
+registration or add a status note. Only explicit setup registers absolute plugin-data
+profiles, storing resolved real paths; relative, empty or invalid paths retain standalone
+behavior without registration. Every install record is validated before publication.
+
+Retirement is checked only at the selected root. A present `retired` entry,
+valid or invalid, disables that root with `pairing_needed`; resume refuses to
+unpause it. Missing or inaccessible entries, non-directory roots and roots owned
+by another user are not retirement evidence. An unrelated default root cannot
+disable an unpaired plugin-data profile. Setup refuses a marked destination with
+`retired_root`, including an implicit default destination, and requires another
+unmarked root. Status remains a single token; explanations are separate details.
+Disabled hooks exit 0 without requests, while explicit controls fail visibly.
+
+Pairing supports Linux within one PID namespace and macOS; Windows pairing is
+unsupported. Boot identity affects stale setup locks, never durable pair validity.
+On macOS, a wall-clock step over two seconds during a lock hold can make a live
+owner look stale; lock holds are short and native host behavior is still to verify.
+Crash recovery may leave private temporary or lock-recovery files. Successful
+key probes clean publication staging and recover dead publication locks; other
+cleanup remains limited to a process's own temporary files.
+
+Pairing requires consent and stopped hosts/workers. Newcomers remain disabled with
+`pairing_needed`; established conflicting clients keep their own existing keys.
+Only Claude writes `sessions/`. A bounded check of valid cursor metadata there can
+establish prior Claude use of a shared default root only when no Claude
+registration exists, active or retired; shared telemetry/key/control files cannot.
+No host directory search or conversation read is involved.
+A delivered pairing record selects the shared root and pause generation;
+`CAIRN_MEMORY_STATE_DIR` is validated for paired worker handoffs, never an
+override; standalone hooks ignore inherited values, as 0.1.1 did. With readable
+coordination, a different Claude plugin-data profile remains unregistered with
+its own key and pause; pairing applies only to the registered profile.
+Paired key loss disables memory with `paired_key_missing`, while hooks still exit
+successfully. Restore the original backup key with stopped workers to retain IDs.
+An explicit identity reset retains old state, changes addressable project scope,
+starts paused at a fresh EOF barrier and requires new adoption by the second client.
+The retired shared root is also paused with a rotated generation and stores a
+private 0600 `retired` marker (`{"version":1,"retired":true}`), validated for ownership,
+permissions and symlinks on publication like other private state. Resolution
+uses positive entry presence, not JSON contents, to recognize retirement.
+There is no automatic key regeneration, history merge or paused backfill for a pair.
 
 Stop and PreCompact pipe only session id, transcript path, working directory,
 and a content-free control generation directly to the detached worker. The
@@ -52,6 +167,66 @@ affected operation rather than silently generating a new scope. A process crash
 during initialization may leave an unreferenced `.*.tmp` file with mode `0600`;
 it is not sent to the service. Do not delete or replace a valid `project-key`:
 doing so changes the scope used to retrieve existing project memories.
+
+At a marked root, a profile sharing its own existing key and pause never claims or changes
+registration through hooks or reads; only explicit setup/pairing may register it. Readable
+coordination also prevents minting at a recorded pair root when deletion removed its marker.
+Codex's paired binding stores the same non-secret identity fingerprint in `install.json` and
+refuses `binding_identity_mismatch` before sending if the key changed. Fingerprints are local
+metadata and are never transmitted. Explicit setup validates its preconditions before durable
+writes and rolls back caught failures; a failed operation preserves files, modes and markers.
+Stopped-host original-backup repair checks the saved fingerprint inside the private key write.
+
+Explicit setup owns registration for both clients. Hooks and resolve/status never write
+`install.json`. Existing own-root sharing also leaves registration untouched. Readable pair
+ownership includes fingerprint-bound client roots, reset destinations and retired roots;
+a missing marker never makes these roots eligible for key creation. The shared mint gate
+also protects identity-facade calls. Only original-backup repair may restore such a key.
+
+Root identity uses real paths and device/inode, so symlink aliases cannot be new reset
+identities. Reset accepts only a new path or an empty directory; otherwise it reports
+`reset_destination_not_new`. Initialization at an existing key reports
+`existing_key_requires_adoption` until the caller explicitly adopts it.
+
+Private entry probes distinguish present, absent and unknown. ENOENT proves absence;
+ENOTDIR does so only for a known controlled regular-file parent. Unknown selected state
+refuses with a named status such as `state_unreadable`, keeping the system error in detail.
+Unusable HOME and unrelated damaged paths keep history-free standalone parity. Invalid
+repair history reports `binding_history_invalid`; invalid backup arguments report
+`invalid_original_key`. Failed explicit operations restore files and modes, except for
+legitimate setup-lock ownership and crashed-owner recovery artifacts.
+
+Codex also keeps private non-secret binding history at
+`<HOME>/.cairn-memory-profile/binding.json`. It retains current and retired pair roots,
+so losing both coordination and a root cannot authorize a replacement key or legacy
+adoption. Invalid history fails closed. Hooks and status never register either client.
+
+### Identity creation and crash recovery
+
+The key publisher records its creator in private `created-by` JSON (0600): version,
+client (`claude` or `codex`) and a non-secret identity fingerprint. It is creation
+evidence, not registration. A newcomer Claude beside a Codex-created standalone
+root needs explicit pairing, with either set or unset plugin data; it sends nothing
+and mints nothing. The established client reports `pairing_needed` when another
+client is declared or detected; Codex-only use explicitly sets `usesClaude: false`
+and stays `single`. Unreadable creator evidence reports `state_unreadable`.
+Older keys without a creator record keep the legacy rules. Publication durably
+stages the secret and creator intent before linking the key under `.project-key.lock`.
+A retry keeps any published winner. A successful key probe or publication removes
+leftover staging and recovers a dead publication owner; live publishers retain
+ownership. A missing key is never restored from staging: creation must pass the
+normal mint gate, or explicit repair must supply the original backup. Read paths
+never write creator records or registration.
+
+Interrupted setup is retried with the same explicit call. Pending initialization
+reuses its winner without demanding adoption; pending reset to the same root skips
+the fresh-destination test. A matching reset receipt permits a zero-write retry,
+returning `identity_reset`, `alreadyComplete: true`, `writes: 0`, and the disclosure.
+Later setup operations supersede it atomically with their install-record write;
+reset to the current root then refuses with `identity_reset_requires_new_root`.
+Initialization retains the original pause flag across its barrier.
+Unreadable key probes refuse with `state_unreadable`, rather than treating the key
+as absent or skipping retirement.
 
 ## Controls and residual risk
 

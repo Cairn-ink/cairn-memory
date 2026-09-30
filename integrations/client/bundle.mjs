@@ -12,6 +12,8 @@ export const CLIENT_MODULES = Object.freeze({
   'control-state.mjs': 'control-state.mjs',
   'file-lock.mjs': 'file-lock.mjs',
   'identity.mjs': 'identity.mjs',
+  'pairing.mjs': 'pairing.mjs',
+  'private-state.mjs': 'private-state.mjs',
   'recall-query.mjs': 'recall-query.mjs',
   'redact.mjs': 'redact.mjs',
   'transport-hosted.mjs': 'http.mjs',

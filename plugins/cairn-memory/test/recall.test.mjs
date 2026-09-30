@@ -45,6 +45,7 @@ async function runRecall({ endpoint, dataDir, prompt, action = "recall" }) {
       CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
       CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
       CLAUDE_PLUGIN_DATA: dataDir,
+      HOME: dataDir + "-home",
     },
     stdio: ["pipe", "pipe", "pipe"],
   });

@@ -157,7 +157,7 @@ export async function observeHosted(pluginRoot) {
       prompt: '  api_token=synthetic-secret 中文 🙂  ' };
     async function run(action) {
       const child = spawn(process.execPath, [join(pluginRoot, 'scripts/hook.mjs'), action], {
-        env: { PATH: process.env.PATH, CLAUDE_PLUGIN_DATA: dataDir,
+        env: { PATH: process.env.PATH, HOME: dir, CLAUDE_PLUGIN_DATA: dataDir,
           CLAUDE_PLUGIN_OPTION_API_ENDPOINT: `http://127.0.0.1:${server.address().port}`,
           CLAUDE_PLUGIN_OPTION_API_TOKEN: 'synthetic-token', CLAUDE_PLUGIN_OPTION_TELEMETRY: 'false' },
         stdio: ['pipe', 'pipe', 'pipe'],

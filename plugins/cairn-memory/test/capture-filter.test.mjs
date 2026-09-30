@@ -42,6 +42,7 @@ async function capture({ port, dataDir, transcript, sessionId }) {
       CLAUDE_PLUGIN_OPTION_API_TOKEN: "test-token",
       CLAUDE_PLUGIN_OPTION_TELEMETRY: "false",
       CLAUDE_PLUGIN_DATA: dataDir,
+      HOME: dataDir + "-home",
     },
     stdio: ["pipe", "ignore", "ignore"],
   });
