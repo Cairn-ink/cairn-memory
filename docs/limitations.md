@@ -1438,3 +1438,49 @@ controlled lifecycle regression, with interrupted and superseded verification
 recorded in the plan. At this authoring checkpoint, independent fixed-head
 review and CI were pending; final review and CI delivery status is recorded on
 the PR. These results establish synthetic mechanics only.
+
+## Optional mixed-runner recall observation
+
+The [mixed witness contract](plans/mixed-recall-witness.md) connects the existing
+facade to the actual mixed runner's Cairn adapter/core only when the caller
+explicitly requests `recallWitness: 'bounded-v1'` for 1–30 prepared cases.
+Its Cairn diagnostic retains scalar counts and finite enums; it never exports
+the facade, private lookup methods, opaque tokens, reference IDs, source text,
+question text, labels or provider error text. The observation closes when
+recall returns, before provenance checking and answer calls. Cleanup clears
+private mappings/events on successful, failed, interrupted and thrown paths;
+the report preserves historical retained-call counts and the actual disposed
+flag. Preflight-only arms create no witness. Pre-recall ingestion failures
+retain an unknown recall outcome rather than claiming an observed empty recall.
+
+Counts describe repeated boundary observations of references/receipts, not
+unique memories, relevance, complete history or semantic coverage. Adapter
+returns remain distinct from core acceptance. Complete-map selection bypasses
+the select model and remains unobservable; an empty completed recall, a failed
+recall and an unstarted recall have distinct outcomes. Overflow, projection
+failure and incomplete calls preserve uncertainty. Aggregate counts cannot
+identify a missing target passage, distinguish fetch loss from rank packing,
+or measure model judgment quality. This change repairs no retrieval behavior.
+
+Offline paired mixed controls exercise actual Cairn/OpenAI and contained pinned
+native Mem0 against fake HTTP for successful, empty-capture, empty-rank,
+ingestion-failure, duplicate-rank rejection, recall-timeout and later
+answer-failure outcomes. They capture original HTTP body strings and verify
+their serialization before comparing order/counts, answers, accounting and
+unchanged final scoring. Fresh independent stores create different generated
+identifiers: a consistent bijection collected from each owned closed SQLite
+store applies only to exact memory/receipt identity fields, generated
+memory-ID schema enums and known generated metadata time fields. These native
+comparisons establish equality after that normalization, not raw wire-byte
+equality across independent stores. Source/query/answer prose stays exact,
+including UUID/date-looking literals and prose containing generated metadata
+values; mutation controls demonstrate such changes remain visible. Wall-clock
+phase values are excluded from equality, while phase/outcome/count diagnostics
+remain checked. Existing actual adapter/core controls additionally
+exercise same-namespace navigation loss with an explicitly scripted counter,
+genuine rank-budget omission with measured independently fetchable source
+units, configured witness overflow, projection failure, unchanged tokenizer
+calls and signal/receiver/result identity. These preconditions are synthetic
+mechanics, not explanations of retained paid omissions or new semantic scores.
+Native roots are containment prerequisites for synthetic stores/ledgers only.
+No provider key, corpus, operational ledger or paid call is used by these gates.

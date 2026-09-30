@@ -39,7 +39,7 @@ export function fakeMixedHttp(override = () => undefined, { cairnMemory = false 
   const calls = [];
   const fetchImpl = async (url, options) => {
     const body = JSON.parse(options.body);
-    calls.push({ route: new URL(url).pathname, body });
+    calls.push({ route: new URL(url).pathname, body, bytes: options.body });
     const replacement = await override(url, body, options, calls);
     if (replacement !== undefined) return replacement;
     if (url.endsWith('/responses/input_tokens')) {

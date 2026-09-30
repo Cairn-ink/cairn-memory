@@ -10,6 +10,7 @@ import { checkedMem0NativeConfiguration, runMem0NativeCase } from '../experiment
 import { mem0WireProfile } from '../experiment-budget/mem0-wire.mjs';
 import { benchmarkStagePolicy } from '../live/public-pilot.mjs';
 import { experimentPolicy } from '../live/session.mjs';
+import { createRecallWitness } from '../long-history/recall-witness.mjs';
 import { ingestIndexedWindowLongMemEvalCase, ingestIndexedEvidenceLongMemEvalCase } from './ingestion.mjs';
 import { createMixedModelDiagnosticObserver,
   summarizeMixedIngestionStop } from './mixed-ingestion-diagnostics.mjs';
@@ -277,7 +278,7 @@ function revokeSemanticOnly(handle, guard, allowedLocalOrdinals) {
 }
 
 async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, holdCore,
-  allowedLocalOrdinals, phaseObserver }) {
+  allowedLocalOrdinals, phaseObserver, recallObservation }) {
   const folder = mkdtempSync(path.join(root, 'mixed-cairn-'));
   const modelDiagnostics = createMixedModelDiagnosticObserver();
   const comparisonProfile = guard.mixedSourcePairCapability.manifest.cairn.comparisonProfile;
@@ -286,12 +287,13 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
     ...(evidenceOnly ? {} : { qualificationInputMode: 'adaptive-text-catalog-v1' }),
     onDiagnostic: modelDiagnostics.onDiagnostic,
     ...(phaseObserver ? { onPhaseTiming: phaseObserver.onPhaseTiming } : {}) });
-  const core = openMemoryCore({ path: path.join(folder, 'store.db'), model,
-    ...(evidenceOnly ? { captureSourcePolicy: 'indexed-evidence-v1' }
-      : { captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' }),
-    sourceCandidatePolicy: 'bounded-keyset-v1' });
-  holdCore(core);
+  const witness = recallObservation ? createRecallWitness(model) : null;
   try {
+    const core = openMemoryCore({ path: path.join(folder, 'store.db'), model: witness?.model ?? model,
+      ...(evidenceOnly ? { captureSourcePolicy: 'indexed-evidence-v1' }
+        : { captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' }),
+      sourceCandidatePolicy: 'bounded-keyset-v1' });
+    holdCore(core);
     verifyMixedCapturePlan({ history: plan.renderedHistory, namespace: row.namespace,
       expectedPlan: plan.cairnPlan, comparisonProfile });
     const ingested = await (evidenceOnly ? ingestIndexedEvidenceLongMemEvalCase
@@ -306,6 +308,8 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
     }
     const recalled = await core.recall({ readSet: [row.namespace], query: plan.mem0Input.query,
       limit: 6, contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' });
+    // The observation ends at recall, before provenance checking or answer calls.
+    witness?.finish(recalled);
     if (recalled?.ok !== true) { revokeSemanticOnly(handle, guard, allowedLocalOrdinals); fail('recall_failed'); }
     let evidence;
     try { evidence = verifiedEvidence(recalled.value,
@@ -322,7 +326,16 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
       recalledCards: evidence.units.length, receiptCount: evidence.provenance.length,
       provenance: evidence.provenance, selectedIndices: packed.selectedIndices,
       duplicateIndices: packed.duplicateIndices, omittedIndices: packed.omittedIndices } };
-  } finally { await transport.drain(); }
+  } finally {
+    if (witness) {
+      witness.close();
+      const summary = witness.summary();
+      witness.dispose();
+      // Disposal clears private events; retain their bounded historical counts.
+      recallObservation.summary = { ...summary, disposed: witness.summary().disposed };
+    }
+    await transport.drain();
+  }
 }
 
 const RETAINED_ATTEMPT_STAGE_LIMIT = 64;
@@ -374,15 +387,21 @@ async function nativeCase({ guard, apiKey, plan, nativeArtifact, nativeConfigura
 
 export async function runMixedGeneration(options) {
   const phaseDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'phaseTiming');
+  const witnessDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'recallWitness');
   const raw = ownOptions(options,
     ['prepared', 'guard', 'apiKey', 'cairnStoreRoot',
-      ...(phaseDescriptor ? ['phaseTiming'] : [])], 'invalid_mixed_generation');
+      ...(phaseDescriptor ? ['phaseTiming'] : []),
+      ...(witnessDescriptor ? ['recallWitness'] : [])], 'invalid_mixed_generation');
   const { prepared, guard, apiKey, cairnStoreRoot } = raw;
   const phaseTiming = phaseDescriptor ? raw.phaseTiming : undefined;
   if (phaseDescriptor && phaseTiming !== 'bounded-tail-v1') fail('invalid_mixed_generation');
+  if (witnessDescriptor && raw.recallWitness !== 'bounded-v1') fail('invalid_mixed_generation');
   const privateData = PREPARED.get(prepared);
   if (!privateData || USED.has(prepared)) fail('prepared_identity_required');
   if (phaseTiming && prepared.counts.fixedN > 30) fail('invalid_mixed_generation');
+  if (witnessDescriptor && (prepared.counts.fixedN < 1 || prepared.counts.fixedN > 30)) {
+    fail('invalid_mixed_generation');
+  }
   USED.add(prepared);
   if (!wellFormed(apiKey) || !apiKey.trim() || /[\r\n]/u.test(apiKey)) fail('invalid_api_key');
   assertGuard(prepared, privateData, guard);
@@ -411,6 +430,7 @@ export async function runMixedGeneration(options) {
       const transport = trackedTransport();
       let outcome, local = null, entered = false, workSettled = false, ownedCore = null;
       let phaseObserver = null;
+      const recallObservation = witnessDescriptor && name === 'cairn' ? { summary: null } : null;
       try {
         outcome = await guard.withCaseScope(identity, async handle => {
           entered = true;
@@ -420,7 +440,8 @@ export async function runMixedGeneration(options) {
             try {
               local = name === 'cairn'
                 ? await cairnCase({ guard, apiKey, root, row, plan, handle, transport,
-                  holdCore: core => { ownedCore = core; }, allowedLocalOrdinals, phaseObserver })
+                  holdCore: core => { ownedCore = core; }, allowedLocalOrdinals, phaseObserver,
+                  recallObservation })
                 : await nativeCase({ guard, apiKey, plan,
                   nativeArtifact: privateData.nativeArtifact,
                   nativeConfiguration: privateData.nativeConfiguration, handle, transport,
@@ -445,6 +466,7 @@ export async function runMixedGeneration(options) {
         resultArm.scope = observed;
         resultArm.diagnostics = { ...local?.diagnostics,
           ...(phaseObserver ? { adapterPhaseTiming: phaseObserver.snapshot() } : {}),
+          ...(recallObservation?.summary ? { recallWitness: recallObservation.summary } : {}),
           attempts: attemptDiagnostics(guard, observed?.ordinal) };
       }
       if (guard.isHalted()) haltReason ??= 'global_halt';
