@@ -230,3 +230,38 @@ OpenClaw, additional clients, fully local model verification, automatic local
 capture and UI improvements follow their own evidence gates. Moss and shared
 team knowledge are separate work. No ten-person alpha prerequisite, guaranteed
 star count, hidden telemetry or automatic publication is implied.
+
+## 2026-09-30 eligible-six checkpoint
+
+The new [terminal six-case checkpoint](docs/plans/official-eligible-six-results.md#2026-09-30-terminal-six-case-checkpoint)
+passes `mechanicalSuccess` and `scoreableSix`: both arms completed full
+ingestion, nonempty answers and durable judging in 6/6 cases, with common
+resolved N=6 and settled accounting. Cairn was 2 correct/4 wrong/0 unresolved,
+native Mem0 4/2/0. This changes the new cohort's pilot flow gate, preserving
+earlier failed cohorts. It does not pass semantic, default MOC or installed
+MCP/Hermes acceptance, establish parity or represent a full-500 benchmark.
+
+Actual fixed-30 remains behind the separately declared
+[compatibility/source-pin hold](docs/plans/official-eligible-six-results.md#fixed-30-compatibility-hold-after-the-completed-six).
+Verify a repaired integrated runtime and obtain explicit fresh source/pin
+acceptance first. PR #307's frozen repair had both review axes passing with
+zero findings, but CI pending and no merge at this checkpoint; it neither ran
+nor explains the completed six-case result. The compatible source author
+reported 80/80 on both runtimes, with primary/dual acceptance pending and real
+pins null. No actual thirty cases have been selected or run. Its seed and
+quotas 6/5/4/5/5/5 remain predeclared; no outcome-based prompt/model/allocation
+tuning, retries, replacements or budget reset follows. The original cumulative
+US$300/v3 campaign and protected US$30 remain the accounting boundary.
+
+## 2026-09-30 compatibility verification update
+
+Primary's [updated verification record](docs/plans/official-eligible-six-results.md#2026-09-30-delivery-verification-update)
+adds 80/80 compatible-thirty source checks and independent Standards/Spec
+source-code passes. PR #307's 23 latest-head CI checks passed; it remained
+unmerged at 15:18 UTC. Integrated acceptance remains blocked by one unchanged
+detached-process test failure on each runtime (401/402 passed). Timing
+diagnosis has only an artificial delayed-start reproduction, with no natural
+cause or product fix established. Repair CI does not clear this hold. Actual
+pins remain null; no actual thirty selection or paid execution has occurred.
+The completed six's 2/6 versus 4/6 and original US$300/v3 accounting boundary
+remain unchanged; final report checks, independent review and PR CI are pending.

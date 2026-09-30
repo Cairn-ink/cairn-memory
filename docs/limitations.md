@@ -1284,3 +1284,121 @@ small-recall parity fixture was frozen from main `3a1c17d`.
 - [Integration inventory](source-reliability-integration.md)
 - [First live evidence](evidence/first-live-evidence.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
+
+## Fresh eligible-six checkpoint remains pending
+
+The [2026-09-30 pending checkpoint](plans/official-eligible-six-results.md#2026-09-30-initial-pending-checkpoint)
+records primary-supplied prospective facts for a new matched LongMemEval-S/
+native Mem0 run using explicit `indexed-evidence-v1`. Its one-shot execution
+started at 12:20:13 UTC, but actual ingestion, answers, judgments, fixed-N C/W/U,
+common resolved denominator, latency, requests and settled accounting remain
+pending. Six ready source preparations and synthetic 74/74 source/pin checks
+on both runtimes are not paid completion or accuracy. The metadata allocation
+refusal concerns source-selection constraints, not a product failure or known
+model cause; the private six allocation has minimum one per official type and
+no spare holdout, without changing the public selector.
+
+All six planned cases per arm remain in the denominator. Later reporting must
+separate ingestion/answer/judgment completion from correct/wrong/unresolved:
+lower `C/6`, upper `(C+U)/6`, resolved `C/(C+W)` or undefined when none resolve,
+and common resolved N out of six. `mechanicalSuccess` requires completed
+ingestion and nonempty answers in both arms for all six; `scoreableSix` requires
+durable judging of all six, common resolved N=6 and no unresolved judgments.
+Wrong resolved answers do not fail either gate. No pending count or score is
+converted into an observed zero.
+
+The supplied 78,241-request / 14,844,049-microUSD fresh-six resource projection
+is a conservative ceiling, not actual usage or an invoice. Continuation uses
+the original cumulative US$300/v3 ledger, protected US$30, and retained unknown
+costs, without retries, replacements or resets. Actual fixed-30 remains gated
+on both `mechanicalSuccess` and `scoreableSix`, plus settled accounting. The
+whole-vector/singleton phase-cap projections add no fallback execution policy.
+Its seed and official-order quotas 6/5/4/5/5/5 were frozen before
+selected content/cost/results; metadata depletion explains redistribution.
+Both arms would use identical fresh cases and source-order 15:15, with no old
+IDs or hidden holdout. Conditional source-only 77/77 checks and two review axes,
+with real pins still unset, do not authorize early selection or execution.
+
+This small pending checkpoint establishes no representative/full-500 score,
+Cairn/Mem0 parity, causal repair, default MOC navigation, source fidelity or
+installed MCP/Hermes reliability. MOC research remains a matched-ablation
+hypothesis. Earlier frozen failures remain retained; no ROADMAP gate changes
+until authentic aggregate outcome facts establish one.
+
+Primary later resolved the author's missing maintainer-tool prerequisite:
+the locked Claude Code 2.1.260 marketplace and strict-plugin validations passed
+on Node 22.16.0 and 24.15.0 with fresh owned configuration and zero owned
+configuration residue. These checks used no live key, real configuration or
+paid call. Primary's personal generic reruns and the paid outcome remain
+pending; maintainer validation does not establish either result.
+
+Primary subsequently supplied completed personal generic reruns: both Node
+22.16.0 and 24.15.0 passed 401/401 tests with exit 0 and no failures,
+cancellations, skips or todos; both JSON validators exited 0 for ten files
+with version 0.1.2 consistent. The plan records exact maintainer-wrapper
+arguments, owned configuration, environment allowlist and validation timing.
+These resolve the earlier pending personal-rerun observation. The paid outcome
+remains pending, with no benchmark score or paid completion inferred.
+
+## Fresh eligible-six completed with Cairn 2/6 and Mem0 4/6
+
+The [2026-09-30 terminal checkpoint](plans/official-eligible-six-results.md#2026-09-30-terminal-six-case-checkpoint)
+records primary-supplied authentic aggregates from the unchanged paid runtime
+`aa02d06880b7e4029ff72ae4261419910c1b9c21`. Both arms completed ingestion,
+nonempty answers and durable judging for all six: `mechanicalSuccess=true`,
+`scoreableSix=true`, common resolved N=6 and no unresolved judgments. No global
+generation or scoring halt occurred. Cairn had 2 correct/4 wrong/0 unresolved;
+native Mem0 had 4/2/0. Lower, upper and resolved rates coincide at 2/6 (33.33%)
+and 4/6 (66.67%). Wrong resolved answers do not fail the completion gates.
+The plan retains per-type C/W/U in the frozen official order: Cairn was correct
+on temporal and knowledge-update, Mem0 on SS-user, SS-assistant, SS-preference
+and multi. Each type has only one case; none was correct in both arms.
+
+All 295 Cairn batches completed. Its 1,360 admitted records and native Mem0's
+2,597 verified-add records are different measures, not semantic coverage or
+a fair memory-count quality comparison. Primary observed terminal completion
+around 14:23:57 UTC after the 12:20:13 UTC start; the observation is not an
+exact run duration or product latency measurement. The original 160 exclusions
+plus six consumed cases remain excluded, without replay or replacement.
+
+All 2,124 run attempts succeeded as requests, with zero pending; actual cost
+remains unknown for 606 attempts, which are not failures. New reservation was
+11,622,098 microUSD and known actual cost 2,632,861 microUSD. The original
+cumulative US$300/v3 ledger retains 27,976 requests / 172,282,993 microUSD
+reserved, leaving 127,717,007 microUSD including the protected US$30. Neither
+reservation nor partial known cost is a complete invoice or a per-arm cost
+comparison, and ledger `open` does not authorize resumption or a budget reset.
+
+The pilot flow/accounting prerequisite passed, while
+[actual fixed-30 remains on a separate compatibility hold](plans/official-eligible-six-results.md#fixed-30-compatibility-hold-after-the-completed-six):
+verified repaired integration and explicit fresh source/pin acceptance are
+still required. PR #307's separately reviewed repair had CI pending and was
+not merged at this checkpoint; it does not explain or change the completed
+six-case score. The predeclared thirty seed and quotas 6/5/4/5/5/5 precede
+selected content, costs and results. Earlier 77/77 source acceptance had no
+real pins; the compatible source author's 80/80 on both runtimes still lacks
+primary/dual acceptance and real pins. No actual thirty cases were selected
+or run, and no result-based prompt, model or allocation tuning follows.
+
+Cairn's 2/6 trails Mem0's 4/6 on this fixed `indexed-evidence-v1` cohort. Six
+cases and per-type N=1 establish no representative/full-500 score, parity,
+general ranking, causal repair, default MOC or installed MCP/Hermes acceptance.
+Earlier dated pending observations and frozen failures remain retained.
+Current final documentation checks, independent review and PR CI are still
+primary-owned pending delivery gates; earlier offline verification is dated
+evidence, not their completion.
+
+## 2026-09-30 compatibility verification update
+
+The primary-supplied [delivery verification update](plans/official-eligible-six-results.md#2026-09-30-delivery-verification-update)
+records PR #307's 23 latest-head CI successes and unmerged, non-draft,
+mergeable state at 15:18 UTC, plus primary's 80/80 compatible-thirty source
+checks on both runtimes and separate Standards/Spec source-code passes.
+Integrated acceptance still failed on both runtimes: 401/402 generic tests
+passed, with a `received.messages` TypeError in the unchanged detached-process
+test. Timing diagnosis is ongoing; an artificial delayed-start reproduction
+establishes no natural cause or product fix, and isolated green checks do not
+clear it. Repair CI is not combined-runtime or report CI. Actual pins remain
+null; no actual thirty cases were selected or paid execution started. The
+terminal 2/6 versus 4/6, original US$300/v3 budget, unknown costs and earlier
+pending/failure records remain retained; final report delivery gates are pending.
