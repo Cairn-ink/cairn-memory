@@ -526,7 +526,7 @@ permitted only to an idempotent receiver. Nothing here enables a hosted target.
 | W05 | `{"event":"timeout","batch":"last"}` | batch-start | 2 | pending | timeout |
 | W06 | `{"event":"processing"}` | batch-start | 0 | pending | processing |
 | W07 | `{"event":"lost"}` | batch-start | 1 | pending | timeout |
-| W08 | `{"event":"bad-reply"}` | batch-start | 0 | pending | invalid_reply |
+| W08 | `{"event":"bad-reply"}` | batch-start | 0 | disabled | invalid_reply |
 | W09 | `{"event":"refusal"}` | batch-start | 0 | pending | quota_reached |
 | W10 | `{"event":"refusal","batch":"middle"}` | batch-start | 1 | pending | quota_reached |
 | W11 | `{"event":"pause"}` | unchanged | 0 | pending | paused |
@@ -552,6 +552,10 @@ permitted only to an idempotent receiver. Nothing here enables a hosted target.
 | W31 | `{"event":"digest-migration"}` | eof | 0 | idle | digest_migrated |
 | W32 | `{"event":"latch-failure"}` | batch-start | 0 | pending | quota_reached |
 | W33 | `{"state":"pending","event":"refused-binding"}` | eof | 0 | idle | binding_changed |
+| W34 | `{"state":"pending","event":"late-binding"}` | unchanged | 0 | idle | superseded |
+| W35 | `{"state":"pending","event":"invalid-binding"}` | batch-start | 0 | disabled | invalid_reply |
+| W36 | `{"event":"digest-key-reset"}` | eof | 0 | idle | digest_key_reset |
+| W37 | `{"event":"unconfigured-latch"}` | batch-start | 0 | pending | quota_reached |
 <!-- codex-worker-table:end -->
 
 The single cursor publication site validates a closed schema, finite counters,
@@ -2004,6 +2008,10 @@ latches remain explicit, including a previously consumed one-attempt quota gate.
 | P04 | `{"change":"concurrency","active":2}` | preserved | drain | concurrency_limited |
 | P05 | `{"event":"daily-rollover"}` | latched | automatic | none |
 | P06 | `{"event":"quota-rollover"}` | latched | latched | quota_reached |
+| P07 | `{"event":"revert","change":"cap"}` | preserved | preserved | daily_cap_reached |
+| P08 | `{"event":"revert","change":"concurrency"}` | preserved | preserved | concurrency_limited |
+| P09 | `{"event":"revert","change":"mode"}` | preserved | preserved | plan_threshold |
+| P10 | `{"event":"policy-conflict"}` | conflict | conflict | policy_conflict |
 <!-- codex-usage-policy-table:end -->
 
 Handoffs: CX-6 records retained engineering/evaluation limitations in
@@ -2068,3 +2076,43 @@ the complete passing matrix on 7b7ce787 remains historical coordinator evidence.
 Creator metadata cannot qualify a newer resumed writer: Codex does not append
 new session_meta on resume. CX-5 must independently qualify the installed host;
 CX-6 records this limitation with the other retained offline boundaries.
+
+### CX-3 round 3 contract (table before code)
+
+Failing-first on ad9694e, Node22.16.0: all three synthetic reviewer revert
+probes failed (0/3, exit 1). Cap 3→50→3 granted 50 reservations the next UTC
+day; concurrency 1→8→1 granted eight; plan→api-key→plan allowed a reserve
+at 99% five_hour utilization. P07–P09 require the active policy to remain in
+force, with pendingPolicy cleared before any activation when config matches
+active again. Natural UTC rotation is the only daily-counter reset.
+
+P10 requires deterministic policy_conflict for disagreeing installed clients,
+without activating or alternating either pending proposal. Installation supplies
+client = claude or codex to the guard. The default shared owner retains the
+existing installation-wide calibration API. Three closed owner slots hold only
+finite cap/concurrency values and a mode enum. Each owner's declaration replaces
+its previous declaration; disagreement clears pendingPolicy and blocks reserve,
+dispatch and resume. Status remains inspectable; release and refusal latching
+remain available. Quota latches and counters survive conflict. Synchronizing both
+installed declarations (including a removed client's declaration during explicit
+installer repair) recovers without deleting usage state or refunding counters.
+
+W34 follows A's frozen Stop range → B SessionStart → B first text → late A
+handoff. A handoff with a different cursor binding is superseded before opening
+source or changing state; the next B worker must send B first under B. The oracle
+adds late-handoff, records expected project attribution from operation history,
+and writes text between a cwd change and its next authorized hook.
+
+W35 preserves invalid_reply across binding changes and SessionStart: only the
+existing explicit stopped reset/repair can clear it. W36 resets a corrupt
+owner-private digest key with digest_key_reset at a new EOF epoch. Cursor intent
+is durable before key recreation; interruption after any write is recoverable by
+the same reset, preserving the recorded reason and epoch. Unsafe ownership or
+permissions still refuse. W37 never marks a quota latch complete when refuse
+returns automatic_cap_unconfigured rather than recording quota_reached.
+
+New result vocabularies admit digest_key_reset and policy_conflict; policy cells
+add preserved/conflict. All columns remain independently asserted and closed.
+The client policy suite uses shared client fixture/table helpers and imports no
+Codex test helper. Package.json/CI remain coordinator-owned: test:codex must
+include both runtime-usage.test.mjs and runtime-policy.test.mjs.
