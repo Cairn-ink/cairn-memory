@@ -133,6 +133,7 @@ test("an unconfigured refusal guard never completes the durable quota latch", as
 test("independent history oracle rejects correct text attributed to the wrong project", () => {
   const oracle = new HistoryOracle("", "a".repeat(64));
   oracle.apply("append", { bytes: 1, text: "Synthetic preference" });
+  oracle.hook();
   const bodies = [{ project_id: "b".repeat(64), messages: [{ content: "Synthetic preference" }] }];
   assert.throws(() => oracle.assert(assert, null, bodies));
   bodies[0].project_id = "a".repeat(64);

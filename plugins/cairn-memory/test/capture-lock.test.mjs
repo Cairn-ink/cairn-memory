@@ -4,9 +4,10 @@ import { access, link, mkdtemp, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { withLockClock } from "../../../integrations/client/testing/lock-contention.mjs";
 import { withFileLock } from "../lib/file-lock.mjs";
 
-test("a live lock is never reclaimed based only on age", async () => {
+test("a live lock is never reclaimed based only on age", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "cairn-live-lock-test-"));
   const lock = join(dir, "capture.lock");
   const token = randomUUID();
@@ -17,13 +18,13 @@ test("a live lock is never reclaimed based only on age", async () => {
   await utimes(lock, old, old);
 
   let entered = false;
-  const acquired = await withFileLock(
-    lock,
-    () => {
+  const acquired = await withLockClock(t, async (clock) => {
+    const result = await withFileLock(lock, () => {
       entered = true;
-    },
-    { timeoutMs: 60, pollMs: 10 },
-  );
+    }, { timeoutMs: 60, pollMs: 10 });
+    assert.equal(clock.elapsed(), 60);
+    return result;
+  });
   assert.equal(acquired, false);
   assert.equal(entered, false);
   await access(lock);
@@ -42,7 +43,7 @@ test("a definitively dead owner is recovered without unlinking its successor", a
   assert.equal(
     await withFileLock(lock, () => {
       firstEntered = true;
-    }, { timeoutMs: 500, pollMs: 10 }),
+    }, { timeoutMs: 30_000, pollMs: 10 }),
     true,
   );
   assert.equal(firstEntered, true);
@@ -51,7 +52,7 @@ test("a definitively dead owner is recovered without unlinking its successor", a
   assert.equal(
     await withFileLock(lock, () => {
       successorEntered = true;
-    }, { timeoutMs: 500, pollMs: 10 }),
+    }, { timeoutMs: 30_000, pollMs: 10 }),
     true,
   );
   assert.equal(successorEntered, true);

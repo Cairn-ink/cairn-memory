@@ -1,6 +1,9 @@
 // Test-only real hook and worker processes. Fixed owner-only synthetic config.
 import { spawn } from 'node:child_process';
 import { writeSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
+import { mock } from 'node:test';
+import { withLockClock } from '../../client/testing/lock-contention.mjs';
 import { privateRead } from '../../client/private-state.mjs';
 import { readHookInput, handleHook, workerFromHandoff } from '../hook.mjs';
 import { createRuntimeGuard } from '../../client/runtime-usage.mjs';
@@ -9,7 +12,7 @@ const config=JSON.parse(await privateRead(configPath));
 try {
   const input=await readHookInput(process.stdin);
   if(kind==='hook') {
-    const result=await handleHook(input,{...config,launch:(stdin)=>new Promise((resolve,reject)=>{
+    const handle=()=>handleHook(input,{...config,launch:(stdin)=>new Promise((resolve,reject)=>{
       const child=spawn(process.execPath,[new URL(import.meta.url).pathname,'worker',configPath],{
         detached:false,stdio:['pipe','ignore','ignore'],env:process.env,shell:false});
       child.once('error',reject);
@@ -18,6 +21,14 @@ try {
       // Test supervisor keeps the hook process alive until its worker exits.
       // The launch itself resolves at the closed-pipe handoff, not on capture.
     })});
+    const result = config.virtualLockClock
+      ? await withLockClock({ mock }, async (clock) => {
+          const value = await handle();
+          const observed = { elapsed: clock.elapsed(), status: value.status };
+          await writeFile(config.lockClockResult, JSON.stringify(observed), { mode: 0o600 });
+          return value;
+        })
+      : await handle();
     if(config.exitAfterHook) {writeSync(1,result.output);process.exit(0);}
     process.stdout.write(result.output);
   } else {

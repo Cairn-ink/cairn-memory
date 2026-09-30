@@ -27,6 +27,7 @@ import {
 } from "../pairing.mjs";
 import { projectKey } from "../identity.mjs";
 import { privateWrite } from "../private-state.mjs";
+import { withLockClock } from "../testing/lock-contention.mjs";
 import { captureCursorPath, writeCaptureCursor } from "../capture-cursor.mjs";
 import { readControlState, setPaused, startIfActive, runIfActive } from "../control-state.mjs";
 
@@ -652,16 +653,16 @@ test("unknown liveness never reaps a same-namespace owner", async (t) => {
   const { namespace } = await localLiveness();
   const owner = { pid: 2147483647, token: "11111111-1111-4111-8111-111111111111", namespace };
   await privateWrite(paths.lock, JSON.stringify(owner));
-  await assert.rejects(
-    initializePairing({
+  await withLockClock(t, async (clock) => {
+    await assert.rejects(initializePairing({
       ...options,
       hostsStopped: true,
       consent: { claude: true, codex: true },
       timeoutMs: 30,
       liveness: { namespace, isAlive: () => undefined },
-    }),
-    /setup_busy/,
-  );
+    }), /setup_busy/);
+    assert.equal(clock.elapsed(), 30);
+  });
   assert.deepEqual(JSON.parse(await readFile(paths.lock)), owner);
 });
 
@@ -854,14 +855,14 @@ test("macOS boot estimate tolerance preserves a live lock and Windows setup is u
     boot: 100000,
   };
   await privateWrite(paths.lock, JSON.stringify(owner));
-  await assert.rejects(
-    initializePairing({
+  await withLockClock(t, async (clock) => {
+    await assert.rejects(initializePairing({
       ...options,
       timeoutMs: 20,
       liveness: { namespace: "darwin", boot: 101000, isAlive: () => true },
-    }),
-    /setup_busy/,
-  );
+    }), /setup_busy/);
+    assert.equal(clock.elapsed(), 20);
+  });
   assert.deepEqual(JSON.parse(await readFile(paths.lock)), owner);
   await assert.rejects(
     initializePairing({ ...options, liveness: await localLiveness({ platform: "win32" }) }),
