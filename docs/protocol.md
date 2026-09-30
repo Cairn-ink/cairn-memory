@@ -789,6 +789,7 @@ polling. This is the plan's explicit upgraded-Claude D1 quota/concurrency except
 | --- | --- | --- | --- | --- |
 | open | dispatch starts / interruption before reply | 1 | unconfirmed durably | unchanged |
 | open | verified 429 | 1 | quota_reached | unchanged |
+| open | resume-quota (even while paused) | 0 | open; pause unchanged | unchanged |
 | quota_reached | either client's hook / restart | 0 | quota_reached | unchanged |
 | quota_reached | resume before validated reset | 0 | quota_reached | unchanged |
 | quota_reached | eligible explicit resume | 0 | one attempt available | unchanged |

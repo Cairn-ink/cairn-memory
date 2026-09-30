@@ -317,6 +317,10 @@ async function control() {
       return;
     }
     // Quota-only resume must not rotate the pause generation or skip pending text.
+    if (action === "resume-quota") {
+      process.stdout.write("Cairn quota gate is active; pause is unchanged.\n");
+      return;
+    }
     await setPaused(dataDir, false);
     process.stdout.write("Cairn automatic memory is active.\n");
     return;

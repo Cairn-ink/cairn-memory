@@ -111,6 +111,14 @@ test("unrecognized 429 is no acknowledgement and stops hook retries", async (t) 
   assert.equal(JSON.parse(frozen).offset, 0);
   assert.equal(await readFile(f.cursor, "utf8"), frozen);
 });
+test("Q13 open gate: quota-only resume preserves pause and sends nothing", async (t) => {
+  const f = await fixture(t); await f.run("pause");
+  const openControl = await readFile(join(f.options.root, "control.json"), "utf8");
+  assert.match(await f.run("resume-quota"), /pause is unchanged/);
+  assert.equal(await readFile(join(f.options.root, "control.json"), "utf8"), openControl);
+  await f.run("capture"); assert.equal(f.requests.length, 0);
+  assert.match(await f.run("status"), /paused/);
+});
 test("quota resume preserves an independent global pause", async (t) => {
   const f = await fixture(t); await f.run("capture"); await f.run("pause");
   const control = await readFile(join(f.options.root, "control.json"), "utf8");
