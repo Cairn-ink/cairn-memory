@@ -544,6 +544,13 @@ permitted only to an idempotent receiver. Nothing here enables a hosted target.
 | W23 | `{"event":"finish","mode":"local-stub"}` | batch-end | 1 | pending | batch_limit |
 | W24 | `{"event":"last-hook","mode":"local-stub"}` | batch-end | 1 | pending | batch_limit |
 | W25 | `{"event":"new-session","mode":"local-stub"}` | old-unchanged | 1 | pending | batch_limit |
+| W26 | `{"event":"binding-change"}` | eof | 0 | idle | binding_changed |
+| W27 | `{"state":"pending","event":"binding-change"}` | eof | 0 | idle | binding_changed |
+| W28 | `{"state":"pending","event":"reset-binding"}` | eof | 0 | idle | state_reset |
+| W29 | `{"event":"late-worker"}` | unchanged | 0 | idle | superseded |
+| W30 | `{"state":"stale","event":"start-binding"}` | eof | 0 | idle | binding_changed |
+| W31 | `{"event":"digest-migration"}` | eof | 0 | idle | digest_migrated |
+| W32 | `{"event":"latch-failure"}` | batch-start | 0 | pending | quota_reached |
 <!-- codex-worker-table:end -->
 
 The single cursor publication site validates a closed schema, finite counters,
@@ -1956,3 +1963,49 @@ Coordinator still runs Node24 golden/MCP/OpenAI/demo:capture, applicable Node20
 shared bundle checks (never importing core), and any additional CI chunks it
 requires. Native host/model, hosted service and installed HMA/LAC acceptance are
 not established by these stubs. Scratch/logs are removed after recording results.
+
+
+### CX-3 round 2 recovery contract (table before code)
+
+Failing-first at 7b7ce787 on Node22.16.0: the reviewer cwd A → cwd B synthetic
+repro failed all three cases (exit 1). Stop returned capture_unavailable; direct
+worker and stopped reset both threw cursor_binding_mismatch. W26–W30 cover the
+new EOF binding epoch, reset precedence, superseded handoff and SessionStart path.
+W31 migrates v1 bare transcript digests by deliberately starting a new EOF epoch
+with digest_migrated. W32 preserves quota_reached/resetAt if the shared latch fails;
+its persisted refusal intent is retried before any subsequent model dispatch.
+
+Facts additionally admit binding-change, reset-binding, late-worker, start-binding,
+digest-migration and latch-failure. All result columns have closed vocabularies.
+Cursor: end, eof, retry-end, unchanged, batch-start, batch-end, old-unchanged.
+Sent: integers 0–3. Worker: idle, pending, disabled. Refusal: the literal finite
+values used in W01–W32. Tests derive all four observed results independently of
+expected cells, assert their concrete cursor/worker properties, and reject both
+unknown values and alternate valid mutations in every result column.
+
+Changing a usage policy stages cap/mode/concurrency until the next UTC accounting
+day. No same-day counter or uncertain reservation is refunded. Old unstarted
+permits are invalidated at activation. If live reservations exceed a lowered
+concurrency, new dispatch remains concurrency_limited until confirmed termination
+allows activation; release/status/refusal operations remain available. Daily-cap
+refusal clears automatically when its UTC day rolls over. Other refusal/resume
+latches remain explicit, including a previously consumed one-attempt quota gate.
+
+<!-- codex-usage-policy-table:start -->
+| ID | Facts | Same window | Next window | Refusal |
+| --- | --- | --- | --- | --- |
+| P01 | `{"change":"cap"}` | preserved | applied | none |
+| P02 | `{"change":"mode"}` | preserved | applied | none |
+| P03 | `{"change":"concurrency"}` | preserved | applied | none |
+| P04 | `{"change":"concurrency","active":2}` | preserved | drain | concurrency_limited |
+| P05 | `{"event":"daily-rollover"}` | latched | automatic | none |
+| P06 | `{"event":"quota-rollover"}` | latched | latched | quota_reached |
+<!-- codex-usage-policy-table:end -->
+
+Handoffs: CX-6 records retained engineering/evaluation limitations in
+`docs/limitations.md` (and relevant ROADMAP gate notes per CONTRIBUTING); this
+package cannot edit that ownership. The coordinator adds `test:codex` and its
+Node22.16/24 CI wiring after this round, as for pairing. Context/model/hosted
+integration remains disabled. The coordinator reports the complete 11-command
+matrix passed on 7b7ce787 on Node22/24, plus npm test/validate on Node20; those are
+coordinator evidence, not new implementation-worker executions in this round.
