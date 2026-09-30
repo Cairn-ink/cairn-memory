@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — explicit installed history updates
+
+- Independent MCP `--history-updates explicit-v1` / JS `historyUpdates` and
+  Hermes `history_updates: explicit-v1` add one keyless `supersede_memory` tool
+  for caller-submitted adopted updates with source evidence. Original records
+  and sources remain historical; `correct_memory` stays an in-place repair.
+  Strict source bounds reject canonical overflow; this new tool refuses malformed
+  Unicode in replacement content and source excerpts instead of replacing it.
+  Existing namespace, revision,
+  suppression and qualified-transition guards remain atomic. Inspection reports
+  unavailable bound evidence after later successor correction/forgetting.
+  Submitted evidence is unverified; no automatic currentness, temporal inference,
+  semantic certification, provider request or default-inventory change is added.
+
 ## Unreleased — model calls fit their budgets
 
 - Local MCP episode access now provides keyless session/time reads, sourced startup

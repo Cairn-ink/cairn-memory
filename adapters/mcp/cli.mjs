@@ -16,6 +16,7 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID] --source-snapshot current-admitted-v1
   cairn-memory --db PATH --owner ID [--project ID] --recall-context source-evidence
   cairn-memory --db PATH --owner ID [--project ID] --classification-recovery guarded-v1
+  cairn-memory --db PATH --owner ID [--project ID] --history-updates explicit-v1
   cairn-memory --db PATH --owner ID [--project ID] --session-episodes-access episode-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1 --session-episodes episode-v1 [--session-episodes-draft-batches 8]
 
@@ -30,6 +31,16 @@ It does not rerun capture, prove failed-batch provenance, establish truth or
 make every memory filed. It is independent of capture settings and remains
 keyless for inspection; an actual classification call needs OPENAI_API_KEY.
 Remember saves explicit content, not automatically extracted conversations.
+--history-updates explicit-v1 adds one keyless local supersede_memory tool.
+Use it only for an actual explicit adopted update to the same subject, property
+and scope, with a recorded source excerpt (1..800 UTF-16 units), never generated
+reasons, proposals or merely later documents. The predecessor and original
+sources remain historical. correct_memory is an in-place repair replacing old
+receipts; it does not create history. Submitted evidence is an unverified claim,
+not an authenticated transcript, semantic truth or permission. This profile
+does not infer currentness or time, and does not support qualified transitions;
+never correct first to bypass that fence. Inspect successor links and evidence
+availability; later correction or forgetting may remove bound update evidence.
 --source-snapshot current-admitted-v1 adds keyless read_memory_sources using the
 local o200k_base tokenizer, with zero provider calls. It reads the whole small
 current-admitted source set, including potentially unrelated personal content.
@@ -103,7 +114,7 @@ export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
-    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client']);
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--history-updates']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -146,6 +157,9 @@ export function parseConfiguration(args) {
   if (values.has('--classification-recovery') && values.get('--classification-recovery') !== 'guarded-v1') {
     throw new Error('invalid_mcp_configuration');
   }
+  if (values.has('--history-updates') && values.get('--history-updates') !== 'explicit-v1') {
+    throw new Error('invalid_mcp_configuration');
+  }
   for (const flag of ['--client', '--read-client']) {
     if (values.has(flag) && !/^[A-Za-z0-9._-]{1,64}$/.test(values.get(flag))) throw new Error('invalid_mcp_configuration');
   }
@@ -173,6 +187,7 @@ export function parseConfiguration(args) {
     ...(values.has('--capture-evidence-access') ? { captureEvidenceAccess: values.get('--capture-evidence-access') } : {}),
     ...(values.has('--source-snapshot') ? { sourceSnapshot: values.get('--source-snapshot') } : {}),
     ...(values.has('--recall-context') ? { recallContext: values.get('--recall-context') } : {}),
+    ...(values.has('--history-updates') ? { historyUpdates: values.get('--history-updates') } : {}),
     ...(values.has('--classification-recovery') ? {
       classificationRecovery: values.get('--classification-recovery') } : {}) };
 }
@@ -197,6 +212,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       ...(config.sessionEpisodes ? { sessionEpisodes: config.sessionEpisodes } : {}),
       ...(config.readClient ? { readClient: config.readClient } : {}),
       ...(config.recallContext ? { recallContext: config.recallContext } : {}),
+      ...(config.historyUpdates ? { historyUpdates: config.historyUpdates } : {}),
       ...(config.sourceSnapshot ? { sourceSnapshot: config.sourceSnapshot,
         sourceSnapshotTokenizer: 'o200k_base' } : {}),
       ...(config.captureQualification ? { captureQualification: config.captureQualification,

@@ -32,10 +32,17 @@ async def exchange(request):
         if request["classification_recovery"] != "guarded-v1":
             raise ValueError("invalid_recovery_configuration")
         args += ["--classification-recovery", "guarded-v1"]
+    if "history_updates" in request:
+        if request["history_updates"] != "explicit-v1":
+            raise ValueError("invalid_history_configuration")
+        args += ["--history-updates", "explicit-v1"]
     uses_extended_timeout = request["operation"] == "call" and request.get("name") in {"capture_memory", "classify_unfiled_memories"}
+    model_environment = ({"OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", "")}
+                         if request["operation"] == "call" and request.get("name") in
+                         {"recall_memory", "capture_memory", "classify_unfiled_memories"} else {})
     parameters = StdioServerParameters(command=request["node_path"],
         args=args,
-        env={"OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", "")})
+        env=model_environment)
     with open(os.devnull, "w", encoding="utf-8") as errors:
         with anyio.fail_after(CAPTURE_HELPER_TIMEOUT_SECONDS if uses_extended_timeout else HELPER_TIMEOUT_SECONDS):
             async with stdio_client(parameters, errlog=errors) as streams:

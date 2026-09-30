@@ -7,8 +7,16 @@ legacy unqualified-to-unqualified operation below remains explicitly unprotected
 by those qualified guards.
 
 `core.supersede` is a trusted local caller's explicit assertion that one memory
-replaces another. It is not automatic semantic contradiction detection, a new
-MCP tool, or evidence that capture now understands changing decisions.
+replaces another. The core API itself is not automatic semantic contradiction
+detection or an MCP tool, nor evidence that capture understands changing
+decisions. The independent [explicit history-update MCP profile](standalone-mcp.md#explicit-adopted-updates-and-retained-history)
+and [Hermes setup](../integrations/hermes/cairn/README.md)
+can expose this public API through one keyless local `supersede_memory` wrapper.
+Without `explicit-v1` opt-in, existing inventories/defaults remain unchanged.
+Use only actual explicit adopted updates to the same subject/property/scope;
+submitted evidence is an unverified claim, not authenticated truth or permission.
+Qualified endpoints retain the fence above, and capture does not establish
+chronology. The wrapper adds no automatic currentness or temporal inference.
 
 ```js
 const changed = core.supersede({
