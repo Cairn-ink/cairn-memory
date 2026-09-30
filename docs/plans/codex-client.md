@@ -54,6 +54,39 @@ CX-3 must pin primary format/schema evidence and synthetic
 host fixtures before capture ships; unsupported formats disable capture. Do not
 advertise a blanket “>=0.150” compatibility claim.
 
+### CX-3 primary format pin
+
+Evidence fetched from the public **openai/codex** repository, without inspecting
+sessions or credential files: annotated tag `rust-v0.157.1`, tag object
+`ac0e23e5232692b95268583c8278c50b8c436d2b`, peeled commit
+**`36650394c5b38c2990ccf2a3457165ca3e9d9726`**. The tag was resolved through the
+GitHub Git refs/tag API. This identifies one source format, not a supported
+version range. File SHA-256 values are frozen in
+[`format-evidence.json`](../../integrations/codex/test/fixtures/format-evidence.json).
+
+| Primary source at that commit | Format evidence |
+| --- | --- |
+| [history/src/rollout_payload.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/history/src/rollout_payload.rs) | `RolloutItemWire`, serde `type` tag, snake_case variants and `payload`. |
+| [rollout/src/recorder.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/rollout/src/recorder.rs) | `RolloutLineRef`: timestamp, optional ordinal, flattened item; `write_line` appends newline and flushes. This is file evidence, not exec stdout. |
+| [rollout/src/policy.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/rollout/src/policy.rs) | Paginated history persists `ItemCompleted`; legacy `UserMessage`/`AgentMessage` events are a different representation. |
+| [protocol/src/protocol.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/protocol.rs) | `SessionMeta.cli_version`, `history_mode`, source and lineage; `EventMsg` snake_case `item_completed`; `ItemCompletedEvent.thread_id/turn_id/item`. |
+| [protocol/src/items.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/items.rs) | `TurnItem` case-sensitive `UserMessage` and `AgentMessage`; user content is `UserInput`; assistant content only `Text { text }`. `HookPrompt`, reasoning and tool items are separate variants. |
+| [protocol/src/user_input.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/user_input.rs) | User `text { text, text_elements }`; image/audio/skill/mention are separately tagged. Rich text markers remain unqualified and exclude their record. |
+| [protocol/src/models.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/models.rs) | Visible assistant phases are `commentary` and `final_answer`; absent phase is supported. Unknown channels/phases refuse. |
+| [core/src/session/mod.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/core/src/session/mod.rs) | Submitted input constructs `UserMessageItem::new(input)` and emits completed turn items; model-history response items are recorded separately. |
+
+The initial parser requires the exact metadata version `0.157.1`, paginated
+history, matching thread ID, `cli`/`exec` source and no inherited/fork/subagent
+history. It consumes only `event_msg` → `item_completed` → `UserMessage/text`
+or `AgentMessage/Text`. Response-item messages, legacy mirrors, compaction,
+instructions, sandbox/cwd and other metadata never supply captured text.
+Unknown discriminators or conversational fields return `unsupported_format`;
+there is no response-item fallback. Synthetic fixtures are authored from these
+types; F0's observed records are not used as parser fixtures. Resume in the same
+flat file is supported; fork, inherited pagination and other host layouts remain
+unavailable pending separate primary evidence and qualification. Hosted dispatch
+and context injection remain disabled; CX-3 uses scripted transports only.
+
 ## Architecture and compatibility profiles
 
 Recommend extracting `integrations/client/` from the Claude plugin, with thin
@@ -471,6 +504,79 @@ only the explicit D1 quota/concurrency exception changes its scheduling. Profile
 new cursor/replay identity; pending ranges cannot change profile on retry.
 
 ## Cursor and worker contract
+
+### CX-3 executable state contract (before implementation)
+
+The table below is the test source. Its closed fact schema is `state` = fresh,
+ready, pending, discard, stale; `event` = append, timeout, processing, lost,
+bad-reply, refusal, pause, resume, replace, truncate, mutate, partial, malformed,
+oversized, missing, unsupported, crash, finish, last-hook, new-session; `batch`
+= first, middle, last; `mode` = hosted-stub, local-stub. Omitted facts default to
+ready/append/first/hosted-stub. Unknown keys and values fail the fixture loader.
+`sent` counts newly admitted batches; retransmission under the same event ID is
+permitted only to an idempotent receiver. Nothing here enables a hosted target.
+
+<!-- codex-worker-table:start -->
+| ID | Facts | Cursor | Sent | Worker | Refusal |
+| --- | --- | --- | --- | --- | --- |
+| W01 | `{"state":"fresh"}` | end | 1 | idle | none |
+| W02 | `{}` | end | 1 | idle | none |
+| W03 | `{"event":"timeout"}` | batch-start | 0 | pending | timeout |
+| W04 | `{"event":"timeout","batch":"middle"}` | batch-start | 1 | pending | timeout |
+| W05 | `{"event":"timeout","batch":"last"}` | batch-start | 2 | pending | timeout |
+| W06 | `{"event":"processing"}` | batch-start | 0 | pending | processing |
+| W07 | `{"event":"lost"}` | batch-start | 1 | pending | timeout |
+| W08 | `{"event":"bad-reply"}` | batch-start | 0 | pending | invalid_reply |
+| W09 | `{"event":"refusal"}` | batch-start | 0 | pending | quota_reached |
+| W10 | `{"event":"refusal","batch":"middle"}` | batch-start | 1 | pending | quota_reached |
+| W11 | `{"event":"pause"}` | unchanged | 0 | pending | paused |
+| W12 | `{"state":"stale","event":"resume"}` | eof | 0 | idle | pause_boundary |
+| W13 | `{"event":"replace"}` | eof | 0 | idle | source_changed |
+| W14 | `{"event":"truncate"}` | eof | 0 | idle | source_changed |
+| W15 | `{"state":"pending","event":"mutate"}` | eof | 0 | idle | source_changed |
+| W16 | `{"event":"partial"}` | unchanged | 0 | pending | partial_tail |
+| W17 | `{"event":"malformed"}` | end | 0 | idle | excluded |
+| W18 | `{"event":"oversized"}` | end | 0 | idle | excluded |
+| W19 | `{"state":"discard","event":"append"}` | end | 0 | idle | excluded |
+| W20 | `{"event":"missing"}` | unchanged | 0 | pending | source_unavailable |
+| W21 | `{"event":"unsupported"}` | unchanged | 0 | disabled | unsupported_format |
+| W22 | `{"event":"crash"}` | retry-end | 1 | idle | none |
+| W23 | `{"event":"finish","mode":"local-stub"}` | batch-end | 1 | pending | batch_limit |
+| W24 | `{"event":"last-hook","mode":"local-stub"}` | batch-end | 1 | pending | batch_limit |
+| W25 | `{"event":"new-session","mode":"local-stub"}` | old-unchanged | 1 | pending | batch_limit |
+<!-- codex-worker-table:end -->
+
+The single cursor publication site validates a closed schema, finite counters,
+monotone offsets within one epoch and conservation of processed bytes:
+acknowledged bytes plus reason-counted exclusions equal the offset. Only detected
+source replacement/truncation/mutation/path change starts a new epoch at EOF;
+that epoch starts with an explicit `source_changed` gap. Pause generation changes
+also establish EOF, count `pause_boundary`, and discard a spanning line through
+its newline. Missing cursors after any pause start at EOF. Unsupported/corrupt
+state refuses; repair restores a trusted backup, or explicit stopped-worker reset
+establishes EOF and records `state_reset`, never backfills.
+
+Invariants enforced at dispatch/publication: (1) each source position has stable
+message/event identity and at most one admission; uncertain delivery replays that
+identity; (2) every consumed byte is acknowledged or deliberately excluded with a
+reason, and all other authorized bytes remain visibly pending; (3) no backward
+cursor movement within an epoch; (4) no paused-generation dispatch or backfill;
+(5) interrupted publication retries the same frozen range; (6) one target-wide
+atomic usage writer validates nonnegative counters and the daily/concurrency caps.
+Transport must provide idempotent admission; this is not an exactly-once network
+delivery claim. Refusal leaves the frozen event identity unchanged.
+
+Tests generated from every row run against synthetic files and an independent
+receiver. A seeded operation-history oracle models append, replacement,
+truncation, malformed lines, pause/resume, crashes at every state write, lost
+replies and mixed Claude/Codex reservations without invoking production parsing,
+cursor or guard helpers to derive expectations. It checks coverage, admission
+uniqueness, pause fencing and cap conservation after every step. Interruption
+fixtures enumerate every durable write of prepare, dispatch/acknowledgement,
+pause-boundary, replacement and usage reserve/release/refusal/resume; retry must
+reach the uninterrupted semantic state (opaque random IDs are compared by their
+stable bindings). The source authorization is supplied anew by each hook; cursors
+contain no path/session/text queue and a new session never drains an old cursor.
 
 Reuse [byte cursors](../../plugins/cairn-memory/lib/capture-cursor.mjs), frozen
 `pendingEnd`, newline framing and [pause generations](../../plugins/cairn-memory/lib/control-state.mjs).
