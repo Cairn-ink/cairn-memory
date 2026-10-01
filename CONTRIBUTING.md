@@ -174,6 +174,10 @@ the generic contributor checks above. These use synthetic temporary ledgers,
 including real child processes; they do not call models or authorize paid runs.
 See `docs/experiment-budget.md` for the ledger-only boundary and remaining
 transport integration gates.
+The same gate includes the maintainer-only exact orphan settlement's synthetic
+history/target refusals, rollback/acknowledgement uncertainty and owned cleanup.
+Never substitute an actual pending ledger for those fixtures or treat a passing
+accounting gate as approval to settle, refund, recover answers or spend.
 
 For the experiment HTTP guard, also run `npm run test:experiment-request-guard`
 and `npm run demo:experiment-request-guard` on Node 22.16 and 24, after installing
