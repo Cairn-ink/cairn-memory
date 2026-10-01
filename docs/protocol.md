@@ -79,6 +79,16 @@ errors gain no field, historical reports remain unchanged, and public
 core/plugin/MCP/HTTP and telemetry schemas are unaffected. See the
 [prospective contract](plans/mixed-native-failure-diagnostics.md).
 
+The optional private journal accepts this observation only on failed Mem0
+generation execution diagnostics, with exact version/layer/finite reason checks
+shared by the projector and write/read validation. It preserves the category
+across terminal publication and halted phase completion without changing the
+outer halt, unknown accounting or next-arm prohibition. The inspector loads
+only builtins and finite shape validation, not native or adapter execution.
+Inspected JSON is structurally validated observation, never authenticated
+exception provenance. No additional captured text/identity or hosted schema is
+introduced; existing local correlation, retention and same-UID limits remain.
+
 The private mixed generation report may retain a failed Cairn arm's first
 noncompleted, arm-disqualifying ingestion batch index and fixed outcome counts.
 A duplicate can precede another ingested batch; this field does not claim the

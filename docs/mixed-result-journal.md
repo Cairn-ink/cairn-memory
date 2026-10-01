@@ -47,6 +47,19 @@ observations and capture classification diagnostics retain their existing
 meaning. Omitted journal and omitted observation options keep their existing
 behavior; enabling these observations grants no additional execution authority.
 
+Generation diagnostics also accept optional `nativeFailure` only on a failed
+Mem0 execution arm (`stage: 'execution'`). It has exactly version 1, a runtime
+or gateway layer, and a finite reason from the shared native observation shape.
+Unknown/extra fields, unsupported versions, layer-mismatched codes, success and
+Cairn contexts fail on writes and offline reads. The typed runner projection
+retains no exception payload; schema-valid inspected JSON is not proof that a
+genuine exception occurred. This category remains separate from the outer halt
+and transport branch observation. A globally halted phase can retain it without
+dispatching the later arm, resolving unknown costs or permitting scoring.
+The shared shape validator uses only builtins, so offline inspection does not
+load native execution or adapters. Extraction-text subtype observations likewise
+remain finite diagnostic events, not retained rejected output or admission.
+
 ## Durable boundaries and interrupted inspection
 
 The writer records a phase start before its first dispatch, then an arm entry

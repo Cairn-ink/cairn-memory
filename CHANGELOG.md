@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — prospective offline evaluation integration
+
+- Private mixed result journaling accepts the existing finite native failure
+  observation only for failed Mem0 execution, using shared strict shape checks
+  for writes and offline reads. Inspection stays free of native/adapter imports.
+  Synthetic installed tests preserve global halt and unknown accounting while
+  retaining this category and extraction-text rejection observations. No old
+  result is recovered, scored or authorized for replay.
+
 ## Unreleased — specific classification error in evaluation reports
 
 - LongMemEval ingestion and its comparison summaries preserve the core's

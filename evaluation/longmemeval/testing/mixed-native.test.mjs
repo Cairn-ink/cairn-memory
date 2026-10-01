@@ -46,6 +46,7 @@ for (const order of [['cairn', 'mem0'], ['mem0', 'cairn']]) for (const observati
       apiKey: 'JOURNAL_KEY_CANARY', cairnStoreRoot: fixture.root, resultJournal,
       ...(observations ? { phaseTiming: 'bounded-tail-v1', recallWitness: 'bounded-v1' } : {}) });
     assert.ok(generation.cases[0].arms.every(arm => arm.status === 'completed'), JSON.stringify(generation));
+    assert.ok(generation.cases[0].arms.every(arm => !Object.hasOwn(arm.diagnostics, 'nativeFailure')));
     const scored = await scoreMixedGeneration({ generationReport: generation,
       evaluatorRows: [evaluatorRow()], referenceRenderings: undefined,
       guard: fixture.guard, apiKey: 'JOURNAL_KEY_CANARY', resultJournal });
@@ -84,6 +85,39 @@ test('RD2/RD8 actual Cairn ingestion failure and native answer remain durable', 
   const observed = inspectMixedResultJournal({ directory });
   assert.equal(observed.phases.generation.arms[0].result.reason, 'ingestion_incomplete');
   assert.equal(observed.phases.generation.arms[1].result.answer.text, 'Synthetic memory fact.');
+});
+
+test('IC5 actual mixed empty extraction text remains zero-admission and journaled', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-journal-empty-text-' });
+  const descriptors = syntheticNativeDescriptors(workspace.path, true);
+  const fake = fakeMixedHttp((url, body) => url.endsWith('/responses')
+    && body.text.format.name === 'cairn_extract'
+    ? indexedResponse(body, { items: [{ content: ' \t\n ', kind: 'context', confidence: 1,
+      sourceIndices: [0] }] }) : undefined);
+  const fixture = syntheticMixedFixture(null, { ...descriptors, sourceCases: [sourceRow()],
+    armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl, workspace });
+  const directory = join(workspace.path, 'journal');
+  const resultJournal = createMixedResultJournal({ directory, prepared: fixture.prepared });
+  const generation = await runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+    apiKey: 'JOURNAL_KEY_CANARY', cairnStoreRoot: fixture.root, resultJournal });
+  const [cairn, mem0] = generation.cases[0].arms;
+  assert.equal(generation.halted, false);
+  assert.deepEqual([cairn.status, mem0.status], ['failed', 'completed']);
+  assert.equal(cairn.reason, 'ingestion_incomplete');
+  assert.equal(cairn.diagnostics.ingestion.counts.failed, 1);
+  const folder = readdirSync(fixture.root).find(name => name.startsWith('mixed-cairn-'));
+  const database = new DatabaseSync(join(fixture.root, folder, 'store.db'), { readOnly: true });
+  workspace.defer(() => database.close());
+  assert.equal(database.prepare('SELECT count(*) AS n FROM memories').get().n, 0);
+  assert.deepEqual(cairn.diagnostics.modelDiagnostics.events,
+    reportSnapshot([{ version: 1, stage: 'extract', layer: 'core_validation', reason: 'invalid_extraction_text_empty' }]));
+  assert.ok([cairn, mem0].every(arm => !Object.hasOwn(arm.diagnostics, 'nativeFailure')));
+  const observed = inspectMixedResultJournal({ directory });
+  assert.deepEqual(observed.phases.generation.completion.report, generation);
+  assert.deepEqual(observed.phases.generation.arms[0].result.diagnostics, cairn.diagnostics);
+  assert.equal(fake.calls.filter(call => call.body.messages?.[0]?.content === PUBLIC_ANSWER_INSTRUCTION).length, 1);
+  await workspace.cleanup();
+  assert.equal(existsSync(workspace.path), false);
 });
 
 const nativeRequire = createRequire(new URL('../../../adapters/openai/package.json', import.meta.url));
@@ -1187,6 +1221,62 @@ test('M7b malformed native usage stops globally without dispatching later arm', 
     assert.equal(fake.calls.some(call => call.route === '/v1/responses/input_tokens'), false);
     assert.equal(fixture.guard.isHalted(), true);
   } finally { fixture.guard.close(); }
+});
+
+test('IC2 journal retains actual native failure despite outer global halt', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-integration-native-failure-' });
+  const nativeScratchBefore = readdirSync(tmpdir()).filter(name => name.startsWith('cairn-y-')).sort();
+  const descriptors = syntheticNativeDescriptors(workspace.path, true);
+  const fake = fakeMixedHttp((url, body) => url.endsWith('/chat/completions')
+    && body.response_format?.type === 'json_object'
+    ? Response.json({ object: 'chat.completion', model: body.model,
+      usage: null, choices: [{ index: 0, finish_reason: 'stop',
+        message: { role: 'assistant', content: '{"memory":[]}' } }] }) : undefined);
+  const fixture = syntheticMixedFixture(null, { ...descriptors, sourceCases: [sourceRow()],
+    armOrders: [['mem0', 'cairn']], fetchImpl: fake.fetchImpl, workspace });
+  const directory = join(workspace.path, 'journal');
+  const resultJournal = createMixedResultJournal({ directory, prepared: fixture.prepared });
+  let generation, failure;
+  try {
+    generation = await runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+      apiKey: 'JOURNAL_KEY_CANARY', cairnStoreRoot: fixture.root, resultJournal });
+  } catch (error) { failure = error; }
+  // Accounting and containment must remain conservative even on baseline RED.
+  const attempts = fixture.guard.attempts();
+  assert.equal(fixture.guard.isHalted(), true);
+  assert.equal(fixture.guard.caseOutcomes().scopes.length, 0);
+  assert.ok(attempts.every(attempt => attempt.outcome !== null));
+  const unknown = attempts.filter(attempt => attempt.outcome === 'unknown');
+  assert.equal(unknown.length, 1);
+  assert.equal(unknown[0].actualMicroUsd, null);
+  assert.ok(unknown[0].reservedMicroUsd > 0);
+  assert.equal(fake.calls.some(call => call.route === '/v1/responses/input_tokens'), false);
+  assert.deepEqual(readdirSync(tmpdir()).filter(name => name.startsWith('cairn-y-')).sort(),
+    nativeScratchBefore, 'native work closes before owned scratch removal');
+  assert.ifError(failure);
+  assert.equal(generation.halted, true);
+  assert.equal(generation.haltReason, 'scope_execution_failed');
+  const native = generation.cases[0].arms.find(arm => arm.name === 'mem0');
+  const cairn = generation.cases[0].arms.find(arm => arm.name === 'cairn');
+  assert.equal(native.status, 'failed');
+  assert.equal(native.reason, 'scope_execution_failed');
+  assert.deepEqual({ ...native.diagnostics.nativeFailure },
+    { version: 1, layer: 'runtime', reason: 'native_gateway_failed' });
+  assert.deepEqual(Reflect.ownKeys(native.diagnostics.nativeFailure), ['version', 'layer', 'reason']);
+  assert.equal(Object.isFrozen(native.diagnostics.nativeFailure), true);
+  assert.equal(native.diagnostics.attempts.unknownActualCount, 1);
+  assert.equal(cairn.status, 'blocked');
+  assert.equal(Object.hasOwn(cairn.diagnostics, 'nativeFailure'), false);
+  const observed = inspectMixedResultJournal({ directory });
+  const view = observed.phases.generation;
+  assert.deepEqual(view.arms.map(arm => arm.state), ['terminal', 'unobserved']);
+  assert.deepEqual(view.arms[0].result, native);
+  assert.deepEqual(view.completion.report, generation);
+  assert.deepEqual(view.arms[0].result.diagnostics.nativeFailure, native.diagnostics.nativeFailure);
+  assert.equal(observed.phases.scoring.started, false);
+  assert.equal(readFileSync(join(directory, '000003.json'), 'utf8').includes('JOURNAL_KEY_CANARY'), false);
+  await workspace.cleanup();
+  assert.equal(existsSync(workspace.path), false);
 });
 
 test('M8 invalid completed answer is local unresolved; later arm and judge still run', async t => {

@@ -1,5 +1,14 @@
 # Known limitations
 
+The [prospective offline integration](plans/prospective-evaluation-readiness.md)
+combines extraction subtype observations, typed native categories, reduced
+bound-v2 validation work and private result journaling. Its installed synthetic
+failure regression first reproduced a journal schema mismatch, then verifies
+finite native category retention through the existing global halt. None of
+this recovers the halted one-shot twelve, proves its original cause, produces
+a competitor score, guarantees latency, or grants a future paid experiment.
+Future measurement still needs a separately frozen protocol and explicit grant.
+
 The [prospective native terminal-failure observation](plans/mixed-native-failure-diagnostics.md)
 retains only a finite typed runtime/gateway category in future private mixed
 Mem0 arm diagnostics. Unknown codes/classes, accessors and proxies remain

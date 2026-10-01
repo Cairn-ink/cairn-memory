@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { isMixedNativeFailure } from './mixed-native-failure-shape.mjs';
 import { canonical, dense, exact, fail, freeze, hash, reportSnapshot,
   safeInteger, wellFormed } from './mixed-validation.mjs';
 
@@ -160,9 +161,12 @@ function validateArm(phase, arm, name) {
     const allowed = ['stage', 'ingestion', 'modelDiagnostics', 'captureBatches', 'admittedMemories',
       'recalledCards', 'receiptCount', 'provenance', 'selectedIndices', 'duplicateIndices',
       'omittedIndices', 'attempts', 'nativeResults', 'verifiedAddRecords',
-      'adapterPhaseTiming', 'recallWitness'];
+      'adapterPhaseTiming', 'recallWitness', 'nativeFailure'];
     if (!arm.diagnostics || typeof arm.diagnostics !== 'object' || Array.isArray(arm.diagnostics)
       || Object.keys(arm.diagnostics).some(key => !allowed.includes(key))) fail(CODE);
+    if (Object.hasOwn(arm.diagnostics, 'nativeFailure') && (name !== 'mem0'
+      || arm.status !== 'failed' || arm.diagnostics.stage !== 'execution'
+      || !isMixedNativeFailure(arm.diagnostics.nativeFailure))) fail(CODE);
   } else {
     if (!['completed', 'failed', 'blocked'].includes(arm.generationStatus)) fail(CODE);
     exact(arm.judgment, ['status', 'correct', 'stage', 'reason', 'attempted'], CODE);

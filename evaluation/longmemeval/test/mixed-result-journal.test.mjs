@@ -8,8 +8,9 @@ import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { prepareMixedComparison, runMixedGeneration } from '../mixed-generation.mjs';
 import { scoreMixedGeneration } from '../mixed-scoring.mjs';
 import { createMixedResultJournal, inspectMixedResultJournal, startMixedJournalPhase,
-  enterMixedJournalArm } from '../mixed-result-journal.mjs';
-import { canonical, freeze, hash } from '../mixed-validation.mjs';
+  enterMixedJournalArm, recordMixedJournalArm } from '../mixed-result-journal.mjs';
+import { isMixedNativeFailure } from '../mixed-native-failure-shape.mjs';
+import { canonical, freeze, hash, reportSnapshot } from '../mixed-validation.mjs';
 import { evaluatorRow, fakeMixedHttp, sourceRow, syntheticMixedFixture } from '../testing/mixed-fixture.mjs';
 import { interruption, syntheticNativeDescriptors,
   syntheticScoringGeneration } from '../testing/result-journal-fixture.mjs';
@@ -38,6 +39,88 @@ const generate = (fixture, journal, guard = fixture.guard) => runMixedGeneration
 const score = (fixture, report, journal) => scoreMixedGeneration({ generationReport: report,
   evaluatorRows: [evaluatorRow()], referenceRenderings: undefined, guard: fixture.guard,
   apiKey: 'JOURNAL_KEY_CANARY', ...(journal === undefined ? {} : { resultJournal: journal }) });
+
+const nativeFailure = { version: 1, layer: 'runtime', reason: 'native_gateway_failed' };
+const malformedNativeFailures = [null, [], 'native_gateway_failed',
+  { ...nativeFailure, version: 2 }, { ...nativeFailure, version: '1' },
+  { ...nativeFailure, layer: 'native' }, { ...nativeFailure, reason: 'unreviewed' },
+  { ...nativeFailure, reason: false }, { ...nativeFailure, reason: 'invalid_native_input' },
+  { ...nativeFailure, layer: 'gateway' }, { ...nativeFailure, extra: 'PRIVATE_CANARY' },
+  { version: 1, layer: 'runtime' }];
+
+test('IC3 shared finite native shape rejects hostile descriptors without observation', () => {
+  for (const value of malformedNativeFailures) assert.equal(isMixedNativeFailure(value), false);
+  assert.equal(isMixedNativeFailure(nativeFailure), true);
+  assert.equal(isMixedNativeFailure({ version: 1, layer: 'gateway', reason: 'invalid_native_input' }), true);
+  let invoked = 0;
+  const accessor = { version: 1, layer: 'runtime' };
+  Object.defineProperty(accessor, 'reason', { get() { invoked++; return nativeFailure.reason; } });
+  const proxy = new Proxy(nativeFailure, { ownKeys() { invoked++; throw Error('PRIVATE_CANARY'); } });
+  const revoked = Proxy.revocable(nativeFailure, {}); revoked.revoke();
+  for (const value of [accessor, proxy, revoked.proxy,
+    { ...nativeFailure, [Symbol('extra')]: true }, Object.create(nativeFailure)]) {
+    assert.equal(isMixedNativeFailure(value), false);
+  }
+  assert.equal(invoked, 0);
+});
+
+test('IC3/IC5 native failure write schema and old failed-arm compatibility', async t => {
+  const cases = [
+    ...malformedNativeFailures.map(value => ({ value })),
+    { value: nativeFailure, name: 'cairn' },
+    { value: nativeFailure, stage: 'answer' },
+    { value: nativeFailure, completed: true },
+    { value: nativeFailure, accepted: true },
+    { omitted: true, accepted: true },
+  ];
+  for (const item of cases) {
+    const name = item.name ?? 'mem0';
+    const fixture = fixtureFor(t, { order: [name, name === 'mem0' ? 'cairn' : 'mem0'] });
+    const generation = await syntheticScoringGeneration(fixture, fixture.guard);
+    const result = structuredClone(generation.cases[0].arms.find(arm => arm.name === name));
+    if (!item.completed) Object.assign(result, { status: 'failed', reason: 'arm_failed', answer: null });
+    result.diagnostics = { stage: item.stage ?? 'execution',
+      ...(item.omitted ? {} : { nativeFailure: item.value }) };
+    const journal = fixture.journal();
+    startMixedJournalPhase(journal, 'generation', fixture.prepared);
+    enterMixedJournalArm(journal, 'generation', 0);
+    const record = () => recordMixedJournalArm(journal, 'generation', 0, generation.cases[0], result);
+    if (item.accepted) {
+      record();
+      const observed = inspectMixedResultJournal({ directory: fixture.directory });
+      assert.deepEqual(observed.phases.generation.arms[0].result, reportSnapshot(result));
+      assert.equal(Object.hasOwn(observed.phases.generation.arms[0].result.diagnostics,
+        'nativeFailure'), !item.omitted);
+    } else {
+      assert.throws(record, { code: 'mixed_result_journal_failed' });
+      assert.deepEqual(inspectMixedResultJournal({ directory: fixture.directory })
+        .phases.generation.arms.map(arm => arm.state), ['entered', 'unobserved']);
+      assert.throws(record, { code: 'mixed_result_journal_failed' }, 'rejected writer stays poisoned');
+    }
+  }
+});
+
+test('IC3/IC5 coherently rehashed native failure offline reads refuse malformed and wrong contexts', async t => {
+  const cases = [...malformedNativeFailures.map(value => ({ value })),
+    { value: nativeFailure, name: 'cairn' }, { value: nativeFailure, stage: 'preflight' }];
+  for (const item of cases) {
+    const name = item.name ?? 'mem0';
+    const fixture = fixtureFor(t, { preflight: true, order: [name, name === 'mem0' ? 'cairn' : 'mem0'] });
+    await generate(fixture, fixture.journal());
+    const file = join(fixture.directory, '000003.json');
+    const record = JSON.parse(fs.readFileSync(file, 'utf8'));
+    record.data.result.diagnostics = { stage: item.stage ?? 'execution', nativeFailure: item.value };
+    const { digest: _digest, ...body } = record;
+    record.digest = hash('cairn.lme.mixed.result-journal-record.v1', body);
+    fs.writeFileSync(file, JSON.stringify(record));
+    // A coherently hashed prefix isolates shape/context rejection from later links.
+    for (const filename of fs.readdirSync(fixture.directory)) {
+      if (/^\d{6}\.json$/u.test(filename) && filename > '000003.json') fs.unlinkSync(join(fixture.directory, filename));
+    }
+    assert.throws(() => inspectMixedResultJournal({ directory: fixture.directory }),
+      { code: 'invalid_mixed_result_journal' });
+  }
+});
 
 for (const order of [['cairn', 'mem0'], ['mem0', 'cairn']]) {
   test(`RD1/RD2/RD5 preflight failure completes privately in ${order.join('/')} order`, async t => {
