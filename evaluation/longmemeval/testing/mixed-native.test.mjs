@@ -538,6 +538,8 @@ test('C1-C7 actual qualified failure and explicit indexed-evidence success share
       assert.equal(generation.halted, false, JSON.stringify(generation.cases));
       const cairn = generation.cases[0].arms[0], mem0 = generation.cases[0].arms[1];
       assert.equal(mem0.status, 'completed', JSON.stringify(mem0));
+      assert.equal(Object.hasOwn(mem0.diagnostics, 'nativeFailure'), false);
+      assert.equal(Object.hasOwn(cairn.diagnostics, 'nativeFailure'), false);
       assert.equal(cairn.status, comparisonProfile ? 'completed' : 'failed', JSON.stringify(cairn));
       if (comparisonProfile) {
         assert.equal(fake.calls.some(call => call.body.text?.format.name === 'cairn_qualifyCandidates'), false);
@@ -1148,6 +1150,7 @@ for (const [label, completion] of [
 }
 
 test('M7b malformed native usage stops globally without dispatching later arm', async t => {
+  const nativeScratchBefore = readdirSync(tmpdir()).filter(name => name.startsWith('cairn-y-')).sort();
   assert.ok(process.env.CAIRN_MEM0_NATIVE_VENV_ROOT && process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT);
   const artifact = inspectMem0NativeArtifact({
     venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
@@ -1165,6 +1168,21 @@ test('M7b malformed native usage stops globally without dispatching later arm', 
     const generation = await runMixedGeneration({ prepared: fixture.prepared,
       guard: fixture.guard, apiKey: 'synthetic-only', cairnStoreRoot: fixture.root });
     assert.equal(generation.halted, true);
+    assert.equal(generation.haltReason, 'scope_execution_failed');
+    const native = generation.cases[0].arms[1];
+    assert.equal(native.reason, 'scope_execution_failed');
+    assert.deepEqual({ ...native.diagnostics.nativeFailure },
+      { version: 1, layer: 'runtime', reason: 'native_gateway_failed' });
+    assert.deepEqual(Reflect.ownKeys(native.diagnostics.nativeFailure), ['version', 'layer', 'reason']);
+    assert.equal(Object.isFrozen(native.diagnostics.nativeFailure), true);
+    assert.equal(Object.hasOwn(generation.cases[0].arms[0].diagnostics, 'nativeFailure'), false);
+    // X throws before appending a scope outcome on this global accounting halt.
+    assert.equal(fixture.guard.caseOutcomes().scopes.length, 0);
+    assert.ok(fixture.guard.attempts().every(attempt => attempt.outcome !== null));
+    assert.equal(fixture.guard.attempts().filter(attempt => attempt.outcome === 'unknown').length, 1);
+    assert.equal(native.diagnostics.attempts.unknownActualCount, 1);
+    assert.deepEqual(readdirSync(tmpdir()).filter(name => name.startsWith('cairn-y-')).sort(),
+      nativeScratchBefore, 'native child/listener work closes before owned scratch removal');
     assert.equal(generation.cases[0].arms[0].status, 'blocked');
     assert.equal(fake.calls.some(call => call.route === '/v1/responses/input_tokens'), false);
     assert.equal(fixture.guard.isHalted(), true);

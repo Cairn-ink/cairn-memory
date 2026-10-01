@@ -231,6 +231,19 @@ trusted parent-side credential injection at a later launch gate; the child holds
 only a local dummy key. Neither this runner nor its synthetic tests authorize a
 paid campaign, verify real semantic answers, or establish matched performance.
 
+Future Mem0 execution exceptions can retain private `diagnostics.nativeFailure`
+with exactly `{version:1,layer,reason}`: `layer` is `runtime` or `gateway`, and
+`reason` is explicitly allowlisted from the corresponding existing native error
+class. The projector accepts only native Error objects with that exact typed
+prototype and an own data code; proxies, getters, unknown classes/codes and
+malformed values produce no field. Success and Cairn errors gain no field.
+The retained object is frozen through the existing report snapshot; the outer
+`scope_execution_failed`/global halt and unknown accounting remain authoritative.
+No messages, stacks, causes or other exception payload enter the observation.
+It cannot identify a past discarded exception, establish a root cause, authorize
+continuation/retry, or change fixed-N scoring. See the
+[prospective diagnostic contract](plans/mixed-native-failure-diagnostics.md).
+
 An [offline indexed-window provenance path](indexed-window-provenance.md) is
 separate from the default prefix-receipt comparison and is not accepted by the
 official scorer or the live paid runner.

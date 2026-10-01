@@ -17,6 +17,7 @@ import { ingestIndexedWindowLongMemEvalCase, ingestIndexedEvidenceLongMemEvalCas
 import { createMixedModelDiagnosticObserver,
   summarizeMixedIngestionStop } from './mixed-ingestion-diagnostics.mjs';
 import { createMixedPhaseTimingObserver } from './mixed-phase-timing.mjs';
+import { projectMixedNativeFailure } from './mixed-native-failure.mjs';
 import { verifiedEvidence } from './mixed-evidence.mjs';
 import { verifyMixedCapturePlan } from './mixed-plan.mjs';
 import { MIXED_ANSWER_CONTEXT_WINDOW, MIXED_ANSWER_MODEL, MIXED_ANSWER_OUTPUT_TOKENS,
@@ -463,8 +464,9 @@ export async function runMixedGeneration(options) {
                   question: { text: row.question.text, date: plan.canonicalQuestionDate },
                   allowedLocalOrdinals });
             } catch (error) {
+              const nativeFailure = name === 'mem0' ? projectMixedNativeFailure(error) : undefined;
               local = { failed: reasonOf(error, 'arm_execution_failed'),
-                diagnostics: { stage: 'execution' } };
+                diagnostics: { stage: 'execution', ...(nativeFailure ? { nativeFailure } : {}) } };
             }
             return local;
           } finally { await transport.drain(); workSettled = true; }
