@@ -677,7 +677,7 @@ requires a documented breaking version for widening capture; accepting a new
 publish a 0.2.0 compatibility note and schemas before any enabled Codex send.
 At the coordinated release, repository/runtime/plugin/marketplace version metadata
 must agree at 0.2.0 as required by the existing release checks; this does not change
-Claude's hosted payload behavior. No version files change in this docs packet.
+Claude's hosted payload behavior. CX-4 prepares the full 0.2.0 release; merging it needs chichi's go.
 
 Compatibility note: 0.2.0 servers accept the unchanged 0.1 Claude payload and the
 new Codex discriminator; 0.1-only servers reject Codex and must not receive its
@@ -2427,3 +2427,363 @@ Below-bar follow-ups, each with its owner:
    - the README's "repeating reset … completes that same epoch", which starts
      a new epoch if the transcript grew in between;
    - the positional `scheduling` boolean in `runtime-usage.mjs`.
+
+
+### CX-4 publication and decision table, 2026-10-01
+
+Coordinator assigns all four published contracts to the same 0.2.0 release:
+Codex capture discriminator, both recall/capture refusal/reset alternatives,
+H4b v1 composed session-start, and shared hosted pause state/generation. See
+[the published contract and state decision table](../protocol.md#hosted-protocol-020).
+U-6 D4 assigns session-start publication/transport to CX-4, H4 serves it and
+CX-5 consumes it. U-6 D5 assigns pause schemas to CX-4, serving to H5, and client
+observation/resume barriers to CX-5. Schema bundle publication is necessary for
+an isolated plugin: contract modules and bundle wiring accompany the shared
+hosted transport. These additions do not enable Codex hooks or session context.
+Today's H4c/H4a legacy quota bodies diverge from the published refusal; H5 must
+adapt both routes before 0.2.0 target qualification. Mocks are not that evidence.
+The explicit upgraded-Claude D1 quota/concurrency exception applies; no 0.1
+Claude request body, message boundary or frozen event identity changes.
+
+The quota store preserves CX-2's native Windows standalone portable policy;
+Linux/WSL still requires private modes and directory sync. The synthetic
+platform fixture is not native Windows or macOS acceptance. It does not change
+pairing support or the existing binding/root ownership policy.
+
+### CX-4 驗證與交接，2026-10-01
+
+驗證使用 Linux/WSL、合成資料、明確指定的臨時 HOME，所有安裝與測試
+在前景依序執行。外層 `HOME` = `CAIRN_TEST_REAL_HOME` =
+`$PWD/.cx4-scratch/home`，`TMPDIR`/`TMP`/`TEMP` =
+`$PWD/.cx4-scratch/tmp`，npm cache = `$PWD/.cx4-scratch/npm-cache`，
+`NODE_DISABLE_COMPILE_CACHE=1`；外層路徑不含 UUID。
+僅轉送 LANG/LC_ALL/TZ/TERM，未轉送憑證。npm/Node wrapper 固定使用
+22.16.0、24.15.0、20.19.0；測試 runner 的子目錄完成後自行清理。
+未讀寫真實的 Cairn、Claude 或 Codex 使用者狀態。
+
+0.2.0 發布 Codex capture discriminator、兩個端點的 quota refusal/reset、
+H4b v1 session-start 與共享 pause state/generation/resume barrier。
+Session-start/pause 的 hook 消費仍由 CX-5 接手；H5 必須把今日 legacy
+429 改成已發布形狀後，才能做 hosted acceptance，schema merge 不等於
+部署驗證。沒有 hosted/service 變更、Codex hook 啟用或模型付費呼叫。
+
+最終集中測試為 protocol 109 + transport 44 + plugin quota 7 = 160 案，
+兩個主要版本均全部通過。涵蓋 strict unknown fields、有效/缺少/錯誤
+reset、processing 與 ack、session-start 群組/收據/截斷/整體預算、pause
+安全 generation、兩 client/重啟持續拒絕、單次 resume 及既有 Claude
+wire payload。Windows portable fixture 是 Linux 平台模擬，未宣稱
+原生 Windows/macOS 接受度。既有 0.1.1 frozen golden 未改；比較器
+只把候選版本標示改為目前 VERSION，並在隔離副本延長 quota contention
+等待，避免把明訂 D1 串行變更誤算為 payload 差異。正式 quota lock
+仍為 150ms，其爭用與單次 permit 另有真實檔案測試。
+
+每列是 `.cx4-scratch/run.py <Node version> <命令>` 的實際命令與 exit
+code；`—` 表示該命令沒有 TAP/spec 案例總數，不表示略過。
+案例欄為 total/pass/fail/skip。早期失敗與重跑也完整保留。
+
+| 次序 | Node | 命令 | Exit | 案例 total/pass/fail/skip |
+| --- | --- | --- | --- | --- |
+| 1 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/transport-hosted.test.mjs` | 1 | 38/37/1/0 |
+| 2 | 22.16.0 | `npm run test:client` | 0 | 5/5/0/0 |
+| 3 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 38/38/0/0 |
+| 4 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/hosted-quota.test.mjs` | 0 | 6/6/0/0 |
+| 5 | 22.16.0 | `npm test` | 1 | 508/502/6/0 |
+| 6 | 22.16.0 | `node integrations/client/testing/run.mjs --test-name-pattern=quota\|Q[0-9]\|classification\|standalone root\|fresh B\|C03\|keyword inventory integrations/client/test/transport-hosted.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/paired-hooks.test.mjs integrations/client/test/claude-decisions.test.mjs` | 0 | 43/43/0/0 |
+| 7 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 8 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 9 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 10 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 11 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 0 | 2/2/0/0 |
+| 12 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 155/155/0/0 |
+| 13 | 22.16.0 | `npm ci --prefix adapters/openai` | 0 | — |
+| 14 | 22.16.0 | `npm ci --prefix adapters/mcp` | 0 | — |
+| 15 | 22.16.0 | `node tools/testing/run.mjs --script packaging/prepare-cache.mjs` | 0 | — |
+| 16 | 22.16.0 | `npm test` | 0 | 511/511/0/0 |
+| 17 | 22.16.0 | `npm run validate` | 0 | — |
+| 18 | 22.16.0 | `npm run test:core` | 0 | 1136/1136/0/0 |
+| 19 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/transport-hosted.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs` | 0 | 48/48/0/0 |
+| 20 | 22.16.0 | `npm test` | 0 | 553/553/0/0 |
+| 21 | 22.16.0 | `npm run validate` | 0 | — |
+| 22 | 22.16.0 | `npm run test:pairing` | 0 | 270/270/0/0 |
+| 23 | 22.16.0 | `npm run test:pairing:golden` | 0 | — |
+| 24 | 22.16.0 | `npm run test:artifact` | 0 | 87/87/0/0 |
+| 25 | 22.16.0 | `npm run test:mcp` | 0 | 111/111/0/0 |
+| 26 | 22.16.0 | `npm run test:codex` | 0 | 133/133/0/0 |
+| 27 | 22.16.0 | `npm run test:client` | 0 | 47/47/0/0 |
+| 28 | 24.15.0 | `npm ci --prefix adapters/openai` | 0 | — |
+| 29 | 24.15.0 | `npm ci --prefix adapters/mcp` | 0 | — |
+| 30 | 24.15.0 | `node tools/testing/run.mjs --script packaging/prepare-cache.mjs` | 0 | — |
+| 31 | 22.16.0 | `npm run test:client` | 0 | 48/48/0/0 |
+| 32 | 22.16.0 | `npm test` | 0 | 554/554/0/0 |
+| 33 | 24.15.0 | `npm test` | 0 | 554/554/0/0 |
+| 34 | 24.15.0 | `npm run validate` | 0 | — |
+| 35 | 24.15.0 | `npm run test:core` | 0 | 1136/1136/0/0 |
+| 36 | 24.15.0 | `npm run test:pairing` | 0 | 270/270/0/0 |
+| 37 | 24.15.0 | `npm run test:pairing:golden` | 0 | — |
+| 38 | 24.15.0 | `npm run test:artifact` | 0 | 87/87/0/0 |
+| 39 | 24.15.0 | `npm run test:mcp` | 0 | 111/111/0/0 |
+| 40 | 24.15.0 | `npm run test:codex` | 0 | 133/133/0/0 |
+| 41 | 24.15.0 | `npm run test:client` | 0 | 49/49/0/0 |
+| 42 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 159/159/0/0 |
+| 43 | 24.15.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 159/159/0/0 |
+| 44 | 22.16.0 | `npm test` | 0 | 555/555/0/0 |
+| 45 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 1 | 159/158/1/0 |
+| 46 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 160/160/0/0 |
+| 47 | 24.15.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 160/160/0/0 |
+| 48 | 22.16.0 | `npm test` | 0 | 556/556/0/0 |
+| 49 | 22.16.0 | `npm run validate` | 0 | — |
+| 50 | 22.16.0 | `npm run test:workspace-lifecycle` | 0 | 25/25/0/0 |
+| 51 | 22.16.0 | `npm run demo:capture` | 0 | — |
+| 52 | 22.16.0 | `npm run demo:session-context` | 0 | — |
+| 53 | 22.16.0 | `npm run demo:recall` | 0 | — |
+| 54 | 24.15.0 | `npm test` | 0 | 556/556/0/0 |
+| 55 | 24.15.0 | `npm run validate` | 0 | — |
+| 56 | 24.15.0 | `npm run test:workspace-lifecycle` | 0 | 25/25/0/0 |
+| 57 | 24.15.0 | `npm run demo:capture` | 0 | — |
+| 58 | 24.15.0 | `npm run demo:session-context` | 0 | — |
+| 59 | 24.15.0 | `npm run demo:recall` | 0 | — |
+| 60 | 22.16.0 | `npm run test:client` | 0 | 49/49/0/0 |
+| 61 | 22.16.0 | `npm ci --prefix tools/plugin-validation` | 0 | — |
+| 62 | 22.16.0 | `npm run validate --prefix tools/plugin-validation` | 0 | — |
+| 63 | 24.15.0 | `npm run validate --prefix tools/plugin-validation` | 0 | — |
+| 64 | 20.19.0 | `npm test` | 0 | 556/548/0/8 |
+| 65 | 20.19.0 | `npm run validate` | 0 | — |
+| 66 | 22.16.0 | `node integrations/client/bundle.mjs --check` | 0 | — |
+
+最終主要結果（所有列 exit 0）：
+
+| 命令 | Node 22.16.0 | Node 24.15.0 | Node 20.19.0 |
+| --- | --- | --- | --- |
+| `npm test` | 556 pass，0 skip | 556 pass，0 skip | 548 pass，8 skip |
+| `npm run validate` | 0 | 0 | 0 |
+| `npm run test:core` | 1136 pass | 1136 pass | 不要求 |
+| `npm run test:pairing` | 270 pass | 270 pass | 不要求 |
+| `npm run test:pairing:golden` | 0（fixture 比對） | 0（fixture 比對） | 不要求 |
+| `npm run test:artifact` | 87 pass | 87 pass | 不要求 |
+| `npm run test:mcp` | 111 pass | 111 pass | 不要求 |
+| `npm run test:codex` | 133 pass | 133 pass | 不要求 |
+| `npm run test:client` | 49 pass | 49 pass | 不要求 |
+
+Node 20 的 8 個 skip 全是現存 `node:sqlite` integration guard，
+其對應案例已在兩個主要版本執行。不是 CX-4 conformance skip。
+core/adapter 未變；後續 transport/plugin 修正以最終 160 案、
+兩個主要版本的完整 556 案及 client 49 案覆核，未重複未變的 core suite。
+
+逐次表之外，早期單獨 protocol runner 的兩次結果（`protocol-first.log`、
+`protocol-final.log`）為 103/103、106/106，shell exit 0。最終 109 案
+已由集中測試與完整 CI-shaped `npm test` 再次覆蓋。這兩次早期命令
+的完整環境/參數未存入逐次 ledger，不把後來的命令冒稱為原命令。
+初始化的 Node binary 複製、scratch 建立、schema/bundle 產生與文件
+修改命令均 exit 0；查閱檔案時曾遇到不存在的 workflow 路徑，隨後
+改讀 `.github/workflows/ci.yml`，不算測試失敗。
+
+早期失敗已修正且保留：transport observer 的中斷注入點、root alias／
+空 legacy root／effective UID 相容性、golden 串行等待及鎖檔消失競態、
+pause resume 的既有 stdout、quota-only open gate 的測試隔離。最後
+一項的初稿混入合法的 resume EOF skip，拆成 Q13 與原 quota 案例。
+兩次 orchestrator 在目前命令完成後以 99 停止，以便修正來源；
+下一個命令尚未啟動，99 不是該測試的 exit code。
+
+Git 使用 `$PWD/.x-index`，每次提交依序執行 `git read-tree HEAD`、
+`git add <本次檔案>`、`git write-tree`、`git commit-tree <tree> -p HEAD`、
+`git update-ref refs/heads/feat/cx4-protocol <new> <old>`，並移除 `.x-index`。
+文件、schema/conformance、client 及後續修正共七次 transaction 的
+每一步均 exit 0；每個 commit 最後均有指定 Co-Authored-By trailer。
+第一次普通 `update-ref` 被唯讀 worktree 的 HEAD.lock 拒絕；外層 shell
+最後的 cat 回傳 0，沒有另存內部 exit code，因此不宣稱該步成功。
+成功重試只對 `update-ref` 設定 `GIT_DIR` 為許可寫入的 common git dir，
+未改 worktree metadata 權限。檢查工作區時用新建 alternate index，
+避免把未更新的預設 index 誤讀為刪檔。
+`git diff HEAD --check` 與 `git diff 1bc7f93 HEAD --check` 均 exit 0；
+release metadata 與本驗證文件另以最後一個 transaction 提交。
+
+CX-5 接手共用 port 與 CX-3 stub DTO 的適配：前者是
+`capture(batch,binding,eventId,signal)`，後者是
+`capture(body,{signal})`；不能直接互換。Session-start 的完整預算解析
+需要傳入受信任的 conservative o200k `countTokens`，缺少時計為
+invalid reply，不自行猜測或刪短證據。pause parser 已發布；observe、
+injection 與 EOF resume barrier 的 hook 接線仍是 CX-5 的工作。
+
+外部接手／未執行：H5 服務實作與實際 hosted acceptance、CX-5 hook
+消費、原生 Windows/macOS 驗收；這些不在本包範圍。合併即發布 0.2.0，
+仍需 chichi 的 go，由協調者處理。沒有 push、PR、tag 或 release。
+執行紀錄寫入此節後，僅移除此工作建立的 scratch（含臨時 HOME、
+TMPDIR、cache、demo DB 及 logs）；不掃描其他使用者目錄。
+
+### CX-4 round 2 決策與交接，2026-10-01
+
+Round 2 coordinator decisions supersede round 1's target-wide quota latch,
+manual-only invalid-429 recovery and unconfirmed marker. The protocol's R01–R16
+decision table is recorded before implementation. Capture processing accepts
+both HTTP 200 and 202. Recall/capture gates are operation-scoped, shared across
+clients/restarts; locks contain only state transitions. Normal retries survive
+hook termination. Resumed probes have stale-safe PID/token/deadline markers
+and restore the prior refusal after owner death/expiry. Unrecognized 429 is
+unavailable with a persisted bounded Retry-After/default cooldown, auto expiry
+and explicit resume recovery. One resume also repairs corrupt regular owned
+state and resumes local pause; no separate resume-quota action remains.
+
+The original CX-4 ownership row is restored. Supporting files edited outside
+that original row are recorded here rather than expanding it: contract/schema
+bundle modules and bundle.mjs (published standalone parser distribution),
+private-state.mjs (revert round 1 helper API expansion), parity.test.mjs and its
+pinned hash fixture (restore mandatory transport hash verification),
+testing/main-golden.mjs (remove quota lock widening, keep required VERSION
+normalization for the prepared 0.2.0 release), and package.json (restore the
+original test:client command; version remains 0.2.0). No CX-5 hooks are enabled.
+
+#### Round 2 結果與保留範圍
+
+本輪實作提交為 `03035e13f69c740984b5883b7e8de7ef8f2d4d71`（先記錄
+決策表與 protocol）及 `9cbddc720481b771be6925bf9acd6615bef8f053`
+（202 分類、operation gate、stale recovery、cooldown、repair、回復額外變更）。
+0.2.0 的版本檔仍全部準備完成，發布內容維持 Codex discriminator、兩端
+嚴格 quota/reset variants、session-start switches/groups/receipts/truncation/
+combined budget，以及 shared pause/generation/resume barrier。沒有 hosted code、
+CX-5 消費接線、push、PR、tag 或 release。
+
+要求回復的五項均已回復：只有 resume；private-state 不新增 ownerId/portable
+API，原 directory fsync 仍在；parity 恢復 transport hash 檢查並只更新其
+pinned hash；ownership row 恢復原文；test:client 恢復原 script。保留的
+額外變更只有必要的 VERSION 正規化（prepared 0.2.0 與既有 golden 版本文字），
+及 final dispatch 的既有 pause generation 再檢查（quota 狀態非同步 I/O 後
+仍須尊重 pause，R16）。Gate 的局部 creator/path checks 只約束 gate 葉節點，
+不擴充 private-state 的權限 API。Supporting files 還包括本輪的新
+`plugins/cairn-memory/test/fixtures/hosted-fetch-preload.mjs`（可控 synthetic
+HTTP reply，實際 child hook 與 signals）及 `docs/limitations.md`
+（CONTRIBUTING 要求保留驗證限制）；不是擴張 package ownership。
+
+最終直接執行的定向案例在 Node 22.16.0、24.15.0、20.19.0 各為
+**184 pass / 0 fail / 0 skip**：protocol 114、transport 58、plugin 12。
+涵蓋 HTTP 202、SIGTERM/SIGKILL、resumed probe SIGKILL、live-owner deadline、
+雙 client/restart 與每 operation quota、in-flight capture 時 recall、
+Retry-After valid/invalid/absent/cap、auto-expiry、corrupt resume，以及
+frozen batch/event/cursor 的保存。Pinned transport hash 及 bundle check 也
+直接驗證；既有 Claude mechanism/output/state bytes 比對另直接執行。
+
+目前 sandbox 拒絕 localhost listen（EPERM），Node child 的 pipe I/O／
+worker serialization 無法正常工作，連同步 git spawn 都回報 EPERM。
+因此 test-only peer 以明示臨時 HOME 中的檔案傳送 synthetic requests/replies，
+child hook stdin/stdout/stderr 使用 regular files；hook 程序與 SIGKILL 是真的，
+不宣稱這是 TCP 或 deployed-host acceptance。CI-shaped 命令維持原 script
+並逐一嘗試，沒有把 test runner 的檔案級 pass 當作案例級成功。
+完整 CI 矩陣**尚未合格**，須在一般 CI 環境重跑。未修改 runner／既有
+CI tests 來掩蓋環境失敗。Artifact 所需 fresh registry cache 在此受限
+網路環境亦未備妥；不宣稱 artifact／MCP／pairing acceptance 通過。
+
+所有執行前均清除應用環境；HOME、CAIRN_TEST_REAL_HOME、TMPDIR/TMP/TEMP、
+npm_config_cache 均明示為本 worktree 的 `.cx4-r2/` 子目錄，Node compile
+cache 停用，exact Node binary 在 PATH 最前。Foreground sequential，
+沒有 real Cairn/Claude/Codex 使用者狀態。Node 20 為 20.19.0。
+下表 124 是 verification wrapper 在逾時後終止 process group 的退出碼，
+不是 npm 自然結束；先以 75 秒確認 hang，再把已知環境阻塞的後續
+嘗試限制為 30 秒。第 37 列 130 是人工 Ctrl-C 的外層 session，未取得
+npm child 的自然退出碼。其他列列出實際 command/wrapper exit。
+
+臨時 `focused.mjs` 依序 import protocol.test.mjs、transport-hosted.test.mjs、
+hosted-quota.test.mjs，以相同 home guard 執行，避開壞掉的 worker pipe。
+逐次記錄保留初稿失敗與診斷，沒有只保留成功。以下 argv JSON 精確
+保留命令引數；沒有省略 node -e 的診斷程式。
+
+| # | Node | argv | exit | tests/pass/fail/skip（可觀察時） |
+| --- | --- | --- | --- | --- |
+| 1 | 22.16.0 | `["node", "integrations/client/bundle.mjs"]` | 0 | —/—/—/— |
+| 2 | 22.16.0 | `["node", "integrations/client/testing/run.mjs", "plugins/cairn-memory/test/protocol.test.mjs", "integrations/client/test/transport-hosted.test.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs", "integrations/client/test/parity.test.mjs"]` | 1 | 4/2/2/0 |
+| 3 | 22.16.0 | `["node", "integrations/client/testing/run.mjs", "--test-reporter=spec", "integrations/client/test/transport-hosted.test.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 2/1/1/0 |
+| 4 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/12/0 |
+| 5 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 6 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 7 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "integrations/client/test/transport-hosted.test.mjs"]` | 0 | 58/58/0/0 |
+| 8 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 9 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 10 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 11 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 12 | 22.16.0 | `["node", "plugins/cairn-memory/scripts/hook.mjs", "status"]` | 0 | —/—/—/— |
+| 13 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 14 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 15 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/8/0 |
+| 16 | 22.16.0 | `["node", "--import", "./plugins/cairn-memory/test/fixtures/hosted-fetch-preload.mjs", "plugins/cairn-memory/scripts/hook.mjs", "status"]` | 0 | —/—/—/— |
+| 17 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "--test-name-pattern=Claude refusal retains", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 1/0/1/0 |
+| 18 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 19 | 22.16.0 | `["/home/chichieh/.nvm/versions/node/v22.16.0/bin/node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 20 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 21 | 24.15.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 22 | 20.19.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 23 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 1 | —/—/—/— |
+| 24 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 25 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 26 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 1 | —/—/—/— |
+| 27 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 28 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 0 | 12/12/0/0 |
+| 29 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", ".cx4-r2/focused.mjs"]` | 0 | 184/184/0/0 |
+| 30 | 24.15.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", ".cx4-r2/focused.mjs"]` | 0 | 184/184/0/0 |
+| 31 | 22.16.0 | `["node", "integrations/client/bundle.mjs"]` | 0 | —/—/—/— |
+| 32 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", ".cx4-r2/focused.mjs"]` | 0 | 184/184/0/0 |
+| 33 | 24.15.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", ".cx4-r2/focused.mjs"]` | 0 | 184/184/0/0 |
+| 34 | 20.19.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", ".cx4-r2/focused.mjs"]` | 0 | 184/184/0/0 |
+| 35 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "--test-name-pattern=pinned shared", "integrations/client/test/parity.test.mjs"]` | 0 | 1/1/0/0 |
+| 36 | 22.16.0 | `["node", "integrations/client/bundle.mjs", "--check"]` | 0 | —/—/—/— |
+| 37 | 22.16.0 | `["npm", "test"]` | 130 | —/—/—/— |
+| 38 | 22.16.0 | `["npm", "test"]` | 124 | —/—/—/— |
+| 39 | 22.16.0 | `["npm", "run", "validate"]` | 0 | —/—/—/— |
+| 40 | 22.16.0 | `["npm", "run", "test:core"]` | 124 | —/—/—/— |
+| 41 | 22.16.0 | `["npm", "run", "test:pairing"]` | 124 | —/—/—/— |
+| 42 | 22.16.0 | `["npm", "run", "test:pairing:golden"]` | 1 | —/—/—/— |
+| 43 | 22.16.0 | `["npm", "run", "test:artifact"]` | 1 | 28/0/28/0 |
+| 44 | 22.16.0 | `["npm", "run", "test:mcp"]` | 1 | 16/1/15/0 |
+| 45 | 22.16.0 | `["npm", "run", "test:codex"]` | 1 | 10/6/4/0 |
+| 46 | 22.16.0 | `["npm", "run", "test:client"]` | 1 | 2/0/2/0 |
+| 47 | 24.15.0 | `["npm", "test"]` | 124 | —/—/—/— |
+| 48 | 24.15.0 | `["npm", "run", "validate"]` | 0 | —/—/—/— |
+| 49 | 24.15.0 | `["npm", "run", "test:core"]` | 124 | —/—/—/— |
+| 50 | 24.15.0 | `["npm", "run", "test:pairing"]` | 124 | —/—/—/— |
+| 51 | 24.15.0 | `["npm", "run", "test:pairing:golden"]` | 1 | —/—/—/— |
+| 52 | 24.15.0 | `["npm", "run", "test:artifact"]` | 1 | 28/0/28/0 |
+| 53 | 24.15.0 | `["npm", "run", "test:mcp"]` | 1 | 16/1/15/0 |
+| 54 | 24.15.0 | `["npm", "run", "test:codex"]` | 1 | 10/6/4/0 |
+| 55 | 24.15.0 | `["npm", "run", "test:client"]` | 124 | —/—/—/— |
+| 56 | 20.19.0 | `["npm", "test"]` | 124 | —/—/—/— |
+| 57 | 20.19.0 | `["npm", "run", "validate"]` | 0 | —/—/—/— |
+| 58 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "--test-name-pattern=pinned shared\|shared mechanisms\|generated original-path", "integrations/client/test/parity.test.mjs"]` | 0 | 3/3/0/0 |
+| 59 | 22.16.0 | `["npm", "run", "demo:capture"]` | 0 | —/—/—/— |
+| 60 | 22.16.0 | `["npm", "run", "demo:session-context"]` | 0 | —/—/—/— |
+| 61 | 22.16.0 | `["npm", "run", "demo:recall"]` | 0 | —/—/—/— |
+| 62 | 22.16.0 | `["npm", "run", "validate", "--prefix", "tools/plugin-validation"]` | 0 | —/—/—/— |
+| 63 | 22.16.0 | `["npm", "run", "test:workspace-lifecycle"]` | 1 | 2/1/1/0 |
+| 64 | 24.15.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "--test-name-pattern=pinned shared\|shared mechanisms\|generated original-path", "integrations/client/test/parity.test.mjs"]` | 0 | 3/3/0/0 |
+| 65 | 24.15.0 | `["npm", "run", "demo:capture"]` | 0 | —/—/—/— |
+| 66 | 24.15.0 | `["npm", "run", "demo:session-context"]` | 0 | —/—/—/— |
+| 67 | 24.15.0 | `["npm", "run", "demo:recall"]` | 0 | —/—/—/— |
+| 68 | 24.15.0 | `["npm", "run", "validate", "--prefix", "tools/plugin-validation"]` | 0 | —/—/—/— |
+| 69 | 24.15.0 | `["npm", "run", "test:workspace-lifecycle"]` | 1 | 2/1/1/0 |
+
+要求的 CI-shaped 矩陣退出碼如下（124 = 逾時；未完成 qualification）：
+
+| 命令 | Node 22.16.0 | Node 24.15.0 | Node 20.19.0 |
+| --- | --- | --- | --- |
+| `npm test` | 124 | 124 | 124 |
+| `npm run validate` | 0 | 0 | 0 |
+| `npm run test:core` | 124 | 124 | 不要求 |
+| `npm run test:pairing` | 124 | 124 | 不要求 |
+| `npm run test:pairing:golden` | 1 | 1 | 不要求 |
+| `npm run test:artifact` | 1 | 1 | 不要求 |
+| `npm run test:mcp` | 1 | 1 | 不要求 |
+| `npm run test:codex` | 1 | 1 | 不要求 |
+| `npm run test:client` | 1 | 124 | 不要求 |
+
+Case counts for CI-shaped worker runs above are **file-level counts**, not the
+full suites' case counts; they are retained only as diagnostic output. Early
+transport/plugin drafts were corrected before the final 184-case runs. Shell
+inspection/preparation/edit commands exited 0 except missing-file/no-match
+reads (1); the diagnostic subprocess pipe/syntax failures remain in the table.
+No dependency or external-service success is inferred from an empty child output.
+
+Git transactions use GIT_INDEX_FILE=$PWD/.x-index: read-tree HEAD → add the
+explicit milestone files → write-tree → commit-tree -p HEAD → update-ref
+refs/heads/feat/cx4-protocol <new> <old>, then unlink .x-index. Only update-ref
+uses the writable common GIT_DIR, avoiding the read-only worktree HEAD.lock.
+Every step of the three round 2 transactions exits 0; every commit ends with
+Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>. Alternate-index worktree
+diff and round 2/full-package diff --check exit 0. Release files remain 0.2.0.
+
+計時：開始 `date +%s` = 1790796567；結果記錄時 = 1790801587，已用 83 分鐘。約 64 分鐘時已向協調者回報未完矩陣與環境阻塞。

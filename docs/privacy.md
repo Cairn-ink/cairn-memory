@@ -469,3 +469,41 @@ source consumers. Unrelated admitted memories survive; existing namespace-wide
 staged purges and content-free replay fences remain. Neither forgetting nor
 redaction guarantees physical erasure of journals, free pages, backups or prior
 provider/caller copies. Hosted schemas/defaults and paid-pilot boundaries are unchanged.
+
+
+### Hosted 0.2.0 client boundary
+
+The Codex discriminator identifies filtered user/assistant conversation text;
+it admits no tools, credentials, metadata or transcript paths. Its reader remains
+disabled pending installed-host/target acceptance. Telemetry stays disabled for
+Codex. Session-start may return owner-bound episode sources, memory receipts and
+accessible claimed commitment provenance, all untrusted and budgeted together.
+These fields can contain personal text; clients must not log response bodies.
+Publishing and parsing do not wire session-start or hosted pause into hooks.
+
+Upgraded Claude honors the shared hosted quota gate as the explicit D1 exception.
+The selected private root retains `hosted-quota/<target digest>.json` and its
+process-owned lock/recovery files. The 0600 record contains only version, a finite
+operation states, reset/null, cooldown deadline and resumed-attempt PID/token/
+deadline; no conversation, raw error, credential or
+session ID. The digest binds the configured endpoint within the owner-bound root (or an
+installer-supplied target ID), is sensitive identity metadata, not anonymization.
+Credential rotation does not reopen the gate. The fallback conservatively gates
+all credentials for that endpoint within the root; account migration needs setup.
+Paired clients must share both root and target identity. Recall and capture have
+separate gates within that target. Only verified refusal closes an operation;
+normal interrupted requests retain normal retries. Resumed probes carry an
+owner PID, token and deadline; stale markers restore their prior refusal.
+Unrecognized 429 persists a bounded per-operation cooldown (Retry-After capped
+at 24 hours, otherwise five minutes), which expires automatically. Resume clears
+cooldowns and repairs malformed regular owned state. Pending cursor/event identity
+is preserved. Status shows validated quota reset or “reset unknown”, or the
+cooldown deadline; Retry-After never supplies a quota reset.
+
+Gate publication uses a flushed temporary file and atomic rename, consistent
+with standalone creator files; it does not promise power-loss durability.
+Linux/WSL gate leaves are 0700/0600 and creator-owned. Native Windows standalone
+relies on host ACLs; no shared private-state API or directory-fsync rule is
+changed, and Windows pairing remains unsupported. Platform shims do not prove
+native Windows/macOS acceptance. H5's hosted pause publication and CX-5's
+observation remain separate gates. See [protocol 0.2.0](protocol.md#hosted-protocol-020).

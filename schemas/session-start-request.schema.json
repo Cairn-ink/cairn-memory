@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/session-start-request.schema.json",
+  "title": "Cairn Memory session-start-request (protocol 0.2.0)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 128
+    },
+    "max_tokens": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000,
+      "default": 1500
+    },
+    "max_chars": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8000,
+      "default": 6000
+    }
+  }
+}

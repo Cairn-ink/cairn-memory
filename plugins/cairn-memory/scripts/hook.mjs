@@ -18,7 +18,8 @@ import {
   startIfActive,
 } from "../lib/control-state.mjs";
 import { withFileLock } from "../lib/file-lock.mjs";
-import { createJsonPoster } from "../lib/http.mjs";
+import { createJsonPoster, hostedQuotaStatus, hostedTargetId, resumeHostedQuota }
+  from "../lib/http.mjs";
 import { prepareRecallQuery } from "../lib/recall-query.mjs";
 import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
 import { VERSION } from "../lib/version.mjs";
@@ -35,6 +36,7 @@ let clientOptions;
 let binding;
 let endpoint;
 let post;
+let quotaTarget;
 try {
   endpoint = normalizeEndpoint(configuredEndpoint);
   post = createJsonPoster({ endpoint, token });
@@ -75,6 +77,14 @@ async function telemetry(event) {
   ).catch(() => {});
 }
 
+// Recheck the existing local barrier after asynchronous quota-state work.
+// The network start itself stays synchronous under the control lock.
+async function dispatchActive(generation, start) {
+  const dispatch = await startIfActive(dataDir, generation, start);
+  if (!dispatch.started) throw new Error("dispatch_not_started");
+  return dispatch.operation;
+}
+
 async function recall(hookInput) {
   if (!token) return;
   const query = prepareRecallQuery(hookInput.prompt);
@@ -86,7 +96,7 @@ async function recall(hookInput) {
     post(
       "/api/memory/recall",
       { query, project_id: projectId, limit: 6 },
-      2_000,
+      2_000, true, (start) => dispatchActive(control.generation, start),
     ),
   );
   if (!started.started) return;
@@ -261,7 +271,7 @@ async function captureLocked(hookInput, statePath, generation) {
           project_id: projectId,
           messages,
         },
-        25_000,
+        25_000, true, (start) => dispatchActive(generation, start),
       ),
     );
     if (!started.started) throw new Error("capture_paused");
@@ -286,16 +296,33 @@ async function control() {
     return;
   }
   if (action === "resume") {
+    const gate = quotaTarget ? await resumeHostedQuota(quotaTarget) : { status: "active" };
+    if (gate.status === "unavailable") throw new Error("quota_gate_unavailable");
     await setPaused(dataDir, false);
-    process.stdout.write("Cairn automatic memory is active.\n");
+    if (gate.status === "repaired") {
+      process.stdout.write("Cairn quota state repaired to open; automatic memory is active.\n");
+      return;
+    }
+    const notices = Object.entries(gate.operations ?? {}).filter(([, value]) => value.status !== "active")
+      .map(([operation, value]) => `${operation}: ${value.status === "ready" ?
+        "one eligible attempt" : value.status === "quota_reached" ?
+        "quota_reached; " + (value.resetAt ?? "reset unknown") : value.status}`);
+    process.stdout.write("Cairn automatic memory is active." +
+      (notices.length ? " " + notices.join("; ") : "") + "\n");
     return;
   }
   const state = await readControlState(dataDir);
+  const quota = quotaTarget ? await hostedQuotaStatus(quotaTarget) : { mode: "open" };
+  const quotaNote = quota.mode === "invalid" ? "; quota_state_invalid; run resume to repair" :
+    quota.mode === "unavailable" || quota.status === "unavailable" ? "; quota gate unavailable" :
+    Object.entries(quota.operations ?? {}).filter(([, gate]) => gate.mode !== "open")
+      .map(([operation, gate]) => `; ${operation}: ${gate.mode}; ${gate.mode === "cooldown" ?
+        "retry after " + new Date(gate.until).toISOString() : gate.reset}`).join("");
   const note = binding.status === "pairing_needed"
     ? "; pairing_needed (existing client active)"
     : binding.status === "standalone_unregistered" ? "; standalone_unregistered" : "";
   process.stdout.write(
-    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}` +
+    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}${quotaNote}` +
     `${binding.detail ? "; " + binding.detail : ""}; ` +
     `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; ` +
     `credential: ${token ? "configured" : "missing"}.\n`,
@@ -316,6 +343,10 @@ try {
     }
   } else {
     dataDir = binding.root;
+    if (endpoint.startsWith("http")) {
+      quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
+      post = createJsonPoster({ endpoint, token, ...quotaTarget });
+    }
     if (["status", "pause", "resume"].includes(action)) {
       await control();
     } else {

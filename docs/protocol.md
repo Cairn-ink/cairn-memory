@@ -1,4 +1,4 @@
-# Compatibility protocol v0.1
+# Compatibility protocol v0.2.0
 
 ### Private mixed-source-pair metadata boundary
 
@@ -377,7 +377,7 @@ The tuple `(authenticated user, client, event_id)` is an idempotency key. Concur
 
 Only `user` and `assistant` text belongs in `messages`. Unknown fields are rejected. Automatic results must remain `personal` or `project` private and carry origin `agent-inferred` plus at least one Source Receipt.
 
-A `202` response with `processing: true` means another request owns the short processing lease. The client must not advance its local transcript cursor and may retry later.
+A `200` or `202` response with `processing: true` means another request owns the short processing lease. The client must not advance its local transcript cursor and may retry later.
 
 ### `POST /api/memory/recall`
 
@@ -728,3 +728,196 @@ contact the configured provider, and does not interpret or capture episodes.
 capture facade stays in legacy mode until a separately reviewed trusted producer
 binds real lifecycle authority. Access alone never enables capture/interpretation.
 No hosted HTTP schema, default or producer contract is widened.
+
+
+## Hosted protocol 0.2.0
+
+The strict JSON schemas in `schemas/` publish this breaking release. Authentication
+and the existing recall/capture request fields stay unchanged. Capture now accepts
+`client: "claude-code"` or `client: "codex"`; this is a truthful source discriminator,
+not authority. No tool output, transcript locator, credentials, host metadata or
+new conversation field is admitted. Codex telemetry remains disabled.
+
+### 0.2.0 compatibility and H5 handoff
+
+A 0.2.0 server accepts unchanged 0.1 Claude requests and the Codex discriminator.
+A 0.1-only server must not receive Codex capture. Installation must independently
+verify target support; publishing these schemas proves no deployment or enabled
+hook. Clients cannot masquerade as Claude or invent version headers. Existing
+success shapes are preserved, but the new refusal alternatives omit their required
+success fields and therefore require this breaking version.
+
+Today's cairn-wiki H4c recall returns HTTP 429
+`{error:<message>,code:"daily_quota_memory_recall"}` with `Retry-After` and
+`X-Quota-Reset`; capture uses its own `daily_quota_memory_capture` refusal.
+Those are the shapes 0.1 clients see today. H5 must serve the **published 0.2.0
+shape below on both routes**, rather than treating today's shapes as conformance.
+No hosted implementation is included here. A deployed 0.2.0 target and real
+receipt/idempotency checks remain client enablement gates.
+
+### Recall and capture outcomes
+
+HTTP 200 recall returns `{memories:[...]}` with the existing origin, confidence
+and complete receipts. HTTP 200 capture acknowledges `{duplicate,memoryCount}`;
+optional `processing:false` is also an acknowledgement. A schema-valid capture
+reply with `processing:true` on HTTP 200 **or 202** denotes unfinished work,
+never acknowledgement or permission to advance the cursor. A 202 without that
+processing reply is not an acknowledgement.
+Both routes refuse quota with HTTP 429 and exactly
+`{"error":"quota_reached","resetAt":"2026-10-02T00:00:00Z"}` or
+`{"error":"quota_reached"}`. Unknown fields, success fields, memories and
+acknowledgements are forbidden in a refusal. `resetAt` must be a finite, valid
+UTC RFC 3339 instant, with `Z` or `+00:00`, optional fractional seconds and no
+calendar overflow or leap second. Missing reset means **reset unknown**; sub-millisecond reset fractions are rounded up
+for eligibility against a millisecond clock, preserving the original displayed
+time. Headers
+and local clocks cannot supply a guessed reset. Refusal bodies on a success
+status, and success bodies on 429, are invalid replies.
+
+A verified refusal leaves the pending capture range, event identity and cursor
+unchanged. Each target has separate durable **recall** and **capture** gates,
+shared across Claude, Codex and restarts. A recall refusal never gates capture;
+a capture refusal never gates recall. Explicit `resume` also resumes the local
+pause and grants one eligible attempt to each refused operation at/after its
+validated reset (or explicitly with unknown reset). An operation still before
+its reset remains refused. Resume preserves the pause generation and pending
+capture bytes; the existing pause EOF barrier still applies to paused history.
+
+Only a resumed attempt has an in-flight marker: owner PID, unique token and
+finite deadline, with its pre-attempt refusal retained. A dead owner or expired
+deadline restores that refusal; another resume may grant a fresh attempt. Normal
+requests leave the operation open, so SIGTERM/SIGKILL cannot turn an uncertain
+request into a permanent gate. Locks cover only state reads/transitions, never
+network I/O. Recall may send while capture is in flight, and normal open requests
+retain their existing concurrency. Late replies cannot clear a newer refusal,
+cooldown or probe. A completed processing/unavailable/error probe restores its
+refusal; validated acknowledgement reopens only its own operation.
+
+An unrecognized 429 is **unavailable**, never acknowledgement. It persists a
+per-operation cooldown: integer Retry-After seconds or a valid HTTP-date,
+capped at 24 hours; otherwise five minutes. A valid zero/past delay has a minimum
+one-second cooldown, preventing immediate retry. The cooldown expires by itself;
+`resume` clears it immediately. Retry-After is not a guessed quota reset and does
+not populate resetAt. A verified quota refusal always uses the validated body
+reset, regardless of headers. Corrupt state fails closed with
+`quota_state_invalid`; status tells the user to run `resume`, which repairs a
+regular owned gate file to open, reports the repair and exits zero. It cannot
+repair unsafe file types, symlinks or ownership/permission failures.
+
+This is the plan's explicit upgraded-Claude D1 quota/concurrency exception;
+0.1 Claude request bytes and frozen retry batches remain unchanged.
+
+| Row | Prior operation | Event | Network | Next operation | Capture cursor |
+| --- | --- | --- | --- | --- | --- |
+| R01 | open | normal request / interrupted request | eligible request | open | ack only |
+| R02 | open | verified 429 | 1 | quota_reached for this operation | unchanged |
+| R03 | quota_reached | either client's hook / restart | 0 | quota_reached | unchanged |
+| R04 | quota_reached | resume before reset | 0 | quota_reached | unchanged |
+| R05 | quota_reached | eligible resume (both operations independently) | 0 | ready | unchanged |
+| R06 | ready | eligible request | 1 | in_flight with pre-attempt refusal | unchanged |
+| R07 | in_flight | owner dead / deadline elapsed | 0 | pre-attempt refusal | unchanged |
+| R08 | in_flight | processing / unavailable / error | 0 additional | pre-attempt refusal | unchanged |
+| R09 | in_flight | validated acknowledgement | 0 additional | open | ack only |
+| R10 | open / matching probe | unrecognized 429 | 1 | cooldown for this operation | unchanged |
+| R11 | cooldown | hook before expiry | 0 | cooldown | unchanged |
+| R12 | cooldown | expiry / resume | next eligible request / 0 | open | unchanged |
+| R13 | corrupt | status / resume | 0 | invalid with repair hint / repaired open | unchanged |
+| R14 | capture in flight | recall hook | recall sends | recall unchanged unless its own refusal | unchanged |
+| R15 | newer gate/probe | old completion | 0 additional | newer state retained | ack only |
+| R16 | ready | local pause/abort prevents dispatch | 0 | ready | unchanged |
+
+### Session-start v1
+
+`POST /api/memory/session-start` uses the same bearer authentication, with
+`Cache-Control: no-store`. The strict request requires `version:1`; optional
+`project_id` selects that exact owner-bound project namespace. Omission selects
+personal scope; there is no union or fallback. Optional `max_tokens` and
+`max_chars` are positive integers bounded at 2,000 and 8,000 UTF-16 units,
+respectively; defaults are 1,500 and 6,000. Switches are stored per person and
+read by the service on every request, not supplied by a model or client:
+
+| Switch | Groups | Default |
+| --- | --- | --- |
+| 正在做 | nextSteps | on |
+| 習慣和背景 | procedural and background | on |
+| 承諾 | commitments | off |
+
+Success requires `version`, `framing`, `namespace` (ownerId/scope/projectId),
+`indexRevision`, and `groups`, in semantic order `nextSteps`, `procedural`,
+`background`, `commitments` (JSON property order is not validation authority).
+Every group is present with `enabled`, `returned`, `complete`, `budget_exhausted`,
+`status` and `items`. `returned` equals its item count. Status is `complete`
+(enabled, complete, no exhaustion), `budget_exhausted` (enabled, incomplete,
+exhausted), or `disabled` (disabled, complete, unexhausted, zero items).
+Procedural and background share the same effective switch. A requested but
+unsupported background group is explicitly incomplete, never silently omitted.
+
+Next steps retain episode ID/revision/client, their open nextStep and complete
+`sources` with ID/digest/role/text/truncated plus anchors. Procedural/background
+items keep the core ContextMemory fields (revision, state, filingStatus and
+optional reviewState), sibling `{id,role,excerpt}` receipts, optional procedural
+tag/anchors, and `semanticSupport:"unassessed"`. They do not use recall's
+nested MemoryDto receipts or per-memory namespace. Commitments retain
+id/title/dueAt/collectionId/acceptedAt, `semanticSupport:"unassessed"` and
+candidate/record receipts (identity, kind/title/date, excerpt, sourceUrl).
+See `session-start-response.schema.json` for the full strict item allowlists.
+
+Only current eligible facts/context enter background regardless of origin.
+Awaiting, forgotten and historical memories are excluded. Only the person's
+own claimed open commitments with surviving source/access enter commitments;
+fulfilled/dropped/deleted/unclaimed or inaccessible items cannot appear. Team
+membership/ownership, not public readability, grants meeting-action access.
+Framing and receipts are untrusted recollection, never execution permission.
+
+A client parser requires a trusted local counter implementing the same token
+contract; absent or invalid counters cannot acknowledge session context.
+One budget covers the **entire serialized success**, including framing,
+namespace, metadata and receipts: requested tokens (local o200k count with the
+conservative 1.15 multiplier), requested UTF-16 units, and 24,000 UTF-8 bytes.
+Background also has its own 500-token/2,000-unit budget. There is at most one
+next step, six items per other group and twelve overall. Core metadata is
+reserved by removing whole background, then procedural, then nextSteps items;
+commitments fill the remainder last, newest claim then ID. Thirteen commitment
+candidates are probed; reaching candidate/item/budget limits marks its group
+incomplete. Evidence is never shortened to fit and an oversized first item is
+not skipped within its group. Per-group truncation must remain visible.
+
+Stored output text is redacted again before budgeting. Source digests and
+anchor offsets describe retained stored text, and may not match redacted text;
+clients must not verify digests or highlight offsets against returned strings.
+Reads spend no generation quota and remain available during pause/maintenance.
+The service rereads switches, commitments and core evidence/revision before
+returning; observed changes yield retryable 503, not stale success. Separate
+stores do not imply a cross-store atomic snapshot. Too-small budgets return
+400 `invalid_memory_input`, never a partial success. Authentication/rollout
+failures are 401/404. Rate limiting is distinct from the recall/capture quota
+refusal. CX-4 publishes/parses this contract; CX-5 owns hook consumption and real
+hosted acceptance under cairn-wiki U-6 D4.
+
+### Shared hosted pause state and generation
+
+`pause-state.schema.json` publishes exactly
+`{paused:boolean,generation:nonnegative-safe-integer,enforced:boolean}`.
+H5 owns its authenticated serving surface; this publication does not invent a
+client pause route or add a generation to unchanged capture requests. The
+state is owner-wide across connected tools and projects. An absent row is
+`{paused:false,generation:0,enforced:<current rollout>}` without read-side writes.
+`enforced:false` means the client cannot claim an effective hosted pause control.
+Missing, malformed or unverified state must fail closed for capture.
+
+Every hosted pause increments generation, including repeated pause commands.
+Resume preserves generation and clears paused; resume before first pause keeps
+zero. Capture checks pause/generation before quota, model construction and each
+later dispatch/charge boundary. An old starting generation is invalid after a
+pause/resume even if paused is now false. Capture refusal `capture_disabled`
+(nonretryable HTTP 409) differs from quota refusal. Recall, session-start and
+forget remain available. Already dispatched model work may finish; this is not
+cancellation. Website workspace capture is outside the connected-tool switch.
+
+CX-5 must observe state before dispatch/context injection and persist the resume
+barrier: the first resumed hook with a missing/stale session cursor moves to
+current transcript EOF and sends nothing, discarding a spanning partial line
+through its newline. Text produced while paused is never uploaded afterwards,
+including offline, restarted and unseen sessions. Quota refusal instead keeps
+pending text/event identity. No pause consumption is wired here. These are U-6
+D5's client guarantees; publishing/parsing alone does not establish them.
