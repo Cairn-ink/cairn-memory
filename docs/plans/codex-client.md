@@ -54,6 +54,39 @@ CX-3 must pin primary format/schema evidence and synthetic
 host fixtures before capture ships; unsupported formats disable capture. Do not
 advertise a blanket “>=0.150” compatibility claim.
 
+### CX-3 primary format pin
+
+Evidence fetched from the public **openai/codex** repository, without inspecting
+sessions or credential files: annotated tag `rust-v0.157.1`, tag object
+`ac0e23e5232692b95268583c8278c50b8c436d2b`, peeled commit
+**`36650394c5b38c2990ccf2a3457165ca3e9d9726`**. The tag was resolved through the
+GitHub Git refs/tag API. This identifies one source format, not a supported
+version range. File SHA-256 values are frozen in
+[`format-evidence.json`](../../integrations/codex/test/fixtures/format-evidence.json).
+
+| Primary source at that commit | Format evidence |
+| --- | --- |
+| [history/src/rollout_payload.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/history/src/rollout_payload.rs) | `RolloutItemWire`, serde `type` tag, snake_case variants and `payload`. |
+| [rollout/src/recorder.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/rollout/src/recorder.rs) | `RolloutLineRef`: timestamp, optional ordinal, flattened item; `write_line` appends newline and flushes. This is file evidence, not exec stdout. |
+| [rollout/src/policy.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/rollout/src/policy.rs) | Paginated history persists `ItemCompleted`; legacy `UserMessage`/`AgentMessage` events are a different representation. |
+| [protocol/src/protocol.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/protocol.rs) | `SessionMeta.cli_version`, `history_mode`, source and lineage; `EventMsg` snake_case `item_completed`; `ItemCompletedEvent.thread_id/turn_id/item`. |
+| [protocol/src/items.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/items.rs) | `TurnItem` case-sensitive `UserMessage` and `AgentMessage`; user content is `UserInput`; assistant content only `Text { text }`. `HookPrompt`, reasoning and tool items are separate variants. |
+| [protocol/src/user_input.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/user_input.rs) | User `text { text, text_elements }`; image/audio/skill/mention are separately tagged. Rich text markers remain unqualified and exclude their record. |
+| [protocol/src/models.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/protocol/src/models.rs) | Visible assistant phases are `commentary` and `final_answer`; absent phase is supported. Unknown channels/phases refuse. |
+| [core/src/session/mod.rs](https://github.com/openai/codex/blob/36650394c5b38c2990ccf2a3457165ca3e9d9726/codex-rs/core/src/session/mod.rs) | Submitted input constructs `UserMessageItem::new(input)` and emits completed turn items; model-history response items are recorded separately. |
+
+The initial parser requires the exact metadata version `0.157.1`, paginated
+history, matching thread ID, `cli`/`exec` source and no inherited/fork/subagent
+history. It consumes only `event_msg` → `item_completed` → `UserMessage/text`
+or `AgentMessage/Text`. Response-item messages, legacy mirrors, compaction,
+instructions, sandbox/cwd and other metadata never supply captured text.
+Unknown discriminators or conversational fields return `unsupported_format`;
+there is no response-item fallback. Synthetic fixtures are authored from these
+types; F0's observed records are not used as parser fixtures. Resume in the same
+flat file is supported; fork, inherited pagination and other host layouts remain
+unavailable pending separate primary evidence and qualification. Hosted dispatch
+and context injection remain disabled; CX-3 uses scripted transports only.
+
 ## Architecture and compatibility profiles
 
 Recommend extracting `integrations/client/` from the Claude plugin, with thin
@@ -472,6 +505,92 @@ new cursor/replay identity; pending ranges cannot change profile on retry.
 
 ## Cursor and worker contract
 
+### CX-3 executable state contract (before implementation)
+
+The table below is the test source. Its closed fact schema is `state` = fresh,
+ready, pending, discard, stale; `event` = append, timeout, processing, lost,
+bad-reply, refusal, pause, resume, replace, truncate, mutate, partial, malformed,
+oversized, missing, unsupported, crash, finish, last-hook, new-session; `batch`
+= first, middle, last; `mode` = hosted-stub, local-stub. Omitted facts default to
+ready/append/first/hosted-stub. Unknown keys and values fail the fixture loader.
+`sent` counts newly admitted batches; retransmission under the same event ID is
+permitted only to an idempotent receiver. Nothing here enables a hosted target.
+
+<!-- codex-worker-table:start -->
+| ID | Facts | Cursor | Sent | Worker | Refusal |
+| --- | --- | --- | --- | --- | --- |
+| W01 | `{"state":"fresh"}` | end | 1 | idle | none |
+| W02 | `{}` | end | 1 | idle | none |
+| W03 | `{"event":"timeout"}` | batch-start | 0 | pending | timeout |
+| W04 | `{"event":"timeout","batch":"middle"}` | batch-start | 1 | pending | timeout |
+| W05 | `{"event":"timeout","batch":"last"}` | batch-start | 2 | pending | timeout |
+| W06 | `{"event":"processing"}` | batch-start | 0 | pending | processing |
+| W07 | `{"event":"lost"}` | batch-start | 1 | pending | timeout |
+| W08 | `{"event":"bad-reply"}` | batch-start | 0 | disabled | invalid_reply |
+| W09 | `{"event":"refusal"}` | batch-start | 0 | pending | quota_reached |
+| W10 | `{"event":"refusal","batch":"middle"}` | batch-start | 1 | pending | quota_reached |
+| W11 | `{"event":"pause"}` | unchanged | 0 | pending | paused |
+| W12 | `{"state":"stale","event":"resume"}` | eof | 0 | idle | pause_boundary |
+| W13 | `{"event":"replace"}` | eof | 0 | idle | source_changed |
+| W14 | `{"event":"truncate"}` | eof | 0 | idle | source_changed |
+| W15 | `{"state":"pending","event":"mutate"}` | eof | 0 | idle | source_changed |
+| W16 | `{"event":"partial"}` | unchanged | 0 | pending | partial_tail |
+| W17 | `{"event":"malformed"}` | end | 0 | idle | excluded |
+| W18 | `{"event":"oversized"}` | end | 0 | idle | excluded |
+| W19 | `{"state":"discard","event":"append"}` | end | 0 | idle | excluded |
+| W20 | `{"event":"missing"}` | unchanged | 0 | pending | source_unavailable |
+| W21 | `{"event":"unsupported"}` | unchanged | 0 | disabled | unsupported_format |
+| W22 | `{"event":"crash"}` | retry-end | 1 | idle | none |
+| W23 | `{"event":"finish","mode":"local-stub"}` | batch-end | 1 | pending | batch_limit |
+| W24 | `{"event":"last-hook","mode":"local-stub"}` | batch-end | 1 | pending | batch_limit |
+| W25 | `{"event":"new-session","mode":"local-stub"}` | old-unchanged | 1 | pending | batch_limit |
+| W26 | `{"event":"binding-change"}` | eof | 0 | idle | binding_changed |
+| W27 | `{"state":"pending","event":"binding-change"}` | eof | 0 | idle | binding_changed |
+| W28 | `{"state":"pending","event":"reset-binding"}` | eof | 0 | idle | state_reset |
+| W29 | `{"event":"late-worker"}` | unchanged | 0 | idle | superseded |
+| W30 | `{"state":"stale","event":"start-binding"}` | eof | 0 | idle | binding_changed |
+| W31 | `{"event":"digest-migration"}` | eof | 0 | idle | digest_migrated |
+| W32 | `{"event":"latch-failure"}` | batch-start | 0 | pending | quota_reached |
+| W33 | `{"state":"pending","event":"refused-binding"}` | eof | 0 | idle | binding_changed |
+| W34 | `{"state":"pending","event":"late-binding"}` | unchanged | 0 | idle | superseded |
+| W35 | `{"state":"pending","event":"invalid-binding"}` | batch-start | 0 | disabled | invalid_reply |
+| W36 | `{"event":"digest-key-reset"}` | eof | 0 | idle | digest_key_reset |
+| W37 | `{"event":"unconfigured-latch"}` | batch-start | 0 | pending | quota_reached |
+<!-- codex-worker-table:end -->
+
+The single cursor publication site validates a closed schema, finite counters,
+monotone offsets within one epoch and conservation of processed bytes:
+acknowledged bytes plus reason-counted exclusions equal the offset. Only detected
+source replacement/truncation/mutation/path change starts a new epoch at EOF;
+that epoch starts with an explicit `source_changed` gap. Pause generation changes
+also establish EOF, count `pause_boundary`, and discard a spanning line through
+its newline. Missing cursors after any pause start at EOF. Unsupported/corrupt
+state refuses; repair restores a trusted backup, or explicit stopped-worker reset
+establishes EOF and records `state_reset`, never backfills.
+
+Invariants enforced at dispatch/publication: (1) each source position has stable
+message/event identity and at most one admission; uncertain delivery replays that
+identity; (2) every consumed byte is acknowledged or deliberately excluded with a
+reason, and all other authorized bytes remain visibly pending; (3) no backward
+cursor movement within an epoch; (4) no paused-generation dispatch or backfill;
+(5) interrupted publication retries the same frozen range; (6) one target-wide
+atomic usage writer validates nonnegative counters and the daily/concurrency caps.
+Transport must provide idempotent admission; this is not an exactly-once network
+delivery claim. Refusal leaves the frozen event identity unchanged.
+
+Tests generated from every row run against synthetic files and an independent
+receiver. A seeded operation-history oracle models append, replacement,
+truncation, malformed lines, pause/resume, crashes at every state write, lost
+replies and mixed Claude/Codex dispatch without invoking production parsing,
+cursor or guard helpers to derive expectations. It checks coverage, admission
+uniqueness, pause fencing and cap conservation after every step. Interruption
+fixtures enumerate every durable write of prepare, dispatch/acknowledgement,
+pause-boundary (including the one-byte SessionStart path), replacement, oversized
+discard and usage reserve/dispatch/release/refusal/resume/observe; retry must
+reach the uninterrupted semantic state (opaque random IDs are compared by their
+stable bindings). The source authorization is supplied anew by each hook; cursors
+contain no path/session/text queue and a new session never drains an old cursor.
+
 Reuse [byte cursors](../../plugins/cairn-memory/lib/capture-cursor.mjs), frozen
 `pendingEnd`, newline framing and [pause generations](../../plugins/cairn-memory/lib/control-state.mjs).
 The new profile additionally persists acknowledgement progress per batch, so
@@ -558,7 +677,7 @@ requires a documented breaking version for widening capture; accepting a new
 publish a 0.2.0 compatibility note and schemas before any enabled Codex send.
 At the coordinated release, repository/runtime/plugin/marketplace version metadata
 must agree at 0.2.0 as required by the existing release checks; this does not change
-Claude's hosted payload behavior. No version files change in this docs packet.
+Claude's hosted payload behavior. CX-4 prepares the full 0.2.0 release; merging it needs chichi's go.
 
 Compatibility note: 0.2.0 servers accept the unchanged 0.1 Claude payload and the
 new Codex discriminator; 0.1-only servers reject Codex and must not receive its
@@ -1767,3 +1886,904 @@ and HOME history deleted together, can erase all durable ownership evidence. The
 undetectable deletions are follow-ups under the round-12 severity bar, not blockers.
 Read resolution never registers, so the old registration-attempt/busy branch has no
 reachable table row. Creator publication supplies first-client evidence instead.
+
+
+### CX-3 offline qualification, 2026-09-30
+
+The package supplies disabled parser/cursor/worker/guard building blocks and
+synthetic A1/A4/A5/A9 gates. It enables no hosted transport, installed hook,
+context injection or real model. Linux/WSL2 5.15.167.4 was tested. Non-Linux source
+traversal, installed HMA/LAC termination/latency, real-host context authority and
+release cap calibration remain their assigned owners' gates.
+
+The 100 ms overall deadline in the unknown-termination fixture could expire
+under suite contention before its child started. The fixture now gives setup
+5 s while retaining the 30 ms request timeout, asserts exactly one child start,
+and checks that unknown termination retains the permit and advances no bytes.
+The handler also bounds binding/key/preparation/launch together (750 ms capture,
+2.5 s disabled context events), fences late launch, and tests a real exit-0 hook
+process while a live identity publication lock remains held. Installed callers
+must flush and exit after the bounded result, without waiting for late identity
+completion. No Claude capture/bundle runtime bytes changed.
+
+The closed decision table has 25 rows/25 generated cases plus one schema check.
+The complete CX-3 invocation has 89 cases: parser 20, table 26, privacy 4, gates
+12, seeded sequences 8, worker interruption 1 and runtime usage 18. Each of six
+consecutive invocations passed all 89 cases, with no skips/failures. Commands used
+`node integrations/client/testing/run.mjs integrations/codex/test/*.test.mjs
+integrations/client/test/runtime-usage.test.mjs`, foreground and sequential, with
+HOME = CAIRN_TEST_REAL_HOME = the worktree scratch HOME and worktree TMPDIR/cache.
+No real sessions, credentials, memory directories or models were accessed.
+
+| Runtime | Three complete invocations (seconds) | Exit codes | Generator seconds per invocation |
+| --- | --- | --- | --- |
+| Node 22.16.0 | 36.54, 37.61, 36.98 | 0, 0, 0 | 36.305, 37.427, 36.794 |
+| Node 24.15.0 | 37.4, 37.06, 37.13 | 0, 0, 0 | 37.203, 36.864, 36.918 |
+
+The independent operation-history oracle uses seeds 1, 7, 42, 91, 12345, 65537,
+49374 and 3405691582, 64 operations each (512/invocation; 3072 across six runs).
+Operations are append, replacement, truncation, malformed lines, pause, resume,
+actual worker crash, lost reply and concurrent Claude/Codex dispatch. Expected
+admissions/offsets/epochs/billing derive from history, not production helpers.
+
+Exhaustive interruptions cover 25 real worker process publication points:
+prepare 2, capture/ack 17, pause boundary 1, one-byte SessionStart 1, replacement
+1 and oversized discard 3. The usage fixture covers 10 reserve/dispatch/release/
+refuse/resume/observe publication points. All k-th-publication retries reached the
+uninterrupted semantic end state; uncertain billing remains conservatively charged.
+Each full invocation repeats all 35 points (210 across the six invocations).
+
+Retained full-matrix results below are actual exits from earlier invocations;
+subsequent changes only affected Codex hook/test code and this documentation.
+The final coordinator instruction stopped full-matrix work and delegated remaining
+rows to chunked runs. A blank completion is not success.
+
+| Command | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| npm ci --prefix adapters/openai | 0 | 0 |
+| npm ci --prefix adapters/mcp | 0 | 0 |
+| prepare-cache (runner --script packaging/prepare-cache.mjs) | 0 | 0 |
+| npm test (CI shape, explicit scratch HOME) | 0 | 0 |
+| npm run validate | 0 | 0 |
+| npm run test:core | 0 | 0 |
+| npm run test:pairing | 0 | 0 |
+| npm run test:pairing:golden | 0 | coordinator pending |
+| npm run test:artifact | 0 | 0 |
+| npm run test:mcp | 0 | coordinator pending |
+| npm run test:openai | 0 | coordinator pending |
+| CX-3 suites, three complete runs | 0 / 0 / 0 | 0 / 0 / 0 |
+| npm run demo:capture | 0 | coordinator pending |
+| git diff --check (entire packet tree and current edits) | 0 | 0 |
+
+Initial Node22 npm-test bundle inventory failures were fixed by the explicit
+uninstalled-module exclusion; its rerun passed 401 cases. Initial cache/artifact
+failures were test-environment setup: packaging sanitizes the npm child environment.
+The successful reruns used copied exact-version Node binaries under worktree
+scratch and an npm wrapper supplying explicit scratch cache/HOME; no packaging
+code changed. Artifact passed 86 cases on each version; core passed 1136 and
+pairing 270 on each version. The old Node22 CX-3 timing failure is superseded by
+the six passing repetitions above.
+
+Coordinator still runs Node24 golden/MCP/OpenAI/demo:capture, applicable Node20
+shared bundle checks (never importing core), and any additional CI chunks it
+requires. Native host/model, hosted service and installed HMA/LAC acceptance are
+not established by these stubs. Scratch/logs are removed after recording results.
+
+
+### CX-3 round 2 recovery contract (table before code)
+
+Failing-first at 7b7ce787 on Node22.16.0: the reviewer cwd A → cwd B synthetic
+repro failed all three cases (exit 1). Stop returned capture_unavailable; direct
+worker and stopped reset both threw cursor_binding_mismatch. W26–W30 cover the
+new EOF binding epoch, reset precedence, superseded handoff and SessionStart path.
+W31 migrates v1 bare transcript digests by deliberately starting a new EOF epoch
+with digest_migrated. W32 preserves quota_reached/resetAt if the shared latch fails;
+its persisted refusal intent is retried before any subsequent model dispatch.
+W33 preserves that target-wide refusal intent across a binding EOF epoch.
+Source, pause and stopped-reset boundaries preserve it as well: skipping source
+bytes never authorizes clearing a quota refusal or an uncertain reservation.
+
+Facts additionally admit binding-change, reset-binding, late-worker, start-binding,
+digest-migration, latch-failure and refused-binding. All result columns are closed.
+Cursor: end, eof, retry-end, unchanged, batch-start, batch-end, old-unchanged.
+Sent: integers 0–3. Worker: idle, pending, disabled. Refusal: the literal finite
+values used in W01–W33. Tests derive all four observed results independently of
+expected cells, assert their concrete cursor/worker properties, and reject both
+unknown values and alternate valid mutations in every result column.
+
+Changing a usage policy stages cap/mode/concurrency until the next UTC accounting
+day. No same-day counter or uncertain reservation is refunded. Old unstarted
+permits are invalidated at activation. If live reservations exceed a lowered
+concurrency, new dispatch remains concurrency_limited until confirmed termination
+allows activation; release/status/refusal operations remain available. Daily-cap
+refusal clears automatically when its UTC day rolls over. Other refusal/resume
+latches remain explicit, including a previously consumed one-attempt quota gate.
+
+<!-- codex-usage-policy-table:start -->
+| ID | Facts | Same window | Next window | Refusal |
+| --- | --- | --- | --- | --- |
+| P01 | `{"change":"cap"}` | preserved | applied | none |
+| P02 | `{"change":"mode"}` | preserved | applied | none |
+| P03 | `{"change":"concurrency"}` | preserved | applied | none |
+| P04 | `{"change":"concurrency","active":2}` | preserved | drain | concurrency_limited |
+| P05 | `{"event":"daily-rollover"}` | latched | automatic | none |
+| P06 | `{"event":"quota-rollover"}` | latched | latched | quota_reached |
+| P07 | `{"event":"revert","change":"cap"}` | preserved | preserved | daily_cap_reached |
+| P08 | `{"event":"revert","change":"concurrency"}` | preserved | preserved | concurrency_limited |
+| P09 | `{"event":"revert","change":"mode"}` | preserved | preserved | plan_threshold |
+| P10 | `{"event":"policy-conflict"}` | conflict | conflict | policy_conflict |
+<!-- codex-usage-policy-table:end -->
+
+Handoffs: CX-6 records retained engineering/evaluation limitations in
+`docs/limitations.md` (and relevant ROADMAP gate notes per CONTRIBUTING); this
+package cannot edit that ownership. The coordinator adds `test:codex` and its
+Node22.16/24 CI wiring after this round, as for pairing. Context/model/hosted
+integration remains disabled. The coordinator reports the complete 11-command
+matrix passed on 7b7ce787 on Node22/24, plus npm test/validate on Node20; those are
+coordinator evidence, not new implementation-worker executions in this round.
+
+### CX-3 round 2 qualification
+
+The reviewer cwd repro was run first against 7b7ce787: 0/3 passed, exit 1.
+The identical synthetic repro then passed 3/3, exit 0. The permanent round-2
+suite has eleven cases, including the actual 400 ms usage-lock reproduction, which
+preserves quota_reached/resetAt and retries the latch before further dispatch.
+
+W26–W33 add eight worker cases; P01–P06 add six usage-window cases. Together
+the tables have 39 rows/39 generated cases plus two schema checks. Every result
+cell is tested against unknown and alternative legal mutations. The complete
+CX-3 invocation has 115 cases: parser 20, worker table 34, privacy 4, gates 12,
+round-2 regressions 11, sequences 8, interruption 1, usage 18 and policy table 7.
+
+The independent oracle now includes resume-cwd, using real project IDs derived
+from synthetic cwd changes. Its ten operations are append, replacement,
+truncation, malformed lines, pause, resume, worker crash, lost reply, concurrent
+Claude/Codex dispatch and resume in another cwd. Seeds remain 1, 7, 42, 91,
+12345, 65537, 49374 and 3405691582, with 64 steps each (512 per invocation).
+All invariants are asserted after every step, including while paused.
+
+Exhaustive real worker interruption fixtures cover 40 publication points:
+prepare 3, capture 17, pause-boundary 1, SessionStart 1, replacement 1,
+oversized 3, binding-change 1, digest-migration 1, reset 1 and refusal 11.
+Reset retry at the same EOF is idempotent. The usage fixture additionally
+covers ten publication points. Each k-th-write retry reaches the uninterrupted
+semantic end state; uncertain billing stays conservatively charged.
+
+All touched JavaScript uses double quotes and lines at most 100 columns;
+the reported unused imports are removed. The 31-second local success gate
+advances an injected clock rather than sleeping in real time. A1/A4/A5/A9
+remain synthetic stub gates, with no installed or hosted enablement.
+
+| Runtime | Three CX-3 runs (seconds) | Exit codes | Generator seconds |
+| --- | --- | --- | --- |
+| Node 22.16.0 | 49.864, 42.509, 42.063 | 0, 0, 0 | 49.728, 42.362, 41.922 |
+| Node 24.15.0 | 41.781, 42.302, 42.308 | 0, 0, 0 | 41.639, 42.159, 42.168 |
+
+The invocation includes both `runtime-usage.test.mjs` and the new
+`runtime-policy.test.mjs`, using the command in the Codex README. Commands
+are foreground/sequential with explicit scratch HOME = CAIRN_TEST_REAL_HOME,
+worktree TMPDIR/cache and no real session/credential/memory access. The full
+matrix is delegated to the coordinator and is not rerun in round 2.
+All six final invocations passed 115/115, with zero failures or skips. They
+exercise 48 seeded sequences/3072 operations and 300 exhaustive interruption
+points in total. Final repetitions include W33 and the five-boundary refusal
+regression; the earlier 113-case repetitions are superseded by these results.
+The current packet and working edits pass git diff --check (exit 0). Scratch
+and its logs are removed after recording the final results. The coordinator
+must qualify this round's final HEAD with its full matrix and add test:codex/CI;
+the complete passing matrix on 7b7ce787 remains historical coordinator evidence.
+
+Creator metadata cannot qualify a newer resumed writer: Codex does not append
+new session_meta on resume. CX-5 must independently qualify the installed host;
+CX-6 records this limitation with the other retained offline boundaries.
+
+### CX-3 round 3 contract (table before code)
+
+Failing-first on ad9694e, Node22.16.0: all three synthetic reviewer revert
+probes failed (0/3, exit 1). Cap 3→50→3 granted 50 reservations the next UTC
+day; concurrency 1→8→1 granted eight; plan→api-key→plan allowed a reserve
+at 99% five_hour utilization. P07–P09 require the active policy to remain in
+force, with pendingPolicy cleared before any activation when config matches
+active again. Natural UTC rotation is the only daily-counter reset.
+
+P10 requires deterministic policy_conflict for disagreeing installed clients,
+without activating or alternating either pending proposal. Installation supplies
+client = claude or codex to the guard. The default shared owner retains the
+existing installation-wide calibration API. Three closed owner slots hold only
+finite cap/concurrency values and a mode enum. Each owner's declaration replaces
+its previous declaration; disagreement clears pendingPolicy and blocks reserve,
+dispatch and resume. Status remains inspectable; release and refusal latching
+remain available. Quota latches and counters survive conflict. Synchronizing both
+installed declarations (including a removed client's declaration during explicit
+installer repair) recovers without deleting usage state or refunding counters.
+
+W34 follows A's frozen Stop range → B SessionStart → B first text → late A
+handoff. A handoff with a different cursor binding is superseded before opening
+source or changing state; the next B worker must send B first under B. The oracle
+adds late-handoff, records expected project attribution from operation history,
+and writes text between a cwd change and its next authorized hook.
+
+W35 preserves invalid_reply across binding changes and SessionStart: only the
+existing explicit stopped reset/repair can clear it. W36 resets a corrupt
+owner-private digest key with digest_key_reset at a new EOF epoch. Cursor intent
+is durable before key recreation; interruption after any write is recoverable by
+the same reset, preserving the recorded reason and epoch. Unsafe ownership or
+permissions still refuse. W37 never marks a quota latch complete when refuse
+returns automatic_cap_unconfigured rather than recording quota_reached.
+
+New result vocabularies admit digest_key_reset and policy_conflict; policy cells
+add preserved/conflict. All columns remain independently asserted and closed.
+The client policy suite uses shared client fixture/table helpers and imports no
+Codex test helper. Package.json/CI remain coordinator-owned: test:codex must
+include both runtime-usage.test.mjs and runtime-policy.test.mjs.
+
+### CX-3 round 3 qualification
+
+All round-3 fixes are covered by the complete direct invocation, including
+runtime-policy.test.mjs; package.json/CI are intentionally unchanged. P07–P09
+replace the failing-first 0/3 repro with three passing revert cases. P10 prevents
+disagreeing named clients from swapping policy across successive UTC days and
+verifies alignment preserves a quota latch. Usage v1/v2 migration retains charged
+reservations and refusals. Client fixture/table helpers have moved into the shared
+client test tree; runtime-policy imports no Codex test helper.
+
+Worker rows W34–W37 cover superseded old-binding handoffs, sticky invalid_reply,
+corrupt digest-key EOF reset and an unconfigured refusal latch. The complete
+hook/handoff sequence sends A text under A, then B first/B second under B, with
+no old binding reversion. Empty, malformed and oversized corrupt keys all recover
+through the documented reset. Reset is idempotent after completion.
+
+The tables now contain 47 rows/47 generated cases plus two schema checks.
+The complete invocation has 133 cases: parser 20, worker table 38, privacy 4,
+gates 12, round-2 regressions 11, round-3 regressions 7, sequences 8, worker
+interruption 1, runtime usage 18 and runtime policy 14. Every result cell stays
+closed and independently asserted. The independent oracle checks text/project
+pairs and adds late-handoff to its eleven generated operation types. It also
+writes text after cwd change before the next hook. Eight existing seeds each
+execute 64 main steps (512 per invocation).
+
+Exhaustive worker interruption coverage is 43 publication points, adding the
+three digest-key-reset writes to round 2's 40. Usage covers ten points; policy
+revert/alignment covers 21 (cap 5, concurrency 5, mode 5, conflict 6). Each
+interrupted operation's same retry reaches the uninterrupted semantic end state;
+uncertain billing stays charged.
+
+The initial focused guard check briefly overlapped with scratch-only formatter
+installation. Subsequent focused checks and all final qualification commands are
+foreground and sequential, with HOME = CAIRN_TEST_REAL_HOME = scratch HOME and
+worktree TMPDIR/cache. No real transcripts, credentials or memory roots are used.
+
+| Runtime | Three complete CX-3 runs (seconds) | Exit codes | Generator seconds |
+| --- | --- | --- | --- |
+| Node 22.16.0 | 43.301, 42.488, 43.040 | 0, 0, 0 | 43.135, 42.347, 42.888 |
+| Node 24.15.0 | 41.926, 42.430, 42.417 | 0, 0, 0 | 41.791, 42.290, 42.280 |
+
+The full matrix is not rerun; the coordinator must qualify this round's final
+HEAD and update test:codex to include every CX-3 test file. The CX-6 limitations
+handoff and installed/native-host/model qualification boundaries remain unchanged.
+
+All six final invocations passed 133/133, with no failures or skips. They
+cover 48 seeded sequences/3072 main operations and 444 exhaustive interruption
+points (74 per invocation). The complete packet passes git diff --check, exit 0.
+Scratch and logs are removed after recording these results.
+
+### CX-3 review and handoff, 2026-09-30
+
+Round-3 Claude SPEC and STANDARDS reviews of `579c441` both passed under the
+capture severity bar: capture loss or duplication through ordinary use, a wrong
+destination, excluded content sent, a policy or quota bypass, or a dead end
+reachable by ordinary use. The coordinator's `579c441` makes `test:codex` glob
+every file in `integrations/codex/test/` and the `runtime-*` client tests, and
+adds `test:client` for CX-1's parity and fixture-generator tests, which no script
+ran before; CI runs both on Node 22.16.0 and 24.
+
+CX-3 `state_busy` follow-up (2026-10-01, base `b593338`): the #310 Ubuntu
+failure was an oracle assumption, not a changed lock contract. The existing
+contract says "acquisition <=250 ms" (line 600), "All automatic handlers catch
+errors and exit 0, with `{}` for Stop" (433), and "if this fails, do not launch"
+for pre-launch cursor persistence (652–653). It requires all other authorized
+bytes to remain visibly pending (571–577), advances batches only on a validated
+terminal acknowledgement (608–610), and permits retry only at a later authorized
+hook for that same session (658–661). A5 expressly includes lock/state failures
+(984). These rules admit a contended operation failing with `state_busy`: no
+send or cursor advance; Stop returns `{}` without launch. A successful later
+authorized attempt admits pending text once under its original project binding;
+without such an attempt, final coverage can remain incomplete. A reserved grant
+still counts as used even if dispatch is busy; termination allows release, not
+a billing refund (887–894).
+
+The seeded oracle now accepts only the exact `state_busy` rejection from
+concurrent reserve/dispatch, accounts for successful starts independently, and
+separates pending text from admitted text. Every seed's first concurrent step
+holds a real dispatch lock with a Promise gate until the other dispatch exhausts
+the unchanged 250 ms acquisition window. Test-local `Date.now`/poll timer mocks
+advance virtual time; filesystem ownership remains real. The holder is released
+in `finally`, after mocks are restored. No runtime code or timeout changed.
+Three additional regressions cover worker reserve, worker dispatch and Stop
+cursor preparation; they assert no send/cursor advance while busy, retained
+pending state, eventual unique admission with the correct project, preserved
+usage accounting, and no extra send on another eligible attempt. The oracle also
+rejects an early admission or cursor advance during the busy attempt.
+
+Failing-first: with the holder gate injected but the original `Promise.all`
+dispatch assumption retained, seed 1 deterministically threw `state_busy` on
+both Node 22.16.0 and 24.15.0 (one case, exit 1 each). The corrected oracle passes
+that contended seed on both versions (exit 0 each). All commands ran in the
+foreground, sequentially, with synthetic fixture data, a separate temporary
+HOME per matrix invocation, HOME = CAIRN_TEST_REAL_HOME, CI=1, compile caching
+disabled, and TMPDIR/TMP/TEMP/npm cache under the non-UUID worktree path
+`.scratch/state-busy`. `npm test` used the CI script with its default concurrency.
+
+| Command | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| Deterministic seed-1 reproduction before oracle fix | 1 | 1 |
+| Deterministic seed-1 reproduction after fix | 0 | 0 |
+| Final `npm run test:codex`, 136 cases per run, three runs | 0 / 0 / 0 | 0 / 0 / 0 |
+| Final Codex runtimes (seconds) | 48.282 / 45.951 / 46.301 | 44.401 / 51.518 / 52.467 |
+| `npm test`, 401 cases | 0 | 0 |
+| `npm run validate` | 0 | 0 |
+| `npm run test:client`, 5 cases | 0 | 0 |
+
+Earlier Node 22 sanity checks also passed: two full 136-case Codex runs (0/0)
+and two three-case busy regression invocations (0/0). An intermediate experiment
+with Node's built-in mock timers stalled the HTTP/child-process fixture and was
+interrupted (130), then removed; it is not one of the six final runs. The final
+seam mocks only the globals used by the lock and hook and preserves native
+HTTP/child-process timers. The complete final suites have zero skipped,
+cancelled or failed cases. No hosted/model enablement, release/version changes,
+push or PR is part of this follow-up.
+
+CX-3 contention-class follow-up (2026-10-01, SE-5 merge base `a5317cd`): CI's
+second failure was the A9 atomic-cap test assuming every concurrent reserve
+acquires the 250 ms usage lock. The contract remains "All automatic handlers
+catch errors and exit 0" (433), "if this fails, do not launch" (652–653), and
+"Only a later hook for that same host session that supplies the authorized
+source may retry" (658–659). Usage additionally requires "Guard state/reservations
+survive restart" (887), and "Unknown billing is not refunded" (889–890).
+An acquisition failure executes no locked mutation: a busy reserve grants and
+bills nothing; a busy dispatch starts nothing and retains the previously billed
+reservation. A later eligible attempt can retry. These are test-model retries,
+not a product retry loop. No product code or default timeout changes are needed.
+
+The audit followed every `stateLock`/`withFileLock` caller, including indirect
+identity, pause/control, capture and fixture-generator callers, then inspected
+`Promise.all`, parallel child hooks and reserve/dispatch operations. Decisions
+below retain each test's original assertions; an existing generous timeout is
+kept only for an invariant that does not test the acquisition deadline.
+
+| Test / concurrent operation | Choice and invariant |
+| --- | --- |
+| `runtime-usage`: A9 shared atomic cap, three reserves | Hold the first usage publication using the existing write observer and a Promise gate. All other initial reserves must reject with exact `state_busy` under virtual time; join the whole wave, then retry each later eligible reserve. Still exactly two grants, one `concurrency_limited`, `used=2`, two reservations with the exact granted IDs across restart, then the third daily grant and daily-cap refusal. Busy attempts cannot add bills. |
+| `runtime-usage`: A9 simultaneous dispatch and injected termination | Apply the same forced-busy/later-attempt model to both reserves and dispatches. Both operations remain active together until cancellation. Still exactly two starts, cap refusal, `termination_unconfirmed`, the exact cancellation ID set, zero reservations after confirmed termination and `used=2` without refunds or duplicate starts. |
+| `sequences`: eight seeded independent history oracles | Keep the earlier gate and virtual clock plus exact busy outcomes in `allSettled`. Busy changes neither admission nor cursor progress; subsequent authorized attempts preserve unique delivery and project attribution. The shared helper replaces the identical Codex-only helper. |
+| `state-busy`: worker reserve, worker dispatch, Stop preparation | Keep all three real locked-operation gates and virtual time. No send/cursor advance or Stop launch while busy; pending text is admitted once later under the original project, with unchanged accounting. |
+| `round2`: held usage lock cannot turn quota into timeout | Replace the 400 ms sleep and `setImmediate` race with explicit dispatch-completion, holder-entry and release Promises. The real holder remains live through refuse and release, each exhausting 250 virtual ms (500 total). Preserve quota intent/reset, zero acceptance and no second transport call when the later attempt latches the refusal. Other injected `state_busy` refusal rows already have deterministic stubs. |
+| `gates`: A5 live identity publication lock / hook deadline | Promise-gated real holder; virtual lock polls in both the parent and actual hook child. Assert exactly 750 virtual ms, `{}`, unavailable status, child exit 0, no launch and no cursor. Release only after both attempts have returned. A guarded isolated copy observes the real `processHook` Promise, so `finally` joins the actual work left by `Promise.race` before assertions/fixture removal. A second identity probe can return before the original publisher cleans up and is not a join. No shipped source changes or cleanup sleeps. |
+| `capture-lock`: live lock never age-reaped | Static live owner cannot release during acquisition. Virtual polls assert exactly 60 ms, no entry and retained ownership. |
+| `capture-lock`: dead owner recovered without unlinking successor | Recovery, not timeout, is the invariant. Use the existing test option `timeoutMs: 30_000` for both sequential acquisitions instead of 500; preserve both entries and final lock removal. No runtime default changes. |
+| `pairing`: unknown same-namespace liveness; macOS boot tolerance | Static owner fixtures remain live/unknown for the entire operation. Virtual polls assert exactly 30 / 20 ms and exact `setup_busy`, unchanged owner, no unsafe reaping and unchanged Windows refusal. |
+| `pairing`: fresh standalone under busy coordination | The fixture contains a live setup owner, but `resolveClient` is a read path and does not acquire that setup lock. Keep exact standalone/project-ID and no-registration assertions; its `timeoutMs` cannot create a lock race. |
+| `pairing`: same-client contenders (18 children per client) | Keep existing 5,000 ms identity publication timeout and exact ID/HMAC/restart/deletion assertions. Read paths never acquire the short setup lock. |
+| `pairing`: two concurrent unpaired clients | Keep existing 5,000 ms identity publication timeout and the invariant that readers create no install registration. |
+| `pairing`: >16 mixed processes, restart/loss/restore | Keep the 20-child waves and exact same-project IDs. Established paired identities are read, not republished; setup/repair is sequential. |
+| Plugin `identity`: 32 concurrent first uses | Keep existing 5,000 ms publication timeout and exact persistent project ID; all owners are the live test process. |
+| Plugin `identity`: 16 independent processes | Keep existing 5,000 ms publication timeout. Each child reports its ID after publication/cleanup, then waits on stdin EOF. Join all ID results before releasing and joining any children, in `finally`; only then perform the original restart probe, exact two-file inventory, fingerprint and private-mode assertions. This tests atomic identity publication independently of process death/reaping. A stale owner probe followed by early owner exit can legitimately elect a permanent reaper marker; file-lock.mjs deliberately retains those markers. The original ungated Node 24 `npm test` exposed that race (400/401 passed, exit 1). No file-count assertion is relaxed or recovery behavior changed. |
+| Plugin `identity`: 32 telemetry initializations | Atomic link election rather than a polling file lock; preserve one telemetry ID distinct from the project key. |
+| Plugin `pause-capture`: two same-session workers | Keep existing 30,000 ms session-lock acquisition and exact one send/one cursor advancement. The network response delay exercises simultaneous workers, not a busy deadline. |
+| `pairing`: paired pause fencing; plugin `pause-capture`: pause during request; plugin `recall`: delayed injection after pause/resume | Requests use explicit response gates. Control locks are released before waiting; pause takes no held session/request lock. Keep exact generation fencing, one initiated request/no later batches and zero stale injection. |
+| `paired-hooks`: delayed Claude recall / second-client pause | The loopback reply has an explicit Promise gate. Recall waits outside the control lock; the completed second-client pause precedes reply release and injection. Keep child exit 0 and exact empty stdout/stderr. |
+| `paired-hooks`: detached launcher handoff / refused recall attempts | The launched worker owns a session cursor lock; subsequent invalid bindings are refused before acquisition and cannot send. Keep CLI binding propagation and exact no-additional-request assertions. This is a handoff test, not concurrent acquisition of the same lock. |
+| `main-golden`, parity and fixture-generator: parallel hooks/launchers | Keep the existing guarded 30,000 ms control-lock seam in isolated base/candidate copies (`goldenControlTimeout`); shipped limits remain unchanged. Exact golden bodies, outputs and 12-call multiset remain required. |
+
+Sequential legacy observations, profile/conflict injections at an awaited
+`beforeSetupLock` boundary, and concurrent key/control **reads** do not contend
+for these locks. Independent test files use separate fixture roots. The opt-in
+host feasibility worker already reports `cursor_busy` on its bounded acquisition;
+offline selftests use fake hosts and do not run that worker. No real hosts or
+provider calls were enabled for this audit.
+
+Failing-first evidence for this second follow-up: the unmodified 43-case affected
+selection passed under CPU contention on both Node versions (exit 0 / 0), so
+pressure alone is not a deterministic reproduction of CI's exit 1. With the
+first real reserve publication gated, retaining the original `Promise.all` for
+the other reserves deterministically threw `state_busy` on both versions
+(one selected A9 case, exit 1 / 1). The corrected test uses the same forced
+contention and preserves the exact cap, restart and billing assertions.
+
+Intermediate checks are retained, not counted as final qualification. The first
+Node 22 combined check exited 1 because a quota holder raced dispatch cleanup
+and consumed 700 rather than 500 virtual ms; joining dispatch completion fixed
+that seam. Subsequent 43-case checks exited 0 / 0. The first full Codex pressure
+run exited 0 (136 cases, 307.582 seconds including supervision). Two ordinary
+Node 22 Codex runs exited 0 / 0, but the third exited 1 in A5 workspace cleanup,
+after its deadline assertions passed. Removing the old cleanup sleep exposed
+the second identity probe returning before the original publisher completed.
+The isolated source observer now joins that actual raced work in `finally`;
+its single-case pressure check exited 0. A scratch wrapper was mistakenly invoked
+without execute permission (126), then all invocations used `sh` successfully.
+Earlier 13-case indirect pressure checks, the exact-deadline check and the
+three-case pairing busy check all exited 0. After the work-join correction,
+Node 24's final `npm test` exposed the separate-process identity inventory race
+described above (exit 1); the child lifetime gate fixes the test assumption.
+Every invocation/code is retained
+in `.scratch/state-busy-class/results.log`.
+
+CPU pressure uses four `nice -n 10` busy-loop processes and the foreground suite
+pinned to the same allowed CPU. Each burner signals readiness through a pipe;
+there is no warm-up sleep. The supervisor joins the suite, records CPU ticks,
+then terminates/joins the burners (expected SIGTERM return codes `-15` each).
+After the work-join correction, the full 136-case Codex pressure runs exited
+0 / 0, taking 241.405 / 275.311 seconds including supervision. The four burners
+consumed 53.49–53.53 / 58.39–58.44 CPU seconds each. The 43-case affected selection,
+entire 54-case pairing test file and single delayed paired-recall case also
+passed under this pressure on both versions (all exit 0). This establishes
+slow-runner evidence without increasing shipped limits or using timed sleeps to
+decide lock outcomes.
+
+Final qualification for this second follow-up uses Node 22.16.0 / 24.15.0,
+verified from each invocation's `node --version`. All suites run in the
+foreground, sequentially, with synthetic data, a separate temporary HOME per
+invocation (HOME = CAIRN_TEST_REAL_HOME), CI=1, compile caching disabled, and
+TMPDIR/TMP/TEMP/npm cache inside the non-UUID worktree scratch path
+`.scratch/state-busy-class`. `npm test` retains CI's default concurrency.
+The identity lifetime change affects only the plugin test helper, so the already
+qualified Codex/client/pairing suites are unchanged; both complete `npm test`
+runs were repeated after that final change. No final suite has failed, skipped
+or cancelled cases.
+
+| Command / evidence | Node 22.16.0 exit | Node 24.15.0 exit |
+| --- | --- | --- |
+| Unmodified 43-case affected selection under CPU pressure | 0 | 0 |
+| Gated original A9 `Promise.all` reproduction, one case | 1 | 1 |
+| Corrected forced-busy A9 in 43-case affected pressure selection | 0 | 0 |
+| Full `pairing.test.mjs` under CPU pressure, 54 cases | 0 | 0 |
+| Delayed paired recall under CPU pressure, one case | 0 | 0 |
+| Full `test:codex` under CPU pressure, 136 cases | 0 | 0 |
+| Final gated `identity.test.mjs` under CPU pressure, 5 cases | 0 | 0 |
+| Final `test:codex`, 136 cases, three runs | 0 / 0 / 0 | 0 / 0 / 0 |
+| Codex runtimes (seconds) | 59.696 / 53.903 / 60.315 | 54.103 / 51.043 / 55.994 |
+| `test:client`, 5 cases | 0 | 0 |
+| `test:pairing`, 270 cases | 0 | 0 |
+| Final CI-shape `npm test`, 401 cases | 0 | 0 |
+| Final npm runtimes (seconds) | 349.753 | 271.727 |
+| `validate` | 0 | 0 |
+
+The last Node 22 43-case pressure check also includes the original post-deadline
+identity recovery assertion after joining hook work (exit 0). The additional
+Node 24 gated identity pressure check exited 0. `git diff --check` exits 0.
+All intermediate failed assumptions (quota gate, A5 cleanup, identity reaper
+inventory), expected failing-first results and the wrapper's 126 are retained
+alongside every successful invocation in `results.log` and its full logs.
+Only tests, test helpers and this handoff changed; no product code, runtime
+defaults, versions/releases, push or PR is part of the follow-up.
+
+The coordinator qualified `579c441` (the round-3 head plus `test:codex` and
+`test:client`) in the complete matrix, each command sequential with HOME =
+CAIRN_TEST_REAL_HOME = scratch: on Node 22.16.0 and 24.15.0, `npm test`,
+`validate`, `test:core`, `test:pairing`, `test:pairing:golden`, `test:artifact`,
+`test:mcp`, `test:openai`, `test:codex`, `test:client` and `demo:capture` all exit
+0; Node 20 `npm test` and `validate` exit 0; `test:codex` from a depth-1 clone
+exits 0; `git diff --check` exits 0.
+
+Node 20 compatibility follow-up (PR #311, base `8155674`): replace all eight
+test calls to `Promise.withResolvers` with one test-only `deferred()` helper in
+`integrations/client/testing/deferred.mjs`. The shared lock gates, round-2
+reproduction and plugin identity tests can all import it across their existing
+test boundaries. Promise gates, virtual time, assertions and product defaults
+are unchanged. The complete diff since the coordinator's `a5317cd` merge was
+searched and inspected for other APIs newer than Node 20; none remain in the
+added JavaScript.
+
+Foreground sequential verification used fresh synthetic HOMEs, an npm cache
+and TMPDIR inside this worktree. The requested Node 20 binary reports
+`v20.20.2`; Node 22 reports `v22.16.0`.
+
+| Command | Runtime | Exit |
+| --- | --- | --- |
+| `npm test` | Node 20.20.2 | 1 |
+| `npm run validate` | Node 20.20.2 | 0 |
+| `npm test` | Node 22.16.0 | 1 |
+| `npm run test:codex` | Node 22.16.0 | 1 |
+| `npm run test:client` | Node 22.16.0 | 1 |
+| Deferred pending / resolve / reject smoke check | Node 20.20.2 | 0 |
+| Direct `runtime-usage.test.mjs`, 18 cases | Node 20.20.2 | 0 |
+| `git diff --check` | final diff | 0 |
+
+The complete suites are **not qualified** in this follow-up environment. Its
+restricted sandbox rejects local socket operations used by Node child-process
+pipes: diagnostics record `shutdown` and `getsockname` returning `EPERM`.
+An independent `spawnSync` probe reproduces the failure with `/bin/echo` and
+a Node child, without loading repository code. Both Node versions consequently
+lose child output or report file-level suite failures; these are not passing
+case counts. The Node 20 direct usage suite exercises the changed lock gates
+successfully. Raw logs, all diagnostic exits and the API audit are retained in
+`logs/node20-deferred/`. Rerun the requested full suites in an environment that
+permits local child-process pipes before claiming CI qualification. No product
+code, default timeout, version/release files or global Promise polyfill changed.
+
+Below-bar follow-ups, each with its owner:
+
+1. **SessionStart on resume (CX-5, before install).** The oracle and W34 expect
+   text written after a cwd change, before the next hook, to be skipped as
+   `binding_changed`. That is safe only if Codex fires `SessionStart` when a
+   session resumes in another cwd; the host table above has seen only
+   `startup`. CX-5 verifies this on the pinned host. If resume emits no
+   `SessionStart`, CX-5 plans the boundary before install.
+2. **Stale policy declarations (CX-7).** After one client is uninstalled, a
+   later policy change in the other returns `policy_conflict` until the removed
+   client's declaration is cleared. The documented recovery is an installer
+   repair that calls the guard under the removed client's name; CX-7's setup
+   and repair own it. Until then it fails closed with the named refusal.
+3. **A worker-table row for `policy_conflict` (CX-5).** A reviewer's probe
+   shows the right behaviour (no call, text kept pending, sent once after
+   alignment), but no row pins it.
+4. **Digest-key reset across sessions (CX-6 limitations).** Resetting a corrupt
+   key in one session drops the other sessions' unsent text in the same root as
+   `source_changed`. It needs a corrupted key, not ordinary use.
+5. **Hygiene (whichever package next edits these files):**
+   - the unreachable `invalid_reply` branches at `worker.mjs:204` and `:330`;
+   - the return shapes at `:322` and `:332`;
+   - `round3.test.mjs:80` should assert which text arrived under which project;
+   - the README's "repeating reset … completes that same epoch", which starts
+     a new epoch if the transcript grew in between;
+   - the positional `scheduling` boolean in `runtime-usage.mjs`.
+
+
+### CX-4 publication and decision table, 2026-10-01
+
+Coordinator assigns all four published contracts to the same 0.2.0 release:
+Codex capture discriminator, both recall/capture refusal/reset alternatives,
+H4b v1 composed session-start, and shared hosted pause state/generation. See
+[the published contract and state decision table](../protocol.md#hosted-protocol-020).
+U-6 D4 assigns session-start publication/transport to CX-4, H4 serves it and
+CX-5 consumes it. U-6 D5 assigns pause schemas to CX-4, serving to H5, and client
+observation/resume barriers to CX-5. Schema bundle publication is necessary for
+an isolated plugin: contract modules and bundle wiring accompany the shared
+hosted transport. These additions do not enable Codex hooks or session context.
+Today's H4c/H4a legacy quota bodies diverge from the published refusal; H5 must
+adapt both routes before 0.2.0 target qualification. Mocks are not that evidence.
+The explicit upgraded-Claude D1 quota/concurrency exception applies; no 0.1
+Claude request body, message boundary or frozen event identity changes.
+
+The quota store preserves CX-2's native Windows standalone portable policy;
+Linux/WSL still requires private modes and directory sync. The synthetic
+platform fixture is not native Windows or macOS acceptance. It does not change
+pairing support or the existing binding/root ownership policy.
+
+### CX-4 驗證與交接，2026-10-01
+
+驗證使用 Linux/WSL、合成資料、明確指定的臨時 HOME，所有安裝與測試
+在前景依序執行。外層 `HOME` = `CAIRN_TEST_REAL_HOME` =
+`$PWD/.cx4-scratch/home`，`TMPDIR`/`TMP`/`TEMP` =
+`$PWD/.cx4-scratch/tmp`，npm cache = `$PWD/.cx4-scratch/npm-cache`，
+`NODE_DISABLE_COMPILE_CACHE=1`；外層路徑不含 UUID。
+僅轉送 LANG/LC_ALL/TZ/TERM，未轉送憑證。npm/Node wrapper 固定使用
+22.16.0、24.15.0、20.19.0；測試 runner 的子目錄完成後自行清理。
+未讀寫真實的 Cairn、Claude 或 Codex 使用者狀態。
+
+0.2.0 發布 Codex capture discriminator、兩個端點的 quota refusal/reset、
+H4b v1 session-start 與共享 pause state/generation/resume barrier。
+Session-start/pause 的 hook 消費仍由 CX-5 接手；H5 必須把今日 legacy
+429 改成已發布形狀後，才能做 hosted acceptance，schema merge 不等於
+部署驗證。沒有 hosted/service 變更、Codex hook 啟用或模型付費呼叫。
+
+最終集中測試為 protocol 109 + transport 44 + plugin quota 7 = 160 案，
+兩個主要版本均全部通過。涵蓋 strict unknown fields、有效/缺少/錯誤
+reset、processing 與 ack、session-start 群組/收據/截斷/整體預算、pause
+安全 generation、兩 client/重啟持續拒絕、單次 resume 及既有 Claude
+wire payload。Windows portable fixture 是 Linux 平台模擬，未宣稱
+原生 Windows/macOS 接受度。既有 0.1.1 frozen golden 未改；比較器
+只把候選版本標示改為目前 VERSION，並在隔離副本延長 quota contention
+等待，避免把明訂 D1 串行變更誤算為 payload 差異。正式 quota lock
+仍為 150ms，其爭用與單次 permit 另有真實檔案測試。
+
+每列是 `.cx4-scratch/run.py <Node version> <命令>` 的實際命令與 exit
+code；`—` 表示該命令沒有 TAP/spec 案例總數，不表示略過。
+案例欄為 total/pass/fail/skip。早期失敗與重跑也完整保留。
+
+| 次序 | Node | 命令 | Exit | 案例 total/pass/fail/skip |
+| --- | --- | --- | --- | --- |
+| 1 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/transport-hosted.test.mjs` | 1 | 38/37/1/0 |
+| 2 | 22.16.0 | `npm run test:client` | 0 | 5/5/0/0 |
+| 3 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 38/38/0/0 |
+| 4 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/hosted-quota.test.mjs` | 0 | 6/6/0/0 |
+| 5 | 22.16.0 | `npm test` | 1 | 508/502/6/0 |
+| 6 | 22.16.0 | `node integrations/client/testing/run.mjs --test-name-pattern=quota\|Q[0-9]\|classification\|standalone root\|fresh B\|C03\|keyword inventory integrations/client/test/transport-hosted.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/paired-hooks.test.mjs integrations/client/test/claude-decisions.test.mjs` | 0 | 43/43/0/0 |
+| 7 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 8 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 9 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 10 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 1 | 2/1/1/0 |
+| 11 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/main-golden.test.mjs` | 0 | 2/2/0/0 |
+| 12 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 155/155/0/0 |
+| 13 | 22.16.0 | `npm ci --prefix adapters/openai` | 0 | — |
+| 14 | 22.16.0 | `npm ci --prefix adapters/mcp` | 0 | — |
+| 15 | 22.16.0 | `node tools/testing/run.mjs --script packaging/prepare-cache.mjs` | 0 | — |
+| 16 | 22.16.0 | `npm test` | 0 | 511/511/0/0 |
+| 17 | 22.16.0 | `npm run validate` | 0 | — |
+| 18 | 22.16.0 | `npm run test:core` | 0 | 1136/1136/0/0 |
+| 19 | 22.16.0 | `node integrations/client/testing/run.mjs integrations/client/test/transport-hosted.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs` | 0 | 48/48/0/0 |
+| 20 | 22.16.0 | `npm test` | 0 | 553/553/0/0 |
+| 21 | 22.16.0 | `npm run validate` | 0 | — |
+| 22 | 22.16.0 | `npm run test:pairing` | 0 | 270/270/0/0 |
+| 23 | 22.16.0 | `npm run test:pairing:golden` | 0 | — |
+| 24 | 22.16.0 | `npm run test:artifact` | 0 | 87/87/0/0 |
+| 25 | 22.16.0 | `npm run test:mcp` | 0 | 111/111/0/0 |
+| 26 | 22.16.0 | `npm run test:codex` | 0 | 133/133/0/0 |
+| 27 | 22.16.0 | `npm run test:client` | 0 | 47/47/0/0 |
+| 28 | 24.15.0 | `npm ci --prefix adapters/openai` | 0 | — |
+| 29 | 24.15.0 | `npm ci --prefix adapters/mcp` | 0 | — |
+| 30 | 24.15.0 | `node tools/testing/run.mjs --script packaging/prepare-cache.mjs` | 0 | — |
+| 31 | 22.16.0 | `npm run test:client` | 0 | 48/48/0/0 |
+| 32 | 22.16.0 | `npm test` | 0 | 554/554/0/0 |
+| 33 | 24.15.0 | `npm test` | 0 | 554/554/0/0 |
+| 34 | 24.15.0 | `npm run validate` | 0 | — |
+| 35 | 24.15.0 | `npm run test:core` | 0 | 1136/1136/0/0 |
+| 36 | 24.15.0 | `npm run test:pairing` | 0 | 270/270/0/0 |
+| 37 | 24.15.0 | `npm run test:pairing:golden` | 0 | — |
+| 38 | 24.15.0 | `npm run test:artifact` | 0 | 87/87/0/0 |
+| 39 | 24.15.0 | `npm run test:mcp` | 0 | 111/111/0/0 |
+| 40 | 24.15.0 | `npm run test:codex` | 0 | 133/133/0/0 |
+| 41 | 24.15.0 | `npm run test:client` | 0 | 49/49/0/0 |
+| 42 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 159/159/0/0 |
+| 43 | 24.15.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 159/159/0/0 |
+| 44 | 22.16.0 | `npm test` | 0 | 555/555/0/0 |
+| 45 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 1 | 159/158/1/0 |
+| 46 | 22.16.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 160/160/0/0 |
+| 47 | 24.15.0 | `node integrations/client/testing/run.mjs plugins/cairn-memory/test/protocol.test.mjs plugins/cairn-memory/test/hosted-quota.test.mjs integrations/client/test/transport-hosted.test.mjs` | 0 | 160/160/0/0 |
+| 48 | 22.16.0 | `npm test` | 0 | 556/556/0/0 |
+| 49 | 22.16.0 | `npm run validate` | 0 | — |
+| 50 | 22.16.0 | `npm run test:workspace-lifecycle` | 0 | 25/25/0/0 |
+| 51 | 22.16.0 | `npm run demo:capture` | 0 | — |
+| 52 | 22.16.0 | `npm run demo:session-context` | 0 | — |
+| 53 | 22.16.0 | `npm run demo:recall` | 0 | — |
+| 54 | 24.15.0 | `npm test` | 0 | 556/556/0/0 |
+| 55 | 24.15.0 | `npm run validate` | 0 | — |
+| 56 | 24.15.0 | `npm run test:workspace-lifecycle` | 0 | 25/25/0/0 |
+| 57 | 24.15.0 | `npm run demo:capture` | 0 | — |
+| 58 | 24.15.0 | `npm run demo:session-context` | 0 | — |
+| 59 | 24.15.0 | `npm run demo:recall` | 0 | — |
+| 60 | 22.16.0 | `npm run test:client` | 0 | 49/49/0/0 |
+| 61 | 22.16.0 | `npm ci --prefix tools/plugin-validation` | 0 | — |
+| 62 | 22.16.0 | `npm run validate --prefix tools/plugin-validation` | 0 | — |
+| 63 | 24.15.0 | `npm run validate --prefix tools/plugin-validation` | 0 | — |
+| 64 | 20.19.0 | `npm test` | 0 | 556/548/0/8 |
+| 65 | 20.19.0 | `npm run validate` | 0 | — |
+| 66 | 22.16.0 | `node integrations/client/bundle.mjs --check` | 0 | — |
+
+最終主要結果（所有列 exit 0）：
+
+| 命令 | Node 22.16.0 | Node 24.15.0 | Node 20.19.0 |
+| --- | --- | --- | --- |
+| `npm test` | 556 pass，0 skip | 556 pass，0 skip | 548 pass，8 skip |
+| `npm run validate` | 0 | 0 | 0 |
+| `npm run test:core` | 1136 pass | 1136 pass | 不要求 |
+| `npm run test:pairing` | 270 pass | 270 pass | 不要求 |
+| `npm run test:pairing:golden` | 0（fixture 比對） | 0（fixture 比對） | 不要求 |
+| `npm run test:artifact` | 87 pass | 87 pass | 不要求 |
+| `npm run test:mcp` | 111 pass | 111 pass | 不要求 |
+| `npm run test:codex` | 133 pass | 133 pass | 不要求 |
+| `npm run test:client` | 49 pass | 49 pass | 不要求 |
+
+Node 20 的 8 個 skip 全是現存 `node:sqlite` integration guard，
+其對應案例已在兩個主要版本執行。不是 CX-4 conformance skip。
+core/adapter 未變；後續 transport/plugin 修正以最終 160 案、
+兩個主要版本的完整 556 案及 client 49 案覆核，未重複未變的 core suite。
+
+逐次表之外，早期單獨 protocol runner 的兩次結果（`protocol-first.log`、
+`protocol-final.log`）為 103/103、106/106，shell exit 0。最終 109 案
+已由集中測試與完整 CI-shaped `npm test` 再次覆蓋。這兩次早期命令
+的完整環境/參數未存入逐次 ledger，不把後來的命令冒稱為原命令。
+初始化的 Node binary 複製、scratch 建立、schema/bundle 產生與文件
+修改命令均 exit 0；查閱檔案時曾遇到不存在的 workflow 路徑，隨後
+改讀 `.github/workflows/ci.yml`，不算測試失敗。
+
+早期失敗已修正且保留：transport observer 的中斷注入點、root alias／
+空 legacy root／effective UID 相容性、golden 串行等待及鎖檔消失競態、
+pause resume 的既有 stdout、quota-only open gate 的測試隔離。最後
+一項的初稿混入合法的 resume EOF skip，拆成 Q13 與原 quota 案例。
+兩次 orchestrator 在目前命令完成後以 99 停止，以便修正來源；
+下一個命令尚未啟動，99 不是該測試的 exit code。
+
+Git 使用 `$PWD/.x-index`，每次提交依序執行 `git read-tree HEAD`、
+`git add <本次檔案>`、`git write-tree`、`git commit-tree <tree> -p HEAD`、
+`git update-ref refs/heads/feat/cx4-protocol <new> <old>`，並移除 `.x-index`。
+文件、schema/conformance、client 及後續修正共七次 transaction 的
+每一步均 exit 0；每個 commit 最後均有指定 Co-Authored-By trailer。
+第一次普通 `update-ref` 被唯讀 worktree 的 HEAD.lock 拒絕；外層 shell
+最後的 cat 回傳 0，沒有另存內部 exit code，因此不宣稱該步成功。
+成功重試只對 `update-ref` 設定 `GIT_DIR` 為許可寫入的 common git dir，
+未改 worktree metadata 權限。檢查工作區時用新建 alternate index，
+避免把未更新的預設 index 誤讀為刪檔。
+`git diff HEAD --check` 與 `git diff 1bc7f93 HEAD --check` 均 exit 0；
+release metadata 與本驗證文件另以最後一個 transaction 提交。
+
+CX-5 接手共用 port 與 CX-3 stub DTO 的適配：前者是
+`capture(batch,binding,eventId,signal)`，後者是
+`capture(body,{signal})`；不能直接互換。Session-start 的完整預算解析
+需要傳入受信任的 conservative o200k `countTokens`，缺少時計為
+invalid reply，不自行猜測或刪短證據。pause parser 已發布；observe、
+injection 與 EOF resume barrier 的 hook 接線仍是 CX-5 的工作。
+
+外部接手／未執行：H5 服務實作與實際 hosted acceptance、CX-5 hook
+消費、原生 Windows/macOS 驗收；這些不在本包範圍。合併即發布 0.2.0，
+仍需 chichi 的 go，由協調者處理。沒有 push、PR、tag 或 release。
+執行紀錄寫入此節後，僅移除此工作建立的 scratch（含臨時 HOME、
+TMPDIR、cache、demo DB 及 logs）；不掃描其他使用者目錄。
+
+### CX-4 round 2 決策與交接，2026-10-01
+
+Round 2 coordinator decisions supersede round 1's target-wide quota latch,
+manual-only invalid-429 recovery and unconfirmed marker. The protocol's R01–R16
+decision table is recorded before implementation. Capture processing accepts
+both HTTP 200 and 202. Recall/capture gates are operation-scoped, shared across
+clients/restarts; locks contain only state transitions. Normal retries survive
+hook termination. Resumed probes have stale-safe PID/token/deadline markers
+and restore the prior refusal after owner death/expiry. Unrecognized 429 is
+unavailable with a persisted bounded Retry-After/default cooldown, auto expiry
+and explicit resume recovery. One resume also repairs corrupt regular owned
+state and resumes local pause; no separate resume-quota action remains.
+
+The original CX-4 ownership row is restored. Supporting files edited outside
+that original row are recorded here rather than expanding it: contract/schema
+bundle modules and bundle.mjs (published standalone parser distribution),
+private-state.mjs (revert round 1 helper API expansion), parity.test.mjs and its
+pinned hash fixture (restore mandatory transport hash verification),
+testing/main-golden.mjs (remove quota lock widening, keep required VERSION
+normalization for the prepared 0.2.0 release), and package.json (restore the
+original test:client command; version remains 0.2.0). No CX-5 hooks are enabled.
+
+#### Round 2 結果與保留範圍
+
+本輪實作提交為 `03035e13f69c740984b5883b7e8de7ef8f2d4d71`（先記錄
+決策表與 protocol）及 `9cbddc720481b771be6925bf9acd6615bef8f053`
+（202 分類、operation gate、stale recovery、cooldown、repair、回復額外變更）。
+0.2.0 的版本檔仍全部準備完成，發布內容維持 Codex discriminator、兩端
+嚴格 quota/reset variants、session-start switches/groups/receipts/truncation/
+combined budget，以及 shared pause/generation/resume barrier。沒有 hosted code、
+CX-5 消費接線、push、PR、tag 或 release。
+
+要求回復的五項均已回復：只有 resume；private-state 不新增 ownerId/portable
+API，原 directory fsync 仍在；parity 恢復 transport hash 檢查並只更新其
+pinned hash；ownership row 恢復原文；test:client 恢復原 script。保留的
+額外變更只有必要的 VERSION 正規化（prepared 0.2.0 與既有 golden 版本文字），
+及 final dispatch 的既有 pause generation 再檢查（quota 狀態非同步 I/O 後
+仍須尊重 pause，R16）。Gate 的局部 creator/path checks 只約束 gate 葉節點，
+不擴充 private-state 的權限 API。Supporting files 還包括本輪的新
+`plugins/cairn-memory/test/fixtures/hosted-fetch-preload.mjs`（可控 synthetic
+HTTP reply，實際 child hook 與 signals）及 `docs/limitations.md`
+（CONTRIBUTING 要求保留驗證限制）；不是擴張 package ownership。
+
+最終直接執行的定向案例在 Node 22.16.0、24.15.0、20.19.0 各為
+**184 pass / 0 fail / 0 skip**：protocol 114、transport 58、plugin 12。
+涵蓋 HTTP 202、SIGTERM/SIGKILL、resumed probe SIGKILL、live-owner deadline、
+雙 client/restart 與每 operation quota、in-flight capture 時 recall、
+Retry-After valid/invalid/absent/cap、auto-expiry、corrupt resume，以及
+frozen batch/event/cursor 的保存。Pinned transport hash 及 bundle check 也
+直接驗證；既有 Claude mechanism/output/state bytes 比對另直接執行。
+
+目前 sandbox 拒絕 localhost listen（EPERM），Node child 的 pipe I/O／
+worker serialization 無法正常工作，連同步 git spawn 都回報 EPERM。
+因此 test-only peer 以明示臨時 HOME 中的檔案傳送 synthetic requests/replies，
+child hook stdin/stdout/stderr 使用 regular files；hook 程序與 SIGKILL 是真的，
+不宣稱這是 TCP 或 deployed-host acceptance。CI-shaped 命令維持原 script
+並逐一嘗試，沒有把 test runner 的檔案級 pass 當作案例級成功。
+完整 CI 矩陣**尚未合格**，須在一般 CI 環境重跑。未修改 runner／既有
+CI tests 來掩蓋環境失敗。Artifact 所需 fresh registry cache 在此受限
+網路環境亦未備妥；不宣稱 artifact／MCP／pairing acceptance 通過。
+
+所有執行前均清除應用環境；HOME、CAIRN_TEST_REAL_HOME、TMPDIR/TMP/TEMP、
+npm_config_cache 均明示為本 worktree 的 `.cx4-r2/` 子目錄，Node compile
+cache 停用，exact Node binary 在 PATH 最前。Foreground sequential，
+沒有 real Cairn/Claude/Codex 使用者狀態。Node 20 為 20.19.0。
+下表 124 是 verification wrapper 在逾時後終止 process group 的退出碼，
+不是 npm 自然結束；先以 75 秒確認 hang，再把已知環境阻塞的後續
+嘗試限制為 30 秒。第 37 列 130 是人工 Ctrl-C 的外層 session，未取得
+npm child 的自然退出碼。其他列列出實際 command/wrapper exit。
+
+臨時 `focused.mjs` 依序 import protocol.test.mjs、transport-hosted.test.mjs、
+hosted-quota.test.mjs，以相同 home guard 執行，避開壞掉的 worker pipe。
+逐次記錄保留初稿失敗與診斷，沒有只保留成功。以下 argv JSON 精確
+保留命令引數；沒有省略 node -e 的診斷程式。
+
+| # | Node | argv | exit | tests/pass/fail/skip（可觀察時） |
+| --- | --- | --- | --- | --- |
+| 1 | 22.16.0 | `["node", "integrations/client/bundle.mjs"]` | 0 | —/—/—/— |
+| 2 | 22.16.0 | `["node", "integrations/client/testing/run.mjs", "plugins/cairn-memory/test/protocol.test.mjs", "integrations/client/test/transport-hosted.test.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs", "integrations/client/test/parity.test.mjs"]` | 1 | 4/2/2/0 |
+| 3 | 22.16.0 | `["node", "integrations/client/testing/run.mjs", "--test-reporter=spec", "integrations/client/test/transport-hosted.test.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 2/1/1/0 |
+| 4 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/12/0 |
+| 5 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 6 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 7 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "integrations/client/test/transport-hosted.test.mjs"]` | 0 | 58/58/0/0 |
+| 8 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 9 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 10 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 11 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 12 | 22.16.0 | `["node", "plugins/cairn-memory/scripts/hook.mjs", "status"]` | 0 | —/—/—/— |
+| 13 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 14 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/6/0 |
+| 15 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 12/0/8/0 |
+| 16 | 22.16.0 | `["node", "--import", "./plugins/cairn-memory/test/fixtures/hosted-fetch-preload.mjs", "plugins/cairn-memory/scripts/hook.mjs", "status"]` | 0 | —/—/—/— |
+| 17 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "--test-name-pattern=Claude refusal retains", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 1 | 1/0/1/0 |
+| 18 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 19 | 22.16.0 | `["/home/chichieh/.nvm/versions/node/v22.16.0/bin/node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 20 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 21 | 24.15.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 22 | 20.19.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 23 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 1 | —/—/—/— |
+| 24 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 25 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 26 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 1 | —/—/—/— |
+| 27 | 22.16.0 | `["node", ".cx4-r2/spawn-diagnostic.mjs"]` | 0 | —/—/—/— |
+| 28 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "plugins/cairn-memory/test/hosted-quota.test.mjs"]` | 0 | 12/12/0/0 |
+| 29 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", ".cx4-r2/focused.mjs"]` | 0 | 184/184/0/0 |
+| 30 | 24.15.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", ".cx4-r2/focused.mjs"]` | 0 | 184/184/0/0 |
+| 31 | 22.16.0 | `["node", "integrations/client/bundle.mjs"]` | 0 | —/—/—/— |
+| 32 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", ".cx4-r2/focused.mjs"]` | 0 | 184/184/0/0 |
+| 33 | 24.15.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", ".cx4-r2/focused.mjs"]` | 0 | 184/184/0/0 |
+| 34 | 20.19.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", ".cx4-r2/focused.mjs"]` | 0 | 184/184/0/0 |
+| 35 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "--test-name-pattern=pinned shared", "integrations/client/test/parity.test.mjs"]` | 0 | 1/1/0/0 |
+| 36 | 22.16.0 | `["node", "integrations/client/bundle.mjs", "--check"]` | 0 | —/—/—/— |
+| 37 | 22.16.0 | `["npm", "test"]` | 130 | —/—/—/— |
+| 38 | 22.16.0 | `["npm", "test"]` | 124 | —/—/—/— |
+| 39 | 22.16.0 | `["npm", "run", "validate"]` | 0 | —/—/—/— |
+| 40 | 22.16.0 | `["npm", "run", "test:core"]` | 124 | —/—/—/— |
+| 41 | 22.16.0 | `["npm", "run", "test:pairing"]` | 124 | —/—/—/— |
+| 42 | 22.16.0 | `["npm", "run", "test:pairing:golden"]` | 1 | —/—/—/— |
+| 43 | 22.16.0 | `["npm", "run", "test:artifact"]` | 1 | 28/0/28/0 |
+| 44 | 22.16.0 | `["npm", "run", "test:mcp"]` | 1 | 16/1/15/0 |
+| 45 | 22.16.0 | `["npm", "run", "test:codex"]` | 1 | 10/6/4/0 |
+| 46 | 22.16.0 | `["npm", "run", "test:client"]` | 1 | 2/0/2/0 |
+| 47 | 24.15.0 | `["npm", "test"]` | 124 | —/—/—/— |
+| 48 | 24.15.0 | `["npm", "run", "validate"]` | 0 | —/—/—/— |
+| 49 | 24.15.0 | `["npm", "run", "test:core"]` | 124 | —/—/—/— |
+| 50 | 24.15.0 | `["npm", "run", "test:pairing"]` | 124 | —/—/—/— |
+| 51 | 24.15.0 | `["npm", "run", "test:pairing:golden"]` | 1 | —/—/—/— |
+| 52 | 24.15.0 | `["npm", "run", "test:artifact"]` | 1 | 28/0/28/0 |
+| 53 | 24.15.0 | `["npm", "run", "test:mcp"]` | 1 | 16/1/15/0 |
+| 54 | 24.15.0 | `["npm", "run", "test:codex"]` | 1 | 10/6/4/0 |
+| 55 | 24.15.0 | `["npm", "run", "test:client"]` | 124 | —/—/—/— |
+| 56 | 20.19.0 | `["npm", "test"]` | 124 | —/—/—/— |
+| 57 | 20.19.0 | `["npm", "run", "validate"]` | 0 | —/—/—/— |
+| 58 | 22.16.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "--test-name-pattern=pinned shared\|shared mechanisms\|generated original-path", "integrations/client/test/parity.test.mjs"]` | 0 | 3/3/0/0 |
+| 59 | 22.16.0 | `["npm", "run", "demo:capture"]` | 0 | —/—/—/— |
+| 60 | 22.16.0 | `["npm", "run", "demo:session-context"]` | 0 | —/—/—/— |
+| 61 | 22.16.0 | `["npm", "run", "demo:recall"]` | 0 | —/—/—/— |
+| 62 | 22.16.0 | `["npm", "run", "validate", "--prefix", "tools/plugin-validation"]` | 0 | —/—/—/— |
+| 63 | 22.16.0 | `["npm", "run", "test:workspace-lifecycle"]` | 1 | 2/1/1/0 |
+| 64 | 24.15.0 | `["node", "--import", "./integrations/client/testing/home-guard.mjs", "--test-name-pattern=pinned shared\|shared mechanisms\|generated original-path", "integrations/client/test/parity.test.mjs"]` | 0 | 3/3/0/0 |
+| 65 | 24.15.0 | `["npm", "run", "demo:capture"]` | 0 | —/—/—/— |
+| 66 | 24.15.0 | `["npm", "run", "demo:session-context"]` | 0 | —/—/—/— |
+| 67 | 24.15.0 | `["npm", "run", "demo:recall"]` | 0 | —/—/—/— |
+| 68 | 24.15.0 | `["npm", "run", "validate", "--prefix", "tools/plugin-validation"]` | 0 | —/—/—/— |
+| 69 | 24.15.0 | `["npm", "run", "test:workspace-lifecycle"]` | 1 | 2/1/1/0 |
+
+要求的 CI-shaped 矩陣退出碼如下（124 = 逾時；未完成 qualification）：
+
+| 命令 | Node 22.16.0 | Node 24.15.0 | Node 20.19.0 |
+| --- | --- | --- | --- |
+| `npm test` | 124 | 124 | 124 |
+| `npm run validate` | 0 | 0 | 0 |
+| `npm run test:core` | 124 | 124 | 不要求 |
+| `npm run test:pairing` | 124 | 124 | 不要求 |
+| `npm run test:pairing:golden` | 1 | 1 | 不要求 |
+| `npm run test:artifact` | 1 | 1 | 不要求 |
+| `npm run test:mcp` | 1 | 1 | 不要求 |
+| `npm run test:codex` | 1 | 1 | 不要求 |
+| `npm run test:client` | 1 | 124 | 不要求 |
+
+Case counts for CI-shaped worker runs above are **file-level counts**, not the
+full suites' case counts; they are retained only as diagnostic output. Early
+transport/plugin drafts were corrected before the final 184-case runs. Shell
+inspection/preparation/edit commands exited 0 except missing-file/no-match
+reads (1); the diagnostic subprocess pipe/syntax failures remain in the table.
+No dependency or external-service success is inferred from an empty child output.
+
+Git transactions use GIT_INDEX_FILE=$PWD/.x-index: read-tree HEAD → add the
+explicit milestone files → write-tree → commit-tree -p HEAD → update-ref
+refs/heads/feat/cx4-protocol <new> <old>, then unlink .x-index. Only update-ref
+uses the writable common GIT_DIR, avoiding the read-only worktree HEAD.lock.
+Every step of the three round 2 transactions exits 0; every commit ends with
+Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>. Alternate-index worktree
+diff and round 2/full-package diff --check exit 0. Release files remain 0.2.0.
+
+計時：開始 `date +%s` = 1790796567；結果記錄時 = 1790801587，已用 83 分鐘。約 64 分鐘時已向協調者回報未完矩陣與環境阻塞。

@@ -117,3 +117,21 @@ connector or named-client chat integration is implied. The third-party
 MemoryManager lifecycle and model-backed sourced-recall evidence. Interactive
 agent tool selection, other host versions and general semantic quality remain
 separate gates; no upstream listing or endorsement is implied.
+
+
+### Hosted protocol 0.2.0 handoff
+
+The shared hosted transport validates distinct acknowledgement, processing,
+quota-refusal, unavailable and error outcomes. Its owner-private target gate
+coordinates separate recall/capture gates across paired clients. Short locks
+cover state transitions only. Verified quota refusals persist; unrecognized 429
+starts a bounded cooldown. Normal retries survive interruption; resumed probes
+use stale-safe owner/deadline markers and one permit per operation. The distributed Claude plugin uses this same bundled code.
+Capture advances only on a validated acknowledgement. Claude's 0.1 request
+payloads remain unchanged under the explicit quota/concurrency D1 exception.
+
+[Protocol 0.2.0](protocol.md#hosted-protocol-020) also publishes and parses the
+session-start groups/receipts/combined budget and hosted pause state/generation.
+CX-5 owns lifecycle consumption and the resume EOF barrier; H5 owns hosted
+serving. No hosted/service code or client hook enablement is delivered here.
+The local automatic-capture connection remains LAC's separate work.

@@ -7,7 +7,7 @@ const help = `Cairn Memory — local stdio MCP developer preview
 Usage:
   cairn-memory --help
   cairn-memory --check-config --db PATH --owner ID [--project ID]
-  cairn-memory --db PATH --owner ID [--project ID]
+  cairn-memory --db PATH --owner ID [--project ID] [--client KEY] [--session ID] [--read-client KEY]
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-deadline-ms 120000
@@ -16,6 +16,8 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID] --source-snapshot current-admitted-v1
   cairn-memory --db PATH --owner ID [--project ID] --recall-context source-evidence
   cairn-memory --db PATH --owner ID [--project ID] --classification-recovery guarded-v1
+  cairn-memory --db PATH --owner ID [--project ID] --session-episodes-access episode-v1
+  cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1 --session-episodes episode-v1 [--session-episodes-draft-batches 8]
 
 Keep the database outside node_modules; its parent directory must exist.
 Reuse the exact database, owner and project across sessions.
@@ -79,6 +81,20 @@ Check the separate rationale status; duplicate batches do not repeat this pass.
 Allow at least 180 seconds for opted-in capture (four bounded model stages).
 recall_memory contextMode rationale-evidence includes linked unverified evidence.
 Save only on actual user intent. Remembered consent is not execution authority.
+--session-episodes-access episode-v1 adds keyless episode reads and management,
+including read_session_start_context with the local o200k_base tokenizer.
+Access alone never enables capture, retention or interpretation. Explicit keep can
+propose automatic procedural tags through normal episode-mode extraction.
+--session-episodes episode-v1 requires source-bound-v2 qualification and staged-v1
+evidence. It records generation configuration only, pending a trusted session producer;
+submitted capture stays in legacy mode. --session-episodes-draft-batches defaults
+to 8 and accepts integers 2..16 only with --session-episodes. No interpretation
+model or producer is wired here. Reads never draft; selected episode passages
+from a separately configured producer may persist until invalidation/deletion.
+--client KEY and --session ID bind explicit receipt provenance at startup
+(default cairn-local-mcp / explicit-tool). --read-client KEY restricts range
+reads and episode-ID tools to one exact client; per-call client can only narrow.
+Session-start context reads cross-client groups in the exact namespace.
 --check-config checks syntax only: no database access or provider requests.
 It cannot verify database permissions, credentials or model availability.
 `;
@@ -86,7 +102,8 @@ It cannot verify database permissions, credentials or model availability.
 export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
-    '--classification-recovery', '--capture-deadline-ms']);
+    '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -129,8 +146,26 @@ export function parseConfiguration(args) {
   if (values.has('--classification-recovery') && values.get('--classification-recovery') !== 'guarded-v1') {
     throw new Error('invalid_mcp_configuration');
   }
+  for (const flag of ['--client', '--read-client']) {
+    if (values.has(flag) && !/^[A-Za-z0-9._-]{1,64}$/.test(values.get(flag))) throw new Error('invalid_mcp_configuration');
+  }
+  if (values.has('--session')) identifier(values.get('--session'));
+  if (values.has('--session-episodes-access') && values.get('--session-episodes-access') !== 'episode-v1') throw new Error('invalid_mcp_configuration');
+  if (values.has('--session-episodes') && (values.get('--session-episodes') !== 'episode-v1' ||
+      values.get('--capture-qualification') !== 'source-bound-v2' || values.get('--capture-evidence') !== 'staged-v1')) throw new Error('invalid_mcp_configuration');
+  let draftEveryBatches = 8;
+  if (values.has('--session-episodes-draft-batches')) {
+    const raw = values.get('--session-episodes-draft-batches');
+    if (!values.has('--session-episodes') || !/^(?:[2-9]|1[0-6])$/.test(raw)) throw new Error('invalid_mcp_configuration');
+    draftEveryBatches = Number(raw);
+  }
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
+    ...(values.has('--client') ? { client: values.get('--client') } : {}),
+    ...(values.has('--session') ? { sessionId: values.get('--session') } : {}),
+    ...(values.has('--read-client') ? { readClient: values.get('--read-client') } : {}),
+    ...(values.has('--session-episodes-access') ? { sessionEpisodesAccess: 'episode-v1' } : {}),
+    ...(values.has('--session-episodes') ? { sessionEpisodes: { mode: 'episode-v1', draftEveryBatches } } : {}),
     ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}),
     ...(values.has('--capture-deadline-ms') ? { captureDeadlineMs } : {}),
     ...(values.has('--capture-rationale') ? { captureRationale: values.get('--capture-rationale') } : {}),
@@ -156,6 +191,11 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       recallModel: key ? DEFAULT_MODEL : null,
       recall: key ? 'configured-not-verified' : 'model_not_configured',
       cloudProcessing: Boolean(key), automaticCapture: false,
+      ...(config.sessionEpisodesAccess || config.sessionEpisodes ? { sessionEpisodesAccess: 'episode-v1',
+        sessionContextTokenizer: 'o200k_base', episodeGeneration: 'awaiting-trusted-session-producer',
+        episodeGenerationEnabled: false } : {}),
+      ...(config.sessionEpisodes ? { sessionEpisodes: config.sessionEpisodes } : {}),
+      ...(config.readClient ? { readClient: config.readClient } : {}),
       ...(config.recallContext ? { recallContext: config.recallContext } : {}),
       ...(config.sourceSnapshot ? { sourceSnapshot: config.sourceSnapshot,
         sourceSnapshotTokenizer: 'o200k_base' } : {}),
@@ -182,7 +222,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   if (env.OPENAI_API_KEY) {
     const { createOpenAIModel } = await import('../openai/index.mjs');
     model = createOpenAIModel({ apiKey: env.OPENAI_API_KEY });
-  } else if (config.sourceSnapshot) {
+  } else if (config.sourceSnapshot || config.sessionEpisodesAccess || config.sessionEpisodes) {
     const { countOpenAITokens } = await import('../openai/index.mjs');
     model = { countTokens: countOpenAITokens };
   }

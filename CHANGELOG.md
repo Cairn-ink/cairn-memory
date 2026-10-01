@@ -33,8 +33,44 @@
   metadata remains unknown; genuine classification failures remain partial and
   stop later batches. See the [contract diagnosis](docs/plans/ingestion-classification-metadata.md).
 
+## 0.2.0 — 2026-10-01
+
+Breaking hosted protocol release (CX-4):
+
+- Accept the truthful `client: "codex"` capture discriminator alongside unchanged
+  0.1 Claude requests. Codex sending still requires verified hosted 0.2.0 support.
+- Publish strict HTTP 429 `quota_reached` alternatives on recall and capture,
+  with an optional finite UTC RFC 3339 reset and no success fields. Today's hosted
+  quota bodies require H5 adaptation before deployment conformance.
+- Publish H4b v1 session-start switches, groups, complete provenance, per-group
+  truncation and the combined budget; publish shared hosted pause state,
+  generation and resume-barrier semantics. Lifecycle consumption remains CX-5's.
+- Upgraded Claude and the shared hosted transport retain pending capture state,
+  persist operation-scoped refusals across clients/restarts. State locks never
+  span network I/O; normal retries survive interrupted hooks, and resumed probes
+  restore their refusal after owner death or deadline expiry.
+  Status shows the validated reset or “reset unknown”; explicit quota resume
+  permits one attempt per eligible operation and repairs corrupt state.
+  Unrecognized 429 is unavailable with a persisted per-operation cooldown:
+  validated Retry-After capped at 24 hours, otherwise five minutes; cooldowns
+  expire automatically and resume clears them.
+  Capture processing accepts HTTP 200 and 202 without advancing the cursor.
+  Existing Claude payload bytes, frozen batches and event IDs remain unchanged
+  under the explicit D1 quota/concurrency exception.
+
+No hosted/server implementation or hook enablement is included.
+
 ## Unreleased — model calls fit their budgets
 
+- Local MCP episode access now provides keyless session/time reads, sourced startup
+  context and revision-guarded correction, closure, unpinning and conversation
+  deletion with its memory/source cascade. Explicit keep uses retained-source
+  admission and may propose source-anchored procedural tags. Procedural remember
+  accepts exact receipt anchors in either mode; null is rejected so clearing a tag
+  requires the revision-guarded management tool.
+  Episode generation flags record configuration only pending a trusted producer;
+  access alone never enables capture or interpretation. Hosted schemas and
+  versions are unchanged.
 - Recall no longer fails with `context_budget_exceeded` because a person has
   many or long memories. `select` and `rank` requests are packed to the
   6,000-token input limit, measured with the adapter's own `countTokens` over

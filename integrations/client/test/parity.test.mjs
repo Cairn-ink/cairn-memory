@@ -12,9 +12,10 @@ const client = fileURLToPath(new URL('../', import.meta.url));
 const plugin = fileURLToPath(new URL('../../../plugins/cairn-memory/', import.meta.url));
 const golden = JSON.parse(await readFile(new URL('./fixtures/claude-hosted-93e52b7.json', import.meta.url), 'utf8'));
 
-test('frozen base 93e52b7 source hashes match untouched shared modules', async () => {
+test('pinned shared source hashes include the revised hosted transport', async () => {
   assert.equal(golden.base, '93e52b7afb298d728cb4831c34bbda6dcf750704');
   for (const [source, original] of Object.entries(CLIENT_MODULES)) {
+    if (!Object.hasOwn(golden.sourceHashes, `plugins/cairn-memory/lib/${original}`)) continue;
     if (['identity.mjs', 'file-lock.mjs', 'control-state.mjs', 'pairing.mjs', 'private-state.mjs'].includes(source)) continue;
     const bytes = await readFile(join(client, source));
     assert.equal(createHash('sha256').update(bytes).digest('hex'),

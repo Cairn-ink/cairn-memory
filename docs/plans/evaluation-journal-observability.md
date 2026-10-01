@@ -28,8 +28,11 @@ merge. The reviewed journal source is PR315 candidate
 - JO4: Read the original source and intent for each overlapping hunk; retain
   both changes, record exact resolution choices, never select one entire side
   indiscriminately. Non-overlapping journal docs/testing infrastructure may be
-  taken exactly from reviewed PR315. Do not import unrelated main changes or
-  reinterpret the old interrupted run as recovered.
+  taken exactly from reviewed PR315. Do not implement unrelated changes or
+  reinterpret the old interrupted run as recovered. A source-preserving sync
+  with fixed main7467 for delivery retains already-approved main features;
+  it is not new feature implementation. Inspect both sources for documentation
+  conflicts, keep both retained-evidence sections, and rerun combined gates.
 - JO5: Run generic npm test, test:longmemeval, the four documented LongMemEval
   demos, test:mixed-native-local, JSON and strict plugin/marketplace validation
   on both Node22.16/24.15. Run the relevant experiment-budget/HTTP guard v3 and
@@ -52,9 +55,23 @@ and operational authority; this worker does not select actual evaluation cases.
 
 ## Evidence
 
+Primary delivery-integration decision2026-10-01: the first additive candidate
+94cb586e1702354f770ec23b82d9f373ad491ff5 passed all JO5 author gates. Read-only
+three-way merge inspection against fixed main7467 found exactly documentation
+conflicts in CHANGELOG.md and docs/limitations.md, no runtime conflict. To keep
+the PR currently mergeable and avoid dropping existing main features, the same
+bounded author will integrate that fixed main into this isolated branch,
+resolve those sections preserving both sources, record provenance, then rerun
+all changed/current contributor gates and freeze a new combined candidate.
+Primary worktrees/main remain untouched; no GitHub PR merge is authorized.
+Independent reviews and primary acceptance target the final combined candidate,
+not the first candidate's stale evidence.
+
 Implementation owner: bounded GPT-6.1 Sol/high worker. Primary acceptance,
 separate nonauthor Standards/Spec reviews and delivery remain root-owned gates.
-Worker has no push, PR, merge or paid execution authority.
+Worker has no push, PR, GitHub PR merge, primary-main update or paid execution
+authority. Only the explicitly authorized fixed-main local integration below
+may finish as an isolated branch merge commit.
 
 ### Integration choices and caller inventory
 
@@ -99,7 +116,7 @@ No browser routes or replay assumptions are present in this evaluation-only
 scope. Request-cap-v3 and the cumulative US$300 lineage files are unchanged and
 their offline guard regressions are required below.
 
-### Worker verification evidence
+### First additive candidate verification (historical)
 
 Retained diagnostic directory:
 `/tmp/cairn-journal-observability-evidence.eSnyvt`, outside test-owned scratch.
@@ -111,7 +128,8 @@ native combined observations 4/4 on each. Native focused logs precede adding
 the two retained omitted-option cases; full final-source native gates supersede
 that narrower result.
 
-Final-source worker results, with zero test failures, cancellations or skips
+First additive candidate `94cb586e1702354f770ec23b82d9f373ad491ff5`
+results, with zero test failures, cancellations or skips
 in every passing suite:
 
 | Command | Node22.16.0 | Node24.15.0 |
@@ -171,3 +189,118 @@ evidence/counts in the verbatim source plan remain historical and are not
 substituted for this matrix. Primary exact-candidate reruns, both independent
 review axes and PR/CI/mergeability are still pending; this worker does not
 claim those gates or merge/deliver the branch.
+
+### Fixed-main delivery integration
+
+The primary started `git merge --no-commit --no-ff 7467aebcb32563c9aab4356a8c3e04c0ebb1ecd4`
+in this isolated worktree after explicitly amending JO4. The worker reread the
+entire current contract and conflict-resolution skill, inspected stage-2 and
+stage-3 documentation sources and source commit intent, and resolved only the
+two conflicts using additive `apply_patch` edits.
+
+- `CHANGELOG.md`: retain all four observed-branch unreleased classification/
+  timing entries, then retain main's complete 0.2.0 CX-4 release section. Do not
+  relabel unreleased evaluation diagnostics as part of that hosted release.
+- `docs/limitations.md`: retain all three observed-branch recall-witness and
+  prospective-transport sections, then retain main's complete CX-4 round-2
+  environment limitations. Earlier journal retention and all other retained
+  evidence remain present; none of the older failures is called recovered.
+- Runtime auto-merge: before resolution, the staged diff from the first additive
+  candidate is empty for `evaluation/longmemeval`, `evaluation/experiment-budget`,
+  `adapters/openai` and `core`. Fixed main's MCP, shared-client/Codex, schema,
+  version and CI files merged without conflict. No implementation is added to
+  those approved main features, and their source content is preserved.
+
+Current `CONTRIBUTING.md`, `package.json` and CI were inspected. The new main
+version is 0.2.0; it adds the Codex/client CI suites and previously approved
+MCP episode/procedural access. All JO5 gates are rerun on the combined source;
+first-candidate evidence above remains historical, not final acceptance.
+Combined-source logs and final frozen candidate are recorded below.
+
+Retained combined-source diagnostic directory:
+`/tmp/cairn-journal-main-sync-evidence.J7pTwb`. Locked MCP dependencies were
+additionally installed with `env -i` and pinned Node24.15.0 after the primary
+confirmed the current contributor/MCP verification scope. No manifest or
+dependency change is authored by this setup. CI's newly imported Codex/client
+and existing MCP/packaging gates are included in the combined matrix.
+
+Exact source preservation checks: the staged combined tree equals fixed
+main7467 for MCP/Codex runtimes, hosted plugin runtimes, schemas and version
+manifests. Relative to main, it additionally retains the observed base's
+pairing-guard v3 accommodation, benchmark-suite registration test, v3 package
+commands/guard registration and installed-observer package/CI gates. These are
+already present in first-candidate94, not new feature implementation. The
+combined tree equals first-candidate94 for all LongMemEval/experiment-budget/
+OpenAI/core source and tests (empty diff). Manual resolution adds both
+conflicting documentation sections; no source changes are authored.
+
+Combined-source worker verification completed on both exact runtimes. Each
+command used the same `env -i`/pinned-PATH convention above, and native tests
+used only the same two supplied pinned native roots. Raw logs use the same
+`<version>-<script-with-colons-replaced-by-hyphens>.log` convention in this
+new directory; no first-candidate raw log was overwritten.
+
+| Command | Node22.16.0 | Node24.15.0 |
+| --- | --- | --- |
+| `npm test` | 581/581 | 581/581 |
+| `npm run test:longmemeval` (all 25 journal cases included) | 258/258 | 258/258 |
+| `npm run test:mixed-native-local` | 41/41 | 41/41 |
+| `npm run test:experiment-budget` | 65/65 | 65/65 |
+| `npm run test:experiment-request-guard` | 313/313 | 313/313 |
+| `npm run test:benchmark-budget-v3` | 19/19 | 19/19 |
+| `npm run test:openai` | 330/330 | 330/330 |
+| `npm run test:codex` | 136/136 | 136/136 |
+| `npm run test:client` | 5/5 | 5/5 |
+| `npm run test:pairing` | 270/270 | 270/270 |
+| `npm run test:pairing:golden` | exit 0 | exit 0 |
+| `npm run test:mcp` | 111/111 | 111/111 |
+| `npm run test:core` | 1136/1136 | 1136/1136 |
+| `npm run test:workspace-lifecycle` | 25/25 | 25/25 |
+| `npm run test:artifact` | 88/88 | 88/88 |
+| `npm run test:installed-phase-live:offline` | 4/4 | 4/4 |
+| `npm run test:installed-classification-followup:offline` | 6/6 | 6/6 |
+| `npm run test:long-history` | 5/5 | 5/5 |
+| `npm run test:long-history-live:offline` | 3/3 | 3/3 |
+| `npm run test:live-evidence-offline` | 340 pass, 30 opt-in skips | 340 pass, 30 opt-in skips |
+| `npm run validate` | exit 0 | exit 0 |
+| `npm run validate --prefix tools/plugin-validation` | both manifests pass | both manifests pass |
+
+The generic count is 581 rather than fixed main's expected 580 because this
+branch retains the observed base's single benchmark-suite registration test.
+All listed suites have zero failures/cancellations. Only the ordinary
+live-evidence suite skips: eight explicitly opt-in pinned Hermes cases,
+nineteen explicitly opt-in installed capture/lifecycle cases and three opt-in
+installed rationale cases. These thirty skips are not counted as passed
+installed-host/product gates. The separate required installed rationale gate
+below explicitly executes its three opt-in cases; all native/journal and
+other listed suites have zero skips.
+
+Each of the four `demo:longmemeval-{ingestion,comparison,public,mixed}` commands
+passes on both runtimes. The current CI contributor demos
+`demo:{store,history,moc,recall,admission,episodes,session-context,capture,conflicts,rebuild,continuation,openai-offline,experiment-budget,experiment-request-guard}`
+also each exit 0 on both runtimes, using their existing synthetic fixtures.
+
+Additional current CI commands all exit 0:
+
+- Metadata preparation: pinned Node24 `node tools/testing/run.mjs --script packaging/prepare-cache.mjs`,
+  retained in `24.15.0-metadata-preparation.log`.
+- On both runtimes: `CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node tools/testing/run.mjs evaluation/live/test/rationale-pilot.test.mjs`,
+  4/4 passed with zero skips, retained in
+  `<version>-installed-rationale-explicit.log`.
+- On both runtimes: `node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs`,
+  retained in `<version>-packaging-fresh-cache.log`. This and metadata
+  preparation use only public npm registry metadata/dependencies, never a
+  model provider or registry publication.
+
+No unexpected verification failure or cancellation occurred during this
+integration. Combined native whole-suite durations are 282.967 seconds on
+Node22 and 279.529 seconds on Node24; core whole-suite durations are 445.723
+and 446.402 seconds, including the existing actual-lock/budget sweeps.
+These are test-suite timings, not engine-performance measurements.
+
+Runtime and tests were unchanged throughout this combined matrix; only this
+evidence record was completed afterward. The isolated merge commit has the
+first additive candidate and fixed main7467 as its two parents. Primary
+acceptance, separate Standards/Spec reviews and latest-head PR delivery gates
+must use that final combined commit/tree; the first-candidate matrix is not
+substituted for it. Exact commit/tree are reported in the worker handoff.

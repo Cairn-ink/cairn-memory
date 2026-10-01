@@ -6,7 +6,7 @@
     "plugins/cairn-memory/lib/config.mjs": "e0cd0b8c69a9b56265d2db4ae477c5aa3719a0f7eb7851155ff3d9ac43dca0d3",
     "plugins/cairn-memory/lib/control-state.mjs": "2921078bae31ac35e5273dcf5ab11857bf753c50e7e384c52f1758b01ec79916",
     "plugins/cairn-memory/lib/file-lock.mjs": "a9026e7cbf285bb3aa1bfe60628ba41bf885c53e9ba922a7958e444f18dfb521",
-    "plugins/cairn-memory/lib/http.mjs": "da22fd81f46671f60bac4c0af0d52bfd33518ed41cf2896a1d241425dcd1c5ba",
+    "plugins/cairn-memory/lib/http.mjs": "f39c691293ca7d4ad17d0ec1de6ebfab0af7f281505c94520777576bbcce51d2",
     "plugins/cairn-memory/lib/identity.mjs": "d86697c1366233021cf1e7699476078338bf2c61694718a7e80cb3b0762d5c4d",
     "plugins/cairn-memory/lib/recall-query.mjs": "87d606696185da8c0455889c9cf359116f82f70b3a92a1153629026b5406f765",
     "plugins/cairn-memory/lib/redact.mjs": "f4bcfdc8edd177060b62a75f9dbc229443328eb822e40d814f0a48684c253f88",

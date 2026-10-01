@@ -2,12 +2,43 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/capture-response.schema.json",
   "title": "Cairn Memory capture response",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["duplicate", "memoryCount"],
-  "properties": {
-    "duplicate": { "type": "boolean" },
-    "processing": { "type": "boolean" },
-    "memoryCount": { "type": "integer", "minimum": 0 }
-  }
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duplicate",
+        "memoryCount"
+      ],
+      "properties": {
+        "duplicate": {
+          "type": "boolean"
+        },
+        "processing": {
+          "type": "boolean"
+        },
+        "memoryCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "const": "quota_reached"
+        },
+        "resetAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|\\+00:00)$"
+        }
+      }
+    }
+  ]
 }

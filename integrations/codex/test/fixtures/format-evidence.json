@@ -1,0 +1,57 @@
+{
+  "repository": "https://github.com/openai/codex",
+  "tag": "rust-v0.157.1",
+  "tagObject": "ac0e23e5232692b95268583c8278c50b8c436d2b",
+  "commit": "36650394c5b38c2990ccf2a3457165ca3e9d9726",
+  "files": [
+    {
+      "path": "codex-rs/protocol/src/protocol.rs",
+      "sha256": "78c5ae9d664a3985c03caae1d42b7ad12d73e0afa59190bb2bec56d4a2277359"
+    },
+    {
+      "path": "codex-rs/protocol/src/items.rs",
+      "sha256": "95784c28d841c311ca765df83b6e355ef1c89b1029533e9872ae1f74a816db93"
+    },
+    {
+      "path": "codex-rs/protocol/src/user_input.rs",
+      "sha256": "735e8f4f8c531dbd99d495cea5602d8f7f5f5cc77b309db9b7c6b75661e7a368"
+    },
+    {
+      "path": "codex-rs/protocol/src/models.rs",
+      "sha256": "d34f7b4f81f189e3446f27bb58de90e9c3d6d473ba3fa9a9aaa64371b23ab671"
+    },
+    {
+      "path": "codex-rs/history/src/rollout_payload.rs",
+      "sha256": "86195a73b3630997dcea137f209251f1bb2a5f31a99672682a42bd82a5c868ff"
+    },
+    {
+      "path": "codex-rs/rollout/src/recorder.rs",
+      "sha256": "3a12d4f9813ceede9e6f616d4b669ba1b4af4c03d5e89c0f4a1c30704f53933d"
+    },
+    {
+      "path": "codex-rs/rollout/src/policy.rs",
+      "sha256": "9963db1dad94a26dbddcfd9792624ff975615c795bb212c12d0f9441db1ad395"
+    },
+    {
+      "path": "codex-rs/core/src/session/mod.rs",
+      "sha256": "52f7d89d8ec2861850b17c4c21fdde295bdf35473efe11821af86432b61e651b"
+    }
+  ],
+  "discriminators": [
+    "session_meta/payload.cli_version=0.157.1",
+    "session_meta/payload.history_mode=paginated",
+    "session_meta/payload.source=cli|exec",
+    "event_msg/payload.type=item_completed",
+    "payload.item.type=UserMessage/content.type=text",
+    "payload.item.type=AgentMessage/content.type=Text",
+    "AgentMessage.phase=null|commentary|final_answer"
+  ],
+  "excludedLayouts": [
+    "legacy",
+    "fork",
+    "history_base",
+    "subagent",
+    "unrecognised discriminator"
+  ],
+  "syntheticOnly": true
+}

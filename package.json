@@ -1,6 +1,6 @@
 {
   "name": "cairn-memory",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "description": "Lightweight cross-session memory for AI agents, with receipts.",
   "license": "Apache-2.0",
@@ -56,6 +56,8 @@
     "test:experiment-request-guard": "node tools/testing/run.mjs evaluation/experiment-budget/test/request-guard.test.mjs evaluation/experiment-budget/test/reconciliation-guard.test.mjs evaluation/experiment-budget/test/qualification-denial.test.mjs evaluation/experiment-budget/test/qualification-guard.test.mjs evaluation/experiment-budget/test/candidate-qualification-denial.test.mjs evaluation/experiment-budget/test/candidate-qualification-guard.test.mjs evaluation/experiment-budget/test/rationale-guard.test.mjs evaluation/experiment-budget/test/rationale-models-guard.test.mjs evaluation/experiment-budget/test/basis-models-guard.test.mjs evaluation/experiment-budget/test/checklist-selection-guard.test.mjs evaluation/experiment-budget/test/benchmark-guard.test.mjs evaluation/experiment-budget/test/case-deadline-guard.test.mjs evaluation/experiment-budget/test/transport-diagnostics.test.mjs evaluation/experiment-budget/test/request-allowance-guard.test.mjs evaluation/experiment-budget/test/budget-extension-guard.test.mjs evaluation/experiment-budget/test/chained-budget-extension.test.mjs evaluation/experiment-budget/test/qualified-source-pair-guard.test.mjs evaluation/experiment-budget/test/qualified-source-pair-parent-inspection.test.mjs evaluation/experiment-budget/test/adaptive-source-pair-guard.test.mjs evaluation/experiment-budget/test/mixed-embedding-lineage.test.mjs evaluation/experiment-budget/test/mem0-wire.test.mjs evaluation/experiment-budget/test/mixed-source-pair-guard.test.mjs evaluation/experiment-budget/test/request-cap-v2-guard.test.mjs evaluation/experiment-budget/test/budget-v3.test.mjs",
     "demo:experiment-request-guard": "node evaluation/experiment-budget/request-guard-example.mjs",
     "test:pairing": "node integrations/client/testing/run.mjs integrations/client/test/pair-invariants.test.mjs integrations/client/test/claude-decisions.test.mjs integrations/client/test/pairing.test.mjs integrations/client/test/pairing-guards.test.mjs integrations/client/test/main-golden.test.mjs integrations/client/test/paired-hooks.test.mjs",
+    "test:codex": "node integrations/client/testing/run.mjs integrations/codex/test/*.test.mjs integrations/client/test/runtime-*.test.mjs",
+    "test:client": "node integrations/client/testing/run.mjs integrations/client/test/parity.test.mjs integrations/client/test/fixture-generator.test.mjs",
     "test:pairing:golden": "node integrations/client/testing/run.mjs --script integrations/client/testing/golden-cli.mjs --verify"
   }
 }
