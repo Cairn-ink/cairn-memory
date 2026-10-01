@@ -203,6 +203,14 @@ Missing prerequisites fail, never skip as a pass. Do not supply a live key,
 corpus or operational ledger. These gates do not establish a semantic score,
 credential broker, resource fit or paid-run authorization.
 
+The ordinary LongMemEval glob also executes the private mixed result-journal
+tests, including real Cairn and scoring subprocess interruptions, malformed
+observation refusal and persistence barriers; it needs no native roots and
+must not silently skip these cases. The explicit mixed-native local gate adds
+journaled actual Cairn/native pairs in both orders and generation/scoring
+interruptions with the same pinned prerequisites. See
+`docs/mixed-result-journal.md` for private retention and inspection limits.
+
 For public pilot runner changes (`evaluation/live/public-pilot.mjs`,
 `evaluation/live/public-pilot-merge.mjs`, `evaluation/live/public-pilot-cli.mjs`
 and their tests), run `npm run test:live-evidence-offline` on Node 22.16 and 24
