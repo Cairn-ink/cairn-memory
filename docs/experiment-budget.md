@@ -220,6 +220,48 @@ conservative after a terminal outcome; even `state: 'open'` does not mean there
 is enough remaining allowance for the next attempt. Re-read/inspect on an
 uncertain storage outcome instead of assuming it is safe to replay.
 
+## Exact orphan settlement — maintainer only
+
+`settleOrphanedEmbeddingAttemptUnknown({configuration, expectedCheckpoint,
+expectedAttempt, authorize})` is one existing-only accounting operation, not a
+recovery, spending or resume capability. It requires the exact schema-v2 ledger
+and existing four-field configuration. `expectedCheckpoint` has exactly
+`{requestCount, reservedMicroUsd, historySha256}`; `expectedAttempt` has exactly
+`{attemptId, channel, reservedMicroUsd}`. The latter implies a pending outcome
+and unknown actual usage. Embedding channels additionally include
+`host-embedding`. Option descriptors must contain data, not accessors; symbols,
+extra fields and malformed values are refused.
+
+Under one `BEGIN IMMEDIATE` transaction the helper checks the complete inspected
+history, open state, private filesystem identity, and exactly one pending row
+matching that target. It calls a synchronous trusted `authorize({state, target})`
+once with detached frozen data and requires `undefined`. Declared asynchronous
+callbacks are refused before invocation; promises/nonundefined returns and thrown
+exceptions fail closed. The callback receives no database or writable handle and
+is not a sandbox or proof of operator approval. History and path identity are
+checked again afterward. A conditional single-row update changes only the target
+outcome to `unknown`, preserving null actual usage, its full reservation, every
+other row/rowid/order, counters, schema, caps and run state. The precise intended
+post-history is checked before commit. The returned frozen snapshot has the
+existing v2 inspection shape, including `historySha256`, not execution authority.
+
+Duplicate/terminal settlement refuses rather than succeeding idempotently.
+Failure before commit rolls back; a failed acknowledgement or close after commit
+may leave the settlement committed. Inspect the ledger read-only to resolve that
+uncertainty; do not automatically retry or reconnect. Existing bound constructors
+still refuse pending histories, and legacy reopen semantics are unchanged.
+The bounded path checks do not defend against a hostile same-user actor; the
+history hash is an integrity witness, not authentication. Primary-held exact
+target approval and independent verification that the old local process has
+stopped and no local dispatch ownership remains are external prerequisites.
+Remote provider completion and charges can remain unknown after a crash; the
+full reservation is retained. Pending rows contain no case identity and cannot
+establish request success, billed cost or lost answers.
+
+The [orphan-settlement plan](plans/orphan-attempt-settlement.md) defines synthetic
+coverage in the existing `test:experiment-budget` CI gate. Those checks settle no
+actual orphan and authorize no new experiment, refund or budget increase.
+
 ## Remaining gate
 
 A separate [experiment HTTP guard](experiment-request-guard.md) now connects
