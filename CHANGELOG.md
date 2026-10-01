@@ -41,6 +41,15 @@
   exception payload, runtime fix, scoring change or historical-cause claim is
   added. See [limitations](docs/limitations.md).
 
+## Unreleased — bound embedding accounting validation work
+
+- Successful bound-v2 reservation and settlement omit one discarded duplicate
+  full validation, while retaining complete pre-write witness and post-write
+  expected-state checks in the existing transaction. Synthetic operation counts
+  change from three to two; legacy/unbound behavior and accounting remain
+  unchanged. This establishes no measured latency gain or historical timeout
+  repair. See [limitations](docs/limitations.md).
+
 ## 0.2.0 — 2026-10-01
 
 Breaking hosted protocol release (CX-4):

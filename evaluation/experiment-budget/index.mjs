@@ -568,7 +568,7 @@ function openHandle(db, expected, bound = null, version = SCHEMA_VERSION) {
           bound === null ? data.channel : channel, reservedMicroUsd);
         db.prepare(`UPDATE run_config SET reserved_micro_usd = reserved_micro_usd + ?,
           request_count = request_count + 1 WHERE singleton = 1`).run(reservedMicroUsd);
-        readValidatedState(db, version, embeddingBound);
+        if (!embeddingBound) readValidatedState(db, version, embeddingBound);
         return publicAttempt({
           attempt_id: attemptId,
           channel: bound === null ? data.channel : channel,
@@ -615,7 +615,7 @@ function openHandle(db, expected, bound = null, version = SCHEMA_VERSION) {
         if (actualMicroUsd !== null && actualMicroUsd > attempt.reserved_micro_usd) {
           db.prepare(`UPDATE run_config SET state = 'overrun' WHERE singleton = 1`).run();
         }
-        readValidatedState(db, version, embeddingBound);
+        if (!embeddingBound) readValidatedState(db, version, embeddingBound);
         return publicAttempt({ ...attempt,
           outcome: bound === null ? data.outcome : outcome, actual_micro_usd: actualMicroUsd });
       }, (current, result) => {

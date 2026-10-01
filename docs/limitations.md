@@ -12,6 +12,17 @@ do not provide semantic scores, measured competitor performance, product parity
 or a new paid-run grant. Outer stop, failure eligibility, fixed N and unknown
 request/reservation accounting remain unchanged.
 
+The [bound embedding transaction read reduction](plans/bound-embedding-transaction-reads.md)
+removes one discarded duplicate full validation from each successful bound-v2
+reservation or settlement. Real SQLite synthetic counters observe three
+complete reads/quick checks before and two after; pre/post witnesses, expected
+state, schema, configuration, path and accounting checks remain. The remaining
+two scans still validate the complete growing history, so repeated operations
+retain growing work. These counts establish no wall-clock latency guarantee,
+historical provider-timeout explanation, native-halt repair, paid-run success,
+memory quality, product lightweight status or competitor parity. No actual
+ledger or past result is changed and no paid rerun is authorized.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025

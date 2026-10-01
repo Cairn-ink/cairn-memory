@@ -165,6 +165,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm run test:experiment-budget
+      - run: node tools/testing/run.mjs evaluation/experiment-budget/test/bound-embedding-transaction-reads.test.mjs
       - run: npm run demo:experiment-budget
 
   experiment-request-guard:
