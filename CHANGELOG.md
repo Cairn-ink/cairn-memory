@@ -25,8 +25,7 @@ Breaking hosted protocol release (CX-4):
   Existing Claude payload bytes, frozen batches and event IDs remain unchanged
   under the explicit D1 quota/concurrency exception.
 
-No hosted/server implementation or hook enablement is included. Merging this
-release requires chichi's go; this implementation prepares it without publishing.
+No hosted/server implementation or hook enablement is included.
 
 ## Unreleased — model calls fit their budgets
 
