@@ -62,6 +62,10 @@ No hosted/server implementation or hook enablement is included.
 
 ## Unreleased — model calls fit their budgets
 
+- Optional core extraction diagnostics prospectively distinguish fixed text
+  rejection checks without retaining rejected content or changing validation,
+  admission, replay or model policy. Historical `invalid_extraction_text`
+  observations remain subtype-unknown; this does not diagnose an old failure.
 - Local MCP episode access now provides keyless session/time reads, sourced startup
   context and revision-guarded correction, closure, unpinning and conversation
   deletion with its memory/source cascade. Explicit keep uses retained-source
