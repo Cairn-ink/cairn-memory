@@ -648,6 +648,9 @@ test('archive inspection and installed hashes prove the explicit single-source r
   }
   for (const path of runtimeFiles) assert.ok(artifact.files.includes(path), path);
   assert.ok(artifact.files.includes('adapters/openai/qualification-evidence-pool.mjs'));
+  assert.ok(artifact.files.includes('adapters/openai/phase-timing.mjs'));
+  assert.equal(artifact.sourceHashes['adapters/openai/phase-timing.mjs'],
+    hash(new URL('../../adapters/openai/phase-timing.mjs', import.meta.url)));
   assert.ok(artifact.files.includes('core/qualification-text-catalog.mjs'));
   assert.equal(artifact.sourceHashes['core/qualification-text-catalog.mjs'],
     hash(new URL('../../core/qualification-text-catalog.mjs', import.meta.url)));
@@ -776,6 +779,37 @@ test('installed adapter resolves the diagnostic helper and emits only the finite
     console.log('installed_diagnostic_passed');`;
   assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
     installation.directory, artifact.userconfig).trim(), 'installed_diagnostic_passed');
+});
+
+test('installed adapter resolves optional phase timing and preserves two fake HTTP requests', () => {
+  const probe = `import assert from 'node:assert/strict';
+    import { createOpenAIModel } from './node_modules/${packageName}/adapters/openai/index.mjs';
+    const events = []; let calls = 0;
+    const model = createOpenAIModel({ apiKey: 'synthetic-installed',
+      onPhaseTiming(event) { events.push(event); },
+      fetchImpl(url) {
+        calls++;
+        if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
+        return Response.json({ object: 'response', model: 'gpt-4.1-mini-2025-04-14', status: 'completed',
+          error: null, incomplete_details: null,
+          output: [{ type: 'message', role: 'assistant', status: 'completed',
+            content: [{ type: 'output_text', text: '{"items":[]}' }] }],
+          usage: { input_tokens: 100, output_tokens: 4, total_tokens: 104 } });
+      } });
+    const value = await model.extract({ system: 'Synthetic', input: { messages: [] },
+      maxOutputTokens: 1024, signal: new AbortController().signal });
+    assert.deepEqual(value, { items: [] });
+    assert.equal(calls, 2);
+    assert.deepEqual(events.map(row => row.phase), ['prepare', 'count_transport', 'count_body',
+      'count_validation', 'generation_transport', 'generation_body', 'output_validation']);
+    for (const row of events) {
+      assert.deepEqual(Object.keys(row), ['version', 'stage', 'phase', 'outcome', 'elapsedMs']);
+      assert.equal(row.version, 1); assert.equal(row.stage, 'extract'); assert.equal(row.outcome, 'completed');
+      assert.ok(Number.isFinite(row.elapsedMs) && row.elapsedMs >= 0); assert.equal(Object.isFrozen(row), true);
+    }
+    console.log('installed_phase_timing_passed');`;
+  assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
+    installation.directory, artifact.userconfig).trim(), 'installed_phase_timing_passed');
 });
 
 test('installed executable completes actual SDK stdio lifecycle, restart and scoped revision rejection', { timeout: 30000 }, async (t) => {

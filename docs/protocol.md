@@ -14,6 +14,33 @@ bounded ordinals, arm/phase, counts and closed outcome reasons; they are not
 hosted telemetry or a public core/plugin/MCP field. A revocation signal fences
 late in-process requests but is not evidence that a native child exited.
 
+Prospective mixed process-local attempts also retain `transportTermination`:
+null while unobserved, then one finite guard-owned branch category. The allowed
+categories are `response`, `http_failure`, `invalid_response`, `deadline`,
+`cancelled`, `case_sealed`, `external_abort`, `transport_failure`, `body_failure`,
+`usage_bound_exceeded`, `invalid_payload` and `other_failure`. No category is
+inferred from an exception's code/message, caller abort reason, response body,
+header or caller diagnostic. A category observes a guard branch, not an upstream
+cause, authenticated authority, physical cancellation or accepted ledger write.
+The existing separate allowlisted `settlementFailure` remains authoritative
+only as a storage-failure observation; terminal transport classification cannot
+replace a null durable outcome or actual cost.
+
+The private mixed report adds the projected category to at most 64 existing
+per-ordinal attempt stages, plus twelve fixed `terminationCounts` over all
+matching attempts and `terminationUnavailableCount`. Failure after that prefix
+remains visible as a count. Missing, null, legacy, unsupported or accessor
+categories count as unavailable rather than success. Category projection reads
+one own data descriptor, excludes proxies and never invokes a category getter,
+coercion or `toJSON`; arbitrary strings are excluded. These new fields carry no
+IDs, text, response/request bodies, headers, secrets, error text, stacks or
+paths. Their threats are inference from correlated local execution/cost metadata
+and treating branch observations as causal proof. They remain within existing
+private experiment artifacts and retention/backup boundaries, never hosted
+telemetry or public core/plugin/MCP/HTTP fields. Collection changes no request,
+reservation, outcome, timeout, retry, halt or isolation decision. It cannot
+retrospectively classify a generic prior failure or authorize a replay.
+
 The separate contained native gateway keeps source text in one fresh private
 case store and sends only W-validated Mem0 chat/embedding bodies through the
 active X scope. Its artifact and configuration SHA-256 values are private
@@ -22,6 +49,21 @@ an immutable host. The normalized native result has only ordered bounded
 `{id,memory,score,attributedTo}` entries and a verified count of native-returned
 ADD records; it does not infer source provenance, timestamps, missing facts,
 or a quality score. Synthetic fake-provider tests do not authorize paid work.
+
+The opt-in [private mixed result journal](mixed-result-journal.md) adds local
+0700/0600 retention of the existing validated generation/scoring outputs:
+questions, actual answers, opaque IDs/hashes, receipt coordinates, finite
+diagnostics and judgments. These are personal-data-bearing private evidence,
+not redacted telemetry or guaranteed secret-free model content. The writer
+receives no API key option, headers, raw provider body, arbitrary exception,
+corpus history or evaluator/reference payload. Local backups and same-UID
+tampering remain operator responsibilities; hash links are not signatures.
+Durable terminal records follow scope/transport settlement and precede the next
+arm. An entered or unobserved arm is unknown, never incorrect or completed.
+Partial inspection cannot mint whole-phase success, replace scorer/X validation,
+settle accounting, execute, resume, retry or grant spending authority. This
+evaluation-only journal versions its own format without changing core, MOC,
+plugin/MCP/HTTP, report, prompt, model or default-policy schemas.
 
 The private mixed generation report may retain a failed Cairn arm's first
 noncompleted, arm-disqualifying ingestion batch index and fixed outcome counts.

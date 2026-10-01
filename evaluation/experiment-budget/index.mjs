@@ -51,6 +51,8 @@ const EMBEDDING_ATTEMPT_SCHEMA = `CREATE TABLE attempts (
 const EMBEDDING_CHANNELS = new Set([...CHANNELS, 'host-embedding']);
 // Only exact snapshots issued by this module can project the private rowid witness.
 const embeddingSnapshotRows = new WeakMap();
+// Origin is private metadata; only the new v3 projector enforces it.
+const embeddingSnapshotDirectories = new WeakMap();
 
 const EXPECTED_SCHEMA = new Map([
   ['attempts', normalizeSql(ATTEMPT_SCHEMA)],
@@ -402,10 +404,11 @@ function embeddingInspection(state, version) {
     state: state.run.state, historySha256: embeddingHistorySha256(state) });
 }
 
-function boundEmbeddingSnapshot(state) {
+function boundEmbeddingSnapshot(state, configuration) {
   const snapshot = Object.freeze({ schemaVersion: EMBEDDING_SCHEMA_VERSION, ...publicState(state),
     historySha256: embeddingHistorySha256(state) });
   embeddingSnapshotRows.set(snapshot, state);
+  if (configuration) embeddingSnapshotDirectories.set(snapshot, configuration.directory);
   return snapshot;
 }
 
@@ -445,6 +448,48 @@ export function projectEmbeddingBudgetCapPrefix(options) {
   });
 }
 
+function embeddingBudgetCapsConfiguration(data) {
+  const oldConfiguration = detachedEmbeddingConfiguration(data.oldConfiguration);
+  const newConfiguration = detachedEmbeddingConfiguration(data.newConfiguration);
+  const checkpoint = ownData(data.checkpoint, ['requestCount', 'reservedMicroUsd']);
+  const requestCount = validateSafeInteger(checkpoint.requestCount);
+  const reservedMicroUsd = validateSafeInteger(checkpoint.reservedMicroUsd);
+  if (oldConfiguration.directory !== newConfiguration.directory
+    || oldConfiguration.runId !== newConfiguration.runId
+    || oldConfiguration.limitMicroUsd !== 200_000_000
+    || newConfiguration.limitMicroUsd !== 300_000_000
+    || newConfiguration.requestCap <= oldConfiguration.requestCap
+    || requestCount > oldConfiguration.requestCap
+    || reservedMicroUsd > oldConfiguration.limitMicroUsd) fail('invalid_options');
+  return { oldConfiguration, newConfiguration, checkpoint: { requestCount, reservedMicroUsd } };
+}
+
+/** Exact 200M→300M historical witness. The old snapshot contains only the checkpoint. */
+export function projectEmbeddingBudgetCapsPrefix(options) {
+  const data = ownData(options, ['snapshot', 'oldConfiguration', 'newConfiguration', 'checkpoint']);
+  const { oldConfiguration, newConfiguration, checkpoint } = embeddingBudgetCapsConfiguration(data);
+  const state = embeddingSnapshotRows.get(data.snapshot);
+  if (!state || embeddingSnapshotDirectories.get(data.snapshot) !== oldConfiguration.directory
+    || state.run.run_id !== oldConfiguration.runId
+    || ![oldConfiguration, newConfiguration].some((config) =>
+      config.limitMicroUsd === state.run.limit_micro_usd
+      && config.requestCap === state.run.request_cap)
+    || state.run.state !== 'open'
+    || embeddingHistorySha256(state) !== data.snapshot.historySha256) fail('invalid_options');
+  const attempts = state.attempts.slice(0, checkpoint.requestCount);
+  if (attempts.length !== checkpoint.requestCount || attempts.some((row) => row.outcome === null)
+    || attempts.reduce((sum, row) => sum + row.reserved_micro_usd, 0)
+      !== checkpoint.reservedMicroUsd) fail('configuration_mismatch');
+  const oldState = { run: { ...state.run, limit_micro_usd: oldConfiguration.limitMicroUsd,
+    request_cap: oldConfiguration.requestCap, request_count: checkpoint.requestCount,
+    reserved_micro_usd: checkpoint.reservedMicroUsd, state: 'open' }, attempts };
+  return Object.freeze({ oldPrefixHistorySha256: embeddingHistorySha256(oldState),
+    newPrefixHistorySha256: embeddingHistorySha256({ ...oldState,
+      run: { ...oldState.run, limit_micro_usd: newConfiguration.limitMicroUsd,
+        request_cap: newConfiguration.requestCap } }),
+    oldPrefixSnapshot: boundEmbeddingSnapshot(oldState, oldConfiguration) });
+}
+
 function embeddingVersion(db) {
   const version = db.prepare('PRAGMA user_version').get().user_version;
   if (version !== SCHEMA_VERSION && version !== EMBEDDING_SCHEMA_VERSION) fail('invalid_ledger');
@@ -463,7 +508,7 @@ function closeAfter(db, work) {
 function openHandle(db, expected, bound = null, version = SCHEMA_VERSION) {
   let closed = false;
   const embeddingBound = bound?.version === EMBEDDING_SCHEMA_VERSION;
-  const boundSnapshot = (state) => embeddingBound ? boundEmbeddingSnapshot(state) : publicState(state);
+  const boundSnapshot = (state) => embeddingBound ? boundEmbeddingSnapshot(state, expected) : publicState(state);
   const access = (mode, work, expectedAfter = null) => {
     if (closed) fail('ledger_closed');
     if (bound === null) {
@@ -587,7 +632,7 @@ function openHandle(db, expected, bound = null, version = SCHEMA_VERSION) {
     },
 
     getState() {
-      return access('read', embeddingBound ? boundEmbeddingSnapshot : publicState);
+      return access('read', boundSnapshot);
     },
 
     close() {
@@ -846,7 +891,7 @@ export function transitionEmbeddingExperimentBudgetRequestCap(options) {
     }
     if (oldCap && (current.run.request_count !== requestCount
       || current.run.reserved_micro_usd !== reservedMicroUsd)) fail('configuration_mismatch');
-    const snapshot = boundEmbeddingSnapshot(current);
+    const snapshot = boundEmbeddingSnapshot(current, oldCap ? oldConfiguration : newConfiguration);
     const witness = projectEmbeddingBudgetCapPrefix({ snapshot,
       oldRequestCap: oldConfiguration.requestCap,
       newRequestCap: newConfiguration.requestCap,
@@ -875,8 +920,67 @@ export function transitionEmbeddingExperimentBudgetRequestCap(options) {
     if (after.run.reserved_micro_usd !== current.run.reserved_micro_usd
       || after.run.request_count !== current.run.request_count
       || JSON.stringify(after.attempts) !== JSON.stringify(current.attempts)) fail('invalid_ledger');
-    const result = boundEmbeddingSnapshot(after);
+    const result = boundEmbeddingSnapshot(after, newConfiguration);
     if (oldCap && result.historySha256 !== witness.newPrefixHistorySha256) fail('invalid_ledger');
+    inspectTransitionLocation(oldConfiguration, identity);
+    return result;
+  }));
+}
+
+/** Existing-only, settled, exact 200M→300M update; never resets historical accounting. */
+export function transitionEmbeddingExperimentBudgetCaps(options) {
+  const data = ownData(options, ['oldConfiguration', 'newConfiguration', 'expectedCheckpoint',
+    'expectedOldHistorySha256', 'authorize']);
+  const { oldConfiguration, newConfiguration, checkpoint } = embeddingBudgetCapsConfiguration({
+    ...data, checkpoint: data.expectedCheckpoint });
+  if (typeof data.expectedOldHistorySha256 !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(data.expectedOldHistorySha256)
+    || typeof data.authorize !== 'function') fail('invalid_options');
+  const identity = inspectTransitionLocation(oldConfiguration);
+  const db = constructExistingWritableDatabase(oldConfiguration.filename);
+  return closeAfter(db, () => withTransaction(db, 'write', function transitionBudgetCaps() {
+    inspectTransitionLocation(oldConfiguration, identity);
+    const current = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+    if (current.run.run_id !== oldConfiguration.runId) fail('run_mismatch');
+    const matches = (config) => current.run.limit_micro_usd === config.limitMicroUsd
+      && current.run.request_cap === config.requestCap;
+    const oldCaps = matches(oldConfiguration);
+    if (!oldCaps && !matches(newConfiguration)) fail('configuration_mismatch');
+    if (current.run.state !== 'open' || current.attempts.some((row) => row.outcome === null)) {
+      fail('budget_blocked');
+    }
+    if (oldCaps && (current.run.request_count !== checkpoint.requestCount
+      || current.run.reserved_micro_usd !== checkpoint.reservedMicroUsd)) fail('configuration_mismatch');
+    const snapshot = boundEmbeddingSnapshot(current, oldCaps ? oldConfiguration : newConfiguration);
+    const witness = projectEmbeddingBudgetCapsPrefix({ snapshot,
+      oldConfiguration: data.oldConfiguration, newConfiguration: data.newConfiguration, checkpoint });
+    if (witness.oldPrefixHistorySha256 !== data.expectedOldHistorySha256
+      || (oldCaps && snapshot.historySha256 !== witness.oldPrefixHistorySha256)) {
+      fail('configuration_mismatch');
+    }
+    if (data.authorize(Object.freeze({ mode: oldCaps ? 'transition' : 'replay', state: snapshot,
+      checkpointAttempts: Object.freeze(snapshot.attempts.slice(0, checkpoint.requestCount)),
+      witness })) !== undefined) fail('ledger_failed');
+    inspectTransitionLocation(oldConfiguration, identity);
+    const afterCallback = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+    if (embeddingHistorySha256(afterCallback) !== snapshot.historySha256
+      || JSON.stringify(afterCallback) !== JSON.stringify(current)) fail('invalid_ledger');
+    if (oldCaps) {
+      const changed = db.prepare(`UPDATE run_config SET limit_micro_usd = ?, request_cap = ?
+        WHERE singleton = 1 AND run_id = ? AND limit_micro_usd = ? AND request_cap = ?
+          AND reserved_micro_usd = ? AND request_count = ? AND state = 'open'`).run(
+        newConfiguration.limitMicroUsd, newConfiguration.requestCap, oldConfiguration.runId,
+        oldConfiguration.limitMicroUsd, oldConfiguration.requestCap,
+        checkpoint.reservedMicroUsd, checkpoint.requestCount);
+      if (Number(changed.changes) !== 1) fail('configuration_mismatch');
+    }
+    const after = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+    assertConfiguration(after, newConfiguration);
+    if (after.run.reserved_micro_usd !== current.run.reserved_micro_usd
+      || after.run.request_count !== current.run.request_count
+      || JSON.stringify(after.attempts) !== JSON.stringify(current.attempts)) fail('invalid_ledger');
+    const result = boundEmbeddingSnapshot(after, newConfiguration);
+    if (oldCaps && result.historySha256 !== witness.newPrefixHistorySha256) fail('invalid_ledger');
     inspectTransitionLocation(oldConfiguration, identity);
     return result;
   }));
@@ -1011,7 +1115,7 @@ export function inspectEmbeddingExperimentBudgetSnapshot(configuration) {
     const state = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
     assertConfiguration(state, config);
     inspectTransitionLocation(config, identity);
-    return boundEmbeddingSnapshot(state);
+    return boundEmbeddingSnapshot(state, config);
   }));
 }
 
@@ -1031,12 +1135,12 @@ export function openBoundEmbeddingExperimentBudget(options) {
       if (state.run.state !== 'open' || state.attempts.some((row) => row.outcome === null)) {
         fail('budget_blocked');
       }
-      const original = JSON.stringify(boundEmbeddingSnapshot(state));
-      if (authorize(boundEmbeddingSnapshot(state)) !== undefined) fail('ledger_failed');
+      const original = JSON.stringify(boundEmbeddingSnapshot(state, config));
+      if (authorize(boundEmbeddingSnapshot(state, config)) !== undefined) fail('ledger_failed');
       inspectTransitionLocation(config, identity);
       const after = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
       assertConfiguration(after, config);
-      if (JSON.stringify(boundEmbeddingSnapshot(after)) !== original) fail('invalid_ledger');
+      if (JSON.stringify(boundEmbeddingSnapshot(after, config)) !== original) fail('invalid_ledger');
       return original;
     });
     return openHandle(db, config, { identity, witness, version: EMBEDDING_SCHEMA_VERSION },

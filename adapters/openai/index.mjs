@@ -9,6 +9,7 @@ import { classificationWire } from './classification-wire.mjs';
 import { decodeQualificationEvidencePool } from './qualification-evidence-pool.mjs';
 import { snapshotQualificationTextCatalog } from '../../core/qualification-text-catalog.mjs';
 import { qualificationCandidatesPrompt, standardInlineQualificationPrompt } from '../../core/qualification-candidates-prompt.mjs';
+import { createPhaseTiming } from './phase-timing.mjs';
 
 const encoder = get_encoding('o200k_base');
 const fail = (code) => { throw new MemoryStoreError(code); };
@@ -223,7 +224,7 @@ function parseOutput(response, contextWindow, model, diagnose) {
 
 export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
   extractionModel = DEFAULT_MODEL, rationaleModel = DEFAULT_MODEL, basisModel = DEFAULT_MODEL,
-  qualificationInputMode = 'inline', episodeModel, onDiagnostic, ...unknown } = {}) {
+  qualificationInputMode = 'inline', episodeModel, onDiagnostic, onPhaseTiming, ...unknown } = {}) {
   const episode = episodeProfile(episodeModel);
   const profile = { ...modelProfile(extractionModel, rationaleModel, basisModel),
     ...(episode ? { interpretEpisode: episode } : {}) };
@@ -231,7 +232,8 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
   if (typeof apiKey !== 'string' || !apiKey.trim() || /[\r\n]/.test(apiKey) ||
       typeof fetchImpl !== 'function' || Object.keys(unknown).length ||
       !['inline', 'adaptive-text-catalog-v1'].includes(qualificationInputMode) ||
-      (onDiagnostic !== undefined && typeof onDiagnostic !== 'function')) throw new Error('invalid_openai_configuration');
+      (onDiagnostic !== undefined && typeof onDiagnostic !== 'function') ||
+      (onPhaseTiming !== undefined && typeof onPhaseTiming !== 'function')) throw new Error('invalid_openai_configuration');
 
   // This is the sole qualifier serializer for both synchronous fit planning
   // and the eventual count/generation dispatch. No transport or observer runs.
@@ -266,8 +268,9 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       countBodyTokens: countTokens(countBody) };
   }
 
-  async function post(path, body, maximum, signal, diagnose) {
+  async function post(path, body, maximum, signal, diagnose, timing, route) {
     checkAbort(signal, diagnose);
+    const finishTransport = timing.start(`${route}_transport`);
     try {
       const response = await fetchImpl(`https://api.openai.com/v1${path}`, {
         method: 'POST', redirect: 'error', signal,
@@ -278,8 +281,18 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
         response.body?.cancel().catch(() => {});
         providerFailure();
       }
-      return await readJSON(response, maximum, signal, diagnose);
+      finishTransport('completed');
+      const finishBody = timing.start(`${route}_body`);
+      try {
+        const value = await readJSON(response, maximum, signal, diagnose);
+        finishBody('completed');
+        return value;
+      } catch (error) {
+        finishBody(signal.aborted ? 'aborted' : 'failed');
+        throw error;
+      }
     } catch (error) {
+      finishTransport(signal.aborted ? 'aborted' : 'failed');
       diagnose(signal.aborted || error?.name === 'AbortError' ? 'model_cancelled' : 'transport_failure');
       checkAbort(signal);
       if (error?.name === 'AbortError') throw new DOMException('OpenAI request cancelled', 'AbortError');
@@ -289,11 +302,8 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
 
   async function invoke(method, { system, input, maxOutputTokens, signal }) {
     const diagnose = (reason) => emitDiagnostic({ onDiagnostic }, method, 'adapter', reason);
-    if (!(signal instanceof AbortSignal) || typeof system !== 'string' || maxOutputTokens !== 1024) {
-      diagnose('request_invalid');
-      throw new Error('invalid_openai_request');
-    }
-    checkAbort(signal, diagnose);
+    const timing = createPhaseTiming(onPhaseTiming, method, signal);
+    const finishPrepare = timing.start('prepare', false);
     let serializedInput;
     let localTokens;
     let schema;
@@ -302,68 +312,99 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     let wire;
     let instructions;
     let qualifier;
-    const episodic = episodeMode(method, system);
+    let episodic;
+    let selected;
+    let countBody;
+    let generateBody;
     try {
-      if (method === 'qualifyCandidates') {
-        qualifier = prepareQualificationRequest({ system, input, maxOutputTokens });
-        snapshot = qualifier.expanded;
-        validationSchema = qualifier.validationSchema;
-        localTokens = qualifier.localTokens;
-      } else {
-        // Validate before JSON serialization can erase sparse/custom fields.
-        if (method === 'selectChecklist') schemasFor(method, input);
-        const prevalidated = method === 'extract' && Object.hasOwn(input, 'inputMode')
-          ? snapshotIndexedExtractInput(input) : input;
-        const originalSerializedInput = JSON.stringify(prevalidated);
-        snapshot = JSON.parse(originalSerializedInput);
-        schema = episodic ? episodeSchemasFor(method, snapshot) : schemasFor(method, snapshot);
-        instructions = qualificationInstructions(method, system, snapshot);
-        localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
-        if (method === 'classify') {
-          wire = classificationWire(snapshot);
-          snapshot = wire.input;
-          schema = schemasFor(method, snapshot);
-        }
-        serializedInput = JSON.stringify(snapshot);
+      if (!(signal instanceof AbortSignal) || typeof system !== 'string' || maxOutputTokens !== 1024) {
+        diagnose('request_invalid');
+        throw new Error('invalid_openai_request');
       }
+      checkAbort(signal, diagnose);
+      episodic = episodeMode(method, system);
+      try {
+        if (method === 'qualifyCandidates') {
+          qualifier = prepareQualificationRequest({ system, input, maxOutputTokens });
+          snapshot = qualifier.expanded;
+          validationSchema = qualifier.validationSchema;
+          localTokens = qualifier.localTokens;
+        } else {
+          // Validate before JSON serialization can erase sparse/custom fields.
+          if (method === 'selectChecklist') schemasFor(method, input);
+          const prevalidated = method === 'extract' && Object.hasOwn(input, 'inputMode')
+            ? snapshotIndexedExtractInput(input) : input;
+          const originalSerializedInput = JSON.stringify(prevalidated);
+          snapshot = JSON.parse(originalSerializedInput);
+          schema = episodic ? episodeSchemasFor(method, snapshot) : schemasFor(method, snapshot);
+          instructions = qualificationInstructions(method, system, snapshot);
+          localTokens = countTokens(JSON.stringify({ system: instructions, input: snapshot, maxOutputTokens }));
+          if (method === 'classify') {
+            wire = classificationWire(snapshot);
+            snapshot = wire.input;
+            schema = schemasFor(method, snapshot);
+          }
+          serializedInput = JSON.stringify(snapshot);
+        }
+      } catch (error) {
+        diagnose('request_invalid');
+        if (error instanceof MemoryStoreError) throw error;
+        throw new Error('invalid_openai_request');
+      }
+      if (!qualifier && typeof serializedInput !== 'string') {
+        diagnose('request_invalid'); throw new Error('invalid_openai_request');
+      }
+      if (localTokens > 6000) { diagnose('request_bounds'); fail('context_budget_exceeded'); }
+      selected = profile[method === 'selectChecklist' ? 'select' : method];
+      const payload = qualifier ? null : { model: selected.model, instructions,
+        input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],
+        text: { format: { type: 'json_schema', name: `cairn_${method}`, strict: true,
+          schema } }, truncation: 'disabled', ...(selected.reasoning ? { reasoning: selected.reasoning } : {}) };
+      // Serialize both requests before the first asynchronous host callback.
+      countBody = qualifier ? qualifier.countBody : JSON.stringify(payload);
+      generateBody = qualifier ? qualifier.generateBody
+        : JSON.stringify({ ...payload, max_output_tokens: 1024, store: false, stream: false });
+      if (qualifier && qualifier.countBodyTokens > 6000) {
+        diagnose('request_bounds');
+        fail('context_budget_exceeded');
+      }
+      finishPrepare('completed');
     } catch (error) {
-      diagnose('request_invalid');
-      if (error instanceof MemoryStoreError) throw error;
-      throw new Error('invalid_openai_request');
+      finishPrepare(signal instanceof AbortSignal && signal.aborted ? 'aborted' : 'failed');
+      throw error;
     }
-    if (!qualifier && typeof serializedInput !== 'string') {
-      diagnose('request_invalid'); throw new Error('invalid_openai_request');
+    const counted = await post('/responses/input_tokens', countBody, 65536, signal, diagnose, timing, 'count');
+    const finishCountValidation = timing.start('count_validation');
+    try {
+      if (!record(counted) || counted.object !== 'response.input_tokens' || !count(counted.input_tokens)) {
+        diagnose('token_count_response');
+        fail('token_count_unavailable');
+      }
+      if (counted.input_tokens > 7024 || counted.input_tokens + 1024 > selected.contextWindow) {
+        diagnose('request_bounds');
+        fail('context_budget_exceeded');
+      }
+      checkAbort(signal, diagnose);
+      finishCountValidation('completed');
+    } catch (error) {
+      finishCountValidation(signal.aborted ? 'aborted' : 'failed');
+      throw error;
     }
-    if (localTokens > 6000) { diagnose('request_bounds'); fail('context_budget_exceeded'); }
-    const selected = profile[method === 'selectChecklist' ? 'select' : method];
-    const payload = qualifier ? null : { model: selected.model, instructions,
-      input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],
-      text: { format: { type: 'json_schema', name: `cairn_${method}`, strict: true,
-        schema } }, truncation: 'disabled', ...(selected.reasoning ? { reasoning: selected.reasoning } : {}) };
-    // Serialize both requests before the first asynchronous host callback.
-    const countBody = qualifier ? qualifier.countBody : JSON.stringify(payload);
-    const generateBody = qualifier ? qualifier.generateBody
-      : JSON.stringify({ ...payload, max_output_tokens: 1024, store: false, stream: false });
-    if (qualifier && qualifier.countBodyTokens > 6000) {
-      diagnose('request_bounds');
-      fail('context_budget_exceeded');
+    const response = await post('/responses', generateBody, 262144, signal, diagnose, timing, 'generation');
+    const finishOutputValidation = timing.start('output_validation');
+    try {
+      checkAbort(signal, diagnose);
+      const output = parseOutput(response, selected.contextWindow, selected.model, diagnose);
+      const value = episodic
+        ? normalizeEpisodeOutput(method, snapshot, output, qualifier?.schema ?? schema, diagnose)
+        : normalizeClassificationWire(method, output, schema, wire, diagnose)
+          ?? normalizeQualificationSlots(method, snapshot, output, validationSchema, diagnose);
+      finishOutputValidation('completed');
+      return value;
+    } catch (error) {
+      finishOutputValidation(signal.aborted ? 'aborted' : 'failed');
+      throw error;
     }
-    const counted = await post('/responses/input_tokens', countBody, 65536, signal, diagnose);
-    if (!record(counted) || counted.object !== 'response.input_tokens' || !count(counted.input_tokens)) {
-      diagnose('token_count_response');
-      fail('token_count_unavailable');
-    }
-    if (counted.input_tokens > 7024 || counted.input_tokens + 1024 > selected.contextWindow) {
-      diagnose('request_bounds');
-      fail('context_budget_exceeded');
-    }
-    checkAbort(signal, diagnose);
-    const response = await post('/responses', generateBody, 262144, signal, diagnose);
-    checkAbort(signal, diagnose);
-    const output = parseOutput(response, selected.contextWindow, selected.model, diagnose);
-    if (episodic) return normalizeEpisodeOutput(method, snapshot, output, qualifier?.schema ?? schema, diagnose);
-    return normalizeClassificationWire(method, output, schema, wire, diagnose)
-      ?? normalizeQualificationSlots(method, snapshot, output, validationSchema, diagnose);
   }
 
   return Object.freeze({ contextWindow, countTokens, ...(onDiagnostic === undefined ? {} : { onDiagnostic }),

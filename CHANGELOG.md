@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased — specific classification error in evaluation reports
+
+- LongMemEval ingestion and its comparison summaries preserve the core's
+  `moc_title_conflict` code when classification proposes a new topic with an
+  existing title. Previously they reported `classification_failed`. Unknown
+  error codes remain generic. This changes reporting only: the colliding
+  placement still fails, admitted source receipts remain, and no failed batch
+  is retried. See the [M1d diagnosis](docs/plans/classification-application-boundary.md).
+
+## Unreleased — bounded mixed-runner phase diagnostics
+
+- The source Cairn/Mem0 paired runner accepts `phaseTiming: 'bounded-tail-v1'`
+  for 1–30 frozen cases. Each entered Cairn arm retains its last 64 content-free
+  adapter events and exact admitted/omitted counts, including late failures.
+  Omission preserves existing reports and the 250-case limit. This adds no
+  timeout, retry, spending authority or installed-runtime claim. See the
+  [M1b contract](docs/plans/mixed-phase-tail-diagnostics.md).
+
+## Unreleased — optional OpenAI invocation phase timing
+
+- The source adapter accepts a trusted `onPhaseTiming` callback for finite,
+  content-free local preparation, count, generation and output-validation
+  durations. It is off by default; `onDiagnostic` v1, request bodies, core
+  deadlines, limits and outputs are unchanged. This does not explain or fix a
+  historical timeout. See the [M1a contract](docs/plans/capture-write-phase-observability.md).
+
+## Unreleased — ingestion classification metadata
+
+- LongMemEval ingestion accepts and retains supported optional
+  `classificationTruncated` metadata on applied capture results. Malformed
+  metadata remains unknown; genuine classification failures remain partial and
+  stop later batches. See the [contract diagnosis](docs/plans/ingestion-classification-metadata.md).
+
 ## 0.2.0 — 2026-10-01
 
 Breaking hosted protocol release (CX-4):
