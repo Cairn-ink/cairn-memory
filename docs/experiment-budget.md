@@ -201,6 +201,16 @@ behavior is unchanged. The bound
 handle still cannot police direct network egress or hostile privileged writes
 after the final path check.
 
+For the separately bound embedding-v2 handle, successful reservation and
+settlement each retain exactly two complete validations: pre-write witness and
+post-write expected state, inside the existing transaction. One discarded
+duplicate post-write read is omitted only in that mode; legacy bound-v1 and
+unbound handles and `getState` keep their existing validation work. Synthetic
+real SQLite checks count the reduction from three to two and retain rollback,
+foreign-edit fencing and conservative reservation accounting. No wall-clock
+improvement or historical timeout cause is established. See the
+[operation-count contract](plans/bound-embedding-transaction-reads.md).
+
 `ExperimentBudgetError` has `name: 'ExperimentBudgetError'`, a fixed `code`, and
 the same code as `message`. The fixed code set is:
 
