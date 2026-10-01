@@ -1,5 +1,17 @@
 # Known limitations
 
+The [prospective native terminal-failure observation](plans/mixed-native-failure-diagnostics.md)
+retains only a finite typed runtime/gateway category in future private mixed
+Mem0 arm diagnostics. Unknown codes/classes, accessors and proxies remain
+unobserved; absence does not imply success. A native category can survive the
+outer `scope_execution_failed` halt, but does not prove which actor or input
+caused the failure, repair native execution, or recover an exception discarded
+by a historical run. Synthetic genuine gateway rejection and installed native
+fake-HTTP global-stop checks establish projection and retention only. They
+do not provide semantic scores, measured competitor performance, product parity
+or a new paid-run grant. Outer stop, failure eligibility, fixed N and unknown
+request/reservation accounting remain unchanged.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
