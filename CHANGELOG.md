@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — private native failure observation
+
+- Future mixed Mem0 execution exceptions can retain a frozen finite native
+  runtime/gateway category in private arm diagnostics, independently of the
+  existing outer halt reason. Unknown exceptions remain unobserved; no raw
+  exception payload, runtime fix, scoring change or historical-cause claim is
+  added. See [limitations](docs/limitations.md).
+
 ## 0.2.0 — 2026-10-01
 
 Breaking hosted protocol release (CX-4):

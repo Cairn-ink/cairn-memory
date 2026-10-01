@@ -23,6 +23,20 @@ an immutable host. The normalized native result has only ordered bounded
 ADD records; it does not infer source provenance, timestamps, missing facts,
 or a quality score. Synthetic fake-provider tests do not authorize paid work.
 
+Future private mixed Mem0 arm diagnostics may retain `nativeFailure` with
+exactly `{version:1,layer,reason}`. The `runtime`/`gateway` layer and reason are
+finite classifications from the existing native error classes, accepted only
+from native Error objects with the exact typed prototype and an own data code.
+Proxies, plain forged objects, unknown classes/codes, accessors and malformed
+values yield no field without getter invocation or coercion. The frozen
+projection survives report cloning even when the outer scope throws and keeps
+`scope_execution_failed`; no exception message, stack, cause, key, text, body,
+URL, ID, length or path enters it. This local evaluation observation grants no
+continuation, retry, resolution, refund or scoring authority. Success and Cairn
+errors gain no field, historical reports remain unchanged, and public
+core/plugin/MCP/HTTP and telemetry schemas are unaffected. See the
+[prospective contract](plans/mixed-native-failure-diagnostics.md).
+
 The private mixed generation report may retain a failed Cairn arm's first
 noncompleted, arm-disqualifying ingestion batch index and fixed outcome counts.
 A duplicate can precede another ingested batch; this field does not claim the
