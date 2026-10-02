@@ -38,6 +38,16 @@ The README links here from its first screen and stays short. A PR that adds or
 revises evidence appends to or edits this file rather than the README; see
 [CONTRIBUTING](../CONTRIBUTING.md#where-to-record-evaluation-limitations).
 
+The [2026-10-03 promotion installation batch](promotion/install-validation/README.md)
+passed three clean Linux x64 source installs and all 18 model-free walkthrough
+stages on Node 22.16.0 and 24.15.0. All were operated by one AI agent, using
+separate local Git archives, empty installation targets and empty npm caches.
+They did not retest the public Git clone, semantic recall or a named chat host.
+The new [36-second demo](promotion/demo/README.md) presents selected fields from
+one additional real synthetic tool transcript, with edited display timing.
+The unfamiliar-human installation and five-reader comprehension checks remain
+pending. This batch changes no extraction-quality or broad-promotion gate.
+
 The section below is the text that opened the README until 2026-09-18, moved
 here unchanged apart from link paths and the bold lead-in becoming this section's heading.
 

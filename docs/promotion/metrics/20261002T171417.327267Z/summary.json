@@ -1,0 +1,56 @@
+{
+  "started_at_utc": "2026-10-02T17:14:17.327267+00:00",
+  "completed_at_utc": "2026-10-02T17:14:18.869639+00:00",
+  "repo": "Cairn-ink/cairn-memory",
+  "phase": "preparation",
+  "local_commit": "7467aebcb32563c9aab4356a8c3e04c0ebb1ecd4",
+  "local_worktree_dirty": true,
+  "stars": 20,
+  "errors": {},
+  "notes": [
+    "Preparation snapshots do not start the campaign or establish publication.",
+    "API uniques describe the whole returned window; do not sum daily uniques.",
+    "Referrers do not establish per-channel star attribution; clones do not establish installs.",
+    "Collection and installer activity may affect traffic counts."
+  ],
+  "views": {
+    "count": 222,
+    "whole_window_uniques": 51,
+    "returned_dates_utc": [
+      "2026-09-18T00:00:00Z",
+      "2026-09-19T00:00:00Z",
+      "2026-09-20T00:00:00Z",
+      "2026-09-21T00:00:00Z",
+      "2026-09-22T00:00:00Z",
+      "2026-09-23T00:00:00Z",
+      "2026-09-24T00:00:00Z",
+      "2026-09-25T00:00:00Z",
+      "2026-09-26T00:00:00Z",
+      "2026-09-27T00:00:00Z",
+      "2026-09-28T00:00:00Z",
+      "2026-09-29T00:00:00Z",
+      "2026-09-30T00:00:00Z",
+      "2026-10-01T00:00:00Z"
+    ]
+  },
+  "clones": {
+    "count": 6767,
+    "whole_window_uniques": 616,
+    "returned_dates_utc": [
+      "2026-09-18T00:00:00Z",
+      "2026-09-19T00:00:00Z",
+      "2026-09-20T00:00:00Z",
+      "2026-09-21T00:00:00Z",
+      "2026-09-22T00:00:00Z",
+      "2026-09-23T00:00:00Z",
+      "2026-09-24T00:00:00Z",
+      "2026-09-25T00:00:00Z",
+      "2026-09-26T00:00:00Z",
+      "2026-09-27T00:00:00Z",
+      "2026-09-28T00:00:00Z",
+      "2026-09-29T00:00:00Z",
+      "2026-09-30T00:00:00Z",
+      "2026-10-01T00:00:00Z"
+    ]
+  }
+}

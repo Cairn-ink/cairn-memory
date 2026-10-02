@@ -1,0 +1,10 @@
+{
+  "name": "cairn-memory-promotion-demo",
+  "private": true,
+  "scripts": {
+    "build": "python3 build.py",
+    "check": "npx --yes hyperframes@0.8.112 check",
+    "preview": "npx --yes hyperframes@0.8.112 preview",
+    "render": "npx --yes hyperframes@0.8.112 render --quality delivery --fps 30 --workers 2 --output cairn-memory-preview.mp4"
+  }
+}

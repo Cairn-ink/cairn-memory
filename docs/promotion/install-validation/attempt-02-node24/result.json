@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "attempt": "attempt-02-node24",
+  "operator": {
+    "type": "AI agent",
+    "role": "independent editorial reviewer, then installation verifier",
+    "priorRuntimeImplementationContribution": false,
+    "humanOperator": false,
+    "readCodeDuringPreparation": true
+  },
+  "startedAt": "2026-10-02T17:14:34.172149+00:00",
+  "status": "passed",
+  "platform": {
+    "os": "Linux",
+    "architecture": "x86_64"
+  },
+  "modelCalls": {
+    "paidPathEnabled": false,
+    "credentialEnvironmentForwarded": false,
+    "withRecall": false,
+    "expectedRecallCode": "model_not_configured"
+  },
+  "isolation": {
+    "separateSourceArchive": true,
+    "targetExistedBeforeInstall": false,
+    "npmCacheInitiallyEmpty": true,
+    "npmShimPurpose": "Pin Node/npm and pass --cache for nested installer npm commands only.",
+    "temporaryArtifactsRetained": true,
+    "sourceHadNodeModules": false,
+    "installationOpenedDatabase": false
+  },
+  "steps": [
+    {
+      "name": "source-commit",
+      "command": "git rev-parse HEAD",
+      "startedAt": "2026-10-02T17:14:34.172457+00:00",
+      "durationSeconds": 0.006,
+      "exitCode": 0,
+      "status": "passed",
+      "stdout": "source-commit.stdout.txt",
+      "stderr": "source-commit.stderr.txt"
+    },
+    {
+      "name": "node-version",
+      "command": "<node-install>/bin/node --version",
+      "startedAt": "2026-10-02T17:14:34.178546+00:00",
+      "durationSeconds": 0.022,
+      "exitCode": 0,
+      "status": "passed",
+      "stdout": "node-version.stdout.txt",
+      "stderr": "node-version.stderr.txt"
+    },
+    {
+      "name": "npm-version",
+      "command": "npm --version",
+      "startedAt": "2026-10-02T17:14:34.201584+00:00",
+      "durationSeconds": 0.235,
+      "exitCode": 0,
+      "status": "passed",
+      "stdout": "npm-version.stdout.txt",
+      "stderr": "npm-version.stderr.txt"
+    },
+    {
+      "name": "source-archive",
+      "command": "git archive --format=tar HEAD --output <attempt-root>/source.tar",
+      "startedAt": "2026-10-02T17:14:35.015224+00:00",
+      "durationSeconds": 0.142,
+      "exitCode": 0,
+      "status": "passed",
+      "stdout": "source-archive.stdout.txt",
+      "stderr": "source-archive.stderr.txt"
+    },
+    {
+      "name": "source-extract",
+      "command": "tar -xf <attempt-root>/source.tar -C <attempt-root>/source",
+      "startedAt": "2026-10-02T17:14:35.187819+00:00",
+      "durationSeconds": 0.172,
+      "exitCode": 0,
+      "status": "passed",
+      "stdout": "source-extract.stdout.txt",
+      "stderr": "source-extract.stderr.txt"
+    },
+    {
+      "name": "install",
+      "command": "npm run install:preview -- --directory <attempt-root>/installed --owner local-user",
+      "startedAt": "2026-10-02T17:14:35.362602+00:00",
+      "durationSeconds": 7.719,
+      "exitCode": 0,
+      "status": "passed",
+      "stdout": "install.stdout.txt",
+      "stderr": "install.stderr.txt"
+    },
+    {
+      "name": "sdk-install",
+      "command": "npm ci --prefix adapters/mcp",
+      "startedAt": "2026-10-02T17:14:43.086028+00:00",
+      "durationSeconds": 4.227,
+      "exitCode": 0,
+      "status": "passed",
+      "stdout": "sdk-install.stdout.txt",
+      "stderr": "sdk-install.stderr.txt"
+    },
+    {
+      "name": "walkthrough",
+      "command": "<node-install>/bin/node adapters/mcp/walkthrough.mjs --executable <attempt-root>/installed/app/node_modules/.bin/cairn-memory",
+      "startedAt": "2026-10-02T17:14:47.313323+00:00",
+      "durationSeconds": 2.381,
+      "exitCode": 0,
+      "status": "passed",
+      "stdout": "walkthrough.stdout.txt",
+      "stderr": "walkthrough.stderr.txt"
+    },
+    {
+      "name": "tool-transcript",
+      "command": "<node-install>/bin/node adapters/mcp/demo-transcript.mjs <attempt-root>/installed/app/node_modules/.bin/cairn-memory",
+      "startedAt": "2026-10-02T17:14:49.696888+00:00",
+      "durationSeconds": 2.129,
+      "exitCode": 0,
+      "status": "passed",
+      "stdout": "tool-transcript.stdout.txt",
+      "stderr": "tool-transcript.stderr.txt"
+    }
+  ],
+  "sourceCommit": "7467aebcb32563c9aab4356a8c3e04c0ebb1ecd4",
+  "nodeVersion": "v24.15.0",
+  "npmVersion": "11.12.1",
+  "nodeBinarySha256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c",
+  "sourceArchiveSha256": "938e1ba8d01d59081802266319aa579808420d848a4756ebd12fd9d1b58a8ba1",
+  "artifact": {
+    "name": "cairn-memory-local-preview",
+    "version": "0.0.0-preview.1",
+    "sha256": "ce2851621a9c7361523f3c7083998200b95665637c6b52c3fa20f269ff523646",
+    "archiveHashMatchesReceipt": true,
+    "installedRuntimeFilesMatchSourceHashes": true,
+    "verifiedRuntimeFileCount": 93
+  },
+  "walkthrough": {
+    "status": "passed",
+    "runtime": "24.15.0",
+    "withRecall": false,
+    "stages": [
+      {
+        "stage": "five_tools",
+        "status": "passed"
+      },
+      {
+        "stage": "remember_and_inspect",
+        "status": "passed"
+      },
+      {
+        "stage": "restart_and_inspect",
+        "status": "passed"
+      },
+      {
+        "stage": "correct_and_reject_stale",
+        "status": "passed"
+      },
+      {
+        "stage": "model_disabled",
+        "status": "passed"
+      },
+      {
+        "stage": "forget_and_empty_inspect",
+        "status": "passed"
+      }
+    ]
+  },
+  "toolTranscript": {
+    "file": "tool-transcript.stdout.txt",
+    "separateLoopFromAssertionWalkthrough": true,
+    "containsModelNotConfigured": true,
+    "containsFreshProcess": true,
+    "fixture": "Tabs preference explicitly corrected to spaces; synthetic content only."
+  },
+  "finishedAt": "2026-10-02T17:14:51.826915+00:00",
+  "totalStepDurationSeconds": 17.033,
+  "readmeCommandDurationSeconds": 14.327
+}

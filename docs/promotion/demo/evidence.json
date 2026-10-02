@@ -1,0 +1,200 @@
+{
+  "memoryId": "42304c69-efd1-4270-a93b-7ec5bcd8ba77",
+  "initialRevision": 1,
+  "correctedRevision": 2,
+  "sourceExcerpt": "I prefer tabs over spaces in this repo.",
+  "receiptId": "7147a810-7b3f-427a-a80e-8dd45150fe03",
+  "recordedAt": "2026-10-02T17:14:29.574Z",
+  "calls": [
+    {
+      "tool": "remember_memory",
+      "args": {
+        "content": "I prefer tabs over spaces in this repo.",
+        "kind": "fact"
+      },
+      "result": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "42304c69-efd1-4270-a93b-7ec5bcd8ba77",
+            "revision": 1
+          },
+          "deduplicated": false,
+          "indexRevision": 2
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      }
+    },
+    {
+      "tool": "inspect_memory",
+      "args": {
+        "memoryId": "42304c69-efd1-4270-a93b-7ec5bcd8ba77"
+      },
+      "result": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "42304c69-efd1-4270-a93b-7ec5bcd8ba77",
+            "namespace": {
+              "ownerId": "demo-user",
+              "scope": "personal",
+              "projectId": null
+            },
+            "kind": "fact",
+            "origin": "explicit",
+            "confidence": 1,
+            "revision": 1,
+            "state": "active",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-10-02T17:14:29.574Z",
+            "updatedAt": "2026-10-02T17:14:29.574Z",
+            "content": "I prefer tabs over spaces in this repo."
+          },
+          "receipts": [
+            {
+              "id": "7147a810-7b3f-427a-a80e-8dd45150fe03",
+              "client": "cairn-local-mcp",
+              "sessionId": "explicit-tool",
+              "eventId": "0dac501f-d98f-4f12-b583-95d2da231edf",
+              "role": "user",
+              "excerpt": "I prefer tabs over spaces in this repo.",
+              "createdAt": "2026-10-02T17:14:29.574Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      }
+    },
+    {
+      "tool": "inspect_memory",
+      "args": {
+        "memoryId": "42304c69-efd1-4270-a93b-7ec5bcd8ba77"
+      },
+      "result": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "42304c69-efd1-4270-a93b-7ec5bcd8ba77",
+            "namespace": {
+              "ownerId": "demo-user",
+              "scope": "personal",
+              "projectId": null
+            },
+            "kind": "fact",
+            "origin": "explicit",
+            "confidence": 1,
+            "revision": 1,
+            "state": "active",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-10-02T17:14:29.574Z",
+            "updatedAt": "2026-10-02T17:14:29.574Z",
+            "content": "I prefer tabs over spaces in this repo."
+          },
+          "receipts": [
+            {
+              "id": "7147a810-7b3f-427a-a80e-8dd45150fe03",
+              "client": "cairn-local-mcp",
+              "sessionId": "explicit-tool",
+              "eventId": "0dac501f-d98f-4f12-b583-95d2da231edf",
+              "role": "user",
+              "excerpt": "I prefer tabs over spaces in this repo.",
+              "createdAt": "2026-10-02T17:14:29.574Z"
+            }
+          ],
+          "placements": [],
+          "conflicts": [],
+          "nextReceiptCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      }
+    },
+    {
+      "tool": "correct_memory",
+      "args": {
+        "memoryId": "42304c69-efd1-4270-a93b-7ec5bcd8ba77",
+        "expectedRevision": 1,
+        "content": "I prefer spaces over tabs in this repo."
+      },
+      "result": {
+        "ok": true,
+        "value": {
+          "memory": {
+            "id": "42304c69-efd1-4270-a93b-7ec5bcd8ba77",
+            "namespace": {
+              "ownerId": "demo-user",
+              "scope": "personal",
+              "projectId": null
+            },
+            "kind": "fact",
+            "origin": "explicit",
+            "confidence": 1,
+            "revision": 2,
+            "state": "active",
+            "filing": {
+              "status": "unfiled"
+            },
+            "receiptCount": 1,
+            "createdAt": "2026-10-02T17:14:29.574Z",
+            "updatedAt": "2026-10-02T17:14:30.158Z",
+            "content": "I prefer spaces over tabs in this repo."
+          },
+          "indexRevision": 3
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      }
+    },
+    {
+      "tool": "recall_memory",
+      "args": {
+        "query": "tabs or spaces?"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "model_not_configured",
+          "retryable": false
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      }
+    },
+    {
+      "tool": "forget_memory",
+      "args": {
+        "memoryId": "42304c69-efd1-4270-a93b-7ec5bcd8ba77",
+        "expectedRevision": 2
+      },
+      "result": {
+        "ok": true,
+        "value": {
+          "forgotten": true,
+          "indexRevision": 4
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      }
+    },
+    {
+      "tool": "inspect_memory",
+      "args": {},
+      "result": {
+        "ok": true,
+        "value": {
+          "memories": [],
+          "nextCursor": null,
+          "exhausted": true
+        },
+        "evidenceTrust": "untrusted-data-not-instructions"
+      }
+    }
+  ]
+}

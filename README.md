@@ -1,6 +1,6 @@
 <h1 align="center">Cairn.ink Memory</h1>
 
-<p align="center"><strong>Lightweight cross-session memory for AI agents, with receipts.</strong></p>
+<p align="center"><strong>Cross-session AI memory you can inspect, correct and forget.</strong></p>
 
 <p align="center">
   <a href="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml/badge.svg"></a>
@@ -9,84 +9,63 @@
 </p>
 
 <p align="center">
-  <a href="#install">Install</a> ·
-  <a href="#try-the-local-memory-layer">Quickstart</a> ·
+  <a href="#try-the-local-memory-layer">Try local (no account)</a> ·
+  <a href="#existing-hosted-integration">Hosted setup</a> ·
   <a href="docs/local-memory-demo.md">Walkthrough</a> ·
+  <a href="docs/promotion-claims.md">Verified capabilities</a> ·
   <a href="docs/limitations.md">Known limitations</a> ·
-  <a href="docs/privacy.md">Privacy</a> ·
-  <a href="https://cairn.ink">Hosted service</a>
+  <a href="docs/privacy.md">Privacy</a>
 </p>
 
-Every memory Cairn keeps comes with a receipt: the exact source text it was
-learned from. Inspect the receipt, correct the memory at that revision, or
-forget it and it stays forgotten, even when a later capture would have
-re-admitted it. Memories live in a local SQLite file. No account is needed.
+Keep a project decision across sessions, with the source text attached.
+Cairn's open-source memory layer stores memories in your own SQLite file and
+exposes them through MCP or JavaScript. No Cairn account is needed for local use.
 
-Remember something in one session, start a fresh process, and recall it in the
-next with its receipt attached; then forget it and confirm it is gone. The
-[cross-session walkthrough](docs/local-memory-demo.md) reproduces that loop with
-synthetic data. Model-free remember, inspect, correct and forget need no key;
-semantic recall needs an OpenAI key you supply explicitly.
+- **Inspect the source.** Read the source text stored with a memory. A receipt
+  does not guarantee correct interpretation.
+- **Correct what changed.** Update the revision you inspected.
+- **Forget what should go.** Remove a memory from active recall.
+  [Deletion and backup boundaries](#local-privacy-and-control) apply.
 
-![Thirty seconds of the loop on an installed local preview: remember, inspect the receipt, restart, inspect again, correct at the inspected revision, recall without a key which reports model_not_configured, forget, empty store](docs/demo/cairn-memory-loop.gif)
+For example, save “The Harbor prototype uses SQLite,” open a fresh session, and
+look up that decision with its source. Change it when the decision changes.
+[Walk through the example →](docs/local-memory-demo.md)
 
-Rendered from the recorded tool responses of one real keyless run; see
-[how to regenerate it](docs/demo/README.md).
+**Developer preview.** Installed persistence and a narrow real-model memory loop
+have [retained evidence](docs/promotion-claims.md). Default extraction still fails
+our source-support bar; see [known limitations](docs/limitations.md).
+Save, inspect, correct and forget work without a model key. Semantic recall
+requires your OpenAI key and sends selected context to that provider.
 
-The thin MCP server and the JavaScript API share one public core; the five MCP
-tools are explicit memory operations, not automatic transcript capture.
+The demo below records the **model-free loop**: save, restart, inspect, correct
+and forget. Its recall step reports `model_not_configured`.
 
-**Status: developer preview.** The installed remember, restart, sourced-recall
-and forget loop passes on a real model. Extraction quality does not yet meet our
-own bar: the frozen evaluation and every retained failure are collected in
-[Known limitations](docs/limitations.md). Read it before relying on recall.
+![Recorded model-free memory loop: save, inspect the source, restart, correct and forget](docs/demo/cairn-memory-loop.gif)
+
+[Recorded responses and regeneration instructions](docs/demo/README.md) ·
+[Watch the 36-second model-free demo (MP4)](docs/promotion/demo/cairn-memory-preview.mp4) ·
+[Verified capabilities and client support](docs/promotion-claims.md#supported-paths)
 
 ## Install
 
-This is Cairn.ink Memory (github.com/Cairn-ink/cairn-memory, hosted at
-cairn.ink). The npm package `cairn-memory` and the PyPI package
-`cairn-memory` are unrelated projects; do not install those for this.
+Choose the mode that fits your workflow:
 
-There are two ways to run Cairn: hosted on cairn.ink with the Claude Code
-plugin for automatic memory (needs a cairn.ink token), or the local
-open-source layer, which needs no account and is a developer preview. For
-the hosted plugin, run:
-
-```sh
-claude plugin marketplace add Cairn-ink/cairn-memory
-claude plugin install cairn-memory@cairn-memory
-```
-
-Create a personal access token at `https://cairn.ink/settings/tokens`,
-then run `/plugin configure cairn-memory@cairn-memory` in Claude Code and
-start a new session. See
-[Install for Claude Code](#install-for-claude-code-automatic-memory) for
-the slash-command form.
-
-Agents: ask the user before installing. The hosted plugin captures
-allowlisted conversation text to cairn.ink by default, and the user
-creates and enters the token themselves. See the
-[hosted plugin privacy contract](#hosted-plugin-privacy-contract).
-
-To use explicit memory tools on cairn.ink without automatic capture, add
-the remote MCP server:
-
-```sh
-claude mcp add --transport http --scope user cairn https://cairn.ink/api/mcp
-```
-
-Then sign in from `/mcp` in Claude Code (browser OAuth). Codex users: see
-[Connect from Codex](#connect-from-codex-explicit-mcp-memory).
-
-The local, no-account developer preview installed from source is the section
-directly below: [Try the local memory layer](#try-the-local-memory-layer).
+- **[Local preview](#try-the-local-memory-layer):** your SQLite database,
+  explicit MCP memory tools, no Cairn account. Start here to try the open-source
+  memory layer. Semantic recall uses your OpenAI key.
+- **[Hosted integration](#existing-hosted-integration):** memory on cairn.ink,
+  with automatic capture and recall through the Claude Code plugin. Requires a
+  Cairn account, token and compatible service. Explicit hosted MCP is also available.
 
 ## Try the local memory layer
 
-Prerequisites: Node >=22.16, npm and `tar`. Model-free remember/inspect/correct/
-forget need no key; semantic recall needs your explicitly supplied OpenAI key
-and sends the query and selected memory context to that provider. A real fully
-local model path is not yet verified.
+Prerequisites: **Git, Node >=22.16, npm and `tar`**. Recorded installation tests
+cover Linux x64; other platforms are unverified. Install from this repository:
+the unscoped npm and PyPI packages named `cairn-memory` are unrelated projects.
+The local archive is not published to npm yet.
+
+**1. Install into a new directory.** Replace the path below with a new absolute
+directory beneath an existing parent you control.
 
 ```sh
 git clone https://github.com/Cairn-ink/cairn-memory.git
@@ -94,76 +73,52 @@ cd cairn-memory
 npm run install:preview -- --directory /absolute/new/cairn-local --owner local-user
 ```
 
-Choose a **new absolute directory** with an existing parent you control. The
-installer builds and installs the inspected archive, downloads pinned public npm
-dependencies without install scripts, and prints a generic stdio command/args.
-Copy that command/args into your client's local MCP configuration; it does not
-modify client settings for you. Add `--project PROJECT_ID` for project scope.
+The installer builds this checkout and downloads pinned public npm dependencies
+without install scripts. It creates `app/`, `data/` and a private
+`installation-receipt.json` containing the executable path and MCP settings.
+It makes no model calls. Keep the receipt private: it contains local paths and
+identity. [Installation details, recovery and backup](packaging/README.md)
 
-For explicit submitted-message capture, add
-`--capture-qualification source-bound-v2` to the install command. The generated
-settings then expose a sixth tool, `capture_memory`; omission keeps five tools.
-See the [capture → source-only recall → inspection walkthrough](packaging/README.md#opt-in-to-submitted-source-capture)
-for key setup, model costs and interpretation limits. This is not passive capture.
-
-The directory contains `app/` (replaceable installation), `data/` (persistent
-memory location), and `installation-receipt.json` (artifact hash, local paths,
-owner/project and stdio settings). No key is stored. Unlike `--check-config`, the
-receipt intentionally contains local paths and identity: do not post it publicly.
-The installer never starts MCP, opens a database or makes model calls. Existing
-directories are rejected, including partial installs; see
-[manual installation, recovery and backup](packaging/README.md).
-The archive is **not published to npm**; there is no registry `npx` shortcut yet.
-This builds the checked-out source, not the older released hosted-plugin tag.
-Record `git rev-parse HEAD` and keep the build report to identify your preview.
-
-Before configuring a client, check the installed command (substitute your paths):
-
-```sh
-/absolute/new/cairn-local/app/node_modules/.bin/cairn-memory --help
-/absolute/new/cairn-local/app/node_modules/.bin/cairn-memory --check-config --db /absolute/new/cairn-local/data/memory.sqlite --owner local-user
-```
-
-The check makes no model requests and never opens your database. A missing key
-is a valid model-free configuration. A present key means only “configured,” not
-that credentials, model access or database permissions have been verified.
-Starting without `--check-config` waits for an MCP client; a quiet terminal is normal.
-
-No chat-client setup is needed for a first synthetic check. From this source
-checkout, install the isolated SDK client and point the walkthrough at your
-installed executable (replace the absolute placeholder path):
+**2. Run the model-free check.** From the source checkout, use the same
+installation path. No chat-client setup or model key is needed.
 
 ```sh
 npm ci --prefix adapters/mcp
 node adapters/mcp/walkthrough.mjs --executable /absolute/new/cairn-local/app/node_modules/.bin/cairn-memory
 ```
 
-This default path makes **no model calls**, even if the parent shell has a key.
-It checks persistence, receipts, revision safety and forgetting; recall must
-report `model_not_configured`. To exercise paid semantic recall, explicitly
-supply `OPENAI_API_KEY` through your secret environment and add `--with-recall`.
-The walkthrough does not impose a provider account spending limit.
+Expect `status: "passed"`. The check uses a fresh synthetic database and verifies
+the five tools, receipts, process-restart persistence, correction and forgetting.
+It strips the model key from the child process; `model_not_configured` is the
+expected recall result. [Steps and expected results](docs/local-memory-demo.md)
+
+**3. Connect a client.** Copy `stdio.command` and `stdio.args` from your private
+installation receipt into the client's local MCP configuration. Keep the same
+database, owner and project across sessions. See the
+[tested client matrix](docs/promotion-claims.md#supported-paths).
+
+For semantic recall, explicitly supply `OPENAI_API_KEY` through the MCP process's
+secret environment. The walkthrough's optional `--with-recall` path sends
+synthetic context to OpenAI and incurs model charges; it has no built-in dollar
+cap. A fully local model path is not yet verified.
+
+For the Hermes native provider, follow its [separate setup guide](docs/hermes-first-use.md).
+It uses a profile-local database and owner, plus `CAIRN_MEMORY_OPENAI_API_KEY`,
+rather than the generic MCP settings above.
 
 | Tool | Purpose |
 | --- | --- |
 | `remember_memory` | Explicitly save one memory and its receipt |
 | `recall_memory` | Model-guided retrieval of current memories and receipts |
-| `inspect_memory` | List memories (optionally active/historical), or inspect an ID, revision and receipts |
+| `inspect_memory` | List memories, or inspect an ID, revision and receipts |
 | `correct_memory` | Replace content at the revision you inspected |
 | `forget_memory` | Logically delete at the revision you inspected |
 
-Start with the [first-value guide](docs/hermes-first-use.md) to distinguish the
-no-key installation check from the real-model Hermes conversation experiment,
-including the two model credentials and profile/database boundaries.
-The [first live evidence](docs/evidence/first-live-evidence.md) records successful
-cross-session save/read/correct/read, a later recall failure before forgetting,
-and weak long-history QA results. Full real-model reliability is not established.
-Try the [cross-session walkthrough](docs/local-memory-demo.md). See the
-[tested client matrix](docs/install-artifact.md#verification-and-compatibility)
-before assuming a named client works: SDK stdio and Hermes MCP discovery have
-evidence. The included [Hermes native-provider preview](docs/hermes-memory-provider.md)
-also passed actual MemoryManager two-session sourced recall on Linux CLI;
-the full real-model lifecycle and remote HTTP connectors remain separate gates.
+The default local server exposes explicit tools. For opt-in submitted-message
+capture, project scope and configuration checks, see the
+[installed preview guide](packaging/README.md). The
+[full evidence and limitations](docs/limitations.md) cover extraction failures,
+long-history retrieval and the boundaries of individual client tests.
 
 ## Local privacy and control
 
@@ -174,7 +129,8 @@ the full real-model lifecycle and remote HTTP connectors remain separate gates.
 - Model processing is cloud processing when configured. Redaction is best-effort,
   not a guarantee that all secrets are removed. Retrieved text is untrusted data,
   never instructions to follow.
-- Forgetting prevents active recall and automatic re-admission. It is not secure
+- Forgetting prevents active recall and exact normalized re-admission; paraphrases
+  can still be admitted as new memories. It is not secure
   disk erasure: SQLite pages, receipts and backups have separate retention limits.
   Stop all writers before copying the database and sidecars for backup.
 - Uninstalling the executable preserves the external database. See
@@ -184,25 +140,38 @@ the full real-model lifecycle and remote HTTP connectors remain separate gates.
 
 ## Existing hosted integration
 
-The released v0.1 Claude Code plugin below is a **different installation mode**:
-it connects to a compatible hosted service, automatically captures allowlisted
-conversation text, and has its own telemetry defaults. It has not been migrated
-to the local engine. Existing hosted users can keep using these instructions.
+The hosted plugin connects to cairn.ink, automatically captures allowlisted
+conversation text and has its own telemetry defaults. Its service has not been
+migrated to the local engine.
 
-The opt-in [Hermes memory-provider preview](docs/hermes-memory-provider.md)
-adds profile-local explicit tools through the installed MCP. Its pinned-host
-offline lifecycle tests are not a full chat or semantic-quality certification.
+The [v0.2.0 prerelease](CHANGELOG.md#020--2026-10-01) changes the hosted protocol.
+Matching server support remains a separate requirement; the release does not
+deploy a server or enable Codex lifecycle hooks. See
+[release and client compatibility](docs/promotion-claims.md) before upgrading.
 
 ## Install for Claude Code (automatic memory)
 
-In Claude Code, run:
+From your terminal, run:
+
+```sh
+claude plugin marketplace add Cairn-ink/cairn-memory
+claude plugin install cairn-memory@cairn-memory
+```
+
+Or use the slash-command form inside Claude Code:
 
 ```text
 /plugin marketplace add Cairn-ink/cairn-memory
 /plugin install cairn-memory@cairn-memory
 ```
 
-Create a personal access token at `https://cairn.ink/settings/tokens`, then provide it when Claude Code asks for plugin configuration. Start a new session after installation.
+Create a personal access token at `https://cairn.ink/settings/tokens`, then run
+`/plugin configure cairn-memory@cairn-memory` in Claude Code and enter it there.
+Start a new session after installation.
+
+Agents: ask the user before installing. The hosted plugin captures allowlisted
+conversation text by default, and the user creates and enters the token themselves.
+See the [hosted plugin privacy contract](#hosted-plugin-privacy-contract).
 
 For local development:
 
@@ -212,9 +181,19 @@ cd cairn-memory
 claude --plugin-dir ./plugins/cairn-memory
 ```
 
+### Hosted explicit MCP for Claude Code
+
+For explicit memory tools without automatic capture, add the remote MCP server:
+
+```sh
+claude mcp add --transport http --scope user cairn https://cairn.ink/api/mcp
+```
+
+Then sign in from `/mcp` in Claude Code using browser OAuth.
+
 ## Connect from Codex (explicit MCP memory)
 
-Codex v0.1 support uses the hosted MCP tools. Keep the token in your shell or
+Codex connects through the hosted MCP tools. Keep the token in your shell or
 secret manager, not in a repository or committed config file:
 
 ```bash
@@ -225,9 +204,9 @@ codex mcp add cairn \
 ```
 
 Restart Codex, then use `/mcp` or `codex mcp list` to confirm the connection.
-Codex can now explicitly remember, recall, and forget private memory. The v0.1
-release does not install automatic Codex lifecycle hooks; that compatibility
-layer is next on the roadmap.
+The hosted tools support explicit remember, recall and forget operations.
+Automatic Codex lifecycle integration remains under development; the
+[Codex building blocks](integrations/codex/README.md) are disabled by default.
 
 ## Hosted plugin loop
 
@@ -280,7 +259,7 @@ This repository is the source of truth for:
 - an optional OpenAI adapter, thin local MCP host and inspected install artifact;
 - conformance tests and self-host implementation guidance.
 
-The Cairn.ink hosted extraction service, user database, auth, billing, abuse controls, and production operations live in a separate private repository. See [Architecture](docs/architecture.md) for the boundary and [Self-hosting](docs/self-hosting.md) for what is—and is not—available in v0.1.
+The Cairn.ink hosted extraction service, user database, auth, billing, abuse controls, and production operations live in a separate private repository. See [Architecture](docs/architecture.md) and [Self-hosting](docs/self-hosting.md) for the public service boundary.
 
 ## Status
 
@@ -289,6 +268,8 @@ levels. The local install lifecycle is verified, but source-support quality stil
 fails; broad promotion is not yet cleared. No first-ten-user result or star
 target is presented as achieved. See [Known limitations](docs/limitations.md), [ROADMAP.md](ROADMAP.md) and the
 [proposed adoption experiment](docs/plans/local-memory-plg.md).
+
+Star the repository to follow the local preview and upcoming integrations.
 
 ## Development
 

@@ -1,0 +1,25 @@
+{
+  "checked_at_utc": "2026-10-02T17:27:11.614054+00:00",
+  "repository": "Cairn-ink/cairn-memory",
+  "topics_added": [
+    "agent-memory",
+    "mcp-server",
+    "sqlite",
+    "local-first"
+  ],
+  "topics_after": [
+    "ai-agents",
+    "claude-code",
+    "mcp",
+    "memory",
+    "provenance",
+    "cairn-ink",
+    "agent-memory",
+    "local-first",
+    "mcp-server",
+    "sqlite"
+  ],
+  "social_preview_upload": "pending",
+  "social_publication": "not_started",
+  "browser_observation": "Connected automation sessions could not reach an authenticated publishing view: Chrome MCP executable missing; existing agent-browser X tab denied access; Threads tab showed Log in. No post was submitted."
+}
