@@ -116,7 +116,7 @@ export const HOSTED_SCHEMAS = {
   "recall-request": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/recall-request.schema.json",
-    "title": "Cairn Memory recall request",
+    "title": "Cairn Memory recall request (protocol 0.3.0)",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -127,6 +127,13 @@ export const HOSTED_SCHEMAS = {
         "type": "string",
         "minLength": 1,
         "maxLength": 4000
+      },
+      "session_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "pattern": "^[A-Za-z0-9._:-]{1,200}(?![\\s\\S])",
+        "description": "Optional host conversation/session id from a trusted client, never invented by a model. Use the same wire representation as capture. The server stores only an owner-scoped SHA-256 hash. Invalid or unavailable host ids are omitted by clients."
       },
       "project_id": {
         "type": "string",
@@ -293,7 +300,7 @@ export const HOSTED_SCHEMAS = {
   "session-start-request": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/session-start-request.schema.json",
-    "title": "Cairn Memory session-start-request (protocol 0.2.1)",
+    "title": "Cairn Memory session-start-request (protocol 0.2.0)",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -302,12 +309,6 @@ export const HOSTED_SCHEMAS = {
     "properties": {
       "version": {
         "const": 1
-      },
-      "session_id": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 200,
-        "description": "Optional host conversation/session id supplied by a trusted client hook, never invented by a model. Use the same wire representation as capture (Codex uses its existing opaque digest). The server stores only an owner-scoped SHA-256 hash."
       },
       "project_id": {
         "type": "string",

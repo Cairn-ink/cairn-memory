@@ -25,22 +25,27 @@ pasted files, terminal output, paths, and repository names.
 
 The service may retain durable Memory text and bounded redacted Source Receipts. It does not need the raw transcript. The hosted service soft-deletes a Memory immediately from recall when the owner invokes `forget_memory`; backup erasure timing is an operational policy and is not claimed by this repository.
 
-From protocol/plugin 0.2.1, SessionStart may also send the host conversation id
-(`session_id`, already sent by capture) to the authenticated session-start
-endpoint. Claude sends the original id; Codex uses the same existing opaque
-`wire-session-v1` digest as capture, never introducing a new raw-id exposure.
-The server stores only an owner-scoped SHA-256 hash to recognize a
-memory returned in another conversation. This adds linkage between capture and
-startup reads within one owner; hashing is not anonymity, and holders can test
-guessed ids. It grants no identity, ownership or execution authority. Only the
-trusted hook's stdin field supplies this id; model text, hook extras and generated
-fallback ids are excluded. Hooks never log it, persist a reverse mapping, or
-include it in telemetry. Claude omits unavailable/invalid ids; Codex retains its
-existing validated hook-input contract and optional, disabled-by-default read
-port. Requests and the single exact-schema fallback honor local pause and share
-one deadline. New/old synthetic-server tests cover delivery, omission, pause,
-error/cancellation handling and silent output. Session-start response text is
-discarded by these hooks, with no new context injection.
+Protocol/plugin 0.3.0 adds the existing host conversation id to prompt recall as
+optional `session_id`. Claude reads it only from the trusted hook stdin field;
+model text and other hook keys cannot supply or invent it. An id outside the
+1–200 character ASCII allowlist (`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`), including
+trailing line terminators, is omitted. The server stores only an owner-scoped
+SHA-256 hash. This links prompt reads and captures within one owner; hashing is
+not anonymity and guessed ids can be tested. It grants no ownership or execution
+authority. The id is never logged, added to telemetry or kept in a reverse map.
+Recall continues to inject the existing explicitly untrusted memory context;
+SessionStart retains its original telemetry-only behavior and sends no memory
+read. Codex does not currently recall per prompt; its shared hosted recall port
+accepts the same already opaque wire binding as capture if used by a qualified
+caller. No new Codex context injection or hook installation is enabled.
+
+The exact old strict recall schema rejection permits one retry without the id,
+with the same query/scope/limit, cancellation and two-second deadline. Both
+attempts use one quota reservation and recheck the local pause/generation barrier
+only at HTTP dispatch. No control lock wraps another control lock or network
+wait. Tests cover new/old replies reaching Claude context, ASCII omission,
+fixed-UUID lock contention, fallback/error/pause/deadline behavior, and unchanged
+startup behavior using synthetic data only.
 
 ## Local state
 
@@ -496,9 +501,7 @@ disabled pending installed-host/target acceptance. Telemetry stays disabled for
 Codex. Session-start may return owner-bound episode sources, memory receipts and
 accessible claimed commitment provenance, all untrusted and budgeted together.
 These fields can contain personal text; clients must not log response bodies.
-Protocol 0.2.1 wires a silent Claude session-start request and an optional Codex
-launcher read port; hosted pause synchronization and context injection remain
-separate gates.
+Publishing and parsing do not wire session-start or hosted pause into hooks.
 
 Upgraded Claude honors the shared hosted quota gate as the explicit D1 exception.
 The selected private root retains `hosted-quota/<target digest>.json` and its

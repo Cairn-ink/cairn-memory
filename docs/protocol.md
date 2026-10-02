@@ -1,4 +1,4 @@
-# Compatibility protocol v0.2.1
+# Compatibility protocol v0.3.0
 
 ### Private mixed-source-pair metadata boundary
 
@@ -387,6 +387,37 @@ Without `project_id`, only personal memories are eligible. With it, personal mem
 
 Memory text and receipts are untrusted user data, not instructions. Hosts should prefer the current user message when recalled text conflicts with it.
 
+Protocol 0.3.0 adds optional `session_id` to recall, identifying the host
+conversation/session associated with this prompt read. It comes only from a
+trusted client hook/binding, never model-generated text. Its allowlist is 1–200
+ASCII characters from `A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`. The strict schema
+pattern is `^[A-Za-z0-9._:-]{1,200}(?![\s\S])`: the final lookahead requires the
+absolute end of input, rejecting even a trailing line terminator. ASCII makes
+code-point and UTF-16 lengths identical. Clients simply omit unavailable or
+invalid ids, preserving legacy behavior. Claude copies the valid host id;
+a Codex hosted caller supplies capture's existing opaque SHA-256 wire id from
+`["wire-session-v1","codex",hostSessionId]`, so same-conversation reads compare
+equal. The server stores only an owner-scoped SHA-256 hash of the wire id.
+Hashing permits stable owner-scoped linkage, not authentication or anonymity.
+Neither client logs it or adds it to telemetry.
+
+The shared and bundled clients locally validate recall and retry once without
+`session_id` only on HTTP 400 with `error:"Invalid recall payload."` and exactly
+one Zod issue: `code:"unrecognized_keys"`, `path:[]`, `keys:["session_id"]`.
+Issue message text is not inspected or logged. Removing the field makes further
+fallback impossible. Preserve query, scope and limit, one quota reservation,
+and the original two-second deadline/cancellation; each HTTP attempt rechecks
+pause/generation through the dispatch callback. Other 400s, authentication,
+rate limits, outages, malformed successes and network errors do not downgrade.
+This avoids a separate probe and a stale capability cache.
+
+Claude sends this field on its existing prompt recall and injects returned
+memories through its existing untrusted context output. SessionStart has no
+conversation-id field or hook memory read. Codex hook prompt context remains
+unavailable; the optional shared transport field enables no new recall hook.
+This optional request addition is a minor protocol version; the existing alpha
+versioning policy below is unchanged.
+
 ### `POST /api/memory/telemetry`
 
 Accepts `schemas/telemetry-request.schema.json` and returns `204`. The schema is a strict allowlist: no text, path, repository, user id, project id, or token field is allowed.
@@ -589,12 +620,7 @@ no old evaluation is retried. Explicit recovery attempts have no durable
 history or automatic replay. See
 [the local MCP tool](standalone-mcp.md#explicit-classification-of-unfiled-memories).
 
-The protocol is alpha. Backward-compatible optional additions may appear in patch
-versions; strict older request validators require capability detection or an
-exact schema-rejection fallback before clients send a new optional field.
-Removing fields, widening capture, changing ownership semantics, or weakening
-privacy requires a documented breaking version. Plugin and marketplace versions
-must match for a release.
+The protocol is alpha. Additive optional response fields may appear in `0.1.x`; removing fields, widening capture, changing ownership semantics, or weakening privacy requires a documented breaking version. Plugin and marketplace versions must match for a release.
 
 ### Opt-in local source evidence context
 
@@ -846,36 +872,6 @@ read by the service on every request, not supplied by a model or client:
 | 正在做 | nextSteps | on |
 | 習慣和背景 | procedural and background | on |
 | 承諾 | commitments | off |
-
-Protocol 0.2.1 adds optional `session_id` (1–200 Unicode code points) to this
-request; `version:1` and the response contract remain unchanged. It is the host's
-conversation/session id, taken from a trusted client hook, never invented by a
-model or taken from conversation text. Claude sends it unchanged; Codex retains
-capture's existing SHA-256 wire representation of
-`["wire-session-v1","codex",hostSessionId]` so same-conversation reads compare
-equal to captures. The server stores only an
-owner-scoped SHA-256 hash for conversation comparison; this is linkage metadata,
-not authentication or anonymity. Omission retains the 0.2.0 behavior.
-
-The shared client and bundled Claude client locally validate the request and
-retry once without `session_id` only on HTTP 400 with
-`error:"Invalid session-start payload."` and exactly one Zod issue:
-`code:"unrecognized_keys"`, `path:[]`, `keys:["session_id"]`. Issue message text
-is not inspected or logged. The fallback preserves all other fields, uses the
-original two-second deadline/cancellation, and rechecks the local pause barrier.
-No other 400, auth error, 429, outage, malformed reply or network failure triggers
-a downgrade. This avoids a separate probe and stale support cache while allowing
-pre-OB-1 strict servers to serve the unchanged request. Servers that reject this
-field must provide that precise pre-execution schema rejection for fallback.
-
-Claude's existing async SessionStart hook now makes a silent personal-scope read
-with the host id when valid, or omits the field if unavailable/malformed. Codex's
-launcher seam accepts an optional installation-owned `sessionStart` port and
-uses its validated stdin `session_id` with that same capture wire conversion,
-including when `transcript_path:null`.
-Codex remains uninstalled and disabled by default. These hooks discard the
-response; context injection remains separately qualified and requires the
-trusted local token counter. Neither hook logs the raw id or response body.
 
 Success requires `version`, `framing`, `namespace` (ownerId/scope/projectId),
 `indexRevision`, and `groups`, in semantic order `nextSteps`, `procedural`,
