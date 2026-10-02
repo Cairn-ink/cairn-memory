@@ -364,3 +364,22 @@ that directory's `worker-cardinality-evidence.json`. Shared workload again
 precludes a latency conclusion. A scoped local candidate is authorized for
 independent Standards/Spec review; no push is authorized before primary review
 acceptance.
+
+### Public review round 1 correction
+
+At candidate `fad9b1ff2ded94b0d7dd6ad37a2e4cb543bbba95`, the independent
+Standards review found one required-document omission and Spec found none.
+`CONTRIBUTING.md` requires `ROADMAP.md` when an evidence gate changes; the
+new blocking CI step had no corresponding roadmap entry. The narrow
+correction adds one developer-preview bullet linking this diagnostic and its
+historical/mixed/paid/semantic limitations, without rewriting old roadmap
+history or budget claims. Diagnostic test/helper hashes and all runtime
+sources remain frozen. Both review axes must inspect the corrected candidate
+before push; the primary owns the additional contributor maintainer gates.
+
+The affected clean-environment canonical `npm run validate` commands passed on
+Node 22.16.0 and 24.15.0, each with actual exit 0, ten valid JSON documents
+and version 0.2.0. Diff/whitespace checks passed. Exact source-free validation
+records are intentionally retained in the approved evidence directory as
+`worker-roadmap-validation.json`; this docs-only correction changes neither
+the diagnostic callers nor the previously verified full gate scripts.
