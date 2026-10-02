@@ -35,7 +35,18 @@ own `resultJournal: undefined` is invalid rather than silently disabling it.
 
 The journal is separately versioned `cairn-lme-mixed-result-journal-v1` and
 binds the existing manifest, roster, fixed N, question IDs and case/arm order.
-The unchanged phase reports remain generation/scoring v1. All authority,
+Its manifest selects exactly one supported family: legacy mixed-source v2 or
+explicit supplied history. Context/scorer identities are recomputed for its
+native configuration and qualified/indexed-evidence capture profile; the full
+Mem0 wire profile must equal the supported immutable profile. That same private
+family determines both phase schemas and every generation digest domain.
+Legacy identity, report and journal bytes remain unchanged. The writer also
+checks the corresponding preparation schema before publishing anything; cold
+identities have no preparation schema, so inspection never invents one or emits
+a new family field. SHA-shaped arbitrary/incoherent protocol identities that
+were formerly accepted now reject. Opaque answer, adapter and artifact hashes
+still declare inputs; this does not authenticate absent original source data.
+All authority,
 source policies, prompts, model settings, guard validation, evaluator separation,
 failure reasons and fixed-N denominators retain their existing behavior.
 
@@ -94,11 +105,19 @@ or invented whole-phase score. Inspection checks private modes, bounded records,
 contiguous sequence/hash links, identity, phase/arm order and result structure;
 completed report aggregates must agree with their existing judgments.
 
-Inspection imports no adapter, native gateway, guard or evaluator and has no
+Inspection imports no adapter, native gateway, guard, tokenizer or evaluator and has no
 HTTP, key, ledger mutation, execution, recovery or resume hook. It cannot
 replace the scorer's generation/X receipt validation or authentic accounting.
 The module's append functions support the trusted in-process runner; calling
 them is not authenticated execution evidence or new authority.
+
+The cold helper uses only builtins and readable immutable protocol snapshots.
+The ordered drift gate compares their complete bodies to the existing source,
+wire, stage, experiment and official-scoring boundaries; it has no automatic
+refresh. Cold-process tests construct a minimal module tree, deny outside
+imports and `node:sqlite`, and install a throwing fetch. Neither this family
+binding nor detached diagnostic retention independently authenticates nested
+`modelDiagnostics` or proves that a reported observation genuinely occurred.
 
 ## Retention and threat limits
 
@@ -131,6 +150,17 @@ X scopes and fake-HTTP answers, then the real scoring runner. The separate
 and containment prerequisites; it exercises actual Cairn/native generation,
 scoring, both arm orders and interruptions with fake HTTP. Missing prerequisites
 fail that explicit gate. None of these tests measures semantic reliability.
+
+The [SJ evidence record](plans/supplied-history-journal-integration.md) records
+offline verification on exact Node 22.16.0 and 24.15.0 for both source families,
+ordered factory/identity drift, full-byte legacy compatibility, minimal-tree
+cold inspection and actual-native interruptions. Original failures and explicit
+unchanged-gate carryforward remain separate from fresh passes. Final candidate,
+review and delivery are pending; no new score or paid-run authority follows.
+This is the 2026-10-02 UTC offline checkpoint; current commit/review/CI/delivery
+state is tracked in the
+[matching branch PR](https://github.com/Cairn-ink/cairn-memory/pulls?q=is%3Apr+head%3Afeat%2Fsupplied-history-journal-integration),
+not a declaration that this snapshot is merged or released.
 
 Tests use owned workspaces, close guards/cores and stop/verify owned subprocess
 groups before removal. Native interruption pauses only before native execution

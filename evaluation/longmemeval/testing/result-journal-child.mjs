@@ -10,7 +10,9 @@ import { scoreMixedGeneration } from '../mixed-scoring.mjs';
 import { evaluatorRow, fakeMixedHttp, sourceRow, syntheticMixedFixture } from './mixed-fixture.mjs';
 import { syntheticNativeDescriptors, syntheticScoringGeneration } from './result-journal-fixture.mjs';
 
-const [parent, phase = 'generation', native = 'synthetic', observations = 'omitted'] = process.argv.slice(2);
+const [parent, phase = 'generation', native = 'synthetic', observations = 'omitted',
+  sourceOptionsJson = '{}'] = process.argv.slice(2);
+const sourceOptions = JSON.parse(sourceOptionsJson);
 const originalSpawn = childProcess.spawn;
 childProcess.spawn = (...args) => {
   const child = originalSpawn(...args);
@@ -29,7 +31,9 @@ const workspace = createTestWorkspace(null, { prefix: 'journal-child-', parent }
 const descriptors = syntheticNativeDescriptors(workspace.path, native === 'native');
 const fake = fakeMixedHttp();
 const fixture = syntheticMixedFixture(null, { ...descriptors, sourceCases: [sourceRow()],
-  armOrders: [['cairn', 'mem0']], fetchImpl: fake.fetchImpl, workspace });
+  armOrders: [sourceOptions.order ?? ['cairn', 'mem0']], fetchImpl: fake.fetchImpl, workspace,
+  ...(sourceOptions.comparisonProfile === undefined ? {} : { comparisonProfile: sourceOptions.comparisonProfile }),
+  ...(sourceOptions.sourceHistoryPolicy === undefined ? {} : { sourceHistoryPolicy: sourceOptions.sourceHistoryPolicy }) });
 let journalModule;
 try { journalModule = await import('../mixed-result-journal.mjs'); }
 catch (error) { if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error; }

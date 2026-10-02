@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { isMixedNativeFailure } from './mixed-native-failure-shape.mjs';
+import { manifestSourceFamily } from './mixed-source-policy.mjs';
 import { canonical, dense, exact, fail, freeze, hash, reportSnapshot,
   safeInteger, wellFormed } from './mixed-validation.mjs';
 
 export const MIXED_RESULT_JOURNAL_VERSION = 'cairn-lme-mixed-result-journal-v1';
 const RECORD_DOMAIN = 'cairn.lme.mixed.result-journal-record.v1';
 const REPORT_DOMAIN = 'cairn.lme.mixed.result-journal-report.v1';
-const GENERATION_DOMAIN = 'cairn.lme.mixed.generation-report.v1';
 const MANIFEST_DOMAIN = 'cairn.lme.mixed.manifest.v1';
 const ROSTER_DOMAIN = 'cairn.lme.mixed-source-pair.roster.v1';
 const STATES = new WeakMap();
@@ -95,10 +95,13 @@ function validateManifest(manifest) {
         || !safeInteger(value[price].tokenDenominator, 1)) fail(CODE);
     }
   }
+  try { return manifestSourceFamily(manifest); } catch { fail(CODE); }
 }
 
 function identityOf(prepared) {
-  const { manifest, roster, counts } = reportSnapshot(prepared);
+  let snapshot;
+  try { snapshot = reportSnapshot(prepared); } catch { fail(CODE); }
+  const { manifest, roster, counts } = snapshot;
   validateManifest(manifest);
   dense(roster, 1, 250, CODE);
   if (!safeInteger(counts?.fixedN, 1) || counts.fixedN !== roster.length) fail(CODE);
@@ -126,7 +129,9 @@ function expectedArms(identity) {
 }
 
 function stateOf(identity) {
-  return { identity, seq: 0, previous: null, active: null,
+  // Derived once for this writer/reconstruction, never serialized as authority.
+  const family = validateManifest(identity.manifest);
+  return { identity, family, seq: 0, previous: null, active: null,
     phases: Object.fromEntries(PHASES.map(phase => [phase,
       { started: false, arms: expectedArms(identity), completion: null }])) };
 }
@@ -241,7 +246,7 @@ function apply(state, type, data) {
     exact(data, phase === 'generation' ? ['phase'] : ['phase', 'generationDigest'], CODE);
     if (view.started || state.active !== null || phase === 'scoring'
       && (!state.phases.generation.completion || data.generationDigest
-        !== hash(GENERATION_DOMAIN, state.phases.generation.completion.report))) fail(CODE);
+        !== hash(state.family.generationDomain, state.phases.generation.completion.report))) fail(CODE);
     if (phase === 'generation' && state.phases.scoring.started) fail(CODE);
     view.started = true; state.active = phase; return;
   }
@@ -270,7 +275,7 @@ function apply(state, type, data) {
   exact(report, phase === 'generation'
     ? ['schemaVersion', 'manifest', 'roster', 'manifestDigest', 'rosterDigest', 'cases', 'halted', 'haltReason']
     : ['schemaVersion', 'generationDigest', 'cases', 'summary', 'halted', 'haltReason'], CODE);
-  if (report.schemaVersion !== `cairn-lme-mixed-${phase}-v1`
+  if (report.schemaVersion !== state.family[phase]
     || typeof report.halted !== 'boolean' || report.halted !== (report.haltReason !== null)
     || data.reportDigest !== hash(REPORT_DOMAIN, report)
     || view.arms.some(arm => arm.state === 'entered')
@@ -280,7 +285,7 @@ function apply(state, type, data) {
     if (!same(report.manifest, state.identity.manifest) || !same(report.roster, state.identity.roster)
       || report.manifestDigest !== state.identity.manifestDigest
       || report.rosterDigest !== state.identity.rosterDigest) fail(CODE);
-  } else if (report.generationDigest !== hash(GENERATION_DOMAIN,
+  } else if (report.generationDigest !== hash(state.family.generationDomain,
     state.phases.generation.completion.report) || report.summary?.fixedN !== state.identity.fixedN) fail(CODE);
   dense(report.cases, state.identity.fixedN, state.identity.fixedN, CODE);
   for (const arm of view.arms) {
@@ -336,6 +341,12 @@ export function createMixedResultJournal(options) {
   const directory = descriptors.directory.value, prepared = descriptors.prepared.value;
   if (!prepared || typeof prepared !== 'object' || !Object.isFrozen(prepared)) fail(CODE);
   const identity = identityOf(prepared);
+  const family = validateManifest(identity.manifest);
+  const evidence = Object.hasOwn(identity.manifest.cairn, 'comparisonProfile');
+  // Writer-only: historical identity records deliberately have no preparation schema.
+  const schema = Object.getOwnPropertyDescriptor(prepared, 'schemaVersion');
+  if (!schema || !schema.enumerable || !Object.hasOwn(schema, 'value')
+    || schema.value !== (evidence ? family.indexedPreparation : family.preparation)) fail(CODE);
   try {
     checkedPath(directory);
     fs.mkdirSync(directory, { mode: 0o700 }); // Exclusive fresh directory; never adopt one.
@@ -357,7 +368,7 @@ export function startMixedJournalPhase(handle, phase, input) {
     state.poisoned = true; fail(CODE);
   }
   publish(state, 'phase_start', phase === 'generation' ? { phase }
-    : { phase, generationDigest: hash(GENERATION_DOMAIN, input) });
+    : { phase, generationDigest: hash(state.family.generationDomain, input) });
 }
 export function enterMixedJournalArm(handle, phase, ordinal) {
   const state = STATES.get(handle);

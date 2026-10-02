@@ -15,7 +15,7 @@ import { inspectMem0NativeArtifact } from '../../experiment-budget/mem0-native-a
 import { mem0NativeConfiguration } from '../../experiment-budget/mem0-native-gateway.mjs';
 import { runMixedGeneration } from '../mixed-generation.mjs';
 import { scoreMixedGeneration } from '../mixed-scoring.mjs';
-import { prepareMixedSourceCase } from '../mixed-source.mjs';
+import { prepareMixedSourceCase, prepareSuppliedHistoryCase } from '../mixed-source.mjs';
 import { prepareLongMemEval } from '../prepare.mjs';
 import { loadReferenceRenderings, resolveReferenceRendering } from '../reference-rendering.mjs';
 import { reportSnapshot } from '../mixed-validation.mjs';
@@ -32,6 +32,39 @@ test('JO2/JO3 actual native generation interruption retains both observations',
   t => interruption(t, 'generation', true, true));
 test('JO2/JO3 actual native scoring interruption preserves the observed generation prefix',
   t => interruption(t, 'scoring', true, true));
+
+for (const comparisonProfile of [undefined, 'indexed-evidence-v1']) {
+  for (const order of [['cairn', 'mem0'], ['mem0', 'cairn']]) {
+    for (const phase of ['generation', 'scoring']) {
+      test(`SJ5 actual supplied ${phase} interruption ${comparisonProfile ?? 'qualified'} ${order.join('/')}`,
+        t => interruption(t, phase, true, phase === 'scoring' || order[0] === 'cairn',
+          { sourceHistoryPolicy: 'supplied-history-v1', comparisonProfile, order }));
+    }
+    test(`SJ5 actual supplied static native refusal ${comparisonProfile ?? 'qualified'} ${order.join('/')}`, async t => {
+      const workspace = createTestWorkspace(t, { prefix: 'sj-native-refusal-' });
+      const descriptors = syntheticNativeDescriptors(workspace.path, true), row = sourceRow();
+      row.history.sessions[0].turns = Array.from({ length: 5 }, (_, index) => ({
+        turn_id: `lme-turn-${String(index + 1).repeat(64)}`, role: 'user', content: '漢'.repeat(3000) }));
+      const fake = fakeMixedHttp();
+      const fixture = syntheticMixedFixture(null, { ...descriptors, workspace, sourceCases: [row],
+        armOrders: [order], comparisonProfile, sourceHistoryPolicy: 'supplied-history-v1',
+        fetchImpl: fake.fetchImpl });
+      assert.equal(fixture.prepared.preflight[0].reason, 'native_static_input_exceeded');
+      const directory = join(workspace.path, 'journal');
+      const resultJournal = createMixedResultJournal({ directory, prepared: fixture.prepared });
+      const generation = await runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+        apiKey: 'synthetic-only', cairnStoreRoot: fixture.root, resultJournal });
+      const scoring = await scoreMixedGeneration({ generationReport: generation, evaluatorRows: [evaluatorRow()],
+        referenceRenderings: undefined, guard: fixture.guard, apiKey: 'synthetic-only', resultJournal });
+      const view = inspectMixedResultJournal({ directory });
+      assert.equal(JSON.stringify(view.phases.generation.completion.report), JSON.stringify(generation));
+      assert.equal(JSON.stringify(view.phases.scoring.completion.report), JSON.stringify(scoring));
+      assert.equal(fixture.guard.caseOutcomes().scopes.length, 4);
+      assert.equal(fixture.guard.attempts().length, 0); assert.equal(fake.calls.length, 0);
+      await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
+    });
+  }
+}
 
 for (const order of [['cairn', 'mem0'], ['mem0', 'cairn']]) for (const observations of [false, true]) {
   test(`RD2/RD5/RD8 actual native journal completes both phases in ${order.join('/')} order${observations ? ' with JO2 observations' : ''}`, async t => {
@@ -538,6 +571,112 @@ test('W302-W304 actual mixed core/adapter/native witness on/off preserves wire, 
     t.diagnostic(`witness native differential: ${mode}, two owned stores; exact generated metadata fields normalized, source/query/answer bytes preserved`);
   }
 });
+for (const comparisonProfile of [undefined, 'indexed-evidence-v1']) {
+  for (const armOrder of [['cairn', 'mem0'], ['mem0', 'cairn']]) {
+    for (const control of ['empty', 'future-source', 'invalid-extraction']) {
+      test(`SCI6 installed supplied history ${comparisonProfile ?? 'qualified'} ${armOrder.join('-')} ${control}`,
+        async t => {
+          const artifact = inspectMem0NativeArtifact({
+            venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,
+            pythonRoot: process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT });
+          const configuration = mem0NativeConfiguration({ topK: 6, threshold: 0,
+            childTimeoutMs: 3_600_000, httpTimeoutMs: 10_000 });
+          const row = sourceRow();
+          const dates = ['2024/01/03 (Wed) 00:00', '2024/01/02 (Tue) 10:00',
+            '2024/01/01 (Mon) 09:00', '2024/01/02 (Tue) 10:01', '2024/01/02 (Tue) 10:00'];
+          row.history.sessions = dates.map((date, index) => ({ session_index: index,
+            session_id: index === 0 ? `lme-session-${'b'.repeat(64)}`
+              : `lme-session-${String(index + 1).repeat(64)}`, date,
+            turns: [{ turn_id: index === 0 ? `lme-turn-${'c'.repeat(64)}`
+              : `lme-turn-${String(index + 1).repeat(64)}`,
+            role: index % 2 ? 'assistant' : 'user', content: `SCI_SENTINEL_${index}` }] }));
+          if (control === 'future-source') {
+            row.history.sessions = [row.history.sessions[0]];
+            row.history.sessions[0].turns[0].content = 'a'.repeat(850) + 'SCI_SENTINEL_0' + 'z'.repeat(900);
+          }
+          const plan = prepareSuppliedHistoryCase(row, comparisonProfile);
+          const fake = fakeMixedHttp((url, body) => {
+            if (!url.endsWith('/responses') || body.text?.format.name !== 'cairn_extract') return;
+            if (control === 'empty') return indexedResponse(body, { items: [] });
+            const input = JSON.parse(body.input[0].content[0].text);
+            const selected = (input.windows ?? input.messages).findIndex(window =>
+              window.content.includes('SCI_SENTINEL_0'));
+            assert.ok(selected >= 0);
+            return indexedResponse(body, { items: [{ content: 'GENERATED_SUMMARY_POISON', kind: 'context',
+              confidence: 0.9, sourceIndices: [control === 'invalid-extraction' ? 999 : selected] }] });
+          }, { cairnMemory: true });
+          const fixture = syntheticMixedFixture(t, { artifact, configuration, sourceCases: [row],
+            armOrders: [armOrder], comparisonProfile, sourceHistoryPolicy: 'supplied-history-v1',
+            fetchImpl: fake.fetchImpl });
+          const directory = join(fixture.root, 'supplied-journal');
+          const resultJournal = createMixedResultJournal({ directory, prepared: fixture.prepared });
+          const generation = await runMixedGeneration({ prepared: fixture.prepared, guard: fixture.guard,
+            apiKey: 'synthetic-only', cairnStoreRoot: fixture.root, resultJournal,
+            phaseTiming: 'bounded-tail-v1', recallWitness: 'bounded-v1' });
+          assert.equal(generation.schemaVersion, 'cairn-lme-supplied-history-mixed-generation-v1');
+          assert.equal(generation.halted, false, JSON.stringify(generation.cases));
+          const cairn = generation.cases[0].arms[0], mem0 = generation.cases[0].arms[1];
+          assert.equal(mem0.status, 'completed', JSON.stringify(mem0));
+          assert.equal(cairn.status, control === 'invalid-extraction' ? 'failed' : 'completed', JSON.stringify(cairn));
+          const extractInputs = fake.calls.filter(call => call.route === '/v1/responses'
+            && call.body.text?.format.name === 'cairn_extract')
+            .map(call => JSON.parse(call.body.input[0].content[0].text));
+          assert.equal(extractInputs.length, control === 'invalid-extraction' ? 1 : plan.counts.batches);
+          for (const [index, input] of extractInputs.entries()) {
+            assert.deepEqual((input.windows ?? input.messages).map(({ role, content }) => ({ role, content })),
+              plan.cairnPlan.batches[index].indexedWindows.map(({ role, content }) => ({ role, content })));
+            assert.equal(JSON.stringify(input).includes(row.question.text), false);
+          }
+          const addInputs = fake.calls.filter(call => call.body.response_format?.type === 'json_object'
+            && JSON.stringify(call.body.messages).includes('SCI_SENTINEL_'));
+          assert.equal(addInputs.length, plan.mem0Input.batches.length);
+          for (const [index, call] of addInputs.entries()) {
+            const serialized = plan.mem0Input.batches[index].map(message =>
+              `${message.role}: ${message.content}\n`).join('');
+            assert.ok(call.body.messages.some(message => message.content.includes(serialized.trimEnd())));
+            assert.equal(JSON.stringify(call.body.messages).includes(row.question.text), false);
+          }
+          if (control === 'empty') {
+            assert.equal(cairn.diagnostics.captureBatches, 5);
+            assert.equal(cairn.diagnostics.admittedMemories, 0);
+            assert.equal(cairn.diagnostics.receiptCount, 0);
+            const answers = fake.calls.filter(call => call.body.messages?.[0]?.content === PUBLIC_ANSWER_INSTRUCTION);
+            const cairnAnswer = answers[armOrder.indexOf('cairn')];
+            assert.deepEqual(JSON.parse(cairnAnswer.body.messages[1].content).evidence, []);
+          } else if (control === 'future-source') {
+            assert.equal(cairn.diagnostics.admittedMemories, 1);
+            assert.equal(cairn.diagnostics.receiptCount, 1);
+            const coordinate = cairn.diagnostics.provenance[0].coordinates[0];
+            assert.equal(coordinate.originalSessionIndex, 0);
+            assert.equal(coordinate.originalTurnIndex, 0);
+            assert.equal(coordinate.classification, 'original-source');
+            const answer = fake.calls.filter(call => call.body.messages?.[0]?.content === PUBLIC_ANSWER_INSTRUCTION)
+              [armOrder.indexOf('cairn')];
+            const evidence = JSON.parse(answer.body.messages[1].content).evidence;
+            assert.deepEqual(evidence, [{ text: row.history.sessions[0].turns[0].content.slice(
+              coordinate.originalStartUtf16, coordinate.originalEndUtf16) }]);
+            assert.ok(evidence[0].text.includes('SCI_SENTINEL_0'));
+            assert.equal(evidence[0].text.includes('GENERATED_SUMMARY_POISON'), false);
+          }
+          const scored = await scoreMixedGeneration({ generationReport: generation, evaluatorRows: [evaluatorRow()],
+            referenceRenderings: undefined, guard: fixture.guard, apiKey: 'synthetic-only', resultJournal });
+          assert.equal(scored.schemaVersion, 'cairn-lme-supplied-history-mixed-scoring-v1');
+          assert.equal(scored.summary.fixedN, 1);
+          assert.equal(scored.summary.perArm.cairn.unresolved, control === 'invalid-extraction' ? 1 : 0);
+          assert.equal(scored.summary.commonResolvedN, control === 'invalid-extraction' ? 0 : 1);
+          assert.equal(scored.summary.outcomeTable.unresolved.correct, control === 'invalid-extraction' ? 1 : 0);
+          const observed = inspectMixedResultJournal({ directory });
+          assert.equal(JSON.stringify(observed.phases.generation.completion.report), JSON.stringify(generation));
+          assert.equal(JSON.stringify(observed.phases.scoring.completion.report), JSON.stringify(scored));
+          assert.deepEqual(observed.phases.generation.arms.map(arm => arm.name), armOrder);
+          assert.equal(JSON.stringify(observed.phases.generation.arms.find(arm => arm.name === 'cairn')
+            .result.diagnostics), JSON.stringify(cairn.diagnostics));
+          assert.equal(Object.hasOwn(cairn.diagnostics, 'recallWitness'), true);
+          assert.equal(Object.hasOwn(cairn.diagnostics, 'adapterPhaseTiming'), true);
+        });
+    }
+  }
+}
 
 test('C1-C7 actual qualified failure and explicit indexed-evidence success share source/native/common scoring', async t => {
   const artifact = inspectMem0NativeArtifact({ venvRoot: process.env.CAIRN_MEM0_NATIVE_VENV_ROOT,

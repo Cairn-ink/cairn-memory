@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { inspectMem0NativeArtifact } from '../../experiment-budget/mem0-native-artifact.mjs';
 import { mem0NativeConfiguration } from '../../experiment-budget/mem0-native-gateway.mjs';
-import { MIXED_GENERATION_VERSION } from '../mixed-generation.mjs';
+import { manifestSourceFamily } from '../mixed-source-policy.mjs';
 import { packMixedAnswer } from '../mixed-answer.mjs';
 import { completeMixedJournalPhase, enterMixedJournalArm, recordMixedJournalArm,
   startMixedJournalPhase } from '../mixed-result-journal.mjs';
@@ -64,7 +64,7 @@ export async function syntheticScoringGeneration(fixture, guard, resultJournal) 
     arm.scope = { ordinal: snapshot.ordinal, status: snapshot.status, reason: snapshot.reason };
     if (resultJournal) recordMixedJournalArm(resultJournal, 'generation', ordinal, entry, arm);
   }
-  const report = freeze(reportSnapshot({ schemaVersion: MIXED_GENERATION_VERSION,
+  const report = freeze(reportSnapshot({ schemaVersion: manifestSourceFamily(prepared.manifest).generation,
     manifest: prepared.manifest, roster: prepared.roster,
     manifestDigest: hash('cairn.lme.mixed.manifest.v1', prepared.manifest),
     rosterDigest: hash('cairn.lme.mixed-source-pair.roster.v1', prepared.roster),
@@ -73,11 +73,14 @@ export async function syntheticScoringGeneration(fixture, guard, resultJournal) 
   return report;
 }
 
-export async function interruption(t, phase, actualNative = false, observations = false) {
+export async function interruption(t, phase, actualNative = false, observations = false, sourceOptions = {}) {
+  if (phase === 'scoring' && !actualNative && observations) {
+    throw new Error('scoring_interruption_observations_require_actual_native');
+  }
   const workspace = createTestWorkspace(null, { prefix: 'cairn-journal-interrupt-' });
   const child = spawn(process.execPath, [fileURLToPath(new URL('./result-journal-child.mjs',
     import.meta.url)), workspace.path, phase, actualNative ? 'native' : 'synthetic',
-    observations ? 'enabled' : 'omitted'],
+    observations ? 'enabled' : 'omitted', JSON.stringify(sourceOptions)],
   { detached: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
   const groups = new Map(child.pid ? [[child.pid, processIdentity(child.pid)]] : []);
   child.on('message', message => {
