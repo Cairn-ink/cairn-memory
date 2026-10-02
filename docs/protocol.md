@@ -1,4 +1,4 @@
-# Compatibility protocol v0.2.0
+# Compatibility protocol v0.2.1
 
 ### Private mixed-source-pair metadata boundary
 
@@ -589,7 +589,12 @@ no old evaluation is retried. Explicit recovery attempts have no durable
 history or automatic replay. See
 [the local MCP tool](standalone-mcp.md#explicit-classification-of-unfiled-memories).
 
-The protocol is alpha. Additive optional response fields may appear in `0.1.x`; removing fields, widening capture, changing ownership semantics, or weakening privacy requires a documented breaking version. Plugin and marketplace versions must match for a release.
+The protocol is alpha. Backward-compatible optional additions may appear in patch
+versions; strict older request validators require capability detection or an
+exact schema-rejection fallback before clients send a new optional field.
+Removing fields, widening capture, changing ownership semantics, or weakening
+privacy requires a documented breaking version. Plugin and marketplace versions
+must match for a release.
 
 ### Opt-in local source evidence context
 
@@ -841,6 +846,36 @@ read by the service on every request, not supplied by a model or client:
 | 正在做 | nextSteps | on |
 | 習慣和背景 | procedural and background | on |
 | 承諾 | commitments | off |
+
+Protocol 0.2.1 adds optional `session_id` (1–200 Unicode code points) to this
+request; `version:1` and the response contract remain unchanged. It is the host's
+conversation/session id, taken from a trusted client hook, never invented by a
+model or taken from conversation text. Claude sends it unchanged; Codex retains
+capture's existing SHA-256 wire representation of
+`["wire-session-v1","codex",hostSessionId]` so same-conversation reads compare
+equal to captures. The server stores only an
+owner-scoped SHA-256 hash for conversation comparison; this is linkage metadata,
+not authentication or anonymity. Omission retains the 0.2.0 behavior.
+
+The shared client and bundled Claude client locally validate the request and
+retry once without `session_id` only on HTTP 400 with
+`error:"Invalid session-start payload."` and exactly one Zod issue:
+`code:"unrecognized_keys"`, `path:[]`, `keys:["session_id"]`. Issue message text
+is not inspected or logged. The fallback preserves all other fields, uses the
+original two-second deadline/cancellation, and rechecks the local pause barrier.
+No other 400, auth error, 429, outage, malformed reply or network failure triggers
+a downgrade. This avoids a separate probe and stale support cache while allowing
+pre-OB-1 strict servers to serve the unchanged request. Servers that reject this
+field must provide that precise pre-execution schema rejection for fallback.
+
+Claude's existing async SessionStart hook now makes a silent personal-scope read
+with the host id when valid, or omits the field if unavailable/malformed. Codex's
+launcher seam accepts an optional installation-owned `sessionStart` port and
+uses its validated stdin `session_id` with that same capture wire conversion,
+including when `transcript_path:null`.
+Codex remains uninstalled and disabled by default. These hooks discard the
+response; context injection remains separately qualified and requires the
+trusted local token counter. Neither hook logs the raw id or response body.
 
 Success requires `version`, `framing`, `namespace` (ownerId/scope/projectId),
 `indexRevision`, and `groups`, in semantic order `nextSteps`, `procedural`,
