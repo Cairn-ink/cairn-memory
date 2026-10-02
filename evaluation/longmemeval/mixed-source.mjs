@@ -341,7 +341,9 @@ function prepareSourceCase(options, comparisonProfile, policy) {
   const originalHistoryDigest = digest(policy.hashDomains.history, history);
   const caseDigest = digest(policy.hashDomains.case, { policyDigest: policy.digest,
     history, question, namespace, renderedHistory, mem0Input, originMap });
-  return freeze({ version: policy.version, policy, originalQuestion: question,
+  const originalQuestion = includeAllSupplied
+    ? { question_id: question.question_id, text: question.text, date: question.date } : question;
+  return freeze({ version: policy.version, policy, originalQuestion,
     canonicalQuestionDate: cutoff.label, renderedHistory, cairnPlan, mem0Input,
     counts: { originalSessions: history.sessions.length, eligibleSessions: renderedSessions.length,
       excludedFutureSessions, originalTurns: originalTurnCount,

@@ -173,9 +173,10 @@ as intentionally interrupted provisional evidence, not passing gates or
 unexplained regression failures. No shared process or caller temporary
 directory was killed or swept.
 
-## Final required gate results
+## Initial candidate required gate results
 
-All commands below passed on **both exact runtimes**, Node 22.16.0 and
+For candidate `6713fd18b3e74355dc7406e9d67bc63d61d2ed70`, all commands below
+passed on **both exact runtimes**, Node 22.16.0 and
 24.15.0, with `NODE_DISABLE_COMPILE_CACHE=1` set on each parent npm invocation.
 Each runtime used its corresponding `/home/chichieh/.nvm/versions/node/vVERSION/bin`
 at the front of PATH and a newly owned `TMPDIR`/`TMP`/`TEMP` under the log root.
@@ -199,10 +200,75 @@ contract; public-demo scratch was removed, and plugin validation added nothing.
 Those outputs remain retained under the new owned evidence roots; no caller
 temporary directory was swept.
 
-Final scope inspection and `git diff --check` passed. Only the renderer, focused
+Initial candidate scope inspection and `git diff --check` passed. Only the renderer, focused
 test file, this plan, comparison docs, limitations and changelog are changed.
 Existing caller tracing confirms no new API use in a runner, host, installation
 caller, scorer, adapter, ledger or core. All implementation/test content covered
-by the final gates is unchanged at freeze; only this evidence record was
+by these gates was unchanged at that freeze; only this evidence record was
 completed afterward. No JavaScript typecheck exists. No provider, paid model,
 actual corpus, operational ledger or semantic score was used.
+
+## Independent Spec review correction: whole-output key order
+
+The Spec reviewer found P2 against candidate `6713fd18`: although case digests
+were key-order stable, the returned `originalQuestion` retained the caller's
+key insertion order. Reordering otherwise identical valid inputs therefore
+changed `JSON.stringify(output)`, contrary to SH3's whole-output stability.
+The correction constructs only the supplied-history result's `originalQuestion`
+in accepted field order `question_id`, `text`, `date`. It preserves the original
+values and exact schema; legacy v2 retains the original snapshot unchanged.
+No policy, digest input, normalization, validation, caller or input limit changes.
+
+Before the correction, two independent regression tests (default and
+`indexed-evidence-v1`) reversed keys throughout history, question and namespace,
+while retaining all array/source order. Both whole-JSON equality tests failed
+on both exact runtimes. RED command:
+
+```sh
+NODE_DISABLE_COMPILE_CACHE=1 node tools/testing/run.mjs --test-name-pattern='SH3 full output' evaluation/longmemeval/test/supplied-history.test.mjs
+```
+
+Raw RED logs: `node-22.16.0-review-whole-output-RED.log` and
+`node-24.15.0-review-whole-output-RED.log` (2/2 failures per runtime).
+An earlier initial single-test RED probe remains in
+`node-VERSION-review-key-order-RED.log`; the separate profile tests provide
+the complete before-fix evidence. After the correction, the focused command
+documented above passed 27/27 on both runtimes in
+`node-VERSION-review-focused-GREEN.log`. The regression also checks fixed
+question field order, question immutability and separately stable serialized
+rendered history, Cairn plan, Mem0 inputs and origin maps. Legacy full-output
+snapshots for both profiles and old/new digest snapshots remain unchanged.
+
+The correction changes only the renderer, focused test and this evidence plan.
+The primary explicitly permitted reuse of unaffected generic gates, tied to
+the exact prior candidate and dependency/configuration scope. The 580/580
+generic results above are carried forward from `6713fd18`, not reported as
+rerun against the correction. A source trace with
+`rg -n 'mixed-source\.mjs|prepareSuppliedHistoryCase|suppliedHistoryPolicy' core plugins integrations evaluation/architecture -g '*.mjs'`
+found no generic-suite dependency importing the changed renderer/API. The
+generic test roots mention LongMemEval only in a frozen package-script inventory
+fixture. `package.json`, CI, CONTRIBUTING, the test runner and generic suite
+configuration/dependencies are unchanged. The repository's review-fix workflow
+requires affected checks; full LongMemEval, validation, all three synthetic
+demos and marketplace/strict plugin validation were rerun for this correction
+on both exact runtimes with the parent compile cache disabled.
+
+| Correction gate | Node 22.16.0 | Node 24.15.0 | Raw log suffix after `node-VERSION-review-` |
+| --- | --- | --- | --- |
+| Focused renderer/regression command above | 27/27, zero skips | 27/27, zero skips | `focused-GREEN.log` |
+| `npm run validate` | passed | passed | `validate.log` |
+| `npm run test:longmemeval` | 203/203, zero skips | 203/203, zero skips | `test-longmemeval.log` |
+| `npm run demo:longmemeval-ingestion` | passed | passed | `demo-longmemeval-ingestion.log` |
+| `npm run demo:longmemeval-comparison` | passed | passed | `demo-longmemeval-comparison.log` |
+| `npm run demo:longmemeval-public` | passed | passed | `demo-longmemeval-public.log` |
+| `npm run validate --prefix tools/plugin-validation` | marketplace and strict plugin passed | marketplace and strict plugin passed | `plugin-validation.log` |
+
+The correction's `node-VERSION-review-cleanup.log` records empty newly owned
+TMPDIR roots after validation and LongMemEval tests. As before, only the
+existing ingestion/comparison demos retain their two synthetic SQLite output
+directories per runtime; public-demo scratch is removed and plugin validation
+adds nothing. All corrected gate logs begin with exact runtime version and
+command. The RED log's command-header shorthand used `SH3-full-output`; the
+actual executed pattern was the quoted `SH3 full output` command above, as
+shown by both failing named tests. Raw assertion output is retained unchanged.
+`git diff --check` passed before the corrected scoped candidate commit.

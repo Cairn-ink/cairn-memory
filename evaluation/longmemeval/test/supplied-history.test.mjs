@@ -216,6 +216,22 @@ test('SH3 hash domains, all inputs, canonical keys and floating dates are stable
   }
 });
 
+for (const profile of [undefined, 'indexed-evidence-v1']) {
+  test(`SH3 full output has stable key order (${profile ?? 'default'})`, () => {
+    const input = fixture();
+    const reordered = JSON.parse(JSON.stringify(input, (key, value) => value && !Array.isArray(value)
+      && typeof value === 'object' ? Object.fromEntries(Object.entries(value).reverse()) : value));
+    const orderedOutput = prepare(input, profile), reorderedOutput = prepare(reordered, profile);
+    assert.equal(JSON.stringify(reorderedOutput), JSON.stringify(orderedOutput));
+    assert.deepEqual(Object.keys(reorderedOutput.originalQuestion), ['question_id', 'text', 'date']);
+    assert.equal(Object.isFrozen(reorderedOutput.originalQuestion), true);
+    assert.equal(JSON.stringify(reorderedOutput.renderedHistory), JSON.stringify(orderedOutput.renderedHistory));
+    assert.equal(JSON.stringify(reorderedOutput.cairnPlan), JSON.stringify(orderedOutput.cairnPlan));
+    assert.equal(JSON.stringify(reorderedOutput.mem0Input), JSON.stringify(orderedOutput.mem0Input));
+    assert.equal(JSON.stringify(reorderedOutput.originMap), JSON.stringify(orderedOutput.originMap));
+  });
+}
+
 test('SH2/SH4 full-turn normalization, redaction, astral chunks and stable greedy boundaries', () => {
   const prefix = '[session-date: 2023-10-16 00:00; clock: dataset-local] source{';
   const maxBody = 4000 - prefix.length - 2;
