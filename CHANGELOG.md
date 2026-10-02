@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — inert phase observer rejection correction
+
+- The optional OpenAI timing observer handles rejected native Promises even
+  when their own `catch` getter or function throws. Rejection handling bypasses
+  that property without awaiting the observer or changing requests, output,
+  diagnostics or timers. Source and installed-archive fake-HTTP subprocess
+  controls cover healthy and invalid output. This corrects a callback handling
+  defect, not a proven cause of any earlier paid interruption; trusted callbacks
+  can still block or act through their closure. See the
+  [O1–O6 contract](docs/plans/phase-observer-rejection.md).
+
 ## Unreleased — prospective offline evaluation integration
 
 - Private mixed result journaling accepts the existing finite native failure

@@ -1136,6 +1136,18 @@ not reuse of these six.
 
 ## Mixed-runner phase tails are bounded observations
 
+The [O1–O6 observer correction](plans/phase-observer-rejection.md) addresses a
+separate callback handling defect: a rejected native Promise whose own `catch`
+getter or function throws previously produced unhandled rejections despite
+completed adapter requests. Standalone actual-adapter and installed-archive
+subprocess controls use fake HTTP, preserve exact requests/output/error envelopes
+and existing diagnostics, and observe zero unhandled rejections after correction.
+The callback is neither awaited nor sandboxed; it can still block the event loop
+or use authority captured by its closure. No timer, retry, model, prompt,
+accounting or halt behavior changes. This synthetic callback failure does not
+establish the cause of any historical paid interruption and does not authorize
+replay, expansion or installed MCP/Hermes adoption.
+
 The [M1b source-runner diagnostic](plans/mixed-phase-tail-diagnostics.md) is
 opt-in for 1–30 frozen cases. It keeps the last 64 adapter events per entered
 Cairn arm, plus counts of admitted and omitted events. The tail may begin in

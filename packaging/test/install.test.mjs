@@ -16,6 +16,7 @@ import { startExperimentProxy } from '../../evaluation/live/proxy.mjs';
 import { qualificationPoolWire } from '../../adapters/openai/test/qualification-pool-wire.mjs';
 import { getQualificationPilotPins, runQualificationPilot } from '../../evaluation/live/qualification-pilot.mjs';
 import { fileURLToPath } from 'node:url';
+import { assertObserverParity } from '../../adapters/openai/test/phase-observer-probe.mjs';
 
 const requireSDK = createRequire(new URL('../../adapters/mcp/package.json', import.meta.url));
 const { Client } = await import(requireSDK.resolve('@modelcontextprotocol/client'));
@@ -52,6 +53,16 @@ function install(archive, directory = temporary(null, 'cairn-installed-preview-'
 before(() => {
   artifact = buildArtifact();
   installation = install(artifact);
+});
+
+test('O4 installed phase observer handles own-catch rejections with unchanged fake HTTP and error envelopes', t => {
+  const helper = 'adapters/openai/phase-timing.mjs';
+  assert.equal(artifact.sourceHashes[helper], hash(join(installation.packagePath, helper)));
+  assert.equal(hash(join(installation.packagePath, helper)),
+    hash(fileURLToPath(new URL('../../adapters/openai/phase-timing.mjs', import.meta.url))));
+  t.diagnostic(JSON.stringify({ artifactSha256: artifact.sha256,
+    helperSha256: artifact.sourceHashes[helper] }));
+  assertObserverParity(workspace(t), join(installation.packagePath, 'adapters/openai/index.mjs'));
 });
 
 async function connect(t, installed, databasePath, { owner = 'synthetic-installed-owner', project } = {}) {

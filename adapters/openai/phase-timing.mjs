@@ -24,7 +24,8 @@ export function createPhaseTiming(onPhaseTiming, stage, signal) {
     const elapsedMs = Math.min(maximumMs, Math.max(0, duration));
     try {
       const result = onPhaseTiming(Object.freeze({ version: 1, stage, phase, outcome, elapsedMs }));
-      Promise.resolve(result).catch(noOp);
+      // A returned native Promise may override its own catch property.
+      Promise.prototype.then.call(Promise.resolve(result), undefined, noOp);
     } catch { /* Observation must not replace an operation result. */ }
   };
   return Object.freeze({ start(phase, watchAbort = true) {

@@ -16,6 +16,15 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [phase observer rejection correction](docs/plans/phase-observer-rejection.md)
+  bypasses a returned native Promise's throwing own `catch` property. Actual
+  adapter subprocesses and installed archives use fake HTTP to check inert
+  rejection handling, unchanged wires/errors and owned scratch cleanup on both
+  supported runtimes. This correction establishes no cause for an earlier paid
+  timeout, classification failure or interruption. Trusted callback authority,
+  historical evidence, fixed-30 and installed host acceptance gates remain as
+  documented.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It
