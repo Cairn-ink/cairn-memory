@@ -73,11 +73,18 @@ export function extractedItems(output, snapshot, retainedMessages, onInvalid = (
       object(item, ['content', 'kind', 'confidence', 'sourceIndices', ...(snapshot.sessionEpisodes ? ['procedural'] : [])]);
       if (Object.hasOwn(item, 'procedural') && (item.procedural !== true || !['preference','instruction'].includes(item.kind))) fail('invalid_model_output');
       reason = 'invalid_extraction_text';
-      if ((snapshot.captureQualification || snapshot.captureSourcePolicy === 'indexed-evidence-v1') &&
-          (typeof item.content !== 'string' || !item.content.isWellFormed())) {
-        fail('invalid_model_output');
+      if (snapshot.captureQualification || snapshot.captureSourcePolicy === 'indexed-evidence-v1') {
+        if (typeof item.content !== 'string') {
+          reason = 'invalid_extraction_text_type';
+          fail('invalid_model_output');
+        }
+        if (!item.content.isWellFormed()) {
+          reason = 'invalid_extraction_text_unicode';
+          fail('invalid_model_output');
+        }
       }
-      const content = boundedText(item.content, 600);
+      const content = boundedText(item.content, 600, false,
+        category => { reason = `invalid_extraction_text_${category}`; });
       reason = 'invalid_extraction_value';
       if (!kinds.includes(item.kind) || typeof item.confidence !== 'number' ||
           !Number.isFinite(item.confidence) || item.confidence < 0 || item.confidence > 1) {

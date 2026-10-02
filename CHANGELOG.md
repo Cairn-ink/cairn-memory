@@ -1,5 +1,75 @@
 # Changelog
 
+## Unreleased — inert phase observer rejection correction
+
+- The optional OpenAI timing observer handles rejected native Promises even
+  when their own `catch` getter or function throws. Rejection handling bypasses
+  that property without awaiting the observer or changing requests, output,
+  diagnostics or timers. Source and installed-archive fake-HTTP subprocess
+  controls cover healthy and invalid output. This corrects a callback handling
+  defect, not a proven cause of any earlier paid interruption; trusted callbacks
+  can still block or act through their closure. See the
+  [O1–O6 contract](docs/plans/phase-observer-rejection.md).
+
+## Unreleased — prospective offline evaluation integration
+
+- Private mixed result journaling accepts the existing finite native failure
+  observation only for failed Mem0 execution, using shared strict shape checks
+  for writes and offline reads. Inspection stays free of native/adapter imports.
+  Synthetic installed tests preserve global halt and unknown accounting while
+  retaining this category and extraction-text rejection observations. No old
+  result is recovered, scored or authorized for replay.
+
+## Unreleased — specific classification error in evaluation reports
+
+- LongMemEval ingestion and its comparison summaries preserve the core's
+  `moc_title_conflict` code when classification proposes a new topic with an
+  existing title. Previously they reported `classification_failed`. Unknown
+  error codes remain generic. This changes reporting only: the colliding
+  placement still fails, admitted source receipts remain, and no failed batch
+  is retried. See the [M1d diagnosis](docs/plans/classification-application-boundary.md).
+
+## Unreleased — bounded mixed-runner phase diagnostics
+
+- The source Cairn/Mem0 paired runner accepts `phaseTiming: 'bounded-tail-v1'`
+  for 1–30 frozen cases. Each entered Cairn arm retains its last 64 content-free
+  adapter events and exact admitted/omitted counts, including late failures.
+  Omission preserves existing reports and the 250-case limit. This adds no
+  timeout, retry, spending authority or installed-runtime claim. See the
+  [M1b contract](docs/plans/mixed-phase-tail-diagnostics.md).
+
+## Unreleased — optional OpenAI invocation phase timing
+
+- The source adapter accepts a trusted `onPhaseTiming` callback for finite,
+  content-free local preparation, count, generation and output-validation
+  durations. It is off by default; `onDiagnostic` v1, request bodies, core
+  deadlines, limits and outputs are unchanged. This does not explain or fix a
+  historical timeout. See the [M1a contract](docs/plans/capture-write-phase-observability.md).
+
+## Unreleased — ingestion classification metadata
+
+- LongMemEval ingestion accepts and retains supported optional
+  `classificationTruncated` metadata on applied capture results. Malformed
+  metadata remains unknown; genuine classification failures remain partial and
+  stop later batches. See the [contract diagnosis](docs/plans/ingestion-classification-metadata.md).
+
+## Unreleased — private native failure observation
+
+- Future mixed Mem0 execution exceptions can retain a frozen finite native
+  runtime/gateway category in private arm diagnostics, independently of the
+  existing outer halt reason. Unknown exceptions remain unobserved; no raw
+  exception payload, runtime fix, scoring change or historical-cause claim is
+  added. See [limitations](docs/limitations.md).
+
+## Unreleased — bound embedding accounting validation work
+
+- Successful bound-v2 reservation and settlement omit one discarded duplicate
+  full validation, while retaining complete pre-write witness and post-write
+  expected-state checks in the existing transaction. Synthetic operation counts
+  change from three to two; legacy/unbound behavior and accounting remain
+  unchanged. This establishes no measured latency gain or historical timeout
+  repair. See [limitations](docs/limitations.md).
+
 ## 0.2.0 — 2026-10-01
 
 Breaking hosted protocol release (CX-4):
@@ -29,6 +99,10 @@ No hosted/server implementation or hook enablement is included.
 
 ## Unreleased — model calls fit their budgets
 
+- Optional core extraction diagnostics prospectively distinguish fixed text
+  rejection checks without retaining rejected content or changing validation,
+  admission, replay or model policy. Historical `invalid_extraction_text`
+  observations remain subtype-unknown; this does not diagnose an old failure.
 - Local MCP episode access now provides keyless session/time reads, sourced startup
   context and revision-guarded correction, closure, unpinning and conversation
   deletion with its memory/source cascade. Explicit keep uses retained-source

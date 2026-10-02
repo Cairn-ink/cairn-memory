@@ -7,9 +7,40 @@ changes below. Current local storage and deletion boundaries are documented in
 injected model adapter can send source text to its provider. Local storage alone
 is not a promise of offline interpretation.
 
+Optional local model diagnostics retain only the frozen four-field finite
+`{version,stage,layer,reason}` event. Prospective extraction-text subtype codes
+describe existing type, Unicode, bound, normalization/redaction and NUL checks;
+they retain no rejected text, values, lengths, IDs, hashes or errors. Historical
+`invalid_extraction_text` events remain subtype-unknown. Collection is disabled
+by default and host-owned; hosts must bound retention. It is never telemetry or
+authority to retry.
+See [model failure diagnostics](model-failure-diagnostics.md).
+
 The main risk in automatic memory is not bad retrieval. It is silently collecting more than the user intended or presenting an inference as trusted fact. Cairn Memory treats capture as a narrow, inspectable boundary.
 
 ## Data flow
+
+The evaluation-only mixed generation report can retain an optional private
+`diagnostics.nativeFailure` on a Mem0 execution exception. Its exact frozen
+shape is `{version:1,layer,reason}`, with `runtime`/`gateway` and finite explicit
+codes emitted by their existing typed native errors. Projection reads only an
+own data code after rejecting proxies, forged plain objects and unknown error
+classes; it never invokes code accessors or coercion. Unknown/malformed codes
+and projection failures add no field. No exception message, stack, cause, key,
+source text, response body, URL, ID, length or path is captured. This is local
+evaluation metadata, with no public core/plugin/MCP/HTTP or telemetry schema
+change. It is an observation, not causal proof or authority to retry, continue,
+resolve an unknown, or change scoring. Historical reports stay unchanged. See
+the [prospective contract](plans/mixed-native-failure-diagnostics.md).
+
+The opt-in private result journal retains the same finite nativeFailure only
+for a failed Mem0 execution arm, independently of its outer halt. Shared strict
+shape validation applies to writes and offline reads; valid JSON does not
+authenticate an exception's provenance. This adds no exception content or
+execution imports to inspection. Correlation with the journal's existing local
+personal-data-bearing results can reveal execution patterns; existing private
+file access, backups and operator retention limits apply. It is not telemetry,
+causal proof, secure erasure or authority to execute, retry or score.
 
 After explicit installation, automatic capture and content-free telemetry default on. The plugin reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24 messages, and sends them to the configured service.
 
@@ -256,6 +287,31 @@ persist a placement. The original durable IDs remain in core and SQLite. Other
 model methods and the hosted plugin wire are unchanged. `store:false` and
 ephemeral local maps do not guarantee provider-side zero retention; the provider
 still receives the aliased request's personal text and ordinary network metadata.
+
+### Optional OpenAI phase timing observer
+
+The source adapter's opt-in `onPhaseTiming` callback receives only a closed
+stage, phase, outcome and bounded elapsed duration, with no source text, key,
+request, response, error or identity. There is no default persistence, export
+or network transmission. A trusted host can still reveal patterns of user
+activity if it stores or combines timings with other records; it owns any
+bounded retention and access control. The callback itself retains authority
+from its host closure and can block the event loop. Aborted timing does not
+prove provider cancellation or billing outcome, and this observer grants no
+new consent for capture or provider transmission.
+
+The source mixed Cairn/Mem0 runner can explicitly retain these observations
+in `diagnostics.adapterPhaseTiming` with `phaseTiming: 'bounded-tail-v1'`.
+This evaluation-only mode admits at most 30 cases and retains only the last
+64 events per entered Cairn arm (1920 per report), copied through the closed
+adapter vocabulary. Additional fields and getters are rejected; no identifiers,
+source, exceptions, usage, absolute timestamps or request/response data enter
+this observation. It writes no per-event files and holds no hidden full history.
+Its snapshot closes after owned work/transport settlement; later callbacks are
+ignored. Counts include admitted events that were evicted and stop exactly at
+`Number.MAX_SAFE_INTEGER`, when the collector closes. Report retention remains
+the maintainer's existing responsibility; opt-in does not authorize additional
+conversation capture, provider calls or broader source retention.
 
 ## Disable automatic behavior
 

@@ -201,6 +201,16 @@ behavior is unchanged. The bound
 handle still cannot police direct network egress or hostile privileged writes
 after the final path check.
 
+For the separately bound embedding-v2 handle, successful reservation and
+settlement each retain exactly two complete validations: pre-write witness and
+post-write expected state, inside the existing transaction. One discarded
+duplicate post-write read is omitted only in that mode; legacy bound-v1 and
+unbound handles and `getState` keep their existing validation work. Synthetic
+real SQLite checks count the reduction from three to two and retain rollback,
+foreign-edit fencing and conservative reservation accounting. No wall-clock
+improvement or historical timeout cause is established. See the
+[operation-count contract](plans/bound-embedding-transaction-reads.md).
+
 `ExperimentBudgetError` has `name: 'ExperimentBudgetError'`, a fixed `code`, and
 the same code as `message`. The fixed code set is:
 
@@ -221,6 +231,17 @@ is enough remaining allowance for the next attempt. Re-read/inspect on an
 uncertain storage outcome instead of assuming it is safe to replay.
 
 ## Remaining gate
+
+`transitionEmbeddingExperimentBudgetCaps` is an existing-only embedding-schema
+operation for exactly 200,000,000→300,000,000 micro-USD and an increasing finite
+request cap. It takes exact old/new configurations, a settled checkpoint, its
+old history hash and a synchronous authorization callback. Both caps change in
+one transaction; every historical rowid, outcome, cost and reservation remains.
+`projectEmbeddingBudgetCapsPrefix` requires a ledger-issued snapshot and returns
+both cap-bound prefix hashes plus an authentic old snapshot containing only the
+checkpoint prefix. This historical projection is a lineage witness, not a grant
+to dispatch or a replacement for inspecting the current ledger. Cloned snapshots
+are refused. The old same-money request-cap helper is unchanged.
 
 A separate [experiment HTTP guard](experiment-request-guard.md) now connects
 this ledger to explicitly injected, bounded host/Cairn transports and verifies

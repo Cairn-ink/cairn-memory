@@ -37,7 +37,7 @@ Each event is a frozen object with exactly four fields:
 | --- | --- |
 | `adapter` | `response_envelope`, `response_usage`, `response_message`, `response_content`, `output_json`, `output_shape`, `output_bounds`, `request_invalid`, `request_bounds`, `token_count_response`, `transport_failure`, `response_body_bounds`, `response_json`, `model_cancelled` |
 | `core_call` | `model_not_configured`, `context_budget_exceeded`, `token_count_unavailable`, `model_timeout`, `model_cancelled`, `provider_failure`, `adapter_output_invalid`, `output_serialization`, `output_bounds` |
-| `core_validation` | `invalid_extraction_output_shape`, `invalid_extraction_item_shape`, `invalid_extraction_text`, `invalid_extraction_value`, `invalid_extraction_source_shape`, `invalid_extraction_source_duplicate`, `invalid_extraction_source_range`, legacy `invalid_extraction`, `invalid_classification`, `invalid_qualification`, `invalid_reconciliation`, `invalid_rationale`, `malformed_refs`, `duplicate_ref`, `non_visible_ref`, `namespace_selection_limit` |
+| `core_validation` | `invalid_extraction_output_shape`, `invalid_extraction_item_shape`, the extraction-text reasons below, `invalid_extraction_value`, `invalid_extraction_source_shape`, `invalid_extraction_source_duplicate`, `invalid_extraction_source_range`, legacy `invalid_extraction`, `invalid_classification`, `invalid_qualification`, `invalid_reconciliation`, `invalid_rationale`, `malformed_refs`, `duplicate_ref`, `non_visible_ref`, `namespace_selection_limit` |
 
 An adapter failure can also produce a core-call event. These are failing
 boundaries, not unique-operation counters. Success is silent. Invalid input
@@ -49,6 +49,27 @@ rejected the returned object. They contain no returned values, indices or text.
 `invalid_extraction_source_range`, for example, does not retain which index was
 outside the current request's source window. Older retained artifacts may use
 the legacy catchall `invalid_extraction`; its exact branch cannot be recovered.
+
+Prospective extraction-text rejection distinguishes the existing checks:
+
+| Reason | Existing rejecting boundary |
+| --- | --- |
+| `invalid_extraction_text_type` | Content is not a string |
+| `invalid_extraction_text_unicode` | Malformed Unicode, only in modes that already reject it |
+| `invalid_extraction_text_raw_bounds` | Raw string exceeds the existing 20,000-unit bound |
+| `invalid_extraction_text_empty` | Existing NFKC/redaction/whitespace normalization produces empty text |
+| `invalid_extraction_text_redacted` | Normalized text is exactly `[REDACTED]` |
+| `invalid_extraction_text_nul` | Normalized text contains NUL |
+| `invalid_extraction_text_normalized_bounds` | Normalized extraction text exceeds the existing 600-unit bound |
+
+These are fixed codes, not captured text, values or lengths. Check precedence,
+normalization, redaction and surrogate-safe receipt truncation are unchanged.
+Plain extraction still does not add the strict Unicode rejection used by
+qualification/indexed-evidence modes. The legacy `invalid_extraction_text`
+remains allowlisted, but its subtype is unknown in historical artifacts. Neither
+token usage nor a later synthetic example can recover the rejected old object.
+The refinement adds no repair, drop, retry, truncation or admission-policy
+change and does not establish improved model quality or reliability.
 
 ## Privacy and authority
 
