@@ -81,6 +81,13 @@ export function parseSessionStartRequest(value) {
   return { max_tokens: 1500, max_chars: 6000, ...value };
 }
 
+// Take only the host hook's field. Never derive an identity from prompt text,
+// transcript contents, another key or a model-supplied fallback.
+export function optionalHostSessionId(value) {
+  return typeof value === "string" && value.length > 0 && value.length <= 200 &&
+    value.isWellFormed() && !/[\x00-\x1f\x7f]/u.test(value) ? value : undefined;
+}
+
 export function parsePauseState(value) {
   if (!conforms("pause-state", value)) throw new Error("invalid_reply");
   return value;

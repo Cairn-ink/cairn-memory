@@ -10,6 +10,16 @@ import { conforms, utcInstant, classifyHostedReply, parseSessionStartRequest }
 
 export { classifyHostedReply } from "./hosted-contract.mjs";
 const routes = new Set(["/api/memory/recall", "/api/memory/capture"]);
+const sessionStartPath = "/api/memory/session-start";
+// Pre-OB-1 Cairn returns Zod issues. Only this root unknown-key rejection
+// proves the optional field was refused before any session-start work ran.
+function rejectsSessionId(status, value) {
+  const issue = value?.issues?.[0];
+  return status === 400 && value?.error === "Invalid session-start payload." &&
+    Array.isArray(value.issues) && value.issues.length === 1 &&
+    issue?.code === "unrecognized_keys" && Array.isArray(issue.path) && issue.path.length === 0 &&
+    Array.isArray(issue.keys) && issue.keys.length === 1 && issue.keys[0] === "session_id";
+}
 const acknowledged = new Set(["complete", "duplicate", "empty"]);
 const operations = ["recall", "capture"];
 const modes = new Set(["open", "quota_reached", "ready", "in_flight", "cooldown"]);
@@ -258,11 +268,12 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
 
   async function request(path, body, timeoutMs, authenticated = true, limits, signal, dispatch) {
     if (authenticated && !token) throw new Error("missing_token");
+    signal?.throwIfAborted();
     const headers = { "content-type": "application/json" };
     if (authenticated) headers.authorization = `Bearer ${token}`;
     const start = () => fetch(`${baseUrl}${path}`, {
       method: "POST", headers, body: JSON.stringify(body),
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) :
+      signal: path === sessionStartPath ? signal : signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) :
         AbortSignal.timeout(timeoutMs),
       ...(client === "codex" ? { redirect: "error" } : {}),
     });
@@ -274,11 +285,25 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
     }
     let value;
     try { value = await response.json(); } catch { value = null; }
+    if (path === sessionStartPath && Object.hasOwn(body, "session_id") &&
+        rejectsSessionId(response.status, value)) {
+      const { session_id, ...legacy } = body;
+      // Removing the field makes a second downgrade impossible. Reuse the
+      // original cancellation/deadline and recheck any caller's pause barrier.
+      return request(path, legacy, timeoutMs, authenticated, limits, signal, dispatch);
+    }
     return classifyHostedReply(path, response.status, value, body, limits,
       response.headers.get("retry-after"));
   }
   async function reply(path, body, timeoutMs, limits, signal, dispatch) {
     if (!token || signal?.aborted) return { status: "unavailable" };
+    if (path === sessionStartPath) {
+      // Establish that session_id is the only possible difference from a
+      // valid 0.2.0 request, preserving the caller's original wire defaults.
+      parseSessionStartRequest(body);
+      signal = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) :
+        AbortSignal.timeout(timeoutMs);
+    }
     const attempt = async () => {
       try { return await request(path, body, timeoutMs, true, limits, signal, dispatch); }
       catch (error) {
@@ -331,9 +356,9 @@ export function createHostedTransport(options) {
       }
       return post.reply("/api/memory/recall", body, 2_000, undefined, signal);
     },
-    sessionStart(request, limits) {
+    sessionStart(request, limits, signal, dispatch) {
       const body = parseSessionStartRequest(request);
-      return post.reply("/api/memory/session-start", body, 2_000, limits);
+      return post.reply("/api/memory/session-start", body, 2_000, limits, signal, dispatch);
     },
   };
 }
