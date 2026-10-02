@@ -1,10 +1,36 @@
 # Cairn Memory 首輪宣傳執行稿
 
-這份執行稿準備英文 X、中文 Threads 兩個入口，直接連到 GitHub，讓開發者試用可查看來源、修正與遺忘的本機 memory preview。文案依 [主張證據表](../promotion-claims.md) 限定範圍；發布順序與成效目標沿用 [宣傳計畫](../plans/github-promotion.md)。
+這份執行稿包含英文 X、中文 Threads 的讀者招募與產品宣傳文案。讀者招募以原貼文直接回覆為入口；產品宣傳則連到 GitHub，讓開發者試用可查看來源、修正與遺忘的本機 memory preview。產品主張依 [證據表](../promotion-claims.md) 限定範圍；發布順序與成效目標沿用 [宣傳計畫](../plans/github-promotion.md)。
 
-目前是待發布文案。P1 的 5 位陌生讀者與 P2 的陌生真人安裝仍待實際執行。文案完成、agent 審閱或自動安裝成功都不能代替這些結果。完成 P0 至 P2 後，再由維護者使用自己的帳號發布，記錄貼文 URL、UTC 時間與當時的 stars 起點。
+先招募並完成真人檢查。P1 的 5 位陌生讀者與 P2 的陌生真人安裝仍待實際執行；文案完成、agent 審閱或自動安裝成功都不能代替這些結果。下方產品宣傳稿安排在 P0 至 P2 通過後發布，記錄貼文 URL、UTC 時間與當時的 stars 起點。
 
-## 英文 X 首則
+## 讀者招募貼文
+
+報名方式是直接回覆 X 或 Threads 的招募貼文。維護者在同一渠道確認參與意願與資格，再提供測試安排。[GitHub issue 326](https://github.com/Cairn-ink/cairn-memory/issues/326) 僅作可選的公開進度追蹤，參加者不需要前往 issue 留言。測試答案仍依下方方式匿名記錄。
+
+英文 X 可直接使用，247 個 ASCII 字元，低於標準 280 字元上限：
+
+```text
+Looking for 5 AI coding agent users who haven't worked on Cairn or read its README.
+
+Read it for 30 seconds, answer 3 questions (~3 minutes total). No install needed; answers recorded anonymously.
+
+Interested? Reply here and I'll send the details.
+```
+
+中文 Threads 可直接使用，157 個字元，低於一般貼文的 500 字元格式：
+
+```text
+想找 5 位平常使用 AI coding agent 的開發者，幫忙看一份開源專案 README。希望你沒參與 Cairn 開發，也還沒讀過這版 README。
+
+看 30 秒，再回答 3 題，大約 3 分鐘。不需要安裝；我們只記錄匿名答案，想知道文件哪裡不清楚。
+
+願意幫忙的話，直接回覆這則貼文，我再提供方式。
+```
+
+正式閱讀前只確認資格與安排，不先解釋產品用途、來源收據或安裝入口，以保留理解測試的有效性。招募貼文的回覆數不算測試完成數；仍需下方 5 位真人的完整紀錄。
+
+## 英文 X 產品宣傳稿
 
 以下區塊是完整貼文；搭配本輪驗證通過的 demo，連結直接指向 repo。
 
@@ -26,7 +52,7 @@ https://github.com/Cairn-ink/cairn-memory/blob/main/docs/limitations.md
 
 首則為 257 個 X 計數字元，回覆為 265 個，均採 ASCII 文字且每個 URL 計 23 個字元；含完整 URL 的原始長度分別為 275、313。標準貼文上限為 280，依 [X 發文說明](https://help.x.com/en/using-x/how-to-post) 與 [X 連結計數規則](https://help.x.com/en/using-twitter/how-to-tweet-a-link.html) 核對。修改文案後須重新計數。
 
-## 中文 Threads 首則
+## 中文 Threads 產品宣傳稿
 
 ```text
 換一個 AI session，上一輪的專案決策還在嗎？
@@ -42,15 +68,13 @@ https://github.com/Cairn-ink/cairn-memory
 
 原始文字為 312 個字元，包含換行與完整 URL，低於一般貼文的 500 字元格式；使用普通貼文即可。格式依 [Meta 的 Threads 說明](https://about.fb.com/news/2023/07/introducing-threads-new-app-text-sharing/) 核對。
 
-兩則首發使用相同的 [MP4 demo](demo/cairn-memory-preview.mp4)，[重製方式](demo/README.md) 與 [實際 transcript](demo/transcript.txt) 隨檔保留。保留畫面的免模型 key 標示，語意 recall 的錯誤結果不可剪成成功搜尋。短文無法展開的版本、忘記後資料保留與 client 支援範圍，由 README 的證據與限制連結承接。
+兩則產品宣傳稿使用相同的 [MP4 demo](demo/cairn-memory-preview.mp4)，[重製方式](demo/README.md) 與 [實際 transcript](demo/transcript.txt) 隨檔保留。保留畫面的免模型 key 標示，語意 recall 的錯誤結果不可剪成成功搜尋。短文無法展開的版本、忘記後資料保留與 client 支援範圍，由 README 的證據與限制連結承接。
 
 ## 五位讀者的三十秒檢查
 
 邀請 5 位未參與開發、未讀過這版 README，且平常使用 AI agent 的開發者。先固定要看的 README 版本及呈現方式；用 `sha256sum README.md` 記錄完整檔案雜湊。若使用未發布的預覽，記錄為 `local_preview`；正式 GitHub 頁面記錄為 `github`。五人看同一版本，記錄視窗寬度。
 
-可自行傳送的招募文字：
-
-> 想找平常使用 AI coding agent 的開發者，幫我們看一份開源專案 README。先看 30 秒，再回答 3 題，大約 3 分鐘。不需要安裝或提供專案資料；我們只記匿名答案，想知道文件哪裡難懂。是否願意參加？
+使用上方中性的招募貼文收集參與意願，確認資格後再安排閱讀。
 
 主持人逐字說明：
 
