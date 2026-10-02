@@ -30,6 +30,37 @@ Interested? Reply here and I'll send the details.
 
 正式閱讀前只確認資格與安排，不先解釋產品用途、來源收據或安裝入口，以保留理解測試的有效性。招募貼文的回覆數不算測試完成數；仍需下方 5 位真人的完整紀錄。
 
+### 有人回覆後的接待
+
+先在原渠道致謝並確認資格，取得私訊意願後再安排閱讀；測試題目和答案不要放在招募貼文的公開留言，以免後來的參加者先看到。帳號與聯絡安排留在私有工作區，公開 CSV 只用 R01–R05。
+
+中文第一則回覆：
+
+> 謝謝！你平常用哪個 AI coding agent？之前有參與 Cairn，或讀過它的 README 嗎？如果方便，我們用私訊做這個約 3 分鐘的閱讀測試，可以嗎？
+
+英文第一則回覆：
+
+> Thanks! Which AI coding agent do you usually use? Have you worked on Cairn or read its README before? Would you be comfortable doing the roughly 3-minute reading check in messages?
+
+本批閱讀連結固定為 [5277c86 的 README](https://github.com/Cairn-ink/cairn-memory/blob/5277c86e1bc4f572658e37f376929763d147f4a2/README.md)，SHA-256 為 `d30306327dcc1bb7fa51cb9b446c2c203e2d43f581e606b6fd47720c86207d7c`。不要在同一批中切換到更新後的 branch 或 main；評分標準與題目沿用下方表格。
+
+確認資格並約好時間後，提供閱讀連結，先請參加者準備好頁面，尚未開始閱讀時回覆「準備好了」。接著使用下方主持人說明，主持人實際計時 30 秒，再通知關閉頁面並依序提問；完成三題前不提供評分規則或產品解釋。遠端文字測試記錄為 `presentation=github`，在 `notes` 記錄 `remote_moderated`、裝置與關閉頁面是否由參加者確認。若參加者已自行閱讀、計時無法確認或看了其他答案，保留回饋並標記偏離流程，不將它計為本批受控測試通過。
+
+停止閱讀後的中文訊息：
+
+> 30 秒到了，請關掉 README，依印象回答就好，不知道也可以直接說不知道。第一題：這個專案幫你解決什麼問題？
+
+英文訊息：
+
+> That's 30 seconds. Please close the README and answer from memory. “I don't know” is fine. First question: what problem does this project help you solve?
+
+第一題回答後再問第二題，第二題回答後再問第三題；題目如下方表格，英文版本為：
+
+1. What is a Source Receipt for? What does it show, and what does it not guarantee?
+2. To try the open-source memory layer on your own computer, which installation option would you choose? Does it require a Cairn account?
+
+已讀過 README 的人可以提供一般文件／試用回饋，或參與陌生真人安裝檢查，但不計入五位首次閱讀者。三題完成後致謝，才提供 repo 主連結、demo 與可選的安裝任務。參加者不必安裝、給星或提供姓名／email，才能完成閱讀檢查。若收到超過五位志願者，先完成同一批五人的完整紀錄，其餘另記為後續回饋或新批次。
+
 ## 英文 X 產品宣傳稿
 
 以下區塊是完整貼文；搭配本輪驗證通過的 demo，連結直接指向 repo。
