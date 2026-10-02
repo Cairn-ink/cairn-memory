@@ -64,9 +64,14 @@ replace the star count immediately before the first campaign post.
 After the launch criteria pass, run with `--phase campaign` immediately before
 publishing and once per UTC day through the 14-day observation period. Enter
 the actual URL, account, UTC time, asset and starting stars into
-[publications.csv](publications.csv). The header-only file currently means
-there are no recorded posts. Recruitment can be logged separately from the
-formal D0 campaign start. Record voluntary, substantive responses in
+[publications.csv](publications.csv). It now records two recruitment posts,
+published on 2026-10-02 at 17:59 UTC (2026-10-03 at 01:59 Taipei):
+[English X](https://x.com/Cch_Chichieh/status/2106081681363095945) and
+[Chinese Threads](https://www.threads.com/@cch.chichieh/post/DeAE9mrktZl).
+Both full copies were verified on their actual permalink pages; the
+[publication evidence](recruitment-publication.json) records the copy hashes.
+No human reader or setup result has been recorded, and formal D0 has not started.
+Record voluntary, substantive responses in
 [feedback.csv](feedback.csv), using anonymous participant IDs.
 
 The [GitHub traffic API](https://docs.github.com/en/rest/metrics/traffic) returns

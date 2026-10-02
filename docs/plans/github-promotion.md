@@ -93,7 +93,7 @@ P2 是入門與素材驗證；其通過不表示預設抽取品質通過，也�
 
 第一輪選兩個已有可見引薦的渠道，建議英文 X 搭配中文 Threads 或維護者既有的開發者社群。每則內容直接連到 repo，單篇聚焦一項能力，提供 demo、preview 狀態與真實限制。
 
-分工：Codex 準備文案、素材、文件修改、驗證結果與量測整理，並依已授權的帳號執行發布及招募。第一輪素材已完成，已找到 Content 發文中心及其 WSL 持久瀏覽器；各平台是否可填稿、是否實際發布，依操作結果分別記錄。先完成真人招募與驗證，再啟動正式宣傳觀察窗。
+分工：Codex 準備文案、素材、文件修改、驗證結果與量測整理，並依已授權的帳號執行發布及招募。第一輪素材已完成，已沿用 Content 發文中心的 WSL 持久瀏覽器發布英文 X 與中文 Threads 招募稿；兩則貼文頁的完整文案均已核對，[發布紀錄](../promotion/publications.csv)保留網址及 UTC 時間。先完成真人招募與驗證，再啟動正式宣傳觀察窗。
 
 真人招募以 X／Threads 原貼文直接回覆為入口，不要求 GitHub 帳號或 issue 留言；[issue 326](https://github.com/Cairn-ink/cairn-memory/issues/326) 只作可選的公開進度追蹤。使用中性招募稿，正式閱讀前不解釋產品用途，以保留第一印象測試的有效性。
 
@@ -159,7 +159,8 @@ GitHub traffic 提供最近 14 天的資料，故需每日保存回傳視窗。�
 - [x] 完成 36 秒可追溯到新 transcript 的 model-free demo。
 - [ ] 完成陌生真人只依文件操作的安裝驗證。
 - [x] 完成英文 X、中文 Threads 文案與招募、評分材料。
-- [ ] 接上發布帳號，招募真人；驗證完成後確定 D0 並發布。
+- [x] 接上既有發布帳號，發布英文 X 與中文 Threads 真人招募稿。
+- [ ] 完成真人招募與驗證，再確定 D0 並發布產品宣傳稿。
 - [ ] 執行 7 天檢查並決定下一個改動。
 - [ ] 核對 P4 品質標準及是否可以擴大產品宣傳。
 - [ ] 完成 14 天結案與下一輪決策。
@@ -174,7 +175,8 @@ GitHub traffic 提供最近 14 天的資料，故需每日保存回傳視窗。�
 - [新版 demo](../promotion/demo/README.md)為 36 秒、1280×720、30 fps 的 H.264 MP4，依其中一次新 tool transcript 製作；保留來源、編輯後的顯示時間與 model-free 標示。實際影片場景及轉場解碼檢查完成。
 - 分享圖保留原始來源中的「prototype」限定；記憶與來源文字一致。縮小預覽可辨識主張，PNG 小於 1 MB；尚未上傳至 repo 設定。
 - [量測腳本](../../tools/promotion/snapshot.py)已實際抓取 repo、views、clones 與 referrers，保留 UTC 視窗。另用控制案例確認寫入前的 Git 狀態與部分 API 失敗記錄；尚未設定定時工作。
-- 已完成獨立的 agent 文件審閱；它不計入 5 位陌生讀者或真人安裝驗證。[五位讀者欄位](../promotion/reader-test.csv)全部 pending；[發布紀錄](../promotion/publications.csv)目前只有欄位標題。
+- 已完成獨立的 agent 文件審閱；它不計入 5 位陌生讀者或真人安裝驗證。[五位讀者欄位](../promotion/reader-test.csv)全部 pending。
+- 英文 X 與中文 Threads 招募稿於 2026-10-02 17:59 UTC 發布（台北 2026-10-03 01:59）；各貼文頁的完整文案均已核對。[發布紀錄](../promotion/publications.csv)及[文案雜湊與核對結果](../promotion/recruitment-publication.json)已保留。X 發布前量得 20 stars，Threads 未單獨重測發布前星數；真人測試尚未完成，正式 D0 尚未開始。
 
 ## 量測與渠道參考
 
