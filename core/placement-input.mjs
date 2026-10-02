@@ -1,4 +1,4 @@
-import { boundedText, fail, identifier, MemoryStoreError, object, revision } from './validation.mjs';
+import { boundedText, denseArray, fail, identifier, MemoryStoreError, object, revision } from './validation.mjs';
 
 // Internal observers see only fixed categories at the original rejecting seam.
 // Their failures must never replace the validator's original public error code.
@@ -7,8 +7,7 @@ function observe(callback, reason) {
 }
 
 export function uniqueIds(input, max, min = 0, onDuplicate) {
-  if (!Array.isArray(input) || input.length < min || input.length > max) fail('invalid_input');
-  if (Object.keys(input).length !== input.length) fail('invalid_input');
+  denseArray(input, min, max);
   const result = input.map(identifier);
   if (new Set(result).size !== input.length) {
     observe(onDuplicate);

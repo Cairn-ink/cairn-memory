@@ -61,6 +61,12 @@ redaction, nonempty, NUL, 240-UTF-16-unit and 120-codepoint checks as one class
 per title role. Reasons are recorded at the actual rejecting validator or
 visibility/create-policy seam; validation is not repeated to infer a reason.
 
+Direct core ID-array validation requires an own indexed value at every position.
+Sparse parent arrays cannot bypass this check by adding extra enumerable keys.
+This deliberately rejects malformed direct-core shapes previously accepted;
+dense proposals, model/provider schemas and public error codes are unchanged.
+These shape failures retain the generic `invalid_classification` diagnostic.
+
 This finite surface reveals only the deterministic validation class, never the
 title, memory/source/receipt/topic IDs, positions, raw proposal, provider data
 or exception details. The event keeps the same frozen

@@ -388,7 +388,7 @@ directory; synthetic diagnostics and test output only).
   omitted, no providers/writes. This root-owned evidence is in its tool
   transcript and root plan; no additional caller patch or test pin is needed.
 
-## Final local verification
+## Final local verification — historical candidate 79f2dc5
 
 All logs below are under `/tmp/cairn-classification-reasons-logs.HHPcHn`.
 Every final command uses the exact pinned Node binary and parent compile cache
@@ -423,6 +423,361 @@ acceptance, independent Standards/Spec review and ordinary latest-head CI.
 No push/merge/release is authorized at this checkpoint, and exact historic
 classification cause and semantic accuracy remain unknown.
 
+## Independent review amendment — compensated sparse parent arrays
+
+Independent review of `79f2dc5538d97594e37d303e7c0a38cedacb2dcc` reported
+Standards: zero hard findings and one nonblocking finite-vocabulary duplication
+smell. Spec reported a genuine CR5 gap: a parent array with one valid indexed
+value, length two, one missing indexed slot and an extra enumerable canary key
+can compensate `Object.keys` cardinality. `map` skips the hole and its Set can
+include `undefined`; the malformed array can consequently pass `uniqueIds`,
+`placementProposal` and actual classification. The gap predates this candidate.
+
+Primary explicitly amends CR1 preservation to valid dense proposals/results,
+authorizing only rejection of these malformed compensated sparse parent arrays.
+Normal JSON/provider schemas, prompts, limits, accepted dense filing, public
+failure codes, retry behavior and post-admission cold retention remain unchanged.
+Direct placement rejects malformed arrays with the existing `invalid_input`;
+classification rejects with existing `invalid_model_output` and only the exact
+finite generic `invalid_classification` diagnostic. No canary, ID or extra array
+key may enter an event. This is deliberate malformed-input acceptance tightening,
+not recovery of the historic live rejection cause or a semantic accuracy claim.
+
+Review correction remains in this same worktree/branch and fixed base. First add
+a RED-capable regression for compensated sparse L1 and L2 parents at direct
+placement and the real classify seam, including observer hostility/no retry.
+Trace every `uniqueIds` consumer and the shared `denseArray` helper; after an
+observed RED, prefer the smallest reuse of existing own-index validation. Do not
+redesign unrelated memory guards, object validation or getters. No runtime fix,
+test/import execution or gate begins while the separate packet owns the heavy
+slot; primary will coordinate a short RED/GREEN window. The old candidate, full
+gates and raw logs remain historical evidence, not acceptance of the amended
+source. A new source freeze, primary key acceptance, affected checks and both
+independent review axes are required for the next HEAD. No push/merge/provider
+call is authorized.
+
+Static readiness: three new RED-capable tests in the existing rejection test
+file cover both parent roles independently at direct placement/`uniqueIds`,
+real `classify`, and SQLite-backed public `classifyPlacement`. Each fixture
+proves key-count compensation and the missing own index, keeps a visible valid
+parent, and asserts existing public codes, only the frozen generic diagnostic,
+canary/ID absence and one model call. Public-core cases seed actual L1/L2 topics,
+verify unchanged map/card/receipts and cold reread, and register immediate
+workspace teardown before assertions. Hostile synchronous/asynchronous observers
+are included. Tests have not been imported or executed, and runtime remains
+unchanged pending the primary's RED/GREEN slot.
+
+Caller trace: `uniqueIds` serves L1 parents, L2 parents, derived proposal target
+IDs and public `classifyPlacementValidated` input memory IDs. `placementProposal`
+also gates `applyPlacement` and `applyInitialPlacement`; classification wraps
+its validation error at the existing rejection seam. Shared `denseArray` in
+`core/validation.mjs` already applies the same array/bounds/key-count checks plus
+`Object.hasOwn` for every index. Reusing it inside `uniqueIds` is the proposed
+minimal correction after observed RED; unrelated `memoryGuards`, items/object
+and getter behavior remains outside this amendment.
+
+Observed RED before production correction: Node 22.16.0, cache disabled,
+`review-correction-control.mjs red review-node22-compensated-sparse-red` runs
+the proposed focused command unchanged. Actual child status one/no signal,
+zero passed/nine failed (three parent tests plus six role subtests), no skips/
+cancellations/TODOs, 561ms. Direct placement fails only "Missing expected
+exception"; actual classify lacks `invalid_model_output`; both public-core
+role cases reach successful `result.ok === true` after actual visible-parent
+seeding, failing the expected refusal. These are the intended seams, not setup
+errors. Production placement SHA before/after remains the historical
+`b15ac186b2c20a8559bbfe4c2c8b1a331c5e900d4b5f451b630bb744a00797ed`.
+Owned caller `/tmp/cr22-T4XOeV` is absent, with streamed raw log/footer/status/
+cleanup retained. Missing density validation is the causal explanation;
+visibility/provider-only explanations cannot explain direct placement acceptance.
+
+After that observed RED, the correction imports and calls existing `denseArray`
+inside `uniqueIds`, replacing only its duplicated array/bounds/key-count checks.
+Identifier normalization and duplicate callbacks remain in their original order.
+Protocol, limitations and changelog explicitly disclose the deliberate malformed
+acceptance tightening. Unrelated memory guards/object/getter handling is unchanged.
+
+Bounded GREEN is complete with no overlap: focused new review cases 9/9 on
+Node 22.16.0 (458ms) and Node 24.15.0 (493ms); combined three-file key checks
+35/35 on each exact runtime, zero failures/skips/cancellations/TODOs. Commands
+use concurrency one, explicit TAP, disabled compile cache and short owned TMP
+callers. All five RED/GREEN callers are absent after actual child closure;
+placement SHA remains unchanged during every invocation. Full raw/status/
+ownership/cleanup records are `review-node22-compensated-sparse-red`,
+`review-node22-compensated-sparse-green`,
+`review-node24-compensated-sparse-green`,
+`review-node22-combined-key-green` and `review-node24-combined-key-green`
+under the existing raw-log directory. The new actual eight-file freeze is
+`review-source-sha256.txt`; historical candidate/full-gate freeze remains intact.
+The bounded slot is returned to primary for its own key reruns. No full matrix,
+candidate correction commit or push starts during this handoff.
+
+Primary's subsequent affected-check plan, after the other packet releases its
+full-gate slot: full core both exact Nodes (regenerated exact 84-file manifests,
+1151 expected tests, disjoint complete-file equivalence allowed), store/MOC
+demos both, full adapter both, full `public-pilot.test.mjs` both, full LongMemEval
+and public demo both, JSON validation both. Narrow full pilot coverage is not
+called a full live-suite rerun; original 372-test live evidence remains historical.
+Generic 580-test, lifecycle 25-test and maintainer schema results may carry
+forward only after actual changed-file/import tracing proves no dependency on
+this correction. Ordinary latest-head all-CI remains mandatory. Any additional
+affected requirement must be raised before omission. Primary key acceptance and
+both independent axes must bind to the next committed candidate; no commit or
+push yet.
+
+Primary correction acceptance is complete, as reported by root without worker
+access to its private directory. Its exact-version, cache-disabled, concurrency
+one three-file checks passed 35/35 on Node 22.16.0 (6908.752738ms) and Node
+24.15.0 (11644.695843ms), with zero failures/skips/cancellations/TODOs. Actual
+child PIDs 50301 and 56793 closed zero without signal. Root verified each owned
+caller identity, empty-only removal and all eight source SHA256 values before
+and after against `review-source-sha256.txt`. Root's retained, mode-600/fsynced
+raw logs are `/tmp/cairn-six-diagnostic-primary.F3Skmd/CR-CORRECTION-PRIMARY-22.16.0.log`
+and `/tmp/cairn-six-diagnostic-primary.F3Skmd/CR-CORRECTION-PRIMARY-24.15.0.log`.
+These are root-supplied facts, not worker inspection of private artifacts.
+Six production/test freeze values remain historical-candidate-identical; only
+`core/placement-input.mjs` and the existing core rejection test have new bytes.
+Root has returned the heavy slot to the separate packet. This worker remains
+static-only until that packet's final release; no further gates have started.
+
+Affected-gate tracing supersedes the conditional generic carry-forward above.
+Five generic architecture test files dynamically import `core/contract.mjs`:
+`small-candidate-model`, `checklist-model`, `augmented-model`,
+`query-evidence-checklist` and `full-label-model`. More decisively,
+`synthetic-lineage.test.mjs` imports `evaluation/architecture/synthetic-lineage.mjs`,
+which imports the contract and actually calls `core.capture`, reaching the
+corrected placement validation. Primary explicitly accepts full generic
+580-test reruns on BOTH exact Nodes as affected coverage; no dependency-free
+generic carry-forward claim remains. Workspace lifecycle tests import only
+unchanged workspace/runner helpers and built-ins. Maintainer validation checks
+unchanged marketplace/plugin manifests against the same locked schema tool,
+without importing corrected core modules. Primary permits those historical
+25-test lifecycle and maintainer results to carry forward on this actual trace;
+ordinary latest-head all-CI remains mandatory. Remaining correction gates are
+full generic, exhaustive full core, full adapter, full public-pilot test file,
+full LongMemEval, store/MOC/OpenAI-offline/public demos and JSON validation on
+both exact runtimes. Pilot-file reruns are not represented as full live-suite
+reruns. All gates remain synthetic/offline and serialized by packet.
+
+Bounded core strategy assessment uses retained old Node 24 records, not new
+test execution: all 84 file controls total 1,777,526ms (29.63 minutes). Seven
+files above 60 seconds account for 1,268,958ms (21.15 minutes); 66 files at most
+15 seconds account for 253,941ms (4.23 minutes). Keep long files and deadline/
+timer-sensitive files isolated at concurrency one, including the original D3
+file. Pair only proven short, non-deadline files in disjoint controls at native
+`--test-concurrency=2`; run exactly one owned control at a time, with ordered
+streamed TAP, exact version/cache header, PID/root/status/counts and cleanup.
+Regenerate an independent manifest from direct regular-file directory entries,
+freeze every SHA, and prove exact 84-file union with no omissions/duplicates and
+1151 aggregate tests per runtime. Historical manifests and interrupted logs
+stay unchanged. The operational five-minute target is not an enforced timeout;
+whole long files retain their original assertions and timers. Estimated core
+wall time remains roughly 25–30 minutes per runtime, not a speed guarantee.
+No monolithic interrupted command is silently retried and no new assertion
+failure is automatically retried. Controller preparation is static until the
+explicit final heavy-slot handoff; affected gates and a new local candidate
+commit are still pending.
+
+Primary explicitly handed the exclusive affected-gate slot back after the other
+packet closed all of its gate children and artifact inspection. Worker-owned
+`correction-affected-control.mjs` now runs fixed offline commands with exact
+runtime/cache headers, ordered streamed logs, known owned PID/caller identity,
+native status/signal/termination, finite TAP/spec footer parsing and eight-file
+SHA checks before/after each child. It never overwrites previous logs, changes
+assertions/timers or automatically reruns a failure. Node 22 generic starts with
+`node integrations/client/testing/run.mjs --test-concurrency=1 --test-reporter=tap`
+followed by the exact regular-file package patterns' expanded paths. Adapter
+uses unchanged `npm run test:openai`; pilot and LME use the existing owned runner,
+concurrency one and TAP. JSON/demos use their unchanged npm package commands.
+All parent/child compile caches are disabled.
+
+The new direct-directory core freeze is `correction-core-manifest.json`, SHA256
+`ffc5d7e94eee8efc2ee63754d09daa9e9bca49991a73a2d05c93780ded6b05be`.
+It contains all 84 regular test files, independently frozen SHA values and 82
+disjoint controls: 80 isolated files and two adjacent, pure-input pairs at
+concurrency two. Pair eligibility is conservative: explicit helper/prompt names,
+retained old duration at most 15 seconds and no direct deadline/timer expression;
+all other files remain isolated at concurrency one. Original D3 and long files
+are isolated. Aggregate acceptance requires the direct directory exact union,
+all current hashes, every raw footer/status/cleanup binding, no duplicates or
+omissions, and 1151 passed/zero other counts on each exact runtime. This is
+equivalent exhaustive local coverage, not a canonical single npm invocation.
+
+Corrected full generic Node 22.16.0 is closed: 580/580 passed, zero failures,
+skips/cancellations/TODOs, 245297ms, actual child PID 1457 native status zero/no
+signal/no controller termination. Owned caller `/tmp/cr22-MOLcoF` was verified
+empty and removed. All eight sources match before/after. Raw
+`correction-node22-generic.log` SHA256 is
+`1c1cf86e3731c4ef0f0e70c20f0f503e7f489cc4fcfec4227c18e8154280525d`,
+with immutable adjacent status/ownership JSON records. Node 24 generic continues
+unchanged as the sole child. Primary requested a new safe inter-gate handoff for
+the separate packet's independent-review correction: do not interrupt this
+child, but after its full closure/cleanup pause before validation/core and
+return the exclusive slot. Completed generic evidence is retained and will
+not be repeated. This scheduling change does not alter coverage or guard limits.
+
+Corrected full generic Node 24.15.0 subsequently closed 580/580, zero failures,
+skips/cancellations/TODOs, 254696ms. Actual child PID 87644 closed zero/no signal/
+no controller termination. Owned `/tmp/cr24-FczxHD` was verified empty and removed;
+all eight source hashes match before/after. Raw `correction-node24-generic.log`
+SHA256 is `94f92e7ea83ec23950e428f59e57e91379ef1488448f2faea699a94097bc2d6e`.
+Both owned generic controls are closed and the worker explicitly released the
+exclusive slot before starting validation or core. No verification child remains.
+
+Primary's subsequent CONTRIBUTING reread strengthens the corrected-candidate
+matrix to the FULL offline live-evidence suite on both runtimes, superseding
+pilot-only coverage above; that full suite includes the pilot file, so no
+redundant subset is needed. Historical live 372-test runs stay separate.
+Primary permits the full regular-file manifest expansion through the unchanged
+owned runner at concurrency one/TAP as an explicitly equivalent invocation;
+this controller uses options before the exact file paths, not a claim of literal
+npm invocation. Live roster and all file hashes are verified before/after, with
+actual full footer counts and the existing intentional installed/provider skips
+reported separately. No filters, new skips, assertion/timer change or semantic
+corpus test is introduced. Execution waits for the next explicit slot return.
+
+External controller evidence history: both generic runs and manifest freeze
+used initial controller SHA256
+`6670e3dbf02fdf7967915e3e1e15b2b5b61625819b79f5d238fba253b33eceb6`.
+After their closure, the verification-only controller adds full-live selection,
+whole gate-file hash/roster checking and its own SHA field for subsequent
+records. Previous raw logs and JSON remain immutable; runtime/test bytes do
+not change. This is evidence-controller preparation only while another packet
+owns execution.
+
+While paused, primary's verification-controller audit found an envelope safety
+gap: a metadata-write failure after spawn could enter `finally` before actual
+child closure and remove an empty owned caller. The external controller now
+tracks closure only from the child's actual `close` callback, installed
+immediately after spawn. Cleanup in `finally` requires confirmed closure or no
+spawned PID; otherwise the exact owned PID/root and closure-unknown status are
+retained in a separate record, without killing or sweeping. Spawn errors do
+not resolve the completion promise before close. Counted gates also require
+exactly one anchored TAP/spec footer for each of six fields; occurrence counts
+are retained and exhaustive core aggregation verifies them and closure. Initial
+generic records and all product/source files remain unchanged. Revised external
+controller SHA256 is
+`17754c0208372de49241842b65f2f842cebde6b0eb00353620c75cdd10a74a05`.
+No gate or controller import was executed while preparing this metadata-only
+correction; independent envelope review remains primary-owned before resuming.
+
+Primary inspected the actual revised envelope and reported an independent
+NONAUTHOR control review with zero findings on the exact `17754c...` controller
+SHA. This is external verification-envelope acceptance, not the renewed product
+Spec review. Primary independently checked the direct 84-file roster, manifest
+SHA, disjoint 82-chunk union and all eight source hashes. After its separate
+packet's correction and personal checks closed, primary explicitly returned
+the sole local heavy slot. No accepted generic run is repeated.
+
+Corrected `npm run validate` passed on both exact runtimes: Node 22.16.0 199ms
+(PID 7108, owned `/tmp/cr22-dxVgmj`) and Node 24.15.0 117ms (PID 7210,
+owned `/tmp/cr24-brhFQc`). Both actual children closed zero/no signal/no
+termination; caller identities were checked by the unchanged helper and empty
+callers removed. Eight-file source checks match before/after. Their immutable
+`correction-node22-validate` and `correction-node24-validate` raw/status/ownership
+records bind controller SHA `17754c...` and raw SHA values. Node 22 exhaustive
+core controls begin next under the same frozen manifest and envelope, with
+long/deadline files isolated and streamed progress retained.
+
+Corrected affected matrix is fully closed on both pinned runtimes. All commands
+use disabled parent/child compile caches and fresh owned callers; none changes
+assertions, timers, caps, skip policy or product defaults. Generic, core, live
+and LME commands are documented resource-controlled equivalents through the
+same package-owned runners, with their complete regular-file path unions.
+Adapter, JSON validation and demos use the unchanged literal npm commands.
+The core command per control is `node tools/testing/run.mjs
+--test-concurrency=1|2 --test-reporter=tap <manifest chunk paths>`; only the two
+named pure-input pairs use two. Live/LME use concurrency one and TAP followed
+by the exact direct-directory complete regular-file list. No pilot-only subset
+is substituted for the full corrected live suite.
+
+| Corrected affected gate | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| Generic | 580/580; 245297ms | 580/580; 254696ms |
+| JSON validation | exit 0; 199ms | exit 0; 117ms |
+| Exhaustive core, 84 files / 82 controls | 1151/1151; 1096912ms | 1151/1151; 1083227ms |
+| Full OpenAI offline adapter | 320/320; 105269ms | 320/320; 95879ms |
+| Full live-evidence offline | 342 passed + 30 existing intentional skips / 372; 255814ms | 342 passed + 30 existing intentional skips / 372; 238655ms |
+| Full LongMemEval offline | 193/193; 14549ms | 193/193; 13351ms |
+| Store demo | exit 0; 243ms | exit 0; 217ms |
+| MOC demo | exit 0; 275ms | exit 0; 262ms |
+| OpenAI-offline demo | exit 0; 878ms | exit 0; 1008ms |
+| Public LongMemEval demo | exit 0; 355ms | exit 0; 327ms |
+
+Every counted gate has zero failures/cancellations/TODOs; all except the full
+live suite have zero skips. The 30 live skips are the unchanged explicit
+installed/provider opt-in skips, not failures or all-passed claims. Core times
+are sums of complete control elapsed times, not a canonical single npm run.
+Root personally independently audited all 82 raw/footer/ownership/closure
+records per runtime, the direct 84-file exact union, all current file hashes,
+eight source hashes, controller SHA, private mode 600 and caller absence, and
+accepted 1151/1151 on each runtime. The exhaustive equivalence and original
+unknown-interruption caveats remain explicit.
+
+Actual raw/index evidence is in the existing owned log directory:
+`correction-node{22,24}-{generic,validate,adapter,live,lme,demo-store,demo-moc,demo-openai,demo-public}.log`
+with adjacent immutable `.json` and `-ownership.json` records;
+`correction-node{22,24}-core-000` through `-081` raw/status/ownership records;
+and both `correction-node{22,24}-core-summary.json` records. Fresh read-only
+`correction-final-audit.mjs` verified all raw SHA values, unique anchored six-field
+footers, native exit/signal/actual closure bindings, exact live/LME/generic
+directory unions, all before/after hashes and current caller absence. Its
+mode-600/fsynced `correction-final-gates-index.json` SHA256 is
+`70451cb17b156346168a1b18e22fe8f7949b4f360a0309c444282b7cec218926`.
+It indexes 18 ordinary gate children and 164 core gate children (182 actual
+spawned children); the orchestration cell additionally performed two read-only
+aggregate controls, then closed naturally with its original queue empty and
+no active child. No unexpected failure, retry or signal occurred in this
+corrected affected matrix. The sole heavy slot was explicitly released before
+static plan/candidate work; the primary's next packet may proceed.
+
+Six demo callers remain intentionally nonempty with only their recorded
+synthetic demo outputs: Node 22 store `/tmp/cr22-T0Cc9Q/cairn-store-demo-aIJmZK`,
+MOC `/tmp/cr22-uOWhJw/cairn-moc-demo-UrciCq`, OpenAI-offline
+`/tmp/cr22-6LtQ23/cairn-openai-offline-Js4kl1`; Node 24 store
+`/tmp/cr24-pVuIGY/cairn-store-demo-lGakiF`, MOC
+`/tmp/cr24-UsBK2b/cairn-moc-demo-yCFao5`, OpenAI-offline
+`/tmp/cr24-bDcaYO/cairn-openai-offline-QmF7JF`. The index independently verifies
+the exact retained directory entries. They are intentional demo databases,
+not unknown live children or accidental test residue. Every other owned gate
+caller is absent. No sweeping or historical cleanup was performed.
+
+Scheduling evidence clarification: primary briefly requested a Node 22
+inter-gate handoff. A separate orchestration-store inspection returned stale
+pre-loop state; its attempted queue truncation did not establish a live pause.
+Primary rescinded that request before any cancellation or signal was sent.
+The actual running cell retained the approved full queue, naturally completed
+all 184 control invocations and verified every required actual raw record.
+This is an envelope/state-observation issue, not a test/product failure, and
+is not evidence explaining either historical status-143 interruption.
+
+Lifecycle 25/25 on both runtimes and locked maintainer schema gates carry
+forward only on primary-approved unchanged-import/manifest proof. The final
+index compares the actual four workspace/runner files, locked tool manifest/
+lockfile and marketplace/plugin JSON bytes to committed historical candidate
+`79f2dc5538d97594e37d303e7c0a38cedacb2dcc`; all are identical. Neither helper
+tests nor the local schema command imports the corrected placement module.
+Ordinary latest-head full CI is still required after eventual authorized push.
+There is no repository typecheck. No corpus/gold/private study, provider model
+call, production mutation, deployment, merge, batch policy or paid-runner
+change was introduced.
+
+After this final plan is committed, the worker-owned
+`correction-candidate-commit.json` records the actual new local HEAD, historical
+parent, fixed base, exact combined 12-file roster, diff SHA and the eight
+committed/current/frozen byte bindings. Keeping the self-referential commit
+hash in that external record avoids changing a frozen commit to name itself.
+Renewed NONAUTHOR Standards and Spec review, final primary byte binding and
+ordinary latest-head CI remain primary-owned. No push is authorized by this
+worker's completion; the new candidate stays local pending those checks.
+
+Primary subsequently reported acceptance of the entire corrected affected
+matrix after personally checking the final live/LME/public-demo raw counts,
+ownership/closure, whole gate hashes and all eight current source hashes. Its
+earlier personal 35/35 checks on both runtimes still bind to the same unchanged
+runtime/test bytes. This is primary acceptance of current frozen content;
+renewed dual NONAUTHOR product review and final committed-byte binding are
+still required before primary-owned push/CI delivery.
+
 ## Acceptance evidence ownership
 
 | Contract | Evidence / owner |
@@ -432,11 +787,15 @@ classification cause and semantic accuracy remain unknown.
 | CR3 | Worker: exhaustive finite categories; both title roles, 121 points, UTF-16 boundary, NFKC expansion, empty/redacted/NUL, cardinality/membership, parent visibility and create policy; direct errors retained |
 | CR5 | Worker: canary+IDs absent from exact events, hostile error fields ignored, sparse/getter/malformed fail closed, observer throw/reject/mutation cannot change outcomes; immediate workspace teardown registrations |
 | CR6 | Worker: protocol finite threat/privacy surface, changelog and limitations explicitly preserve unknown historic cause and avoid accuracy/score claims |
-| CR7 | Worker: both exact-runtime local gate sets closed, full raw logs and exhaustive Node 24 core union; local candidate freeze follows; primary byte-bound acceptance, independent Standards/Spec review and ordinary latest-head CI remain root-owned |
+| CR7 | Worker: corrected both exact-runtime affected matrices closed, 1151/1151 exhaustive core unions, generic580/adapter320/LME193 and full live342+30 intentional skips; unchanged lifecycle25/schema carry-forward proved; final raw index and local candidate byte binding; renewed independent review/primary binding/latest-head CI remain root-owned |
 
 No UI/browser replay, old URL migration, extraction/recall runner change or
 new semantic policy is involved. Existing `uniqueIds` consumers in
-`classifyPlacementValidated` keep their original checks and codes.
-Elapsed time/cost/token measurements are not exposed and remain unknown.
+`classifyPlacementValidated` keep their original valid-dense-input results and
+error codes; the explicitly amended density check rejects malformed sparse
+arrays that previously slipped through key-count compensation.
+Diagnostic events expose no timing/cost/token measurements; historic runtime
+measurements remain unknown. Verification elapsed times above are owned local
+test evidence, not model accuracy or runtime-observability measurements.
 No primary implementation takeover occurred. Fixture and external evidence
 corrections are explicitly recorded above.

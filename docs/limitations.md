@@ -707,6 +707,12 @@ This prospective schema constraint does not reconstruct the pilot's rejected
 response or establish its cause. It does not change that pilot's partial result,
 stop policy or score denominators.
 
+Direct core ID arrays now require every indexed position to be present, closing
+a malformed sparse-array bypass where extra enumerable keys compensated the
+key count. This deliberately tightens malformed direct-input acceptance, not
+dense JSON/provider proposals, and does not identify a historic live cause.
+Such shape failures use the existing public codes and generic diagnostic.
+
 Future post-admission core classification rejection events can distinguish
 duplicate memory targets, duplicate L1/L2 parents, invalid L1/L2 titles, target
 coverage mismatch, parent visibility and incomplete-catalog creation policy.

@@ -3,7 +3,7 @@ import test from 'node:test';
 import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import { classify } from '../classification.mjs';
-import { placementProposal } from '../placement-input.mjs';
+import { placementProposal, uniqueIds } from '../placement-input.mjs';
 import { emitDiagnostic } from '../model-diagnostics.mjs';
 import { openMemoryCore } from '../contract.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
@@ -16,6 +16,20 @@ const proposal = (first = item()) => ({ items: [first, item(ids[1])] });
 const diagnostic = reason => ({ version: 1, stage: 'classify', layer: 'core_validation', reason });
 const groups = ['L1', 'L1', 'L2', 'L2'].map((level, index) => ({ type: 'moc',
   moc: { id: `synthetic-topic-id-${index}`, level, title: 'Synthetic visible topic' } }));
+
+function compensatedParents(parentId) {
+  const parents = [parentId];
+  parents.length = 2;
+  parents[canary] = `${canary}:${ids[0]}`;
+  assert.equal(Object.keys(parents).length, parents.length);
+  assert.equal(Object.hasOwn(parents, 1), false);
+  return parents;
+}
+
+function compensatedProposal(role) {
+  return role === 'L1' ? proposal({ ...item(), parentIds: compensatedParents(groups[0].moc.id) }) :
+    proposal({ ...topic(), newL1: { title: 'Synthetic leaf', parentL2Ids: compensatedParents(groups[2].moc.id) } });
+}
 
 async function run(output, { exhausted = true, onDiagnostic, callback } = {}) {
   const events = [], calls = [];
@@ -119,6 +133,87 @@ test('CR5: sparse, malformed and hostile getters fail closed without copying err
   const events = [];
   emitDiagnostic({ onDiagnostic: event => events.push(event) }, 'classify', 'core_validation', canary);
   assert.deepEqual(events, []);
+});
+
+test('CR5 review: compensated sparse parents keep direct placement invalid_input', async t => {
+  for (const role of ['L1', 'L2']) await t.test(role, async () => {
+    for (const observer of [undefined, () => { throw new Error(canary); }, () => Promise.reject(new Error(canary))]) {
+      assert.throws(() => placementProposal(compensatedProposal(role), ids, observer), error => error.code === 'invalid_input');
+      assert.throws(() => uniqueIds(compensatedParents(ids[0]), 5, 1, observer), error => error.code === 'invalid_input');
+    }
+    await setImmediate();
+  });
+});
+
+test('CR5 review: compensated sparse parents reach actual classify and emit only generic rejection', async t => {
+  for (const role of ['L1', 'L2']) await t.test(role, async () => {
+    for (const onDiagnostic of [undefined, () => { throw new Error(`${canary}:${ids[0]}`); },
+      () => Promise.reject(new Error(`${canary}:${ids[0]}`))]) {
+      await rejection(compensatedProposal(role), 'invalid_classification', { onDiagnostic });
+    }
+    await setImmediate();
+  });
+});
+
+test('CR5 review: classifyPlacement rejects compensated sparse parents without writes or retry', async t => {
+  const namespace = { ownerId: 'synthetic-sparse-parent-owner', scope: 'personal', projectId: null };
+  for (const role of ['L1', 'L2']) await t.test(role, async t => {
+    const workspace = createTestWorkspace(t, { prefix: 'classification-sparse-parent-' });
+    const path = join(workspace.path, 'store.sqlite'), events = [], calls = [];
+    const model = { contextWindow: 8192, countTokens: () => 1,
+      onDiagnostic: event => {
+        events.push(event);
+        const error = new Error(`${canary}:${ids[0]}`);
+        if (role === 'L1') throw error;
+        return Promise.reject(error);
+      },
+      classify: ({ input }) => {
+        calls.push('classify');
+        const visible = input.map.find(entry => entry.type === 'moc' && entry.moc.level === role);
+        assert.ok(visible, 'the valid indexed parent is visible to the actual classifier');
+        const parents = compensatedParents(visible.moc.id), memoryId = input.memories[0].id;
+        return { items: [role === 'L1' ? { memoryId, parentIds: parents } :
+          { memoryId, parentIds: [], newL1: { title: 'Synthetic new leaf', parentL2Ids: parents } }] };
+      } };
+    const core = openMemoryCore({ path, model });
+    workspace.defer(() => core.close());
+    const admitted = core.admit({ namespace, memory: { content: 'Synthetic topic seed', kind: 'fact' },
+      receipts: [{ client: 'synthetic', sessionId: 'synthetic-session', eventId: 'synthetic-seed',
+        role: 'user', excerpt: 'Synthetic topic seed' }] });
+    assert.equal(admitted.ok, true);
+    const seed = admitted.value.memory;
+    const seeded = core.applyPlacement({ namespace,
+      proposal: { items: [{ memoryId: seed.id, parentIds: [], newL1: {
+        title: 'Synthetic seed leaf', parentL2Ids: [], newL2Title: 'Synthetic seed root' } }] },
+      expectedMemoryRevisions: [{ memoryId: seed.id, revision: seed.revision }],
+      expectedIndexRevision: core.map({ namespace, purpose: 'classification' }).value.indexRevision });
+    assert.equal(seeded.ok, true);
+    const target = core.admit({ namespace, memory: { content: canary, kind: 'fact' },
+      receipts: [{ client: 'synthetic', sessionId: 'synthetic-session', eventId: 'synthetic-target',
+        role: 'user', excerpt: canary }] });
+    assert.equal(target.ok, true);
+    const memory = target.value.memory;
+    const before = core.get({ namespace, memoryId: memory.id });
+    const mapped = core.map({ namespace, purpose: 'classification' });
+    assert.equal(before.ok, true); assert.equal(mapped.ok, true);
+    const result = await core.classifyPlacement({ namespace, memoryIds: [memory.id],
+      expectedMemoryRevisions: [{ memoryId: memory.id, revision: memory.revision }],
+      mapRevision: mapped.value.indexRevision });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.error, { code: 'invalid_model_output', retryable: false });
+    assert.deepEqual(calls, ['classify']);
+    assert.deepEqual(events, [diagnostic('invalid_classification')]);
+    assert.equal(Object.isFrozen(events[0]), true);
+    for (const value of [canary, ...ids, memory.id, seed.id, ...seeded.value.createdMocs.map(moc => moc.id)]) {
+      assert.equal(JSON.stringify(events).includes(value), false);
+    }
+    assert.deepEqual(core.get({ namespace, memoryId: memory.id }), before);
+    assert.deepEqual(core.map({ namespace, purpose: 'classification' }), mapped);
+    const cold = openMemoryCore({ path });
+    workspace.defer(() => cold.close());
+    assert.deepEqual(cold.get({ namespace, memoryId: memory.id }), before);
+    await setImmediate();
+  });
 });
 
 test('CR2: unexpected internal title error retains the generic fallback', async t => {

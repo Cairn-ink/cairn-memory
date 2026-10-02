@@ -35,6 +35,9 @@ No hosted/server implementation or hook enablement is included.
   committed admission/receipts and duplicate capture behavior are unchanged.
   This improves future observability; the cause of an unretained historical
   rejected proposal remains unknown.
+- Direct core placement/classification now rejects malformed sparse ID arrays
+  even when extra enumerable keys compensate their key count. Dense proposals,
+  existing public error codes and model/provider schemas remain unchanged.
 - Local MCP episode access now provides keyless session/time reads, sourced startup
   context and revision-guarded correction, closure, unpinning and conversation
   deletion with its memory/source cascade. Explicit keep uses retained-source
