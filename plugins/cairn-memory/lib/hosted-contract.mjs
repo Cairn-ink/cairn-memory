@@ -84,8 +84,7 @@ export function parseSessionStartRequest(value) {
 // Take only the host hook's field. Never derive an identity from prompt text,
 // transcript contents, another key or a model-supplied fallback.
 export function optionalHostSessionId(value) {
-  return typeof value === "string" && value.length > 0 && value.length <= 200 &&
-    value.isWellFormed() && !/[\x00-\x1f\x7f]/u.test(value) ? value : undefined;
+  return typeof value === "string" && /^[A-Za-z0-9._:-]{1,200}(?![\s\S])/.test(value) ? value : undefined;
 }
 
 export function parsePauseState(value) {

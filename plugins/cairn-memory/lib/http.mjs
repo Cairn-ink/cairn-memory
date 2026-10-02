@@ -6,17 +6,17 @@ import { dirname, join, resolve } from "node:path";
 import { normalizeEndpoint } from "./config.mjs";
 import { notifyWrite } from "./private-state.mjs";
 import { withFileLock } from "./file-lock.mjs";
-import { conforms, utcInstant, classifyHostedReply, parseSessionStartRequest }
+import { conforms, utcInstant, classifyHostedReply, parseSessionStartRequest, optionalHostSessionId }
   from "./hosted-contract.mjs";
 
 export { classifyHostedReply } from "./hosted-contract.mjs";
 const routes = new Set(["/api/memory/recall", "/api/memory/capture"]);
-const sessionStartPath = "/api/memory/session-start";
+const recallPath = "/api/memory/recall";
 // Pre-OB-1 Cairn returns Zod issues. Only this root unknown-key rejection
-// proves the optional field was refused before any session-start work ran.
+// proves the optional field was refused before any recall work ran.
 function rejectsSessionId(status, value) {
   const issue = value?.issues?.[0];
-  return status === 400 && value?.error === "Invalid session-start payload." &&
+  return status === 400 && value?.error === "Invalid recall payload." &&
     Array.isArray(value.issues) && value.issues.length === 1 &&
     issue?.code === "unrecognized_keys" && Array.isArray(issue.path) && issue.path.length === 0 &&
     Array.isArray(issue.keys) && issue.keys.length === 1 && issue.keys[0] === "session_id";
@@ -274,7 +274,7 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
     if (authenticated) headers.authorization = `Bearer ${token}`;
     const start = () => fetch(`${baseUrl}${path}`, {
       method: "POST", headers, body: JSON.stringify(body),
-      signal: path === sessionStartPath ? signal : signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) :
+      signal: path === recallPath ? signal : signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) :
         AbortSignal.timeout(timeoutMs),
       ...(client === "codex" ? { redirect: "error" } : {}),
     });
@@ -286,7 +286,7 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
     }
     let value;
     try { value = await response.json(); } catch { value = null; }
-    if (path === sessionStartPath && Object.hasOwn(body, "session_id") &&
+    if (path === recallPath && Object.hasOwn(body, "session_id") &&
         rejectsSessionId(response.status, value)) {
       const { session_id, ...legacy } = body;
       // Removing the field makes a second downgrade impossible. Reuse the
@@ -298,10 +298,10 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
   }
   async function reply(path, body, timeoutMs, limits, signal, dispatch) {
     if (!token || signal?.aborted) return { status: "unavailable" };
-    if (path === sessionStartPath) {
+    if (path === recallPath) {
       // Establish that session_id is the only possible difference from a
-      // valid 0.2.0 request, preserving the caller's original wire defaults.
-      parseSessionStartRequest(body);
+      // valid legacy recall request, preserving the caller's original wire defaults.
+      if (!conforms("recall-request", body)) return { status: "error", code: "invalid_memory_input" };
       signal = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) :
         AbortSignal.timeout(timeoutMs);
     }
@@ -350,16 +350,18 @@ export function createHostedTransport(options) {
       return post.reply("/api/memory/capture", body, 25_000, undefined, signal);
     },
     recall(query, binding = {}, limits = {}, signal) {
+      const sessionId = optionalHostSessionId(binding.sessionId);
       const body = { query, ...(binding.projectId ? { project_id: binding.projectId } : {}),
-        limit: limits.limit ?? 6 };
+        limit: limits.limit ?? 6,
+        ...(sessionId === undefined ? {} : { session_id: sessionId }) };
       if (!conforms("recall-request", body)) {
         return Promise.resolve({ status: "error", code: "invalid_memory_input" });
       }
       return post.reply("/api/memory/recall", body, 2_000, undefined, signal);
     },
-    sessionStart(request, limits, signal, dispatch) {
+    sessionStart(request, limits) {
       const body = parseSessionStartRequest(request);
-      return post.reply("/api/memory/session-start", body, 2_000, limits, signal, dispatch);
+      return post.reply("/api/memory/session-start", body, 2_000, limits);
     },
   };
 }
