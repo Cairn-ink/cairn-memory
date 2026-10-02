@@ -105,6 +105,29 @@ for (const legacy of [false, true]) {
   });
 }
 
+for (const legacy of [false, true]) {
+  test(`Claude personal recall without cwd reaches context on ${legacy ? 'old' : 'new'} servers`, async t => {
+    const f = await claude(t, legacy);
+    for (const cwd of [undefined, '']) {
+      for (const session_id of [id, undefined]) {
+        const before = (await f.requests()).length;
+        const input = {prompt:'Synthetic question',
+          ...(cwd === undefined ? {} : {cwd}),
+          ...(session_id === undefined ? {} : {session_id})};
+        const stdout = await f.run(input);
+        assert.notEqual(stdout, '', 'personal recall must inject memories even without cwd');
+        assert.match(JSON.parse(stdout).hookSpecificOutput.additionalContext, /Synthetic remembered work/);
+        const sent = (await f.requests()).slice(before);
+        const expected = {query:'Synthetic question', limit:6,
+          ...(session_id === undefined ? {} : {session_id})};
+        assert.deepEqual(sent.map(request => request.body), legacy && session_id !== undefined ?
+          [expected, {query:'Synthetic question', limit:6}] : [expected]);
+        assert.ok(sent.every(request => request.url.endsWith('/api/memory/recall')));
+      }
+    }
+  });
+}
+
 test('Codex keeps prompt recall disabled; its hosted recall port uses capture wire identity and omits invalid ids', async t => {
   const f=await codexFixture(t, {text:header()+item('Synthetic preference')});
   await runWorker(f.binding, {guard:f.guard,transport:f.transport});

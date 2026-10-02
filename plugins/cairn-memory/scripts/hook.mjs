@@ -96,7 +96,7 @@ async function recall(hookInput) {
   const sessionId = optionalHostSessionId(hookInput.session_id);
   const result = await post(
     "/api/memory/recall",
-    { query, project_id: projectId, limit: 6,
+    { query, ...(projectId === undefined ? {} : { project_id: projectId }), limit: 6,
       ...(sessionId === undefined ? {} : { session_id: sessionId }) },
     2_000, true, (start) => dispatchActive(control.generation, start),
   );

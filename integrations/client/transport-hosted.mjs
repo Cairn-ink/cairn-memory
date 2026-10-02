@@ -266,17 +266,26 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
   if (!["claude", "codex"].includes(client)) throw new Error("invalid_client");
   const target = root !== undefined ? { root, targetId: targetId ?? hostedTargetId({ endpoint, token }) } : null;
 
-  async function request(path, body, timeoutMs, authenticated = true, limits, signal, dispatch) {
+  async function request(path, body, timeoutMs, authenticated = true, limits, signal, dispatch, recallDeadline = {}) {
     if (authenticated && !token) throw new Error("missing_token");
     signal?.throwIfAborted();
+    recallDeadline.signal?.throwIfAborted();
     const headers = { "content-type": "application/json" };
     if (authenticated) headers.authorization = `Bearer ${token}`;
-    const start = () => fetch(`${baseUrl}${path}`, {
-      method: "POST", headers, body: JSON.stringify(body),
-      signal: path === recallPath ? signal : signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) :
-        AbortSignal.timeout(timeoutMs),
-      ...(client === "codex" ? { redirect: "error" } : {}),
-    });
+    const start = () => {
+      signal?.throwIfAborted();
+      // Start the recall budget only at first fetch, after local gate/lock waits.
+      // A schema fallback reuses it, including time waiting for retry dispatch.
+      const timedSignal = path === recallPath ?
+        (recallDeadline.signal ??= signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) :
+          AbortSignal.timeout(timeoutMs)) :
+        signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
+      timedSignal.throwIfAborted();
+      return fetch(`${baseUrl}${path}`, {
+        method: "POST", headers, body: JSON.stringify(body), signal: timedSignal,
+        ...(client === "codex" ? { redirect: "error" } : {}),
+      });
+    };
     const response = await (dispatch ? dispatch(start) : start());
     if (!routes.has(path) && path !== "/api/memory/session-start") {
       if (!response.ok) throw new Error(`http_${response.status}`);
@@ -290,7 +299,7 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
       const { session_id, ...legacy } = body;
       // Removing the field makes a second downgrade impossible. Reuse the
       // original cancellation/deadline and recheck any caller's pause barrier.
-      return request(path, legacy, timeoutMs, authenticated, limits, signal, dispatch);
+      return request(path, legacy, timeoutMs, authenticated, limits, signal, dispatch, recallDeadline);
     }
     return classifyHostedReply(path, response.status, value, body, limits,
       response.headers.get("retry-after"));
@@ -301,8 +310,6 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
       // Establish that session_id is the only possible difference from a
       // valid legacy recall request, preserving the caller's original wire defaults.
       if (!conforms("recall-request", body)) return { status: "error", code: "invalid_memory_input" };
-      signal = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) :
-        AbortSignal.timeout(timeoutMs);
     }
     const attempt = async () => {
       try { return await request(path, body, timeoutMs, true, limits, signal, dispatch); }

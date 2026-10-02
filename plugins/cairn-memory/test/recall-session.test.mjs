@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
+import { readFile } from 'node:fs/promises';
+import { HOSTED_SCHEMAS as sharedSchemas } from '../../../integrations/client/hosted-schemas.mjs';
+import { HOSTED_SCHEMAS as pluginSchemas } from '../lib/hosted-schemas.mjs';
 import { hostedQuotaStatus, resumeHostedQuota, createJsonPoster as sharedPoster } from '../../../integrations/client/transport-hosted.mjs';
 import { createJsonPoster as pluginPoster } from '../lib/http.mjs';
 import { optionalHostSessionId, conforms } from '../lib/hosted-contract.mjs';
@@ -40,6 +44,17 @@ test('recall accepts only an optional ASCII host id; session-start has no id fie
   for (const value of invalid) {
     if (value !== undefined) assert.equal(conforms('recall-request', {query:'Synthetic',session_id:value}), false);
     assert.equal(optionalHostSessionId(value), undefined);
+  }
+});
+
+test('recall publishes a portable ASCII pattern and clients reject trailing line terminators', async () => {
+  const schema = JSON.parse(await readFile(new URL('../../../schemas/recall-request.schema.json', import.meta.url), 'utf8'));
+  for (const recall of [schema, sharedSchemas['recall-request'], pluginSchemas['recall-request']]) {
+    assert.equal(recall.properties.session_id.pattern, '^[A-Za-z0-9._:-]{1,200}$');
+  }
+  for (const ending of ['\n', '\r', '\r\n', '\u2028', '\u2029']) {
+    assert.equal(optionalHostSessionId('synthetic' + ending), undefined);
+    assert.equal(conforms('recall-request', {query:'Synthetic',session_id:'synthetic' + ending}), false);
   }
 });
 
@@ -146,5 +161,37 @@ for (const [name, poster] of [['shared', sharedPoster], ['plugin', pluginPoster]
       {status:'unavailable', notStarted:true});
     assert.equal(dispatches, 2);
     assert.equal(f.requests.length, 1);
+  });
+}
+
+for (const [name, poster] of [['shared', sharedPoster], ['plugin', pluginPoster]]) {
+  test(`${name} recall starts its budget at first dispatch and shares it with fallback`, async t => {
+    let respond = async (_, __, wire) => {
+      await delay(300, undefined, {signal:wire.signal});
+      return Response.json(context);
+    };
+    const f = await peer(t, poster, (...args) => respond(...args));
+    const {session_id:_, ...legacy} = request;
+    const dispatch = async start => { await delay(1900); return start(); };
+    const reply = await f.post.reply(path, legacy, 2000, limits, undefined, dispatch);
+    assert.equal(reply.status, 'complete', '1.9s before dispatch must not consume the 2s fetch budget');
+    assert.deepEqual(f.requests.map(request => request.body), [legacy]);
+
+    let dispatches = 0;
+    respond = () => Response.json(rejection, {status:400});
+    f.requests.length = 0;
+    const fallbackDispatch = async start => {
+      if (++dispatches === 2) await delay(250);
+      return start();
+    };
+    assert.equal((await f.post.reply(path, request, 200, limits, undefined, fallbackDispatch)).status, 'unavailable');
+    assert.equal(dispatches, 2);
+    assert.equal(f.requests.length, 1, 'retry dispatch must honor the first attempt deadline');
+
+    const abort = new AbortController();
+    f.requests.length = 0;
+    assert.equal((await f.post.reply(path, legacy, 2000, limits, abort.signal,
+      start => { abort.abort(); return start(); })).status, 'unavailable');
+    assert.equal(f.requests.length, 0, 'cancellation during the dispatch wait prevents first fetch');
   });
 }
