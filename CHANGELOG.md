@@ -1,22 +1,26 @@
 # Changelog
 
-## 0.2.1 — Unreleased
+## 0.3.0 — Unreleased
 
-- Add optional host conversation `session_id` to the strict session-start v1
-  request. Trusted hooks supply it, never model text; the server stores only an
-  owner-scoped SHA-256 hash. Existing requests and the response contract remain
-  unchanged. See the [privacy update](docs/privacy.md#data-flow).
-- Claude's async SessionStart hook sends a silent personal-scope read. Codex's
-  disabled launcher seam accepts an optional trusted session-start read port,
-  including for hooks with no transcript. Codex uses capture's existing opaque
-  wire session id so same-conversation reads remain comparable. No context
-  injection, raw-id logging, credential discovery or hook installation is added.
-- On the exact pre-OB-1 HTTP 400 root `unrecognized_keys` rejection of only
-  `session_id`, retry once without it. Preserve scope/budgets, the original
-  two-second deadline/cancellation and local pause barrier. Other errors never
-  downgrade. Offline synthetic old/new-server tests cover both clients.
-- Prepare matching plugin, marketplace, root and runtime versions at 0.2.1.
-  Publication, tags and releases require chichi's approval.
+- Add optional trusted host conversation `session_id` to the recall request.
+  Accept only 1–200 ASCII characters from `A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`,
+  with no trailing line terminator. Clients omit invalid/unavailable ids; models
+  never invent them. The server stores only an owner-scoped SHA-256 hash.
+- Claude sends the id on existing prompt recall and injects the returned memories
+  through its existing untrusted context. Restore telemetry-only SessionStart;
+  remove the unused session-start schema field and Codex startup read port.
+  Codex prompt recall remains unavailable; its shared hosted transport accepts
+  capture's existing opaque wire session binding when called by a qualified client.
+- Retry once without the field only on the exact legacy recall HTTP 400 root
+  `unrecognized_keys` rejection of `session_id`. Preserve query/scope/limit, one
+  quota reservation and the original two-second deadline/cancellation. Other
+  errors never downgrade. Neither raw ids nor response bodies are logged.
+- Remove nested control locks from Claude recall/capture: each HTTP dispatch,
+  including fallback, checks pause/generation once. Test fixed UUIDs, context
+  delivery, ASCII omission, startup parity, old/new servers and bounded fallback.
+- Prepare matching plugin, marketplace, root and runtime versions at 0.3.0 for
+  the optional request addition, preserving the existing versioning policy.
+  Publication, tags and releases require maintainer approval.
 
 ## 0.2.0 — 2026-10-01
 
