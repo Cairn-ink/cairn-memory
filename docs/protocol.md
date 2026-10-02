@@ -49,6 +49,30 @@ requests, retry behavior, scoring or admission, and does not prove which actor
 caused a malformed output. No public core/plugin/MCP/HTTP or hosted telemetry
 schema changes.
 
+For future classification proposal rejections, the trusted `onDiagnostic`
+observer receives one `classify/core_validation` event with a compile-time
+allowlisted reason: `classification_duplicate_targets`,
+`classification_duplicate_l1_parents`, `classification_duplicate_l2_parents`,
+`classification_l1_title`, `classification_l2_title`,
+`classification_target_mismatch`, `classification_parent_visibility`, or
+`classification_create_policy`. Malformed or unexpected unclassified failures
+retain `invalid_classification`. Title reasons cover the existing normalization,
+redaction, nonempty, NUL, 240-UTF-16-unit and 120-codepoint checks as one class
+per title role. Reasons are recorded at the actual rejecting validator or
+visibility/create-policy seam; validation is not repeated to infer a reason.
+
+This finite surface reveals only the deterministic validation class, never the
+title, memory/source/receipt/topic IDs, positions, raw proposal, provider data
+or exception details. The event keeps the same frozen
+`{version:1,stage,layer,reason}` shape. A throwing or rejecting observer cannot
+alter public errors, admission, requests or retry behavior. Classification
+still occurs after admission: rejected placement retains committed cards and
+source receipts, and duplicate capture does not retry the failed initial
+classification. Adapter validation and storage conflicts remain separate
+boundaries. These runtime observations provide no semantic accuracy or causal
+proof and cannot reconstruct an unretained historical proposal. No persisted
+field or public core/plugin/MCP/HTTP schema is added.
+
 
 ### Optional embedded indexed source-window boundary
 

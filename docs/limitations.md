@@ -707,6 +707,20 @@ This prospective schema constraint does not reconstruct the pilot's rejected
 response or establish its cause. It does not change that pilot's partial result,
 stop policy or score denominators.
 
+Future post-admission core classification rejection events can distinguish
+duplicate memory targets, duplicate L1/L2 parents, invalid L1/L2 titles, target
+coverage mismatch, parent visibility and incomplete-catalog creation policy.
+The trusted observer receives only finite categories in the existing v1 event;
+unclassified errors retain `invalid_classification`. Synthetic fake HTTP tests
+show adapter-valid 121-codepoint titles and duplicate targets/parents rejected
+by the real core while cold admitted cards and source receipts survive. A
+120-codepoint title files normally, missing aliases fail at the adapter, and
+storage title conflicts remain separate. These tests establish runtime
+observability and state preservation, not semantic accuracy or a benchmark
+score. The exact historical rejected proposal was not retained, so its cause
+remains unknown. This prospective change does not repair, retry, re-admit or
+reinterpret any historical batch or alter scoring/stop policy.
+
 The rejected provider response and its exact token count were not retained.
 Database size and a matching synthetic rejection do not establish that the
 historical response exceeded the token ceiling. Neither a deterministic repeat

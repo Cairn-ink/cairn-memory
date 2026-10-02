@@ -29,6 +29,12 @@ No hosted/server implementation or hook enablement is included.
 
 ## Unreleased — model calls fit their budgets
 
+- Trusted classification diagnostics now distinguish duplicate targets/parents,
+  invalid titles, target mismatch, parent visibility and topic creation policy
+  using finite reasons without content or identifiers. Public rejection codes,
+  committed admission/receipts and duplicate capture behavior are unchanged.
+  This improves future observability; the cause of an unretained historical
+  rejected proposal remains unknown.
 - Local MCP episode access now provides keyless session/time reads, sourced startup
   context and revision-guarded correction, closure, unpinning and conversation
   deletion with its memory/source cascade. Explicit keep uses retained-source
