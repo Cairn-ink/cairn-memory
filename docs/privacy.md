@@ -40,7 +40,8 @@ accepts the same already opaque wire binding as capture if used by a qualified
 caller. No new Codex context injection or hook installation is enabled.
 
 The exact old strict recall schema rejection permits one retry without the id,
-with the same query/scope/limit, cancellation and two-second deadline. Both
+with the same query/scope/limit and cancellation. Its two-second deadline starts
+at first HTTP dispatch after local waits, and is shared by fallback. Both
 attempts use one quota reservation and recheck the local pause/generation barrier
 only at HTTP dispatch. No control lock wraps another control lock or network
 wait. Tests cover new/old replies reaching Claude context, ASCII omission,

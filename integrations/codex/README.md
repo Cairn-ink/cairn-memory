@@ -43,8 +43,8 @@ protocol 0.3.0 accepts optional `binding.sessionId`, in the same wire
 representation as capture: SHA-256 of the JSON tuple
 `["wire-session-v1","codex",hostSessionId]`. Supply that existing opaque binding,
 not a new id. The transport sends only ids in the 1–200 character ASCII allowlist
-(`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`), with absolute end-of-input; unavailable
-or invalid ids are omitted. The server stores only an owner-scoped SHA-256 of the
+(`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`), explicitly rejecting line terminators.
+Unavailable or invalid ids are omitted. The server stores only an owner-scoped SHA-256 of the
 wire id. The id is never logged or sent as telemetry. A precise legacy recall
 schema rejection gets one retry without it, with the original deadline and quota
 reservation. This adds no per-prompt Codex recall, host registration or credentials.

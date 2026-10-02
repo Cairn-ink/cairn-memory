@@ -13,8 +13,6 @@ const files = [
   "schemas/capture-response.schema.json",
   "schemas/recall-request.schema.json",
   "schemas/recall-response.schema.json",
-  "schemas/session-start-request.schema.json",
-  "schemas/session-start-response.schema.json",
   "schemas/telemetry-request.schema.json"
 ];
 
