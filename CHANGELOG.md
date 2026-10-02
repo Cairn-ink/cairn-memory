@@ -29,6 +29,12 @@ No hosted/server implementation or hook enablement is included.
 
 ## Unreleased — model calls fit their budgets
 
+- Add the explicit offline `prepareSuppliedHistoryCase` and
+  `suppliedHistoryPolicy` evaluation API (`cairn-lme-supplied-history-v1`): retain
+  all valid supplied sessions in source order with their timestamps, report
+  later-session counts and use separate hash domains. Legacy mixed-source v2
+  cutoff, digests, output shape and caller defaults remain unchanged; no runner
+  or score protocol opts in.
 - Local MCP episode access now provides keyless session/time reads, sourced startup
   context and revision-guarded correction, closure, unpinning and conversation
   deletion with its memory/source cascade. Explicit keep uses retained-source

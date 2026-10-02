@@ -281,3 +281,45 @@ preparation. All text, IDs and maps are private; public reporting uses counts
 only. The versioned SHA-256 domains and exact policy are in the module and
 the [frozen P contract](plans/mixed-source-renderer.md). These digests bind
 preparation data, not a future answer/scorer protocol or a paid grant.
+
+### Explicit supplied-history preparation (offline only)
+
+The same module separately exports `suppliedHistoryPolicy()` and
+`prepareSuppliedHistoryCase({history, question, namespace}, comparisonProfile)`
+with version `cairn-lme-supplied-history-v1`. Calling this named API explicitly
+includes every valid supplied session, even after the question minute, at the
+same minute or out of chronological order. Original order, user/assistant roles
+and dataset-local dates are preserved; timestamps are neither repaired nor
+converted to instants. `comparisonProfile` accepts the existing optional
+`indexed-evidence-v1` planner profile. All legacy callers still use mixed-source
+v2 and its at-or-before cutoff.
+
+This policy reuses the same strict validation, limits, normalization/redaction,
+stable greedy partition, synthetic date wrappers and origin maps. Preparation
+fails explicitly if all supplied source cannot fit; it never drops a session to
+make an arm fit. Both prospective arms receive identical ordered role/content
+batches. The question remains only a recall query. The immutable result has the
+same fields as v2; its `counts.sessionsAfterQuestion` counts supplied sessions
+strictly later than the question without removing them. `eligibleSessions`
+equals `originalSessions`, and `excludedFutureSessions` is zero on success.
+Equal-minute sessions are retained too; the later-session count alone is not a
+complete check of the paper's strict chronology assumption. Distinct
+policy/history/turn/case hash domains prevent accidental identity sharing with
+v2, even when both policies include the same sessions.
+
+The [paper's formal definition (§3.1)](https://arxiv.org/html/2410.10813v2#S3.SS1)
+assumes `tq > tN`. The pinned official executable
+[generation baseline](https://github.com/xiaowu0162/LongMemEval/blob/9e0b455f4ef0e2ab8f2e582289761153549043fc/src/generation/run_generation.py#L66)
+and [retrieval baseline](https://github.com/xiaowu0162/LongMemEval/blob/9e0b455f4ef0e2ab8f2e582289761153549043fc/src/retrieval/run_retrieval.py#L224)
+enumerate supplied haystack sessions without a universal question-date cutoff;
+the [dataset format](https://github.com/xiaowu0162/LongMemEval/blob/9e0b455f4ef0e2ab8f2e582289761153549043fc/README.md#dataset-format)
+records question and session dates separately. Input parity between arms does
+not establish fidelity to all supplied history, and retaining supplied history
+does not establish formal chronological consistency or semantic quality.
+
+This additive API is synthetic offline preparation only. No paid runner,
+installation caller, host default, scorer or frozen operator protocol opts in.
+Native integration, scorer compatibility, inventory accounting and any paid
+comparison require separate gates. It provides neither permission to use future
+personal data nor certified official scores. See the
+[SH contract and evidence](plans/supplied-history-source-policy.md).

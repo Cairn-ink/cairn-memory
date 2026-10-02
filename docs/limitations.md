@@ -845,6 +845,20 @@ all JavaScript process memory or side effects of Proxy traps during own-key
 inspection. No semantic score, parity or installed behavior follows from
 renderer tests.
 
+The opt-in [supplied-history preparation policy](longmemeval-comparison.md#explicit-supplied-history-preparation-offline-only)
+preserves all valid supplied sessions, including equal-minute and later ones,
+with original timestamps and source order. The legacy mixed-source v2 cutoff
+remains unchanged. Matching prospective arm inputs establishes parity, not
+fidelity to all supplied history: a cutoff can remove the same source from both
+arms. Conversely, keeping all supplied sessions does not prove the paper's
+formal `tq > tN` assumption; pinned executable supplied-history baselines and
+that formal definition express different chronology boundaries. The finite
+`sessionsAfterQuestion` count reports later sessions without repairing or
+excluding them, and does not count equal-minute violations of strict chronology.
+Only synthetic offline tests cover the new policy. Native/scorer/inventory and
+paid-run integration remain separate future gates; no source-policy choice
+authorizes future personal-data use or certifies an official score.
+
 ## Direct candidate-ID wire remains an offline experiment
 
 The [direct candidate-ID experiment](plans/direct-candidate-wire-experiment.md)
