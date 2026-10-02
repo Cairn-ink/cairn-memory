@@ -10,8 +10,8 @@ import { pathToFileURL } from "node:url";
 export async function observedHook(directory) {
   const original = new URL("../hook.mjs", import.meta.url);
   const source = await readFile(original, "utf8");
-  const call = "processHook(input,{clientOptions,targetId,launch,sessionStart},\n" +
-    "      ()=>expired || now()-start>=budget, abort.signal)";
+  const call = "processHook(input,{clientOptions,targetId,launch},\n" +
+    "      ()=>expired || now()-start>=budget)";
   assert.equal(source.split(call).length, 2, "hook work observation seam must match once");
   const instrumented = source.replace(call, `observeHookWork(${call})`)
     .replace(/from (['"])(\.\.?\/[^'"]+)\1/g,

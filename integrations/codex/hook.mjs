@@ -1,7 +1,7 @@
 import { isAbsolute } from 'node:path';
 import { resolveClient, clientProjectId } from '../client/pairing.mjs';
-import { readControlState, startIfActive } from '../client/control-state.mjs';
-import { prepareCapture, runWorker, establishPauseBoundary, wireSessionId } from './worker.mjs';
+import { readControlState } from '../client/control-state.mjs';
+import { prepareCapture, runWorker, establishPauseBoundary } from './worker.mjs';
 import { FORMAT } from './parser.mjs';
 
 const EVENTS = new Set(['SessionStart','UserPromptSubmit','Stop','PreCompact','SessionEnd']);
@@ -32,55 +32,33 @@ export async function readHookInput(stream,{limit=65536,deadlineMs=750}={}) {
 }
 
 /** The installed launcher owns fixed config and a closed direct-pipe launch callback.
- * SessionStart accepts an optional installation-owned read port. Context
- * injection and model calls remain unavailable; no credentials are read here.
+ * No transport is enabled here. Context and model calls remain unavailable.
  */
-export async function handleHook(input,{clientOptions,targetId,launch,sessionStart,now=Date.now}={}) {
+export async function handleHook(input,{clientOptions,targetId,launch,now=Date.now}={}) {
   const start=now();
   const budget=['SessionStart','UserPromptSubmit'].includes(input?.hook_event_name)?2500:750;
   let expired=false,timer;
-  const abort = new AbortController();
   const unavailable={output:['Stop','PreCompact','SessionEnd'].includes(input?.hook_event_name)?'{}':'',status:'capture_unavailable'};
   try {
-    return await Promise.race([processHook(input,{clientOptions,targetId,launch,sessionStart},
-      ()=>expired || now()-start>=budget, abort.signal),new Promise(resolve=>{
-      timer=setTimeout(()=>{expired=true;abort.abort();resolve(unavailable);},budget);
+    return await Promise.race([processHook(input,{clientOptions,targetId,launch},
+      ()=>expired || now()-start>=budget),new Promise(resolve=>{
+      timer=setTimeout(()=>{expired=true;resolve(unavailable);},budget);
     })]);
-  } finally {clearTimeout(timer);abort.abort();}
+  } finally {clearTimeout(timer);}
 }
 
-async function processHook(input,{clientOptions,targetId,launch,sessionStart},expired,signal) {
+async function processHook(input,{clientOptions,targetId,launch},expired) {
   let event=input?.hook_event_name;
   const output=()=> ['Stop','PreCompact','SessionEnd'].includes(event)?'{}':'';
   try {
     const hook=validateHook(input); event=hook.event;
-    if (!clientOptions || (!launch && !(event==='SessionStart' && typeof sessionStart==='function')) ||
-        !/^[a-f0-9]{64}$/.test(targetId)) return {output:output(),status:'transport_unavailable'};
+    if (!clientOptions || !launch || !/^[a-f0-9]{64}$/.test(targetId)) return {output:output(),status:'transport_unavailable'};
     const options={...clientOptions,client:'codex'};
     const resolved=await resolveClient(options);
     if (!resolved.enabled) return {output:output(),status:resolved.status};
     if (expired()) return {output:output(),status:'capture_unavailable'};
     const control=await readControlState(resolved.root);
     if (control.paused) return {output:output(),status:'paused'};
-    if (event==='SessionStart' && typeof sessionStart==='function') {
-      // Preserve any needed capture boundary before the read; ephemeral hooks
-      // have no transcript but still carry a host conversation/session id.
-      if (hook.path!==null) {
-        const projectId=await clientProjectId(options,hook.cwd);
-        await establishPauseBoundary({root:resolved.root,targetId,projectId,sessionId:hook.sessionId,path:hook.path});
-      }
-      const dispatch=async start=>{
-        if (expired()) throw new Error('dispatch_not_started');
-        const started=await startIfActive(resolved.root,control.generation,start);
-        if (!started.started) throw new Error('dispatch_not_started');
-        return started.operation;
-      };
-      if (expired()) return {output:'',status:'capture_unavailable'};
-      // Match capture's existing opaque wire id so a read in this very same
-      // conversation cannot be counted as a different host conversation.
-      const result=await sessionStart({version:1,session_id:wireSessionId(hook.sessionId)},{signal,dispatch});
-      return {output:'',status:result?.status==='complete'?'complete':'context_unavailable'};
-    }
     if (hook.path===null) return {output:output(),status:'source_unavailable'};
     if (event==='UserPromptSubmit') return {output:'',status:'context_unavailable'};
     const projectId=await clientProjectId(options,hook.cwd);

@@ -1,10 +1,9 @@
 # Codex capture building blocks (CX-3)
 
 These are uninstalled, disabled-by-default building blocks. No hosted endpoint,
-host credentials, host hook registration or context injection is enabled.
-An installation may inject the shared hosted session-start transport as described
-below; test transports use synthetic replies. LAC and CX-5 own installed
-transport/lifecycle integration.
+host credentials, host hook registration or context injection is enabled. The
+only network adapter in this package is a test-only loopback stub. CX-4 owns the
+public protocol; LAC and CX-5 own installed transport/lifecycle integration.
 
 `parser.mjs` pins openai/codex commit
 `36650394c5b38c2990ccf2a3457165ca3e9d9726` (`rust-v0.157.1`). Primary type files,
@@ -24,7 +23,7 @@ and `workerFromHandoff` implement that seam without installing anything.
 `readHookInput` bounds JSON stdin at 64 KiB and 750 ms. Launchers must implement
 a bounded direct stdin pipe, ignore worker stdout/stderr, use no shell and pass
 only the closed handoff. Never pass tokens or expanded hook input. Recall and
-SessionStart context injection remain unavailable here. Callers catch automatic-hook
+SessionStart context remain unavailable here. Callers catch automatic-hook
 errors and exit 0; explicit controls report failures.
 The installed hook process must flush the bounded result and exit 0 immediately;
 it must not wait for an identity operation still completing after its deadline.
@@ -33,32 +32,22 @@ at 750 ms (2.5 s for disabled context events), and fences late completion;
 the launcher must enforce its own process/pipe lifetime. SessionStart establishes
 a stale pause generation's EOF using only the last byte, without history parsing.
 
-Hook JSON stdin uses `session_id` for the host conversation id, alongside
-`hook_event_name`, `cwd` and nullable `transcript_path`; see the
-[recorded hook contract](../../docs/plans/codex-client.md#cx-3-primary-format-pin).
-There is no `conversation_id` alias or model-derived fallback. `validateHook`
-requires a nonempty, well-formed string of at most 200 UTF-16 units with no
-control characters. Capture already sends an opaque SHA-256 of the JSON tuple
-`["wire-session-v1","codex",session_id]`. Session-start uses the same conversion
-so the server can compare reads with captures from that conversation; sending
-the raw host id instead would make a same-conversation read look different.
-The server retains only an owner-scoped SHA-256 of this wire id.
+The hook input's conversation identity is `session_id`, alongside `cwd`,
+`hook_event_name` and nullable `transcript_path`. There is no `conversation_id`
+alias or model-derived fallback. `UserPromptSubmit` currently returns
+`context_unavailable`; it makes no recall request and injects no context.
+SessionStart retains only its original capture pause-boundary work.
 
-For protocol 0.2.1, an installation can supply
-`handleHook(input, {clientOptions, targetId, sessionStart, ...})`, where
-`sessionStart(request, {signal, dispatch})` is a trusted read-only callback.
-Delegate to the shared hosted port with
-`port.sessionStart(request, limits, signal, dispatch)`; `limits` needs the trusted
-token counter to validate a response. The callback must honor cancellation and
-dispatch every HTTP attempt through `dispatch` to recheck pause/generation.
-The request is personal-scope `{version:1, session_id:wireSessionId(input.session_id)}`;
-the transport fills its existing budget defaults. The hook discards returned
-context and emits no id or response text. It works with `transcript_path:null`
-and needs no capture launcher in this mode; when a source exists, it preserves
-the existing pause boundary first. Omission of the port retains the existing
-disabled behavior. No registration, credential discovery or real-host enablement
-is introduced. The shared transport retries once without the id only on the
-[precise old strict-schema rejection](../../docs/protocol.md#hosted-protocol-020).
+If a qualified caller uses the shared `createHostedTransport().recall` port,
+protocol 0.3.0 accepts optional `binding.sessionId`, in the same wire
+representation as capture: SHA-256 of the JSON tuple
+`["wire-session-v1","codex",hostSessionId]`. Supply that existing opaque binding,
+not a new id. The transport sends only ids in the 1–200 character ASCII allowlist
+(`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`), with absolute end-of-input; unavailable
+or invalid ids are omitted. The server stores only an owner-scoped SHA-256 of the
+wire id. The id is never logged or sent as telemetry. A precise legacy recall
+schema rejection gets one retry without it, with the original deadline and quota
+reservation. This adds no per-prompt Codex recall, host registration or credentials.
 
 `prepareCapture(binding)` durably freezes a content-free pending manifest before
 launch. `runWorker(binding,{transport,guard,mode})` revalidates the supplied source

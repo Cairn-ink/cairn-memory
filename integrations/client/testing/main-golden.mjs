@@ -383,22 +383,21 @@ export function candidateGolden(base) {
       '\\"version\\":\\"0.1.1\\"',
       `\\"version\\":\\"${VERSION}\\"`,
     );
-    // 0.2.1 deliberately adds a silent personal SessionStart read. Keep the
-    // frozen base's other exact request bytes; expect the new request only
-    // where startup telemetry proves the client is enabled and not paused.
-    if (variant.entry === "hook" && variant.mode !== "paused-standalone") {
-      variant.requestBytes = variant.requestBytes.split("\n").map((line) => {
-        if (!line) return line;
-        const request = JSON.parse(line);
-        if (!request.url.endsWith("/telemetry") ||
-            JSON.parse(request.body).event !== "plugin_started") return line;
-        return line + "\n" + JSON.stringify({
-          url: "https://synthetic.invalid/api/memory/session-start",
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: "Bearer synthetic-token" },
-          body: JSON.stringify({ version: 1, session_id: "synthetic-session" }),
-        });
-      }).join("\n");
+    // The 0.3.0 request addition belongs to prompt recall, never startup.
+    // Keep all frozen bytes except this field; concurrent fixtures compare an
+    // exact multiset, so enumerate their twelve authorized host session ids.
+    let recallIndex = 0;
+    variant.requestBytes = variant.requestBytes.split("\n").map(line => {
+      if (!line) return line;
+      const request = JSON.parse(line);
+      if (!request.url.endsWith("/recall")) return line;
+      const sessionId = variant.mode.startsWith("concurrent-") ?
+        `synthetic-session-${recallIndex++}` : "synthetic-session";
+      request.body = JSON.stringify({ ...JSON.parse(request.body), session_id: sessionId });
+      return JSON.stringify(request);
+    }).join("\n");
+    if (variant.mode.startsWith("concurrent-")) {
+      variant.requestBytes = variant.requestBytes.trimEnd().split("\n").sort().join("\n") + "\n";
     }
     // Coordinator's round-10 tie-break: local 0.1.2 history is not first use.
     // These remain actual-base fixtures, but are refusal tests rather than parity.

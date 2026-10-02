@@ -86,21 +86,6 @@ async function dispatchActive(generation, start) {
   return dispatch.operation;
 }
 
-async function sessionStart(hookInput) {
-  if (!token) return;
-  const control = await readControlState(dataDir);
-  if (control.paused) return;
-  const sessionId = optionalHostSessionId(hookInput.session_id);
-  const request = { version: 1, ...(sessionId === undefined ? {} : { session_id: sessionId }) };
-  // The existing async start hook stays silent. Context injection requires a
-  // qualified local token counter; no response body or raw id is logged here.
-  const started = await startIfActive(dataDir, control.generation, () =>
-    post.reply("/api/memory/session-start", request, 2_000, undefined, undefined,
-      (start) => dispatchActive(control.generation, start)),
-  );
-  if (started.started) await started.operation;
-}
-
 async function recall(hookInput) {
   if (!token) return;
   const query = prepareRecallQuery(hookInput.prompt);
@@ -108,15 +93,13 @@ async function recall(hookInput) {
   const control = await readControlState(dataDir);
   if (control.paused) return;
   const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
-  const started = await startIfActive(dataDir, control.generation, () =>
-    post(
-      "/api/memory/recall",
-      { query, project_id: projectId, limit: 6 },
-      2_000, true, (start) => dispatchActive(control.generation, start),
-    ),
+  const sessionId = optionalHostSessionId(hookInput.session_id);
+  const result = await post(
+    "/api/memory/recall",
+    { query, project_id: projectId, limit: 6,
+      ...(sessionId === undefined ? {} : { session_id: sessionId }) },
+    2_000, true, (start) => dispatchActive(control.generation, start),
   );
-  if (!started.started) return;
-  const result = await started.operation;
   if (!Array.isArray(result?.memories) || result.memories.length === 0) return;
   const lines = result.memories.map((memory) => {
     const receipt = memory.receipts?.[0];
@@ -277,21 +260,17 @@ async function captureLocked(hookInput, statePath, generation) {
       .map(({ id, role, content }) => ({ id, role, content }));
     // A batch of machine records only has nothing to send; it completes as is.
     if (messages.length === 0) continue;
-    const started = await startIfActive(dataDir, generation, () =>
-      post(
-        "/api/memory/capture",
-        {
-          client: "claude-code",
-          event_id: captureEventId(hookInput.session_id, batch),
-          session_id: hookInput.session_id,
-          project_id: projectId,
-          messages,
-        },
-        25_000, true, (start) => dispatchActive(generation, start),
-      ),
+    const result = await post(
+      "/api/memory/capture",
+      {
+        client: "claude-code",
+        event_id: captureEventId(hookInput.session_id, batch),
+        session_id: hookInput.session_id,
+        project_id: projectId,
+        messages,
+      },
+      25_000, true, (start) => dispatchActive(generation, start),
     );
-    if (!started.started) throw new Error("capture_paused");
-    const result = await started.operation;
     // A concurrent/recovered capture still holding its short lease returns
     // processing. Do not advance the cursor: the next hook can retry safely.
     if (result?.processing) throw new Error("capture_processing");
@@ -367,10 +346,7 @@ try {
       await control();
     } else {
       const hookInput = await input();
-      if (action === "start") {
-        await telemetry("plugin_started");
-        await sessionStart(hookInput);
-      }
+      if (action === "start") await telemetry("plugin_started");
       else if (action === "recall") await recall(hookInput);
       else if (["capture", "capture-detached"].includes(action)) {
         const requestedGeneration =
