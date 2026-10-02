@@ -430,3 +430,212 @@ their earlier head. No push, PR edit, merge, default enablement, paid call,
 new grant, journal integration, new certified score or semantic-quality claim
 is authorized by these local passes. The old grant remains closed and existing
 score data are unchanged.
+
+### Independent Spec correction packet: omitted inherited selector
+
+Independent Spec review of local candidate
+`c13a3ba4eee2d8e0172cda80a2287de4ed6bdcf8` found one P2 in SCI1/SCI3:
+`ownOptions` returns an ordinary object, and the unconditional
+`sourceHistoryFamily(raw.sourceHistoryPolicy)` reads an inherited selector when
+the caller has omitted its own property. An inherited writable
+`'supplied-history-v1'` can therefore bind the new family while the descriptor-
+selected renderer remains legacy; an inherited getter can be invoked. Omission
+must remain complete legacy behavior, not an inherited opt-in.
+
+The regression is staged before any implementation correction or execution.
+Four actual-API tests isolate prototype pollution in disposable Node children:
+both capture profiles crossed with an inherited writable data selector or a
+throwing/counting inherited getter. Each child compares complete serialized
+legacy projections for before-question, equal-minute and future-only sentinel
+inputs against clean baselines, including schema, manifest/roster digests,
+case digest, batch counts and source-body preflight. Controls establish valid
+own-data opt-in and rejected unread own getters before and after restoring the
+child prototype; the parent test process is never polluted. No provider,
+native call, scratch store or model work is involved.
+
+The proposed runtime correction is only to gate the family lookup by the
+already validated own descriptor, aligning it with renderer selection. No
+general options/prototype/schema behavior, renderer, cap, timer or dependency
+change is proposed. The classification owner currently holds the heavy slot:
+no regression or other gate has run, and runtime bytes are still unchanged.
+RED invocation/output, the minimal fix, both-runtime GREEN/affected full gates,
+fresh primary acceptance, a new freeze/candidate and renewed dual review remain
+pending explicit scheduling handoff. The preceding full matrix and primary
+acceptance establish only the c13 candidate bytes, not this correction.
+
+### Selector correction RED, minimal fix and new freeze
+
+The primary handed the author the sole heavy slot after classification's two
+generic children closed and their callers were cleaned. Before the actual RED,
+the command-only metadata wrapper failed to parse: double-quoted JSON of its
+multiline `--eval` source retained literal backslash-newlines. No runner, caller
+or regression log was created, and runtime remained c13. The original tool
+diagnostic is retained; mode-600, fsynced
+`selector-correction-launch-envelope-failure.log` records this zero-child
+launch failure separately, not as regression RED. The author stopped and
+reported it. The primary authorized command-envelope correction only: an
+external task-owned wrapper was created with `apply_patch` and passed Node 22
+`--check` before dispatch. A later orchestration-only `URL is not defined`
+while constructing the artifact helper likewise occurred before any tool call,
+file or child; the diagnostic was retained and reported, and the unnecessary
+URL construction was replaced by the literal approved module URL. Neither
+event is a product failure, native N7 diagnosis, API retry or test rerun.
+
+Actual RED against unchanged c13 runtime on exact Node `v22.16.0`:
+
+```sh
+node tools/testing/run.mjs --test-concurrency=1 --test-name-pattern='SCI1 omitted own source selector' evaluation/longmemeval/test/supplied-history-comparison.test.mjs
+```
+
+All four selected tests failed (0 pass, 4 fail, zero skipped/cancelled/TODO).
+Inherited writable data produced the supplied-history schema and identity
+digests while retaining legacy body preflight. Throwing inherited getters were
+read in all three sentinel controls of each profile. Explicit own-data and own
+getter controls passed before and after child-prototype restoration. The actual
+runner child 3153 closed code 1, signal `null`; caller `/tmp/ss22.debn72` had its
+identity verified, was empty and removed. Raw log:
+`selector-correction-node-22.16.0-RED.log`, preserved without replacement.
+
+Only the family lookup was corrected:
+`sourceHistoryFamily(sourceDescriptor ? raw.sourceHistoryPolicy : undefined)`.
+The same descriptor already governs renderer selection, so an omitted own
+selector now chooses legacy without inherited reads. No broader options,
+prototype, schema, renderer, prompt, guard, cap, timer, model, budget or lock
+change was made. The focused four-file scope documented above now passed
+36/36 on each exact Node `v22.16.0` and `v24.15.0`, all other counts zero,
+code 0, signal `null`, children closed and exact callers empty/removed. Logs:
+`selector-correction-node-VERSION-focused-GREEN.log`. Legacy full-JSON hash
+snapshots remain unchanged. This corrects the review finding, not the separately
+declared malformed-report validation tightening.
+
+New same-nine-file freeze:
+`selector-correction-runtime-test-freeze.sha256`, SHA-256
+`120e431786b117012751b12fedefc324843c24cc397c221100985045573ae058`.
+Exactly two hashes changed: `mixed-generation.mjs` and the focused supplied
+comparison test. The seven other hashes match the original manifest, which
+remains intact together with all c13 raw logs and candidate binding records.
+`selector-correction-freeze-and-carryforward-proof.json` records both manifest
+hashes and all nine old/new entries. Raw logs retain exact runtime, command,
+PIDs, caller identity and closure, and wrapper SHA-256
+`3c1ce0cee7ec62443fea7b452ba0ad6c04cf23bd19d929e7b79a17ae51e9113f`.
+The new manifest binds these correction runs; product/test bytes are frozen.
+
+Generic 580/580, workspace lifecycle 25/25 and locked maintainer marketplace/
+strict-plugin validations on both exact Nodes are carried forward from c13,
+not falsely claimed rerun. The carryforward proof hashes 497 unchanged tracked
+files across integration/plugin/core/architecture/runner/packaging/adapter
+namespaces plus scripts, policies, fixtures, README/contributor instructions,
+CI and dependency locks. The supplementary
+`selector-correction-carryforward-import-graph.json` conservatively expands
+these complete namespaces through literal relative file references and the
+actual nested lifecycle qualified-comparison fixture: 570 unchanged nodes,
+1,416 edges, neither corrected module nor new focused test reachable.
+Inspected computed loads stay in the included client/plugin trees; lifecycle's
+generated runner/packaging/core/paired/semantic children are included. The only
+outside-LongMemEval inbound reference to this source-family entrypoint is
+`evaluation/long-history-live/prepare.mjs`, absent from the carried scripts.
+Maintainer validation checks the unchanged marketplace/plugin descriptors,
+not these evaluation modules. This is an affected-check justification, not
+latest-head CI evidence. Affected full gates, final audit, new primary controls,
+candidate commit-byte binding and renewed dual reviews remain required.
+
+### Completed selector-correction affected matrix
+
+The frozen correction passed every affected gate once on both exact runtimes:
+
+| Actual command/scope | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| Four-file focused scope above, `--test-concurrency=1` | 36/36; 31,300 ms | 36/36; 31,092 ms |
+| `npm run test:longmemeval -- --test-concurrency=1` | 217/217; 9,223 ms | 217/217; 7,666 ms |
+| `npm run test:mixed-native-local -- --test-concurrency=1` | Complete 38/38; 214,873 ms | Complete 38/38; 191,733 ms |
+| `npm run validate` | JSON/version validation pass | JSON/version validation pass |
+| `npm run demo:longmemeval-ingestion` | Exit 0 | Exit 0 |
+| `npm run demo:longmemeval-comparison` | Exit 0 | Exit 0 |
+| `npm run demo:longmemeval-public` | Exit 0 | Exit 0 |
+| `npm run demo:longmemeval-mixed` | Exit 0 | Exit 0 |
+
+All successful counted suites have zero failures, skipped, cancelled and TODO
+tests. All 16 successful commands closed code 0, signal `null`, with their
+children absent at closure. The raw RED remains code 1 with four failures,
+not relabeled by GREEN. There was no unexpected product failure or product/API
+retry in this correction matrix. Full command elapsed times above are not
+performance or benchmark measurements. Parent npm compile cache was disabled;
+each invocation used `env -i`, exact Node PATH, the separate isolated npm config/
+cache described above, a fresh short owned `/tmp/ss22.*` or `/tmp/ss24.*` caller,
+and at most one active heavy command. Native gates alone received the two
+approved read-only artifact roots. No dependency install, model call or native
+bootstrap occurred.
+
+Original mode-600, fsynced logs are retained under
+`/tmp/cairn-supplied-comparison-gates.GkCy99` as
+`selector-correction-node-VERSION-LABEL.log`: VERSION is `22.16.0` or `24.15.0`,
+and LABEL is `focused-GREEN`, `longmemeval`, `mixed-native-local`, `validate`,
+`demo-ingestion`, `demo-comparison`, `demo-public`, or `demo-mixed`; the separate
+Node 22 `RED` log is also retained. The independent
+`selector-correction-final-gate-audit.json` verifies all 17 exact raw records,
+unique anchored TAP `#` or SPEC `ℹ` numeric footers, statuses, known PIDs,
+caller identities and present-day caller existence. Every test and empty-output
+caller is absent after identity-checked empty-only removal. Four documented
+synthetic demo outputs remain, checked without reading database contents:
+
+- `/tmp/ss22.rHYToL/cairn-lme-ingestion-demo-MkLyTI/memory.sqlite`
+- `/tmp/ss22.aej3j3/cairn-lme-comparison-demo-GTi72z/memory.sqlite`
+- `/tmp/ss24.rke7X7/cairn-lme-ingestion-demo-bPAnPg/memory.sqlite`
+- `/tmp/ss24.L5n2w0/cairn-lme-comparison-demo-301VBT/memory.sqlite`
+
+`selector-correction-native-artifact-before.log` and
+`selector-correction-native-artifact-after.log` are byte-identical by `cmp` and
+independent audit, and equal the original approved c13 descriptor recorded
+above. The inspector's after child closed before slot release. The new freeze
+manifest still matches all nine current runtime/test files, and the original
+manifest/raw/candidate records remain intact. `git diff --check` passes; only
+the one-line generation lookup, four regression tests and this plan differ
+from c13. The CHANGELOG and limitations already correctly describe omission as
+legacy and the separately declared malformed-report tightening; no extra claim
+or wording change is needed for this pre-delivery correction.
+
+The author explicitly released the heavy slot after all affected children and
+the after-inspector closed, before this static evidence append. Primary
+corrected-byte acceptance (focused 36 and installed SCI6 12 on both Nodes),
+the new local candidate/committed-byte binding, renewed independent Standards
+and Spec reviews against the original fixed base, and latest-head CI remain
+pending. No candidate commit or push has been made in this correction packet;
+HEAD is still the reviewed c13 candidate. The unchanged grant remains closed,
+paid/default/journal integration remains excluded, and existing scores remain
+unchanged.
+
+### Primary corrected-byte acceptance and local correction candidate
+
+The primary personally accepted all four corrected-byte controls with the new
+`120e431786b117012751b12fedefc324843c24cc397c221100985045573ae058` manifest:
+all nine file hashes were identical before and after, exact Node runtime
+assertions passed, and every command closed code 0, signal `null`, with unique
+TAP count footers and zero failures/skips/cancellations/TODOs. Primary-supplied
+results (Node test duration, not a benchmark):
+
+| Exact runtime / gate | Result / duration ms | Raw SHA-256 | Known child / removed caller suffix |
+| --- | --- | --- | --- |
+| 22.16.0 / focused | 36/36; 12,134.392257 | `c0901fee44028dcec22e26e4ee4cab72159d521ea4ddc09a0617c4b294c2d50c` | 30906 / `6WzmRM` |
+| 24.15.0 / focused | 36/36; 14,150.004633 | `1a31817bf9e80d49e55a7851f11827449f907cd1a2423d3c2f1031b00a4c19c7` | 38158 / `heKbzD` |
+| 22.16.0 / native | Actual SCI6 12/12; 59,963.969245 | `b62e707b5e909de6d80c9148cad4a6f60b038eaa64d1f3f34805cbc9762dac82` | 44269 / `Ddr3JB` |
+| 24.15.0 / native | Actual SCI6 12/12; 57,590.698168 | `737ec86ad72adb9d3db7b73c2bde0747a5cfbb40adfa04b7e7914dbfb2d33159` | 78502 / `cUAJIf` |
+
+Raw primary evidence is
+`/tmp/cairn-six-diagnostic-primary.F3Skmd/SCI-SELECTOR-PRIMARY-VERSION-GATE.log`,
+where VERSION and GATE match the table. The primary verified each exact caller
+identity, empty contents and removal, with no residue. These paths and facts
+were supplied by the primary; the author did not inspect or list that private
+directory. The primary acceptance utility received independent non-author
+control review before execution. The primary also accepted the author's 17
+raw invocation records and unchanged native artifact. Its first read-only
+audit helper accidentally parsed a pretty-printed demo's opening brace as
+metadata; a finite header/closure filter corrected the audit only, with no raw
+log, code or child change and no gate rerun.
+
+The primary authorized only the three-file local correction commit and new
+committed-blob binding; classification owns the heavy slot. The author makes
+no further test call or push. The new binding records the exact candidate SHA,
+same nine frozen blob hashes, clean status and combined 13-file roster against
+the original fixed base, preserving both earlier manifests and binding records.
+Renewed independent Standards and Spec review of that final combined candidate,
+primary final binding/diff acceptance and latest-head CI remain delivery gates.

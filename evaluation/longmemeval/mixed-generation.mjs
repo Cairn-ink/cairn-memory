@@ -154,7 +154,7 @@ export function prepareMixedComparison(options) {
     ...(sourceDescriptor ? ['sourceHistoryPolicy'] : [])], 'invalid_mixed_preparation');
   if (profileDescriptor && raw.comparisonProfile !== 'indexed-evidence-v1') fail('invalid_mixed_preparation');
   if (sourceDescriptor && raw.sourceHistoryPolicy !== 'supplied-history-v1') fail('invalid_mixed_preparation');
-  const family = sourceHistoryFamily(raw.sourceHistoryPolicy);
+  const family = sourceHistoryFamily(sourceDescriptor ? raw.sourceHistoryPolicy : undefined);
   const source = sourceSnapshot({ sourceCases: raw.sourceCases, armOrders: raw.armOrders });
   dense(source.sourceCases, 1, 250, 'invalid_source_cases');
   dense(source.armOrders, source.sourceCases.length, source.sourceCases.length,

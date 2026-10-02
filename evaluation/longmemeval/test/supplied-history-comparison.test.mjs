@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readdirSync } from 'node:fs';
 import test from 'node:test';
@@ -103,6 +104,67 @@ test('SCI1 strict caller source policy options fail before callbacks or getters'
   const oracle = sourceRow(); oracle.history.answer_session_ids = ['forbidden'];
   assert.throws(() => supplied(oracle), { code: 'invalid_source_cases' });
 });
+
+for (const comparisonProfile of [undefined, 'indexed-evidence-v1']) {
+  for (const inherited of ['writable-data', 'throwing-getter']) {
+    test(`SCI1 omitted own source selector ignores inherited ${inherited} (${comparisonProfile ?? 'default'})`, () => {
+      const controls = ['2024/01/01 (Mon) 09:00', '2024/01/02 (Tue) 10:00',
+        '2024/01/03 (Wed) 00:00'].map((date, index) => {
+        const row = sourceRow();
+        row.history.sessions[0].date = date;
+        row.history.sessions[0].turns[0].content = `Synthetic inherited-selector sentinel ${index}.`;
+        const input = options(row, comparisonProfile);
+        const legacy = prepareMixedComparison(input);
+        assert.equal(legacy.counts.batchCounts[0], index === 2 ? 0 : 1);
+        assert.equal(legacy.preflight[0].reason, index === 2 ? 'no_eligible_history' : null);
+        return { input, legacy: JSON.stringify(legacy),
+          explicit: JSON.stringify(prepareMixedComparison({ ...input,
+            sourceHistoryPolicy: 'supplied-history-v1' })) };
+      });
+      // Pollute only a disposable child, never the concurrent test process.
+      const script = `
+        import assert from 'node:assert/strict';
+        import { readFileSync } from 'node:fs';
+        import { prepareMixedComparison } from ${JSON.stringify(new URL('../mixed-generation.mjs', import.meta.url).href)};
+        const { controls, inherited } = JSON.parse(readFileSync(0, 'utf8'));
+        let reads = 0;
+        const explicitControls = () => {
+          for (const { input, explicit } of controls) {
+            assert.equal(JSON.stringify(prepareMixedComparison({ ...input,
+              sourceHistoryPolicy: 'supplied-history-v1' })), explicit);
+            const ownGetter = { ...input };
+            Object.defineProperty(ownGetter, 'sourceHistoryPolicy', { enumerable: true,
+              get() { reads++; throw new Error('own selector getter must not be read'); } });
+            assert.throws(() => prepareMixedComparison(ownGetter), { code: 'invalid_mixed_preparation' });
+          }
+        };
+        assert.equal(Object.hasOwn(Object.prototype, 'sourceHistoryPolicy'), false);
+        explicitControls();
+        const failures = [];
+        Object.defineProperty(Object.prototype, 'sourceHistoryPolicy', inherited === 'writable-data'
+          ? { configurable: true, enumerable: true, writable: true, value: 'supplied-history-v1' }
+          : { configurable: true, enumerable: true,
+            get() { reads++; throw new Error('inherited selector must not be read'); } });
+        try {
+          for (const { input, legacy } of controls) {
+            assert.equal(Object.hasOwn(input, 'sourceHistoryPolicy'), false);
+            try { assert.equal(JSON.stringify(prepareMixedComparison(input)), legacy); }
+            catch (error) { failures.push(error.message); }
+          }
+        } finally { delete Object.prototype.sourceHistoryPolicy; }
+        explicitControls();
+        assert.equal(reads, 0, 'no own or inherited selector getter invocation');
+        assert.deepEqual(failures, [], 'complete legacy projection including schema, manifest, roster, digests and body preflight');
+      `;
+      const child = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+        input: JSON.stringify({ controls, inherited }), encoding: 'utf8', timeout: 15_000,
+        maxBuffer: 4 * 1024 * 1024 });
+      assert.equal(child.error, undefined);
+      assert.equal(child.signal, null);
+      assert.equal(child.status, 0, child.stderr || child.stdout);
+    });
+  }
+}
 
 test('SCI3 authentic legacy capability, cloned preparation and runtime selector refuse before scopes/HTTP', async t => {
   const fixture = syntheticMixedFixture(t, { artifact: descriptors.nativeArtifact,
