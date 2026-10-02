@@ -383,6 +383,23 @@ export function candidateGolden(base) {
       '\\"version\\":\\"0.1.1\\"',
       `\\"version\\":\\"${VERSION}\\"`,
     );
+    // 0.2.1 deliberately adds a silent personal SessionStart read. Keep the
+    // frozen base's other exact request bytes; expect the new request only
+    // where startup telemetry proves the client is enabled and not paused.
+    if (variant.entry === "hook" && variant.mode !== "paused-standalone") {
+      variant.requestBytes = variant.requestBytes.split("\n").map((line) => {
+        if (!line) return line;
+        const request = JSON.parse(line);
+        if (!request.url.endsWith("/telemetry") ||
+            JSON.parse(request.body).event !== "plugin_started") return line;
+        return line + "\n" + JSON.stringify({
+          url: "https://synthetic.invalid/api/memory/session-start",
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: "Bearer synthetic-token" },
+          body: JSON.stringify({ version: 1, session_id: "synthetic-session" }),
+        });
+      }).join("\n");
+    }
     // Coordinator's round-10 tie-break: local 0.1.2 history is not first use.
     // These remain actual-base fixtures, but are refusal tests rather than parity.
     if (variant.mode.startsWith("local-marker-")) {

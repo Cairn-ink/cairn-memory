@@ -23,6 +23,7 @@ import { createJsonPoster, hostedQuotaStatus, hostedTargetId, resumeHostedQuota 
 import { prepareRecallQuery } from "../lib/recall-query.mjs";
 import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
 import { VERSION } from "../lib/version.mjs";
+import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
 
 const action = process.argv[2] ?? "status";
 const configuredEndpoint =
@@ -83,6 +84,21 @@ async function dispatchActive(generation, start) {
   const dispatch = await startIfActive(dataDir, generation, start);
   if (!dispatch.started) throw new Error("dispatch_not_started");
   return dispatch.operation;
+}
+
+async function sessionStart(hookInput) {
+  if (!token) return;
+  const control = await readControlState(dataDir);
+  if (control.paused) return;
+  const sessionId = optionalHostSessionId(hookInput.session_id);
+  const request = { version: 1, ...(sessionId === undefined ? {} : { session_id: sessionId }) };
+  // The existing async start hook stays silent. Context injection requires a
+  // qualified local token counter; no response body or raw id is logged here.
+  const started = await startIfActive(dataDir, control.generation, () =>
+    post.reply("/api/memory/session-start", request, 2_000, undefined, undefined,
+      (start) => dispatchActive(control.generation, start)),
+  );
+  if (started.started) await started.operation;
 }
 
 async function recall(hookInput) {
@@ -351,7 +367,10 @@ try {
       await control();
     } else {
       const hookInput = await input();
-      if (action === "start") await telemetry("plugin_started");
+      if (action === "start") {
+        await telemetry("plugin_started");
+        await sessionStart(hookInput);
+      }
       else if (action === "recall") await recall(hookInput);
       else if (["capture", "capture-detached"].includes(action)) {
         const requestedGeneration =

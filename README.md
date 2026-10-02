@@ -248,6 +248,11 @@ The bundled MCP connection also exposes explicit `remember_memory`, `recall_memo
 
 ## Hosted plugin privacy contract
 
+SessionStart also sends the host conversation id to the authenticated service
+when available. Trusted hooks supply it; models never invent it. The server
+stores only an owner-scoped hash. Older strict servers receive one exact-schema
+fallback without the optional field. See the [protocol](docs/protocol.md#hosted-protocol-020).
+
 - Installation is explicit. Automatic capture begins only after installation and is on by default.
 - Only textual user and assistant message blocks are allowlisted.
 - Tool-result and tool-use blocks are excluded; the plugin does not read arbitrary project files. Ordinary user/assistant text can still contain pasted file contents, terminal output, paths, or repository names and is eligible for processing.

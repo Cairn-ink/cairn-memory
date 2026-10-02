@@ -17,9 +17,10 @@ const closed = (x, allowed) =>
   !Array.isArray(x) &&
   Object.keys(x).every((k) => allowed.includes(k));
 const fileId = (stat, path) => hash(path, stat.dev, stat.ino);
+export const wireSessionId = (sessionId) => hash("wire-session-v1", "codex", sessionId);
 const wireBinding = (b) => ({
   projectId: b.projectId,
-  sessionId: hash("wire-session-v1", "codex", b.sessionId),
+  sessionId: wireSessionId(b.sessionId),
 });
 function account(s, records, start, end) {
   for (const r of records.filter((r) => r.start >= start && r.end <= end)) {
