@@ -317,9 +317,32 @@ records question and session dates separately. Input parity between arms does
 not establish fidelity to all supplied history, and retaining supplied history
 does not establish formal chronological consistency or semantic quality.
 
-This additive API is synthetic offline preparation only. No paid runner,
-installation caller, host default, scorer or frozen operator protocol opts in.
-Native integration, scorer compatibility, inventory accounting and any paid
-comparison require separate gates. It provides neither permission to use future
-personal data nor certified official scores. See the
-[SH contract and evidence](plans/supplied-history-source-policy.md).
+The mixed comparison preparation API also accepts the explicit own-data option
+`sourceHistoryPolicy: 'supplied-history-v1'`, independently of
+`comparisonProfile`. Omission preserves legacy preparation and caller defaults;
+unknown values, accessors and an explicitly undefined selector fail preflight.
+The choice is bound privately to preparation, not accepted again at runtime.
+Both arms use the same supplied-history plan, including its unchanged static
+native-token fit and batch caps. A legacy capability cannot execute this plan.
+
+This mode uses separately bound preparation, context, generation and scoring
+identities. Its generation and scoring versions are respectively
+`cairn-lme-supplied-history-mixed-generation-v1` and
+`cairn-lme-supplied-history-mixed-scoring-v1`; report digests use a distinct
+domain. The scorer recomputes the exact source/context/scorer identities for the
+two finite report families before judging, including legacy reports. This
+additionally rejects malformed legacy identities that were formerly checked
+only against the supplied capability. Valid legacy outputs and hashes remain
+unchanged. Fixed-N accounting and judge prompts are shared, but the two families
+must not be pooled.
+
+Only synthetic offline preparation and fake-HTTP installed-native tests cover
+this explicit path. Empty extraction can retain every ingestion input while
+producing no Cairn evidence; inclusion does not establish source retention or
+semantic quality. No paid runner, installation caller, host default or frozen
+operator protocol opts in. Inventory and durable-result integration remain
+future gates: the result journal is an unmerged dependency (PR #321), not wired
+here. A later live run needs that integration and a fresh approved capability.
+This provides neither permission to use future personal data nor certified
+official scores. See the [SH contract and evidence](plans/supplied-history-source-policy.md)
+and [comparison integration contract and evidence](plans/supplied-history-comparison-integration.md).
