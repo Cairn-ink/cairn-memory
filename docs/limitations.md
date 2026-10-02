@@ -1301,3 +1301,42 @@ are retained in the [round 2 handoff](plans/codex-client.md#cx-4-round-2-決策�
 A file-level pass from a broken worker pipe is not evidence of case-level success;
 hung or failed CI commands require a rerun in the ordinary CI environment.
 The existing round 1 results do not qualify the revised round 2 implementation.
+
+## Offline write diagnosis does not establish the historical causes
+
+The [Stage D diagnostic](plans/write-failure-diagnosis.md#public-stage-d-checkpoint)
+uses new synthetic messages, the actual public core/OpenAI adapter and an
+invocation-owned v1 ledger with the ordinary case-deadline guard. On both Node
+22.16 and 24.15, the healthy direct control and guarded controls with 16 and
+4,096 historical attempts completed all three planned batches with 12 identical
+fake requests and exact source receipts after cold reopen. Guarded capture made 74 full
+history validations, examining 1,628 versus 303,548 returned attempt rows;
+SQLite quick-check invocations are counted separately, while their internal
+page work is unknown. Setup is linear fixture seeding and measured separately.
+These are evaluation-accounting observations, not provider or product latency.
+
+The same health assertion fails under an explicit count-fetch rejection and
+passes when only that injection is removed. Failure controls retain full
+unknown reservations, fence further requests after global halt, preserve earlier
+sources after a later extraction failure, and distinguish classification
+failure after admission. The actual 30-second core deadline is exercised with
+a test clock; the transport-specific control explicitly configures a test-only
+10 ms guard deadline instead of the normal 60 seconds. Success and failure
+subprocesses leave no unexpected owned scratch. No natural failure reproduced,
+and no production timer, retry, model, stop policy or runtime source changed.
+
+A subsequently authorized one-batch point at exactly 35,812 synthetic settled
+history rows also passed on both Nodes against the matching 16-row control:
+1/1 capture, four fake requests, one exact cold-reopened source, unchanged
+prefix/caps and zero pending attempts or global halt. Both one-batch fixtures
+made 26 full history reads over 468 versus 931,164 returned attempt rows.
+This checks ordinary-v1 ledger cardinality only; no actual book was read, no
+64-batch gate was run, and no embedding/mixed-profile or historical causal
+claim follows from it.
+
+This v1 fixture is not the embedding-bound-v2/mixed-v3 path. The private
+credential parent, v3 operator, native arm, full mixed runner, scoring and
+internal adapter phases are unexercised. Neither the older capture timeout
+after five of 45 batches nor the later count-transport failure after fourteen
+of 50 has a proven cause from this loop. It supplies no semantic-quality,
+real-provider completion, resource-fit or paid-run acceptance.

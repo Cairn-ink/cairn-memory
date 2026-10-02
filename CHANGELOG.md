@@ -29,6 +29,10 @@ No hosted/server implementation or hook enablement is included.
 
 ## Unreleased — model calls fit their budgets
 
+- Add a keyless synthetic write diagnostic through the actual core, OpenAI
+  adapter and ordinary case-deadline guard, with fixed ledger work counts,
+  failure controls and cleanup checks on Node 22/24 CI. No natural capture
+  failure or historical cause was reproduced; production behavior is unchanged.
 - Local MCP episode access now provides keyless session/time reads, sourced startup
   context and revision-guarded correction, closure, unpinning and conversation
   deletion with its memory/source cascade. Explicit keep uses retained-source

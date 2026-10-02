@@ -180,6 +180,8 @@ jobs:
       - run: npm ci --prefix adapters/openai
       - run: npm run test:experiment-request-guard
       - run: npm run demo:experiment-request-guard
+      - name: Synthetic write failure diagnostic without provider access
+        run: node tools/testing/run.mjs evaluation/experiment-budget/test/write-failure-diagnostic.test.mjs
 
   plugin-validation:
     runs-on: ubuntu-latest
