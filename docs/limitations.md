@@ -1,5 +1,20 @@
 # Known limitations
 
+The OFF-by-default [source-partition offline harness](plans/source-partition-offline.md)
+checks synthetic whole-message planning, original window coordinates and local
+extraction-token fit. Corrected public-core capture/cold replay and recall checks
+passed 36/36 on Node 22.16.0 and 24.15.0, including primary personal reruns;
+mandatory offline gates also passed. The first Node22 attempt's 35/36 result is
+retained: its public-map assertion wrongly expected a private classifier catalog.
+Correcting that fixture establishes no historic source-loss cause. Scripted
+five-card extraction can omit a sixth structured fact even when every receipt
+still contains its full source. Receipt retention, structured-card coverage and
+answer utility are different properties. Ordinary recall uses query-aware
+memory selection/ranking, not model-directed MOC-topic descent; public MOC
+pages and classifier catalogs have separate visibility/budget boundaries.
+Provider budgets remain separate. This does not establish semantic quality,
+historical N7 cause or benchmark scores, or change any capture default.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025

@@ -29,6 +29,11 @@ No hosted/server implementation or hook enablement is included.
 
 ## Unreleased — model calls fit their budgets
 
+- Added OFF-by-default synthetic source-partition planning and public-core
+  capture/cold-receipt, stop/replay and query-aware recall controls using actual
+  source windows and local extraction-token budgets. These mechanical checks
+  do not establish semantic quality, historical N7 cause or benchmark scores,
+  and change no capture defaults.
 - Trusted classification diagnostics now distinguish duplicate targets/parents,
   invalid titles, target mismatch, parent visibility and topic creation policy
   using finite reasons without content or identifiers. Public rejection codes,
