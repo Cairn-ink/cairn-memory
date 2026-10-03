@@ -16,6 +16,15 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [phase observer rejection correction](docs/plans/phase-observer-rejection.md)
+  bypasses a returned native Promise's throwing own `catch` property. Actual
+  adapter subprocesses and installed archives use fake HTTP to check inert
+  rejection handling, unchanged wires/errors and owned scratch cleanup on both
+  supported runtimes. This correction establishes no cause for an earlier paid
+  timeout, classification failure or interruption. Trusted callback authority,
+  historical evidence, fixed-30 and installed host acceptance gates remain as
+  documented.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It
@@ -47,6 +56,35 @@ service must use the same public core, not separate engines.
   unproven. Do not expand to fixed-30 now. Diagnose the timeout, empty
   multi-session retrieval and temporal evidence path offline, then separately
   review any new proposal. Default MOC and product semantic gates remain open.
+
+- The [one-shot installed long-write diagnostic](docs/evidence/installed-phase-long-write.md)
+  used two new synthetic 32-batch histories. Cairn answered one of two;
+  Mem0 answered both; automatic correct/incorrect/unresolved were Cairn 1/0/1
+  and Mem0 1/1/0 at common-resolved N=1. One Cairn classification failed after
+  partial sixth-batch admission. Both second-case answers received automatic
+  positive grades, but agent review found Cairn denied an adopted prior
+  decision and flagged possible causal inversion in Mem0. The primary found
+  the earlier adoption passage stored but absent from selected receipts;
+  the stage causing that selection loss remains unproven. Full completion was
+  not achieved, and semantic acceptance remains open. Diagnose classification
+  after the observed output-validation boundary and
+  evidence/adoption preservation separately. No consumed-case replay,
+  fixed-30 expansion, raw-retention increase or installed MCP/Hermes claim.
+
+- The [M1e installed classification follow-up](docs/evidence/installed-classification-followup.md)
+  completed both new cases in both arms, with all four judgments resolved:
+  fixed N=2 and common-resolved N=2; automatic Cairn 2/0/0 and Mem0 1/1/0
+  correct/incorrect/unresolved. All 32 Cairn batches and initial-classification
+  journal entries completed per case. The engine was unchanged; prior timeout
+  and classification failure causes remain unproven. All eight required source
+  windows were stored, but logistics recall selected only the reconfirmation
+  passage; the visibility/selection/ranking cause remains unknown. Positive
+  grades coexist with finer source omissions, so semantic coverage stays open.
+  Diagnose those stages on new synthetic cases before engine/prompt changes.
+  This explicit bounded-keyset source-evidence/bounded-source-scan route does
+  not establish default MOC navigation, reliability, lightweight fit or
+  installed MCP/Hermes acceptance; no immediate fixed-30 expansion, consumed-case
+  replay/retuning or raw-retention increase follows.
 
 - The [fresh official-six v3 observation](docs/evidence/qualification-official-v3.md)
   halted during generation: six planned cases and twelve arms retain one
@@ -185,6 +223,12 @@ reliability work below without declaring older failure gates resolved.
    It does not supply an operational credential broker, prove source selection
    or model answers, or authorize a paid cohort. Its synthetic pre-grant demo
    and explicit pinned-native local test must not be conflated with a score.
+   The opt-in [private mixed result journal](docs/mixed-result-journal.md) adds
+   incremental terminal-arm retention and failure barriers for a future
+   explicitly enabled operator. Its offline interruption gate does not recover
+   old missing outputs, resume a consumed cohort or pass semantic/performance
+   gates. Audit finite fresh-case availability and the unchanged budget, then
+   freeze and review a new protocol before any paid execution.
    A fresh [six-batch synthetic canary](docs/evidence/qualification-canary.md)
    has since completed one paired question; this is technical feasibility,
    not a benchmark result or repair of the earlier failed cases. The later

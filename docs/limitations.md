@@ -1,5 +1,37 @@
 # Known limitations
 
+The [prospective offline integration](plans/prospective-evaluation-readiness.md)
+combines extraction subtype observations, typed native categories, reduced
+bound-v2 validation work and private result journaling. Its installed synthetic
+failure regression first reproduced a journal schema mismatch, then verifies
+finite native category retention through the existing global halt. None of
+this recovers the halted one-shot twelve, proves its original cause, produces
+a competitor score, guarantees latency, or grants a future paid experiment.
+Future measurement still needs a separately frozen protocol and explicit grant.
+
+The [prospective native terminal-failure observation](plans/mixed-native-failure-diagnostics.md)
+retains only a finite typed runtime/gateway category in future private mixed
+Mem0 arm diagnostics. Unknown codes/classes, accessors and proxies remain
+unobserved; absence does not imply success. A native category can survive the
+outer `scope_execution_failed` halt, but does not prove which actor or input
+caused the failure, repair native execution, or recover an exception discarded
+by a historical run. Synthetic genuine gateway rejection and installed native
+fake-HTTP global-stop checks establish projection and retention only. They
+do not provide semantic scores, measured competitor performance, product parity
+or a new paid-run grant. Outer stop, failure eligibility, fixed N and unknown
+request/reservation accounting remain unchanged.
+
+The [bound embedding transaction read reduction](plans/bound-embedding-transaction-reads.md)
+removes one discarded duplicate full validation from each successful bound-v2
+reservation or settlement. Real SQLite synthetic counters observe three
+complete reads/quick checks before and two after; pre/post witnesses, expected
+state, schema, configuration, path and accounting checks remain. The remaining
+two scans still validate the complete growing history, so repeated operations
+retain growing work. These counts establish no wall-clock latency guarantee,
+historical provider-timeout explanation, native-halt repair, paid-run success,
+memory quality, product lightweight status or competitor parity. No actual
+ledger or past result is changed and no paid rerun is authorized.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
@@ -233,9 +265,23 @@ attempt stages per arm. `retainedStageCount` and `omittedStageCount` explicitly
 describe that sample; use the guard and ledger artifacts for the full trail.
 This prevents an unbounded duplicate diagnostics list from exhausting the
 fixed report envelope after generation. Synthetic large-report validation is
-not a completed paid run or a semantic score. Unexpected process death before
-the generator returns still does not supply per-case generation checkpoints or
-authorize resuming the consumed cohort.
+not a completed paid run or a semantic score. Without the explicit journal
+opt-in below, unexpected process death before the generator returns still
+does not supply per-case generation checkpoints or authorize resuming the
+consumed cohort.
+
+The opt-in [mixed result journal](mixed-result-journal.md) now provides a separate
+incremental private retention boundary for future explicitly enabled runs.
+Offline SIGKILL tests retain an actual completed answer or judgment before
+whole-phase return; failed persistence prevents later dispatch. This does not
+recover the interrupted thirty-case run's missing outputs, change its frozen
+operator, retry consumed cases, settle old accounting or establish a score.
+Missing journal arms are unknown, and a halted completion marker is observation
+completion rather than success. Same-UID tampering, host/filesystem failures,
+local backups and sensitive model-output retention remain documented limits.
+Fresh-case availability, the unchanged cumulative budget, a separately frozen
+paid protocol, installed-host behavior and performance/semantic gates remain
+open; synthetic native/fake-HTTP evidence does not pass them.
 
 The completed fixed-30 S3 attempt remains unresolved for every Cairn arm at
 ingestion. Its retained report records `ingestion_incomplete` but not each
@@ -845,6 +891,40 @@ all JavaScript process memory or side effects of Proxy traps during own-key
 inspection. No semantic score, parity or installed behavior follows from
 renderer tests.
 
+The opt-in [supplied-history preparation policy](longmemeval-comparison.md#explicit-supplied-history-preparation-offline-only)
+preserves all valid supplied sessions, including equal-minute and later ones,
+with original timestamps and source order. The legacy mixed-source v2 cutoff
+remains unchanged. Matching prospective arm inputs establishes parity, not
+fidelity to all supplied history: a cutoff can remove the same source from both
+arms. Conversely, keeping all supplied sessions does not prove the paper's
+formal `tq > tN` assumption; pinned executable supplied-history baselines and
+that formal definition express different chronology boundaries. The finite
+`sessionsAfterQuestion` count reports later sessions without repairing or
+excluding them, and does not count equal-minute violations of strict chronology.
+Only synthetic offline tests cover the new policy. Explicit mixed preparation
+can bind it to separately versioned generation/scoring families, independently
+of capture profile; omitted selectors and all installation/paid callers remain
+legacy. Fake-HTTP installed-native checks establish supplied-input inclusion and
+source-window provenance, not semantic accuracy. Empty extraction can complete
+with no admitted evidence and does not fix source retention. The scorer now
+rejects malformed legacy source/context/scorer identities even when a forged
+matching capability echoes them; valid legacy reports remain unchanged.
+The private result-journal integration binds the selected family coherently
+across both phases and cold inspection, including complete supported wire-profile
+equality; it does not retain original histories, authenticate opaque declared
+artifact/adapter hashes, or independently authenticate nested diagnostics.
+Its synthetic adversarial/cold and fake-HTTP installed-native gates are offline
+verified on exact Node 22.16.0 and 24.15.0; the
+[SJ contract](plans/supplied-history-journal-integration.md) retains the failures,
+corrected evidence and containment limits. Final candidate, review and delivery
+remain pending. Inventory and paid-run authorization remain separate future
+gates. No source-policy choice authorizes
+future personal-data use or certifies an official score.
+This is the 2026-10-02 UTC offline checkpoint; current commit/review/CI/delivery
+state is tracked in the
+[matching branch PR](https://github.com/Cairn-ink/cairn-memory/pulls?q=is%3Apr+head%3Afeat%2Fsupplied-history-journal-integration),
+not a declaration that this snapshot is merged or released.
+
 ## Direct candidate-ID wire remains an offline experiment
 
 The [direct candidate-ID experiment](plans/direct-candidate-wire-experiment.md)
@@ -857,6 +937,18 @@ fixture, the current adapter fits one whole request while the alternate needs
 five singleton qualifier pairs. Valid maximal-label outputs also exceed the
 unchanged output-token ceiling. The decision is to revise the design rather
 than adopt it; no paid cases, user data or operational ledger were used.
+
+## Capture classification diagnostics are an offline ingestion contract check
+
+The [classification-metadata regression](plans/ingestion-classification-metadata.md)
+uses a real local core and scripted models with synthetic source and topics.
+Ingestion now accepts and retains the producer's optional `classificationTruncated`
+counts on an applied result; malformed diagnostics remain unknown, and genuine
+classification failures remain partial and stop later batches. Applied
+classification does not establish complete filing or semantic coverage. These
+offline checks neither diagnose any historical or ongoing paid failure nor
+revise frozen results, scores, source policies or the public core/default
+behavior or the currently frozen paid runtime.
 
 ## Combined ingestion remains an offline design experiment
 
@@ -1043,6 +1135,17 @@ localizes an evidence-sufficiency miss without proving the fact was never
 stored or identifying a model root cause. The frozen 6/6 completion and
 common-resolution feasibility gate failed, so a fixed-30 expansion is blocked.
 
+The [M1a optional adapter phase observer](plans/capture-write-phase-observability.md)
+can distinguish future adapter preparation, provider count transport/body,
+generation transport/body and output validation in an isolated invocation. It
+cannot reconstruct the historical N7 phase from these aggregate results,
+measure earlier core planning or later SQLite commit, prove provider
+cancellation/billing, or make a multistage capture reliable. Extraction timeout
+prevents a new memory commit in its synthetic control, while a classification
+timeout after successful extraction leaves an admitted source-backed memory
+with failed initial placement. No timeout, model/context budget, or indexed
+map limit was changed, and the fixed-30 evaluation remains blocked.
+
 Actual accounting added 1,935 guarded requests and 10,621,743 microUSD of
 conservative reservation. Known usage estimates were 2,452,595 microUSD for
 1,417 rows; 518 costs remain unknown, and none of the requests is pending.
@@ -1064,6 +1167,83 @@ qualification, default MOC navigation,
 source fidelity or installed MCP/Hermes reliability. A larger cohort requires
 a new frozen selection and resource check after the failed feasibility gate,
 not reuse of these six.
+
+## Mixed-runner phase tails are bounded observations
+
+The [O1–O6 observer correction](plans/phase-observer-rejection.md) addresses a
+separate callback handling defect: a rejected native Promise whose own `catch`
+getter or function throws previously produced unhandled rejections despite
+completed adapter requests. Standalone actual-adapter and installed-archive
+subprocess controls use fake HTTP, preserve exact requests/output/error envelopes
+and existing diagnostics, and observe zero unhandled rejections after correction.
+The callback is neither awaited nor sandboxed; it can still block the event loop
+or use authority captured by its closure. No timer, retry, model, prompt,
+accounting or halt behavior changes. This synthetic callback failure does not
+establish the cause of any historical paid interruption and does not authorize
+replay, expansion or installed MCP/Hermes adoption.
+
+The [M1b source-runner diagnostic](plans/mixed-phase-tail-diagnostics.md) is
+opt-in for 1–30 frozen cases. It keeps the last 64 adapter events per entered
+Cairn arm, plus counts of admitted and omitted events. The tail may begin in
+the middle of an invocation and supplies no invocation correlation or complete
+concurrent timeline. Default reports and existing model/attempt samples are
+unchanged. No extra Mem0 timing is inferred from this Cairn-only field.
+
+The observer excludes earlier core planning, local map work and SQLite commit.
+An aborted phase is not proof of provider cancellation or billing; missing
+events do not mean zero elapsed work. The unchanged 500,000-node / 32 MiB
+report envelope passes a complete 30-case high-diagnostic synthetic control,
+not every possible combination of historical provenance maxima. Diagnostic
+mode rejects larger rosters before consumption; omitted mode retains its old
+250-case preparation limit and report behavior.
+
+The runner imports checkout Cairn modules. Native-local fake-HTTP tests exercise
+installed Mem0, but do not establish installed Cairn behavior, semantic quality,
+long-write reliability or historical N7's cause. Any later paid paired run needs
+a separately reviewed installed coordinator, a frozen observation mode and the
+existing cumulative budget authority. Previous failures and costs are unchanged.
+
+## Installed long-write diagnostic did not clear completion or semantic gates
+
+The [one-shot M1c result](evidence/installed-phase-long-write.md) used installed
+Cairn core/adapter and contained native Mem0 on two new synthetic 32-batch
+histories. Cairn completed and answered only one case: its first case stopped
+after five complete batches and a partial sixth with nonretryable
+`classification_failed`; 26 batches were not run and no partial-memory answer
+was produced. Mem0 completed both. At fixed N=2 per arm and common-resolved
+N=1, the unmodified automatic judgments were Cairn 1/0/1 and Mem0 1/1/0
+correct/incorrect/unresolved. The unresolved Cairn arm is not a wrong answer.
+
+Both second-case answers were automatically marked correct. Against the frozen
+source, the Cairn answer falsely denies the earlier adopted decision; the Mem0
+answer may reverse why changed transport calls for reconfirmation. These are
+primary/worker agent assessments, not independent human adjudication. Positive
+automatic grades therefore cannot establish a broad semantic pass. The
+primary's exact-window audit found the earlier adoption passage stored but
+absent from the two selected and packed receipts; the candidate visibility,
+selection or ranking cause remains unproven. The first Cairn tail contains
+completed classification transport and output-validation phases, with no
+observed timeout, but does not prove the remaining adapter, core or application
+reason for failure or the historical N7 cause. The primary reports 358 new requests,
+2,019,151 microUSD reserved, 392,454 microUSD in known estimates and 79
+unknown actual costs, with zero pending. Reservation is not an invoice and
+known estimates are not total spend. The primary's fresh read-only audit
+authenticated the parent, verified the unchanged original prefix and matched
+all 358 new ledger rows to guarded attempts; it was not independent review and
+made no ledger writes. Diagnose the classification refusal after the observed
+output-validation boundary and
+evidence/adoption preservation in a separately frozen packet; consumed-case
+replay, fixed-30 expansion, raw-retention growth and MCP/Hermes conclusions
+do not follow.
+
+The [M1d classification-boundary diagnosis](plans/classification-application-boundary.md)
+found that LongMemEval reporting previously converted the trusted core code
+`moc_title_conflict` to generic `classification_failed`. Reporting now retains
+that specific code. A synthetic repeated-topic proposal reproduces the M1c
+report's partial-capture, completed-adapter and empty-diagnostic fingerprint,
+but the missing paid classification plan prevents attributing M1c to that
+collision. This reporting fix does not repair MOC classification, retry the
+failed batch or reclassify or rescore the frozen result.
 
 ## Claude plugin 0.1.1 filter rests on narrow evidence
 
@@ -1265,9 +1445,62 @@ and `core/test/classification-budget.test.mjs` use the test counter.
 counter is shaped like a padded o200k count but is not a provider tokenizer. The
 small-recall parity fixture was frozen from main `3a1c17d`.
 
+## Prospective M1e classification follow-up fixture
+
+The new synthetic packet has two separate 16-session, 512-user-turn histories:
+one records an adopted workshop rack being replaced by a later adopted rack
+with a stated reason; the other records an adopted cold-chain dock whose
+supporting power premise later ceased to apply, with no replacement adopted.
+Source-only indexed-evidence preparation reports 32 batches and 512 windows
+per case, and the canonical mixed preflight marks both ready. The separately
+stored answer key is held in another module. The pure conditional ceiling for both
+cases is 16,982 requests and 3,326,968 microUSD (US$3.326968), under the
+predeclared 4,000,000 microUSD (US$4) new reservation limit while protecting
+30,000,000 microUSD (US$30) of the original 200,000,000 microUSD (US$200).
+
+At the prospective prelaunch checkpoint, these checks established fixture
+shape, source separation and preparation only; no model had been called or
+answer graded. This source-backed diagnostic packet is not an official
+benchmark. The [contract and verification record](plans/installed-classification-followup.md)
+preserve that checkpoint and the later closure record.
+
+## M1e installed classification follow-up result
+
+The [one-shot M1e report](evidence/installed-classification-followup.md) records
+two completed ingestions, answers and judgments per arm, fixed N=2 and
+common-resolved N=2. Automatic correct/incorrect/unresolved were Cairn 2/0/0
+and Mem0 1/1/0. Both Cairn cases completed all 32 batches; the primary separately
+found 32 admissions and 32 `applied` initial-classification journal entries per
+case. No classification failure was observed, but unchanged engine bytes and
+different cases do not establish a repair of prior classification or timeout
+failures; their causes remain unproven.
+
+The primary found all eight required source windows stored as exact receipts.
+Workshop recall selected prior adoption, replacement and reaffirmation; the
+replacement passage also carries the HVAC reason. Logistics selected only its
+final reconfirmation window, leaving stored earlier-adoption, explicit
+power-removal and unadopted-proposal windows unselected. All selected receipts
+were packed. The observed logistics loss precedes packing; candidate visibility,
+selection or ranking as its cause remains unknown. Four of eight exact windows
+selected is not a semantic-coverage percentage.
+
+Agent reading found finer omissions despite Cairn's positive grades: its
+workshop answer does not explicitly give the original clearance rationale or
+link current status to reaffirmation; logistics answers omit explicit power
+removal and the dock-six proposal. This preserves the finite completion pass
+while leaving strict source/rubric coverage open. The explicit bounded-keyset,
+source-evidence/bounded-source-scan route does not validate default MOC
+navigation, reliability, lightweight resource fit, installed MCP/Hermes,
+comparative superiority or an official score. Diagnose candidate visibility,
+selection and ranking on new synthetic cases before changing engine or prompts;
+no fixed-30 expansion, consumed-case replay/retuning or raw-retention increase
+follows.
+
 ## Where the evidence lives
 
 - [Model input budgets and packing](model-input-budgets.md)
+- [Prospective M1e classification follow-up fixture](#prospective-m1e-classification-follow-up-fixture)
+- [M1e installed classification follow-up result](evidence/installed-classification-followup.md)
 - [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)
 - [Decision confirmation and whole-episode context cost](#decision-confirmation-hides-whole-episode-context)
 - [Claude plugin 0.1.1 privacy filter](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter)
@@ -1284,6 +1517,96 @@ small-recall parity fixture was frozen from main `3a1c17d`.
 - [Integration inventory](source-reliability-integration.md)
 - [First live evidence](evidence/first-live-evidence.md)
 - [ROADMAP](../ROADMAP.md): the gates that must pass before broad promotion.
+
+## Offline recall stage witnesses are boundary observations
+
+The [M1g recall witness](plans/recall-stage-witness.md) is an evaluation-only,
+bounded, ephemeral facade, not paid-generation wiring or a product API. It
+records opaque reference/receipt membership at select/rank adapter boundaries;
+public summaries contain finite aggregates. Adapter-returned references are not
+individually core-accepted references, and a successful whole recall establishes
+only chain completion. Missing observations after overflow, projection failure,
+plain close, bypass or skipped packed pages remain partial/unknown, not absent.
+Reference visibility does not prove source-preview completeness; receipt
+membership does not prove full excerpt or semantic coverage. Rank-input loss
+alone cannot distinguish fetch from packing. Synthetic parity/loss controls do
+not establish the cause of earlier paid omissions, and no consumed case is
+replayed or rescored by this seam. Raw custom IDs exist only in bounded private
+lookup state until disposal; no source/query/namespace text or raw errors are
+emitted. Model identity changes, so tested frozen OpenAI compatibility is not
+universal transparency for arbitrary timing-sensitive or hostile models.
+Disposal clears private mappings and witness events while retaining bounded
+aggregates and the observation enum; a failed pending call remains partial
+after disposal. Final offline gates on both exact Node versions include this
+controlled lifecycle regression, with interrupted and superseded verification
+recorded in the plan. At this authoring checkpoint, independent fixed-head
+review and CI were pending; final review and CI delivery status is recorded on
+the PR. These results establish synthetic mechanics only.
+
+## Optional mixed-runner recall observation
+
+The [mixed witness contract](plans/mixed-recall-witness.md) connects the existing
+facade to the actual mixed runner's Cairn adapter/core only when the caller
+explicitly requests `recallWitness: 'bounded-v1'` for 1–30 prepared cases.
+Its Cairn diagnostic retains scalar counts and finite enums; it never exports
+the facade, private lookup methods, opaque tokens, reference IDs, source text,
+question text, labels or provider error text. The observation closes when
+recall returns, before provenance checking and answer calls. Cleanup clears
+private mappings/events on successful, failed, interrupted and thrown paths;
+the report preserves historical retained-call counts and the actual disposed
+flag. Preflight-only arms create no witness. Pre-recall ingestion failures
+retain an unknown recall outcome rather than claiming an observed empty recall.
+
+Counts describe repeated boundary observations of references/receipts, not
+unique memories, relevance, complete history or semantic coverage. Adapter
+returns remain distinct from core acceptance. Complete-map selection bypasses
+the select model and remains unobservable; an empty completed recall, a failed
+recall and an unstarted recall have distinct outcomes. Overflow, projection
+failure and incomplete calls preserve uncertainty. Aggregate counts cannot
+identify a missing target passage, distinguish fetch loss from rank packing,
+or measure model judgment quality. This change repairs no retrieval behavior.
+
+Offline paired mixed controls exercise actual Cairn/OpenAI and contained pinned
+native Mem0 against fake HTTP for successful, empty-capture, empty-rank,
+ingestion-failure, duplicate-rank rejection, recall-timeout and later
+answer-failure outcomes. They capture original HTTP body strings and verify
+their serialization before comparing order/counts, answers, accounting and
+unchanged final scoring. Fresh independent stores create different generated
+identifiers: a consistent bijection collected from each owned closed SQLite
+store applies only to exact memory/receipt identity fields, generated
+memory-ID schema enums and known generated metadata time fields. These native
+comparisons establish equality after that normalization, not raw wire-byte
+equality across independent stores. Source/query/answer prose stays exact,
+including UUID/date-looking literals and prose containing generated metadata
+values; mutation controls demonstrate such changes remain visible. Wall-clock
+phase values are excluded from equality, while phase/outcome/count diagnostics
+remain checked. Existing actual adapter/core controls additionally
+exercise same-namespace navigation loss with an explicitly scripted counter,
+genuine rank-budget omission with measured independently fetchable source
+units, configured witness overflow, projection failure, unchanged tokenizer
+calls and signal/receiver/result identity. These preconditions are synthetic
+mechanics, not explanations of retained paid omissions or new semantic scores.
+Native roots are containment prerequisites for synthetic stores/ledgers only.
+No provider key, corpus, operational ledger or paid call is used by these gates.
+
+## Prospective mixed transport classification
+
+The [native failure diagnostic](plans/native-failure-diagnosis.md) retains finite
+guard-owned transport categories in process-local mixed attempts and bounded
+per-ordinal reports, including counts of failures beyond the first 64 stages.
+Legacy, missing or malformed classification remains unavailable. These fields
+distinguish transport, response validation and authenticated deadline branches;
+they do not identify an upstream actor or prove physical cancellation, accepted
+billing or semantic quality. Accounting settlement failures remain separate.
+
+Synthetic installed-native controls preserve unknown/full-reservation global
+halts for transport and malformed-response failures, and local continuation
+for authenticated deadlines and definite singleton embedding 503s. They neither
+repair the earlier stopped run nor assign its generic halt a retrospective
+category. No consumed case is replayed or rescored. This is a prospective local
+diagnostic with unchanged requests, budget, caps, isolation, retries, models and
+timeouts; it grants no paid launch, default MOC/MCP/Hermes acceptance, competitor
+parity or quality-score claim.
 
 ## CX-4 round 2 verification environment
 

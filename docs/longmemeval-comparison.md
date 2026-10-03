@@ -231,6 +231,19 @@ trusted parent-side credential injection at a later launch gate; the child holds
 only a local dummy key. Neither this runner nor its synthetic tests authorize a
 paid campaign, verify real semantic answers, or establish matched performance.
 
+Future Mem0 execution exceptions can retain private `diagnostics.nativeFailure`
+with exactly `{version:1,layer,reason}`: `layer` is `runtime` or `gateway`, and
+`reason` is explicitly allowlisted from the corresponding existing native error
+class. The projector accepts only native Error objects with that exact typed
+prototype and an own data code; proxies, getters, unknown classes/codes and
+malformed values produce no field. Success and Cairn errors gain no field.
+The retained object is frozen through the existing report snapshot; the outer
+`scope_execution_failed`/global halt and unknown accounting remain authoritative.
+No messages, stacks, causes or other exception payload enter the observation.
+It cannot identify a past discarded exception, establish a root cause, authorize
+continuation/retry, or change fixed-N scoring. See the
+[prospective diagnostic contract](plans/mixed-native-failure-diagnostics.md).
+
 An [offline indexed-window provenance path](indexed-window-provenance.md) is
 separate from the default prefix-receipt comparison and is not accepted by the
 official scorer or the live paid runner.
@@ -281,3 +294,79 @@ preparation. All text, IDs and maps are private; public reporting uses counts
 only. The versioned SHA-256 domains and exact policy are in the module and
 the [frozen P contract](plans/mixed-source-renderer.md). These digests bind
 preparation data, not a future answer/scorer protocol or a paid grant.
+
+### Explicit supplied-history preparation (offline only)
+
+The same module separately exports `suppliedHistoryPolicy()` and
+`prepareSuppliedHistoryCase({history, question, namespace}, comparisonProfile)`
+with version `cairn-lme-supplied-history-v1`. Calling this named API explicitly
+includes every valid supplied session, even after the question minute, at the
+same minute or out of chronological order. Original order, user/assistant roles
+and dataset-local dates are preserved; timestamps are neither repaired nor
+converted to instants. `comparisonProfile` accepts the existing optional
+`indexed-evidence-v1` planner profile. All legacy callers still use mixed-source
+v2 and its at-or-before cutoff.
+
+This policy reuses the same strict validation, limits, normalization/redaction,
+stable greedy partition, synthetic date wrappers and origin maps. Preparation
+fails explicitly if all supplied source cannot fit; it never drops a session to
+make an arm fit. Both prospective arms receive identical ordered role/content
+batches. The question remains only a recall query. The immutable result has the
+same fields as v2; its `counts.sessionsAfterQuestion` counts supplied sessions
+strictly later than the question without removing them. `eligibleSessions`
+equals `originalSessions`, and `excludedFutureSessions` is zero on success.
+Equal-minute sessions are retained too; the later-session count alone is not a
+complete check of the paper's strict chronology assumption. Distinct
+policy/history/turn/case hash domains prevent accidental identity sharing with
+v2, even when both policies include the same sessions.
+
+The [paper's formal definition (§3.1)](https://arxiv.org/html/2410.10813v2#S3.SS1)
+assumes `tq > tN`. The pinned official executable
+[generation baseline](https://github.com/xiaowu0162/LongMemEval/blob/9e0b455f4ef0e2ab8f2e582289761153549043fc/src/generation/run_generation.py#L66)
+and [retrieval baseline](https://github.com/xiaowu0162/LongMemEval/blob/9e0b455f4ef0e2ab8f2e582289761153549043fc/src/retrieval/run_retrieval.py#L224)
+enumerate supplied haystack sessions without a universal question-date cutoff;
+the [dataset format](https://github.com/xiaowu0162/LongMemEval/blob/9e0b455f4ef0e2ab8f2e582289761153549043fc/README.md#dataset-format)
+records question and session dates separately. Input parity between arms does
+not establish fidelity to all supplied history, and retaining supplied history
+does not establish formal chronological consistency or semantic quality.
+
+The mixed comparison preparation API also accepts the explicit own-data option
+`sourceHistoryPolicy: 'supplied-history-v1'`, independently of
+`comparisonProfile`. Omission preserves legacy preparation and caller defaults;
+unknown values, accessors and an explicitly undefined selector fail preflight.
+The choice is bound privately to preparation, not accepted again at runtime.
+Both arms use the same supplied-history plan, including its unchanged static
+native-token fit and batch caps. A legacy capability cannot execute this plan.
+
+This mode uses separately bound preparation, context, generation and scoring
+identities. Its generation and scoring versions are respectively
+`cairn-lme-supplied-history-mixed-generation-v1` and
+`cairn-lme-supplied-history-mixed-scoring-v1`; report digests use a distinct
+domain. The scorer recomputes the exact source/context/scorer identities for the
+two finite report families before judging, including legacy reports. This
+additionally rejects malformed legacy identities that were formerly checked
+only against the supplied capability. Valid legacy outputs and hashes remain
+unchanged. Fixed-N accounting and judge prompts are shared, but the two families
+must not be pooled.
+
+Only synthetic offline preparation and fake-HTTP installed-native tests cover
+this explicit path. Empty extraction can retain every ingestion input while
+producing no Cairn evidence; inclusion does not establish source retention or
+semantic quality. No paid runner, installation caller, host default or frozen
+operator protocol opts in. The opt-in [private result journal](mixed-result-journal.md)
+now derives one supported family from its manifest and uses that family for
+generation/scoring completion and digest domains, without adding serialized
+identity fields or execution imports to cold inspection. This is local
+dependency composition, not a public merge or a paid-run grant. Synthetic offline
+and fake-HTTP installed-native verification passed on exact Node 22.16.0 and
+24.15.0; final candidate, review and delivery remain pending. Inventory and any
+later live run's fresh approved capability remain separate gates. The
+[SJ evidence record](plans/supplied-history-journal-integration.md) preserves
+original failures, explicit historical carryforward and containment limits.
+This is the 2026-10-02 UTC offline checkpoint; current commit/review/CI/delivery
+state is tracked in the
+[matching branch PR](https://github.com/Cairn-ink/cairn-memory/pulls?q=is%3Apr+head%3Afeat%2Fsupplied-history-journal-integration),
+not a declaration that this snapshot is merged or released.
+This provides neither permission to use future personal data nor certified
+official scores. See the [SH contract and evidence](plans/supplied-history-source-policy.md)
+and [comparison integration contract and evidence](plans/supplied-history-comparison-integration.md).

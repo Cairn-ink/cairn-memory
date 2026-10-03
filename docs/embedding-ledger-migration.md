@@ -56,6 +56,18 @@ operation; its `getState()` includes the history digest. Neither API grants
 HTTP access or performs an upgrade. Existing v1 readers and G request guards
 continue to refuse v2; a future mixed-engine grant needs a separate protocol.
 
+Each successful bound-v2 `reserve` and `recordOutcome` now performs two complete
+state validations inside its existing transaction: the pre-write witness check
+and post-write expected-state check. The previously discarded immediate
+post-write validation duplicated that enclosing post-check and is omitted only
+for bound-v2. Real SQLite synthetic operation counters measured three full
+reads/quick checks before and two afterward, with unchanged rowid/history,
+configuration, location and schema checks and rollback on foreign edits.
+Legacy/unbound writes, construction and `getState` keep their existing work.
+This is a reduction in counted validation work, not a measured latency gain,
+historical-timeout repair, paid-run result or new transport authority. See the
+[bounded contract](plans/bound-embedding-transaction-reads.md).
+
 `assertChainedBenchmarkParentForEmbeddingSnapshot({ ledger, policy,
 benchmarkExtension, snapshot })` is a separate read-only verifier for the
 existing US$200 chained benchmark parent and its inherited original prefix.

@@ -8,23 +8,27 @@ import { openMemoryCore } from '../../core/contract.mjs';
 import { checkedMem0NativeArtifact } from '../experiment-budget/mem0-native-artifact.mjs';
 import { checkedMem0NativeConfiguration, runMem0NativeCase } from '../experiment-budget/mem0-native-gateway.mjs';
 import { mem0WireProfile } from '../experiment-budget/mem0-wire.mjs';
-import { benchmarkStagePolicy } from '../live/public-pilot.mjs';
-import { experimentPolicy } from '../live/session.mjs';
+import { MIXED_TRANSPORT_TERMINATIONS,
+  projectMixedTransportTermination } from '../experiment-budget/mixed-transport-observation.mjs';
+import { createRecallWitness } from '../long-history/recall-witness.mjs';
 import { ingestIndexedWindowLongMemEvalCase, ingestIndexedEvidenceLongMemEvalCase } from './ingestion.mjs';
 import { createMixedModelDiagnosticObserver,
   summarizeMixedIngestionStop } from './mixed-ingestion-diagnostics.mjs';
+import { createMixedPhaseTimingObserver } from './mixed-phase-timing.mjs';
+import { projectMixedNativeFailure } from './mixed-native-failure.mjs';
 import { verifiedEvidence } from './mixed-evidence.mjs';
 import { verifyMixedCapturePlan } from './mixed-plan.mjs';
 import { MIXED_ANSWER_CONTEXT_WINDOW, MIXED_ANSWER_MODEL, MIXED_ANSWER_OUTPUT_TOKENS,
   MIXED_ANSWER_TIMEOUT_MS, packMixedAnswer } from './mixed-answer.mjs';
-import { prepareMixedSourceCase, mixedSourcePolicy } from './mixed-source.mjs';
-import { OFFICIAL_JUDGE_MODEL, OFFICIAL_QUESTION_TYPES,
-  OFFICIAL_UPSTREAM_COMMIT } from './official-scoring.mjs';
+import { prepareMixedSourceCase, prepareSuppliedHistoryCase } from './mixed-source.mjs';
+import { sourceHistoryFamily, sourceProtocolIdentity } from './mixed-source-policy.mjs';
 import { PUBLIC_ANSWER_INSTRUCTION } from './public-comparison.mjs';
 import { MixedComparisonError, canonical, dense, exact, fail, freeze, hash,
   reportSnapshot, sourceSnapshot, wellFormed } from './mixed-validation.mjs';
 import { authenticateLocalUnknown, completionOnce, trackedTransport,
   unknownCurrentAttempt } from './mixed-transport.mjs';
+import { completeMixedJournalPhase, enterMixedJournalArm, recordMixedJournalArm,
+  startMixedJournalPhase } from './mixed-result-journal.mjs';
 
 const requireFromAdapter = createRequire(new URL('../../adapters/openai/package.json', import.meta.url));
 const nativeEncoder = requireFromAdapter('tiktoken').get_encoding('cl100k_base');
@@ -33,13 +37,9 @@ const USED = new WeakSet();
 const CASE_ID = /^lme-case-[a-f0-9]{64}$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const ARM_NAMES = ['cairn', 'mem0'];
-const PREPARATION_VERSION = 'cairn-lme-mixed-preparation-v1';
-export const MIXED_GENERATION_VERSION = 'cairn-lme-mixed-generation-v1';
-const CONTEXT_DOMAIN = 'cairn.lme.mixed.context.v1';
+export { MIXED_GENERATION_VERSION } from './mixed-source-policy.mjs';
 const ANSWER_DOMAIN = 'cairn.lme.mixed.answer.v1';
-const SCORER_DOMAIN = 'cairn.lme.mixed.scorer.v1';
 const CAIRN_ADAPTER_DOMAIN = 'cairn.lme.mixed.cairn-adapter.v1';
-const CASE_DOMAIN = 'cairn.lme.mixed.case-protocol.v1';
 const MANIFEST_DOMAIN = 'cairn.lme.mixed.manifest.v1';
 const ROSTER_DOMAIN = 'cairn.lme.mixed-source-pair.roster.v1';
 const SCOPE_DOMAIN = 'cairn.lme.mixed-source-pair.scope.v1';
@@ -109,7 +109,7 @@ function staticNativeFit(input) {
 }
 
 function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArtifactSha256,
-  comparisonProfile }) {
+  comparisonProfile }, family) {
   const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
   if (typeof cairnRuntimeArtifactSha256 !== 'string' || !SHA256.test(cairnRuntimeArtifactSha256)) {
     fail('invalid_cairn_artifact_descriptor');
@@ -120,33 +120,12 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
     'configurationSha256', 'invalid_native_descriptor');
   const configuration = Object.getOwnPropertyDescriptor(nativeConfiguration, 'configuration')?.value;
   if (!configuration || typeof configuration !== 'object') fail('invalid_native_descriptor');
-  const context = { version: 'mixed-context-v2', sourcePolicyDigest: mixedSourcePolicy().digest,
-    nativeProfile: 'mem0-2.2.0-infer-add-no-nlp-v1',
-    nativeConfigurationSha256: configurationSha256,
-    nativeTopK: 6, nativeThreshold: 0, nativeChildTimeoutMs: 3_600_000,
-    cairnQualification: 'source-bound-v2',
-    qualificationDispatchPolicy: 'whole-then-singleton-preflight-v1',
-    captureSourcePolicy: 'indexed-windows-v1',
-    sourceCandidatePolicy: 'bounded-keyset-v1', recallLimit: 6,
-    recallContextMode: 'source-evidence', recallSelectionMode: 'bounded-source-scan',
-    experimentPolicy: experimentPolicy(), stages: benchmarkStagePolicy(),
-    wireProfile: mem0WireProfile() };
-  if (evidenceOnly) {
-    context.version = 'mixed-indexed-evidence-context-v1';
-    context.comparisonProfile = comparisonProfile;
-    context.cairnQualification = 'not-requested';
-    context.captureSourcePolicy = 'indexed-evidence-v1';
-    delete context.qualificationDispatchPolicy;
-  }
   const answer = { version: 'mixed-answer-v1', model: MIXED_ANSWER_MODEL,
     instruction: PUBLIC_ANSWER_INSTRUCTION, contextWindow: MIXED_ANSWER_CONTEXT_WINDOW,
     outputTokens: MIXED_ANSWER_OUTPUT_TOKENS, timeoutMs: MIXED_ANSWER_TIMEOUT_MS,
     requestKeys: ['model', 'messages', 'temperature', 'max_tokens', 'n'],
     evidenceShape: 'JSON.stringify({evidence:[{text}],currentQuestion:{text,date}})',
     packing: 'exact-string-first-seen-whole-unit-v1' };
-  const scorer = { version: 'mixed-scorer-v1', upstreamCommit: OFFICIAL_UPSTREAM_COMMIT,
-    judgeModel: OFFICIAL_JUDGE_MODEL, questionTypes: OFFICIAL_QUESTION_TYPES,
-    judgePolicy: benchmarkStagePolicy().judge, aggregation: 'fixed-N-paired-3x3-v1' };
   const cairnAdapter = { version: 'mixed-cairn-adapter-v1',
     qualificationInputMode: 'adaptive-text-catalog-v1',
     extractionModel: DEFAULT_MODEL, rationaleModel: DEFAULT_MODEL, basisModel: DEFAULT_MODEL,
@@ -158,10 +137,12 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
     delete cairnAdapter.rationaleModel;
     delete cairnAdapter.basisModel;
   }
-  return freeze({ sourceProtocolSha256: mixedSourcePolicy().digest,
-    contextProtocolSha256: hash(CONTEXT_DOMAIN, context),
+  const identity = sourceProtocolIdentity(family, {
+    nativeConfigurationSha256: configurationSha256, comparisonProfile });
+  return freeze({ sourceProtocolSha256: identity.sourceProtocolSha256,
+    contextProtocolSha256: identity.contextProtocolSha256,
     answerProtocolSha256: hash(ANSWER_DOMAIN, answer),
-    scorerProtocolSha256: hash(SCORER_DOMAIN, scorer),
+    scorerProtocolSha256: identity.scorerProtocolSha256,
     cairn: { runtimeArtifactSha256: cairnRuntimeArtifactSha256,
       adapterConfigurationSha256: hash(CAIRN_ADAPTER_DOMAIN, cairnAdapter),
       qualificationInputProfile: evidenceOnly ? 'not-requested' : 'adaptive-text-catalog-v1',
@@ -173,10 +154,14 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
 
 export function prepareMixedComparison(options) {
   const profileDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'comparisonProfile');
+  const sourceDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'sourceHistoryPolicy');
   const raw = ownOptions(options, ['sourceCases', 'armOrders', 'nativeArtifact',
     'nativeConfiguration', 'cairnRuntimeArtifactSha256',
-    ...(profileDescriptor ? ['comparisonProfile'] : [])], 'invalid_mixed_preparation');
+    ...(profileDescriptor ? ['comparisonProfile'] : []),
+    ...(sourceDescriptor ? ['sourceHistoryPolicy'] : [])], 'invalid_mixed_preparation');
   if (profileDescriptor && raw.comparisonProfile !== 'indexed-evidence-v1') fail('invalid_mixed_preparation');
+  if (sourceDescriptor && raw.sourceHistoryPolicy !== 'supplied-history-v1') fail('invalid_mixed_preparation');
+  const family = sourceHistoryFamily(sourceDescriptor ? raw.sourceHistoryPolicy : undefined);
   const source = sourceSnapshot({ sourceCases: raw.sourceCases, armOrders: raw.armOrders });
   dense(source.sourceCases, 1, 250, 'invalid_source_cases');
   dense(source.armOrders, source.sourceCases.length, source.sourceCases.length,
@@ -189,7 +174,7 @@ export function prepareMixedComparison(options) {
       fail('invalid_arm_orders');
     }
   }
-  const manifest = protocolManifest(raw);
+  const manifest = protocolManifest(raw, family);
   const preflight = [];
   const plans = [];
   const batchCounts = [];
@@ -197,7 +182,7 @@ export function prepareMixedComparison(options) {
   for (const [index, row] of source.sourceCases.entries()) {
     let plan = null, reason = null;
     try {
-      plan = prepareMixedSourceCase(row, raw.comparisonProfile);
+      plan = (sourceDescriptor ? prepareSuppliedHistoryCase : prepareMixedSourceCase)(row, raw.comparisonProfile);
       if (!staticNativeFit(plan.mem0Input)) { plan = null; reason = 'native_static_input_exceeded'; }
     } catch (error) {
       reason = typeof error?.code === 'string' && /^[a-z0-9_]{1,80}$/u.test(error.code)
@@ -211,7 +196,7 @@ export function prepareMixedComparison(options) {
     preflight.push(preflightRow);
     batchCounts.push(plan?.counts.batches ?? 0);
     const armOrder = source.armOrders[index];
-    const protocolDigest = hash(CASE_DOMAIN, { manifest, question: row.question,
+    const protocolDigest = hash(family.caseDomain, { manifest, question: row.question,
       namespace: row.namespace, caseDigest: plan?.caseDigest ?? null,
       preflight: { status, reason: preflightRow.reason }, armOrder });
     roster.push({ questionId, protocolDigest, armOrder,
@@ -219,10 +204,10 @@ export function prepareMixedComparison(options) {
         scopeId: `lme-case-${hash(SCOPE_DOMAIN, [questionId, name])}` })) });
   }
   const projection = freeze({ schemaVersion: raw.comparisonProfile
-    ? 'cairn-lme-mixed-indexed-evidence-preparation-v1' : PREPARATION_VERSION,
+    ? family.indexedPreparation : family.preparation,
     manifest, roster, counts: { fixedN: source.sourceCases.length, batchCounts }, preflight });
   PREPARED.set(projection, { sourceCases: source.sourceCases, armOrders: source.armOrders,
-    plans, nativeArtifact: raw.nativeArtifact, nativeConfiguration: raw.nativeConfiguration,
+    plans, family, nativeArtifact: raw.nativeArtifact, nativeConfiguration: raw.nativeConfiguration,
     manifestDigest: hash(MANIFEST_DOMAIN, manifest), rosterDigest: hash(ROSTER_DOMAIN, roster) });
   return projection;
 }
@@ -276,20 +261,22 @@ function revokeSemanticOnly(handle, guard, allowedLocalOrdinals) {
 }
 
 async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, holdCore,
-  allowedLocalOrdinals }) {
+  allowedLocalOrdinals, phaseObserver, recallObservation }) {
   const folder = mkdtempSync(path.join(root, 'mixed-cairn-'));
   const modelDiagnostics = createMixedModelDiagnosticObserver();
   const comparisonProfile = guard.mixedSourcePairCapability.manifest.cairn.comparisonProfile;
   const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
   const model = createOpenAIModel({ apiKey, fetchImpl: transport.track(guard.cairnFetch),
     ...(evidenceOnly ? {} : { qualificationInputMode: 'adaptive-text-catalog-v1' }),
-    onDiagnostic: modelDiagnostics.onDiagnostic });
-  const core = openMemoryCore({ path: path.join(folder, 'store.db'), model,
-    ...(evidenceOnly ? { captureSourcePolicy: 'indexed-evidence-v1' }
-      : { captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' }),
-    sourceCandidatePolicy: 'bounded-keyset-v1' });
-  holdCore(core);
+    onDiagnostic: modelDiagnostics.onDiagnostic,
+    ...(phaseObserver ? { onPhaseTiming: phaseObserver.onPhaseTiming } : {}) });
+  const witness = recallObservation ? createRecallWitness(model) : null;
   try {
+    const core = openMemoryCore({ path: path.join(folder, 'store.db'), model: witness?.model ?? model,
+      ...(evidenceOnly ? { captureSourcePolicy: 'indexed-evidence-v1' }
+        : { captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' }),
+      sourceCandidatePolicy: 'bounded-keyset-v1' });
+    holdCore(core);
     verifyMixedCapturePlan({ history: plan.renderedHistory, namespace: row.namespace,
       expectedPlan: plan.cairnPlan, comparisonProfile });
     const ingested = await (evidenceOnly ? ingestIndexedEvidenceLongMemEvalCase
@@ -304,6 +291,8 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
     }
     const recalled = await core.recall({ readSet: [row.namespace], query: plan.mem0Input.query,
       limit: 6, contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' });
+    // The observation ends at recall, before provenance checking or answer calls.
+    witness?.finish(recalled);
     if (recalled?.ok !== true) { revokeSemanticOnly(handle, guard, allowedLocalOrdinals); fail('recall_failed'); }
     let evidence;
     try { evidence = verifiedEvidence(recalled.value,
@@ -320,23 +309,38 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
       recalledCards: evidence.units.length, receiptCount: evidence.provenance.length,
       provenance: evidence.provenance, selectedIndices: packed.selectedIndices,
       duplicateIndices: packed.duplicateIndices, omittedIndices: packed.omittedIndices } };
-  } finally { await transport.drain(); }
+  } finally {
+    if (witness) {
+      witness.close();
+      const summary = witness.summary();
+      witness.dispose();
+      // Disposal clears private events; retain their bounded historical counts.
+      recallObservation.summary = { ...summary, disposed: witness.summary().disposed };
+    }
+    await transport.drain();
+  }
 }
 
 const RETAINED_ATTEMPT_STAGE_LIMIT = 64;
 
 export function summarizeAttemptsForOrdinal(attempts, ordinal) {
   const summary = { requests: 0, reservedMicroUsd: 0, knownActualMicroUsd: 0,
-    unknownActualCount: 0, retainedStageCount: 0, omittedStageCount: 0, stages: [] };
+    unknownActualCount: 0, retainedStageCount: 0, omittedStageCount: 0, stages: [],
+    terminationCounts: Object.fromEntries(MIXED_TRANSPORT_TERMINATIONS.map(value => [value, 0])),
+    terminationUnavailableCount: 0 };
   for (const item of attempts) {
     if (item.ordinal !== ordinal) continue;
+    const transportTermination = projectMixedTransportTermination(item);
+    if (transportTermination === null) summary.terminationUnavailableCount++;
+    else summary.terminationCounts[transportTermination]++;
     summary.requests++;
     summary.reservedMicroUsd += item.reservedMicroUsd;
     summary.knownActualMicroUsd += item.actualMicroUsd ?? 0;
     if (item.actualMicroUsd === null) summary.unknownActualCount++;
     if (summary.stages.length < RETAINED_ATTEMPT_STAGE_LIMIT) {
       summary.stages.push({ stage: item.stage, outcome: item.outcome,
-        reservedMicroUsd: item.reservedMicroUsd, actualMicroUsd: item.actualMicroUsd });
+        reservedMicroUsd: item.reservedMicroUsd, actualMicroUsd: item.actualMicroUsd,
+        transportTermination });
     }
   }
   summary.retainedStageCount = summary.stages.length;
@@ -371,15 +375,30 @@ async function nativeCase({ guard, apiKey, plan, nativeArtifact, nativeConfigura
 }
 
 export async function runMixedGeneration(options) {
-  const { prepared, guard, apiKey, cairnStoreRoot } = ownOptions(options,
-    ['prepared', 'guard', 'apiKey', 'cairnStoreRoot'], 'invalid_mixed_generation');
+  const phaseDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'phaseTiming');
+  const witnessDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'recallWitness');
+  const journalDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'resultJournal');
+  const raw = ownOptions(options,
+    ['prepared', 'guard', 'apiKey', 'cairnStoreRoot',
+      ...(phaseDescriptor ? ['phaseTiming'] : []),
+      ...(witnessDescriptor ? ['recallWitness'] : []),
+      ...(journalDescriptor ? ['resultJournal'] : [])], 'invalid_mixed_generation');
+  const { prepared, guard, apiKey, cairnStoreRoot, resultJournal } = raw;
+  const phaseTiming = phaseDescriptor ? raw.phaseTiming : undefined;
+  if (phaseDescriptor && phaseTiming !== 'bounded-tail-v1') fail('invalid_mixed_generation');
+  if (witnessDescriptor && raw.recallWitness !== 'bounded-v1') fail('invalid_mixed_generation');
   const privateData = PREPARED.get(prepared);
   if (!privateData || USED.has(prepared)) fail('prepared_identity_required');
+  if (phaseTiming && prepared.counts.fixedN > 30) fail('invalid_mixed_generation');
+  if (witnessDescriptor && (prepared.counts.fixedN < 1 || prepared.counts.fixedN > 30)) {
+    fail('invalid_mixed_generation');
+  }
   USED.add(prepared);
   if (!wellFormed(apiKey) || !apiKey.trim() || /[\r\n]/u.test(apiKey)) fail('invalid_api_key');
   assertGuard(prepared, privateData, guard);
   assertNative(prepared, privateData, guard);
   const root = rootPath(cairnStoreRoot);
+  if (journalDescriptor) startMixedJournalPhase(resultJournal, 'generation', prepared);
   const cases = privateData.sourceCases.map((row, index) => ({
     questionId: row.question.question_id,
     question: { text: row.question.text,
@@ -401,24 +420,31 @@ export async function runMixedGeneration(options) {
         haltReason = 'global_accounting_unsettled'; break;
       }
       const transport = trackedTransport();
+      const journalOrdinal = index * 2 + prepared.roster[index].armOrder.indexOf(name);
+      if (journalDescriptor) enterMixedJournalArm(resultJournal, 'generation', journalOrdinal);
       let outcome, local = null, entered = false, workSettled = false, ownedCore = null;
+      let phaseObserver = null;
+      const recallObservation = witnessDescriptor && name === 'cairn' ? { summary: null } : null;
       try {
         outcome = await guard.withCaseScope(identity, async handle => {
           entered = true;
           try {
             if (!plan) { handle.revoke(); return null; }
+            if (phaseTiming && name === 'cairn') phaseObserver = createMixedPhaseTimingObserver();
             try {
               local = name === 'cairn'
                 ? await cairnCase({ guard, apiKey, root, row, plan, handle, transport,
-                  holdCore: core => { ownedCore = core; }, allowedLocalOrdinals })
+                  holdCore: core => { ownedCore = core; }, allowedLocalOrdinals, phaseObserver,
+                  recallObservation })
                 : await nativeCase({ guard, apiKey, plan,
                   nativeArtifact: privateData.nativeArtifact,
                   nativeConfiguration: privateData.nativeConfiguration, handle, transport,
                   question: { text: row.question.text, date: plan.canonicalQuestionDate },
                   allowedLocalOrdinals });
             } catch (error) {
+              const nativeFailure = name === 'mem0' ? projectMixedNativeFailure(error) : undefined;
               local = { failed: reasonOf(error, 'arm_execution_failed'),
-                diagnostics: { stage: 'execution' } };
+                diagnostics: { stage: 'execution', ...(nativeFailure ? { nativeFailure } : {}) } };
             }
             return local;
           } finally { await transport.drain(); workSettled = true; }
@@ -429,10 +455,13 @@ export async function runMixedGeneration(options) {
       if (ownedCore) {
         try { ownedCore.close(); } catch { haltReason ??= 'core_cleanup_failed'; }
       }
+      phaseObserver?.close();
       const observed = scopeOf(guard);
       if (entered) {
         resultArm.scope = observed;
         resultArm.diagnostics = { ...local?.diagnostics,
+          ...(phaseObserver ? { adapterPhaseTiming: phaseObserver.snapshot() } : {}),
+          ...(recallObservation?.summary ? { recallWitness: recallObservation.summary } : {}),
           attempts: attemptDiagnostics(guard, observed?.ordinal) };
       }
       if (guard.isHalted()) haltReason ??= 'global_halt';
@@ -456,12 +485,16 @@ export async function runMixedGeneration(options) {
         resultArm.diagnostics = { ...resultArm.diagnostics,
           stage: local?.diagnostics?.stage ?? 'preflight' };
       }
+      if (journalDescriptor) recordMixedJournalArm(resultJournal, 'generation', journalOrdinal,
+        cases[index], resultArm);
     }
   }
   if (haltReason) for (const item of cases) for (const resultArm of item.arms) {
     if (resultArm.reason === 'not_started') resultArm.reason = haltReason;
   }
-  return freeze(reportSnapshot({ schemaVersion: MIXED_GENERATION_VERSION, manifest: prepared.manifest,
+  const report = freeze(reportSnapshot({ schemaVersion: privateData.family.generation, manifest: prepared.manifest,
     roster: prepared.roster, manifestDigest: privateData.manifestDigest,
     rosterDigest: privateData.rosterDigest, cases, halted: haltReason !== null, haltReason }));
+  if (journalDescriptor) completeMixedJournalPhase(resultJournal, 'generation', report);
+  return report;
 }
