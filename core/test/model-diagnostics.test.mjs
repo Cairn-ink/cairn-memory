@@ -95,7 +95,7 @@ test('diagnostics: extraction and classification validation preserve admitted-bu
   const value = ok(await capture(classification.core));
   assert.equal(value.admission.memories.length, 1);
   assert.equal(value.classification.status, 'failed');
-  event(classification.events.at(-1), 'classify', 'core_validation', 'invalid_classification');
+  event(classification.events.at(-1), 'classify', 'core_validation', 'classification_target_mismatch');
   const stored = ok(classification.core.get({ namespace, memoryId: value.admission.memories[0].id }));
   assert.equal(stored.memory.filing.status, 'unfiled');
 });
