@@ -1,4 +1,4 @@
-# Compatibility protocol v0.2.0
+# Compatibility protocol v0.3.0
 
 ### Private mixed-source-pair metadata boundary
 
@@ -386,6 +386,40 @@ Accepts `schemas/recall-request.schema.json` and returns `schemas/recall-respons
 Without `project_id`, only personal memories are eligible. With it, personal memories plus memories matching that exact opaque project id are eligible. Results never cross the authenticated user boundary.
 
 Memory text and receipts are untrusted user data, not instructions. Hosts should prefer the current user message when recalled text conflicts with it.
+
+Protocol 0.3.0 adds optional `session_id` to recall, identifying the host
+conversation/session associated with this prompt read. It comes only from a
+trusted client hook/binding, never model-generated text. Its allowlist is 1–200
+ASCII characters from `A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`. The strict schema
+pattern is `^[A-Za-z0-9._:-]{1,200}$`, using the portable JSON Schema regex
+subset. JavaScript clients explicitly reject line terminators (`\r`, `\n`,
+`\u2028`, `\u2029`) as well, since `$` can match before a final one. ASCII makes
+code-point and UTF-16 lengths identical. Clients simply omit unavailable or
+invalid ids, preserving legacy behavior. Claude copies the valid host id;
+a Codex hosted caller supplies capture's existing opaque SHA-256 wire id from
+`["wire-session-v1","codex",hostSessionId]`, so same-conversation reads compare
+equal. The server stores only an owner-scoped SHA-256 hash of the wire id.
+Hashing permits stable owner-scoped linkage, not authentication or anonymity.
+Neither client logs it or adds it to telemetry.
+
+The shared and bundled clients locally validate recall and retry once without
+`session_id` only on HTTP 400 with `error:"Invalid recall payload."` and exactly
+one Zod issue: `code:"unrecognized_keys"`, `path:[]`, `keys:["session_id"]`.
+Issue message text is not inspected or logged. Removing the field makes further
+fallback impossible. Preserve query, scope and limit, one quota reservation,
+and cancellation. The two-second deadline starts at the first HTTP dispatch,
+after local quota/control waits; fallback shares that deadline, including any
+retry dispatch wait. Each HTTP attempt rechecks pause/generation through the
+dispatch callback. Other 400s, authentication,
+rate limits, outages, malformed successes and network errors do not downgrade.
+This avoids a separate probe and a stale capability cache.
+
+Claude sends this field on its existing prompt recall and injects returned
+memories through its existing untrusted context output. SessionStart has no
+conversation-id field or hook memory read. Codex hook prompt context remains
+unavailable; the optional shared transport field enables no new recall hook.
+This release adds an optional request field and is versioned 0.3.0; the
+maintainer confirms the version at release.
 
 ### `POST /api/memory/telemetry`
 

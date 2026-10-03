@@ -23,6 +23,7 @@ import { createJsonPoster, hostedQuotaStatus, hostedTargetId, resumeHostedQuota 
 import { prepareRecallQuery } from "../lib/recall-query.mjs";
 import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
 import { VERSION } from "../lib/version.mjs";
+import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
 
 const action = process.argv[2] ?? "status";
 const configuredEndpoint =
@@ -92,15 +93,13 @@ async function recall(hookInput) {
   const control = await readControlState(dataDir);
   if (control.paused) return;
   const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
-  const started = await startIfActive(dataDir, control.generation, () =>
-    post(
-      "/api/memory/recall",
-      { query, project_id: projectId, limit: 6 },
-      2_000, true, (start) => dispatchActive(control.generation, start),
-    ),
+  const sessionId = optionalHostSessionId(hookInput.session_id);
+  const result = await post(
+    "/api/memory/recall",
+    { query, ...(projectId === undefined ? {} : { project_id: projectId }), limit: 6,
+      ...(sessionId === undefined ? {} : { session_id: sessionId }) },
+    2_000, true, (start) => dispatchActive(control.generation, start),
   );
-  if (!started.started) return;
-  const result = await started.operation;
   if (!Array.isArray(result?.memories) || result.memories.length === 0) return;
   const lines = result.memories.map((memory) => {
     const receipt = memory.receipts?.[0];
@@ -261,21 +260,17 @@ async function captureLocked(hookInput, statePath, generation) {
       .map(({ id, role, content }) => ({ id, role, content }));
     // A batch of machine records only has nothing to send; it completes as is.
     if (messages.length === 0) continue;
-    const started = await startIfActive(dataDir, generation, () =>
-      post(
-        "/api/memory/capture",
-        {
-          client: "claude-code",
-          event_id: captureEventId(hookInput.session_id, batch),
-          session_id: hookInput.session_id,
-          project_id: projectId,
-          messages,
-        },
-        25_000, true, (start) => dispatchActive(generation, start),
-      ),
+    const result = await post(
+      "/api/memory/capture",
+      {
+        client: "claude-code",
+        event_id: captureEventId(hookInput.session_id, batch),
+        session_id: hookInput.session_id,
+        project_id: projectId,
+        messages,
+      },
+      25_000, true, (start) => dispatchActive(generation, start),
     );
-    if (!started.started) throw new Error("capture_paused");
-    const result = await started.operation;
     // A concurrent/recovered capture still holding its short lease returns
     // processing. Do not advance the cursor: the next hook can retry safely.
     if (result?.processing) throw new Error("capture_processing");

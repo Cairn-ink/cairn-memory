@@ -232,6 +232,10 @@ The bundled MCP connection also exposes explicit `remember_memory`, `recall_memo
 - Tool-result and tool-use blocks are excluded; the plugin does not read arbitrary project files. Ordinary user/assistant text can still contain pasted file contents, terminal output, paths, or repository names and is eligible for processing.
 - Supported credential shapes are replaced with `[REDACTED]` locally in both capture text and automatic recall queries before transmission. Redaction is best-effort, not a guarantee that every secret is recognized. The hosted service redacts again as defense in depth.
 - Automatic recall sends a redacted, bounded version of the current prompt to the configured service. This occurs before capture and is a separate processing path.
+- Prompt recall sends the host conversation id when it matches the 1–200 character
+  ASCII allowlist (`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`). Trusted hooks supply
+  it, never model text; the server stores only an owner-scoped SHA-256 hash.
+  An older strict server gets one exact-schema retry without the optional field.
 - Project scope is a keyed opaque identifier. Its derivation key never leaves the device and is separate from the anonymous telemetry id.
 - Automatically inferred memories remain personal or project-private. They cannot publish into a team or community.
 - Product telemetry is content-free, defaults on, and can be disabled. Its schema accepts only lifecycle event, client version, platform, and a random installation id.
