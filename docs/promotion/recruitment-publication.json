@@ -1,0 +1,33 @@
+{
+  "copy_revision": "5277c86e1bc4f572658e37f376929763d147f4a2",
+  "publications": [
+    {
+      "post_id": 212,
+      "channel": "x",
+      "account": "Cch_Chichieh",
+      "post_url": "https://x.com/Cch_Chichieh/status/2106081681363095945",
+      "submitted_at_utc": "2026-10-02T17:59:37.397Z",
+      "verified_at_utc": "2026-10-02T18:04:22.731593+00:00",
+      "copy_sha256": "7f059e96ed3448c56bc95e947c726d3f23b3a0b89316274e0af720d2d02fa50d",
+      "permalink_full_text_match": true,
+      "creation_response_full_text_match": true,
+      "campaign_phase": "recruitment",
+      "formal_d0_started": false
+    },
+    {
+      "post_id": 213,
+      "channel": "threads",
+      "account": "cch.chichieh",
+      "post_url": "https://www.threads.com/@cch.chichieh/post/DeAE9mrktZl",
+      "submitted_at_utc": "2026-10-02T17:59:55.333Z",
+      "verified_at_utc": "2026-10-02T18:04:22.731593+00:00",
+      "copy_sha256": "c4033c08cebed6ef53c3c063fa9054f176e2722ad33822fa45c35169141927b8",
+      "permalink_full_text_match": true,
+      "creation_response_full_text_match": false,
+      "campaign_phase": "recruitment",
+      "formal_d0_started": false
+    }
+  ],
+  "completed_human_reader_attempts": 0,
+  "human_local_setup_completed": false
+}

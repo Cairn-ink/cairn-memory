@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-02T17:23:14.319508+00:00",
+  "status": "passed",
+  "method": "Execute current runner with controlled subprocess fixtures; no real subprocess installation or network calls.",
+  "runnerSha256": "b5be2f8f7aaf5f374c97f6cdf67767d6c9eacf19baf3ecb6eb4cf59662132fe2",
+  "recordedRunnerSha256": "a337be63d8037f8b3826805721b5a2bc50715204f83cec33fc23edf6c70953c7",
+  "retainedAttemptAndSummaryFilesUnchanged": true,
+  "realInstallAttempts": 0,
+  "paidModelCalls": 0,
+  "cases": [
+    {
+      "case": "archive-mismatch",
+      "expectedFailure": "artifact_archive_hash_mismatch",
+      "observedFailure": "artifact_archive_hash_mismatch",
+      "runnerExitCode": 1,
+      "runnerStatus": "failed",
+      "archiveHashMatchesReceipt": false,
+      "installedRuntimeFilesMatchSourceHashes": true,
+      "sdkInstallReached": false,
+      "walkthroughReached": false,
+      "status": "passed"
+    },
+    {
+      "case": "installed-file-mismatch",
+      "expectedFailure": "installed_source_hash_mismatch",
+      "observedFailure": "installed_source_hash_mismatch",
+      "runnerExitCode": 1,
+      "runnerStatus": "failed",
+      "archiveHashMatchesReceipt": true,
+      "installedRuntimeFilesMatchSourceHashes": false,
+      "sdkInstallReached": false,
+      "walkthroughReached": false,
+      "status": "passed"
+    }
+  ]
+}

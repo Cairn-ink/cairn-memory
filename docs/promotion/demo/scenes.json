@@ -1,0 +1,187 @@
+[
+  {
+    "id": "s01-save",
+    "start": 0,
+    "duration": 5,
+    "title": "AI memory you can inspect.",
+    "sub": "Cairn Memory \u00b7 A real, model-free local run",
+    "label": "SESSION A / REMEMBER",
+    "lines": [
+      [
+        "$ remember_memory",
+        "command"
+      ],
+      [
+        "content: \"I prefer tabs over spaces in this repo.\"",
+        "normal"
+      ],
+      [
+        "kind: \"fact\"",
+        "muted"
+      ],
+      [
+        "\u2192 revision: 1   \u00b7   ok: true",
+        "success"
+      ]
+    ],
+    "note": "Explicit save. Local SQLite. No Cairn account required."
+  },
+  {
+    "id": "s02-source",
+    "start": 5,
+    "duration": 5,
+    "title": "Inspect the source text.",
+    "sub": "See the receipt attached to the saved memory",
+    "label": "SESSION A / INSPECT",
+    "lines": [
+      [
+        "$ inspect_memory",
+        "command"
+      ],
+      [
+        "receipt.role: \"user\"",
+        "muted"
+      ],
+      [
+        "receipt.excerpt:",
+        "muted"
+      ],
+      [
+        "\"I prefer tabs over spaces in this repo.\"",
+        "success"
+      ]
+    ],
+    "note": "A receipt records submitted text; it does not independently authenticate it."
+  },
+  {
+    "id": "s03-restart",
+    "start": 10,
+    "duration": 5,
+    "title": "New process. Same memory.",
+    "sub": "Session A closes. Session B opens the same local database.",
+    "label": "SESSION B / FRESH PROCESS",
+    "lines": [
+      [
+        "$ inspect_memory",
+        "command"
+      ],
+      [
+        "id: 42304c69-efd1-4270-a93b-7ec5bcd8ba77",
+        "muted"
+      ],
+      [
+        "revision: 1   \u00b7   state: active",
+        "success"
+      ],
+      [
+        "content: \"I prefer tabs over spaces in this repo.\"",
+        "normal"
+      ]
+    ],
+    "note": "Persistence is shown by inspection after a real process restart."
+  },
+  {
+    "id": "s04-correct",
+    "start": 15,
+    "duration": 6,
+    "title": "Changed your mind? Correct it.",
+    "sub": "Update the memory at the revision you inspected",
+    "label": "SESSION B / CORRECT",
+    "lines": [
+      [
+        "$ correct_memory",
+        "command"
+      ],
+      [
+        "expectedRevision: 1",
+        "muted"
+      ],
+      [
+        "content: \"I prefer spaces over tabs in this repo.\"",
+        "normal"
+      ],
+      [
+        "\u2192 revision: 2   \u00b7   state: active",
+        "success"
+      ]
+    ],
+    "note": "The correction is tied to this memory ID and its inspected revision."
+  },
+  {
+    "id": "s05-recall",
+    "start": 21,
+    "duration": 5,
+    "title": "Semantic recall needs a model key.",
+    "sub": "This run deliberately makes no model calls",
+    "label": "SESSION B / RECALL BOUNDARY",
+    "lines": [
+      [
+        "$ recall_memory",
+        "command"
+      ],
+      [
+        "query: \"tabs or spaces?\"",
+        "normal"
+      ],
+      [
+        "\u2192 ok: false",
+        "muted"
+      ],
+      [
+        "error.code: model_not_configured",
+        "accent"
+      ]
+    ],
+    "note": "With a provider key, selected context is sent to the cloud model."
+  },
+  {
+    "id": "s06-forget",
+    "start": 26,
+    "duration": 6,
+    "title": "Forget it from active recall.",
+    "sub": "Forget at revision 2, then inspect the active list",
+    "label": "SESSION B / FORGET + INSPECT",
+    "lines": [
+      [
+        "$ forget_memory  { expectedRevision: 2 }",
+        "command"
+      ],
+      [
+        "\u2192 forgotten: true",
+        "success"
+      ],
+      [
+        "$ inspect_memory {}",
+        "command"
+      ],
+      [
+        "\u2192 memories: []",
+        "success"
+      ]
+    ],
+    "note": "Active-list removal is shown here. This is not a physical-erasure claim."
+  },
+  {
+    "id": "s07-try",
+    "start": 32,
+    "duration": 4,
+    "title": "Try the local developer preview.",
+    "sub": "Inspect. Correct. Forget.",
+    "label": "OPEN SOURCE / CAIRN MEMORY",
+    "lines": [
+      [
+        "github.com/Cairn-ink/cairn-memory",
+        "url"
+      ],
+      [
+        "Start with the model-free walkthrough.",
+        "normal"
+      ],
+      [
+        "Star the repo to follow the preview.",
+        "normal"
+      ]
+    ],
+    "note": "Linux x64 verified \u00b7 Source install \u00b7 Semantic recall requires a key"
+  }
+]

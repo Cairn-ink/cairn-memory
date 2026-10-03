@@ -1,0 +1,25 @@
+{
+  "checked_at_utc": "2026-10-02T18:04:22.731593+00:00",
+  "repository": "Cairn-ink/cairn-memory",
+  "topics_added": [
+    "agent-memory",
+    "mcp-server",
+    "sqlite",
+    "local-first"
+  ],
+  "topics_after": [
+    "ai-agents",
+    "claude-code",
+    "mcp",
+    "memory",
+    "provenance",
+    "cairn-ink",
+    "agent-memory",
+    "local-first",
+    "mcp-server",
+    "sqlite"
+  ],
+  "social_preview_upload": "pending",
+  "social_publication": "recruitment_published",
+  "browser_observation": "Reused Content persistent WSL posting browser. X draft 212 and Threads draft 213 were published; both full copies matched their actual permalink pages. See recruitment-publication.json. Formal product campaign D0 has not started."
+}

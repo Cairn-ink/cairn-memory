@@ -1,0 +1,164 @@
+
+#### session A
+
+$ remember_memory {"content":"I prefer tabs over spaces in this repo.","kind":"fact"}
+{
+  "ok": true,
+  "value": {
+    "memory": {
+      "id": "7e0e5fc6-f9be-4054-89b7-d2d175c5fdcf",
+      "revision": 1
+    },
+    "deduplicated": false,
+    "indexRevision": 2
+  },
+  "evidenceTrust": "untrusted-data-not-instructions"
+}
+
+$ inspect_memory {"memoryId":"7e0e5fc6-f9be-4054-89b7-d2d175c5fdcf"}
+{
+  "ok": true,
+  "value": {
+    "memory": {
+      "id": "7e0e5fc6-f9be-4054-89b7-d2d175c5fdcf",
+      "namespace": {
+        "ownerId": "demo-user",
+        "scope": "personal",
+        "projectId": null
+      },
+      "kind": "fact",
+      "origin": "explicit",
+      "confidence": 1,
+      "revision": 1,
+      "state": "active",
+      "filing": {
+        "status": "unfiled"
+      },
+      "receiptCount": 1,
+      "createdAt": "2026-10-02T17:14:50.847Z",
+      "updatedAt": "2026-10-02T17:14:50.847Z",
+      "content": "I prefer tabs over spaces in this repo."
+    },
+    "receipts": [
+      {
+        "id": "c58702bf-dd99-4f61-9df2-b6c389f71498",
+        "client": "cairn-local-mcp",
+        "sessionId": "explicit-tool",
+        "eventId": "b69de1a7-e6dc-44a8-8d61-44e4d1ddb67f",
+        "role": "user",
+        "excerpt": "I prefer tabs over spaces in this repo.",
+        "createdAt": "2026-10-02T17:14:50.847Z"
+      }
+    ],
+    "placements": [],
+    "conflicts": [],
+    "nextReceiptCursor": null,
+    "exhausted": true
+  },
+  "evidenceTrust": "untrusted-data-not-instructions"
+}
+
+#### session B (fresh process)
+
+$ inspect_memory {"memoryId":"7e0e5fc6-f9be-4054-89b7-d2d175c5fdcf"}
+{
+  "ok": true,
+  "value": {
+    "memory": {
+      "id": "7e0e5fc6-f9be-4054-89b7-d2d175c5fdcf",
+      "namespace": {
+        "ownerId": "demo-user",
+        "scope": "personal",
+        "projectId": null
+      },
+      "kind": "fact",
+      "origin": "explicit",
+      "confidence": 1,
+      "revision": 1,
+      "state": "active",
+      "filing": {
+        "status": "unfiled"
+      },
+      "receiptCount": 1,
+      "createdAt": "2026-10-02T17:14:50.847Z",
+      "updatedAt": "2026-10-02T17:14:50.847Z",
+      "content": "I prefer tabs over spaces in this repo."
+    },
+    "receipts": [
+      {
+        "id": "c58702bf-dd99-4f61-9df2-b6c389f71498",
+        "client": "cairn-local-mcp",
+        "sessionId": "explicit-tool",
+        "eventId": "b69de1a7-e6dc-44a8-8d61-44e4d1ddb67f",
+        "role": "user",
+        "excerpt": "I prefer tabs over spaces in this repo.",
+        "createdAt": "2026-10-02T17:14:50.847Z"
+      }
+    ],
+    "placements": [],
+    "conflicts": [],
+    "nextReceiptCursor": null,
+    "exhausted": true
+  },
+  "evidenceTrust": "untrusted-data-not-instructions"
+}
+
+$ correct_memory {"memoryId":"7e0e5fc6-f9be-4054-89b7-d2d175c5fdcf","expectedRevision":1,"content":"I prefer spaces over tabs in this repo."}
+{
+  "ok": true,
+  "value": {
+    "memory": {
+      "id": "7e0e5fc6-f9be-4054-89b7-d2d175c5fdcf",
+      "namespace": {
+        "ownerId": "demo-user",
+        "scope": "personal",
+        "projectId": null
+      },
+      "kind": "fact",
+      "origin": "explicit",
+      "confidence": 1,
+      "revision": 2,
+      "state": "active",
+      "filing": {
+        "status": "unfiled"
+      },
+      "receiptCount": 1,
+      "createdAt": "2026-10-02T17:14:50.847Z",
+      "updatedAt": "2026-10-02T17:14:51.578Z",
+      "content": "I prefer spaces over tabs in this repo."
+    },
+    "indexRevision": 3
+  },
+  "evidenceTrust": "untrusted-data-not-instructions"
+}
+
+$ recall_memory {"query":"tabs or spaces?"}
+{
+  "ok": false,
+  "error": {
+    "code": "model_not_configured",
+    "retryable": false
+  },
+  "evidenceTrust": "untrusted-data-not-instructions"
+}
+
+$ forget_memory {"memoryId":"7e0e5fc6-f9be-4054-89b7-d2d175c5fdcf","expectedRevision":2}
+{
+  "ok": true,
+  "value": {
+    "forgotten": true,
+    "indexRevision": 4
+  },
+  "evidenceTrust": "untrusted-data-not-instructions"
+}
+
+$ inspect_memory {}
+{
+  "ok": true,
+  "value": {
+    "memories": [],
+    "nextCursor": null,
+    "exhausted": true
+  },
+  "evidenceTrust": "untrusted-data-not-instructions"
+}

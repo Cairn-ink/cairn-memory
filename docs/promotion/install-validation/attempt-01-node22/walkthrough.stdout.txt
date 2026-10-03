@@ -1,0 +1,32 @@
+{
+  "status": "passed",
+  "runtime": "22.16.0",
+  "database": "<attempt-root>/tmp/cairn-walkthrough-gpGOe4/memory.sqlite",
+  "withRecall": false,
+  "stages": [
+    {
+      "stage": "five_tools",
+      "status": "passed"
+    },
+    {
+      "stage": "remember_and_inspect",
+      "status": "passed"
+    },
+    {
+      "stage": "restart_and_inspect",
+      "status": "passed"
+    },
+    {
+      "stage": "correct_and_reject_stale",
+      "status": "passed"
+    },
+    {
+      "stage": "model_disabled",
+      "status": "passed"
+    },
+    {
+      "stage": "forget_and_empty_inspect",
+      "status": "passed"
+    }
+  ]
+}

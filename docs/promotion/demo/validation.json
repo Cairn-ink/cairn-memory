@@ -1,0 +1,90 @@
+{
+  "tool": "hyperframes@0.8.112",
+  "ok": true,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "filesScanned": 8
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "duration": 36,
+    "samples": [
+      2,
+      6,
+      10,
+      14,
+      18,
+      22,
+      26,
+      30,
+      34
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 0,
+    "truncated": false
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      2,
+      10,
+      18,
+      26,
+      34
+    ],
+    "checked": 53,
+    "passed": 53
+  },
+  "motionAssertionsEnabled": false,
+  "visualReview": "20 frames inspected, including all seven scenes and cut boundaries; no overlap in full-resolution frames.",
+  "renderValidation": {
+    "status": "passed",
+    "codec": "h264",
+    "width": 1280,
+    "height": 720,
+    "fps": "30/1",
+    "durationSeconds": 36,
+    "frameCount": 1080,
+    "bytes": 976529,
+    "sha256": "0179866e5bc6d91c0c3437f86f2766dec4d0a87074c947e00a2bc79c58b6dc46",
+    "capture": "beginframe",
+    "gpu": "software",
+    "decodedFramesInspectedAtSeconds": [
+      4,
+      9,
+      14,
+      15.2,
+      19,
+      21.2,
+      25,
+      26.2,
+      30,
+      32.2,
+      35.5
+    ],
+    "notes": "Decoded MP4 frame review matches the source snapshots; boundary panels are blank before new output and carry only the new scene label/footer. Contact sheet is reduced for review."
+  }
+}

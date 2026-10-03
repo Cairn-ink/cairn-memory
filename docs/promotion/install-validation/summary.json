@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-02T17:16:50.780251+00:00",
+  "sourceCommit": "7467aebcb32563c9aab4356a8c3e04c0ebb1ecd4",
+  "operatorType": "AI agent",
+  "operatorCount": 1,
+  "attemptsPlanned": 3,
+  "attemptsStarted": 3,
+  "attemptsPassed": 3,
+  "attemptsFailed": 0,
+  "attemptsIncomplete": 0,
+  "walkthroughStagesPassed": 18,
+  "walkthroughStagesExpected": 18,
+  "nodeVersions": [
+    "v22.16.0",
+    "v24.15.0"
+  ],
+  "sameArchiveSha256": true,
+  "artifactSha256": "ce2851621a9c7361523f3c7083998200b95665637c6b52c3fa20f269ff523646",
+  "allInstalledRuntimeSourceHashesMatch": true,
+  "humanInstallCheck": "pending",
+  "fivePersonComprehensionStudy": "pending",
+  "completeP2Gate": "not_passed_by_these_results_alone",
+  "paidModelCalls": 0,
+  "semanticRecallTested": false,
+  "publicGitCloneRetested": false,
+  "runnerSha256": "a337be63d8037f8b3826805721b5a2bc50715204f83cec33fc23edf6c70953c7",
+  "attempts": [
+    {
+      "id": "attempt-01-node22",
+      "result": "attempt-01-node22/result.json",
+      "status": "passed",
+      "nodeVersion": "v22.16.0",
+      "readmeCommandDurationSeconds": 9.163
+    },
+    {
+      "id": "attempt-02-node24",
+      "result": "attempt-02-node24/result.json",
+      "status": "passed",
+      "nodeVersion": "v24.15.0",
+      "readmeCommandDurationSeconds": 14.327
+    },
+    {
+      "id": "attempt-03-node22",
+      "result": "attempt-03-node22/result.json",
+      "status": "passed",
+      "nodeVersion": "v22.16.0",
+      "readmeCommandDurationSeconds": 8.439
+    }
+  ]
+}
