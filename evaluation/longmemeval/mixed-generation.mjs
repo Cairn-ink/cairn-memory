@@ -8,8 +8,6 @@ import { openMemoryCore } from '../../core/contract.mjs';
 import { checkedMem0NativeArtifact } from '../experiment-budget/mem0-native-artifact.mjs';
 import { checkedMem0NativeConfiguration, runMem0NativeCase } from '../experiment-budget/mem0-native-gateway.mjs';
 import { mem0WireProfile } from '../experiment-budget/mem0-wire.mjs';
-import { benchmarkStagePolicy } from '../live/public-pilot.mjs';
-import { experimentPolicy } from '../live/session.mjs';
 import { ingestIndexedWindowLongMemEvalCase, ingestIndexedEvidenceLongMemEvalCase } from './ingestion.mjs';
 import { createMixedModelDiagnosticObserver,
   summarizeMixedIngestionStop } from './mixed-ingestion-diagnostics.mjs';
@@ -17,9 +15,8 @@ import { verifiedEvidence } from './mixed-evidence.mjs';
 import { verifyMixedCapturePlan } from './mixed-plan.mjs';
 import { MIXED_ANSWER_CONTEXT_WINDOW, MIXED_ANSWER_MODEL, MIXED_ANSWER_OUTPUT_TOKENS,
   MIXED_ANSWER_TIMEOUT_MS, packMixedAnswer } from './mixed-answer.mjs';
-import { prepareMixedSourceCase, mixedSourcePolicy } from './mixed-source.mjs';
-import { OFFICIAL_JUDGE_MODEL, OFFICIAL_QUESTION_TYPES,
-  OFFICIAL_UPSTREAM_COMMIT } from './official-scoring.mjs';
+import { prepareMixedSourceCase, prepareSuppliedHistoryCase } from './mixed-source.mjs';
+import { sourceHistoryFamily, sourceProtocolIdentity } from './mixed-source-policy.mjs';
 import { PUBLIC_ANSWER_INSTRUCTION } from './public-comparison.mjs';
 import { MixedComparisonError, canonical, dense, exact, fail, freeze, hash,
   reportSnapshot, sourceSnapshot, wellFormed } from './mixed-validation.mjs';
@@ -33,13 +30,9 @@ const USED = new WeakSet();
 const CASE_ID = /^lme-case-[a-f0-9]{64}$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const ARM_NAMES = ['cairn', 'mem0'];
-const PREPARATION_VERSION = 'cairn-lme-mixed-preparation-v1';
-export const MIXED_GENERATION_VERSION = 'cairn-lme-mixed-generation-v1';
-const CONTEXT_DOMAIN = 'cairn.lme.mixed.context.v1';
+export { MIXED_GENERATION_VERSION } from './mixed-source-policy.mjs';
 const ANSWER_DOMAIN = 'cairn.lme.mixed.answer.v1';
-const SCORER_DOMAIN = 'cairn.lme.mixed.scorer.v1';
 const CAIRN_ADAPTER_DOMAIN = 'cairn.lme.mixed.cairn-adapter.v1';
-const CASE_DOMAIN = 'cairn.lme.mixed.case-protocol.v1';
 const MANIFEST_DOMAIN = 'cairn.lme.mixed.manifest.v1';
 const ROSTER_DOMAIN = 'cairn.lme.mixed-source-pair.roster.v1';
 const SCOPE_DOMAIN = 'cairn.lme.mixed-source-pair.scope.v1';
@@ -109,7 +102,7 @@ function staticNativeFit(input) {
 }
 
 function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArtifactSha256,
-  comparisonProfile }) {
+  comparisonProfile }, family) {
   const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
   if (typeof cairnRuntimeArtifactSha256 !== 'string' || !SHA256.test(cairnRuntimeArtifactSha256)) {
     fail('invalid_cairn_artifact_descriptor');
@@ -120,33 +113,12 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
     'configurationSha256', 'invalid_native_descriptor');
   const configuration = Object.getOwnPropertyDescriptor(nativeConfiguration, 'configuration')?.value;
   if (!configuration || typeof configuration !== 'object') fail('invalid_native_descriptor');
-  const context = { version: 'mixed-context-v2', sourcePolicyDigest: mixedSourcePolicy().digest,
-    nativeProfile: 'mem0-2.2.0-infer-add-no-nlp-v1',
-    nativeConfigurationSha256: configurationSha256,
-    nativeTopK: 6, nativeThreshold: 0, nativeChildTimeoutMs: 3_600_000,
-    cairnQualification: 'source-bound-v2',
-    qualificationDispatchPolicy: 'whole-then-singleton-preflight-v1',
-    captureSourcePolicy: 'indexed-windows-v1',
-    sourceCandidatePolicy: 'bounded-keyset-v1', recallLimit: 6,
-    recallContextMode: 'source-evidence', recallSelectionMode: 'bounded-source-scan',
-    experimentPolicy: experimentPolicy(), stages: benchmarkStagePolicy(),
-    wireProfile: mem0WireProfile() };
-  if (evidenceOnly) {
-    context.version = 'mixed-indexed-evidence-context-v1';
-    context.comparisonProfile = comparisonProfile;
-    context.cairnQualification = 'not-requested';
-    context.captureSourcePolicy = 'indexed-evidence-v1';
-    delete context.qualificationDispatchPolicy;
-  }
   const answer = { version: 'mixed-answer-v1', model: MIXED_ANSWER_MODEL,
     instruction: PUBLIC_ANSWER_INSTRUCTION, contextWindow: MIXED_ANSWER_CONTEXT_WINDOW,
     outputTokens: MIXED_ANSWER_OUTPUT_TOKENS, timeoutMs: MIXED_ANSWER_TIMEOUT_MS,
     requestKeys: ['model', 'messages', 'temperature', 'max_tokens', 'n'],
     evidenceShape: 'JSON.stringify({evidence:[{text}],currentQuestion:{text,date}})',
     packing: 'exact-string-first-seen-whole-unit-v1' };
-  const scorer = { version: 'mixed-scorer-v1', upstreamCommit: OFFICIAL_UPSTREAM_COMMIT,
-    judgeModel: OFFICIAL_JUDGE_MODEL, questionTypes: OFFICIAL_QUESTION_TYPES,
-    judgePolicy: benchmarkStagePolicy().judge, aggregation: 'fixed-N-paired-3x3-v1' };
   const cairnAdapter = { version: 'mixed-cairn-adapter-v1',
     qualificationInputMode: 'adaptive-text-catalog-v1',
     extractionModel: DEFAULT_MODEL, rationaleModel: DEFAULT_MODEL, basisModel: DEFAULT_MODEL,
@@ -158,10 +130,12 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
     delete cairnAdapter.rationaleModel;
     delete cairnAdapter.basisModel;
   }
-  return freeze({ sourceProtocolSha256: mixedSourcePolicy().digest,
-    contextProtocolSha256: hash(CONTEXT_DOMAIN, context),
+  const identity = sourceProtocolIdentity(family, {
+    nativeConfigurationSha256: configurationSha256, comparisonProfile });
+  return freeze({ sourceProtocolSha256: identity.sourceProtocolSha256,
+    contextProtocolSha256: identity.contextProtocolSha256,
     answerProtocolSha256: hash(ANSWER_DOMAIN, answer),
-    scorerProtocolSha256: hash(SCORER_DOMAIN, scorer),
+    scorerProtocolSha256: identity.scorerProtocolSha256,
     cairn: { runtimeArtifactSha256: cairnRuntimeArtifactSha256,
       adapterConfigurationSha256: hash(CAIRN_ADAPTER_DOMAIN, cairnAdapter),
       qualificationInputProfile: evidenceOnly ? 'not-requested' : 'adaptive-text-catalog-v1',
@@ -173,10 +147,14 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
 
 export function prepareMixedComparison(options) {
   const profileDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'comparisonProfile');
+  const sourceDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'sourceHistoryPolicy');
   const raw = ownOptions(options, ['sourceCases', 'armOrders', 'nativeArtifact',
     'nativeConfiguration', 'cairnRuntimeArtifactSha256',
-    ...(profileDescriptor ? ['comparisonProfile'] : [])], 'invalid_mixed_preparation');
+    ...(profileDescriptor ? ['comparisonProfile'] : []),
+    ...(sourceDescriptor ? ['sourceHistoryPolicy'] : [])], 'invalid_mixed_preparation');
   if (profileDescriptor && raw.comparisonProfile !== 'indexed-evidence-v1') fail('invalid_mixed_preparation');
+  if (sourceDescriptor && raw.sourceHistoryPolicy !== 'supplied-history-v1') fail('invalid_mixed_preparation');
+  const family = sourceHistoryFamily(sourceDescriptor ? raw.sourceHistoryPolicy : undefined);
   const source = sourceSnapshot({ sourceCases: raw.sourceCases, armOrders: raw.armOrders });
   dense(source.sourceCases, 1, 250, 'invalid_source_cases');
   dense(source.armOrders, source.sourceCases.length, source.sourceCases.length,
@@ -189,7 +167,7 @@ export function prepareMixedComparison(options) {
       fail('invalid_arm_orders');
     }
   }
-  const manifest = protocolManifest(raw);
+  const manifest = protocolManifest(raw, family);
   const preflight = [];
   const plans = [];
   const batchCounts = [];
@@ -197,7 +175,7 @@ export function prepareMixedComparison(options) {
   for (const [index, row] of source.sourceCases.entries()) {
     let plan = null, reason = null;
     try {
-      plan = prepareMixedSourceCase(row, raw.comparisonProfile);
+      plan = (sourceDescriptor ? prepareSuppliedHistoryCase : prepareMixedSourceCase)(row, raw.comparisonProfile);
       if (!staticNativeFit(plan.mem0Input)) { plan = null; reason = 'native_static_input_exceeded'; }
     } catch (error) {
       reason = typeof error?.code === 'string' && /^[a-z0-9_]{1,80}$/u.test(error.code)
@@ -211,7 +189,7 @@ export function prepareMixedComparison(options) {
     preflight.push(preflightRow);
     batchCounts.push(plan?.counts.batches ?? 0);
     const armOrder = source.armOrders[index];
-    const protocolDigest = hash(CASE_DOMAIN, { manifest, question: row.question,
+    const protocolDigest = hash(family.caseDomain, { manifest, question: row.question,
       namespace: row.namespace, caseDigest: plan?.caseDigest ?? null,
       preflight: { status, reason: preflightRow.reason }, armOrder });
     roster.push({ questionId, protocolDigest, armOrder,
@@ -219,10 +197,10 @@ export function prepareMixedComparison(options) {
         scopeId: `lme-case-${hash(SCOPE_DOMAIN, [questionId, name])}` })) });
   }
   const projection = freeze({ schemaVersion: raw.comparisonProfile
-    ? 'cairn-lme-mixed-indexed-evidence-preparation-v1' : PREPARATION_VERSION,
+    ? family.indexedPreparation : family.preparation,
     manifest, roster, counts: { fixedN: source.sourceCases.length, batchCounts }, preflight });
   PREPARED.set(projection, { sourceCases: source.sourceCases, armOrders: source.armOrders,
-    plans, nativeArtifact: raw.nativeArtifact, nativeConfiguration: raw.nativeConfiguration,
+    plans, family, nativeArtifact: raw.nativeArtifact, nativeConfiguration: raw.nativeConfiguration,
     manifestDigest: hash(MANIFEST_DOMAIN, manifest), rosterDigest: hash(ROSTER_DOMAIN, roster) });
   return projection;
 }
@@ -461,7 +439,7 @@ export async function runMixedGeneration(options) {
   if (haltReason) for (const item of cases) for (const resultArm of item.arms) {
     if (resultArm.reason === 'not_started') resultArm.reason = haltReason;
   }
-  return freeze(reportSnapshot({ schemaVersion: MIXED_GENERATION_VERSION, manifest: prepared.manifest,
+  return freeze(reportSnapshot({ schemaVersion: privateData.family.generation, manifest: prepared.manifest,
     roster: prepared.roster, manifestDigest: privateData.manifestDigest,
     rosterDigest: privateData.rosterDigest, cases, halted: haltReason !== null, haltReason }));
 }
