@@ -27,6 +27,15 @@ test("frozen golden pins main 0.1.1 and its complete runtime source inventory", 
     assert.match(golden.hashes[`plugins/cairn-memory/${file}`], /^[a-f0-9]{64}$/);
   }
   assert.equal(golden.standalone.length, 86);
+  for (const variant of candidateGolden(golden.standalone)) {
+    const requests = variant.requestBytes.trim().split("\n").filter(Boolean).map(JSON.parse);
+    assert.ok(requests.every(request => !request.url.endsWith("/session-start")));
+    const recalls = requests.filter(request => request.url.endsWith("/recall"));
+    const ids = recalls.map(request => JSON.parse(request.body).session_id).sort();
+    assert.deepEqual(ids, variant.mode.startsWith("concurrent-") ?
+      Array.from({ length: recalls.length }, (_, index) => `synthetic-session-${index}`).sort() :
+      recalls.map(() => "synthetic-session"));
+  }
 });
 test("isolated plugin preserves no-history parity and explicitly refuses lost 0.1.2 history", async (t) => {
   const workspace = createTestWorkspace(t, { prefix: "cx2-main-parity-" });

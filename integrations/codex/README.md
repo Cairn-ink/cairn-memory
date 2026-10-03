@@ -32,6 +32,23 @@ at 750 ms (2.5 s for disabled context events), and fences late completion;
 the launcher must enforce its own process/pipe lifetime. SessionStart establishes
 a stale pause generation's EOF using only the last byte, without history parsing.
 
+The hook input's conversation identity is `session_id`, alongside `cwd`,
+`hook_event_name` and nullable `transcript_path`. There is no `conversation_id`
+alias or model-derived fallback. `UserPromptSubmit` currently returns
+`context_unavailable`; it makes no recall request and injects no context.
+SessionStart retains only its original capture pause-boundary work.
+
+If a qualified caller uses the shared `createHostedTransport().recall` port,
+protocol 0.3.0 accepts optional `binding.sessionId`, in the same wire
+representation as capture: SHA-256 of the JSON tuple
+`["wire-session-v1","codex",hostSessionId]`. Supply that existing opaque binding,
+not a new id. The transport sends only ids in the 1–200 character ASCII allowlist
+(`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`), explicitly rejecting line terminators.
+Unavailable or invalid ids are omitted. The server stores only an owner-scoped SHA-256 of the
+wire id. The id is never logged or sent as telemetry. A precise legacy recall
+schema rejection gets one retry without it, with the original deadline and quota
+reservation. This adds no per-prompt Codex recall, host registration or credentials.
+
 `prepareCapture(binding)` durably freezes a content-free pending manifest before
 launch. `runWorker(binding,{transport,guard,mode})` revalidates the supplied source
 and manifest under one cursor lock. A binding consists of the resolved private

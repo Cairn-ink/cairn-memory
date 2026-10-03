@@ -34,6 +34,11 @@ The bundled Cairn MCP server also exposes explicit `remember_memory`, `recall_me
 - Automatic recall sends the redacted current prompt, bounded to the protocol query limit, to the
   configured service.
 - Project paths are hashed locally into an opaque scope id.
+- Prompt recall sends the host's `session_id` only when it matches the 1–200
+  character ASCII allowlist (`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`). Invalid or
+  unavailable ids are omitted. The server stores only an owner-scoped SHA-256
+  hash. Models never supply this id, and it is never logged or sent in telemetry.
+  Only the exact old recall schema rejection permits one retry without the field.
 - `/cairn-memory:pause` and `/cairn-memory:resume` control automatic capture and recall.
 - `/cairn-memory:status` reports state without printing the credential.
 - Remote endpoints require HTTPS; plain HTTP is accepted only on explicit loopback hosts for local

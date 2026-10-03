@@ -28,6 +28,10 @@ const object = (value) => value !== null && typeof value === "object" && !Array.
 export function conforms(name, value) {
   const root = HOSTED_SCHEMAS[name];
   if (!root) return false;
+  // JavaScript's $ may match before a final line terminator. Supplement the
+  // portable schema pattern with the same explicit host-id check as callers.
+  if (name === "recall-request" && object(value) && Object.hasOwn(value, "session_id") &&
+      optionalHostSessionId(value.session_id) === undefined) return false;
   function check(schema, input) {
     if (schema.$ref) return check(root.$defs[schema.$ref.slice("#/$defs/".length)], input);
     if (schema.oneOf && schema.oneOf.filter((s) => check(s, input)).length !== 1) return false;
@@ -78,6 +82,13 @@ export function conforms(name, value) {
 export function parseSessionStartRequest(value) {
   if (!conforms("session-start-request", value)) throw new Error("invalid_memory_input");
   return { max_tokens: 1500, max_chars: 6000, ...value };
+}
+
+// Take only the host hook's field. Never derive an identity from prompt text,
+// transcript contents, another key or a model-supplied fallback.
+export function optionalHostSessionId(value) {
+  return typeof value === "string" && !/[\r\n\u2028\u2029]/.test(value) &&
+    /^[A-Za-z0-9._:-]{1,200}$/.test(value) ? value : undefined;
 }
 
 export function parsePauseState(value) {

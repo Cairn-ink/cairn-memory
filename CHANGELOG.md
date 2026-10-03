@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.0 — Unreleased
+
+- Add optional trusted host conversation `session_id` to recall so existing
+  prompt recall can identify the conversation receiving memory context. Claude
+  supplies its host id; a qualified Codex hosted caller uses capture's existing
+  opaque wire binding. Codex prompt context remains unavailable.
+- Accept only 1–200 ASCII characters from `A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`.
+  Clients omit invalid/unavailable ids, including trailing line terminators.
+  Models never invent the id; the server stores only an owner-scoped SHA-256
+  hash. Neither raw ids nor response bodies are logged.
+- Retry once without the field only on the exact older-server recall HTTP 400
+  root `unrecognized_keys` rejection of `session_id`. Preserve query/scope/limit,
+  one quota reservation and cancellation. The two-second budget starts at first
+  dispatch and is shared with fallback. Other errors never downgrade.
+- Fix nested control locks in Claude recall/capture so each HTTP dispatch checks
+  pause/generation once, without holding a control lock during network waits.
+- Version this optional request addition at 0.3.0, with matching plugin,
+  marketplace, root and runtime versions. The maintainer confirms the version at
+  release; publication, tags and releases require maintainer approval.
+
 ## 0.2.0 — 2026-10-01
 
 Breaking hosted protocol release (CX-4):

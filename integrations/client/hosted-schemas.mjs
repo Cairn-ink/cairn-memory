@@ -115,7 +115,7 @@ export const HOSTED_SCHEMAS = {
   "recall-request": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/recall-request.schema.json",
-    "title": "Cairn Memory recall request",
+    "title": "Cairn Memory recall request (protocol 0.3.0)",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -126,6 +126,13 @@ export const HOSTED_SCHEMAS = {
         "type": "string",
         "minLength": 1,
         "maxLength": 4000
+      },
+      "session_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "pattern": "^[A-Za-z0-9._:-]{1,200}$",
+        "description": "Optional host conversation/session id from a trusted client, never invented by a model. Use the same wire representation as capture. The server stores only an owner-scoped SHA-256 hash. Invalid or unavailable host ids are omitted by clients."
       },
       "project_id": {
         "type": "string",

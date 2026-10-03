@@ -25,6 +25,29 @@ pasted files, terminal output, paths, and repository names.
 
 The service may retain durable Memory text and bounded redacted Source Receipts. It does not need the raw transcript. The hosted service soft-deletes a Memory immediately from recall when the owner invokes `forget_memory`; backup erasure timing is an operational policy and is not claimed by this repository.
 
+Protocol/plugin 0.3.0 adds the existing host conversation id to prompt recall as
+optional `session_id`. Claude reads it only from the trusted hook stdin field;
+model text and other hook keys cannot supply or invent it. An id outside the
+1–200 character ASCII allowlist (`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`), including
+trailing line terminators, is omitted. The server stores only an owner-scoped
+SHA-256 hash. This links prompt reads and captures within one owner; hashing is
+not anonymity and guessed ids can be tested. It grants no ownership or execution
+authority. The id is never logged, added to telemetry or kept in a reverse map.
+Recall continues to inject the existing explicitly untrusted memory context;
+SessionStart retains its original telemetry-only behavior and sends no memory
+read. Codex does not currently recall per prompt; its shared hosted recall port
+accepts the same already opaque wire binding as capture if used by a qualified
+caller. No new Codex context injection or hook installation is enabled.
+
+The exact old strict recall schema rejection permits one retry without the id,
+with the same query/scope/limit and cancellation. Its two-second deadline starts
+at first HTTP dispatch after local waits, and is shared by fallback. Both
+attempts use one quota reservation and recheck the local pause/generation barrier
+only at HTTP dispatch. No control lock wraps another control lock or network
+wait. Tests cover new/old replies reaching Claude context, ASCII omission,
+fixed-UUID lock contention, fallback/error/pause/deadline behavior, and unchanged
+startup behavior using synthetic data only.
+
 ## Local state
 
 Ordinary standalone use selects `CLAUDE_PLUGIN_DATA` when supplied, otherwise
