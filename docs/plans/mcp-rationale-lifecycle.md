@@ -177,3 +177,42 @@ No package/install/runtime/configuration/default/timeout/schema changes were
 made. Locked SDK preparation belongs to primary. Full MCP/contributor checks,
 primary direct final-candidate acceptance, both independent review axes and
 dependent latest-head CI remain pending. Worker edits pause at this checkpoint.
+
+## Primary integrated verification checkpoint (2026-10-05)
+
+Historical implementation base remains
+`8485f04566a7ac43d23912981e1f33e24f2833f3`; feature checkpoint `d40835a`
+was integrated with the accepted timeline dependency at
+`1aab63637af2f16bdaa7eb68ae248373d04c505f`. Final review/delivery base is
+`9f86dc5e2238767c67379bc51c2901da906039e4`. This integration only merged the
+feature dependency: runtime and test bytes did not change, including both final
+test/fixture SHA-256 bindings above. Actual author model/effort was GPT-6.1
+Sol/high. Primary directly inspected the integrated diff and reran the key paths.
+
+All results below are primary's integrated executions, naturally exiting 0 with
+zero failed, skipped, cancelled or todo tests; durations are milliseconds.
+
+| Gate | Node 22.16.0 result / duration | Node 24.15.0 result / duration |
+| --- | --- | --- |
+| Focused rationale lifecycle | 3/3 / 5,867.737348 | 3/3 / 4,971.348794 |
+| Full MCP | 116/116 / 35,411.433684 | 116/116 / 34,185.224539 |
+| Affected core timeline + deadline | 22/22 / 20,295.384940 | 22/22 / 20,279.094304 |
+| Workspace lifecycle | 25/25 / 20,430.206576 | 25/25 / 20,524.218264 |
+| Generic suite | 591/591 / 298,921.219141 | 591/591 / 302,652.560565 |
+| JSON/version validation | 10 files + version 0.3.0; exit 0 | 10 files + version 0.3.0; exit 0 |
+
+Locked Claude 2.1.260 marketplace and strict plugin validation both exited 0
+against the MCP worktree; the owned validator root was removed. This JavaScript
+repository has no typecheck gate. The inherited M2 full-core 1163-test result is
+M2 evidence, not a newly executed MCP full-core gate. All worker and authored
+fixture-failure history above remains unchanged.
+
+At this dated checkpoint, separate nonauthor Standards/Spec reviews on the
+fixed final base/head and latest-head CI are still pending. Existing CI
+clean-cache, artifact and installed-rationale jobs are separate gates; no local
+result substitutes for them. No artifact runtime allowlist, wire contract,
+package, configuration or default changed. This evidence makes no native Hermes,
+semantic-quality, full M2 or score claim. Paid/provider calls remained zero;
+scripted model-port calls were asserted. No public-main merge, release, deploy
+or historical cleanup was performed. Documentation edits pause here for primary
+candidate freeze and independent review.
