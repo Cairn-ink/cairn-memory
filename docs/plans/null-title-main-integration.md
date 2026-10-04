@@ -6,7 +6,8 @@ remaining CI are pending at this checkpoint. Only `applyPlacement` production
 behavior changed. Ordinary scoped verification and PR delivery follow the
 contributor workflow; paid/native trials, publication and merge are not implied.
 
-Fixed base: `81ed1da6f366a6f288122e00f9df8ef68c832bb8`.
+Original implementation base: `81ed1da6f366a6f288122e00f9df8ef68c832bb8`.
+Delivery/review base: `5af15dc04ba42fc2d27da6454cc1b7fd921ed37d`.
 Worktree: `null-title-main-integration`; branch:
 `fix/null-title-main-integration`.
 Bounded implementation owner: actual GPT-6.1 Sol/high. The primary owns scope,
@@ -284,3 +285,28 @@ excluded from both final review axes. These engineering results establish no
 semantic quality, lightweight/performance gain, installed-Hermes readiness,
 provider/default improvement, paid result or new pilot score. Historical
 failures and source-support limitations remain unchanged.
+
+## Strict-branch delivery integration — 2026-10-05
+
+Both independent Standards and Spec reviews passed candidate
+`02603c7cf8ae197fd0eefd9dbf59cfe076d48df1` with zero findings, using actual
+GPT-6.1 Sol/high nonauthors. Those reviews are historical until both axes review
+the new exact delivery candidate against the delivery/review base above.
+
+GitHub main protection requires an up-to-date branch (`strict=true`, required
+`test (20)`, `test (22)` and plugin validation). For draft PR #333, the
+primary merged current main `5af15dc` into the feature branch only, producing
+integration commit `e10ec512519ce48e7bc1496301f3114579f69430`. Main's nine
+README/brand-document changes are preserved, not authored or revised by this NR
+slice. NR production/test bytes remain unchanged; the PR diff against the new
+base remains the same 15 NR files.
+
+After integration, the primary reran the complete focused command through the
+owned runner in a cleared environment: Node 22.16.0 passed 30/30 in
+17,648.979717 ms and Node 24.15.0 passed 30/30 in 17,667.314846 ms, both with
+natural exit 0 and zero skips, cancellations or todo. JSON validation checked
+ten files and consistent version values successfully on both runtimes. All five
+code/test hashes above stayed unchanged; CONTRIBUTING, package scripts and
+workflows also had no integration delta. No model/API request occurred.
+Latest-head CI and both exact-candidate review axes remain pending at this
+integration checkpoint; old-head CI or reviews do not substitute for them.
