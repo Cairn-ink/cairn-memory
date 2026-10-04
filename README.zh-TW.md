@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/images/readme-hero.png" alt="Cairn Memory：可以查看與修改的 AI 記憶。正式 Cairn 疊石標誌，搭配記憶與提交的來源文字示意。目前為開源開發者預覽版。" width="1200">
+  <picture>
+    <source media="(max-width: 600px)" srcset="docs/images/readme-hero-mobile.png">
+    <img src="docs/images/readme-hero.png" alt="Cairn Memory：可以查看與修改的 AI 記憶。正式 Cairn 疊石標誌。目前為開源開發者預覽版。" width="1200">
+  </picture>
 </p>
 
 # Cairn Memory

@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/images/readme-hero.png" alt="Cairn Memory — AI memory you can inspect and change. Official Cairn stacked-stone logo, with an illustrated memory and its submitted source text. Open-source developer preview." width="1200">
+  <picture>
+    <source media="(max-width: 600px)" srcset="docs/images/readme-hero-mobile.png">
+    <img src="docs/images/readme-hero.png" alt="Cairn Memory — AI memory you can inspect and change. Official Cairn stacked-stone logo. Open-source developer preview." width="1200">
+  </picture>
 </p>
 
 <h1 align="center">Cairn Memory</h1>

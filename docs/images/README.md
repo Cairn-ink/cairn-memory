@@ -12,6 +12,9 @@ opacity levels. The existing Cairn wordmark is followed by a separate Memory
 descriptor. Do not replace the mark with bars or redraw it with a generator.
 
 - `readme-hero.svg` / `.png`: the brand header.
+- `readme-hero-mobile.svg` / `.png`: a simpler header for screens up to 600px,
+  with larger type and the same official logo geometry. Both introductions
+  select it through a responsive `<picture>` element.
 - `memory-workflow.svg` / `.png`: an explicit-tool example of saving, inspecting,
   correcting and forgetting a reporting preference.
 

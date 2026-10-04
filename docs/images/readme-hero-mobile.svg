@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="320" viewBox="0 0 600 320" role="img" aria-labelledby="title desc">
+  <title id="title">Cairn Memory — AI memory you can inspect and change</title>
+  <desc id="desc">The official Cairn stacked-stone mark and wordmark with a Memory descriptor. Save context. Inspect. Correct. Forget. Open-source developer preview.</desc>
+  <rect width="600" height="320" rx="24" fill="#FAF7F2"/>
+  <g transform="translate(36 27) scale(1.2)" fill="#1F1D1A">
+    <ellipse cx="12" cy="28" rx="10.5" ry="3.6" opacity="0.95"/>
+    <ellipse cx="11.5" cy="19.5" rx="7.8" ry="3.2" opacity="0.78" transform="rotate(-6 11.5 19.5)"/>
+    <ellipse cx="12.5" cy="11" rx="5.2" ry="3.6" opacity="0.62" transform="rotate(9 12.5 11)"/>
+  </g>
+  <g fill="#1F1D1A" font-family="'EB Garamond', Georgia, serif" font-weight="400">
+    <text x="82" y="65" font-size="48" font-weight="500" letter-spacing="-0.4" style="font-feature-settings: 'lnum', 'onum';">Cairn</text>
+    <text x="36" y="144" font-size="56">AI memory you can</text>
+    <text x="36" y="202" font-size="56" fill="#5A7A4E">inspect and change.</text>
+  </g>
+  <g fill="#1F1D1A" font-family="Inter, Arial, sans-serif">
+    <text x="211" y="63" font-size="24" font-weight="500">Memory</text>
+    <text x="36" y="251" font-size="21">Save context. Inspect. Correct. Forget.</text>
+    <text x="36" y="288" font-size="18" fill="#6B6560">Open source · Developer preview</text>
+  </g>
+</svg>
