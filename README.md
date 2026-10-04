@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/readme-hero.png" alt="Cairn Memory — Memory you can change. Save context. Inspect its source. Update or forget. Developer preview." width="1200">
+  <img src="docs/images/readme-hero.png" alt="Cairn Memory — AI memory you can inspect and change. Official Cairn stacked-stone logo, with an illustrated memory and its submitted source text. Open-source developer preview." width="1200">
 </p>
 
 <h1 align="center">Cairn Memory</h1>
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  English · <a href="README.zh-TW.md">繁體中文介紹</a>
+  English · <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
 <p align="center">
@@ -51,11 +51,23 @@ A **Source Receipt** is the submitted text attached to a memory. It helps you
 check what was supplied when the memory was saved or corrected. It is not a
 verified transcript of the whole conversation or proof of human intent.
 
+## Cairn Memory and Cairn
+
+**Cairn Memory** is the open-source toolkit in this repository for saving,
+inspecting and changing AI memory. **[Cairn](https://cairn.ink)** is the hosted
+shared memory map for people and AI, where people organize, review and share
+knowledge.
+
+This repository includes local memory tools and connectors to the hosted Cairn
+service. Each path has its own setup and feature boundaries. Local use does not
+require a Cairn account; hosted connections require a compatible service and
+authentication.
+
 ## Choose your starting point
 
 | You want to… | Start here | What you need |
 | --- | --- | --- |
-| Understand the idea before installing | [繁中介紹](README.zh-TW.md) or the [recorded walkthrough](#watch-the-recorded-walkthrough) | No installation or account |
+| Understand the idea before installing | [繁體中文](README.zh-TW.md) or the [recorded walkthrough](#watch-the-recorded-walkthrough) | No installation or account |
 | Try the open-source tools on your computer | [Local preview setup](#try-the-local-memory-layer) | Terminal setup; installation checks cover Linux x64; no Cairn account |
 | Use the documented hosted Claude Code or Codex connection | [Hosted setup](#existing-hosted-integration) | A compatible hosted service and authentication; separate from local-preview client support |
 | Build on the memory layer | [Architecture](docs/architecture.md) and [MCP tools](docs/standalone-mcp.md) | JavaScript or MCP integration work |
