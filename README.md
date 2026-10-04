@@ -1,6 +1,10 @@
-<h1 align="center">Cairn.ink Memory</h1>
+<p align="center">
+  <img src="docs/images/readme-hero.png" alt="Cairn Memory — Memory you can change. Save context. Inspect its source. Update or forget. Developer preview." width="1200">
+</p>
 
-<p align="center"><strong>Cross-session AI memory you can inspect, correct and forget.</strong></p>
+<h1 align="center">Cairn Memory</h1>
+
+<p align="center"><strong>Keep important context between AI sessions. Change it when things change.</strong></p>
 
 <p align="center">
   <a href="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml/badge.svg"></a>
@@ -9,27 +13,62 @@
 </p>
 
 <p align="center">
-  <a href="#try-the-local-memory-layer">Try local (no account)</a> ·
+  English · <a href="README.zh-TW.md">繁體中文介紹</a>
+</p>
+
+<p align="center">
+  <a href="#a-preference-changes">See an example</a> ·
+  <a href="#choose-your-starting-point">Where to start</a> ·
+  <a href="#try-the-local-memory-layer">Local setup</a> ·
   <a href="#existing-hosted-integration">Hosted setup</a> ·
-  <a href="docs/local-memory-demo.md">Walkthrough</a> ·
-  <a href="docs/promotion-claims.md">Verified capabilities</a> ·
-  <a href="docs/limitations.md">Known limitations</a> ·
+  <a href="docs/limitations.md">Limitations</a> ·
   <a href="docs/privacy.md">Privacy</a>
 </p>
 
-Keep a project decision across sessions, with the source text attached.
-Cairn's open-source memory layer stores memories in your own SQLite file and
-exposes them through MCP or JavaScript. No Cairn account is needed for local use.
+Starting a new AI session often means repeating your preferences and project
+decisions. Cairn provides memory tools to save that context between sessions,
+inspect the submitted text behind each memory, and update it when things change.
+
+## A preference changes
+
+Suppose you save **“Keep my reports short.”** Later, you decide you need detailed
+reports. You can inspect the old memory and its source text, correct the saved
+preference, or forget it so it is no longer available for active recall.
+
+![Illustrated example: save a short-report preference with its submitted source text, then correct it to detailed reports or forget it to remove it from active use.](docs/images/memory-workflow.png)
+
+This is an **illustrated explicit-tool example**, not a chat-client screenshot.
+The local preview uses tools to save, inspect, correct and forget; it does not
+automatically read your conversations.
 
 - **Inspect the source.** Read the source text stored with a memory. A receipt
-  does not guarantee correct interpretation.
-- **Correct what changed.** Update the revision you inspected.
+  does not prove that the memory is true or correctly interpreted.
+- **Correct what changed.** Update the memory at the revision you inspected.
 - **Forget what should go.** Remove a memory from active recall.
   [Deletion and backup boundaries](#local-privacy-and-control) apply.
 
-For example, save “The Harbor prototype uses SQLite,” open a fresh session, and
-look up that decision with its source. Change it when the decision changes.
-[Walk through the example →](docs/local-memory-demo.md)
+A **Source Receipt** is the submitted text attached to a memory. It helps you
+check what was supplied when the memory was saved or corrected. It is not a
+verified transcript of the whole conversation or proof of human intent.
+
+## Choose your starting point
+
+| You want to… | Start here | What you need |
+| --- | --- | --- |
+| Understand the idea before installing | [繁中介紹](README.zh-TW.md) or the [recorded walkthrough](#watch-the-recorded-walkthrough) | No installation or account |
+| Try the open-source tools on your computer | [Local preview setup](#try-the-local-memory-layer) | Terminal setup; installation checks cover Linux x64; no Cairn account |
+| Use the documented hosted Claude Code or Codex connection | [Hosted setup](#existing-hosted-integration) | A compatible hosted service and authentication; separate from local-preview client support |
+| Build on the memory layer | [Architecture](docs/architecture.md) and [MCP tools](docs/standalone-mcp.md) | JavaScript or MCP integration work |
+
+If you use Claude or Codex but do not usually install tools from a terminal,
+start with the example and recorded walkthrough. This preview requires setup;
+check the [tested client paths](docs/promotion-claims.md#supported-paths) before
+connecting your AI tool.
+
+## Current preview
+
+Cairn's open-source memory layer stores memories in your own SQLite file and
+exposes them through MCP or JavaScript. No Cairn account is needed for local use.
 
 **Developer preview.** Installed persistence and a narrow real-model memory loop
 have [retained evidence](docs/promotion-claims.md). Default extraction still fails
@@ -37,14 +76,24 @@ our source-support bar; see [known limitations](docs/limitations.md).
 Save, inspect, correct and forget work without a model key. Semantic recall
 requires your OpenAI key and sends selected context to that provider.
 
+## Watch the recorded walkthrough
+
+[Watch the 36-second model-free demo (MP4)](docs/promotion/demo/cairn-memory-preview.mp4).
+This records the memory tools running, rather than a conversation in Claude or
+Codex. “Model-free” means no AI model is called during the walkthrough.
+
+<details>
+<summary>Open the recorded tool walkthrough (GIF)</summary>
+
 The demo below records the **model-free loop**: save, restart, inspect, correct
 and forget. Its recall step reports `model_not_configured`.
 
 ![Recorded model-free memory loop: save, inspect the source, restart, correct and forget](docs/demo/cairn-memory-loop.gif)
 
 [Recorded responses and regeneration instructions](docs/demo/README.md) ·
-[Watch the 36-second model-free demo (MP4)](docs/promotion/demo/cairn-memory-preview.mp4) ·
 [Verified capabilities and client support](docs/promotion-claims.md#supported-paths)
+
+</details>
 
 ## Install
 

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
+  <title id="title">Cairn Memory — Memory you can change</title>
+  <desc id="desc">Cairn's three-stone mark beside the words: Save context. Inspect its source. Update or forget. Developer preview.</desc>
+  <rect width="1200" height="380" rx="24" fill="#f4f1e9"/>
+  <g font-family="DejaVu Sans, Arial, sans-serif" fill="#26362d">
+    <rect x="48" y="38" width="46" height="46" rx="13" fill="#356d55"/>
+    <path d="M58 70h26M62 61h18M67 52h8" fill="none" stroke="#f4f1e9" stroke-width="5" stroke-linecap="round"/>
+    <text x="110" y="70" font-size="30" font-weight="700">Cairn Memory</text>
+    <text x="48" y="165" font-size="62" font-weight="700" letter-spacing="-2">Memory you</text>
+    <text x="48" y="239" font-size="62" font-weight="700" letter-spacing="-2">can change.</text>
+    <text x="50" y="295" font-size="25" fill="#5d6b61">Save context. Inspect its source.</text>
+    <text x="50" y="333" font-size="25" fill="#5d6b61">Update or forget.</text>
+    <rect x="935" y="40" width="219" height="36" rx="18" fill="#e3e8de"/>
+    <text x="1044" y="64" text-anchor="middle" font-size="17" font-weight="700" fill="#356d55">DEVELOPER PREVIEW</text>
+  </g>
+  <g fill="none" stroke="#356d55" stroke-width="27" stroke-linecap="round">
+    <path d="M838 293h241"/>
+    <path d="M868 228h181"/>
+    <path d="M918 163h81"/>
+  </g>
+</svg>

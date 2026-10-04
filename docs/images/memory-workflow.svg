@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="610" viewBox="0 0 1000 610" role="img" aria-labelledby="title desc">
+  <title id="title">A preference changes. Your memory can change too.</title>
+  <desc id="desc">Illustrated explicit-tool example: save a preference for short reports with submitted source text attached. Later, correct the memory to detailed reports, or forget it to remove it from active use. This is a concept illustration, not an application screenshot.</desc>
+  <rect width="1000" height="610" rx="24" fill="#f4f1e9"/>
+  <g font-family="DejaVu Sans, Arial, sans-serif" fill="#26362d">
+    <text x="42" y="56" font-size="29" font-weight="700">A preference changes. Your memory can change too.</text>
+    <circle cx="59" cy="115" r="19" fill="#356d55"/>
+    <text x="59" y="123" text-anchor="middle" font-size="23" font-weight="700" fill="#fffefb">1</text>
+    <text x="93" y="123" font-size="26" font-weight="700">Save a preference</text>
+    <rect x="42" y="148" width="432" height="171" rx="16" fill="#e3e8de"/>
+    <text x="65" y="184" font-size="18" fill="#356d55" font-weight="700">SUBMITTED TEXT · SOURCE RECEIPT</text>
+    <text x="65" y="234" font-size="29">“Please keep my</text>
+    <text x="65" y="276" font-size="29">reports short.”</text>
+    <rect x="526" y="148" width="432" height="171" rx="16" fill="#fffefb" stroke="#cbd2c6" stroke-width="2"/>
+    <text x="549" y="184" font-size="18" fill="#356d55" font-weight="700">SAVED MEMORY</text>
+    <text x="549" y="234" font-size="29" font-weight="600">Keep reports brief.</text>
+    <text x="549" y="278" font-size="21" fill="#5d6b61">Inspect the attached source.</text>
+    <path d="M475 234h37m-10-9 10 9-10 9" fill="none" stroke="#356d55" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="59" cy="372" r="19" fill="#356d55"/>
+    <text x="59" y="380" text-anchor="middle" font-size="23" font-weight="700" fill="#fffefb">2</text>
+    <text x="93" y="380" font-size="26" font-weight="700">Later, decide what stays</text>
+    <rect x="42" y="405" width="432" height="131" rx="16" fill="#fffefb" stroke="#cbd2c6" stroke-width="2"/>
+    <text x="65" y="443" font-size="18" fill="#356d55" font-weight="700">CORRECT</text>
+    <text x="65" y="486" font-size="29" font-weight="600">Use detailed reports.</text>
+    <rect x="526" y="405" width="432" height="131" rx="16" fill="#fffefb" stroke="#cbd2c6" stroke-width="2"/>
+    <text x="549" y="443" font-size="18" fill="#356d55" font-weight="700">FORGET</text>
+    <text x="549" y="486" font-size="26" font-weight="600">Remove from active use.</text>
+    <text x="42" y="577" font-size="18" fill="#5d6b61">Illustrated explicit-tool example · Source text is not proof of truth.</text>
+  </g>
+</svg>
