@@ -171,3 +171,136 @@ seconds. The complete capture-deadline file passed 19/19, full `test:core`
 690/690 and `demo:capture` passed on both Node versions. The C5 gates in the
 linked guard plan also passed. Candidate commit, primary acceptance,
 independent reviews and new exact-head CI remain pending.
+
+## 2026-10-05 rationale/staged write-boundary repair (F1–F8)
+
+Fixed implementation base: `be7bc1397029b05677534e5a46aa66e0b853d524`,
+dependent on NR PR #333. This acceptance contract is frozen before the repair.
+Requested/actual implementation worker: GPT-6.1 Sol, high reasoning.
+
+- **F1 — Retained failure and diagnosis.** The M2 integration's full Node
+  24.15.0 core attempt exited 1: 1,161 passed / 2 failed of 1,163, zero
+  skip/cancel/todo, 439,764.244427 ms. The existing rationale-commit and staged
+  final-admission tests expected SQL reach count 1 but observed 0. Full core22
+  passed 1,163/1,163; unchanged focused cases subsequently passed on both
+  runtimes. Neither isolated green regrades the original failure. A controlled
+  private diagnostic reproduced the exact reach-count RED by expiring before
+  SQL, proved real rollback after SQL, and exposed durable writes when only
+  the transaction post-work check was removed in memory. This supports a
+  scheduling-sensitive fixture, not proof of the historical scheduler event
+  or a demonstrated Node24 rollback defect. The diagnostic's first
+  separate-connection observation failure is observer-only and retained.
+- **F2 — Narrow replacement.** Replace only `D3/D4 rationale commit expiry`
+  and `D3 staged final admission`. All other test assertions, helpers and
+  real-time budgets remain unchanged, including earlier placement/cumulative
+  clock fixtures.
+- **F3 — Real transaction precondition.** An isolated child installs a
+  controlled monotonic clock before importing the actual core. Keep it at zero
+  through real capture and the target SQLite `run`; assert one target execution
+  and the same connection's uncommitted write. Advance a fixture-only
+  120,000 ms budget by 120,001 ms after that write. The original guard must
+  roll back rationale edges while retaining prior admission/receipts/applied
+  classification, or roll back staged memory/receipt/qualification/journal
+  admission while leaving a pending claim and non-admitted evidence.
+- **F4 — Two discriminating RED controls per mode.** Before-target expiry
+  must preserve the original reached-1 assertion RED with reached 0 and actual
+  model_timeout. A counterfactual removes exactly one literal post-work check
+  from the imported transaction helper, never a source file. It reaches the
+  same SQL, leaves durable writes and fails the rollback assertion. Parent
+  tests verify both observations, not merely nonzero exits.
+- **F5 — Owned lifecycle.** Use `createTestWorkspace`, defer every opened
+  database/core closure, restore clock/import hook/SQLite prototype in finally,
+  and verify owned scratch removal. Cleanup failures fail child and outer
+  tests. No existing-path adoption or historical cleanup.
+- **F6 — Test-precondition repair only.** Allowed paths: this appended plan,
+  `core/test/capture-invocation-deadline.test.mjs`, new
+  `core/testing/capture-write-clock-child.mjs`, and an appended limitations
+  section. No production runtime, prompts, schema, caps, policy, default,
+  timeout, versions, dependencies, README, paid/provider/native/ledger changes.
+  This does not repair or certify semantic/product behavior.
+- **F7 — Final worker verification.** Run the exact two-case pattern and
+  complete deadline file through `tools/testing/run.mjs` on nvm Node 22.16.0
+  and 24.15.0 in a cleared, keyless environment. Record actual commands,
+  counts/exits and failures; never substitute earlier expiry for target reach.
+- **F8 — Delivery gates.** Primary inspects the actual diff and personally
+  reruns key paths, contributor/full-core gates. Separate nonauthors review
+  Standards and Spec on one fixed base/head before a dependent PR/latest-head
+  CI. No commit, push, PR, merge, release or deploy is performed by the worker.
+
+### F1–F8 implementation and verification
+
+The two parent cases invoke the new child in ordinary, before-target-expiry
+and remove-post-work-check modes. Each validates exact target reach, inside
+uncommitted writes, outside rows/state, expected assertion RED and cleanup.
+The child restores the prototype, clock and hook and verifies workspace removal.
+Primary F5 inspection additionally identified that empty child environments
+would drop the outer runner's temporary-directory ownership. The two new
+invocations now forward only `TMPDIR`/`TMP`/`TEMP` after absolute-path,
+NUL-refusal and existing-directory validation; credentials, HOME and application
+settings remain excluded. No other parent test/helper was changed.
+
+Pre-F5-correction worker runs passed focused 2/2 on Node22/24 (1,729.222463 /
+1,710.193003 ms), and whole deadline 19/19 (18,281.336071 / 18,425.664611 ms),
+all natural exit 0 and zero fail/skip/cancel/todo. Those observations do not
+certify the final temp-forwarding bytes. Final worker runs on parent test
+SHA-256 `2c89af9c112132a7664854099fe84567d9f2a385e1396b4f6023094b8d14cf7a`
+and child SHA-256 `3cee7cae85ff2f3d503f276ecee13e69c0d99db9d978f470d78d4293875600ed`
+passed:
+
+| Runtime | Focused cases | Complete deadline file |
+| --- | --- | --- |
+| Node 22.16.0 | 2/2; 1,252.093889 ms | 19/19; 16,741.530726 ms |
+| Node 24.15.0 | 2/2; 1,225.894576 ms | 19/19; 16,544.979089 ms |
+
+All four final invocations naturally exited 0, with zero fail/skip/cancel/todo.
+Each of the two replaced cases verified a healthy real rollback, expected
+before-target reachability RED and expected missing-guard durable-write RED;
+every child reported and verified owned cleanup. No worker implementation run
+failed. The original full24 failure and initial diagnostic observer-only error
+remain historical evidence, not repaired product observations. Paid/provider,
+native and operational-ledger calls were zero.
+
+Reproducible focused command (substitute `v24.15.0` for the second runtime):
+
+```sh
+env -i PATH=/home/chichieh/.nvm/versions/node/v22.16.0/bin:/usr/bin:/bin LC_ALL=C TZ=UTC NODE_DISABLE_COMPILE_CACHE=1 /home/chichieh/.nvm/versions/node/v22.16.0/bin/node tools/testing/run.mjs '--test-name-pattern=D3/D4 rationale commit expiry|D3 staged final admission' core/test/capture-invocation-deadline.test.mjs
+```
+
+Omit the name-pattern argument for the complete deadline file. Contributor/
+full-core primary runs, fixed-candidate reviews and latest-head CI remain
+pending; this test-precondition correction does not regrade the original failure.
+
+### 2026-10-05 final primary verification checkpoint
+
+Primary inspected the final diff and reran the unchanged parent/child hashes
+recorded above in this clock worktree. These are final-byte observations;
+the original failed full24 attempt and all pre-F5 observations remain retained.
+
+| Gate | Node 22.16.0 | Node 24.15.0 |
+| --- | --- | --- |
+| Exact two-case focused pattern | 2/2; 1,972.564630 ms | 2/2; 1,952.757045 ms |
+| Complete deadline file | 19/19; 20,847.850860 ms | 19/19; 20,815.645745 ms |
+| Full core | 1,160/1,160; 416,927.890325 ms | 1,160/1,160; 416,879.048593 ms |
+| Generic suite | 591/591; 318,098.952501 ms | 591/591; 329,159.477047 ms |
+| JSON/version validation | 10 files + version 0.3.0; exit 0 | 10 files + version 0.3.0; exit 0 |
+| Store and capture demos | Both exit 0 | Both exit 0 |
+
+All tabulated test suites naturally exited 0 with zero fail/skip/cancel/todo.
+The full-core count excludes the three tests in the separate M2 timeline
+worktree. Earlier generic22 terminal output was not retained and is not credited;
+the fresh observed rerun above is the accepted evidence. Reproduce the focused
+and deadline runs with the command above; the broader commands are `npm run
+test:core`, `npm test`, `npm run validate`, `npm run demo:store` and `npm run
+demo:capture`, using the corresponding cleared runtime environment.
+
+Locked maintainer Claude 2.1.260 was reused from the M2 preparation but validated
+this clock worktree: marketplace and strict plugin validators each naturally
+exited 0, and fresh owned configuration/temp were cleaned. Demo databases were
+retained under their existing contracts, not unexpected test residue. Production
+core/runtime, package and CI diffs remained empty; primary diff-check exited 0.
+No paid/provider, opt-in native Mem0 or operational-ledger calls were made.
+
+At this checkpoint, independent Standards/Spec reviews on the same fixed
+base/head and remote latest-head CI remain pending. The evidence supports the
+test-precondition repair, not a regrade of the historical failure or a semantic
+quality claim. Worker edits are paused for primary candidate delivery.
