@@ -15,6 +15,20 @@ the decision unassessed, not confirmed or authorized. Scripted integration tests
 do not establish semantic quality, lightweight readiness, a new score, or full
 M2 completion; fixed-candidate review and dependent-PR CI remain separate gates.
 
+## MCP premise-chain lifecycle is scripted host evidence
+
+The [three-source MCP acceptance](plans/mcp-rationale-lifecycle.md) exercises a
+separately captured choice, supporting premise and challenge through ordinary
+SDK stdio tools, then correction/stale-reference and forget boundaries followed
+by cold recall. Scripted ports propose the relationships; receipts establish
+provenance, not truth or adoption. Invalidation leaves the choice unassessed,
+not confirmed, cancelled or authorized. This test-only slice adds no binding
+tool, default or runtime behavior. Existing installed cold-forget tests already
+cover simpler graphs; this is not new installed or native Hermes evidence,
+semantic accuracy, lightweight readiness, a score or full M2 completion.
+Final focused results and retained fixture failures are recorded in its plan;
+fixed-candidate review and latest-head CI remain separate gates.
+
 ## NULL-title filing is structural reuse, not semantic recovery
 
 The [NR1–NR8](plans/null-title-main-integration.md) implementation changes only
