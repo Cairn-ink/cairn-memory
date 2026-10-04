@@ -92,6 +92,23 @@ repository. No private source/fixture text is copied; no new runtime dependency.
   core tests on Node22.16 and24. JS repository has no TypeScript gate. Mock success
   proves orchestration/contracts, not semantic classification or recall quality.
 
+## NR exception to historical B3
+
+B3 above records the delivered blanket collision rule and its historical
+evidence. The accepted [NR1–NR8](null-title-main-integration.md) decision
+excepts only exact same-namespace/level/canonical-key collisions whose
+authoritative visible label is NULL. The shared-core implementation and focused
+30-case checks are accepted on Node 22.16.0 and 24.15.0, with installed NR
+regressions included in the accepted artifact suites. This changes the current
+placement rule, not the historical B3 statement or its recorded results.
+
+The exception retains original identity and title/source bindings, visible-title
+refusal, public shapes and all guards. Reused groups are not newly created MOCs.
+Fresh membership can re-expose retained ancestors without renewing labels or
+establishing semantic equivalence. Inherited degree is distinct from the three
+submitted explicit L2-ID union and the one requested new-L2 title. Historical
+B3 results remain unchanged, not rerun or relabeled.
+
 ## Explicitly later
 
 Fetch/recall orchestration, inferred admission leases, conflict hints, index rebuild

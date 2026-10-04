@@ -20,6 +20,22 @@
   marketplace, root and runtime versions. The maintainer confirms the version at
   release; publication, tags and releases require maintainer approval.
 
+## Unreleased — NULL-title structural filing
+
+- Reuse an existing topic during guarded placement only for an exact
+  same-namespace/level/canonical key whose authoritative visible title is NULL.
+  Preserve its ID, stored label and original title sources; fresh membership
+  never renews label evidence, and reused topics are absent from `createdMocs`.
+  Resolve aliases by actual IDs, deduplicate additive edges, and retain atomic
+  guards, replacement membership, real-delta revisions and true no-op behavior.
+  Visible-title collisions still refuse. Fresh filing may expose retained
+  ancestors: this is structural association, not semantic matching or restored
+  forgotten evidence. See [NR1–NR8](docs/plans/null-title-main-integration.md)
+  for accepted synthetic checks on Node 22.16.0 and 24.15.0, retained failures
+  and remaining CI/review gates. Hosted 0.3.0 fields, conversation-ID behavior
+  and existing version values are unchanged;
+  no provider/default, semantic-score, paid or publication claim follows.
+
 ## 0.2.0 — 2026-10-01
 
 Breaking hosted protocol release (CX-4):

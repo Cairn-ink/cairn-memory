@@ -876,3 +876,309 @@ test('installed redactor preserves the original self-contained dependency closur
   assert.equal(command(process.execPath, ['--input-type=module', '-e', probe],
     installation.directory, artifact.userconfig).trim(), 'installed_shared_redactor_passed');
 });
+
+
+// The server/cold fixture imports only installed runtime and server SDK modules.
+// The source SDK client remains the existing real-stdio transport seam.
+function installedNullTitleFixture(t, { hidden, completionFault = false }) {
+  const directory = temporary(t, 'cairn-installed-null-title-');
+  const databasePath = join(directory, 'memory.sqlite'), tracePath = join(directory, 'transport.jsonl');
+  const fixturePath = join(directory, 'fixture.mjs');
+  const namespace = { ownerId: 'synthetic-installed-null-title', scope: 'personal', projectId: null };
+  const title = 'Installed recovery topic', parentTitle = 'Installed recovery parent';
+  const batch = { batchId: 'installed-nr-batch',
+    messages: [{ role: 'user', content: 'Fresh installed recovery source.' }] };
+  const config = { databasePath, tracePath, namespace, title, parentTitle, hidden, completionFault };
+  writeFileSync(fixturePath, String.raw`import assert from 'node:assert/strict';
+    import { appendFileSync } from 'node:fs';
+    import { DatabaseSync } from 'node:sqlite';
+    import { createRequire } from 'node:module';
+    import { openMemoryCore } from ${JSON.stringify(join(installation.packagePath, 'core/contract.mjs'))};
+    import { createCairnServer } from ${JSON.stringify(join(installation.packagePath, 'adapters/mcp/server.mjs'))};
+    import { createOpenAIModel } from ${JSON.stringify(join(installation.packagePath, 'adapters/openai/index.mjs'))};
+    const requireInstalled = createRequire(${JSON.stringify(join(installation.packagePath, 'package.json'))});
+    const { serveStdio, StdioServerTransport } =
+      await import(requireInstalled.resolve('@modelcontextprotocol/server/stdio'));
+    globalThis.fetch = () => assert.fail('Native network forbidden');
+    const cfg = ${JSON.stringify(config)}, ns = cfg.namespace, mode = process.argv[2];
+    const ok = r => { assert.equal(r.ok, true, JSON.stringify(r)); return r.value; };
+    const plain = value => JSON.parse(JSON.stringify(value));
+    const forbidden = () => assert.fail('Cold reader called a model port');
+    const readModel = () => ({ contextWindow: 8192, countTokens: () => 1,
+      extract: forbidden, qualify: forbidden, classify: forbidden, select: forbidden, rank: forbidden });
+    const rows = (db, table, order) => plain(db.prepare('SELECT * FROM ' + table + ' ORDER BY ' + order).all());
+    const state = db => Object.fromEntries([
+      ['memories', 'id'], ['receipts', 'id'], ['mocs', 'id'],
+      ['moc_title_sources', 'moc_id,memory_id'], ['moc_memory_refs', 'moc_id,memory_id'],
+      ['moc_edges', 'parent_id,child_id'], ['namespace_epochs', 'owner_id,scope,project_id'],
+      ['rationale_edges', 'from_id,to_id,relation'],
+    ].map(([table, order]) => [table, rows(db, table, order)]));
+    function observe() {
+      const db = new DatabaseSync(cfg.databasePath, { readOnly: true });
+      try {
+        return { state: state(db), provenance: {
+          groups: plain(db.prepare('SELECT id,owner_id,scope,project_id,level,title,canonical_title,created_at FROM mocs ORDER BY id').all()),
+          sources: rows(db, 'moc_title_sources', 'moc_id,memory_id'),
+        }, journal: plain(db.prepare('SELECT * FROM capture_initial_classification WHERE event_id=?').get('installed-nr-batch') ?? null) };
+      } finally { db.close(); }
+    }
+    if (mode === 'seed') {
+      const model = readModel();
+      model.relate = () => ({ edges: [{ from: 1, to: 0, relation: 'supports-decision', fromReceipt: 0, toReceipt: 0 }] });
+      const core = openMemoryCore({ path: cfg.databasePath, model });
+      let topics;
+      try {
+        const admit = content => ok(core.admit({ namespace: ns, memory: { content, kind: 'fact' },
+          receipts: [{ client: 'seed', sessionId: 'seed-session', eventId: content, role: 'user', excerpt: content }] })).memory;
+        const original = admit('Original installed topic source.');
+        topics = ok(core.applyPlacement({ namespace: ns, proposal: { items: [{
+          memoryId: original.id, parentIds: [], newL1: { title: cfg.title, parentL2Ids: [], newL2Title: cfg.parentTitle },
+        }] }, expectedMemoryRevisions: [{ memoryId: original.id, revision: original.revision }],
+          expectedIndexRevision: ok(core.map({ namespace: ns, purpose: 'classification' })).indexRevision })).createdMocs;
+        assert.equal(topics.length, 2);
+        if (cfg.hidden) ok(core.forget({ namespace: ns, memoryId: original.id,
+          expectedRevision: ok(core.get({ namespace: ns, memoryId: original.id })).memory.revision }));
+        if (cfg.completionFault) {
+          const members = [admit('Installed rollback decision.'), admit('Installed rollback premise.')];
+          assert.equal(ok(await core.reviewRationale({ namespace: ns,
+            refs: members.map(m => ({ memoryId: m.id, revision: m.revision })) })).inserted, 1);
+        }
+        const page = ok(core.map({ namespace: ns, purpose: 'classification' }));
+        assert.equal(page.exhausted, true);
+        for (const topic of topics) {
+          const entry = page.items.find(i => i.type === 'moc' && i.moc.id === topic.id);
+          assert.ok(entry); assert.equal(entry.moc.title, cfg.hidden ? null : topic.title);
+          assert.equal(Object.hasOwn(entry.moc, 'titleSources'), false);
+        }
+      } finally { core.close(); }
+      if (cfg.completionFault) {
+        const db = new DatabaseSync(cfg.databasePath);
+        try { db.exec("CREATE TRIGGER installed_nr_completion_fault BEFORE UPDATE ON capture_initial_classification "
+          + "WHEN NEW.event_id='installed-nr-batch' AND NEW.status='applied' "
+          + "BEGIN SELECT RAISE(ABORT,'synthetic_installed_completion_fault'); END;"); }
+        finally { db.close(); }
+      }
+      console.log(JSON.stringify({ topics, ...observe() }));
+    } else if (mode === 'observe') {
+      console.log(JSON.stringify(observe()));
+    } else if (mode === 'clear-fault') {
+      const db = new DatabaseSync(cfg.databasePath);
+      try { db.exec('DROP TRIGGER installed_nr_completion_fault'); } finally { db.close(); }
+      console.log(JSON.stringify({ faultRemoved: true }));
+    } else if (mode === 'cold') {
+      const memoryId = process.argv[3];
+      const core = openMemoryCore({ path: cfg.databasePath, model: readModel(), captureQualification: 'source-bound-v1' });
+      try {
+        const memory = ok(core.get({ namespace: ns, memoryId, includeQualification: true }));
+        const admission = ok(core.inspectAdmission({ namespace: ns, client: 'installed-nr-client',
+          eventId: 'installed-nr-batch', includeInitialClassification: true }));
+        const maps = ['classification', 'recall'].map(purpose => ok(core.map({ namespace: ns, purpose })));
+        const expectedIndexRevision = maps[0].indexRevision;
+        let cursor;
+        for (;;) {
+          const result = ok(core.rebuildIndex({ namespace: ns, expectedIndexRevision, limit: 500,
+            ...(cursor ? { cursor } : {}) }));
+          if (result.exhausted) { assert.equal(result.state, 'published'); break; }
+          assert.ok(result.nextCursor); cursor = result.nextCursor;
+        }
+        const publishedMaps = ['classification', 'recall'].map(purpose => ok(core.map({ namespace: ns, purpose })));
+        assert.equal(core.get({ namespace: { ...ns, ownerId: 'foreign-installed-owner' }, memoryId }).error.code, 'memory_not_found');
+        console.log(JSON.stringify({ memory, admission, maps, publishedMaps, ...observe() }));
+      } finally { core.close(); }
+    } else {
+      assert.equal(mode, 'serve');
+      const model = createOpenAIModel({ apiKey: 'synthetic-fake-only', fetchImpl: async (url, options) => {
+        if (process.argv[3] === 'deny') {
+          appendFileSync(cfg.tracePath, JSON.stringify({ deniedTransport: true }) + '\n', { mode: 0o600 });
+          assert.fail('Cold replay must not call fake transport');
+        }
+        assert.ok(['https://api.openai.com/v1/responses/input_tokens', 'https://api.openai.com/v1/responses'].includes(String(url)));
+        const payload = JSON.parse(options.body), method = payload.text.format.name;
+        const input = JSON.parse(payload.input[0].content[0].text), count = String(url).endsWith('/input_tokens');
+        appendFileSync(cfg.tracePath, JSON.stringify({ method, count, input,
+          ...(!count && method === 'cairn_classify' ? { beforePlacement: observe().state } : {}) }) + '\n', { mode: 0o600 });
+        if (count) return Response.json({ object: 'response.input_tokens', input_tokens: 120 });
+        let output;
+        if (method === 'cairn_extract') output = { items: [{
+          content: input.messages[0].content, kind: 'preference', confidence: 0.9, sourceIndices: [0],
+        }] };
+        else if (method === 'cairn_qualify') output = { qualifications: input.items.map(item => ({
+          itemIndex: item.itemIndex, qualification: { version: 1,
+            slot: { subject: null, property: null, scope: null, applies: null }, value: null,
+            attribution: 'unknown', commitment: 'unknown', anchors: [{ receiptIndex: 0, start: 0,
+              end: item.sources[0].excerpt.length, text: item.sources[0].excerpt, fields: ['value'] }],
+          },
+        })) };
+        else {
+          assert.equal(method, 'cairn_classify');
+          assert.equal(input.memories.length, 1); assert.equal(input.mapExhausted, true);
+          output = { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [],
+            newL1: { title: cfg.title, parentL2Ids: [], newL2Title: cfg.parentTitle },
+          })) };
+        }
+        return Response.json({ object: 'response', model: payload.model, status: 'completed', error: null,
+          incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
+            content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
+          usage: { input_tokens: 120, output_tokens: 100, total_tokens: 220 } });
+      } });
+      const handle = serveStdio(() => createCairnServer({ path: cfg.databasePath, model, namespace: ns,
+        client: 'installed-nr-client', sessionId: 'installed-nr-session',
+        captureQualification: 'source-bound-v1', classificationRecovery: 'guarded-v1' }), {
+          transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 65536 }),
+        });
+      process.stdin.once('end', () => { void handle.close(); });
+      process.once('SIGTERM', () => { void handle.close(); });
+    }`, { flag: 'wx', mode: 0o600 });
+  const probe = (mode, ...args) => JSON.parse(command(process.execPath, [fixturePath, mode, ...args],
+    installation.directory, artifact.userconfig));
+  const seed = probe('seed');
+  assert.equal(seed.provenance.sources.length, 2);
+  assert.deepEqual(seed.provenance.groups.map(m => m.id).sort(), seed.topics.map(m => m.id).sort());
+  const trace = () => readFileSync(tracePath, 'utf8').trimEnd().split('\n').map(line => JSON.parse(line));
+  const assertCalls = classifications => assert.deepEqual(trace().map(row => [row.method, row.count]), [
+    ['cairn_extract', true], ['cairn_extract', false], ['cairn_qualify', true], ['cairn_qualify', false],
+    ...Array.from({ length: classifications }, () => [['cairn_classify', true], ['cairn_classify', false]]).flat(),
+  ]);
+  const start = async (deny = false) => {
+    const transport = new StdioClientTransport({ command: process.execPath,
+      args: [fixturePath, 'serve', ...(deny ? ['deny'] : [])],
+      cwd: installation.directory, env: { OPENAI_API_KEY: '', NODE_NO_WARNINGS: '1' }, stderr: 'pipe' });
+    const client = new Client({ name: 'synthetic-installed-nr-client', version: '1.0.0' });
+    let closed = false;
+    const close = async () => { if (!closed) { closed = true; await client.close(); } };
+    workspace(t).defer(close);
+    await client.connect(transport);
+    return { client, close };
+  };
+  const assertCatalog = () => {
+    const record = trace().filter(row => row.method === 'cairn_classify' && !row.count).at(-1);
+    assert.ok(record); assert.equal(record.input.mapExhausted, true);
+    const catalog = record.input.map.filter(i => i.type === 'moc');
+    assert.equal(catalog.length, 2, 'wire catalog contains exactly the two seeded MOCs');
+    assert.deepEqual(catalog.map(i => i.moc.id), ['c0', 'c1']);
+    assert.deepEqual(catalog.map(i => i.moc.level), ['L1', 'L2']);
+    assert.deepEqual(seed.topics.map(topic => topic.level).sort(), ['L1', 'L2']);
+    const serializedInput = JSON.stringify(record.input);
+    for (const topic of seed.topics) {
+      const entries = catalog.filter(i => i.moc.level === topic.level);
+      assert.equal(entries.length, 1, `wire catalog contains one ${topic.level} seed`);
+      assert.equal(entries[0].moc.title, hidden ? null : topic.title);
+      assert.equal(Object.hasOwn(entries[0].moc, 'titleSources'), false);
+      assert.equal(serializedInput.includes(topic.id), false, 'wire input omits original seed UUIDs');
+    }
+    return record;
+  };
+  const assertCold = (cold, expectedStatus) => {
+    assert.equal(cold.admission.initialClassification.status, expectedStatus);
+    assert.deepEqual(cold.provenance, seed.provenance);
+    for (const page of [...cold.maps, ...cold.publishedMaps]) {
+      assert.equal(page.exhausted, true);
+      for (const topic of seed.topics) {
+        const entry = page.items.find(i => i.type === 'moc' && i.moc.id === topic.id);
+        assert.ok(entry); assert.equal(entry.moc.title, hidden ? null : topic.title);
+        assert.equal(Object.hasOwn(entry.moc, 'titleSources'), false);
+      }
+    }
+  };
+  return { seed, batch, probe, trace, start, assertCalls, assertCatalog, assertCold };
+}
+
+test('NR1/2 installed stdio initial capture reuses exact NULL L1/L2 IDs without renewing label sources', async t => {
+  const f = installedNullTitleFixture(t, { hidden: true }), first = await f.start();
+  const captured = ok(await call(first.client, 'capture_memory', f.batch));
+  assert.equal(captured.classification.status, 'applied', JSON.stringify(captured.classification));
+  assert.equal(captured.admission.memories.length, 1);
+  const memoryId = captured.admission.memories[0].id;
+  const stored = ok(await call(first.client, 'inspect_memory', { memoryId, includeQualification: true }));
+  assert.deepEqual(stored.placements.map(p => [p.mocId, p.title]), [[f.seed.topics.find(m => m.level === 'L1').id, null]]);
+  assert.equal(stored.receipts.length, 1); assert.equal(stored.receipts[0].excerpt, f.batch.messages[0].content);
+  assert.equal(ok(await call(first.client, 'inspect_capture_admission',
+    { batchId: f.batch.batchId, includeInitialClassification: true })).initialClassification.status, 'applied');
+  f.assertCatalog();
+  f.assertCalls(1);
+  const before = f.probe('observe'), calls = f.trace();
+  assert.deepEqual(before.provenance, f.seed.provenance);
+  assert.equal(before.state.mocs.length, 2); assert.equal(before.journal.status, 'applied');
+  assert.deepEqual(before.state.moc_edges.map(e => [e.parent_id, e.child_id]),
+    f.seed.state.moc_edges.map(e => [e.parent_id, e.child_id]));
+  await first.close();
+  const cold = f.probe('cold', memoryId); f.assertCold(cold, 'applied');
+  assert.deepEqual(cold.memory, stored); assert.deepEqual(cold.journal, before.journal);
+  const restarted = await f.start(true);
+  assert.deepEqual(ok(await call(restarted.client, 'inspect_memory', { memoryId, includeQualification: true })), stored);
+  assert.equal(ok(await call(restarted.client, 'capture_memory', f.batch)).duplicate, true);
+  assert.deepEqual(f.trace(), calls); await restarted.close();
+});
+
+test('NR5/6 installed completion fault rolls back placement before guarded recovery and real stdio cold replay', async t => {
+  const f = installedNullTitleFixture(t, { hidden: true, completionFault: true }), first = await f.start();
+  const captured = ok(await call(first.client, 'capture_memory', f.batch));
+  assert.deepEqual(captured.classification, { status: 'failed', error: { code: 'storage_error', retryable: false } });
+  assert.equal(captured.admission.memories.length, 1);
+  const admitted = captured.admission.memories[0];
+  const before = ok(await call(first.client, 'inspect_memory', { memoryId: admitted.id, includeQualification: true }));
+  assert.equal(before.memory.filing.status, 'unfiled'); assert.equal(before.receipts.length, 1);
+  assert.equal(before.receipts[0].excerpt, f.batch.messages[0].content);
+  assert.equal(ok(await call(first.client, 'inspect_capture_admission',
+    { batchId: f.batch.batchId, includeInitialClassification: true })).initialClassification.status, 'failed');
+  const prePlacement = f.assertCatalog(), failed = f.probe('observe');
+  assert.equal(prePlacement.beforePlacement.rationale_edges.length, 1);
+  assert.deepEqual(failed.state, prePlacement.beforePlacement, 'completion failure rolls back exact post-admission state');
+  assert.deepEqual(failed.provenance, f.seed.provenance); assert.equal(failed.journal.status, 'failed');
+  f.assertCalls(1); await first.close();
+  assert.deepEqual(f.probe('clear-fault'), { faultRemoved: true });
+  const recovery = await f.start();
+  const placed = ok(await call(recovery.client, 'classify_unfiled_memories',
+    { refs: [{ memoryId: admitted.id, revision: before.memory.revision }] }));
+  assert.equal(placed.status, 'applied'); assert.deepEqual(placed.createdMocs, []);
+  const stored = ok(await call(recovery.client, 'inspect_memory', { memoryId: admitted.id, includeQualification: true }));
+  assert.equal(stored.memory.filing.status, 'filed'); assert.deepEqual(stored.receipts, before.receipts);
+  assert.equal(stored.memory.content, before.memory.content);
+  assert.deepEqual(stored.qualification, before.qualification);
+  assert.deepEqual(stored.placements.map(p => [p.mocId, p.title]), [[f.seed.topics.find(m => m.level === 'L1').id, null]]);
+  assert.equal(ok(await call(recovery.client, 'inspect_capture_admission',
+    { batchId: f.batch.batchId, includeInitialClassification: true })).initialClassification.status, 'unknown');
+  f.assertCatalog(); f.assertCalls(2);
+  const after = f.probe('observe'), calls = f.trace();
+  assert.deepEqual(after.journal, failed.journal); assert.deepEqual(after.provenance, f.seed.provenance);
+  assert.deepEqual(after.state.moc_edges.map(e => [e.parent_id, e.child_id]),
+    f.seed.state.moc_edges.map(e => [e.parent_id, e.child_id]));
+  await recovery.close();
+  const cold = f.probe('cold', admitted.id); f.assertCold(cold, 'unknown');
+  assert.deepEqual(cold.memory, stored); assert.deepEqual(cold.journal, failed.journal);
+  const restarted = await f.start(true);
+  assert.deepEqual(ok(await call(restarted.client, 'inspect_memory', { memoryId: admitted.id, includeQualification: true })), stored);
+  assert.equal(ok(await call(restarted.client, 'capture_memory', f.batch)).duplicate, true);
+  assert.equal(ok(await call(restarted.client, 'inspect_capture_admission',
+    { batchId: f.batch.batchId, includeInitialClassification: true })).initialClassification.status, 'unknown');
+  assert.deepEqual(f.trace(), calls); assert.deepEqual(f.probe('observe').journal, failed.journal);
+  await restarted.close();
+});
+
+test('NR1/5 installed stdio visible title collision keeps durable admission and placement state atomic', async t => {
+  const f = installedNullTitleFixture(t, { hidden: false }), first = await f.start();
+  const captured = ok(await call(first.client, 'capture_memory', f.batch));
+  assert.deepEqual(captured.classification, { status: 'failed', error: { code: 'moc_title_conflict', retryable: false } });
+  assert.equal(captured.admission.memories.length, 1);
+  const admitted = captured.admission.memories[0];
+  const before = ok(await call(first.client, 'inspect_memory', { memoryId: admitted.id }));
+  assert.equal(before.memory.filing.status, 'unfiled'); assert.equal(before.receipts[0].excerpt, f.batch.messages[0].content);
+  const prePlacement = f.assertCatalog(), failed = f.probe('observe');
+  assert.deepEqual(failed.state, prePlacement.beforePlacement); assert.deepEqual(failed.provenance, f.seed.provenance);
+  assert.equal(failed.journal.status, 'failed');
+  const refused = await call(first.client, 'classify_unfiled_memories',
+    { refs: [{ memoryId: admitted.id, revision: before.memory.revision }] });
+  assert.equal(refused.ok, false); assert.equal(refused.error.code, 'moc_title_conflict');
+  assert.deepEqual(ok(await call(first.client, 'inspect_memory', { memoryId: admitted.id })), before);
+  const after = f.probe('observe');
+  assert.deepEqual(after.state, failed.state); assert.deepEqual(after.journal, failed.journal);
+  assert.equal(ok(await call(first.client, 'inspect_capture_admission',
+    { batchId: f.batch.batchId, includeInitialClassification: true })).initialClassification.status, 'failed');
+  f.assertCalls(2); const calls = f.trace(); await first.close();
+  const cold = f.probe('cold', admitted.id); f.assertCold(cold, 'failed');
+  assert.deepEqual(cold.journal, failed.journal);
+  const restarted = await f.start(true);
+  assert.deepEqual(ok(await call(restarted.client, 'inspect_memory', { memoryId: admitted.id })), before);
+  assert.equal(ok(await call(restarted.client, 'capture_memory', f.batch)).duplicate, true);
+  assert.deepEqual(f.trace(), calls); await restarted.close();
+});
