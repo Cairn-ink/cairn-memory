@@ -28,6 +28,11 @@ async def exchange(request):
                 or not deadline.isdecimal() or len(deadline) > 6 or int(deadline) > 110000):
             raise ValueError("invalid_capture_configuration")
         args += ["--capture-deadline-ms", deadline]
+    if "capture_rationale" in request:
+        if (request["capture_rationale"] != "source-bound-v1"
+                or request.get("capture_qualification") != "source-bound-v2" or "capture_deadline_ms" not in request):
+            raise ValueError("invalid_capture_configuration")
+        args += ["--capture-rationale", "source-bound-v1"]
     if "classification_recovery" in request:
         if request["classification_recovery"] != "guarded-v1":
             raise ValueError("invalid_recovery_configuration")

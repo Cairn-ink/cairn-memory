@@ -11,6 +11,29 @@ for neither, capture, recovery or both settings. A v2-only optional
 configuration, restart and cost boundaries. Historical evidence below predates
 these opt-ins and does not certify semantic quality.
 
+## Explicit native rationale opt-in
+
+`capture_rationale: source-bound-v1` now forwards the installed MCP's existing
+rationale mode. It requires v2 capture and an explicit canonical deadline string
+in 1–110000, and adds only keyless `cairn_inspect_rationale`: seven tools with v2,
+nine with independent recovery. All previous profiles/inventories remain valid.
+It changes neither the source-only recall preference nor the existing host
+timeouts; use explicit `contextMode: "rationale-evidence"` for rationale recall.
+
+The [NH1–NH9 contract](plans/hermes-rationale-lifecycle.md) adds the focused
+`test_rationale_conversation.py` to the canonical command below. It
+uses the real pinned manager/agent and installed artifact with locally scripted
+HTTP only: separate choice/premise/challenge receipts, cold recall, correction
+and forget, stale-reference refusal, and a separately reported rationale-stage
+expiry with retained admission/completed classification and keyless completed-batch
+replay. The scripted classifier uses `parentIds: []`, leaving these memories
+unfiled; this is not successful MOC tree placement or routing-quality evidence.
+Actual results and preparation failures belong in that plan; the historical
+matrices below do not certify this new opt-in. Scripted proposals prove plumbing,
+not truth, natural tool choice, automatic adoption, semantic quality or a score.
+Selected local source receipts leave the device during keyed rationale work;
+there is no account-wide budget or hard completion guarantee.
+
 ## Native deadline and recovery offline gate
 
 The focused `test_capture_recovery.py` uses the real pinned Hermes
@@ -27,7 +50,7 @@ unchanged. A stale reference rejects before another model request. This is
 mechanical evidence, not natural tool choice, general semantic quality or a
 hard wall-clock guarantee.
 
-From the pinned Hermes checkout, pass all five native files to its canonical
+From the pinned Hermes checkout, pass all six native files to its canonical
 runner with retries disabled and the separately installed local executable:
 
 ```sh
@@ -36,11 +59,12 @@ scripts/run_tests.sh /absolute/cairn/integrations/hermes/test/test_provider.py \
   /absolute/cairn/integrations/hermes/test/test_qualified_provider.py \
   /absolute/cairn/integrations/hermes/test/test_qualified_conversation.py \
   /absolute/cairn/integrations/hermes/test/test_capture_recovery.py \
+  /absolute/cairn/integrations/hermes/test/test_rationale_conversation.py \
   --file-retries 0 -- --cairn-executable /absolute/installed/bin/cairn-memory.mjs \
   --cairn-node /absolute/node -q -p no:cacheprovider
 ```
 
-The five-file matrix passed **22 tests on each of Node 22.16.0 and 24.15.0**
+The historical five-file matrix passed **22 tests on each of Node 22.16.0 and 24.15.0**
 with `--file-retries 0`. The independently built private archive was
 `f77d837dc8940e94535d227e27e272863ffc47c5af0397d21a7e6e4398a5b8ad`;
 all 72 listed packaged source-file hashes matched the offline installation.

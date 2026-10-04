@@ -20,6 +20,17 @@
   marketplace, root and runtime versions. The maintainer confirms the version at
   release; publication, tags and releases require maintainer approval.
 
+## Unreleased — explicit native Hermes rationale
+
+- Add optional `capture_rationale: source-bound-v1` to the native Hermes preview,
+  requiring v2 capture and an explicit valid 1–110000 ms deadline string. It
+  forwards the existing installed rationale mode and adds keyless inspection;
+  five default tools, existing profiles, source-only recall preference and host
+  timeouts stay unchanged. Rationale proposals are not adoption or authority.
+  Extra keyed capture work sends selected local receipts to the model provider;
+  partial rationale failure does not undo saved admission/completed classification,
+  and completed replay does not retry it. No version bump, release or semantic-score claim.
+
 ## Unreleased — NULL-title structural filing
 
 - Reuse an existing topic during guarded placement only for an exact

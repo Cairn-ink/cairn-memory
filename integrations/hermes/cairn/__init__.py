@@ -28,6 +28,8 @@ def configured_tools(config):
         tools = tools | {"capture_memory"}
     if config and config.get("classification_recovery") == "guarded-v1":
         tools = tools | {"inspect_capture_admission", "classify_unfiled_memories"}
+    if config and config.get("capture_rationale") == "source-bound-v1":
+        tools = tools | {"inspect_rationale"}
     return tools
 
 
@@ -63,7 +65,7 @@ def configuration(home):
 
 def validate_config(value):
     required = {"node_path", "executable_path"}
-    optional = {"capture_qualification", "capture_deadline_ms", "classification_recovery", "recall_context"}
+    optional = {"capture_qualification", "capture_deadline_ms", "classification_recovery", "recall_context", "capture_rationale"}
     if not isinstance(value, dict) or not required <= set(value) or not set(value) <= required | optional:
         raise ValueError("cairn_invalid_configuration")
     if "capture_qualification" in value and value["capture_qualification"] != "source-bound-v2":
@@ -77,6 +79,9 @@ def validate_config(value):
     if "classification_recovery" in value and value["classification_recovery"] != "guarded-v1":
         raise ValueError("cairn_invalid_configuration")
     if "recall_context" in value and value["recall_context"] != "source-evidence":
+        raise ValueError("cairn_invalid_configuration")
+    if "capture_rationale" in value and (value["capture_rationale"] != "source-bound-v1"
+            or value.get("capture_qualification") != "source-bound-v2" or "capture_deadline_ms" not in value):
         raise ValueError("cairn_invalid_configuration")
     for key in ("node_path", "executable_path"):
         raw = value[key]
@@ -165,7 +170,10 @@ class CairnMemoryProvider(MemoryProvider):
                          "required": False},
                         {"key": "recall_context",
                          "description": "Optional source-evidence default for recall calls that omit both contextMode and includeQualification. Explicit tool arguments take precedence.",
-                         "required": False}]
+                         "required": False},
+                        {"key": "capture_rationale",
+                         "description": "Optional source-bound-v1 proposed rationale after capture (extra paid source-receipt model work). Requires v2 and an explicit deadline 1–110000; adds keyless inspection, not automatic adoption.",
+                         "when": {"capture_qualification": "source-bound-v2"}, "required": False}]
         for field in optional:
             if field["key"] in existing:
                 field["default"] = existing[field["key"]]
