@@ -78,3 +78,21 @@ npm run demo:capture
 No runtime, prompt, policy, schema, version, or dependency changes are allowed in this slice.
 
 Known-ID cold `get`/historical `fetch` proves retained storage and receipts, not automatic history discovery or reverse-predecessor traversal. The `binding_missing` negative proves an identity gate, not semantic judgment that a considered choice cannot be adopted. Cold recall independently selects visible catalog references and checks the ranked and returned evidence. Historical rationale reconstruction remains unsupported.
+
+## 2026-10-05 clock dependency integration checkpoint
+
+The original implementation base and local checkpoint `8485f04566a7ac43d23912981e1f33e24f2833f3` remain historical. The separately reviewed test-only clock dependency is `c115cc0e6979dc6d13858e9b04c6d9c1d1b68807` ([PR #334](https://github.com/Cairn-ink/cairn-memory/pull/334)); this is the final timeline review/delivery base. Feature-branch integration commit `95550c5fff2b500adffae55524637e5fae13c035` combines the existing timeline checkpoint with that dependency, not public main. Against the clock base the timeline scope remains the same four files, and the final test SHA-256 above is unchanged.
+
+Primary performs only this bounded integration correction and its evidence documentation while the implementation worker owns the independent MCP packet. No test logic, runtime, prompt, qualification, rationale, defaults or package/CI configuration changed during integration. Independent nonauthor Standards/Spec still must review the final committed timeline diff.
+
+Controlled diagnostics reproduced reach-zero by expiring before the target SQL; after real same-connection SQL the original transaction checks rolled back correctly on both runtimes. Removing exactly one post-work check in memory left durable writes and failed the rollback assertions. This supports a scheduling-sensitive test precondition, not proof of the historical scheduler event or a Node24 commit defect. The original failed full24 attempt and diagnostic observer-only error remain retained; the narrow correction does not regrade them.
+
+On the integrated candidate, primary focused timeline runs passed 3/3 on Node 22.16.0 and 24.15.0 in 5,290.395584 / 5,238.890067 ms. Complete deadline runs passed 19/19 in 21,601.032720 / 21,547.498025 ms. All four naturally exited 0 with zero fail/skip/cancel/todo. JSON validation again passed ten files/version 0.3.0 on both; locked 2.1.260 marketplace and strict plugin validation passed against this worktree with owned configuration/temp cleanup. Store/history/MOC/recall/capture demos each passed on both, retaining fresh databases under their existing contracts.
+
+Full integrated core and generic regressions are in progress at this checkpoint. Final fixed-candidate reviews and latest dependent-PR CI remain pending. These observations do not establish semantic quality, automatic adoption, a new score, lightweight readiness or complete M2 acceptance.
+
+### Final combined primary gate
+
+The final test hashes remained unchanged throughout the integrated runs. Full core passed 1,163/1,163 on Node 22.16.0 and 24.15.0, with natural exit 0, zero fail/skip/cancel/todo and durations 587,455.453964 / 587,090.231288 ms. These runs include the three final timeline cases and the independently repaired deadline tests. Generic suites passed 591/591 with natural exit 0 and zero fail/skip/cancel/todo in 442,577.567127 / 445,818.631284 ms. The focused, deadline, JSON, strict plugin and demo outcomes above are from the same integrated source bytes.
+
+Clock dependency PR #334 was subsequently verified OPEN/non-draft/MERGEABLE/CLEAN on its reviewed head, with 21/21 applicable latest-head CI checks passing (run 37237281891). Its optional Standards duplication suggestion is nonblocking and does not change timeline code. The original failed full24 attempt is still retained. This checkpoint permits freezing the local timeline candidate for separate Standards/Spec review; it does not claim those reviews or the timeline's remote CI have passed.
