@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
+  <title id="title">Cairn Memory — AI memory you can inspect and change</title>
+  <desc id="desc">The official Cairn stacked-stone mark and wordmark, with Memory as the product descriptor. An illustrated saved preference connects to its submitted source text. Open-source developer preview with explicit memory tools.</desc>
+  <rect width="1200" height="440" rx="24" fill="#FAF7F2"/>
+  <!-- Official Cairn geometry, unchanged; scaled equally in both axes. -->
+  <g transform="translate(48 36) scale(1.47)" fill="#1F1D1A">
+    <ellipse cx="12" cy="28" rx="10.5" ry="3.6" opacity="0.95"/>
+    <ellipse cx="11.5" cy="19.5" rx="7.8" ry="3.2" opacity="0.78" transform="rotate(-6 11.5 19.5)"/>
+    <ellipse cx="12.5" cy="11" rx="5.2" ry="3.6" opacity="0.62" transform="rotate(9 12.5 11)"/>
+  </g>
+  <g fill="#1F1D1A" font-family="'EB Garamond', Georgia, serif" font-weight="400">
+    <text x="104" y="80" font-size="56" font-weight="500" letter-spacing="-0.5" style="font-feature-settings: 'lnum', 'onum';">Cairn</text>
+    <text x="48" y="179" font-size="66">AI memory</text>
+    <text x="48" y="250" font-size="66">you can inspect</text>
+    <text x="48" y="321" font-size="66" fill="#5A7A4E">and change.</text>
+  </g>
+  <g fill="#1F1D1A" font-family="Inter, Arial, sans-serif">
+    <text x="252" y="78" font-size="28" font-weight="500">Memory</text>
+    <text x="48" y="379" font-size="23">Save context. Inspect. Correct. Forget.</text>
+    <text x="48" y="413" font-size="19" fill="#6B6560">Open source · Explicit memory tools</text>
+    <text x="1148" y="63" text-anchor="end" font-size="19" fill="#6B6560">Developer preview</text>
+    <rect x="750" y="119" width="398" height="102" rx="12" fill="#FFFFFF" stroke="#E5DFD4" stroke-width="2"/>
+    <text x="774" y="151" font-size="19" fill="#5A7A4E" font-weight="600">Saved memory</text>
+    <text x="774" y="192" font-size="27" font-weight="500">Keep reports brief.</text>
+    <path d="M949 222v27m-7-7 7 7 7-7" fill="none" stroke="#5A7A4E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="750" y="255" width="398" height="126" rx="12" fill="#F4F0E8"/>
+    <text x="774" y="287" font-size="19" fill="#5A7A4E" font-weight="600">Source Receipt</text>
+    <text x="774" y="324" font-size="25">“Please keep my</text>
+    <text x="774" y="359" font-size="25">reports short.”</text>
+    <text x="1148" y="413" text-anchor="end" font-size="17" fill="#6B6560">Illustrated example · submitted source text</text>
+  </g>
+</svg>
