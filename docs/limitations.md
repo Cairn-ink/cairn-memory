@@ -1343,3 +1343,22 @@ are retained in the [round 2 handoff](plans/codex-client.md#cx-4-round-2-決策�
 A file-level pass from a broken worker pipe is not evidence of case-level success;
 hung or failed CI commands require a rerun in the ordinary CI environment.
 The existing round 1 results do not qualify the revised round 2 implementation.
+
+## Capture write-deadline test reachability
+
+The 2026-10-05 full Node 24.15.0 core attempt retained two failures in the
+rationale-commit and staged-final-admission deadline tests: target SQL was not
+reached before the fixture's 600 ms deadline. Isolated unchanged reruns passed;
+that does not regrade the failed full attempt or identify its scheduler event.
+Controlled synthetic probes reproduce early-expiry reach count zero, while
+expiry after actual SQL correctly rolls back on both supported runtimes. A
+single in-memory removal of the post-work transaction check leaves durable
+writes and fails the rollback assertions.
+
+The [F1–F8 test-only repair](plans/capture-deadline-test-clock.md#2026-10-05-rationalestaged-write-boundary-repair-f1f8)
+isolates these two transaction tests in controlled-clock children, proves
+same-connection writes before expiry, and keeps explicit early-expiry and
+missing-guard RED controls. It does not change production timing, cancellation,
+capture defaults or semantic behavior, and does not establish a historical
+Node24 commit defect. Final contributor gates, fixed-candidate review and
+latest-head CI remain separate acceptance checkpoints.

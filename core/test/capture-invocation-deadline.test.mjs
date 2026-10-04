@@ -360,40 +360,88 @@ test('D3 placement expiry rolls back filing and applied journal while retaining 
   assert.ok(counterfactual.mocs > 0, 'the removed post-work check permits a durable placement');
 });
 
-test('D3/D4 rationale commit expiry rolls back edges but keeps admitted sources and applied placement', async t => {
-  const { core, db } = fixture(t, { model: rationaleModel(), captureDeadlineMs: 600,
-    captureQualification: 'source-bound-v2', captureRationale: 'source-bound-v1' });
-  const delayed = delayAfterSql('INSERT INTO rationale_edges', 900);
-  try {
-    const result = ok(await core.capture(input('rationale-precommit',
-      'I chose A because it supports offline work.')));
-    assert.equal(delayed.reached(), 1);
-    assert.equal(result.classification.status, 'applied');
-    assert.equal(result.rationale.status, 'failed');
-    assert.equal(result.rationale.error.code, 'model_timeout');
-    assert.equal(count(db, 'rationale_edges'), 0);
-    assert.equal(count(db, 'receipts'), 1);
-    assert.equal(db.prepare("SELECT status FROM capture_initial_classification WHERE event_id='rationale-precommit'")
-      .get().status, 'applied');
-  } finally { delayed.restore(); }
+test('D3/D4 rationale commit expiry rolls back edges but keeps admitted sources and applied placement', async () => {
+  const { isAbsolute } = await import('node:path');
+  const { lstatSync } = await import('node:fs');
+  const childEnv = {};
+  for (const key of ['TMPDIR', 'TMP', 'TEMP']) {
+    const value = process.env[key];
+    if (value === undefined) continue;
+    assert.ok(isAbsolute(value) && !value.includes('\0') && lstatSync(value).isDirectory(), 'valid runner temp directory');
+    childEnv[key] = value;
+  }
+  const child = fileURLToPath(new URL('../testing/capture-write-clock-child.mjs', import.meta.url));
+  const run = fault => spawnSync(process.execPath, [child, 'rationale', ...(fault ? [fault] : [])],
+    { encoding: 'utf8', env: childEnv, timeout: 10_000 });
+  const inspect = (run, status) => {
+    assert.equal(run.error, undefined); assert.equal(run.signal, null);
+    assert.equal(run.status, status, run.stderr);
+    assert.match(run.stderr, /WRITE_CLOCK_CLEANUP_COMPLETED:true/u);
+    return JSON.parse(run.stdout);
+  };
+  const observed = inspect(run(), 0);
+  assert.deepEqual(observed.calls, ['extract', 'qualifyCandidates', 'classify', 'relate']);
+  assert.equal(observed.reached, 1); assert.equal(observed.elapsedMs, 120_001);
+  assert.deepEqual(observed.inside, { elapsedMs: 0, memories: 1, receipts: 1, rationaleEdges: 1 });
+  assert.equal(observed.classification.status, 'applied');
+  assert.equal(observed.rationale.status, 'failed'); assert.equal(observed.rationale.error.code, 'model_timeout');
+  assert.equal(observed.rationaleEdges, 0); assert.equal(observed.memories, 1); assert.equal(observed.receipts, 1);
+  assert.equal(observed.initialStatus, 'applied');
+  const early = run('before-target-expiry');
+  const before = inspect(early, 2);
+  assert.match(early.stderr, /WRITE_CLOCK_ASSERTION_FAILED:target SQL must execute exactly once/u);
+  assert.equal(before.reached, 0); assert.equal(before.inside, null);
+  assert.equal(before.rationale.error.code, 'model_timeout'); assert.equal(before.classification.status, 'applied');
+  assert.equal(before.memories, 1); assert.equal(before.receipts, 1); assert.equal(before.rationaleEdges, 0);
+  const mutant = run('remove-post-work-check');
+  const counterfactual = inspect(mutant, 2);
+  assert.match(mutant.stderr, /WRITE_CLOCK_ASSERTION_FAILED:rationale edge must roll back/u);
+  assert.equal(counterfactual.mutatedModules, 1); assert.equal(counterfactual.reached, 1);
+  assert.deepEqual(counterfactual.inside, observed.inside);
+  assert.equal(counterfactual.rationaleEdges, 1); assert.equal(counterfactual.rationale.status, 'reviewed');
+  assert.equal(counterfactual.memories, 1); assert.equal(counterfactual.receipts, 1);
 });
 
-test('D3 staged final admission rolls back qualified evidence when receipt work crosses deadline', async t => {
-  const { core, db } = fixture(t, { model: rationaleModel(), captureDeadlineMs: 600,
-    captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1' });
-  const delayed = delayAfterSql('INSERT OR IGNORE INTO receipts', 900);
-  try {
-    const result = await core.capture(input('staged-final'));
-    assert.equal(delayed.reached(), 1);
-    assert.equal(result.error.code, 'model_timeout');
-    for (const table of ['memories', 'receipts', 'capture_initial_classification']) {
-      assert.equal(count(db, table), 0, table);
-    }
-    assert.equal(db.prepare("SELECT state FROM admission_claims WHERE event_id='staged-final'").get().state,
-      'pending');
-    assert.notEqual(db.prepare("SELECT state FROM staged_capture_evidence WHERE event_id='staged-final'")
-      .get().state, 'admitted');
-  } finally { delayed.restore(); }
+test('D3 staged final admission rolls back qualified evidence when receipt work crosses deadline', async () => {
+  const { isAbsolute } = await import('node:path');
+  const { lstatSync } = await import('node:fs');
+  const childEnv = {};
+  for (const key of ['TMPDIR', 'TMP', 'TEMP']) {
+    const value = process.env[key];
+    if (value === undefined) continue;
+    assert.ok(isAbsolute(value) && !value.includes('\0') && lstatSync(value).isDirectory(), 'valid runner temp directory');
+    childEnv[key] = value;
+  }
+  const child = fileURLToPath(new URL('../testing/capture-write-clock-child.mjs', import.meta.url));
+  const run = fault => spawnSync(process.execPath, [child, 'staged', ...(fault ? [fault] : [])],
+    { encoding: 'utf8', env: childEnv, timeout: 10_000 });
+  const inspect = (run, status) => {
+    assert.equal(run.error, undefined); assert.equal(run.signal, null);
+    assert.equal(run.status, status, run.stderr);
+    assert.match(run.stderr, /WRITE_CLOCK_CLEANUP_COMPLETED:true/u);
+    return JSON.parse(run.stdout);
+  };
+  const observed = inspect(run(), 0);
+  assert.deepEqual(observed.calls, ['extract', 'qualifyCandidates']);
+  assert.equal(observed.reached, 1); assert.equal(observed.elapsedMs, 120_001);
+  assert.deepEqual(observed.inside, { elapsedMs: 0, memories: 1, receipts: 1, rationaleEdges: 0 });
+  assert.equal(observed.errorCode, 'model_timeout');
+  for (const field of ['memories', 'receipts', 'qualifications', 'initialRows']) assert.equal(observed[field], 0, field);
+  assert.equal(observed.claimState, 'pending'); assert.notEqual(observed.stagedState, 'admitted');
+  const early = run('before-target-expiry');
+  const before = inspect(early, 2);
+  assert.match(early.stderr, /WRITE_CLOCK_ASSERTION_FAILED:target SQL must execute exactly once/u);
+  assert.equal(before.reached, 0); assert.equal(before.inside, null); assert.equal(before.errorCode, 'model_timeout');
+  for (const field of ['memories', 'receipts', 'qualifications', 'initialRows']) assert.equal(before[field], 0, field);
+  assert.equal(before.claimState, 'pending'); assert.notEqual(before.stagedState, 'admitted');
+  const mutant = run('remove-post-work-check');
+  const counterfactual = inspect(mutant, 2);
+  assert.match(mutant.stderr, /WRITE_CLOCK_ASSERTION_FAILED:staged memory must roll back/u);
+  assert.equal(counterfactual.mutatedModules, 1); assert.equal(counterfactual.reached, 1);
+  assert.deepEqual(counterfactual.inside, observed.inside);
+  assert.equal(counterfactual.memories, 1); assert.equal(counterfactual.receipts, 1);
+  assert.equal(counterfactual.qualifications, 1); assert.equal(counterfactual.initialRows, 1);
+  assert.equal(counterfactual.claimState, 'completed'); assert.equal(counterfactual.stagedState, 'admitted');
 });
 
 test('D2/D3 cumulative extraction plus v1/v2 qualification exhausts one budget before admission', () => {
