@@ -27,7 +27,7 @@ def provider_factory(tmp_path, monkeypatch, request):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     managers = []
 
-    def make(name, enabled=True, initialize=True, source_context=False, recovery=False):
+    def make(name, enabled=True, initialize=True, source_context=False, recovery=False, rationale=False):
         home = tmp_path / name
         shutil.copytree(Path(__file__).parents[1] / "cairn", home / "plugins" / "cairn")
         monkeypatch.setenv("HERMES_HOME", str(home))
@@ -42,6 +42,8 @@ def provider_factory(tmp_path, monkeypatch, request):
             config["recall_context"] = "source-evidence"
         if recovery:
             config["classification_recovery"] = "guarded-v1"
+        if rationale:
+            config.update(capture_rationale="source-bound-v1", capture_deadline_ms="110000")
         provider.save_config(config, str(home))
         manager = MemoryManager()
         manager.add_provider(provider)
@@ -113,7 +115,7 @@ def test_full_native_setup_preserves_existing_cairn_values_on_blank(provider_fac
     monkeypatch.setattr(memory_setup, "_get_available_providers", lambda: [("cairn", "local", provider)])
     monkeypatch.setattr(memory_setup, "_install_dependencies", lambda *args, **kwargs: None)
     monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: 0)
-    secrets = iter(["synthetic-wizard-only-key", "", "", ""])
+    secrets = iter(["synthetic-wizard-only-key", "", "", "", "", ""])
     written_secrets = []
     monkeypatch.setattr(memory_setup, "masked_secret_prompt", lambda *args, **kwargs: next(secrets))
     monkeypatch.setattr(memory_setup, "_write_env_vars", lambda values: written_secrets.append(dict(values)))
@@ -140,6 +142,45 @@ def test_full_native_setup_preserves_existing_cairn_values_on_blank(provider_fac
     memory_setup.cmd_setup([])
     assert (home / "cairn.json").read_bytes() == before
     assert not (home / "cairn").exists()
+    # The new optional field is last: old field order and separate secret writes
+    # stay intact, while explicit enabling and blank retention use the real wizard.
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n" * 6 + "source-bound-v1\n"))
+    memory_setup.cmd_setup([])
+    enabled["capture_rationale"] = "source-bound-v1"
+    assert json.loads((home / "cairn.json").read_text()) == enabled
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n" * 7))
+    memory_setup.cmd_setup([])
+    assert json.loads((home / "cairn.json").read_text()) == enabled
+    assert written_secrets == [{"CAIRN_MEMORY_OPENAI_API_KEY": "synthetic-wizard-only-key"}]
+    assert not (home / "cairn").exists()
+
+
+def test_rationale_requires_explicit_valid_v2_deadline_before_save_or_bridge(provider_factory, monkeypatch):
+    home, provider, _, config = provider_factory("rationale-validation")
+    before = (home / "cairn.json").read_bytes()
+    for bad in [None, False, True, 1, "", "source-bound-v2", " source-bound-v1", "source-bound-v1 "]:
+        with pytest.raises(ValueError, match="cairn_invalid_configuration"):
+            provider.save_config({**config, "capture_deadline_ms": "110000", "capture_rationale": bad}, str(home))
+        assert (home / "cairn.json").read_bytes() == before
+    for bad in [{"capture_rationale": "source-bound-v1"},
+                {"capture_rationale": "source-bound-v1", "capture_deadline_ms": "1", "capture_qualification": None},
+                {"capture_rationale": "source-bound-v1", "capture_deadline_ms": "01"},
+                {"capture_rationale": "source-bound-v1", "capture_deadline_ms": 1}]:
+        with pytest.raises(ValueError, match="cairn_invalid_configuration"):
+            provider.save_config({**config, **bad}, str(home))
+        assert (home / "cairn.json").read_bytes() == before
+    assert not (home / "cairn").exists()
+    for deadline in ["1", "110000"]:
+        provider.save_config({**config, "capture_deadline_ms": deadline, "capture_rationale": "source-bound-v1"}, str(home))
+        field = next(field for field in provider.get_config_schema() if field["key"] == "capture_rationale")
+        assert field["default"] == "source-bound-v1" and not field["required"]
+    module = importlib.import_module(provider.__class__.__module__)
+    monkeypatch.setattr(module.subprocess, "Popen", lambda *args, **kwargs: pytest.fail("invalid config launched child"))
+    (home / "cairn.json").write_text(json.dumps({**config, "capture_rationale": "source-bound-v1"}))
+    fresh = load_memory_provider("cairn")
+    assert fresh is not provider
+    with pytest.raises(ValueError, match="cairn_invalid_configuration"):
+        fresh.get_tool_schemas()
 
 
 def test_opt_in_recall_context_supplies_only_missing_default_without_mutating_callers(provider_factory, monkeypatch):
@@ -210,10 +251,23 @@ def test_discovery_uses_keyless_synthetic_db_and_matching_tool_allowlists(provid
                 assert not json.loads(provider.handle_tool_call("cairn_capture_memory", {"batchId": "synthetic", "messages": []}))["ok"]
             if not recovery:
                 assert not json.loads(provider.handle_tool_call("cairn_classify_unfiled_memories", {"refs": []}))["ok"]
+            assert not json.loads(provider.handle_tool_call("cairn_inspect_rationale", {}))["ok"]
+    for recovery in [False, True]:
+        home, provider, manager, _ = provider_factory("rationale-discovery-" + str(recovery), recovery=recovery, rationale=True)
+        expected = base | {"capture_memory", "inspect_rationale"} | (recovery_tools if recovery else set())
+        schemas = manager.get_all_tool_schemas()
+        assert {schema["name"] for schema in schemas} == {"cairn_" + name for name in expected}
+        assert len(schemas) == (9 if recovery else 7)
+        installed = provider._request("list", tmp_path / (home.name + ".sqlite"), "synthetic-schema-owner")
+        assert {entry["name"]: entry["inputSchema"] for entry in installed} == {
+            schema["name"].removeprefix("cairn_"): schema["parameters"] for schema in schemas}
+        assert not (home / "cairn").exists()
+        assert observed[-1] == {"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"}
 
 
-def test_dedicated_key_forwarded_only_capture_recall_with_no_generic_env_or_payload_authority(provider_factory, monkeypatch):
-    _, provider, manager, _ = provider_factory("keys", recovery=True)
+@pytest.mark.parametrize("rationale", [False, True])
+def test_dedicated_key_forwarded_only_capture_recall_with_no_generic_env_or_payload_authority(provider_factory, monkeypatch, rationale):
+    _, provider, manager, _ = provider_factory("keys-" + str(rationale), recovery=True, rationale=rationale)
     real_popen = subprocess.Popen
     observed = []
 
@@ -241,6 +295,19 @@ def test_dedicated_key_forwarded_only_capture_recall_with_no_generic_env_or_payl
         assert observed[-1] == {"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"}
     json.loads(manager.handle_tool_call("cairn_inspect_capture_admission", {"batchId": "synthetic-batch"}))
     assert observed[-1] == {"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"}
+    rationale_revision = call(manager, "inspect", memoryId=memory["id"])["value"]["memory"]["revision"] if rationale else memory["revision"]
+    count = len(observed)
+    inspected = json.loads(manager.handle_tool_call("cairn_inspect_rationale", {
+        "memoryId": memory["id"], "revision": rationale_revision}))
+    if rationale:
+        assert inspected["ok"] is True
+        assert observed[-1] == {"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"}
+    else:
+        assert inspected == {"error": "No memory provider handles tool 'cairn_inspect_rationale'"}
+        refused = json.loads(provider.handle_tool_call("cairn_inspect_rationale", {
+            "memoryId": memory["id"], "revision": rationale_revision}))
+        assert refused["ok"] is False and refused["error"]["code"] == "invalid_input"
+        assert len(observed) == count
     current = call(manager, "inspect", memoryId=memory["id"])["value"]["memory"]
     assert json.loads(manager.handle_tool_call("cairn_classify_unfiled_memories", {"refs": [
         {"memoryId": current["id"], "revision": current["revision"]}]}))["error"]["code"] == "model_not_configured"
@@ -318,8 +385,9 @@ def test_bridge_applies_operation_deadlines_and_fixed_mode_arguments(provider_fa
     monkeypatch.setattr(bridge.anyio, "fail_after", deadline)
     monkeypatch.setattr(bridge, "stdio_client", streams)
     monkeypatch.setattr(bridge, "ClientSession", Session)
-    for enabled, source_context in [(False, False), (False, True), (True, False), (True, True)]:
-        for operation in ["list", "recall_memory", "capture_memory", "inspect_capture_admission",
+    for enabled, source_context, rationale in [(False, False, False), (False, True, False),
+            (True, False, False), (True, True, False), (True, False, True), (True, True, True)]:
+        for operation in ["list", "recall_memory", "capture_memory", "inspect_rationale", "inspect_capture_admission",
                           "classify_unfiled_memories"]:
             observations.clear()
             request = {"node_path": config["node_path"], "executable_path": config["executable_path"],
@@ -328,6 +396,8 @@ def test_bridge_applies_operation_deadlines_and_fixed_mode_arguments(provider_fa
             if enabled:
                 request["capture_qualification"] = "source-bound-v2"
                 request["capture_deadline_ms"] = "110000"
+            if rationale:
+                request["capture_rationale"] = "source-bound-v1"
             request["classification_recovery"] = "guarded-v1"
             if source_context:
                 request["recall_context"] = "source-evidence"
@@ -340,16 +410,23 @@ def test_bridge_applies_operation_deadlines_and_fixed_mode_arguments(provider_fa
             expected = [config["executable_path"], "--db", "/synthetic/unused.sqlite", "--owner", "synthetic-owner"]
             if enabled:
                 expected += ["--capture-qualification", "source-bound-v2", "--capture-deadline-ms", "110000"]
+            if rationale:
+                expected += ["--capture-rationale", "source-bound-v1"]
             expected += ["--classification-recovery", "guarded-v1"]
             assert observations["parameters"].args == expected
             assert observations["parameters"].command == config["node_path"]
     for invalid in [{"capture_deadline_ms": "1"}, {"capture_qualification": "source-bound-v2",
                      "capture_deadline_ms": 1}, {"capture_qualification": "source-bound-v2",
-                     "capture_deadline_ms": "01"}, {"classification_recovery": "unguarded"}]:
+                     "capture_deadline_ms": "01"}, {"classification_recovery": "unguarded"},
+                    {"capture_rationale": "source-bound-v1"},
+                    {"capture_qualification": "source-bound-v2", "capture_rationale": "source-bound-v1"},
+                    {"capture_qualification": "source-bound-v2", "capture_deadline_ms": "1", "capture_rationale": True}]:
+        observations.clear()
         with pytest.raises(ValueError):
             anyio.run(bridge.exchange, {"node_path": config["node_path"],
                 "executable_path": config["executable_path"], "database": "/synthetic/unused.sqlite",
                 "owner": "synthetic-owner", "operation": "list", **invalid})
+        assert observations == {}, "invalid rationale rejected before SDK child/context"
 
 
 def test_provider_outer_transport_uses_extended_envelope_only_for_capture_and_classification(provider_factory, monkeypatch, tmp_path):
@@ -369,10 +446,10 @@ def test_provider_outer_transport_uses_extended_envelope_only_for_capture_and_cl
     module = importlib.import_module(provider.__class__.__module__)
     monkeypatch.setattr(module.subprocess, "Popen", lambda *args, **kwargs: Completed())
     for operation in ["recall_memory", "capture_memory", "classify_unfiled_memories",
-                      "inspect_capture_admission", "inspect_memory"]:
+                      "inspect_capture_admission", "inspect_memory", "inspect_rationale"]:
         assert provider._request("call", tmp_path / "unused.sqlite", "synthetic-owner",
                                  name=operation, arguments={})["ok"]
-    assert observed == [45, 135, 135, 45, 45]
+    assert observed == [45, 135, 135, 45, 45, 45]
 
 
 @pytest.mark.parametrize("operation", ["capture", "classify"])

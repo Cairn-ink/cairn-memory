@@ -29,6 +29,23 @@ semantic accuracy, lightweight readiness, a score or full M2 completion.
 Final focused results and retained fixture failures are recorded in its plan;
 fixed-candidate review and latest-head CI remain separate gates.
 
+## Native Hermes rationale remains explicit and model-proposed
+
+The [NH1–NH9 packet](plans/hermes-rationale-lifecycle.md) adds native rationale
+only with explicit v2 capture, `capture_rationale: source-bound-v1` and a configured
+deadline string ≤110000. Existing profiles, five default tools and source-only
+recall preference are unchanged. Relationships remain untrusted proposals:
+invalidating a challenge leaves a decision unassessed, not confirmed, cancelled
+or authorized. Capture can retain admission/completed classification even when
+its rationale stage fails. The scripted classifier leaves memories unfiled
+(`parentIds: []`), not successfully routed through a MOC tree; no placement-quality
+claim follows. Exact completed-batch replay does not retry that stage. Keyless inspection
+is separate from extra keyed model work over selected local receipts.
+The pinned-host fixtures use scripted completions/HTTP, not real provider calls,
+natural tool selection, a semantic score, automatic adoption, lightweight resource
+readiness or full M2 acceptance. Preparation, failures and actual native results
+are recorded in the plan; independent fixed-candidate review and CI remain separate.
+
 ## NULL-title filing is structural reuse, not semantic recovery
 
 The [NR1–NR8](plans/null-title-main-integration.md) implementation changes only
