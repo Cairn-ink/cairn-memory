@@ -11,6 +11,12 @@
 
 **保存跨次 AI 工作的重要背景，需求改變時也能修改。**
 
+<p align="center">
+  <a href="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Cairn-ink/cairn-memory/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
+  <a href="https://cairn.ink"><img alt="Cairn.ink 託管服務" src="https://img.shields.io/badge/hosted-cairn.ink-5b5147"></a>
+</p>
+
 你是不是常跟 AI 重複說：「報告要簡短」「這個專案已經改方向了」？
 Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以查看；事情改變時，
 也能修改或移出使用中的記憶。
