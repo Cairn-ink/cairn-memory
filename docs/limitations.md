@@ -1,5 +1,20 @@
 # Known limitations
 
+## Composed decision timeline is opt-in and partly trusted/manual
+
+The [decision timeline acceptance](plans/reliability-decision-timeline.md)
+composes synthetic qualification, source-backed challenge/rationale, explicit
+trusted A→B identity binding, late quotation, and cold source inspection through
+existing public core APIs. Qualification/rationale are opt-ins; retirement still
+requires embedded single-claim/identity attestation, not automatic MCP or Hermes
+inference. Tentative B remains stored rather than being deleted to permit the
+positive transition. A late quote's unbound refusal is not general event-time
+reasoning. Known-ID historical fetch is not automatic history discovery, and
+historical rationale reconstruction is unsupported. Removing a challenge makes
+the decision unassessed, not confirmed or authorized. Scripted integration tests
+do not establish semantic quality, lightweight readiness, a new score, or full
+M2 completion; fixed-candidate review and dependent-PR CI remain separate gates.
+
 ## NULL-title filing is structural reuse, not semantic recovery
 
 The [NR1–NR8](plans/null-title-main-integration.md) implementation changes only

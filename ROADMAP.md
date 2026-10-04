@@ -16,6 +16,15 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [composed decision timeline](docs/plans/reliability-decision-timeline.md)
+  exercises adopted versus tentative choices, a changed support premise,
+  explicit trusted identity transition, late quotation and cold provenance.
+  It composes existing opt-in public APIs without changing defaults or adding
+  automatic host retirement. Historical source inspection is supported;
+  historical rationale reconstruction and general event-time inference are
+  not established. Synthetic offline acceptance is not a semantic score,
+  lightweight readiness result or completion of the reliability backlog.
+
 - [NULL-title structural filing](docs/plans/null-title-main-integration.md)
   reuses exact namespace/level/canonical topic identities only while their
   authoritative labels are NULL. Tests-first RED and subsequent focused,
