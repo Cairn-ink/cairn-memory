@@ -314,7 +314,7 @@ test('P6 canonical digests bind original and rendered data but ignore object key
   assert.equal(first.originalHistoryDigest, second.originalHistoryDigest);
   assert.equal(mixedSourcePolicy(), first.policy);
   assert.equal(Object.isFrozen(first.policy.date), true);
-  assert.equal(first.version, 'cairn-lme-mixed-source-v2');
+  assert.equal(first.version, 'cairn-lme-mixed-source-v3');
   assert.equal(first.policy.rendering.suffix, ' }');
   assert.equal(first.policy.limits.partitionProbeUtf16, 32 * 1024 * 1024);
   assert.ok(Object.values(first.policy.hashDomains).every((domain) => domain.endsWith('.v2')));

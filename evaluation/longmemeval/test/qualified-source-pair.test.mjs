@@ -64,15 +64,16 @@ test('N1/N2 independent canonical protocol golden and source-binding mutations',
   assert.deepEqual(Object.keys(protocol), ['schemaVersion', 'questionId', 'question', 'namespace',
     'answerModel', 'templateVersion', 'limits', 'armOrder', 'captureQualification',
     'historyDigest', 'sourceMapDigest', 'arms', 'digest']);
-  assert.equal(protocol.digest, '2ba041c482a625d184d3398da8b4993c1dc2aeb5bf01203f69a01880668ee905');
+  assert.equal(protocol.digest, '8b04295c02ccbe0d7bb9afbdb346adadd4240ea3a8da3e2abe793f3767563afd');
+  assert.notEqual(protocol.digest, '2ba041c482a625d184d3398da8b4993c1dc2aeb5bf01203f69a01880668ee905');
   assert.equal(protocol.historyDigest, '8ee8a1822a7ed1dc07d7ac1cf003b62a948f11e8c1dbdde04b3983f036974912');
-  assert.equal(protocol.sourceMapDigest, 'af5091f3e9a73005f13d6899a9c08d7fbb7d30b266f205407a7f68ac1bc820d3');
+  assert.equal(protocol.sourceMapDigest, '5a032e9d52d836a97e6bfd1aa225dca6ff9977a5c683bb3cef5dd4de001e24c4');
   assert.deepEqual(protocol.arms.map((arm) => arm.scopeId), [
     'lme-case-7630a3b6278161b397c12bd3cadddf9703b06fe04ae0c65855d3ca96abf340b7',
     'lme-case-dfdc699668e6b09c250ff66abc86846bae782cc8203898036c757bc3fb62ddc7']);
   assert.deepEqual(protocol.arms.map((arm) => arm.payloadDigests), [
     ['3bb47431d1806c27fd882833a49c0b5a12b215f92d1015106fedd19acb6ec6aa'],
-    ['2b7b5a83c38a63b45898e4ffbfb37199ae4849efa9fce2e244089780b30a2eeb']]);
+    ['9bc323d39bc656fb00984ddf22128c331cae64916287219660ff93b7c0cd35d4']]);
   assert.equal(Object.isFrozen(protocol.arms[0].payloadDigests), true);
   const variants = [
     config({ history: source(['x'.repeat(800) + 'Tail Monday.', '  Å  ']) }),

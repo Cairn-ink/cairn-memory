@@ -1,16 +1,25 @@
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 
 import { captureSnapshot, retainedSourceView } from '../../core/capture-input.mjs';
 import { sourceWindowCatalog } from '../../core/source-windows.mjs';
+import { planCaptureMessageBatches } from '../../core/capture-batch-planning.mjs';
+import { MODEL_INPUT_TOKENS } from '../../core/model-call.mjs';
 import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 
 export const INGESTION_PLAN_SCHEMA_VERSION = 'cairn-longmemeval-ingestion-plan-v1';
-export const INDEXED_WINDOW_INGESTION_PLAN_SCHEMA_VERSION = 'cairn-longmemeval-indexed-window-ingestion-plan-v1';
+export const INDEXED_WINDOW_INGESTION_PLAN_SCHEMA_VERSION = 'cairn-longmemeval-indexed-window-ingestion-plan-v2';
 export const QUALIFIED_PREFIX_INGESTION_PLAN_SCHEMA_VERSION = 'cairn-longmemeval-qualified-prefix-ingestion-plan-v1';
 export const INGESTION_CLIENT = 'longmemeval-ingestion-v1';
 export const INDEXED_WINDOW_CAPTURE_QUALIFICATION = 'source-bound-v2';
 export const INDEXED_WINDOW_CAPTURE_SOURCE_POLICY = 'indexed-windows-v1';
 export const QUALIFIED_PREFIX_CAPTURE_SOURCE_POLICY = 'retained-prefix-v1';
+export const INDEXED_BATCHING_POLICY = Object.freeze({
+  version: 'cairn.longmemeval.indexed-token-fit-batch.v1',
+  counter: 'tiktoken-1.0.22/o200k_base', inputTokens: MODEL_INPUT_TOKENS,
+  partition: 'whole-messages-within-session-structural-batches',
+  singleton: 'explicit-blocker-no-drop',
+});
 export const CAPTURE_LIMITS = Object.freeze({
   rawMessageUtf16: 20_000,
   normalizedMessageUtf16: 4_000,
@@ -385,51 +394,91 @@ export function planLongMemEvalCase(options) {
   return deepFreeze(buildPlan(history, namespace));
 }
 
-export function planIndexedWindowLongMemEvalCase(options) {
+function planIndexedCase(options, evidenceOnly) {
   const legacy = planLongMemEvalCase(options);
+  // Legacy/prefix and diagnostic callers do not need the optional adapter.
+  // Indexed planning still synchronously requires its exact exported counter;
+  // missing dependencies fail here, without a fallback or approximate count.
+  const { countOpenAITokens } = createRequire(import.meta.url)('../../adapters/openai/index.mjs');
   const blockers = structuredClone(legacy.blockers);
-  const batches = legacy.batches.map((batch) => {
+  const batches = [];
+  const sessionCounts = new Map();
+  const captureQualification = evidenceOnly ? undefined : INDEXED_WINDOW_CAPTURE_QUALIFICATION;
+  const captureSourcePolicy = evidenceOnly ? 'indexed-evidence-v1' : INDEXED_WINDOW_CAPTURE_SOURCE_POLICY;
+  const rebuild = (batch, indices, oversized = false) => {
+    const batchIndex = batches.length;
+    const sessionBatchIndex = sessionCounts.get(batch.source.sessionIndex) ?? 0;
+    sessionCounts.set(batch.source.sessionIndex, sessionBatchIndex + 1);
+    const messages = indices.map(index => batch.captureInput.messages[index]);
+    const eventId = derivedId('event', [INDEXED_BATCHING_POLICY.version, legacy.questionId,
+      batch.source.sessionIndex, batch.source.sourceSessionId, sessionBatchIndex,
+      messages.map(message => message.id)]);
+    const captureInput = { ...batch.captureInput, eventId, messages };
+    const sourceMap = indices.map((index, messageIndex) => ({ ...batch.sourceMap[index], messageIndex }));
+    const rebuilt = { ...batch, batchIndex, sessionBatchIndex, captureInput, sourceMap };
     let snapshot;
     try {
-      snapshot = captureSnapshot(batch.captureInput, INDEXED_WINDOW_CAPTURE_QUALIFICATION,
-        INDEXED_WINDOW_CAPTURE_SOURCE_POLICY);
+      snapshot = captureSnapshot(captureInput, captureQualification, captureSourcePolicy);
       const catalog = sourceWindowCatalog(snapshot);
-      return { ...batch,
-        normalizedCapture: { ...batch.normalizedCapture, messages: snapshot.messages,
+      batches.push({ ...rebuilt,
+        normalizedCapture: { messages: snapshot.messages,
           normalizedTotalUtf16: snapshot.messages.reduce((sum, message) => sum + message.content.length, 0),
           payloadDigest: snapshot.payloadDigest },
         indexedWindows: catalog.entries,
-        sourceWindowCatalog: catalog.coverage.sourceWindowCatalog };
+        sourceWindowCatalog: catalog.coverage.sourceWindowCatalog });
+      if (oversized) blockers.push({ code: 'extraction_message_oversized', batchIndex,
+        messageIndex: 0, messageId: messages[0].id });
     } catch {
-      blockers.push({ code: 'indexed_window_preflight_failed', batchIndex: batch.batchIndex });
-      return { ...batch, normalizedCapture: snapshot
+      blockers.push({ code: 'indexed_window_preflight_failed', batchIndex });
+      batches.push({ ...rebuilt, normalizedCapture: snapshot
         ? { messages: snapshot.messages,
           normalizedTotalUtf16: snapshot.messages.reduce((sum, message) => sum + message.content.length, 0),
           payloadDigest: snapshot.payloadDigest }
-        : { ...batch.normalizedCapture, payloadDigest: null },
-        indexedWindows: [], sourceWindowCatalog: null };
+        : { messages: [], normalizedTotalUtf16: 0, payloadDigest: null },
+        indexedWindows: [], sourceWindowCatalog: null });
     }
-  });
-  return deepFreeze({ ...legacy, schemaVersion: INDEXED_WINDOW_INGESTION_PLAN_SCHEMA_VERSION,
-    captureQualification: INDEXED_WINDOW_CAPTURE_QUALIFICATION,
-    captureSourcePolicy: INDEXED_WINDOW_CAPTURE_SOURCE_POLICY,
+  };
+  for (const batch of legacy.batches) {
+    // Invalid source catalogs keep their full evidence and remain blockers;
+    // partitioning is not a repair or fallback for source validation.
+    try { sourceWindowCatalog(captureSnapshot(batch.captureInput, captureQualification, captureSourcePolicy)); }
+    catch { rebuild(batch, batch.captureInput.messages.map((_, index) => index)); continue; }
+    const planned = planCaptureMessageBatches({ messages: batch.captureInput.messages },
+      { model: { countTokens: countOpenAITokens }, captureQualification, captureSourcePolicy });
+    const oversized = new Set(planned.oversizedMessageIndices);
+    const groups = [...planned.batches, ...planned.oversizedMessageIndices.map(index => [index])]
+      .sort((left, right) => left[0] - right[0]);
+    // The core helper lists oversized messages separately. Retain each as an
+    // explicit blocked singleton so no submitted source disappears from the map.
+    for (const indices of groups) rebuild(batch, indices, oversized.has(indices[0]));
+  }
+  return deepFreeze({ ...legacy, schemaVersion: evidenceOnly
+    ? 'cairn-longmemeval-indexed-evidence-ingestion-plan-v2' : INDEXED_WINDOW_INGESTION_PLAN_SCHEMA_VERSION,
+    ...(evidenceOnly ? { qualificationStatus: 'not-requested' } : { captureQualification }),
+    captureSourcePolicy,
     executable: blockers.length === 0, blockers, batches,
-    summary: { ...legacy.summary, blockerCount: blockers.length,
+    summary: { ...legacy.summary, plannedBatchCount: batches.length,
+      blockerCount: blockers.length, modelContextFitEstablished: blockers.length === 0,
       rawReconstruction: blockers.length === 0 ? 'exact-from-source-map' : 'exact-from-source-turns' } });
 }
 
-// Same source partition/catalog, with the separately bound evidence-only replay digest.
+export function planIndexedWindowLongMemEvalCase(options) {
+  return planIndexedCase(options, false);
+}
+
+// Compare complete ordered sources independently of versioned batch identities.
+// Only messageIndex is batch-local; every source coordinate and raw byte remains.
+export function ingestionSourceProjection(plan) {
+  return { sourceTurns: plan.sourceTurns,
+    messages: plan.batches.flatMap(({ captureInput }) => captureInput.messages.map(message => ({
+      namespace: captureInput.namespace, client: captureInput.client,
+      sessionId: captureInput.sessionId, message }))),
+    sourceMap: plan.batches.flatMap(batch => batch.sourceMap.map(({ messageIndex, ...source }) => source)) };
+}
+
+// Same token-fit source partition/catalog, separately bound evidence-only digest.
 export function planIndexedEvidenceLongMemEvalCase(options) {
-  const indexed = planIndexedWindowLongMemEvalCase(options);
-  const { captureQualification: _qualification, ...plan } = indexed;
-  const batches = indexed.batches.map(batch => {
-    const snapshot = captureSnapshot(batch.captureInput, undefined, 'indexed-evidence-v1');
-    return { ...batch, normalizedCapture: { ...batch.normalizedCapture,
-      payloadDigest: snapshot.payloadDigest } };
-  });
-  return deepFreeze({ ...plan,
-    schemaVersion: 'cairn-longmemeval-indexed-evidence-ingestion-plan-v1',
-    captureSourcePolicy: 'indexed-evidence-v1', qualificationStatus: 'not-requested', batches });
+  return planIndexedCase(options, true);
 }
 
 export function planQualifiedPrefixLongMemEvalCase(options) {

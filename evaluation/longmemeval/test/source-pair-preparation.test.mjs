@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import { FRESH_SMOKE_TYPES, selectFreshSmoke } from '../../live/reliability-smoke.mjs';
-import { planIndexedWindowLongMemEvalCase,
+import { ingestionSourceProjection, planIndexedWindowLongMemEvalCase,
   planQualifiedPrefixLongMemEvalCase } from '../ingestion.mjs';
 import { opaqueQuestionId, opaqueSessionId, stableTurnIdV2 } from '../prepare.mjs';
 import { qualifiedSourcePairProtocol } from '../public-comparison.mjs';
@@ -170,8 +170,8 @@ test('R2 one-batch source protocol has independent exact route and phase golden'
   const sourcePlanInput = { history: input.history, namespace: input.namespace };
   const prefix = planQualifiedPrefixLongMemEvalCase(sourcePlanInput);
   const indexed = planIndexedWindowLongMemEvalCase(sourcePlanInput);
-  assert.deepEqual(prefix.batches.map((batch) => batch.captureInput),
-    indexed.batches.map((batch) => batch.captureInput));
+  assert.deepEqual(ingestionSourceProjection(prefix), ingestionSourceProjection(indexed));
+  assert.notEqual(prefix.batches[0].captureInput.eventId, indexed.batches[0].captureInput.eventId);
   assert.equal(prefix.batches[0].retainedMessages[0].content, 'x'.repeat(800));
   assert.deepEqual(indexed.batches[0].indexedWindows.map((window) => window.content),
     ['x'.repeat(800), 'Tail Friday.']);

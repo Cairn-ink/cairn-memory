@@ -7,10 +7,33 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { types } from 'node:util';
 import { checkedMem0NativeArtifact } from './mem0-native-artifact.mjs';
 import { mem0WireProfile } from './mem0-wire.mjs';
 
 const CHILD_VERSION = 'cairn-mem0-native-result-v1';
+const httpClientErrorDiagnostics = new WeakMap();
+const HTTP_CLIENT_CODES = new Set(['HPE_INVALID_HEADER_TOKEN', 'HPE_INVALID_EOF_STATE',
+  'HPE_HEADER_OVERFLOW', 'ERR_HTTP_REQUEST_TIMEOUT', 'ECONNRESET']);
+const boundedCount = value => Math.min(1_000_000, value);
+const boundedAge = (now, then) => Math.min(2_147_483_647, Math.max(0, Math.floor(now - then)));
+
+// Only the kernel can mint provenance. Caller properties, copied errors and
+// proxies confer no authority and never participate in this identity lookup.
+export function nativeHttpClientErrorDiagnostic(error) {
+  return httpClientErrorDiagnostics.get(error);
+}
+
+function clientErrorCode(error) {
+  try {
+    if (!error || types.isProxy(error)) return 'other';
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'code');
+    const code = descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : null;
+    if (typeof code !== 'string' || code.length > 80) return 'other';
+    return HTTP_CLIENT_CODES.has(code) ? code : code.startsWith('HPE_') ? 'other_parser' : 'other';
+  } catch { return 'other'; }
+}
 
 export class Mem0NativeRuntimeError extends Error {
   constructor(code) { super(code); this.name = 'Mem0NativeRuntimeError'; this.code = code; }
@@ -223,6 +246,11 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
   fs.mkdirSync(path.join(store, 'cache'), { mode: 0o700 });
   const pending = new Set();
   const connections = new Set();
+  const connectionStates = new WeakMap();
+  let connectionCount = 0;
+  let requestCount = 0;
+  let lastResponseAt = null;
+  let httpClientError = null;
   let fault = null;
   let child = null;
   let childClose = null;
@@ -262,6 +290,16 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
   const resource = new AsyncResource('Mem0NativeGatewayRequest');
   const server = http.createServer({ maxHeaderSize: configuration.headerBytes },
     (request, response) => {
+    const connectionState = connectionStates.get(request.socket);
+    requestCount = boundedCount(requestCount + 1);
+    if (connectionState) {
+      connectionState.requestCount = boundedCount(connectionState.requestCount + 1);
+      connectionState.phase = 'body';
+    }
+    response.once('finish', () => {
+      lastResponseAt = performance.now();
+      if (connectionState) connectionState.phase = 'idle';
+    });
     const task = resource.runInAsyncScope(async () => {
       try {
         if (stopping || handle.snapshot().status !== 'active') fail('native_scope_closed');
@@ -272,6 +310,7 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
         const limit = profile[route].maxRequestBytes;
         const expected = requestBody(request, limit, configuration);
         const bytes = await boundedBody(request, limit, configuration.httpTimeoutMs);
+        if (connectionState) connectionState.phase = 'response';
         if (bytes.length !== expected) fail('native_http_invalid');
         let body;
         try {
@@ -316,6 +355,9 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
   server.requestTimeout = configuration.httpTimeoutMs;
   server.timeout = configuration.localTransportTimeoutMs;
   server.on('connection', connection => {
+    connectionCount = boundedCount(connectionCount + 1);
+    connectionStates.set(connection, { ordinal: connectionCount, openedAt: performance.now(),
+      requestCount: 0, phase: 'headers' });
     if (connections.size >= configuration.connectionLimit) {
       firstFault('native_connection_cap');
       connection.destroy();
@@ -327,12 +369,22 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     if (stopping || handle.snapshot().status !== 'active') connection.destroy();
   });
   server.on('clientError', (error, connection) => {
+    const code = clientErrorCode(error);
+    const scopeStatus = handle.snapshot().status;
+    const ignoredReset = (stopping || scopeStatus !== 'active') && code === 'ECONNRESET';
+    const state = connectionStates.get(connection);
+    if (!ignoredReset && fault === null && state) {
+      const now = performance.now();
+      httpClientError = Object.freeze({ version: 1, code, connectionOrdinal: state.ordinal,
+        requestCount, connectionRequestCount: state.requestCount, phase: state.phase,
+        stopping, scopeStatus, connectionAgeMs: boundedAge(now, state.openedAt),
+        sinceLastResponseMs: lastResponseAt === null ? null : boundedAge(now, lastResponseAt) });
+    }
     connection.destroy();
     // Parser faults remain global while the listener exists, even if a prior
     // priced response locally sealed this scope. A reset caused by tearing
     // down a revoked connection is expected cancellation, not a new fault.
-    if ((stopping || handle.snapshot().status !== 'active')
-      && error?.code === 'ECONNRESET') return;
+    if (ignoredReset) return;
     firstFault('native_http_invalid'); terminate();
   });
   server.on('timeout', connection => {
@@ -452,7 +504,14 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     } else firstFault('native_reap_failed');
     resource.emitDestroy();
   }
-  if (fault !== null || !clean) { handle.halt(); fail(fault ?? 'native_cleanup_failed'); }
+  if (fault !== null || !clean) {
+    handle.halt();
+    const error = new Mem0NativeRuntimeError(fault ?? 'native_cleanup_failed');
+    if (fault === 'native_http_invalid' && httpClientError !== null) {
+      httpClientErrorDiagnostics.set(error, httpClientError);
+    }
+    throw error;
+  }
   if (outcome === 'sealed') return Object.freeze({ status: 'sealed', value: null });
   if (outcome !== 'completed' || output === null) { handle.halt(); fail('native_output_invalid'); }
   return Object.freeze({ status: 'completed', value: output });

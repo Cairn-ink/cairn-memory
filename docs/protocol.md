@@ -65,16 +65,23 @@ settle accounting, execute, resume, retry or grant spending authority. This
 evaluation-only journal versions its own format without changing core, MOC,
 plugin/MCP/HTTP, report, prompt, model or default-policy schemas.
 
-Future private mixed Mem0 arm diagnostics may retain `nativeFailure` with
-exactly `{version:1,layer,reason}`. The `runtime`/`gateway` layer and reason are
-finite classifications from the existing native error classes, accepted only
-from native Error objects with the exact typed prototype and an own data code.
+Private mixed Mem0 arm diagnostics may retain the legacy `nativeFailure` shape
+`{version:1,layer,reason}`. Only `runtime`/`native_http_invalid` may additionally
+carry optional `httpClientError`: the first accepted local Node clientError's
+finite code, bounded connection/request state and saturated monotonic elapsed
+time, as specified in the [client-error contract](plans/native-http-client-error.md).
+The immutable diagnostic is minted privately by the runtime and associated with
+the genuine thrown Error's identity; caller properties cannot mint it. The
+`runtime`/`gateway` layer and reason are finite classifications from the existing
+native error classes, accepted only from native Error objects with the exact
+typed prototype and an own data code.
 Proxies, plain forged objects, unknown classes/codes, accessors and malformed
 values yield no field without getter invocation or coercion. The frozen
 projection survives report cloning even when the outer scope throws and keeps
-`scope_execution_failed`; no exception message, stack, cause, key, text, body,
-URL, ID, length or path enters it. This local evaluation observation grants no
-continuation, retry, resolution, refund or scoring authority. Success and Cairn
+`scope_execution_failed`; no exception message, stack, cause, key, rawPacket,
+source text, headers, body, URL, ID, payload length or path enters it. This local
+evaluation observation grants no continuation, retry, resolution, refund or
+scoring authority. Success and Cairn
 errors gain no field, historical reports remain unchanged, and public
 core/plugin/MCP/HTTP and telemetry schemas are unaffected. See the
 [prospective contract](plans/mixed-native-failure-diagnostics.md).

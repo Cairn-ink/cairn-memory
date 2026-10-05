@@ -10,6 +10,7 @@ import { MixedComparisonError, canonical, dense, exact, fail, freeze, hash, repo
   wellFormed } from './mixed-validation.mjs';
 import { completeMixedJournalPhase, enterMixedJournalArm, recordMixedJournalArm,
   startMixedJournalPhase } from './mixed-result-journal.mjs';
+import { isMixedNativeFailure } from './mixed-native-failure-shape.mjs';
 
 export const MIXED_SCORING_VERSION = 'cairn-lme-mixed-scoring-v1';
 const GENERATION_DOMAIN = 'cairn.lme.mixed.generation-report.v1';
@@ -100,6 +101,9 @@ function validateGeneration(raw, guard) {
           || arm.answer.usage.outputTokens > 512
           || !safeInteger(arm.answer.usage.costMicroUsd)) fail('invalid_mixed_report');
       }
+      if (Object.hasOwn(arm.diagnostics, 'nativeFailure') && (arm.name !== 'mem0'
+        || arm.status !== 'failed' || arm.diagnostics.stage !== 'execution'
+        || !isMixedNativeFailure(arm.diagnostics.nativeFailure))) fail('invalid_mixed_report');
       if (arm.scope !== null) {
         exact(arm.scope, ['ordinal', 'status', 'reason'], 'invalid_mixed_report');
         if (!safeInteger(arm.scope.ordinal) || !['active', 'completed', 'failed', 'blocked']

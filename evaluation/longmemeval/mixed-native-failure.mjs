@@ -1,6 +1,6 @@
 // Evaluation observation only: never use this classification as scope authority.
 import { types } from 'node:util';
-import { Mem0NativeRuntimeError } from '../experiment-budget/mem0-native-runtime.mjs';
+import { Mem0NativeRuntimeError, nativeHttpClientErrorDiagnostic } from '../experiment-budget/mem0-native-runtime.mjs';
 import { Mem0NativeGatewayError } from '../experiment-budget/mem0-native-gateway.mjs';
 import { isMixedNativeFailure } from './mixed-native-failure-shape.mjs';
 
@@ -16,6 +16,8 @@ export function projectMixedNativeFailure(error) {
     const code = Object.getOwnPropertyDescriptor(error, 'code');
     if (!code || !Object.hasOwn(code, 'value') || typeof code.value !== 'string') return undefined;
     const observation = { version: 1, layer, reason: code.value };
+    const httpClientError = nativeHttpClientErrorDiagnostic(error);
+    if (httpClientError !== undefined) observation.httpClientError = httpClientError;
     return isMixedNativeFailure(observation) ? Object.freeze(observation) : undefined;
   } catch { return undefined; }
 }

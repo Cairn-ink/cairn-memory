@@ -18,6 +18,7 @@
   "core/automatic-qualification.mjs",
   "core/automatic-rationale.mjs",
   "core/capture-input.mjs",
+  "core/capture-batch-planning.mjs",
   "core/capture.mjs",
   "core/source-windows.mjs",
   "core/capture-deadline.mjs",

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 import { FRESH_SMOKE_TYPES } from '../live/reliability-smoke.mjs';
-import { planIndexedWindowLongMemEvalCase,
+import { ingestionSourceProjection, planIndexedWindowLongMemEvalCase,
   planQualifiedPrefixLongMemEvalCase } from './ingestion.mjs';
 import { qualifiedSourcePairProtocol } from './public-comparison.mjs';
 
@@ -162,10 +162,8 @@ export function projectSourcePairCase(options) {
     indexed = planIndexedWindowLongMemEvalCase(planInput);
   } catch { fail('invalid_case'); }
   if (!prefix.executable || !indexed.executable) fail('nonexecutable_plan');
-  if (!isDeepStrictEqual(prefix.batches.map((batch) => batch.captureInput),
-    indexed.batches.map((batch) => batch.captureInput))
-    || !isDeepStrictEqual(prefix.batches.map((batch) => batch.sourceMap),
-      indexed.batches.map((batch) => batch.sourceMap))) fail('plan_mismatch');
+  if (!isDeepStrictEqual(ingestionSourceProjection(prefix),
+    ingestionSourceProjection(indexed))) fail('plan_mismatch');
   const batchCounts = { qualifiedPrefix: prefix.batches.length, indexedWindows: indexed.batches.length };
   const modelMethods = checkedAdd(checkedMultiply(3,
     checkedAdd(batchCounts.qualifiedPrefix, batchCounts.indexedWindows)), 6);

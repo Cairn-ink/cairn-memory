@@ -11,6 +11,7 @@ import { bubblewrapArguments, runNativeGatewayKernel } from '../mem0-native-runt
 import { nativeFakeProvider, nativeFixture } from './mem0-native-fixture.mjs';
 // Register the installed native timeout/reconnect regressions in the canonical gate.
 import '../testing/native-http-timeout.test.mjs';
+import '../testing/native-http-client-error-local.test.mjs';
 
 function installed() {
   const venvRoot = process.env.CAIRN_MEM0_NATIVE_VENV_ROOT;

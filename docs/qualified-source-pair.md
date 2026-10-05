@@ -31,6 +31,18 @@ array order is preserved. Neither protocol digest nor plan metadata authenticate
 an arbitrary callback, its model configuration, source origin or a corpus.
 Later scoring needs a separately trusted expected protocol or roster binding.
 
+Indexed preparation now uses the v2 token-fit planner while qualified-prefix
+keeps its original structural grouping. Their frozen batch counts and event IDs
+may therefore differ: this is no longer a pure source-window-only ablation.
+Before binding a protocol, both plans must have identical ordered raw source
+turns, message identities/roles/bytes, non-event capture namespace/client/session
+identity and source coordinates. Only batch-local messageIndex is omitted from
+the shared projection; its source-map digest uses the v2 domain. Each arm's
+payload digests still bind its own full frozen partition and event identities.
+Current indexed-v2 descriptors refuse stale v1 protocols; scoring arithmetic,
+scope IDs and denominator rules are unchanged. In the separate Cairn/Mem0 mixed
+comparison, both arms continue to receive exactly the same frozen partition.
+
 The execution port has exactly `withCaseScope` and `isHalted`. It enters
 `{phase:'generation', caseId:scopeId}` once per arm, sequentially. The scope
 handle must report matching `case-deadline-scope-v1` identity and an active

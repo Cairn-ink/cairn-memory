@@ -1,5 +1,12 @@
 # Known limitations
 
+Token-fit indexed preparation preserves all source bytes but may split a batch
+that the legacy qualified-prefix planner leaves whole. The prefix/indexed source
+pair now binds exact shared ordered source identity and each arm's distinct frozen
+partition; it is not a pure source-window-only ablation. This does not change the
+identical Cairn/Mem0 message partition or authorize a paid run. See
+[the qualified source-pair boundary](qualified-source-pair.md).
+
 The [current-engine scoring integration](plans/current-engine-score.md) ports
 the accepted shared-core NULL-title structural reuse repair onto the compatible
 prospective evaluation base. Reuse does not restore a label's source validity
@@ -1361,6 +1368,22 @@ or planning, and capture batches are planned. See
   call, and retrying the same batch refuses again. Hosts plan batches with
   `core.planCaptureBatches`, which splits only between whole messages. Hosted
   and MCP capture tools do not call it for you yet.
+- **Indexed evaluation planning establishes only local extraction fit.**
+  Indexed-window and indexed-evidence LongMemEval ingestion use the same pure
+  whole-message planner with the pinned OpenAI local counter. The former
+  structural partition could exceed the 6,000-token extraction guard: a
+  closed, unscored comparison stopped after 41 completed batches, and its next
+  request measured 6,652 tokens. This request contained only that batch's
+  windows, not accumulated MOC context. The new partition preserves source
+  coordinates and orders, changes versioned event identities, and is frozen
+  for both mixed arms before resource authorization. A nonfitting singleton
+  blocks the whole case with its source retained; nothing is discarded or
+  retried. `modelContextFitEstablished` on these indexed plans means the local
+  extraction envelope fits, not provider wire framing, output availability,
+  qualification/classification/recall fit or semantic reliability. Smaller
+  batches can change extraction context and increase requests and cost.
+  Historical results are not replayed or scored by this correction. The native
+  HTTP failure that separately halted that comparison is outside this fix.
 - **Episode targets degrade differently.** When an episode's own new messages
   cannot fit one interpretation request, the attempt records gap code
   `context_budget_exceeded` and the same batch is still admitted as memories.
@@ -1685,3 +1708,38 @@ historical input evidence, not verification of the combination. Combined local
 gates, independent review and latest-head CI remain separate acceptance steps;
 no retrieval, semantic, default-MOC/MCP/Hermes, footprint or paid-score claim
 follows, and any new paid cohort requires a fresh specific grant.
+
+## Prospective native HTTP client-error provenance
+
+The [bounded diagnostic contract](plans/native-http-client-error.md) adds only
+the first accepted local Node clientError's finite code category, bounded
+connection/request counts and lifecycle phase, scope/stopping state, and
+saturated monotonic elapsed milliseconds to the existing private nativeFailure
+observation. Internally minted immutable metadata is authenticated by runtime
+Error identity; caller properties, forged/copy errors and proxies cannot mint
+it. Plain journal observations confer no execution authority. New optional
+metadata must be enumerable own data, allowlisted and bounded; accessors,
+proxies, extra fields and malformed values reject without executing their
+callbacks. Existing native failure observations remain valid.
+
+Threat boundary: counts, phase and timing can disclose local execution patterns
+and correlate with other private observations. This metadata stays in the
+existing private report/journal boundary, outside public MCP/API authority or
+telemetry. Existing owner-private0700 directories and0600 files, operator
+access/retention policy, backup exposure and same-UID tampering limits continue
+to apply; no encryption or secure deletion is provided. No message, rawPacket,
+header, URL, body, source, stack/cause, arbitrary provider code, key, new reader,
+output destination or retention policy is added. The shared snapshot boundary
+rejects nested proxies before reflection; this does not claim unrelated options
+or every public caller is globally hardened.
+
+Synthetic genuine-kernel/genuine-guard UDS cases distinguish malformed header,
+partial-header EOF and HTTP header timeout while preserving native_http_invalid,
+callback_failed and global halt. Complete HTTP with invalid JSON retains
+native_gateway_failed. A genuine UDS ECONNRESET after local revoke retains
+failed/cancelled without global halt; this is a test of the existing exception,
+not a new relaxation. A sustained pinned Mem0/httpx fake-provider control
+completes19requests in six batches and search with checked accounting and
+cleanup. These observations neither reproduce N9's unknown underlying event
+nor prove general product reliability. N9 remains closed, unscored and
+immutable; no replay, regrading, paid call, policy change or release follows.
