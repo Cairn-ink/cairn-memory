@@ -25,6 +25,8 @@ import { evaluatorRow, fakeMixedHttp, sourceRow,
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createMixedResultJournal, inspectMixedResultJournal } from '../mixed-result-journal.mjs';
 import { interruption, syntheticNativeDescriptors } from './result-journal-fixture.mjs';
+// Register the bounded recall diagnostics regression in the canonical native gate.
+import './mixed-recall-failure.test.mjs';
 
 test('RD8 actual native generation interruption retains settled answer', t => interruption(t, 'generation', true));
 test('RD8 actual native scoring interruption retains settled judgment', t => interruption(t, 'scoring', true));
@@ -452,6 +454,18 @@ test('W302-W304 actual mixed core/adapter/native witness on/off preserves wire, 
         assert.equal(generation.halted, false, `${mode}: ${JSON.stringify(generation.cases)}`);
         const recallFailed = ['rejected-rank', 'timeout-rank'].includes(mode);
         const failed = recallFailed || ['ingestion-failure', 'answer-failure'].includes(mode);
+        if (recallFailed) {
+          assert.equal(cairn.reason, mode === 'timeout-rank' ? 'deadline' : 'recall_failed');
+          assert.equal(cairn.diagnostics.stage, 'execution');
+          assert.equal(cairn.diagnostics.modelDiagnostics.recallErrorCode,
+            mode === 'rejected-rank' ? 'invalid_model_output' : 'model_timeout');
+          assert.ok(cairn.diagnostics.modelDiagnostics.events.some(event =>
+            event.stage === 'rank' && (mode === 'rejected-rank'
+              ? event.layer === 'core_validation' && event.reason === 'duplicate_ref'
+              : event.layer === 'core_call' && event.reason === 'model_timeout')));
+        } else {
+          assert.equal(Object.hasOwn(cairn.diagnostics.modelDiagnostics ?? {}, 'recallErrorCode'), false);
+        }
         assert.equal(cairn.status, failed ? 'failed' : 'completed');
         assert.equal(mem0.status, 'completed');
         assert.equal(Object.hasOwn(mem0.diagnostics, 'recallWitness'), false);
