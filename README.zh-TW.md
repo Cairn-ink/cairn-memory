@@ -60,7 +60,7 @@ Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以�
 | 你現在想做的事 | 建議入口 | 需要什麼 |
 | --- | --- | --- |
 | 先看懂用途，不想安裝 | [36 秒操作影片](docs/promotion/demo/cairn-memory-preview.mp4) | 不需要安裝或 Cairn 帳號；影片展示工具輸出 |
-| 在自己的電腦試工具 | [英文 README 的本機安裝步驟](README.md#try-the-local-memory-layer) | 需要終端機設定與 Git、Node、npm、tar；安裝驗證目前涵蓋 Linux x64；不需要 Cairn 帳號 |
+| 在自己的電腦試工具 | [Linux／WSL 步驟](README.md#try-the-local-memory-layer) 或 [Windows PowerShell 指南](docs/windows-install.md) | 需要 Git、Node >=22.16、npm、tar；有 Linux x64 與限定範圍的 Windows x64 驗證；不需要 Cairn 帳號 |
 | 使用已文件化的 Claude Code／Codex 託管連線 | [託管設定](README.md#existing-hosted-integration) | 需要相容的服務與登入授權；Claude Code 外掛需要 Cairn 帳號與 token |
 
 如果你平常只在網頁或桌面 App 聊天，**先不要照著 Claude Code 或 Codex 的
@@ -73,6 +73,9 @@ Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以�
 
 ## 使用需求與限制
 
+- 長對話已有[四個案例的實際模型實驗](docs/evidence/long-history-live-pilot.md)，
+  其中一個 Cairn 回答漏掉重要資訊。這是特定實驗路徑的小型診斷，不能代表
+  預設客戶端的長期召回可靠度；完整邊界見[已知限制](docs/limitations.md)。
 - 本機的保存、查看、修改與忘記，可以不呼叫 AI 模型。操作影片也是這種方式。
 - 讓模型依上下文挑選相關記憶的功能，需要你自己的 OpenAI API key；選取的
   上下文會傳到 OpenAI，也可能產生費用。沒有 key 時，該步驟會回報
