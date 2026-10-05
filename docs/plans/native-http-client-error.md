@@ -285,3 +285,16 @@ Worker delivery scope is stable for primary commit and independent same-base/
 same-head Standards and Spec reviews. Worker made no commit, push, PR, paid
 call, old artifact change, runtime relaxation or speculative defect fix.
 Primary owns candidate commit, review integration and latest-head CI acceptance.
+
+## Independent review documentation correction
+
+Both initial independent axes reviewed candidate
+e41376f585bc312d5ad5d10a28518b168800c486: Spec PASS with zero findings;
+Standards PASS with one actionable documentation inconsistency. Primary approved
+a narrow docs/protocol.md correction: its stale exact-three-field overview now
+preserves the legacy nativeFailure shape while allowing the optional bounded
+httpClientError only for runtime/native_http_invalid, linking this contract and
+retaining private minting, no raw data and no execution authority. No source,
+test or gate changed. The docs-only correction passed git diff --check and
+npm run validate on exact Node22.16.0. Primary owns the correction commit and
+both reviewers' final-head rechecks; earlier CODE gate evidence remains intact.
