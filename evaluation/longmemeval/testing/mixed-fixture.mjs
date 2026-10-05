@@ -109,9 +109,9 @@ function add(configuration, amount, outcome, actual) {
 }
 
 export function syntheticMixedFixture(t, { artifact, configuration, sourceCases,
-  armOrders, fetchImpl, httpTimeoutMs = 10_000, comparisonProfile }) {
-  const root = mkdtempSync(join(tmpdir(), 'cairn-mixed-runner-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  armOrders, fetchImpl, httpTimeoutMs = 10_000, comparisonProfile, workspace }) {
+  const root = workspace?.path ?? mkdtempSync(join(tmpdir(), 'cairn-mixed-runner-'));
+  if (!workspace) t.after(() => rmSync(root, { recursive: true, force: true }));
   const prepared = prepareMixedComparison({ sourceCases, armOrders,
     nativeArtifact: artifact, nativeConfiguration: configuration,
     cairnRuntimeArtifactSha256: '5'.repeat(64),
@@ -157,5 +157,6 @@ export function syntheticMixedFixture(t, { artifact, configuration, sourceCases,
     manifest: prepared.manifest, roster: prepared.roster, limits });
   const guard = createMixedSourcePairExperimentRequestGuard({ ledger, policy,
     benchmarkExtension, mixedSourcePairCapability: capability, fetchImpl });
+  workspace?.defer(() => guard.close());
   return { root, guard, capability, prepared, snapshot };
 }

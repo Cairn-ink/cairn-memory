@@ -243,9 +243,23 @@ attempt stages per arm. `retainedStageCount` and `omittedStageCount` explicitly
 describe that sample; use the guard and ledger artifacts for the full trail.
 This prevents an unbounded duplicate diagnostics list from exhausting the
 fixed report envelope after generation. Synthetic large-report validation is
-not a completed paid run or a semantic score. Unexpected process death before
-the generator returns still does not supply per-case generation checkpoints or
-authorize resuming the consumed cohort.
+not a completed paid run or a semantic score. Without the explicit journal
+opt-in below, unexpected process death before the generator returns still
+does not supply per-case generation checkpoints or authorize resuming the
+consumed cohort.
+
+The opt-in [mixed result journal](mixed-result-journal.md) now provides a separate
+incremental private retention boundary for future explicitly enabled runs.
+Offline SIGKILL tests retain an actual completed answer or judgment before
+whole-phase return; failed persistence prevents later dispatch. This does not
+recover the interrupted thirty-case run's missing outputs, change its frozen
+operator, retry consumed cases, settle old accounting or establish a score.
+Missing journal arms are unknown, and a halted completion marker is observation
+completion rather than success. Same-UID tampering, host/filesystem failures,
+local backups and sensitive model-output retention remain documented limits.
+Fresh-case availability, the unchanged cumulative budget, a separately frozen
+paid protocol, installed-host behavior and performance/semantic gates remain
+open; synthetic native/fake-HTTP evidence does not pass them.
 
 The completed fixed-30 S3 attempt remains unresolved for every Cairn arm at
 ingestion. Its retained report records `ingestion_incomplete` but not each

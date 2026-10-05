@@ -8,6 +8,8 @@ import { authenticateLocalUnknown, completionOnce, trackedTransport,
   unknownCurrentAttempt, verifiedLocalOrdinals } from './mixed-transport.mjs';
 import { MixedComparisonError, canonical, dense, exact, fail, freeze, hash, reportSnapshot, safeInteger,
   wellFormed } from './mixed-validation.mjs';
+import { completeMixedJournalPhase, enterMixedJournalArm, recordMixedJournalArm,
+  startMixedJournalPhase } from './mixed-result-journal.mjs';
 
 export const MIXED_SCORING_VERSION = 'cairn-lme-mixed-scoring-v1';
 const GENERATION_DOMAIN = 'cairn.lme.mixed.generation-report.v1';
@@ -26,7 +28,8 @@ function optionsData(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || Object.getPrototypeOf(value) !== Object.prototype) fail('invalid_mixed_scoring');
   const keys = Reflect.ownKeys(value), expected = ['generationReport', 'evaluatorRows',
-    'referenceRenderings', 'guard', 'apiKey'];
+    'referenceRenderings', 'guard', 'apiKey',
+    ...(Object.hasOwn(value, 'resultJournal') ? ['resultJournal'] : [])];
   if (keys.length !== expected.length || expected.some(key => !keys.includes(key))) {
     fail('invalid_mixed_scoring');
   }
@@ -196,7 +199,8 @@ function summary(cases) {
 
 export async function scoreMixedGeneration(options) {
   const { generationReport: rawReport, evaluatorRows, referenceRenderings, guard,
-    apiKey } = optionsData(options);
+    apiKey, resultJournal } = optionsData(options);
+  const journalEnabled = Object.hasOwn(options, 'resultJournal');
   if (referenceRenderings !== undefined && !(referenceRenderings instanceof Map)
     || !wellFormed(apiKey)
     || !apiKey.trim() || /[\r\n]/u.test(apiKey)) fail('invalid_mixed_scoring');
@@ -207,6 +211,7 @@ export async function scoreMixedGeneration(options) {
     || [...renderings.keys()].some(key => !generation.cases.some(item =>
       item.questionId === key))) fail('invalid_reference_renderings');
   const digest = hash(GENERATION_DOMAIN, generation);
+  if (journalEnabled) startMixedJournalPhase(resultJournal, 'scoring', rawReport);
   const cases = generation.cases.map((entry, index) => ({
     questionId: entry.questionId, questionType: evaluators[index].question_type,
     arms: entry.arms.map(arm => ({ name: arm.name, generationStatus: arm.status,
@@ -226,6 +231,8 @@ export async function scoreMixedGeneration(options) {
       if (guard.isHalted() || unknownCurrentAttempt(guard, allowedLocalOrdinals)) {
         haltReason = 'global_accounting_unsettled'; break;
       }
+      const journalOrdinal = index * 2 + generation.roster[index].armOrder.indexOf(name);
+      if (journalEnabled) enterMixedJournalArm(resultJournal, 'scoring', journalOrdinal);
       const transport = trackedTransport();
       let local = null, outcome, entered = false, workSettled = false;
       const priorScopes = guard.caseOutcomes().scopes.length;
@@ -274,11 +281,15 @@ export async function scoreMixedGeneration(options) {
             outcome?.reason ?? source.reason ?? 'judge_unresolved', false);
       resultArm.judgment.attempted = guard.attempts().filter(item =>
         item.stage === 'judge').length > priorJudgeAttempts;
+      if (journalEnabled) recordMixedJournalArm(resultJournal, 'scoring', journalOrdinal,
+        resultCase, resultArm);
     }
   }
   if (haltReason) for (const item of cases) for (const arm of item.arms) {
     if (arm.judgment.reason === 'generation_unresolved') arm.judgment.reason = haltReason;
   }
-  return freeze(reportSnapshot({ schemaVersion: MIXED_SCORING_VERSION, generationDigest: digest,
+  const report = freeze(reportSnapshot({ schemaVersion: MIXED_SCORING_VERSION, generationDigest: digest,
     cases, summary: summary(cases), halted: haltReason !== null, haltReason }));
+  if (journalEnabled) completeMixedJournalPhase(resultJournal, 'scoring', report);
+  return report;
 }

@@ -185,6 +185,12 @@ reliability work below without declaring older failure gates resolved.
    It does not supply an operational credential broker, prove source selection
    or model answers, or authorize a paid cohort. Its synthetic pre-grant demo
    and explicit pinned-native local test must not be conflated with a score.
+   The opt-in [private mixed result journal](docs/mixed-result-journal.md) adds
+   incremental terminal-arm retention and failure barriers for a future
+   explicitly enabled operator. Its offline interruption gate does not recover
+   old missing outputs, resume a consumed cohort or pass semantic/performance
+   gates. Audit finite fresh-case availability and the unchanged budget, then
+   freeze and review a new protocol before any paid execution.
    A fresh [six-batch synthetic canary](docs/evidence/qualification-canary.md)
    has since completed one paired question; this is technical feasibility,
    not a benchmark result or repair of the earlier failed cases. The later
