@@ -9,6 +9,28 @@ names, can still be sent to the configured service.
 
 ## Install
 
+After chichi approves the npm release, with Node ≥22.16 and the Claude Code CLI:
+
+```sh
+npx @cairn-ink/memory setup
+```
+
+**The npm helper is prepared but not published yet.** From a source checkout,
+run `node packages/setup/bin/memory.mjs setup`. It installs this plugin and its
+SessionStart, UserPromptSubmit, Stop and PreCompact hooks, opens the PAT settings
+page and accepts one hidden paste. Supported CLIs store `api_endpoint` and
+sensitive `api_token` through stdin; otherwise complete `/plugin configure
+cairn-memory@cairn-memory`. Legacy MCP removal requires confirmation after
+configuration. Use `setup --dry-run` to preview or `status` to inspect.
+[Installer details](../../packages/setup/README.md)
+
+Manual fallback inside Claude Code:
+
+```text
+/plugin marketplace add Cairn-ink/cairn-memory
+/plugin install cairn-memory@cairn-memory
+```
+
 1. Create a personal access token in Cairn.ink settings.
 2. Add the `Cairn-ink/cairn-memory` marketplace.
 3. Install `cairn-memory@cairn-memory` and supply the endpoint and token when prompted.

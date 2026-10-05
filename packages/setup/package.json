@@ -1,0 +1,17 @@
+{
+  "name": "@cairn-ink/memory",
+  "version": "0.1.0",
+  "description": "One-command setup of the Cairn Memory Claude Code plugin.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22.16.0" },
+  "bin": { "cairn-memory": "bin/memory.mjs" },
+  "files": ["bin/", "lib/", "README.md", "LICENSE"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cairn-ink/cairn-memory.git",
+    "directory": "packages/setup"
+  },
+  "homepage": "https://github.com/Cairn-ink/cairn-memory#install-for-claude-code-automatic-memory",
+  "publishConfig": { "access": "public" }
+}

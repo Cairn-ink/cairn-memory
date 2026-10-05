@@ -4,6 +4,10 @@ A locally installable, private npm artifact of the same public memory core and
 stdio MCP host. No Cairn account is required. This archive is not published to
 the npm registry; no public `npx` command or named-client compatibility is claimed.
 
+The separate [`@cairn-ink/memory` setup helper](../packages/setup/README.md) is
+prepared for a later npm release. It installs the hosted Claude Code plugin and
+hooks, not this local SQLite preview. Other clients use MCP.
+
 ## Install directly from the source checkout
 
 With Node >=22.16, npm and `tar`, run from the repository root:

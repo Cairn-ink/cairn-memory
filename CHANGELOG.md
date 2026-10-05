@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — Claude Code one-command installer
+
+- Prepare dependency-free `@cairn-ink/memory` (initial version proposed at 0.1.0)
+  with `setup`, `setup --dry-run` and `status` for the repo's plugin and hooks.
+- Use a hidden PAT prompt and Claude Code stdin configuration when available,
+  otherwise exact manual instructions. Legacy MCP removal needs confirmed
+  plugin configuration and affirmative user consent.
+- Add fake-CLI tests and a release checklist. No publication, tag, merge or
+  release is included in this preparation.
+
 ## Unreleased — Windows source installer
 
 - Run npm's JavaScript CLI with the current Node binary on Windows, keeping

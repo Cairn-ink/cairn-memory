@@ -12,6 +12,16 @@ changes, `ROADMAP.md`.
 
 ## Before opening a pull request
 
+For the dependency-free setup helper in `packages/setup`, run `npm run test:setup`
+on Node 22.16 and 24.15. It uses a fake `claude` on PATH and synthetic tokens,
+without real client configuration or hosted/model calls. Build with
+`npm pack --ignore-scripts` from the package directory and cross-check the file
+list against the archive listing. See [the release checklist](docs/npx-setup-release.md);
+the installer has its own version and release requires chichi's approval.
+
+This single-file suite runs directly through the owned runner's `--script` mode;
+`node:test` still executes all assertions and reports its actual exit status.
+
 Ordinary offline `npm test` and `test:*` suites use
 `tools/testing/run.mjs`, which gives each invocation a fresh owned temporary
 directory and removes it after the test processes finish, including assertion
