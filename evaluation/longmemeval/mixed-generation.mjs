@@ -56,6 +56,22 @@ const LOCAL_REASONS = new Set(['planner_mismatch', 'ingestion_incomplete', 'reca
   'question_context_exceeded', 'answer_token_count_unavailable', 'invalid_answer_units']);
 const reasonOf = (error, fallback) => error instanceof MixedComparisonError
   && LOCAL_REASONS.has(error.code) ? error.code : fallback;
+// Project only the trusted local core's finite recall vocabulary. Unknown
+// causes stay unavailable; messages and arbitrary provider codes never escape.
+const RECALL_ERROR_CODES = new Set(['invalid_input', 'invalid_read_set',
+  'model_not_configured', 'model_timeout', 'model_cancelled',
+  'context_budget_exceeded', 'token_count_unavailable', 'invalid_model_output',
+  'recall_failed', 'revision_conflict', 'context_item_too_large',
+  'storage_busy', 'storage_error']);
+
+export function projectMixedRecallErrorCode(error) {
+  try {
+    if (!error || typeof error !== 'object') return null;
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'code');
+    return descriptor?.enumerable && Object.hasOwn(descriptor, 'value')
+      && RECALL_ERROR_CODES.has(descriptor.value) ? descriptor.value : null;
+  } catch { return null; }
+}
 const arm = name => ({ name, status: 'blocked', reason: 'not_started', answer: null,
   scope: null, diagnostics: {} });
 const scopeOf = guard => {
@@ -315,7 +331,12 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
       limit: 6, contextMode: 'source-evidence', selectionMode: 'bounded-source-scan' });
     // The observation ends at recall, before provenance checking or answer calls.
     witness?.finish(recalled);
-    if (recalled?.ok !== true) { revokeSemanticOnly(handle, guard, allowedLocalOrdinals); fail('recall_failed'); }
+    if (recalled?.ok !== true) {
+      revokeSemanticOnly(handle, guard, allowedLocalOrdinals);
+      return { failed: 'recall_failed', diagnostics: { stage: 'execution',
+        modelDiagnostics: { ...modelDiagnostics.snapshot(),
+          recallErrorCode: projectMixedRecallErrorCode(recalled?.error) } } };
+    }
     let evidence;
     try { evidence = verifiedEvidence(recalled.value,
       input => core.get(input), plan, row.namespace); }
