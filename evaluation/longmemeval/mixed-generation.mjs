@@ -53,7 +53,8 @@ const SCOPE_DOMAIN = 'cairn.lme.mixed-source-pair.scope.v1';
 const LOCAL_REASONS = new Set(['planner_mismatch', 'ingestion_incomplete', 'recall_failed',
   'invalid_recall_provenance', 'provenance_limit_exceeded', 'invalid_native_result',
   'invalid_mixed_completion', 'invalid_mixed_usage', 'mixed_usage_unsettled',
-  'question_context_exceeded', 'answer_token_count_unavailable', 'invalid_answer_units']);
+  'question_context_exceeded', 'answer_token_count_unavailable', 'invalid_answer_units',
+  'native_response_disconnect']);
 const reasonOf = (error, fallback) => error instanceof MixedComparisonError
   && LOCAL_REASONS.has(error.code) ? error.code : fallback;
 // Project only the trusted local core's finite recall vocabulary. Unknown

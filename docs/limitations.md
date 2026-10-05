@@ -1,5 +1,17 @@
 # Known limitations
 
+The [accounted native response-disconnection correction](plans/native-settled-write-disconnect.md)
+locally seals native work only for an identified EPIPE on the connection whose
+bounded, validated provider response has a successful priced settlement in the
+current scope. It records `native_response_disconnect`, keeps the arm unresolved
+and unjudged, and permits later work only after existing cleanup and accounting
+checks pass. A provider settlement or response finish does not establish native
+receipt or ingestion. Genuine synthetic UDS failures and controlled-child mixed
+journal/scoring tests establish this failure class; an installed-native healthy
+fake-provider gate is separate evidence. The original closed run recorded only
+`other`, so its exact cause remains unknown and its results are unchanged. This
+correction adds no retry, paid-run grant, semantic score or performance claim.
+
 Token-fit indexed preparation preserves all source bytes but may split a batch
 that the legacy qualified-prefix planner leaves whole. The prefix/indexed source
 pair now binds exact shared ordered source identity and each arm's distinct frozen
