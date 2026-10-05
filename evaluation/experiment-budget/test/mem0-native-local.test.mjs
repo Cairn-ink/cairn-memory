@@ -9,6 +9,8 @@ import { checkedMem0NativeArtifact, inspectMem0NativeArtifact } from '../mem0-na
 import { mem0NativeConfiguration, runMem0NativeCase } from '../mem0-native-gateway.mjs';
 import { bubblewrapArguments, runNativeGatewayKernel } from '../mem0-native-runtime.mjs';
 import { nativeFakeProvider, nativeFixture } from './mem0-native-fixture.mjs';
+// Register the installed native timeout/reconnect regressions in the canonical gate.
+import '../testing/native-http-timeout.test.mjs';
 
 function installed() {
   const venvRoot = process.env.CAIRN_MEM0_NATIVE_VENV_ROOT;

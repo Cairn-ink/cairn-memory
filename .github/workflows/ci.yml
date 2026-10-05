@@ -182,6 +182,7 @@ jobs:
           cache-dependency-path: adapters/openai/package-lock.json
       - run: npm ci --prefix adapters/openai
       - run: npm run test:experiment-request-guard
+      - run: npm run test:mem0-native-gateway
       - run: npm run demo:experiment-request-guard
 
   plugin-validation:

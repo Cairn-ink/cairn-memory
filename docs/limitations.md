@@ -1602,3 +1602,46 @@ are retained in the [round 2 handoff](plans/codex-client.md#cx-4-round-2-決策�
 A file-level pass from a broken worker pipe is not evidence of case-level success;
 hung or failed CI commands require a rerun in the ordinary CI environment.
 The existing round 1 results do not qualify the revised round 2 implementation.
+
+## Native HTTP timeout synthetic diagnosis
+
+The [bounded offline diagnosis](plans/native-http-timeout-diagnosis.md) uses the
+actual pinned Mem0 child, containment kernel, genuine synthetic v3 guard and
+fake HTTP. Deliberately pausing only the authenticated owned interpreter after
+a priced response reproduces native_http_timeout followed by callback_failed,
+an active scope snapshot with no appended outcome, and a global halt. All
+admitted requests can be terminal and priced while that native safety halt
+still applies. The fixture independently checks child/process-group exit,
+transport closure and owned socket/store removal.
+
+Both pinned Node runtimes replace the configured socket inactivity timeout
+after a response with their default six-second internal keep-alive deadline.
+The kernel's existing timeout handler treats that idle expiry as a native
+global fault. The retained baseline control establishes this mechanism under
+deliberate synthetic starvation. The native relay now returns standard
+Connection: close for each validated guard response, so Node orderly closes
+that completed IPC socket. The pinned SDK reconnects without replaying a
+request. Both supported Node versions' actual production paths complete
+add/get/search after an authenticated eight-second interpreter pause with the
+same four request bodies/order/count as the persistent-socket control, terminal
+priced accounting and checked child/group/transport/root closure. An indefinite
+pause instead reaches the unchanged native child watchdog and cancels locally.
+
+Malformed accepted JSON and fully parsed pipelined requests retain global
+faults. Unaccepted partial next-header bytes may be discarded after the standard
+completed response closes its connection; no additional request is accepted or
+purchased. Fresh/no-request idle sockets, active requests, parser faults,
+unknown accounting and failed containment retain their existing safety checks.
+This bounded fix does not prove that starvation, a particular idle socket or
+this timing mechanism caused any closed paid run, nor justify localizing native
+failure solely from terminal accounting. Normal native execution and authentic
+X deadline remain distinct controls. Existing timeout classifications, budgets,
+provider/child timers, retries and scorers are unchanged. The work supplies no
+paid score, original-case replay, refund or new spending authority.
+
+Finite timing/control observations exist only in synthetic test diagnostics.
+No journal, product API, production stderr capture or operational ledger field
+is added. Tests project only trusted allowlisted exception codes, finite counts,
+booleans and elapsed values after cleanup; source/query/provider prose, headers,
+credentials, real identifiers, raw exception messages and stacks are excluded.
+Synthetic request bodies are compared in memory, not exported as observations.

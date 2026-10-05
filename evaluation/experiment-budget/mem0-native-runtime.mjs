@@ -288,8 +288,10 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
         const result = Buffer.from(await checked.arrayBuffer());
         if (result.length > profile[route].maxResponseBytes) fail('native_response_invalid');
         if (!response.destroyed) {
+          // Close the completed IPC response so an unused pooled socket cannot
+          // trigger a keep-alive timeout while native work continues locally.
           response.writeHead(checked.status, { 'content-type': 'application/json',
-            'content-length': result.length });
+            'content-length': result.length, connection: 'close' });
           response.end(result);
         } else fail('native_response_disconnect');
       } catch (error) {

@@ -193,6 +193,12 @@ skip. Both suites use new synthetic ledgers and fake HTTP; the
 local gate imports installed Mem0 but never uses a provider key or operational
 ledger. This is containment/accounting verification, not permission to spend.
 
+The portable native-gateway suite runs in the existing request-guard CI matrix.
+It uses real UDS, synthetic artifacts, controlled children and host Python 3
+standard library, with no installed Mem0, bwrap, provider key or paid call.
+That CI step does not replace the mandatory explicit installed-native LOCAL
+gate above, including its timeout/reconnect and containment regressions.
+
 For the controlled mixed Cairn/Mem0 runner, additionally run
 `npm run demo:longmemeval-mixed` and the explicit `npm run test:mixed-native-local`
 on Node 22.16 and 24.15 after `npm ci --prefix adapters/openai`. The demo is
