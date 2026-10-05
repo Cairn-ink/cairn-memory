@@ -7,6 +7,15 @@ changes below. Current local storage and deletion boundaries are documented in
 injected model adapter can send source text to its provider. Local storage alone
 is not a promise of offline interpretation.
 
+Optional local model diagnostics retain only the frozen four-field finite
+`{version,stage,layer,reason}` event. Prospective extraction-text subtype codes
+describe existing type, Unicode, bound, normalization/redaction and NUL checks;
+they retain no rejected text, values, lengths, IDs, hashes or errors. Historical
+`invalid_extraction_text` events remain subtype-unknown. Collection is disabled
+by default and host-owned; hosts must bound retention. It is never telemetry or
+authority to retry.
+See [model failure diagnostics](model-failure-diagnostics.md).
+
 The main risk in automatic memory is not bad retrieval. It is silently collecting more than the user intended or presenting an inference as trusted fact. Cairn Memory treats capture as a narrow, inspectable boundary.
 
 ## Data flow
