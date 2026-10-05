@@ -16,6 +16,12 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [offline write diagnosis gate](docs/plans/write-failure-diagnosis.md)
+  exercises actual core/OpenAI capture with fake HTTP, synthetic ordinary-v1
+  ledger cardinality and owned-fixture cleanup. Historical failure causes,
+  mixed-profile representativeness, paid completion and semantic scores remain
+  open; production runtime and stop policies are unchanged.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It
