@@ -8,6 +8,10 @@ the npm registry; no public `npx` command or named-client compatibility is claim
 
 With Node >=22.16, npm and `tar`, run from the repository root:
 
+Windows PowerShell users should follow the [Windows setup guide](../docs/windows-install.md),
+which uses an absolute Windows target and the executable recorded in the private
+receipt. The following example uses a Linux/WSL path.
+
 ```sh
 npm run install:preview -- --directory /absolute/new/cairn-local --owner local-user
 ```
@@ -34,7 +38,8 @@ the failure. It does not recursively remove files. Never delete the whole target
 to upgrade: preserve `data/` and backups, and operate on `app/` using the manual
 upgrade instructions below. The preview trusts local process/filesystem access;
 owner labels are not OS access control. POSIX permissions are not a Windows ACL
-guarantee. No cross-platform compatibility is claimed beyond recorded tests.
+guarantee. See the [bounded native Windows check](../docs/evidence/windows-install.md);
+cross-platform compatibility remains limited to recorded tests.
 
 ## Opt in to submitted source capture
 

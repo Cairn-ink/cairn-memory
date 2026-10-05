@@ -48,6 +48,15 @@ one additional real synthetic tool transcript, with edited display timing.
 The unfamiliar-human installation and five-reader comprehension checks remain
 pending. This batch changes no extraction-quality or broad-promotion gate.
 
+The later [2026-10-05 native Windows check](evidence/windows-install.md) verifies
+source installation and the six-stage keyless SDK lifecycle on Windows x64 with
+Node 24.15.0 after correcting npm CLI launch and CRLF archive parsing. It is
+agent-operated and separate from the reader's report of installing after manual
+changes. It does not establish named chat-client compatibility, Windows ACL
+privacy, semantic recall or long-term retention quality. The POSIX maintainer
+test runner remains unsupported on Windows; the focused native check owns its
+own scratch and cleanup.
+
 The section below is the text that opened the README until 2026-09-18, moved
 here unchanged apart from link paths and the bold lead-in becoming this section's heading.
 

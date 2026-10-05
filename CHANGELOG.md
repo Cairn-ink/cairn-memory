@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — Windows source installer
+
+- Run npm's JavaScript CLI with the current Node binary on Windows, keeping
+  installation paths out of a shell, and accept CRLF archive-list output.
+- Add a native Windows source-install and model-free SDK walkthrough check,
+  including restart persistence, source inspection, correction and forgetting.
+
 ## 0.3.0 — Unreleased
 
 - Add optional trusted host conversation `session_id` to recall so existing

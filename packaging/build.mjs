@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -19,6 +19,24 @@ const extraFiles = [
 ];
 
 // npm receives no application environment, credentials or project npm config.
+// Windows npm.cmd is a shell wrapper. Run its JavaScript entry point with the
+// current Node binary instead, keeping paths and arguments out of a shell.
+export function commandInvocation(executable, args, {
+  platform = process.platform, execPath = process.execPath, npmExecPath = process.env.npm_execpath,
+} = {}) {
+  if (executable !== 'npm' || platform !== 'win32') return { executable, args };
+  const candidates = [npmExecPath, join(dirname(execPath), 'node_modules/npm/bin/npm-cli.js')];
+  for (const path of candidates) {
+    if (typeof path !== 'string' || !isAbsolute(path) || !path.endsWith('npm-cli.js')) continue;
+    try {
+      if (statSync(path).isFile()) return { executable: execPath, args: [path, ...args] };
+    } catch (error) {
+      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+    }
+  }
+  throw new Error('artifact_npm_cli_not_found');
+}
+
 export function command(executable, args, cwd, userconfig) {
   const temp = {};
   for (const key of ['TMPDIR', 'TMP', 'TEMP']) {
@@ -29,7 +47,8 @@ export function command(executable, args, cwd, userconfig) {
     }
     temp[key] = value;
   }
-  const result = spawnSync(executable, args, { cwd, encoding: 'utf8', timeout: 120000,
+  const invocation = commandInvocation(executable, args);
+  const result = spawnSync(invocation.executable, invocation.args, { cwd, encoding: 'utf8', timeout: 120000,
     maxBuffer: 4 * 1024 * 1024, env: { PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ''}`,
       ...temp,
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
@@ -58,7 +77,7 @@ function productionLock(manifest) {
   return { name: manifest.name, version: manifest.version, lockfileVersion: 3, requires: true, packages };
 }
 
-export function buildArtifact({ version = packageVersion } = {}) {
+export function buildArtifact({ version = packageVersion, runCommand = command } = {}) {
   if (!/^0\.0\.0-preview\.[1-9]\d*$/.test(version)) throw new Error('invalid_preview_version');
   const directory = mkdtempSync(join(tmpdir(), 'cairn-local-artifact-'));
   const stagingPath = join(directory, 'staging');
@@ -87,12 +106,12 @@ export function buildArtifact({ version = packageVersion } = {}) {
     dependencies: { '@modelcontextprotocol/server': '2.0.0', zod: '4.5.4', tiktoken: '1.0.22' } };
   writeFileSync(join(stagingPath, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
   writeFileSync(join(stagingPath, 'npm-shrinkwrap.json'), JSON.stringify(productionLock(manifest), null, 2) + '\n');
-  const packed = JSON.parse(command('npm', ['pack', '--offline', '--ignore-scripts', '--json',
+  const packed = JSON.parse(runCommand('npm', ['pack', '--offline', '--ignore-scripts', '--json',
     '--pack-destination', directory], stagingPath, userconfig));
   if (packed.length !== 1 || packed[0].filename !== `${packageName}-${version}.tgz`) throw new Error('unexpected_artifact_name');
   const artifactPath = join(directory, packed[0].filename);
-  const archiveFiles = command('tar', ['-tzf', artifactPath], stagingPath, userconfig)
-    .trim().split('\n').map((path) => {
+  const archiveFiles = runCommand('tar', ['-tzf', artifactPath], stagingPath, userconfig)
+    .trim().split(/\r?\n/).map((path) => {
       if (!path.startsWith('package/')) throw new Error('unexpected_archive_prefix');
       return path.slice('package/'.length);
     }).sort();

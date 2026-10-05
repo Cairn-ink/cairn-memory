@@ -71,7 +71,7 @@ authentication.
 | You want to… | Start here | What you need |
 | --- | --- | --- |
 | Understand the idea before installing | [繁體中文](README.zh-TW.md) or the [recorded walkthrough](#watch-the-recorded-walkthrough) | No installation or account |
-| Try the open-source tools on your computer | [Local preview setup](#try-the-local-memory-layer) | Terminal setup; installation checks cover Linux x64; no Cairn account |
+| Try the open-source tools on your computer | [Local preview setup](#try-the-local-memory-layer) or [Windows guide](docs/windows-install.md) | Terminal setup; Linux x64 and a bounded native Windows x64 check; no Cairn account |
 | Use the documented hosted Claude Code or Codex connection | [Hosted setup](#existing-hosted-integration) | A compatible hosted service and authentication; separate from local-preview client support |
 | Build on the memory layer | [Architecture](docs/architecture.md) and [MCP tools](docs/standalone-mcp.md) | JavaScript or MCP integration work |
 
@@ -96,6 +96,10 @@ requires your OpenAI key and sends selected context to that provider.
 [Watch the 36-second model-free demo (MP4)](docs/promotion/demo/cairn-memory-preview.mp4).
 This records the memory tools running, rather than a conversation in Claude or
 Codex. “Model-free” means no AI model is called during the walkthrough.
+
+For long-conversation results, see the [four-case real-model pilot](docs/evidence/long-history-live-pilot.md).
+It is an opt-in diagnostic with one failed Cairn answer, not a measurement of
+long-term default-client recall reliability. [Known limitations](docs/limitations.md)
 
 <details>
 <summary>Open the recorded tool walkthrough (GIF)</summary>
@@ -123,8 +127,11 @@ Choose the mode that fits your workflow:
 
 ## Try the local memory layer
 
-Prerequisites: **Git, Node >=22.16, npm and `tar`**. Recorded installation tests
-cover Linux x64; other platforms are unverified. Install from this repository:
+Prerequisites: **Git, Node >=22.16, npm and `tar`**. Recorded checks cover Linux
+x64 and a [bounded native Windows x64 installation](docs/evidence/windows-install.md).
+**On Windows, use the [PowerShell setup and walkthrough](docs/windows-install.md)**;
+the commands below use Linux/WSL paths. Other platforms are unverified.
+Install from this repository:
 the unscoped npm and PyPI packages named `cairn-memory` are unrelated projects.
 The local archive is not published to npm yet.
 

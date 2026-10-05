@@ -9,6 +9,21 @@ permissions:
   contents: read
 
 jobs:
+  windows-preview:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        node-version: ['22.16.0', 24]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm ci --prefix adapters/mcp --ignore-scripts
+      # The POSIX suite runner is unsupported here. This focused native test
+      # owns its scratch and never reads provider keys or makes model calls.
+      - run: node --test packaging/test/build-command.test.mjs packaging/test/windows-preview.test.mjs
+
   live-evidence-offline:
     runs-on: ubuntu-latest
     strategy:
