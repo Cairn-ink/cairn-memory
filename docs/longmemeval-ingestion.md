@@ -32,8 +32,17 @@ Each planned batch is checked against the actual capture input validator:
 at most 24 messages, 4,000 normalized UTF-16 units per message and 20,000 total,
 while respecting the separate raw-input bound. A blocker prevents the entire
 case from executing; no invalid turn is silently dropped to obtain a pass.
-These are structural limits, not token counts. The model context check can
-still reject a batch, and splitting may lose cross-chunk reasoning context.
+The legacy and qualified-prefix plans establish structural limits, not token
+counts. Indexed-window and indexed-evidence v2 plans also use the core's shared
+pure whole-message planner with the pinned OpenAI local counter, measuring the
+exact extraction envelope against 6,000 tokens. They preserve session and
+structural boundaries, source message identities, raw coordinates and order,
+while rebuilding dense batch/window indices and versioned batch event IDs.
+A message that does not fit alone adds `extraction_message_oversized` and blocks
+the entire case; its source is retained rather than silently dropped.
+`modelContextFitEstablished` on indexed plans describes local extraction only;
+provider wire framing and downstream model calls can still fail. Splitting may
+lose cross-chunk reasoning context and increase request/cost ceilings.
 The adapter does not raise limits or claim unchanged semantic quality.
 
 A credential split across chunks could evade a per-message redactor. If a turn
@@ -111,7 +120,7 @@ ingestion path continue to use their original digest and response contract.
 `planIndexedEvidenceLongMemEvalCase` and `ingestIndexedEvidenceLongMemEvalCase`
 reuse that exact indexed partition/source map for a trusted core opened with
 `captureSourcePolicy: 'indexed-evidence-v1'` and omitted enrichment options.
-The separate `cairn-longmemeval-indexed-evidence-ingestion-plan-v1` binds the
+The separate `cairn-longmemeval-indexed-evidence-ingestion-plan-v2` binds the
 actual evidence-lane replay digest. Every success (including processing,
 duplicate and partial classification) requires the exact source catalog plus
 `qualificationStatus: 'not-requested'`; ordinary qualified responses and extra

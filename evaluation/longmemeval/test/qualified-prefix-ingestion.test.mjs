@@ -35,7 +35,8 @@ test('Q1/Q2 fixed-base complete legacy and indexed plan hashes, shared identity,
   const indexed = planIndexedWindowLongMemEvalCase({ history, namespace });
   const qualified = plan(history);
   assert.equal(sha(legacy), 'f5af56cf2a719b373428ad52ad9c2b95c9e3397d031bdd9939e363f292b3841e');
-  assert.equal(sha(indexed), '07569388926df67d2ad5df01dcd8a1aeeb78412a66e01dfcf2ce82eafba4babb');
+  assert.equal(sha(indexed), '9acabd8a7b971fa366e4a76046cee848bb4d9f1dbd89d67f6e863455279392f6');
+  assert.notEqual(sha(indexed), '07569388926df67d2ad5df01dcd8a1aeeb78412a66e01dfcf2ce82eafba4babb');
   assert.equal(qualified.schemaVersion, QUALIFIED_PREFIX_INGESTION_PLAN_SCHEMA_VERSION);
   assert.equal(qualified.captureQualification, 'source-bound-v2');
   assert.equal(qualified.captureSourcePolicy, 'retained-prefix-v1');

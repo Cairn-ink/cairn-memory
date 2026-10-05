@@ -10,6 +10,7 @@ import { scoreMixedGeneration } from '../mixed-scoring.mjs';
 import { createMixedResultJournal, inspectMixedResultJournal, startMixedJournalPhase,
   enterMixedJournalArm, recordMixedJournalArm } from '../mixed-result-journal.mjs';
 import { isMixedNativeFailure } from '../mixed-native-failure-shape.mjs';
+import { planIndexedWindowLongMemEvalCase } from '../ingestion.mjs';
 import { canonical, freeze, hash, reportSnapshot } from '../mixed-validation.mjs';
 import { evaluatorRow, fakeMixedHttp, sourceRow, syntheticMixedFixture } from '../testing/mixed-fixture.mjs';
 import { interruption, syntheticNativeDescriptors,
@@ -24,11 +25,19 @@ function fixtureFor(t, { order = ['cairn', 'mem0'], preflight = false, override,
   const workspace = createTestWorkspace(t, { prefix: 'cairn-result-journal-' });
   const descriptors = syntheticNativeDescriptors(workspace.path);
   const row = sourceRow();
-  if (preflight) row.history.sessions[0].turns = Array.from({ length: 5 }, (_, index) => ({
-    turn_id: `lme-turn-${String(index + 1).repeat(64)}`, role: 'user', content: '漢'.repeat(3000) }));
+  // A whole singleton must still fail after token-fit partitioning. The former
+  // five fitting turns now correctly split and no longer establish preflight denial.
+  if (preflight) row.history.sessions[0].turns = [{
+    turn_id: `lme-turn-${'1'.repeat(64)}`, role: 'user', content: '㐀'.repeat(4000) }];
   const fake = fakeMixedHttp(override);
   const fixture = syntheticMixedFixture(null, { ...descriptors, sourceCases: [row],
     armOrders: [order], fetchImpl: fake.fetchImpl, comparisonProfile, workspace });
+  if (preflight) {
+    assert.equal(fixture.prepared.preflight[0].status, 'failed');
+    assert.equal(fixture.prepared.preflight[0].reason, 'planner_limit_exceeded');
+    assert.ok(planIndexedWindowLongMemEvalCase({ history: row.history,
+      namespace: row.namespace }).blockers.some(blocker => blocker.code === 'extraction_message_oversized'));
+  }
   const directory = join(workspace.path, 'journal');
   return { ...fixture, descriptors, row, workspace, fake, directory,
     journal: () => createMixedResultJournal({ directory, prepared: fixture.prepared }) };

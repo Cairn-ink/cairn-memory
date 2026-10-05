@@ -16,7 +16,13 @@ test('E7 actual installed core/adapter evidence capture is cold-readable; qualif
       artifact.artifactPath], root, artifact.userconfig);
     const installed = join(root, 'node_modules', packageName);
     const { openMemoryCore } = await import(pathToFileURL(join(installed, 'core/index.mjs')).href);
-    const { createOpenAIModel } = await import(pathToFileURL(join(installed, 'adapters/openai/index.mjs')).href);
+    const { createOpenAIModel, countOpenAITokens } = await import(pathToFileURL(join(installed, 'adapters/openai/index.mjs')).href);
+    const { planCaptureMessageBatches } = await import(pathToFileURL(join(installed, 'core/capture-batch-planning.mjs')).href);
+    assert.ok(artifact.files.includes('core/capture-batch-planning.mjs'));
+    const planned = planCaptureMessageBatches({ messages: [0, 1].map(index => ({ id: `message-${index}`,
+      role: 'user', content: '中'.repeat(3200) })) },
+    { model: { countTokens: countOpenAITokens }, captureSourcePolicy: 'indexed-evidence-v1' });
+    assert.deepEqual(planned, { batches: [[0], [1]], oversizedMessageIndices: [] });
     const namespace = { ownerId: 'installed-evidence-test', scope: 'personal', projectId: null };
     const tail = 'TAIL: synthetic Friday-only trip.';
     const request = { namespace, client: 'synthetic', sessionId: 'session', eventId: 'batch',

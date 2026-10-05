@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 
 import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
-import { planIndexedWindowLongMemEvalCase, planIndexedEvidenceLongMemEvalCase } from './ingestion.mjs';
+import { INDEXED_BATCHING_POLICY, planIndexedWindowLongMemEvalCase,
+  planIndexedEvidenceLongMemEvalCase } from './ingestion.mjs';
 
-export const MIXED_SOURCE_VERSION = 'cairn-lme-mixed-source-v2';
+export const MIXED_SOURCE_VERSION = 'cairn-lme-mixed-source-v3';
 const CASE_ID = /^lme-case-[a-f0-9]{64}$/u;
 const SESSION_ID = /^lme-session-[a-f0-9]{64}$/u;
 const TURN_ID = /^lme-turn-[a-f0-9]{64}$/u;
@@ -51,6 +52,7 @@ const policyBody = freeze({ version: MIXED_SOURCE_VERSION,
   rendering: { prefix: '[session-date: ${YYYY-MM-DD HH:mm}; clock: dataset-local] source{',
     suffix: ' }', roles: ['user', 'assistant'],
     chunks: 'greedy-longest-capture-stable-code-point-prefix;full-turn-first' },
+  batching: INDEXED_BATCHING_POLICY,
   limits: { inputUtf8Bytes: MAX_INPUT_BYTES, traversalDepth: MAX_DEPTH, traversalNodes: MAX_NODES,
     sessions: MAX_SESSIONS, originalTurns: MAX_TURNS, messageUtf16: MAX_MESSAGE,
     partitionProbeUtf16: MAX_PARTITION_PROBE_UTF16,

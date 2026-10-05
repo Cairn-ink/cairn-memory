@@ -676,9 +676,10 @@ test('M12a valid P batch over native 8192-token serialization denies both arms w
   async t => {
     assert.ok(process.env.CAIRN_MEM0_NATIVE_VENV_ROOT && process.env.CAIRN_MEM0_NATIVE_PYTHON_ROOT);
     const row = sourceRow();
-    row.history.sessions[0].turns = Array.from({ length: 5 }, (_, index) => ({
-      turn_id: `lme-turn-${String(index + 1).repeat(64)}`, role: 'user',
-      content: '漢'.repeat(3000) }));
+    // U+85DD is one o200k token but three cl100k tokens. Preserve the native
+    // serialization denial despite Cairn's independently fitting new partition.
+    row.history.sessions[0].turns = [{
+      turn_id: `lme-turn-${'1'.repeat(64)}`, role: 'user', content: '藝'.repeat(3900) }];
     const source = prepareMixedSourceCase(row);
     assert.equal(source.cairnPlan.executable, true);
     assert.equal(source.mem0Input.batches.length, 1);

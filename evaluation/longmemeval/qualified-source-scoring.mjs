@@ -80,7 +80,6 @@ function validateProtocol(protocol, code = 'invalid_protocol') {
     || protocol.limits.recallLimit > 12 || protocol.limits.answerTimeoutMs > 2_147_483_647) fail(code);
   if (!dense(protocol.armOrder, 2) || new Set(protocol.armOrder).size !== 2
     || NAMES.some((name) => !protocol.armOrder.includes(name)) || !dense(protocol.arms, 2)) fail(code);
-  let batchCount;
   for (const [index, arm] of protocol.arms.entries()) {
     exactObject(arm, ['name', 'scopeId', 'captureSourcePolicy', 'planSchemaVersion',
       'payloadDigests'], code);
@@ -91,12 +90,10 @@ function validateProtocol(protocol, code = 'invalid_protocol') {
       || arm.captureSourcePolicy !== (prefix ? 'retained-prefix-v1' : 'indexed-windows-v1')
       || arm.planSchemaVersion !== (prefix
         ? 'cairn-longmemeval-qualified-prefix-ingestion-plan-v1'
-        : 'cairn-longmemeval-indexed-window-ingestion-plan-v1')
+        : 'cairn-longmemeval-indexed-window-ingestion-plan-v2')
       || !Array.isArray(arm.payloadDigests)
       || !dense(arm.payloadDigests, arm.payloadDigests.length)
       || arm.payloadDigests.some((digest) => digest !== null && !HEX.test(digest))) fail(code);
-    if (batchCount !== undefined && arm.payloadDigests.length !== batchCount) fail(code);
-    batchCount = arm.payloadDigests.length;
   }
   const { digest, ...withoutDigest } = protocol;
   if (digest !== hash('cairn.lme.source-pair.protocol.v1', withoutDigest)) fail(code);

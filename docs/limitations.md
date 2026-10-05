@@ -1,5 +1,12 @@
 # Known limitations
 
+Token-fit indexed preparation preserves all source bytes but may split a batch
+that the legacy qualified-prefix planner leaves whole. The prefix/indexed source
+pair now binds exact shared ordered source identity and each arm's distinct frozen
+partition; it is not a pure source-window-only ablation. This does not change the
+identical Cairn/Mem0 message partition or authorize a paid run. See
+[the qualified source-pair boundary](qualified-source-pair.md).
+
 The [current-engine scoring integration](plans/current-engine-score.md) ports
 the accepted shared-core NULL-title structural reuse repair onto the compatible
 prospective evaluation base. Reuse does not restore a label's source validity
@@ -1361,6 +1368,22 @@ or planning, and capture batches are planned. See
   call, and retrying the same batch refuses again. Hosts plan batches with
   `core.planCaptureBatches`, which splits only between whole messages. Hosted
   and MCP capture tools do not call it for you yet.
+- **Indexed evaluation planning establishes only local extraction fit.**
+  Indexed-window and indexed-evidence LongMemEval ingestion use the same pure
+  whole-message planner with the pinned OpenAI local counter. The former
+  structural partition could exceed the 6,000-token extraction guard: a
+  closed, unscored comparison stopped after 41 completed batches, and its next
+  request measured 6,652 tokens. This request contained only that batch's
+  windows, not accumulated MOC context. The new partition preserves source
+  coordinates and orders, changes versioned event identities, and is frozen
+  for both mixed arms before resource authorization. A nonfitting singleton
+  blocks the whole case with its source retained; nothing is discarded or
+  retried. `modelContextFitEstablished` on these indexed plans means the local
+  extraction envelope fits, not provider wire framing, output availability,
+  qualification/classification/recall fit or semantic reliability. Smaller
+  batches can change extraction context and increase requests and cost.
+  Historical results are not replayed or scored by this correction. The native
+  HTTP failure that separately halted that comparison is outside this fix.
 - **Episode targets degrade differently.** When an episode's own new messages
   cannot fit one interpretation request, the attempt records gap code
   `context_budget_exceeded` and the same batch is still admitted as memories.

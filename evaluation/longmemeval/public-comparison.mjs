@@ -4,7 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { INGESTION_CLIENT, INDEXED_WINDOW_CAPTURE_QUALIFICATION, INDEXED_WINDOW_CAPTURE_SOURCE_POLICY,
   ingestIndexedWindowLongMemEvalCase, ingestLongMemEvalCase, ingestQualifiedPrefixLongMemEvalCase,
   planIndexedWindowLongMemEvalCase, planLongMemEvalCase, planQualifiedPrefixLongMemEvalCase,
-  projectIngestionFailure } from './ingestion.mjs';
+  projectIngestionFailure, ingestionSourceProjection } from './ingestion.mjs';
 import { canonicalStoredReceiptExcerpt } from './receipt-canonicalization.mjs';
 import { createShapeValidators, deepFreeze, isPlainObject, validString } from './validation.mjs';
 
@@ -145,10 +145,8 @@ function pairData(options, runner) {
     prefix = planQualifiedPrefixLongMemEvalCase({ history, namespace });
     indexed = planIndexedWindowLongMemEvalCase({ history, namespace });
   } catch { fail('invalid_history'); }
-  if (!isDeepStrictEqual(prefix.batches.map((batch) => batch.captureInput),
-    indexed.batches.map((batch) => batch.captureInput))
-    || !isDeepStrictEqual(prefix.batches.map((batch) => batch.sourceMap),
-      indexed.batches.map((batch) => batch.sourceMap))) fail('plan_mismatch');
+  const sharedSource = ingestionSourceProjection(prefix);
+  if (!isDeepStrictEqual(sharedSource, ingestionSourceProjection(indexed))) fail('plan_mismatch');
   const descriptors = PAIR_ARM_NAMES.map((name) => {
     const plan = name === 'qualified-prefix' ? prefix : indexed;
     return { name, scopeId: 'lme-case-' + protocolHash('cairn.lme.source-pair.scope.v1',
@@ -161,8 +159,8 @@ function pairData(options, runner) {
     namespace, answerModel: raw.answerModel, templateVersion: PUBLIC_ANSWER_TEMPLATE_VERSION_V2,
     limits, armOrder, captureQualification: INDEXED_WINDOW_CAPTURE_QUALIFICATION,
     historyDigest: protocolHash('cairn.lme.source-pair.history.v1', prefix.sourceTurns),
-    sourceMapDigest: protocolHash('cairn.lme.source-pair.source-map.v1',
-      prefix.batches.map((batch) => batch.sourceMap)), arms: descriptors };
+    sourceMapDigest: protocolHash('cairn.lme.source-pair.source-map.v2',
+      sharedSource.sourceMap), arms: descriptors };
   protocol.digest = protocolHash('cairn.lme.source-pair.protocol.v1', protocol);
   let ports = null;
   if (runner) {

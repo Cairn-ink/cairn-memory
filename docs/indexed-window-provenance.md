@@ -15,18 +15,24 @@ caller. Use an explicitly configured core opened with both
 `captureQualification: 'source-bound-v2'` and
 `captureSourcePolicy: 'indexed-windows-v1'`. No automatic mode selection occurs.
 
-Planning retains the deterministic source partition, case namespace, capture
-client, event/message IDs, raw UTF-16 source map and original date/role. For each
+Planning retains the case namespace, capture client, message IDs, raw UTF-16
+source map and original date/role. It partitions whole messages within each
+session/structural batch using the shared core planner and exact OpenAI local
+counter, and derives batch event IDs in a new token-fit identity domain. For each
 batch it snapshots the exact submitted capture input in the indexed policy
 domain before a callback, records that domain's payload digest, and builds the
 core's bounded, host-derived window catalog from the normalized/redacted
 snapshot. The plan has schema
-`cairn-longmemeval-indexed-window-ingestion-plan-v1` and explicitly identifies
+`cairn-longmemeval-indexed-window-ingestion-plan-v2` and explicitly identifies
 the qualification and source policy. A catalog failure adds
 `indexed_window_preflight_failed` and blocks the entire case before any capture
-callback; it does not shorten, rebatch, retry or fall back to prefix mode.
-This is structural preparation, not proof that model input fits a provider
-context window or that a later source fact will be extracted.
+callback; invalid catalogs are not repaired by partitioning or prefix fallback.
+A message whose extraction envelope exceeds 6,000 local tokens adds
+`extraction_message_oversized`; every source remains in the blocked plan.
+Indexed `modelContextFitEstablished` describes only that exact local extraction
+envelope. It does not establish provider wire framing, downstream model fit or
+that a later source fact will be extracted. Smaller batches can change model
+context and increase requests and cost. Old frozen plans are not resumed.
 
 Every indexed success response—including duplicate and processing—must carry
 the exact five-field `sourceWindowCatalog` metadata for that submitted batch.

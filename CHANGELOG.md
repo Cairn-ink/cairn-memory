@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — indexed evaluation batches fit local extraction
+
+- Indexed-window and indexed-evidence LongMemEval preparation now splits
+  whole messages using the core's shared planner and the exact OpenAI local
+  counter. It preserves source maps and uses new versioned batch identities;
+  an oversized single message blocks the case. Mixed Cairn/Mem0 preparation
+  freezes the same partition for both arms and recomputes resource bounds.
+  This establishes local extraction fit, not provider framing, downstream
+  model fit or semantic quality. Old results and legacy/prefix ingestion stay
+  unchanged. See the [TFI contract](docs/plans/token-fit-ingestion.md).
+  The qualified-prefix/indexed pair preserves exact ordered source identity but
+  may now use different frozen batch counts; it is not a window-only ablation.
+
 ## Unreleased — inert phase observer rejection correction
 
 - The optional OpenAI timing observer handles rejected native Promises even

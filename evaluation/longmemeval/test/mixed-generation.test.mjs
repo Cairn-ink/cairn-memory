@@ -142,7 +142,8 @@ test('M2/M3 source-only preparation freezes exact public projection and fixed ro
 
 test('M3 fixed protocol and scope golden is accepted by actual X authority', t => {
   // SHA256(JSON.stringify([domain, canonical-sorted value])); fixed sourceRow(),
-  // 1/2/3/5 descriptors, and Cairn-first schedule. These are literal goldens,
+  // 1/2/3/4 descriptors, Cairn-first schedule, and token-fit source policy v3.
+  // These are literal goldens,
   // not expected values recomputed with the production hash helper.
   const fixture = syntheticMixedFixture(t, { artifact: descriptors().nativeArtifact,
     configuration: descriptors().nativeConfiguration, sourceCases: [sourceRow()],
@@ -150,7 +151,10 @@ test('M3 fixed protocol and scope golden is accepted by actual X authority', t =
   try {
     const row = fixture.prepared.roster[0];
     assert.equal(row.protocolDigest,
-      '08d4f3804aeed541e17de13e37e3f4660d02a4bfb3eaa499714c378400bd6203');
+      '613fc5d50e30d9a0957671bb90c8e988b0836e755d7afa899ee51b9c86be632f');
+    assert.notEqual(row.protocolDigest,
+      '08d4f3804aeed541e17de13e37e3f4660d02a4bfb3eaa499714c378400bd6203',
+      'the old source policy cannot have the new prepared protocol identity');
     assert.deepEqual(row.arms.map(item => item.scopeId), [
       'lme-case-60944a186cb2b615f6b643cecc585fb79be01d6739b468228b46b0d88e1f9f73',
       'lme-case-15015798b217141bb54a70b1682ec77d61e7f16acf3ff4d7cdd99f7ec1698629',

@@ -76,6 +76,24 @@ const protocolDigest = (protocol) => {
   return digest(JSON.stringify(['cairn.lme.source-pair.protocol.v1', canonical(fields)]));
 };
 
+test('TFI4 unequal frozen partition counts score normally; coherently rehashed stale indexed v1 refuses', async () => {
+  const f = fixture('token-fit-source-pair');
+  for (const turn of f.options.history.sessions[0].turns) turn.content = '中'.repeat(3200);
+  const run = await runQualifiedSourcePair(f.options);
+  assert.deepEqual(run.protocol.arms.map(arm => arm.payloadDigests.length), [1, 2]);
+  assert.deepEqual(run.arms.map(arm => arm.status), ['completed', 'completed']);
+  const s = scoring(run, f.evaluator);
+  await scoreQualifiedSourcePair(s.options);
+  assert.equal(s.scopes.length, 2);
+  const stale = clone(run.protocol);
+  stale.arms[1].planSchemaVersion = 'cairn-longmemeval-indexed-window-ingestion-plan-v1';
+  stale.digest = protocolDigest(stale);
+  const denied = scoring(run, f.evaluator, { expectedProtocol: stale });
+  await assert.rejects(scoreQualifiedSourcePair(denied.options), { code: 'invalid_protocol' });
+  assert.equal(denied.scopes.length, 0);
+  assert.equal(denied.requests.length, 0);
+});
+
 test('P1/P2 actual N reports in both orders use only official requests and scoped identities', async () => {
   for (const armOrder of [names, [...names].reverse()]) {
     const input = fixture('source-scoring-order-' + armOrder[0], armOrder);

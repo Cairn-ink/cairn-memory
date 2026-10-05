@@ -63,7 +63,10 @@ test('I1/I2 fixed-base legacy golden plan and answer request remain unchanged', 
     '9199ade51f702bce3ef94fb648ff27fddc9b2cded3d6633bc93aa932a1ca7e15');
   const indexed = planIndexedWindowLongMemEvalCase({ history: source, namespace: ns });
   assert.equal(indexed.schemaVersion, INDEXED_WINDOW_INGESTION_PLAN_SCHEMA_VERSION);
-  assert.deepEqual(indexed.batches[0].captureInput, legacy.batches[0].captureInput);
+  assert.deepEqual({ ...indexed.batches[0].captureInput,
+    eventId: legacy.batches[0].captureInput.eventId }, legacy.batches[0].captureInput);
+  assert.notEqual(indexed.batches[0].captureInput.eventId, legacy.batches[0].captureInput.eventId,
+    'indexed token-fit plans have separately versioned event identity');
   assert.deepEqual(indexed.batches[0].sourceMap, legacy.batches[0].sourceMap);
   assert.notEqual(indexed.batches[0].normalizedCapture.payloadDigest,
     legacy.batches[0].normalizedCapture.payloadDigest);
