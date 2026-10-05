@@ -16,6 +16,7 @@ import { checkedMem0NativeConfiguration, mem0NativeConfiguration,
   runMem0NativeCase } from '../mem0-native-gateway.mjs';
 import { runNativeGatewayKernel } from '../mem0-native-runtime.mjs';
 import { nativeFakeProvider, nativeFixture } from './mem0-native-fixture.mjs';
+import { keepAliveReplyProbe } from '../testing/native-http-timeout-fixture.mjs';
 
 function miniature(t) {
   const root = mkdtempSync(join(tmpdir(), 'cairn-y-artifact-'));
@@ -848,6 +849,86 @@ test('Y6/Y11 malformed framing on an accepted socket after local seal is global'
 
 const rawRequest = (headers, body) => `POST /v1/chat/completions HTTP/1.1\r\n` +
   `Host: unix-gateway\r\n${headers}\r\n${body}`;
+
+test('NHT negative header control refuses unavailable and unrelated listener addresses', t => {
+  for (const [target, address, matched] of [
+    [null, null, false], ['', '', false], [null, '/synthetic/other.sock', false],
+    ['/synthetic/owned.sock', '/synthetic/other.sock', false],
+    ['/synthetic/owned.sock', '/synthetic/owned.sock', true],
+  ]) {
+    const probe = keepAliveReplyProbe(t, () => target);
+    try {
+      const response = new http.ServerResponse({ method: 'POST', httpVersionMajor: 1,
+        httpVersionMinor: 1 });
+      response.socket = { server: { address: () => address } };
+      response.writeHead(200, { 'content-type': 'application/json', 'content-length': 2,
+        connection: 'close' });
+      assert.equal(probe.applied(), matched ? 1 : 0);
+      assert.equal(/connection: close\r\n/i.test(response._header), !matched);
+    } finally { probe.restore(); }
+  }
+});
+
+for (const closeReply of [false, true]) for (const mode of [
+  'malformed accepted JSON', 'fully parsed pipelined request', 'buffered partial next header',
+]) {
+  test(`NHT raw ${mode} ${closeReply ? 'standard close' : 'baseline'} differential`, async t => {
+    const fake = nativeFakeProvider();
+    const f = controlledHarness(t, fake.fetchImpl, { childTimeoutMs: 12_000, httpTimeoutMs: 10_000 });
+    const path = () => f.lastCaseRoot() === null ? null : join(f.lastCaseRoot(), 'gateway.sock');
+    const keepAliveProbe = closeReply ? null : keepAliveReplyProbe(t, path);
+    let accepted = 0;
+    const originalEmit = http.Server.prototype.emit;
+    const emitProbe = t.mock.method(http.Server.prototype, 'emit', function(event) {
+      if (event === 'request' && this.address() === path()) accepted += 1;
+      return originalEmit.apply(this, arguments);
+    });
+    const validBody = chatBody();
+    const frame = body => rawRequest('Authorization: Bearer local-only-dummy-key\r\n'
+      + 'Content-Type: application/json\r\nConnection: keep-alive\r\n'
+      + `Content-Length: ${Buffer.byteLength(body)}\r\n`, body);
+    const raw = mode === 'malformed accepted JSON' ? frame('{')
+      : frame(validBody) + (mode === 'fully parsed pipelined request' ? frame('{')
+        : 'POST /v1/chat/completions HTTP/1.1\r\nHost: unix-gateway\r\n');
+    let result = null;
+    let failure = null;
+    try {
+      try {
+        result = await f.run(async socketPath => {
+          const socket = net.createConnection(socketPath);
+          socket.on('error', () => {});
+          const closed = new Promise(resolve => socket.once('close', resolve));
+          await new Promise(resolve => socket.once('connect', resolve));
+          socket.write(raw);
+          // Consume responses but retain no raw response prose in observation.
+          socket.resume();
+          await closed;
+          return output();
+        });
+      } catch (error) {
+        assert.equal(error.code, 'callback_failed');
+        failure = 'callback_failed';
+      }
+      const discarded = mode === 'buffered partial next header' && closeReply;
+      assert.equal(f.guard.isHalted(), !discarded);
+      assert.equal(failure, discarded ? null : 'callback_failed');
+      assert.equal(result?.status ?? null, discarded ? 'completed' : null);
+      assert.equal(accepted, mode === 'fully parsed pipelined request' ? 2 : 1);
+      assert.equal(fake.requests.length, mode === 'buffered partial next header' ? 1 : 0);
+      if (fake.requests.length) assert.deepEqual(fake.requests[0].body, JSON.parse(validBody));
+      assert.equal(f.guard.attempts().some(attempt => attempt.outcome === null), false);
+      assert.equal(existsSync(f.lastCaseRoot()), false);
+      t.diagnostic(JSON.stringify({ mode, closeReply, accepted, physicalRequests: fake.requests.length,
+        succeeded: f.guard.attempts().filter(a => a.outcome === 'succeeded').length,
+        failure, halted: f.guard.isHalted(), negativeKeepAliveReplies: keepAliveProbe?.applied() ?? 0,
+        kernelRootAbsent: true }));
+    } finally {
+      f.guard.close();
+      keepAliveProbe?.restore();
+      emitProbe.mock.restore();
+    }
+  });
+}
 
 test('Y6/Y11 malformed accepted JSON body after local seal is global', async t => {
   let handle;
