@@ -14,7 +14,7 @@ import { runNativeGatewayKernel } from '../mem0-native-runtime.mjs';
 import { nativeFakeProvider } from '../test/mem0-native-fixture.mjs';
 import { nativeHttpTimeoutFixture } from './native-http-timeout-fixture.mjs';
 
-function artifactFor(t) {
+export function artifactFor(t) {
   const workspace = createTestWorkspace(t, { prefix: 'cairn-nhc-artifact-' });
   const venvRoot = join(workspace.path, 'venv'), pythonRoot = join(workspace.path, 'python');
   for (const directory of [join(venvRoot, 'bin'),

@@ -15,7 +15,7 @@ import { mem0WireProfile } from './mem0-wire.mjs';
 const CHILD_VERSION = 'cairn-mem0-native-result-v1';
 const httpClientErrorDiagnostics = new WeakMap();
 const HTTP_CLIENT_CODES = new Set(['HPE_INVALID_HEADER_TOKEN', 'HPE_INVALID_EOF_STATE',
-  'HPE_HEADER_OVERFLOW', 'ERR_HTTP_REQUEST_TIMEOUT', 'ECONNRESET']);
+  'HPE_HEADER_OVERFLOW', 'ERR_HTTP_REQUEST_TIMEOUT', 'ECONNRESET', 'EPIPE']);
 const boundedCount = value => Math.min(1_000_000, value);
 const boundedAge = (now, then) => Math.min(2_147_483_647, Math.max(0, Math.floor(now - then)));
 
@@ -251,6 +251,7 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
   let requestCount = 0;
   let lastResponseAt = null;
   let httpClientError = null;
+  let disconnectReason = null;
   let fault = null;
   let child = null;
   let childClose = null;
@@ -295,6 +296,7 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     if (connectionState) {
       connectionState.requestCount = boundedCount(connectionState.requestCount + 1);
       connectionState.phase = 'body';
+      connectionState.settledResponse = false;
     }
     response.once('finish', () => {
       lastResponseAt = performance.now();
@@ -320,12 +322,24 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
         if (handle.snapshot().status !== 'active') fail('native_scope_closed');
         const controller = new AbortController();
         const fetch = route === 'chat' ? guard.mem0ChatFetch : guard.mem0EmbeddingFetch;
+        const beforeAttemptCount = guard.attempts().length;
         const checked = await fetch(profile[route].endpoint, {
           method: 'POST', redirect: 'error', body,
           headers: { authorization: 'Bearer local-only-dummy-key',
             'content-type': 'application/json' }, signal: controller.signal });
         const result = Buffer.from(await checked.arrayBuffer());
         if (result.length > profile[route].maxResponseBytes) fail('native_response_invalid');
+        const attempts = guard.attempts();
+        const attempt = attempts.at(-1);
+        // This is provider-response eligibility, never evidence that the native
+        // peer received it. X validates/prices the complete body before settling.
+        if (connectionState) connectionState.settledResponse = checked.status === 200
+          && attempts.length === beforeAttemptCount + 1
+          && attempt?.ordinal === handle.snapshot().ordinal
+          && attempt.arm === 'mem0' && attempt.phase === 'generation'
+          && attempt.outcome === 'succeeded' && attempt.transportTermination === 'response'
+          && Number.isSafeInteger(attempt.actualMicroUsd) && attempt.actualMicroUsd >= 0
+          && attempts.every(item => item.outcome !== null) && !guard.isHalted();
         if (!response.destroyed) {
           // Close the completed IPC response so an unused pooled socket cannot
           // trigger a keep-alive timeout while native work continues locally.
@@ -357,7 +371,7 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
   server.on('connection', connection => {
     connectionCount = boundedCount(connectionCount + 1);
     connectionStates.set(connection, { ordinal: connectionCount, openedAt: performance.now(),
-      requestCount: 0, phase: 'headers' });
+      requestCount: 0, phase: 'headers', settledResponse: false });
     if (connections.size >= configuration.connectionLimit) {
       firstFault('native_connection_cap');
       connection.destroy();
@@ -373,6 +387,18 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     const scopeStatus = handle.snapshot().status;
     const ignoredReset = (stopping || scopeStatus !== 'active') && code === 'ECONNRESET';
     const state = connectionStates.get(connection);
+    // A failed local IPC write after a validated, priced provider response is
+    // unresolved native work. Seal it, then let every cleanup/accounting gate
+    // veto continuation. A finish/idle event alone confers no eligibility.
+    if (code === 'EPIPE' && state?.settledResponse && fault === null
+      && ((!stopping && scopeStatus === 'active')
+        || disconnectReason !== null && stopping && scopeStatus === 'failed')) {
+      disconnectReason = 'native_response_disconnect';
+      handle.revoke();
+      connection.destroy();
+      terminate();
+      return;
+    }
     if (!ignoredReset && fault === null && state) {
       const now = performance.now();
       httpClientError = Object.freeze({ version: 1, code, connectionOrdinal: state.ordinal,
@@ -512,7 +538,10 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     }
     throw error;
   }
-  if (outcome === 'sealed') return Object.freeze({ status: 'sealed', value: null });
+  // Classification may happen while cleanup awaits socket completion, after
+  // the earlier child-result snapshot. Its final failure state still wins.
+  if (disconnectReason !== null || outcome === 'sealed') return Object.freeze({ status: 'sealed',
+    ...(disconnectReason === null ? {} : { reason: disconnectReason }), value: null });
   if (outcome !== 'completed' || output === null) { handle.halt(); fail('native_output_invalid'); }
   return Object.freeze({ status: 'completed', value: output });
 }

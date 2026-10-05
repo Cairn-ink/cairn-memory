@@ -19,6 +19,7 @@ import { nativeFakeProvider, nativeFixture } from './mem0-native-fixture.mjs';
 import { keepAliveReplyProbe } from '../testing/native-http-timeout-fixture.mjs';
 // Portable clientError provenance and safety controls run in the canonical gate.
 import './native-http-client-error.test.mjs';
+import './native-settled-disconnect.test.mjs';
 
 function miniature(t) {
   const root = mkdtempSync(join(tmpdir(), 'cairn-y-artifact-'));

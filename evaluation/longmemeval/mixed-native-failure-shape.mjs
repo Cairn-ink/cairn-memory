@@ -20,7 +20,7 @@ const GATEWAY_REASONS = new Set([
   'native_manifest_mismatch', 'native_scope_required',
 ]);
 const HTTP_CLIENT_CODES = new Set(['HPE_INVALID_HEADER_TOKEN', 'HPE_INVALID_EOF_STATE',
-  'HPE_HEADER_OVERFLOW', 'ERR_HTTP_REQUEST_TIMEOUT', 'ECONNRESET', 'other_parser', 'other']);
+  'HPE_HEADER_OVERFLOW', 'ERR_HTTP_REQUEST_TIMEOUT', 'ECONNRESET', 'EPIPE', 'other_parser', 'other']);
 
 function ownData(value, keys, enumerable = false) {
   if (!value || typeof value !== 'object' || types.isProxy(value)) return null;
