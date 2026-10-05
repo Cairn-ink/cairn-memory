@@ -1,5 +1,20 @@
 # Known limitations
 
+The OFF-by-default [source-partition offline harness](plans/source-partition-offline.md)
+checks synthetic whole-message planning, original window coordinates and local
+extraction-token fit. Corrected public-core capture/cold replay and recall checks
+passed 36/36 on Node 22.16.0 and 24.15.0, including primary personal reruns;
+mandatory offline gates also passed. The first Node22 attempt's 35/36 result is
+retained: its public-map assertion wrongly expected a private classifier catalog.
+Correcting that fixture establishes no historic source-loss cause. Scripted
+five-card extraction can omit a sixth structured fact even when every receipt
+still contains its full source. Receipt retention, structured-card coverage and
+answer utility are different properties. Ordinary recall uses query-aware
+memory selection/ranking, not model-directed MOC-topic descent; public MOC
+pages and classifier catalogs have separate visibility/budget boundaries.
+Provider budgets remain separate. This does not establish semantic quality,
+historical N7 cause or benchmark scores, or change any capture default.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
@@ -716,6 +731,26 @@ validates exact target coverage, including repeated IDs, after the model call.
 This prospective schema constraint does not reconstruct the pilot's rejected
 response or establish its cause. It does not change that pilot's partial result,
 stop policy or score denominators.
+
+Direct core ID arrays now require every indexed position to be present, closing
+a malformed sparse-array bypass where extra enumerable keys compensated the
+key count. This deliberately tightens malformed direct-input acceptance, not
+dense JSON/provider proposals, and does not identify a historic live cause.
+Such shape failures use the existing public codes and generic diagnostic.
+
+Future post-admission core classification rejection events can distinguish
+duplicate memory targets, duplicate L1/L2 parents, invalid L1/L2 titles, target
+coverage mismatch, parent visibility and incomplete-catalog creation policy.
+The trusted observer receives only finite categories in the existing v1 event;
+unclassified errors retain `invalid_classification`. Synthetic fake HTTP tests
+show adapter-valid 121-codepoint titles and duplicate targets/parents rejected
+by the real core while cold admitted cards and source receipts survive. A
+120-codepoint title files normally, missing aliases fail at the adapter, and
+storage title conflicts remain separate. These tests establish runtime
+observability and state preservation, not semantic accuracy or a benchmark
+score. The exact historical rejected proposal was not retained, so its cause
+remains unknown. This prospective change does not repair, retry, re-admit or
+reinterpret any historical batch or alter scoring/stop policy.
 
 The rejected provider response and its exact token count were not retained.
 Database size and a matching synthetic rejection do not establish that the
