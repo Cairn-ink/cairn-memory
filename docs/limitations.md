@@ -1615,6 +1615,17 @@ recall failures still report `recall_failed`, a null answer and their original
 scope outcome; accounting and transport halts retain precedence, and authenticated
 deadlines still report `deadline` with their original stop behavior.
 
+Threat boundary: this new code remains private local report/journal metadata,
+outside public MCP/API authority and telemetry. Correlation with existing finite
+events and timing can disclose execution patterns. The journal's existing
+owner-private 0700 directories and 0600 files, operator access/retention policy,
+backup/snapshot exposure and same-UID tampering limits continue to apply; these
+controls provide neither encryption nor secure deletion. No raw source, query,
+IDs, error messages, new reader, output destination or retention policy is added.
+Codes are observations of local checks, not proof of provider/upstream causation,
+semantic truth or execution authority. See the [explicit threat-model update](plans/mixed-recall-failure-diagnostics.md#threat-model-update-private-recall-diagnostic-field)
+and [journal threat limits](mixed-result-journal.md#retention-and-threat-limits).
+
 Synthetic actual-core/fake-HTTP cases demonstrate adapter-accepted ranking
 responses subsequently rejected by core, plus unchanged witness comparisons,
 journal/scorer handling and timeout/unknown-accounting boundaries. Fresh-store

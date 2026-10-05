@@ -40,6 +40,34 @@ owned test workspaces with pinned installed native prerequisites. There is no
 TypeScript gate. The primary reruns key paths and independently reviews a fixed
 candidate before delivery. Retain failed evidence and report limitations.
 
+## Threat-model update: private recall diagnostic field
+
+`modelDiagnostics.recallErrorCode` adds one finite code or null to the existing
+private local generation report and, when explicitly enabled, its private result
+journal. It is not a public MCP/API/telemetry field or an execution authority.
+The existing model events remain capped at 64. Correlating the code with those
+events, existing timing, scope and accounting metadata can disclose execution
+patterns or failure-stage information, even without source text. Operators must
+treat the whole report/journal as private evidence; this scalar is not anonymization.
+
+The verified [journal storage boundary](../mixed-result-journal.md#retention-and-threat-limits)
+requires owner-private 0700 parent/journal directories and 0600 files on supported
+POSIX hosts. The writer and inspector check modes and UID; exclusive publication,
+identity checks and hash links do not protect against hostile same-UID processes,
+coherent rewrites or filesystem races. Existing operator access/retention policies
+and backup/snapshot exposure still apply. Encryption and secure deletion are not
+provided, and no new reader, output destination or retention policy is introduced.
+
+Only the trusted core return is projected, by finite allowlist and an own data
+descriptor. No raw source/query, identifiers, messages, stacks, provider bodies
+or raw error object is added or read from private operational artifacts. Codes
+and events are observations of local checks; they are not proof of provider or
+upstream causation, semantic truth, authentic execution or permission to retry.
+Existing RFD privacy tests verify unknown/accessor/inherited/non-enum refusal,
+huge-message and serialization exclusion, the 64-event bound, and absence of
+synthetic private sentinels in real-call failure diagnostics. Both supported
+runtimes passed these controls within the recorded contributor/native gates.
+
 ## Checkpoints
 
 Instructions read: wiki AGENTS, worktree workflow/model routing, diagnosing-bugs,
@@ -262,6 +290,19 @@ Primary full corrected logs and SHA256 values, supplied by the primary:
 /tmp/cairn-rfd-primary.m3gGHW99/node24-native-r2.log
 feb557aa2928dda5f45cf29040a936cff47a2a50badad065a974b8aa456969e2
 ```
+
+### Independent review correction checkpoint
+
+First candidate: `f5ebc7a0c2cb5310512841724f9fd8d987837742`. Standards P2
+identified the contributor requirement for an explicit threat-model update for
+the new captured field. The finding is retained and resolved by the bounded
+threat-model section above and its limitations summary, verified against the
+existing journal docs and actual storage/inspection code. No implementation,
+test, schema, reader or retention behavior changed. The optional duplicated
+fixture-setup heuristic is nonblocking; distinct fixture and real-call assertions
+remain intact. The primary will inspect this docs-only correction, create a
+notes-only successor and rerun independent Standards and Spec on its exact SHA.
+Final independent review and CI remain pending.
 
 Primary key runtime reruns are now complete. Remaining delivery gates belong
 to the primary: create a scoped fixed candidate commit, obtain independent
