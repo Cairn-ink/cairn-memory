@@ -3,14 +3,13 @@ import { OFFICIAL_QUESTION_TYPES, officialJudgeRequest, officialPrompt,
 import { opaqueQuestionId } from './prepare.mjs';
 import { countOpenAITokens } from '../../adapters/openai/index.mjs';
 import { resolveReferenceRendering } from './reference-rendering.mjs';
-import { MIXED_GENERATION_VERSION } from './mixed-generation.mjs';
+import { generationReportFamily, sourceProtocolIdentity } from './mixed-source-policy.mjs';
 import { authenticateLocalUnknown, completionOnce, trackedTransport,
   unknownCurrentAttempt, verifiedLocalOrdinals } from './mixed-transport.mjs';
 import { MixedComparisonError, canonical, dense, exact, fail, freeze, hash, reportSnapshot, safeInteger,
   wellFormed } from './mixed-validation.mjs';
 
-export const MIXED_SCORING_VERSION = 'cairn-lme-mixed-scoring-v1';
-const GENERATION_DOMAIN = 'cairn.lme.mixed.generation-report.v1';
+export { MIXED_SCORING_VERSION } from './mixed-source-policy.mjs';
 const MANIFEST_DOMAIN = 'cairn.lme.mixed.manifest.v1';
 const ROSTER_DOMAIN = 'cairn.lme.mixed-source-pair.roster.v1';
 const OUTCOMES = ['correct', 'incorrect', 'unresolved'];
@@ -46,7 +45,12 @@ function validateGeneration(raw, guard) {
   const report = reportSnapshot(raw);
   exact(report, ['schemaVersion', 'manifest', 'roster', 'manifestDigest', 'rosterDigest',
     'cases', 'halted', 'haltReason'], 'invalid_mixed_report');
-  if (report.schemaVersion !== MIXED_GENERATION_VERSION || typeof report.halted !== 'boolean'
+  const family = generationReportFamily(report.schemaVersion);
+  const identity = sourceProtocolIdentity(family, {
+    nativeConfigurationSha256: report.manifest?.mem0?.configurationSha256,
+    comparisonProfile: report.manifest?.cairn?.comparisonProfile });
+  if (Object.entries(identity).some(([key, value]) => report.manifest?.[key] !== value)
+    || typeof report.halted !== 'boolean'
     || report.halted !== (report.haltReason !== null)
     || report.halted && (!wellFormed(report.haltReason) || !SAFE_REASON.test(report.haltReason))
     || canonical(report.manifest) !== canonical(guard?.mixedSourcePairCapability?.manifest)
@@ -201,12 +205,13 @@ export async function scoreMixedGeneration(options) {
     || !wellFormed(apiKey)
     || !apiKey.trim() || /[\r\n]/u.test(apiKey)) fail('invalid_mixed_scoring');
   const generation = validateGeneration(rawReport, guard);
+  const family = generationReportFamily(generation.schemaVersion);
   const evaluators = validateEvaluators(evaluatorRows, generation);
   const renderings = referenceRenderings ?? new Map();
   if (renderings.size > generation.cases.length
     || [...renderings.keys()].some(key => !generation.cases.some(item =>
       item.questionId === key))) fail('invalid_reference_renderings');
-  const digest = hash(GENERATION_DOMAIN, generation);
+  const digest = hash(family.generationDomain, generation);
   const cases = generation.cases.map((entry, index) => ({
     questionId: entry.questionId, questionType: evaluators[index].question_type,
     arms: entry.arms.map(arm => ({ name: arm.name, generationStatus: arm.status,
@@ -279,6 +284,6 @@ export async function scoreMixedGeneration(options) {
   if (haltReason) for (const item of cases) for (const arm of item.arms) {
     if (arm.judgment.reason === 'generation_unresolved') arm.judgment.reason = haltReason;
   }
-  return freeze(reportSnapshot({ schemaVersion: MIXED_SCORING_VERSION, generationDigest: digest,
+  return freeze(reportSnapshot({ schemaVersion: family.scoring, generationDigest: digest,
     cases, summary: summary(cases), halted: haltReason !== null, haltReason }));
 }
