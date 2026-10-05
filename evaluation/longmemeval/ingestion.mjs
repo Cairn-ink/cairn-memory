@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 
 import { captureSnapshot, retainedSourceView } from '../../core/capture-input.mjs';
 import { sourceWindowCatalog } from '../../core/source-windows.mjs';
 import { planCaptureMessageBatches } from '../../core/capture-batch-planning.mjs';
 import { MODEL_INPUT_TOKENS } from '../../core/model-call.mjs';
-import { countOpenAITokens } from '../../adapters/openai/index.mjs';
 import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 
 export const INGESTION_PLAN_SCHEMA_VERSION = 'cairn-longmemeval-ingestion-plan-v1';
@@ -396,6 +396,10 @@ export function planLongMemEvalCase(options) {
 
 function planIndexedCase(options, evidenceOnly) {
   const legacy = planLongMemEvalCase(options);
+  // Legacy/prefix and diagnostic callers do not need the optional adapter.
+  // Indexed planning still synchronously requires its exact exported counter;
+  // missing dependencies fail here, without a fallback or approximate count.
+  const { countOpenAITokens } = createRequire(import.meta.url)('../../adapters/openai/index.mjs');
   const blockers = structuredClone(legacy.blockers);
   const batches = [];
   const sessionCounts = new Map();

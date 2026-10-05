@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { captureSnapshot } from '../../../core/capture-input.mjs';
 import { checkExtractionFits, extractionRequest } from '../../../core/capture.mjs';
@@ -25,6 +27,34 @@ const history = (lengths = [3200, 3200]) => ({
   sessions: [{ session_index: 0, session_id: 'synthetic-session', date: 'synthetic-date',
     turns: lengths.map((length, index) => ({ turn_id: `lme-turn-${String(index).padStart(64, '0')}`,
       role: index % 2 ? 'assistant' : 'user', content: '中'.repeat(length) })) }],
+});
+
+test('I7 lazy indexed acquisition uses the same installed counter and accepted TFI synthetic plans', () => {
+  const required = createRequire(import.meta.url)('../../../adapters/openai/index.mjs');
+  assert.equal(required.countOpenAITokens, countOpenAITokens);
+  // Literal SHA256(JSON.stringify(plan)) observed on accepted TFI693804d;
+  // acquisition changed, not tokenization, source partition or plan identity.
+  const cases = [
+    { contents: ['中'.repeat(3200), '中'.repeat(3200)], hashes: [
+      '98fbef166ca0ca88a239ccb3983a66a377a4d75532f9deafde13cbfeb8b2ee38',
+      '78d2fcc3fbb0803b8201fb3d75b7b5b8a42884ac71d1cc1b9869f38b968bee2c'] },
+    { contents: ['Synthetic fact.', 'Å 🙂'], hashes: [
+      'def217825e3e48911e2b4bd784ee543cda499f236f04001832e72e86e3871b13',
+      'd81f82d9ad1b5ae57d562197ec4f5d3c6bab968c9ed9e0b5b88c82604d3d50e9'] },
+    { contents: ['㐀'.repeat(4000)], hashes: [
+      '2fa4c2249dd458665c44721dfa39c96b45cda12f461c22335d30495faf4aa929',
+      '9bd60cfd902990a55564bb2a9a0f22b0b94aee4dd458bfed2fc7fb660d067a08'] },
+  ];
+  for (const { contents, hashes } of cases) {
+    const source = history(contents.map(text => text.length));
+    source.sessions[0].turns.forEach((turn, index) => { turn.content = contents[index]; });
+    const options = { history: source, namespace: { ownerId: 'optional-counter-synthetic',
+      scope: 'personal', projectId: null } };
+    for (const [index, plan] of [planIndexedWindowLongMemEvalCase,
+      planIndexedEvidenceLongMemEvalCase].entries()) {
+      assert.equal(createHash('sha256').update(JSON.stringify(plan(options))).digest('hex'), hashes[index]);
+    }
+  }
 });
 
 test('TFI3/TFI4 token-fit partition retains source coordinates, dense catalogs, sessions and new identities', () => {

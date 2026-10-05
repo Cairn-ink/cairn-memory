@@ -19,20 +19,49 @@ const GATEWAY_REASONS = new Set([
   'native_configuration_identity_required', 'native_guard_required',
   'native_manifest_mismatch', 'native_scope_required',
 ]);
+const HTTP_CLIENT_CODES = new Set(['HPE_INVALID_HEADER_TOKEN', 'HPE_INVALID_EOF_STATE',
+  'HPE_HEADER_OVERFLOW', 'ERR_HTTP_REQUEST_TIMEOUT', 'ECONNRESET', 'other_parser', 'other']);
+
+function ownData(value, keys, enumerable = false) {
+  if (!value || typeof value !== 'object' || types.isProxy(value)) return null;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return null;
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (Reflect.ownKeys(descriptors).length !== keys.length
+    || keys.some(key => !Object.hasOwn(descriptors, key)
+      || !Object.hasOwn(descriptors[key], 'value')
+      || enumerable && !descriptors[key].enumerable)) return null;
+  return Object.fromEntries(keys.map(key => [key, descriptors[key].value]));
+}
+
+function validHttpClientError(value) {
+  const row = ownData(value, ['version', 'code', 'connectionOrdinal', 'requestCount',
+    'connectionRequestCount', 'phase', 'stopping', 'scopeStatus', 'connectionAgeMs', 'sinceLastResponseMs'], true);
+  if (!row) return false;
+  const integer = (value, minimum, maximum) => Number.isSafeInteger(value)
+    && !Object.is(value, -0) && value >= minimum && value <= maximum;
+  return row.version === 1 && HTTP_CLIENT_CODES.has(row.code)
+    && integer(row.connectionOrdinal, 1, 1_000_000)
+    && integer(row.requestCount, 0, 1_000_000)
+    && integer(row.connectionRequestCount, 0, row.requestCount)
+    && ['headers', 'body', 'response', 'idle'].includes(row.phase)
+    && typeof row.stopping === 'boolean'
+    && ['active', 'completed', 'failed'].includes(row.scopeStatus)
+    && integer(row.connectionAgeMs, 0, 2_147_483_647)
+    && (row.sinceLastResponseMs === null || integer(row.sinceLastResponseMs, 0, 2_147_483_647));
+}
 
 export function isMixedNativeFailure(value) {
   try {
-    if (!value || typeof value !== 'object' || types.isProxy(value)) return false;
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) return false;
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    const keys = ['version', 'layer', 'reason'];
-    if (Reflect.ownKeys(descriptors).length !== keys.length
-      || keys.some(key => !Object.hasOwn(descriptors, key)
-        || !Object.hasOwn(descriptors[key], 'value'))) return false;
-    const { version, layer, reason } = Object.fromEntries(keys.map(key => [key, descriptors[key].value]));
+    if (!value || types.isProxy(value)) return false;
+    const keys = ['version', 'layer', 'reason', ...(Object.hasOwn(value, 'httpClientError') ? ['httpClientError'] : [])];
+    const row = ownData(value, keys, keys.length > 3);
+    if (!row) return false;
+    const { version, layer, reason } = row;
     return version === 1 && typeof reason === 'string'
       && (layer === 'runtime' ? RUNTIME_REASONS : layer === 'gateway' ? GATEWAY_REASONS : null)
-        ?.has(reason) === true;
+        ?.has(reason) === true
+      && (!Object.hasOwn(row, 'httpClientError') || layer === 'runtime'
+        && reason === 'native_http_invalid' && validHttpClientError(row.httpClientError));
   } catch { return false; }
 }
