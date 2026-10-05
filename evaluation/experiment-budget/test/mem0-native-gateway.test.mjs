@@ -17,6 +17,8 @@ import { checkedMem0NativeConfiguration, mem0NativeConfiguration,
 import { runNativeGatewayKernel } from '../mem0-native-runtime.mjs';
 import { nativeFakeProvider, nativeFixture } from './mem0-native-fixture.mjs';
 import { keepAliveReplyProbe } from '../testing/native-http-timeout-fixture.mjs';
+// Portable clientError provenance and safety controls run in the canonical gate.
+import './native-http-client-error.test.mjs';
 
 function miniature(t) {
   const root = mkdtempSync(join(tmpdir(), 'cairn-y-artifact-'));
@@ -757,6 +759,52 @@ test('Y13 revoked in-flight route seals and late provider completion cannot ente
       assert.equal(f.guard.attempts().length, prior);
     } finally { f.guard.close(); }
   });
+
+test('NHC2 genuine UDS reset after local revoke retains cancellation without new global fault', async t => {
+  let handle;
+  const eventCodes = [];
+  const original = http.createServer;
+  t.mock.method(http, 'createServer', (options, listener) => {
+    const server = original(options, listener);
+    server.prependListener('clientError', error => {
+      const descriptor = Object.getOwnPropertyDescriptor(error, 'code');
+      eventCodes.push(descriptor?.value === 'ECONNRESET' ? 'ECONNRESET' : 'other');
+    });
+    return server;
+  });
+  const f = controlledHarness(t, (_url, options) => {
+    const response = embeddingResponse(JSON.parse(options.body).input.length);
+    for (const row of response.data) row.embedding.fill(0.1234567890123456);
+    return Response.json(response);
+  });
+  try {
+    const result = await f.run(async socketPath => {
+      const socket = net.createConnection(socketPath);
+      socket.on('error', () => {});
+      await new Promise(resolve => socket.once('connect', resolve));
+      const body = embeddingBody(Array.from({ length: 100 }, () => 'x'));
+      const firstData = new Promise(resolve => socket.once('data', () => {
+        handle.revoke(); socket.destroy(); resolve();
+      }));
+      socket.write(`POST /v1/embeddings HTTP/1.1\r\nHost: unix-gateway\r\n` +
+        `Authorization: Bearer local-only-dummy-key\r\nContent-Type: application/json\r\n` +
+        `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+      await firstData;
+      await new Promise(resolve => setTimeout(resolve, 50));
+      return output();
+    }, child => { setTimeout(() => child.complete(143), 100); }, current => { handle = current; });
+    t.diagnostic(JSON.stringify({ clientErrorCodes: eventCodes, status: result.status,
+      reason: result.reason, halted: f.guard.isHalted() }));
+    assert.deepEqual(eventCodes, ['ECONNRESET'], 'genuine socket reset, never manual emit');
+    assert.equal(result.status, 'failed'); assert.equal(result.reason, 'cancelled');
+    assert.equal(f.guard.isHalted(), false);
+    assert.ok(f.guard.attempts().every(attempt => attempt.outcome === 'succeeded'
+      && Number.isSafeInteger(attempt.actualMicroUsd) && attempt.transportTermination === 'response'));
+    assert.equal(existsSync(f.lastCaseRoot()), false);
+    const next = await f.guard.withCaseScope(f.capability.schedule[1], () => 'next');
+    assert.equal(next.status, 'completed');
+  } finally { f.guard.close(); }
+});
 
 test('Y13 fifth idle UDS connection globally halts before physical dispatch', async t => {
   const f = controlledHarness(t, () => assert.fail('idle sockets reached provider'));

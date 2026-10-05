@@ -1685,3 +1685,38 @@ historical input evidence, not verification of the combination. Combined local
 gates, independent review and latest-head CI remain separate acceptance steps;
 no retrieval, semantic, default-MOC/MCP/Hermes, footprint or paid-score claim
 follows, and any new paid cohort requires a fresh specific grant.
+
+## Prospective native HTTP client-error provenance
+
+The [bounded diagnostic contract](plans/native-http-client-error.md) adds only
+the first accepted local Node clientError's finite code category, bounded
+connection/request counts and lifecycle phase, scope/stopping state, and
+saturated monotonic elapsed milliseconds to the existing private nativeFailure
+observation. Internally minted immutable metadata is authenticated by runtime
+Error identity; caller properties, forged/copy errors and proxies cannot mint
+it. Plain journal observations confer no execution authority. New optional
+metadata must be enumerable own data, allowlisted and bounded; accessors,
+proxies, extra fields and malformed values reject without executing their
+callbacks. Existing native failure observations remain valid.
+
+Threat boundary: counts, phase and timing can disclose local execution patterns
+and correlate with other private observations. This metadata stays in the
+existing private report/journal boundary, outside public MCP/API authority or
+telemetry. Existing owner-private0700 directories and0600 files, operator
+access/retention policy, backup exposure and same-UID tampering limits continue
+to apply; no encryption or secure deletion is provided. No message, rawPacket,
+header, URL, body, source, stack/cause, arbitrary provider code, key, new reader,
+output destination or retention policy is added. The shared snapshot boundary
+rejects nested proxies before reflection; this does not claim unrelated options
+or every public caller is globally hardened.
+
+Synthetic genuine-kernel/genuine-guard UDS cases distinguish malformed header,
+partial-header EOF and HTTP header timeout while preserving native_http_invalid,
+callback_failed and global halt. Complete HTTP with invalid JSON retains
+native_gateway_failed. A genuine UDS ECONNRESET after local revoke retains
+failed/cancelled without global halt; this is a test of the existing exception,
+not a new relaxation. A sustained pinned Mem0/httpx fake-provider control
+completes19requests in six batches and search with checked accounting and
+cleanup. These observations neither reproduce N9's unknown underlying event
+nor prove general product reliability. N9 remains closed, unscored and
+immutable; no replay, regrading, paid call, policy change or release follows.

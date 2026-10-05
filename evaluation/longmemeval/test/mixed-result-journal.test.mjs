@@ -14,6 +14,9 @@ import { canonical, freeze, hash, reportSnapshot } from '../mixed-validation.mjs
 import { evaluatorRow, fakeMixedHttp, sourceRow, syntheticMixedFixture } from '../testing/mixed-fixture.mjs';
 import { interruption, syntheticNativeDescriptors,
   syntheticScoringGeneration } from '../testing/result-journal-fixture.mjs';
+import { syntheticHttpClientFailure } from '../testing/native-http-client-error-fixture.mjs';
+import { nativeClientErrorProbe } from '../../experiment-budget/testing/native-http-client-error-fixture.mjs';
+import { projectMixedNativeFailure } from '../mixed-native-failure.mjs';
 
 test('RD7 generation interruption retains first real completed answer', t => interruption(t, 'generation'));
 test('RD8 scoring interruption retains first real settled judgment', t => interruption(t, 'scoring'));
@@ -71,6 +74,7 @@ test('IC3/IC5 native failure write schema and old failed-arm compatibility', asy
     { value: nativeFailure, stage: 'answer' },
     { value: nativeFailure, completed: true },
     { value: nativeFailure, accepted: true },
+    { value: syntheticHttpClientFailure(), accepted: true },
     { omitted: true, accepted: true },
   ];
   for (const item of cases) {
@@ -98,6 +102,69 @@ test('IC3/IC5 native failure write schema and old failed-arm compatibility', asy
       assert.throws(record, { code: 'mixed_result_journal_failed' }, 'rejected writer stays poisoned');
     }
   }
+});
+
+test('NHC3 genuine kernel provenance survives private journal and scorer input roundtrip', async t => {
+  const observed = await nativeClientErrorProbe(t, 'bad-header');
+  const nativeFailure = projectMixedNativeFailure(observed.innerError);
+  const fixture = fixtureFor(t);
+  const generation = structuredClone(await syntheticScoringGeneration(fixture, fixture.guard));
+  const native = generation.cases[0].arms.find(arm => arm.name === 'mem0');
+  Object.assign(native, { status: 'failed', reason: 'arm_failed', answer: null,
+    diagnostics: { stage: 'execution', nativeFailure } });
+  const report = freeze(reportSnapshot(generation));
+  const journal = fixture.journal();
+  startMixedJournalPhase(journal, 'generation', fixture.prepared);
+  for (const [ordinal, name] of report.roster[0].armOrder.entries()) {
+    enterMixedJournalArm(journal, 'generation', ordinal);
+    recordMixedJournalArm(journal, 'generation', ordinal, report.cases[0],
+      report.cases[0].arms.find(arm => arm.name === name));
+  }
+  const retained = inspectMixedResultJournal({ directory: fixture.directory })
+    .phases.generation.arms.find(arm => arm.name === 'mem0').result.diagnostics.nativeFailure;
+  assert.deepEqual(retained, reportSnapshot(nativeFailure));
+  const scored = await score(fixture, report);
+  assert.equal(scored.summary.fixedN, 1);
+  assert.equal(scored.summary.perArm.mem0.unresolved, 1);
+  assert.equal(scored.summary.perArm.cairn.correct, 1);
+  assert.equal(scored.cases[0].arms.find(arm => arm.name === 'mem0').judgment.attempted, false);
+});
+
+test('NHC3 journal and scorer reject hostile nested metadata before traps or provider entry', async t => {
+  let invoked = 0;
+  for (const corrupt of [
+    row => { row.httpClientError = new Proxy(row.httpClientError, {
+      ownKeys() { invoked++; throw Error('PRIVATE_CANARY'); },
+      getPrototypeOf() { invoked++; throw Error('PRIVATE_CANARY'); },
+    }); },
+    row => { Object.defineProperty(row.httpClientError, 'code', {
+      enumerable: true, get() { invoked++; return 'ECONNRESET'; } }); },
+    row => { Object.defineProperty(row.httpClientError, 'code', { enumerable: false }); },
+    row => { Object.defineProperty(row, 'httpClientError', { enumerable: false }); },
+    row => { row.httpClientError.code = 'PRIVATE_UNKNOWN_CODE'; },
+    row => { row.httpClientError.connectionAgeMs = 2_147_483_648; },
+  ]) {
+    const fixture = fixtureFor(t);
+    const generation = structuredClone(await syntheticScoringGeneration(fixture, fixture.guard));
+    const value = syntheticHttpClientFailure(); corrupt(value);
+    const native = generation.cases[0].arms.find(arm => arm.name === 'mem0');
+    Object.assign(native, { status: 'failed', reason: 'arm_failed', answer: null,
+      diagnostics: { stage: 'execution', nativeFailure: value } });
+    // Freeze the report root without traversing hostile nested data in the fixture.
+    Object.freeze(generation);
+    const calls = fixture.fake.calls.length;
+    await assert.rejects(score(fixture, generation), { code: 'invalid_mixed_report' });
+    assert.equal(fixture.fake.calls.length, calls);
+    const journal = fixture.journal();
+    startMixedJournalPhase(journal, 'generation', fixture.prepared);
+    enterMixedJournalArm(journal, 'generation', 0);
+    recordMixedJournalArm(journal, 'generation', 0, generation.cases[0], generation.cases[0].arms[0]);
+    enterMixedJournalArm(journal, 'generation', 1);
+    assert.throws(() => recordMixedJournalArm(journal, 'generation', 1, generation.cases[0], native),
+      { code: 'mixed_result_journal_failed' });
+    assert.equal(fixture.fake.calls.length, calls);
+  }
+  assert.equal(invoked, 0);
 });
 
 test('IC3/IC5 coherently rehashed native failure offline reads refuse malformed and wrong contexts', async t => {

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { types } from 'node:util';
 
 export class MixedComparisonError extends Error {
   constructor(code) { super(code); this.name = 'MixedComparisonError'; this.code = code; }
@@ -36,8 +37,8 @@ export const freeze = value => {
 };
 
 // Before any descriptor walk, charge the minimum nodes implied by own width.
-// Reflect.ownKeys/Proxy traps can still allocate or run arbitrary caller code;
-// these limits bound accepted JSON data, not whole-process memory.
+// Proxies are rejected before reflection; the limits bound accepted JSON data,
+// not whole-process memory or caller allocation before this boundary.
 export function snapshotJson(root, { bytes, nodes, depth }, code) {
   const state = { bytes: 0, nodes: 0, active: new WeakSet() };
   const charge = text => {
@@ -53,7 +54,7 @@ export function snapshotJson(root, { bytes, nodes, depth }, code) {
     }
     if (value === null || typeof value === 'boolean') return value;
     if (typeof value === 'number' && Number.isFinite(value) && !Object.is(value, -0)) return value;
-    if (!value || typeof value !== 'object' || state.active.has(value)) fail(code);
+    if (!value || typeof value !== 'object' || types.isProxy(value) || state.active.has(value)) fail(code);
     const array = Array.isArray(value);
     const prototype = Object.getPrototypeOf(value);
     if (array ? prototype !== Array.prototype
