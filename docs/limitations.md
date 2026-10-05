@@ -1,5 +1,17 @@
 # Known limitations
 
+The [current-engine scoring integration](plans/current-engine-score.md) ports
+the accepted shared-core NULL-title structural reuse repair onto the compatible
+prospective evaluation base. Reuse does not restore a label's source validity
+or establish semantic topic agreement. Label-source invalidity does not erase
+retained same-namespace MOC identities or edges; fresh membership can make
+retained ancestors navigable again without restoring their labels.
+The evaluated `indexed-evidence-v1`
+profile still uses source-only flat recall; this integration does not enable
+Hermes rationale, prove default MOC quality or lightweight operation, recover
+historical failures, or authorize another paid run. Verification remains pending
+at the dated implementation checkpoint in the plan.
+
 The [prospective offline integration](plans/prospective-evaluation-readiness.md)
 combines extraction subtype observations, typed native categories, reduced
 bound-v2 validation work and private result journaling. Its installed synthetic
