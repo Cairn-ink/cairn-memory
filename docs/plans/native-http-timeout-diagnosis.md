@@ -621,3 +621,32 @@ python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("evaluation/experiment-bu
 Primary exit0, output `synthetic pidfd helper Python AST: PASS (no pyc)`.
 AST parsing creates no pyc. This evidence-only addition changes no frozen CODE,
 CI or prior test result; no worker test, commit or push was performed.
+
+## Primary-approved review correction NHT10 — before ROADMAP edit
+
+Independent review inspected candidate 5e6fa8c56d5fe325ae623e6a39a79c253c998da0
+against base c982c77e3586c07e0ed024c3eee759e25cb22657. Spec passed; Standards
+identified CONTRIBUTING's requirement to update ROADMAP when a gate changes.
+Primary authorizes only one narrow Current developer preview bullet in
+ROADMAP.md and this existing plan's review checkpoint. No existing history or
+budget entry, CODE, CI, test or other documentation may change.
+
+NHT10: Link this diagnosis plan from that bullet; distinguish portable gateway
+coverage added to the existing Node 22/24 CI matrix from the locally verified
+canonical installed-native timeout/reconnect/local-watchdog controls. Remote
+CI has not yet passed. Keep the original paid-run cause unproven, no score or
+replay, and semantic/default-MOC/installed-MCP/Hermes/footprint gates pending.
+Primary owns the correction commit, renewed independent review and remote CI;
+worker performs no test, spend, retry, commit or push.
+
+The optional Repeated Switches observation in synthetic mode setup/assertions
+is reasonably deferred, not a defect: setup and outcomes are deliberately
+explicit for safety evidence. No speculative refactor is justified in this
+bounded correction. This contract is recorded before editing ROADMAP.
+
+The correction adds only that linked ROADMAP bullet. Earlier frozen runtime,
+helper, CI and test evidence remains unchanged, including final portable 52,
+canonical native 15, MIXED 43, LongMemEval 264 and live-offline 340 pass + 30 not run
+on both Nodes. Remote-head CI is still pending, not a local-pass claim. The
+primary must inspect this documentation delta and obtain both review axes on
+the resulting committed candidate before delivery.

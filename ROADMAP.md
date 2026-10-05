@@ -16,6 +16,16 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [native HTTP timeout diagnosis](docs/plans/native-http-timeout-diagnosis.md)
+  adds portable gateway regression coverage to the existing Node 22.16/24
+  request-guard CI matrix; latest-head CI remains a separate delivery gate.
+  Canonical installed native tests pass locally on Node 22.16.0/24.15.0 for
+  completed-response closure, timeout/reconnect parity and authentic local
+  child-watchdog cancellation.
+  These synthetic mechanical controls leave the original paid-run cause
+  unproven and supply no score or replay authority. Semantic quality, default
+  MOC navigation, installed MCP/Hermes reliability and footprint remain pending.
+
 - The [phase observer rejection correction](docs/plans/phase-observer-rejection.md)
   bypasses a returned native Promise's throwing own `catch` property. Actual
   adapter subprocesses and installed archives use fake HTTP to check inert
