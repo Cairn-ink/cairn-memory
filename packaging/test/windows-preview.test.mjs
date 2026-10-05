@@ -15,6 +15,8 @@ test('native Windows source installation and six-stage keyless SDK lifecycle', {
 }, t => {
   const workspace = createTestWorkspace(t, { prefix: 'cairn-windows-preview-' });
   const root = fileURLToPath(new URL('../../', import.meta.url));
+  assert.equal(readFileSync(join(root, 'packaging/bin/cairn-memory.mjs'), 'utf8').split('\n')[0],
+    '#!/usr/bin/env node', 'Git checkout must preserve the executable LF shebang');
   const target = join(workspace.path, 'local preview & spaces');
   const env = { PATH: `${dirname(process.execPath)};${process.env.PATH ?? ''}`,
     SystemRoot: process.env.SystemRoot, TMPDIR: workspace.path, TMP: workspace.path, TEMP: workspace.path,
@@ -31,7 +33,7 @@ test('native Windows source installation and six-stage keyless SDK lifecycle', {
   assert.equal(createHash('sha256').update(readFileSync(receipt.artifact.path)).digest('hex'), receipt.artifact.sha256);
   for (const [path, expected] of Object.entries(receipt.artifact.sourceHashes)) {
     const installedFile = join(target, 'app/node_modules/cairn-memory-local-preview', path);
-    assert.equal(createHash('sha256').update(readFileSync(installedFile)).digest('hex'), expected);
+    assert.equal(createHash('sha256').update(readFileSync(installedFile)).digest('hex'), expected, path);
   }
   assert.equal(existsSync(receipt.databasePath), false, 'installation must not open a database');
   const refused = run(['packaging/install-preview.mjs', '--directory', target, '--owner', 'synthetic-windows-owner']);

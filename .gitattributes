@@ -1,0 +1,3 @@
+# npm rewrites CRLF shebangs during installation. Keep the executable's source
+# bytes stable so the installation receipt's source hash still matches.
+packaging/bin/cairn-memory.mjs text eol=lf

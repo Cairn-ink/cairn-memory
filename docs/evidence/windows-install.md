@@ -6,6 +6,13 @@ source contained the Windows npm-launch and CRLF fixes proposed with this
 report. A portable Node distribution was verified against Node's published
 SHA-256 before use; the machine's existing Node installation was not upgraded.
 
+The first Windows CI run also caught npm normalizing a CRLF executable shebang
+after installation, invalidating that file's source hash. A Git attribute now
+keeps this executable in LF form even when Windows checkout converts other text
+files to CRLF. A fresh `core.autocrlf=true` checkout then passed all five native
+tests on Windows with Node 24.15.0, including all 93 installed source hashes.
+The native test checks its shebang and every installed source hash.
+
 The check used `packaging/test/windows-preview.test.mjs` with a new owned
 temporary directory, an installation path containing spaces and `&`, and empty
 model credentials. It installed pinned public dependencies without install
