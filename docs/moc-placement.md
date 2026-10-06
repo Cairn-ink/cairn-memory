@@ -46,6 +46,28 @@ The exact inputs/results and acceptance cases are documented in the
 Correction, deletion and material changes through either core facade remove old
 memory memberships. Exact admission retries leave organization unchanged.
 
+## NULL-title filing
+
+The implemented [NR1–NR8 contract](plans/null-title-main-integration.md) adds
+one exception to canonical duplicate-title refusal: exact namespace, level and
+canonical key may resolve an existing topic whose authoritative visible label
+is NULL, including a nonempty group. Focused core/OpenAI/MCP checks and installed
+NR regressions passed on Node 22.16.0 and 24.15.0; final fixed-candidate review
+and remaining CI are separate delivery gates.
+
+Reuse preserves the topic ID and every original title/source binding.
+Fresh members do not support the old label, and reused topics are not returned
+as `createdMocs`. Visible-title collisions still refuse. Requested edges are
+resolved-pair deduplicated; inherited hierarchy is retained. The three submitted
+explicit existing L2 IDs and one requested new-L2 title remain distinct limits,
+even if that title resolves to an existing NULL L2.
+
+Fresh membership can make retained ancestors navigable again. This is a
+deliberate structural association, not semantic matching or restoration of
+forgotten evidence. Guards, replacement membership, real-delta revision changes,
+true no-op and atomic rollback are preserved. Later recovery cannot rewrite
+a failed initial classification attempt. See [ADR 0004](adr/0004-null-title-structural-reuse.md).
+
 ## Model and token-counting port
 
 `openMemoryCore({path, model})` accepts this explicit adapter:

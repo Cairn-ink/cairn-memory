@@ -1,5 +1,25 @@
 # Compatibility protocol v0.3.0
 
+### Local NULL-title filing boundary
+
+The accepted [NR1–NR8](plans/null-title-main-integration.md) decision permits
+exact same-namespace/level/canonical-key identity reuse only when the existing
+topic's authoritative source-supported label is NULL. The shared-core placement
+implementation has accepted synthetic checks on Node 22.16.0 and 24.15.0.
+This does not change protocol 0.3.0 hosted fields; remaining CI and independent
+fixed-candidate review are tracked in the NR plan.
+
+Reuse must preserve stored identity and original title/source provenance,
+without fresh label sources, a reused DTO or `titleSources` output. New
+membership can expose retained ancestor navigation; this is structural
+association, not semantic equivalence or restored forgotten evidence. Visible
+collisions still refuse `moc_title_conflict`. Existing namespace/revision/index
+guards, public shapes, suppression, retention and model/request limits remain.
+Late placement or initial-completion failures must roll back structure while
+preserving prior admission and receipts; later recovery never rewrites a failed
+initial attempt. No provider default, retry, telemetry, captured field, storage
+schema or spending authority is added. See [ADR 0004](adr/0004-null-title-structural-reuse.md).
+
 ### Private mixed-source-pair metadata boundary
 
 The evaluation-only `cairn-mem0-source-pair-case-v1` capability and durable

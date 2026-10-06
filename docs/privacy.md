@@ -1,6 +1,6 @@
 # Privacy and threat model
 
-This page describes the hosted plugin path and explicitly marked proposed local
+This page describes the hosted plugin path and explicitly marked local
 changes below. Current local storage and deletion boundaries are documented in
 [Local store](local-store.md); local model/MCP data exposure is documented in
 [Protocol](protocol.md). Core has no network client or telemetry, but a configured
@@ -47,6 +47,29 @@ only at HTTP dispatch. No control lock wraps another control lock or network
 wait. Tests cover new/old replies reaching Claude context, ASCII omission,
 fixed-UUID lock contention, fallback/error/pause/deadline behavior, and unchanged
 startup behavior using synthetic data only.
+
+## NULL-title structural association
+
+[NR1–NR8](plans/null-title-main-integration.md) distinguishes a retained topic
+identity from its source-supported label. The implemented exception uses exact
+namespace, hierarchy level and canonical title key to reuse an identity only
+when its authoritative visible label is NULL. Synthetic core, fake-HTTP OpenAI,
+actual MCP and installed-stdio checks cover this boundary on both supported
+Node runtimes; they do not establish model quality or installed-host readiness.
+
+Original title/source bindings remain unsupported and unchanged; new members
+must never renew the old label or restore forgotten text or receipts. Logical
+forget can retain topic identity and hierarchy. Fresh filing may make those
+ancestors navigable again, deliberately associating new memories with retained
+structure. Canonical equality is not semantic equivalence, hashing is not
+anonymity, and this is not a zero-privacy-change claim. Reversing the association
+requires unwinding memberships and hierarchy, not merely changing a label.
+
+Visible collisions, namespace authority, suppression, retention and existing
+public/schema/provider boundaries remain unchanged. The change adds no
+capture, telemetry, automatic retry, model consent or historical-cause claim.
+The released 0.3.0 hosted conversation-ID behavior above is unaffected.
+See [ADR 0004](adr/0004-null-title-structural-reuse.md).
 
 ## Local state
 
