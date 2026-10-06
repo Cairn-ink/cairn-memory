@@ -1,3 +1,4 @@
+import { dispatchClient } from './codex.mjs';
 import { spawn } from 'node:child_process';
 import { writeSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -190,6 +191,10 @@ export async function main(argv, {
     } finally { input.fill(0); input = undefined; }
   };
   try {
+    const dispatch = await dispatchClient(argv, { write, prompt, interactive, browse,
+      nodeVersion, supportedNode, SetupError, validEndpoint });
+    if (dispatch.handled) return dispatch.code;
+    argv = dispatch.argv;
     const [action, ...flags] = argv;
     if (action === '--help' || action === '-h' || action === undefined) {
       write('用法 / Usage: npx @cairn-ink/memory setup [--dry-run] [--no-browser] [--manual-token] [--reauthorize]');
