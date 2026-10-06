@@ -1,6 +1,6 @@
 # Frozen six-case execution under standing authority
 
-Status: execution in progress. Base `516a3d16be8d8ca00f3119698211f30a47a6a727`
+Status: execution completed and audited. Base `516a3d16be8d8ca00f3119698211f30a47a6a727`
 (#348); immutable runtime `7de7688e904f3626e10c4f92dd65fd9d7f84ab48` (#347).
 
 The user authorized this six-case run and reasonable subsequent work toward the
@@ -171,3 +171,88 @@ US$400 authority and this run's stricter enforced US$300 ledger / US$20 round /
 US$30 protection remain unchanged. Root monitors the running process; the
 bounded author only records the supplied finite status and neither reads actual
 JSON nor reruns or launches any command. No automatic restart is authorized.
+
+## Completed six-case result and accounting audit
+
+The sole supervised run closed with actual exit 0 (`56ada9`) at
+`2026-10-06T10:58:22.050Z`. Its observed elapsed time was 8,120,501 ms
+(135 minutes 20.501 seconds) for the whole serial six-case, two-arm comparison,
+including generation and scoring. This is not per-question or interactive/UI
+latency. All 12 generation arms and all 12 judgments resolved; fixed N, resolved
+N for each arm and common-pair N are all 6.
+
+| Arm | Correct | Wrong | Unresolved | Fixed-six correctness |
+| --- | --- | --- | --- | --- |
+| Cairn | 3 | 3 | 0 | 3/6 (50%) |
+| Mem0 | 4 | 2 | 0 | 4/6 (66.7%, rounded) |
+
+Results in the frozen source order (C = correct, W = wrong):
+
+| Case | Question type | Cairn | Mem0 |
+| --- | --- | --- | --- |
+| 1 | single-session-user | W | C |
+| 2 | multi-session | W | W |
+| 3 | temporal-reasoning | W | C |
+| 4 | knowledge-update | C | C |
+| 5 | knowledge-update | C | C |
+| 6 | single-session-assistant | C | W |
+
+Root's independent read-only post-run audit returned actual exit 0 (`e32cdc`).
+It confirmed durable generation/scoring journal equality, the unchanged original
+40,833-attempt prefix, equality with the live book, pending 0 and an open ledger.
+The audit initially exited 1 (`d045ad`) because strict deep comparison treated
+journal null-prototype objects and JSON plain objects differently; that was an
+audit representation mismatch, not unequal JSON values or a provider failure.
+Root corrected the private read-only audit to compare JSON values and suppress
+raw objects, then reran only that audit. There was no paid rerun.
+
+The round added 2,014 requests, all succeeded, and 11,040,683 microUSD in
+conservative reservations. Cumulative reservations are now 252,940,040 microUSD
+(US$252.940040) on the original ledger. The round's known actual cost is
+2,521,259 microUSD (US$2.521259), with 574 successful count-call requests whose
+actual costs remain unknown. The known actual figure is not a complete bill;
+the difference from reservations is not a refund or reusable accounting credit.
+No retry, reselection, replacement, repricing or historical-result overwrite
+occurred. Runtime and source files remain unchanged.
+
+This is a six-case development sample across five types, without preference
+questions, using `indexed-evidence-v1`; it does not assess default MOC, MCP or
+Hermes behavior or establish parity, superiority, statistical significance or
+the causal effect of the transport correction. The proposed next milestone is
+an offline trace of the three Cairn wrong cases from saved source through
+candidate selection, packed context and answer, retaining this frozen score.
+It is not an expensive rerun or a causal conclusion before evidence.
+
+Standing US$400 authority remains granted, while technical enforcement is still
+US$300. Future activation requires a separately verified 300→400 v4 lineage;
+no limit is activated by this result. Root reported 21/21 successful CI checks
+on the preceding documentation head `df442f368c1990e58133943ec789a3700ac72797`
+(`ce9964`); that is not CI evidence for the later result-documentation candidate.
+The bounded GPT-6.1 Sol/high author recorded only root-supplied finite evidence,
+without opening actual JSON/corpus/ledger/key, running an operational command or
+making provider calls. Final result-documentation review and latest-head CI
+remain delivery gates.
+
+## Preliminary post-score trace
+
+Root's finite post-score artifact inspection returned actual exit 0 (`309932`).
+For the three Cairn wrong cases, recall completed with model-selected cards,
+without overflow; the answer packer omitted none of the selected cards. Root's
+separate source inspection returned actual exit 0 (`24149c`) after verifying
+the frozen source hash. Only ordinal and coverage counts are recorded here:
+
+| Case | Selected cards | Required source sessions | Required sessions represented in final provenance |
+| --- | --- | --- | --- |
+| 1 | 1 | 1 | 0 |
+| 2 | 2 | 2 | 2 |
+| 3 | 1 | 2 | 1 |
+
+The session-coverage mismatches are localization signals, not proof of an
+incorrect ranking or a root cause. Case 2 represents both required sessions yet
+still answers incorrectly: session presence alone does not establish that the
+necessary passages reached or were used by the answer. With no selected-card
+packer omissions in these three cases, upstream candidate selection, relevant
+passage coverage and answer use remain unresolved. No question/answer text,
+dataset ID or memory ID is published. Under `diagnosing-bugs`, a red-capable
+offline feedback loop through the actual failing path is required before a fix;
+this preliminary inspection is not a new regression, replay or paid rerun.

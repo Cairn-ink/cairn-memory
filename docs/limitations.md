@@ -1847,3 +1847,43 @@ turn the preparation checkpoint into an execution result: completion, durable
 generation/scoring and accounting still require post-run audit. Standing
 US$400 authority does not change this run's enforced US$300 / US$20 / US$30
 limits, fixed roster or no-restart rule. Historical results remain unchanged.
+
+## Audited N12 six-case development result
+
+The [frozen N12 comparison](plans/native-comparison-execution.md#completed-six-case-result-and-accounting-audit)
+subsequently completed with supervised exit 0 at `2026-10-06T10:58:22.050Z`.
+All 12 generation arms and 12 judgments resolved; both arms' fixed/resolved N
+and common-pair N are 6:
+
+| Arm | Correct | Wrong | Unresolved | Fixed-six correctness |
+| --- | --- | --- | --- | --- |
+| Cairn | 3 | 3 | 0 | 3/6 (50%) |
+| Mem0 | 4 | 2 | 0 | 4/6 (66.7%, rounded) |
+
+Root's independent read-only audit confirmed durable generation/scoring journal
+equality, the unchanged original 40,833-attempt prefix, live-book equality,
+pending 0 and an open ledger. Its first strict comparison failed on
+null-prototype versus JSON plain objects, not different JSON values. Only the
+read-only audit was corrected and rerun; the paid run was not repeated.
+
+The round's 2,014 requests all succeeded. It added 11,040,683 microUSD in
+conservative reservations, bringing cumulative reservations to 252,940,040
+microUSD. Known actual round cost is 2,521,259 microUSD, plus 574 successful
+count-call requests with unknown actual costs. This is not a complete provider
+bill, and reservation differences are not refunds. Whole serial comparison
+elapsed time was 8,120,501 ms (135 minutes 20.501 seconds), not per-question
+or UI latency. No retry, reselection, repricing or old-result overwrite occurred.
+
+Six cases across five types, with no preference coverage, are a development
+sample rather than a full benchmark. The `indexed-evidence-v1` profile does not
+test default MOC/MCP/Hermes quality; these results establish neither semantic
+parity/superiority nor a causal effect of the transport correction. The proposed
+next step is offline evidence tracing of the three Cairn wrong cases through
+saved source, candidates, context and answer, not score replacement or an
+expensive rerun before identifying a cause. Standing US$400 authority remains
+separate from the unchanged technical US$300 cap; future 300→400 activation
+needs an independently verified v4 lineage and is not performed here.
+Preliminary source-session coverage counts localize gaps in wrong cases 1 and 3,
+while case 2 represents both required sessions but remains wrong; none had
+selected-card packer omissions, and these observations do not establish ranking
+or passage-use causes or replace a red-capable offline regression before repair.
