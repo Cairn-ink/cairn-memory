@@ -1806,3 +1806,101 @@ future launch inventory. Fresh binding and revalidation, independent reviews,
 latest-head CI and a specific new paid grant remain necessary. No new paid
 cohort or score has been produced, no old failed case recovered, and no semantic
 parity or general native reliability claim follows from these offline checks.
+
+## Frozen six-case launch preparation
+
+The later [execution checkpoint](plans/native-comparison-execution.md) reuses
+the exact N11 six cases and unchanged indexed-evidence operator. Root's keyless
+assembly authenticated a separate complete 1,472-file launch inventory and
+rebound preparation identity; the six-case native preparation and 279-batch
+projection still match 74,001 requests / 14,088,609 microUSD in conservative
+reservation. This is a conditional upper bound, not charges incurred, completed
+ingestion or a score. The original cumulative ledger remains unchanged at this
+checkpoint. Root subsequently passed authentic keyless preflight and four
+altered-pin/preload refusal checks with no credential/evaluator read, provider
+call, run output or ledger change. Exact Node 22.16/24.15 public tests each
+passed 581/581 and the unchanged private generic suite each passed 34/34, all
+with no skips and actual exit 0. Validation and maintainer validation also
+returned exit 0 on both runtimes. These offline checks do not replace the still
+pending independent source reviews or establish paid completion or a score.
+An independent final inventory reconstruction matched all 1,472 files and
+verified hashes/Node identity; the primary observer again confirmed an open,
+unchanged ledger with pending 0 and delta 0 before any supervisor intent.
+
+The user has now granted this run and reasonable subsequent evaluation toward
+the agreed reliability goal under a US$400 cumulative authority ceiling. This
+does not silently change enforcement: this frozen run retains the existing
+US$300 ledger, US$20 full-round ceiling and US$30 protected reserve. Later
+activation of a larger ledger limit requires preserving and validating its
+authorization chain, not resetting historical reservations. Root alone may
+load credentials and dispatch after the outstanding gates pass; no repeated
+per-round permission request is needed within the standing authority. No new
+paid result, historical recovery, semantic superiority or general native
+reliability claim follows from this preparation.
+
+The later N12 documentation candidate `bd90347c` passed both independent
+nonauthor review axes with zero findings; committed-document validation and
+latest-head runtime/preparation CI also passed. Root then started the sole
+supervised paid six-case dispatch at approximately 08:43 UTC on 2026-10-06.
+Execution is in progress with no exit or score yet. This does not retroactively
+turn the preparation checkpoint into an execution result: completion, durable
+generation/scoring and accounting still require post-run audit. Standing
+US$400 authority does not change this run's enforced US$300 / US$20 / US$30
+limits, fixed roster or no-restart rule. Historical results remain unchanged.
+
+## Audited N12 six-case development result
+
+The [frozen N12 comparison](plans/native-comparison-execution.md#completed-six-case-result-and-accounting-audit)
+subsequently completed with supervised exit 0 at `2026-10-06T10:58:22.050Z`.
+All 12 generation arms and 12 judgments resolved; both arms' fixed/resolved N
+and common-pair N are 6:
+
+| Arm | Correct | Wrong | Unresolved | Fixed-six correctness |
+| --- | --- | --- | --- | --- |
+| Cairn | 3 | 3 | 0 | 3/6 (50%) |
+| Mem0 | 4 | 2 | 0 | 4/6 (66.7%, rounded) |
+
+Root's independent read-only audit confirmed durable generation/scoring journal
+equality, the unchanged original 40,833-attempt prefix, live-book equality,
+pending 0 and an open ledger. Its first strict comparison failed on
+null-prototype versus JSON plain objects, not different JSON values. Only the
+read-only audit was corrected and rerun; the paid run was not repeated.
+
+The round's 2,014 requests all succeeded. It added 11,040,683 microUSD in
+conservative reservations, bringing cumulative reservations to 252,940,040
+microUSD. Known actual round cost is 2,521,259 microUSD, plus 574 successful
+count-call requests with unknown actual costs. This is not a complete provider
+bill, and reservation differences are not refunds. Whole serial comparison
+elapsed time was 8,120,501 ms (135 minutes 20.501 seconds), not per-question
+or UI latency. No retry, reselection, repricing or old-result overwrite occurred.
+
+Six cases across five types, with no preference coverage, are a development
+sample rather than a full benchmark. The `indexed-evidence-v1` profile does not
+test default MOC/MCP/Hermes quality; these results establish neither semantic
+parity/superiority nor a causal effect of the transport correction. The proposed
+next step is offline evidence tracing of the three Cairn wrong cases through
+saved source, candidates, context and answer, not score replacement or an
+expensive rerun before identifying a cause. Standing US$400 authority remains
+separate from the unchanged technical US$300 cap; future 300→400 activation
+needs an independently verified v4 lineage and is not performed here.
+Preliminary source-session coverage counts localize gaps in wrong cases 1 and 3,
+while case 2 represents both required sessions but remains wrong; none had
+selected-card packer omissions, and these observations do not establish ranking
+or passage-use causes or replace a red-capable offline regression before repair.
+
+The later exact-marker diagnostic supersedes unreliable broad saved-match
+counts of 0/3/2: a broad case-2 marker had also matched unrelated source.
+Exact planned-input matches are 2/1/1 for cases 1/2/3, saved receipt matches
+0/0/1, and final-context presence is false for all three, with selected cards
+1/2/1 and no packer omissions. Read-only actual-packer/SQLite probes on exact
+Node 22/24 intentionally exited 1 with identical counts; the pure prepared-source
+probe on Node 24 exited 0, with no API call or database change. These localize
+extraction/admission for cases 1/2 and candidate
+visibility/selection for case 3, not verified causes. Combined select/rank
+`shownRefs` counts do not establish unique visibility. The indexed-evidence
+contract retains selected admitted receipts, not every source window;
+successful capture and catalog metadata with unassessed semantic coverage
+cannot promise completeness, and `sourceSnapshot` cannot recover omitted
+source. Proposed synthetic wire-omission/include controls and stage-specific
+candidate-visibility fixtures remain unimplemented; no source/default change,
+benchmark-score correction or paid rerun is made by this diagnostic correction.
