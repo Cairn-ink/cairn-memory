@@ -350,7 +350,9 @@ test("SessionStart with an invalid replacement endpoint clears auth and reports 
   assert.match(status.stdout, /endpoint: invalid \(HTTPS required; HTTP is loopback-only\)/);
   assert.match(status.stdout, /credential: configured \(not verified yet\)/);
   assert.equal(status.stdout.includes("not seen yet"), false);
-  assert.equal(status.stdout.includes(invalid), false);
-  assert.equal((await readFile(join(f.root, "credential-state.json"), "utf8")).includes(invalid), false);
+  // A regex, not .includes(): the check is that the rejected endpoint is never echoed.
+  const echoed = new RegExp(invalid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  assert.doesNotMatch(status.stdout, echoed);
+  assert.doesNotMatch(await readFile(join(f.root, "credential-state.json"), "utf8"), echoed);
   await assertNoTokenFiles(f);
 });
