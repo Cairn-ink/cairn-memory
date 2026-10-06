@@ -369,8 +369,10 @@ This document describes the public contract implemented by the plugin. JSON Sche
 
 The Claude plugin's local credential status observes the HTTP results of its
 existing authenticated recall/capture requests. HTTP 2xx records `ok`; 401/403
-records `rejected`; other unsuccessful replies or fetch failures record
-`unreachable`. No raw reply or credential material is persisted and no new
+records `rejected`; HTTP 429 records `server-busy`, other unsuccessful replies
+record `server-error`, and fetch failures without a response record `unreachable`.
+SessionStart clears previous auth evidence without adding a request, including
+when a replacement endpoint is invalid; only a fixed diagnostic is retained. No raw reply or credential material is persisted and no new
 authentication route or request is added. The local observation format and
 historical-verification boundary are documented in [Privacy](privacy.md#local-state).
 

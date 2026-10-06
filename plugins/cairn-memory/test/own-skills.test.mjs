@@ -8,7 +8,7 @@ import test from "node:test";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import { captureEventId, transcriptMessages, transcriptWindow } from "../lib/transcript.mjs";
 import { redactSecrets } from "../lib/redact.mjs";
-import { captureCursorPath, readCaptureCursor, writeCaptureCursor } from "../lib/capture-cursor.mjs";
+import { captureCursorPath, writeCaptureCursor } from "../lib/capture-cursor.mjs";
 
 const hook = fileURLToPath(new URL("../scripts/hook.mjs", import.meta.url));
 const preload = fileURLToPath(new URL("./fixtures/status-fetch-preload.mjs", import.meta.url));
@@ -86,7 +86,7 @@ async function captureFixture(t, sessionId = "own-skills-session") {
     CAIRN_STATUS_FIXTURE_REPLY: JSON.stringify({ status: 200, body: { duplicate: false, memoryCount: 1 } }),
   };
   return { workspace, data, transcript, env, sessionId,
-    cursor: () => readCaptureCursor(captureCursorPath(data, sessionId)),
+    cursor: async () => JSON.parse(await readFile(captureCursorPath(data, sessionId), "utf8")),
     calls: async () => (await readFile(requests, "utf8")).trim().split("\n").filter(Boolean).map(JSON.parse),
     run: () => processResult(workspace, "capture", env, {
       session_id: sessionId, transcript_path: transcript, cwd: "/synthetic/project", hook_event_name: "Stop",
@@ -116,16 +116,30 @@ test("every installed skill and future cairn-memory skills withhold the whole tu
   }
 });
 
-test("Skill tool-only records and meta skill base directories start withholding", () => {
-  const markers = [skillTool("cairn-memory:status"),
-    user("Base directory for this skill: /synthetic/plugins/cairn-memory/skills/status\nInstructions", { isMeta: true }),
-    user("Base directory for this skill: /synthetic/cache/cairn-memory/0.1.5/skills/status\nInstructions", { isMeta: true }),
-    user("Base directory for this skill: C:\\synthetic\\cairn-memory\\0.1.5\\skills\\status\r\nInstructions", { isMeta: true }),
-  ];
-  for (const marker of markers) {
-    const state = {};
-    assert.ok(transcriptWindow(jsonl([marker, assistant("Command explanation")]), "markers", { turnState: state }).every((m) => m.withheld));
-    assert.equal(state.ownSkillTurn, true);
+test("Skill tool-only records and the exact installed plugin skill directory start withholding", () => {
+  const ownedRoot = fileURLToPath(new URL("../", import.meta.url));
+  for (const root of [ownedRoot, "/synthetic/.claude/plugins/cache/cairn-memory/cairn-memory/0.3.0",
+    "C:\\synthetic\\.claude\\plugins\\cache\\cairn-memory\\cairn-memory\\0.3.0"]) {
+    for (const marker of [skillTool("cairn-memory:status"),
+      user(`Base directory for this skill: ${root.replace(/[\\/]+$/, "")}/skills/status\nInstructions`, { isMeta: true })]) {
+      const state = {};
+      assert.ok(transcriptWindow(jsonl([marker, assistant("Command explanation")]), "markers", {
+        turnState: state, pluginRoot: root,
+      }).every((m) => m.withheld));
+      assert.equal(state.ownSkillTurn, true);
+    }
+  }
+});
+
+test("project skills and other marketplace/plugin identities do not withhold their answers", () => {
+  const pluginRoot = "/synthetic/.claude/plugins/cache/cairn-memory/cairn-memory/0.3.0";
+  for (const directory of ["/synthetic/code/cairn-memory/.claude/skills/deploy",
+    "/synthetic/.claude/plugins/cache/cairn-memory/other-plugin/0.3.0/skills/status",
+    "/synthetic/.claude/plugins/cache/other-marketplace/cairn-memory/0.3.0/skills/status",
+    pluginRoot + "/other/skills/status", pluginRoot + "/skills/../status"]) {
+    const record = user(`Base directory for this skill: ${directory}\nInstructions`, { isMeta: true });
+    const kept = transcriptMessages(jsonl([record, assistant("Ordinary answer")]), "other", { pluginRoot });
+    assert.deepEqual(kept.map((m) => m.content), ["Ordinary answer"]);
   }
 });
 
@@ -155,13 +169,22 @@ test("whole plugin control outputs are withheld without markers; longer explanat
     assert.ok(output.startsWith("Cairn automatic memory"));
     assert.equal(transcriptMessages(jsonl([assistant(output)]), "output").length, 0);
     assert.equal(transcriptMessages(jsonl([user(output, { promptSource: "typed" })]), "output").length, 1);
-    for (const explanation of [`The plugin printed: ${output}`, `${output}\nHere is what this means.`]) {
+    for (const explanation of [`The plugin printed: ${output}`, `${output}\nHere is what this means.`, `${output} Also, your flight is at 9am.`]) {
+      assert.equal(transcriptMessages(jsonl([assistant(explanation)]), "output").length, 1);
+    }
+    if (action === "status") {
+      const explanation = output.replace("; telemetry:", "; your flight is at 9am; telemetry:");
       assert.equal(transcriptMessages(jsonl([assistant(explanation)]), "output").length, 1);
     }
   }
   for (const output of ["Cairn automatic memory is active. capture: quota_reached; reset unknown",
-    "Cairn quota state repaired to open; automatic memory is active."]) {
+    "Cairn automatic memory is active. recall: quota_reached; 2026-10-06T10:00:00.123456Z",
+    "Cairn automatic memory: active; capture: ready; reset unknown; telemetry: on; endpoint: https://cairn.ink; credential: configured.",
+    "Cairn automatic memory: paused; recall: cooldown; retry after 2026-10-06T10:00:00.123Z; telemetry: off; endpoint: https://cairn.ink; credential: missing.",
+    "Cairn quota state repaired to open; automatic memory is active.",
+    "Cairn automatic memory: pairing_needed; coordination unreadable."]) {
     assert.equal(transcriptMessages(jsonl([assistant(output)]), "output").length, 0);
+    assert.equal(transcriptMessages(jsonl([assistant(output + " Also, your flight is at 9am.")]), "output").length, 1);
   }
 });
 

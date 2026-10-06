@@ -281,7 +281,9 @@ hooks, because Claude Code's Bash tool does not inherit sensitive plugin options
 `configured (verified <time>)` reports the last accepted authenticated request;
 `rejected` links to the configured endpoint's token page. `configured (not
 verified yet)` or `configured (unreachable <time>; not verified)` does not claim
-successful authentication. `not seen yet` asks you to restart Claude Code and
+successful authentication; `server answered: busy/error` reports an HTTP refusal.
+SessionStart clears the old verdict so token rotation requires new verification.
+`not seen yet` asks you to restart Claude Code and
 send one message; `missing` means a hook actually observed no configured token.
 Status makes no network request and never reads the token from secure storage.
 

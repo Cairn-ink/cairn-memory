@@ -6,7 +6,9 @@ import { normalizeEndpoint } from "./config.mjs";
 import { withFileLock } from "./file-lock.mjs";
 import { checkedPath, privateRead, notifyWrite } from "./private-state.mjs";
 
-const outcomes = new Set(["ok", "rejected", "unreachable"]);
+const outcomes = new Set(["ok", "rejected", "unreachable", "server-busy", "server-error"]);
+export const INVALID_ENDPOINT = "invalid (HTTPS required; HTTP is loopback-only)";
+const observationEndpoint = (value) => value === INVALID_ENDPOINT ? value : normalizeEndpoint(value);
 const instant = (value) => typeof value === "string" &&
   Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 const exactKeys = (value, keys) => value !== null && typeof value === "object" &&
@@ -22,8 +24,9 @@ export async function readCredentialState(root) {
     const value = JSON.parse(bytes);
     if (!exactKeys(value, ["version", "configured", "endpoint", "observed_at", "auth"]) ||
         value.version !== 1 || typeof value.configured !== "boolean" ||
-        !instant(value.observed_at) || normalizeEndpoint(value.endpoint) !== value.endpoint ||
+        !instant(value.observed_at) || observationEndpoint(value.endpoint) !== value.endpoint ||
         (value.auth !== null && (!value.configured ||
+          value.endpoint === INVALID_ENDPOINT ||
           !exactKeys(value.auth, ["outcome", "at"]) || !outcomes.has(value.auth.outcome) ||
           !instant(value.auth.at)))) return undefined;
     return value;
@@ -57,14 +60,14 @@ async function update(root, work) {
 }
 
 export async function recordCredentialConfiguration(root, {
-  configured, endpoint, observedAt,
+  configured, endpoint, observedAt, resetAuth = false,
 }) {
-  endpoint = normalizeEndpoint(endpoint);
+  endpoint = observationEndpoint(endpoint);
   if (typeof configured !== "boolean" || !instant(observedAt)) throw new Error("invalid_credential_state");
   await update(root, (previous) => {
     // Async SessionStart must not erase a newer prompt's observation.
     if (previous && previous.observed_at > observedAt) return;
-    const auth = configured && previous?.configured && previous.endpoint === endpoint ? previous.auth : null;
+    const auth = !resetAuth && configured && previous?.configured && previous.endpoint === endpoint ? previous.auth : null;
     return { version: 1, configured, endpoint, observed_at: observedAt, auth };
   });
 }
@@ -73,7 +76,7 @@ export async function recordCredentialAuth(root, { endpoint, observedAt, outcome
   if (!outcomes.has(outcome) || !instant(at)) throw new Error("invalid_credential_state");
   await update(root, (previous) => {
     // An older in-flight request cannot validate a newer hook's configuration.
-    if (!previous?.configured || previous.endpoint !== endpoint ||
+    if (!previous?.configured || previous.endpoint === INVALID_ENDPOINT || previous.endpoint !== endpoint ||
         previous.observed_at !== observedAt || previous.auth?.at > at) return;
     return { ...previous, auth: { outcome, at } };
   });
@@ -91,6 +94,10 @@ export function credentialDescription(state, { hasToken = false } = {}) {
   if (state.auth?.outcome === "ok") return `configured (verified ${state.auth.at})`;
   if (state.auth?.outcome === "unreachable") {
     return `configured (unreachable ${state.auth.at}; not verified)`;
+  }
+  if (["server-busy", "server-error"].includes(state.auth?.outcome)) {
+    const answer = state.auth.outcome === "server-busy" ? "busy" : "error";
+    return `configured (server answered: ${answer} ${state.auth.at}; not verified)`;
   }
   return "configured (not verified yet)";
 }

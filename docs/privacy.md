@@ -18,7 +18,10 @@ From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude 
 Cairn Memory's own skill turns (`status`, `pause`, `resume`, and future skills in
 the same plugin namespace) are withheld from invocation through the next submitted
 user prompt. The parser recognizes command XML, the `Skill` tool's qualified
-name, and meta skill expansion headers identifying this plugin's skill directory.
+name, and meta skill expansion headers identifying a direct skill directory
+inside the exact loaded plugin root (including marketplace/plugin/version for
+installed cache paths). A project directory or marketplace named `cairn-memory`
+does not establish ownership.
 Meta records and tool results do not end the turn. A plain user record also ends
 it on older hosts without `promptSource`. The cursor retains only a boolean so
 later capture hooks still withhold continued answers. Whole single-line assistant
@@ -64,29 +67,36 @@ startup behavior using synthetic data only.
 
 Claude Code exports sensitive plugin option values to hook processes, but not
 to commands Claude runs through the Bash tool. The status skill passes the
-substituted `${CLAUDE_PLUGIN_DATA}` path explicitly; it does not inspect Claude
-Code's secure credential store. See the official
+substituted `${CLAUDE_PLUGIN_DATA}` path explicitly, as do pause and resume;
+these controls do not inspect Claude Code's secure credential store. See the official
 [variable environment rules](https://code.claude.com/docs/en/plugins-reference#where-each-variable-resolves)
 and [saved option rules](https://code.claude.com/docs/en/plugins-reference#reference-a-saved-value).
 
 Hooks keep a private 0600 `credential-state.json` in the plugin profile's data
 directory (even when memory uses a paired shared root). Its strict fields are
-`version: 1`, `configured` (boolean), normalized `endpoint`, `observed_at` (UTC
+`version: 1`, `configured` (boolean), normalized `endpoint` (or the fixed
+`invalid (HTTPS required; HTTP is loopback-only)` diagnostic), `observed_at` (UTC
 ISO timestamp), and `auth` (null or `{outcome, at}`). Outcomes are limited to
-`ok`, `rejected` (HTTP 401/403), and `unreachable` (network failure or another
-unsuccessful HTTP response). This file and its atomic-write/lock files contain
+`ok`, `rejected` (HTTP 401/403), `unreachable` (fetch failure without a reply),
+`server-busy` (HTTP 429), and `server-error` (other unsuccessful HTTP replies,
+including 5xx). Busy/error status says the server answered; it does not claim
+successful authentication. This file and its atomic-write/lock files contain
 no conversation, token, token hash, token prefix, response body, or raw error.
 Only hooks write observations; status never infers missing from its own empty
 environment. Malformed, unreadable or unsafe observation files are unknown.
 Observation write failures remain silent and cannot block normal host work.
+Invalid configured URLs retain only that fixed diagnostic, never the rejected
+raw URL, and cannot carry auth evidence. SessionStart still clears an old verdict
+when the replacement endpoint is invalid.
 
 Auth observations reuse actual authenticated recall/capture fetches. They add
 no requests, retries or startup probes; unauthenticated telemetry is excluded.
 An HTTP success records accepted authentication even if the memory response
 later fails protocol validation. Empty prompts, pauses and quota gates that
-prevent dispatch cannot verify credentials. SessionStart retains the last auth
-outcome for the same configured endpoint without probing; removing the token or
-changing endpoints clears that outcome. Older in-flight requests and delayed
+prevent dispatch cannot verify credentials. SessionStart clears the previous
+auth outcome without probing, because a token can change while paused or quota
+gated and no credential identifier is retained. Removing the token or changing
+endpoints also clears that outcome. Older in-flight requests and delayed
 SessionStart writes cannot replace a newer configuration observation. A shown
 verification time is a historical observation, not a guarantee that a token
 has not since been rotated or revoked. The next actual request supplies new

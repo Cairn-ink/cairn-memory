@@ -3,4 +3,4 @@ description: Resume Cairn automatic memory capture and recall on this machine.
 disable-model-invocation: true
 ---
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs" resume` with Bash and report its output.
+Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs" resume --plugin-data "${CLAUDE_PLUGIN_DATA}"` with Bash and report its output.

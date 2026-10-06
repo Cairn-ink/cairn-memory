@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { open, stat } from "node:fs/promises";
+import { open, readFile, stat } from "node:fs/promises";
 import { platform } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 import { captureEvent } from "../lib/capture-event.mjs";
@@ -25,7 +25,7 @@ import { prepareRecallQuery } from "../lib/recall-query.mjs";
 import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
 import { VERSION } from "../lib/version.mjs";
 import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
-import { credentialDescription, readCredentialState, recordCredentialAuth,
+import { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
   recordCredentialConfiguration } from "../lib/credential-state.mjs";
 
 const action = process.argv[2] ?? "status";
@@ -47,7 +47,7 @@ try {
   endpoint = normalizeEndpoint(configuredEndpoint);
   post = createJsonPoster({ endpoint, token });
 } catch {
-  endpoint = "invalid (HTTPS required; HTTP is loopback-only)";
+  endpoint = INVALID_ENDPOINT;
   post = async () => {
     throw new Error("invalid_endpoint");
   };
@@ -92,7 +92,7 @@ async function dispatchActive(generation, start) {
     const operation = start();
     return Promise.resolve(operation).then(async (response) => {
       const outcome = [401, 403].includes(response.status) ? "rejected" :
-        response.ok ? "ok" : "unreachable";
+        response.ok ? "ok" : response.status === 429 ? "server-busy" : "server-error";
       await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome,
         at: new Date().toISOString() }).catch(() => {});
       return response;
@@ -184,6 +184,15 @@ async function captureLocked(hookInput, statePath, generation) {
   const transcriptPath = hookInput.transcript_path;
   const size = (await stat(transcriptPath)).size;
   let cursor = await readCaptureCursor(statePath);
+  // Keep Claude-only turn metadata out of the frozen shared cursor helper.
+  // The caller holds this session's capture lock throughout both reads.
+  if (cursor) {
+    try {
+      if (JSON.parse(await readFile(statePath, "utf8")).ownSkillTurn === true) {
+        cursor.ownSkillTurn = true;
+      }
+    } catch { /* Missing/corrupt extension carries no verified turn state. */ }
+  }
 
   // After every pause barrier, the first hook for each session establishes a
   // fresh EOF boundary and transmits nothing. This also protects sessions the
@@ -317,6 +326,13 @@ async function control() {
     process.stdout.write("Cairn automatic memory is paused.\n");
     return;
   }
+  const credentialState = await readCredentialState(credentialDir);
+  const statusEndpoint = !token && credentialState ? credentialState.endpoint : endpoint;
+  const statusCredential = credentialState?.endpoint === statusEndpoint ? credentialState : undefined;
+  // Bash controls and status must address the same observed endpoint's quota gate.
+  if (statusEndpoint.startsWith("http")) {
+    quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint: statusEndpoint }) };
+  } else quotaTarget = undefined;
   if (action === "resume") {
     const gate = quotaTarget ? await resumeHostedQuota(quotaTarget) : { status: "active" };
     if (gate.status === "unavailable") throw new Error("quota_gate_unavailable");
@@ -334,13 +350,6 @@ async function control() {
     return;
   }
   const state = await readControlState(dataDir);
-  const credentialState = await readCredentialState(credentialDir);
-  const statusEndpoint = !token && credentialState ? credentialState.endpoint : endpoint;
-  const statusCredential = credentialState?.endpoint === statusEndpoint ? credentialState : undefined;
-  // Quota gates are endpoint-scoped, so Bash must use the observed endpoint too.
-  if (statusEndpoint.startsWith("http")) {
-    quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint: statusEndpoint }) };
-  }
   const quota = quotaTarget ? await hostedQuotaStatus(quotaTarget) : { mode: "open" };
   const quotaNote = quota.mode === "invalid" ? "; quota_state_invalid; run resume to repair" :
     quota.mode === "unavailable" || quota.status === "unavailable" ? "; quota gate unavailable" :
@@ -361,11 +370,15 @@ async function control() {
 try {
   const { pairingRecord, rest } = parsePairingRecord(process.argv.slice(3));
   if (rest.length) {
-    if (rest.length !== 2 || rest[0] !== "--plugin-data" || !isAbsolute(rest[1])) {
+    if (rest.length !== 2 || rest[0] !== "--plugin-data") {
       throw new Error("invalid_plugin_data_argument");
     }
     // Skill content substitutes this path; Bash does not inherit plugin env.
-    process.env.CLAUDE_PLUGIN_DATA = resolve(rest[1]);
+    // Older hosts can leave it empty or unsubstituted; retain legacy fallback.
+    if (rest[1] && rest[1] !== "${CLAUDE_PLUGIN_DATA}") {
+      if (!isAbsolute(rest[1])) throw new Error("invalid_plugin_data_argument");
+      process.env.CLAUDE_PLUGIN_DATA = resolve(rest[1]);
+    }
   }
   clientOptions = { client: "claude", pairingRecord };
   binding = await resolveClient(clientOptions);
@@ -390,7 +403,7 @@ try {
       const hookInput = await input();
       if (["start", "recall", "capture", "capture-detached"].includes(action)) {
         await recordCredentialConfiguration(credentialDir, {
-          configured: Boolean(token), endpoint, observedAt,
+          configured: Boolean(token), endpoint, observedAt, resetAuth: action === "start",
         }).catch(() => {});
       }
       if (action === "start") await telemetry("plugin_started");

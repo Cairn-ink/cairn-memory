@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — credential/control review corrections
+
+- Restore the frozen shared cursor helper and its parity hash; read Claude-only
+  skill-turn metadata in the hook without changing shared cursor semantics.
+- Clear old auth verdicts on SessionStart and distinguish server busy/error
+  replies from an unreachable service. Invalid endpoints use a fixed diagnostic
+  and clear old auth too; token rotation adds no auth probe.
+- Give pause/resume the same substituted plugin-data directory as status. Empty
+  or unsubstituted plugin-data arguments retain the legacy fallback. Resume also
+  resets the same observed endpoint quota gate that status displays.
+- Match meta skill directories inside the exact installed plugin root and match
+  complete control output lines. Project/marketplace names and appended prose
+  do not withhold ordinary answers. Token leak checks use Node fs only.
+
 ## Unreleased — exclude Cairn's own skill turns from automatic capture
 
 - Withhold Cairn Memory skill invocation records and all answers until the next

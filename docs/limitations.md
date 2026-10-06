@@ -1127,6 +1127,14 @@ The evidence behind it is narrow:
   status/pause/resume output lines can be recognized in that case. Longer quoted
   outputs in otherwise ordinary assistant answers remain eligible. No backfill
   or removal of already delivered memories is performed.
+- **Review validation.** A frozen shared cursor hash was accidentally changed by
+  the first skill-turn follow-up. Comparing only the names of failing test files
+  missed that incremental parity assertion. The helper is restored byte for byte;
+  Claude-specific metadata is read only by the hook. Hash and mechanism checks
+  must be reported separately from full integration results. A sandbox that
+  rejects loopback listeners (`listen EPERM`) or child socketpair stdio cannot
+  certify the full client-bundle/hosted parity gate; matching failure filenames
+  is not evidence of equivalence or a passing CI run.
 
 ## Decision confirmation hides whole episode context
 

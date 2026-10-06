@@ -8,6 +8,7 @@ import test from "node:test";
 import { createTestWorkspace } from "../../../tools/testing/workspace.mjs";
 import { readCredentialState, recordCredentialConfiguration, recordCredentialAuth }
   from "../lib/credential-state.mjs";
+import { transcriptMessages } from "../lib/transcript.mjs";
 
 const hook = fileURLToPath(new URL("../scripts/hook.mjs", import.meta.url));
 const fetchFixture = fileURLToPath(new URL("./fixtures/status-fetch-preload.mjs", import.meta.url));
@@ -73,10 +74,22 @@ async function fixture(t) {
         .filter(Boolean).map((line) => JSON.parse(line)));
       return result;
     },
-    status() {
+    async status(extra = [], options = {}) {
       // Exactly the skill's command after Claude substitutes the two paths:
       // no plugin path or option env is inherited by the Bash-like child.
-      return processResult(process.execPath, [hook, "status", "--plugin-data", root], { env });
+      const result = await processResult(process.execPath, [hook, "status", ...(extra.length ? extra : ["--plugin-data", root])], { env: { ...env, ...options } });
+      if (result.exitCode === 0) {
+        const record = { type: "assistant", message: { content: result.stdout.trim() } };
+        assert.equal(transcriptMessages(JSON.stringify(record), "status-output").length, 0);
+        record.message.content += " Also, your flight is at 9am.";
+        assert.equal(transcriptMessages(JSON.stringify(record), "status-output").length, 1);
+      }
+      return result;
+    },
+    async skillControl(action) {
+      const skill = await readFile(new URL(`../skills/${action}/SKILL.md`, import.meta.url), "utf8");
+      assert.ok(skill.includes(action + ' --plugin-data "${CLAUDE_PLUGIN_DATA}"'));
+      return processResult(process.execPath, [hook, action, "--plugin-data", root], { env });
     },
   };
 }
@@ -100,12 +113,7 @@ async function assertNoTokenFiles(f) {
       assert.equal(bytes.includes(token.slice(0, 18)), false, path);
     }
   }
-  // Independently grep every written file, including hidden state and lock files.
-  for (const token of [syntheticToken, rotatedToken]) {
-    const grep = await processResult("rg", ["--hidden", "--no-ignore", "--fixed-strings",
-      "--files-with-matches", "--", token, f.workspace.path]);
-    assert.equal(grep.exitCode, 1, grep.stdout + grep.stderr);
-  }
+
 }
 
 test("Bash-like status reads hook-verified configuration and endpoint without token env", async (t) => {
@@ -176,39 +184,48 @@ test("SessionStart telemetry cannot verify auth; empty/paused recall makes no au
   await assertNoTokenFiles(f);
 });
 
-for (const outage of ["network", "http"]) {
-  test(`${outage} outage retains configured and records unreachable without raw errors`, async (t) => {
+for (const outage of ["network", "http", "busy"]) {
+  test(`${outage} outage retains configured and distinguishes server replies from unreachable without raw errors`, async (t) => {
     const f = await fixture(t);
-    f.respond(503, { error: syntheticToken });
+    f.respond(outage === "busy" ? 429 : 503, { error: syntheticToken });
     const endpoint = outage === "network" ? "http://127.0.0.1:9" : f.endpoint;
     assert.deepEqual(await f.hook("recall", { CLAUDE_PLUGIN_OPTION_API_ENDPOINT: endpoint,
       CAIRN_STATUS_FIXTURE_OUTAGE: outage === "network" ? "true" : "false" }),
       { exitCode: 0, stdout: "", stderr: "" });
     const state = await readCredentialState(f.root);
     assert.equal(state.configured, true);
-    assert.equal(state.auth.outcome, "unreachable");
+    assert.equal(state.auth.outcome, outage === "network" ? "unreachable" : outage === "busy" ? "server-busy" : "server-error");
     const result = await f.status();
     assert.equal(result.exitCode, 0);
-    assert.match(result.stdout, /credential: configured \(unreachable .*; not verified\)/);
+    assert.match(result.stdout, outage === "network" ? /credential: configured \(unreachable .*; not verified\)/ :
+      outage === "busy" ? /server answered: busy .*; not verified/ : /server answered: error .*; not verified/);
     assert.equal(result.stdout.includes("missing"), false);
     await assertNoTokenFiles(f);
   });
 }
 
-test("SessionStart retains the last auth without probing; successful recall replaces rejection", async (t) => {
-  const f = await fixture(t);
-  f.respond(401);
-  await f.hook();
-  assert.equal((await readCredentialState(f.root)).auth.outcome, "rejected");
-  await f.hook("start");
-  assert.equal((await readCredentialState(f.root)).auth.outcome, "rejected");
-  assert.equal(f.requests.length, 1);
-  f.respond(200, { memories: [] });
-  await f.hook("recall", { CLAUDE_PLUGIN_OPTION_API_TOKEN: rotatedToken });
-  assert.equal((await readCredentialState(f.root)).auth.outcome, "ok");
-  assert.equal(f.requests.length, 2);
-  await assertNoTokenFiles(f);
-});
+for (const initial of [200, 401]) {
+  test(`SessionStart clears previous HTTP ${initial} auth on token rotation without probing`, async (t) => {
+    const f = await fixture(t);
+    f.respond(initial, { memories: [] });
+    await f.hook();
+    assert.equal((await readCredentialState(f.root)).auth.outcome, initial === 200 ? "ok" : "rejected");
+    await f.hook("pause");
+    await f.hook("start", { CLAUDE_PLUGIN_OPTION_API_TOKEN: rotatedToken });
+    assert.equal((await readCredentialState(f.root)).auth, null);
+    const status = await f.status();
+    assert.match(status.stdout, /credential: configured \(not verified yet\)/);
+    assert.equal(status.stdout.includes("rejected"), false);
+    assert.equal(status.stdout.includes("verified 2026"), false);
+    assert.equal(f.requests.length, 1);
+    await f.hook("resume");
+    f.respond(200, { memories: [] });
+    await f.hook("recall", { CLAUDE_PLUGIN_OPTION_API_TOKEN: rotatedToken });
+    assert.equal((await readCredentialState(f.root)).auth.outcome, "ok");
+    assert.equal(f.requests.length, 2);
+    await assertNoTokenFiles(f);
+  });
+}
 
 test("invalid or symlinked observations are unknown, never missing or printed", async (t) => {
   const f = await fixture(t);
@@ -252,7 +269,7 @@ test("late SessionStart and old authenticated responses cannot overwrite newer h
   const newer = "2026-10-06T06:31:00.000Z";
   await recordCredentialConfiguration(f.root, { ...config, observedAt: newer });
   await recordCredentialAuth(f.root, { endpoint: f.endpoint, observedAt: newer, outcome: "ok", at: newer });
-  await recordCredentialConfiguration(f.root, config);
+  await recordCredentialConfiguration(f.root, { ...config, resetAuth: true });
   await recordCredentialAuth(f.root, { endpoint: f.endpoint, observedAt: time, outcome: "rejected", at: newer });
   const state = await readCredentialState(f.root);
   assert.equal(state.observed_at, newer);
@@ -268,4 +285,72 @@ test("status skill passes the substituted data path and forbids credential-store
   assert.ok(skill.includes('status --plugin-data "${CLAUDE_PLUGIN_DATA}"'));
   assert.ok(skill.includes("Do not print or inspect"));
   assert.ok(skill.includes("credential store"));
+});
+
+test("Bash pause/resume skills share the hook data directory and status observes the real pause", async (t) => {
+  const f = await fixture(t);
+  await f.hook();
+  assert.equal(f.requests.length, 1);
+  const paused = await f.skillControl("pause");
+  assert.deepEqual(paused, { exitCode: 0, stdout: "Cairn automatic memory is paused.\n", stderr: "" });
+  assert.match((await f.status()).stdout, /Cairn automatic memory: paused/);
+  await f.hook();
+  assert.equal(f.requests.length, 1, "paused hook must not recall");
+  assert.equal((await f.skillControl("resume")).exitCode, 0);
+  assert.match((await f.status()).stdout, /Cairn automatic memory: active/);
+  await f.hook();
+  assert.equal(f.requests.length, 2, "resumed hook recalls again");
+  await assertNoTokenFiles(f);
+});
+
+test("empty and unsubstituted plugin-data arguments preserve legacy status fallback", async (t) => {
+  const f = await fixture(t);
+  const old = await f.status(["--plugin-data", ""]);
+  assert.equal(old.exitCode, 0);
+  assert.equal(old.stderr, "");
+  assert.match(old.stdout, /Cairn automatic memory: active/);
+  const unsubstituted = await f.status(["--plugin-data", "${CLAUDE_PLUGIN_DATA}"]);
+  assert.deepEqual(unsubstituted, old);
+  await assertNoTokenFiles(f);
+});
+
+test("token leakage scans use Node fs and work with no executables on PATH", async (t) => {
+  const f = await fixture(t);
+  assert.equal((await f.hook("recall", { PATH: "" })).exitCode, 0);
+  assert.equal((await f.status([], { PATH: "" })).exitCode, 0);
+  await assertNoTokenFiles(f);
+});
+
+test("Bash resume clears the observed custom endpoint's cooldown, as shown by status", async (t) => {
+  const f = await fixture(t);
+  f.respond(429);
+  await f.hook();
+  assert.match((await f.status()).stdout, /recall: cooldown/);
+  assert.equal(f.requests.length, 1);
+  assert.equal((await f.skillControl("resume")).exitCode, 0);
+  assert.equal((await f.status()).stdout.includes("recall: cooldown"), false);
+  f.respond(200, { memories: [] });
+  await f.hook();
+  assert.equal(f.requests.length, 2);
+  await assertNoTokenFiles(f);
+});
+
+test("SessionStart with an invalid replacement endpoint clears auth and reports the fixed diagnostic", async (t) => {
+  const f = await fixture(t);
+  await f.hook();
+  assert.equal((await readCredentialState(f.root)).auth.outcome, "ok");
+  const invalid = "http://invalid.synthetic.invalid/private-config";
+  await f.hook("start", { CLAUDE_PLUGIN_OPTION_API_ENDPOINT: invalid,
+    CLAUDE_PLUGIN_OPTION_API_TOKEN: rotatedToken });
+  const state = await readCredentialState(f.root);
+  assert.equal(state.auth, null);
+  assert.equal(state.endpoint, "invalid (HTTPS required; HTTP is loopback-only)");
+  assert.equal(f.requests.length, 1);
+  const status = await f.status();
+  assert.match(status.stdout, /endpoint: invalid \(HTTPS required; HTTP is loopback-only\)/);
+  assert.match(status.stdout, /credential: configured \(not verified yet\)/);
+  assert.equal(status.stdout.includes("not seen yet"), false);
+  assert.equal(status.stdout.includes(invalid), false);
+  assert.equal((await readFile(join(f.root, "credential-state.json"), "utf8")).includes(invalid), false);
+  await assertNoTokenFiles(f);
 });
