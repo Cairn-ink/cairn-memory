@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased — credential/control review corrections
+## 0.3.1 — 2026-10-06
+
+Plugin and marketplace 0.3.1. Protocol stays 0.3.0.
+
+### credential/control review corrections
 
 - Restore the frozen shared cursor helper and its parity hash; read Claude-only
   skill-turn metadata in the hook without changing shared cursor semantics.
@@ -14,7 +18,7 @@
   complete control output lines. Project/marketplace names and appended prose
   do not withhold ordinary answers. Token leak checks use Node fs only.
 
-## Unreleased — exclude Cairn's own skill turns from automatic capture
+### exclude Cairn's own skill turns from automatic capture
 
 - Withhold Cairn Memory skill invocation records and all answers until the next
   submitted user prompt, using Claude Code command/skill markers. Keep only a
@@ -23,7 +27,7 @@
   invocation marker is absent. Ordinary mentions remain conversation.
 - Preserve 0.1.0 batch boundaries, message identities and capture event IDs.
 
-## Unreleased — truthful Claude Code credential status
+### truthful Claude Code credential status
 
 - Read hook-written credential observations when the status skill's Bash command
   cannot see Claude Code's sensitive plugin options. Pass the substituted plugin
