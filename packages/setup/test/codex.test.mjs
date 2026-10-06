@@ -14,8 +14,10 @@ async function fixture(t, options = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'cairn-codex-setup-' });
   const home = join(workspace.path, options.customHome ? 'custom-codex' : '.codex');
   const fakeBin = join(workspace.path, 'bin'); mkdirSync(fakeBin);
+  const projectTmp = join(workspace.path, 'project-tmp');
+  if (options.projectTmp) { mkdirSync(join(projectTmp, '.codex'), {recursive:true}); writeFileSync(join(projectTmp,'.codex','config.toml'), 'model = "project"\n'); }
   const callsPath = join(workspace.path, 'calls.jsonl'); writeFileSync(callsPath, '');
-  const statePath = join(workspace.path, 'state.json'); writeFileSync(statePath, JSON.stringify({ token: secret, ...options.state }));
+  const statePath = join(workspace.path, 'state.json'); writeFileSync(statePath, JSON.stringify({ token: secret, ...options.state, ...(options.projectConfig ? {projectConfig: options.projectConfig, projectCwd: workspace.path} : {}) }));
   if (!options.noCodex) writeFileSync(join(fakeBin, 'codex'),
     `#!${process.execPath}\n${readFileSync(new URL('./fake-codex.mjs', import.meta.url), 'utf8')}`, { mode: 0o755 });
   if (options.claude) writeFileSync(join(fakeBin, 'claude'), `#!${process.execPath}\nprocess.exit(8);`, { mode: 0o755 });
@@ -44,7 +46,7 @@ async function fixture(t, options = {}) {
   const result = await new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [harness, ...(options.args ?? ['setup', '--client', 'codex', '--no-browser'])], {
       cwd: workspace.path, stdio: ['ignore', 'pipe', 'pipe'],
-      env: { PATH: fakeBin, HOME: workspace.path, FAKE_CALLS: callsPath, FAKE_STATE: statePath,
+      env: { PATH: options.relativePath ? 'bin' : fakeBin, HOME: workspace.path, TMPDIR: options.projectTmp ? projectTmp : process.env.TMPDIR, FAKE_CALLS: callsPath, FAKE_STATE: statePath,
         ...(options.customHome ? { CODEX_HOME: home } : {}), ...options.env },
     });
     let stdout = '', stderr = '';
@@ -107,9 +109,10 @@ test('configured Codex is idempotent and status never prints native secret outpu
 });
 
 test('existing HTTP endpoint without credential prompts only for PAT', async t => {
-  const result = await fixture(t, { config: endpoint, answers: [secret] });
-  assert.equal(result.code, 0, result.stdout); assert.equal(result.prompts.length, 1);
-  assert.equal(result.prompts[0].options.secret, true); assert.equal(result.mode, 0o600);
+  const result = await fixture(t, { config: endpoint, answers: ['pat', secret] });
+  assert.equal(result.code, 0, result.stdout); assert.equal(result.prompts.length, 2);
+  assert.equal(result.prompts[1].options.secret, true); assert.equal(result.mode, 0o600);
+  assert.match(result.stdout, /User-level endpoint: https:\/\/cairn\.ink\/api\/mcp/);
 });
 
 for (const config of [endpoint + 'enabled = false\n', '[mcp_servers.cairn]\ncommand = "other"\n',
@@ -130,7 +133,7 @@ test('loaded environment credential is preserved and not written to config', asy
 test('noninteractive Codex setup leaves configuration pending without writing', async t => {
   const result = await fixture(t, { interactive: false });
   assert.equal(result.code, 0); assert.equal(result.homeExists, false); assert.deepEqual(result.prompts, []);
-  assert.match(result.stdout, /Configuration pending/); assert.match(result.stdout, /--bearer-token-env-var CAIRN_API_TOKEN/);
+  assert.match(result.stdout, /Configuration pending/); assert.match(result.stdout, /--bearer-token-env-var CAIRN_MCP_TOKEN/);
 });
 
 test('older Codex CLI falls back before collecting credentials', async t => {
@@ -164,7 +167,7 @@ test('invalid PAT leaves original file intact and cleans validation scratch', as
   assert.equal(result.code, 1); assert.equal(result.config, 'model = "preserve"\n'); assert.deepEqual(result.files, ['config.toml']);
 });
 
-for (const command of ['--version', 'mcp list --json', 'mcp get cairn --json']) {
+for (const command of ['--version', 'mcp get cairn --json']) {
   test(`Codex failure propagates actual exit without secret-bearing child output: ${command}`, async t => {
     const result = await fixture(t, { config: configured, state: { fail: command } });
     assert.equal(result.code, 7); assert.match(result.stdout, /exit 7/); assert.equal(result.config, configured);
@@ -204,9 +207,10 @@ test('browser opens only for interactive Codex PAT pairing', async t => {
 });
 
 
-test('OAuth status preserves credentials owned by Codex', async t => {
-  const result = await fixture(t, { config: endpoint, state: { authStatus: 'o_auth' } });
-  assert.equal(result.code, 0); assert.equal(result.config, endpoint); assert.deepEqual(result.prompts, []);
+test('bare user entry defaults to native OAuth login and preserves stored OAuth credentials', async t => {
+  const result = await fixture(t, { config: endpoint, answers: [''] });
+  assert.equal(result.code, 0); assert.equal(result.config, endpoint); assert.equal(result.prompts.length, 1);
+  assert.match(result.stdout, /codex mcp login cairn/); assert.ok(!result.prompts.some(p => p.options?.secret));
 });
 
 test('nonstandard Authorization header remains untouched', async t => {
@@ -223,4 +227,55 @@ test('help documents client flags without executing host CLIs', async t => {
 test('explicit Claude never auto-selects the available Codex binary', async t => {
   const result = await fixture(t, { args: ['status', '--client', 'claude'] });
   assert.equal(result.code, 1); assert.match(result.stdout, /claude CLI not found/); assert.deepEqual(result.calls, []);
+});
+
+
+test('trusted-project-only Cairn entry cannot select a header-only user config or project URL', async t => {
+  const result = await fixture(t, { projectConfig: '[mcp_servers.cairn]\nurl = "http://127.0.0.1:18768/api/mcp"\n' });
+  assert.equal(result.code, 0, result.stdout); assert.equal(result.prompts.length, 2);
+  assert.ok(result.config.startsWith('[mcp_servers.cairn]\nurl = "https://cairn.ink/api/mcp"\n'));
+  assert.doesNotMatch(result.stdout, /18768/);
+  assert.ok(result.calls.every(call => call.cwd !== call.home));
+  assert.ok(result.calls.every(call => !call.args.includes('list')));
+  assert.ok(result.calls.at(-1).home.endsWith('/.codex'));
+  assert.ok(result.calls.at(-1).cwd.includes('cairn-codex-inspect-'));
+});
+
+test('project layer cannot override the existing user-level Cairn endpoint', async t => {
+  const result = await fixture(t, { config: endpoint, projectConfig: '[mcp_servers.cairn]\nurl = "http://127.0.0.1:18768/api/mcp"\n', answers: ['pat', secret] });
+  assert.equal(result.code, 0, result.stdout); assert.ok(result.config.includes('url = "https://cairn.ink/api/mcp"'));
+  assert.doesNotMatch(result.stdout, /18768/); assert.match(result.stdout, /User-level endpoint: https:\/\/cairn\.ink/);
+});
+
+for (const authStatus of ['not_logged_in', 'unknown', 'unsupported']) {
+  test(`PAT explicitly selected works without OAuth discovery state (${authStatus})`, async t => {
+    const result = await fixture(t, { config: endpoint, state: { authStatus }, answers: ['pat', secret] });
+    assert.equal(result.code, 0, result.stdout); assert.equal(result.mode, 0o600);
+    assert.ok(result.config.includes('Bearer ' + secret)); assert.ok(result.calls.every(call => !call.args.includes('list')));
+  });
+}
+
+
+test('Claude-only help does not prepend the Codex client line', async t => {
+  const result = await fixture(t, { noCodex: true, claude: true, args: ['--help'] });
+  assert.equal(result.code, 0); assert.doesNotMatch(result.stdout, /^Client:/); assert.deepEqual(result.calls, []);
+});
+
+
+test('a temporary parent with project config fails closed before any CLI or credential collection', async t => {
+  const result = await fixture(t, { projectTmp: true });
+  assert.equal(result.code, 1); assert.deepEqual(result.prompts, []); assert.deepEqual(result.calls, []);
+  assert.match(result.stdout, /choose a neutral temporary directory/); assert.equal(result.config, null);
+});
+
+test('an incomplete user header table fails rather than borrowing a project transport', async t => {
+  const config = '[mcp_servers.cairn.http_headers]\nAuthorization = "Bearer existing"\n';
+  const result = await fixture(t, { config, projectConfig: endpoint });
+  assert.equal(result.code, 1); assert.equal(result.config, config); assert.deepEqual(result.prompts, []);
+});
+
+
+test('relative CLI PATH entries still work after moving to neutral cwd', async t => {
+  const result = await fixture(t, { relativePath: true });
+  assert.equal(result.code, 0, result.stdout); assert.equal(result.mode, 0o600);
 });
