@@ -28,7 +28,11 @@ function settle(ledger, amount, embedding = false) {
   } finally { budget.close(); }
 }
 
-export function nativeHttpTimeoutFixture(t, { artifact, configuration, fetchImpl }) {
+export function nativeHttpTimeoutFixture(t, { artifact, configuration, fetchImpl,
+  generationBatchCount = 1 }) {
+  // Bounded synthetic diagnosis allowance; existing one-batch tests stay identical.
+  assert.ok(Number.isSafeInteger(generationBatchCount)
+    && generationBatchCount >= 1 && generationBatchCount <= 54);
   const workspace = createTestWorkspace(t, { prefix: 'cairn-nht-v3-' });
   const policy = experimentPolicy();
   const first = { directory: join(workspace.path, 'ledger'), runId: randomUUID(),
@@ -67,10 +71,11 @@ export function nativeHttpTimeoutFixture(t, { artifact, configuration, fetchImpl
   const oldLedger = { ...fourth, requestCap: 80 };
   settle(oldLedger, 29, true);
   const beforeV3 = inspectEmbeddingExperimentBudgetSnapshot(oldLedger);
-  const ledger = { ...oldLedger, limitMicroUsd: 300_000_000, requestCap: 100 };
+  const requestCap = 100 * generationBatchCount;
+  const ledger = { ...oldLedger, limitMicroUsd: 300_000_000, requestCap };
   const benchmarkExtension = authorizeChainedBenchmarkBudgetV3({ oldLedger, policy,
     parentBudgetExtension: parentV2, authorizationId: 'nht-budget300',
-    newLimitMicroUsd: 300_000_000, newRequestCap: 100,
+    newLimitMicroUsd: 300_000_000, newRequestCap: requestCap,
     expectedCheckpoint: { requestCount: 5, reservedMicroUsd: 101 },
     expectedOldHistorySha256: beforeV3.historySha256 });
   const snapshot = inspectEmbeddingExperimentBudgetSnapshot(ledger);
@@ -92,9 +97,11 @@ export function nativeHttpTimeoutFixture(t, { artifact, configuration, fetchImpl
         wireProfile: structuredClone(mem0WireProfile()) } },
     roster: [{ questionId, protocolDigest: 'd'.repeat(64), armOrder: ['mem0', 'cairn'],
       arms: ['cairn', 'mem0'].map(name => ({ name, scopeId: scopeId(name) })) }],
-    limits: { phaseCaps: { generation: caps(55, 1_000_000), scoring: caps(20, 100_000) },
+    limits: { phaseCaps: { generation: caps(55 * generationBatchCount,
+      1_000_000 * generationBatchCount), scoring: caps(20, 100_000) },
       caseCaps: { cairn: { generation: caps(20, 200_000), scoring: caps(5, 20_000) },
-        mem0: { generation: caps(55, 800_000), scoring: caps(5, 20_000) } },
+        mem0: { generation: caps(55 * generationBatchCount,
+          800_000 * generationBatchCount), scoring: caps(5, 20_000) } },
       mem0TimeoutMs: configuration.configuration.httpTimeoutMs } });
   const guard = createMixedSourcePairExperimentRequestGuard({ ledger, policy, benchmarkExtension,
     mixedSourcePairCapability: capability, fetchImpl });

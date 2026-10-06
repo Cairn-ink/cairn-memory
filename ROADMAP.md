@@ -227,6 +227,10 @@ reliability work below without declaring older failure gates resolved.
    evidence is recorded in the plan. Its real pinned local fake-provider
    tests are an engineering gate only; matched-resource comparison, semantic
    quality, a paid grant and broad-promotion readiness remain unestablished.
+   The [native long-batch diagnosis](docs/plans/native-long-batch-diagnosis.md)
+   adds an installed zero-byte finishing-write regression and strict owned
+   cancellation checks. This synthetic engineering gate does not recover
+   historical outputs, establish their failure cause or authorize paid work.
    The [controlled mixed runner candidate](docs/plans/mixed-comparison-runner.md)
    adds source-only Cairn/Mem0 preparation, actual-core/native fake-HTTP local
    integration and fixed-N official-style scoring as a separate offline gate.

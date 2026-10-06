@@ -28,13 +28,75 @@ async function connect(socketPath) {
   return raw;
 }
 
-export function observeDisconnectServer(t, events, { veto = null, mode = null } = {}) {
+export function observeDisconnectServer(t, events, { veto = null, mode = null,
+  onWriteCallback = () => {} } = {}) {
   const original = http.createServer;
   t.mock.method(http, 'createServer', function(...args) {
     const server = original.apply(this, args);
+    server.on('request', (request, response) => {
+      const write = response.write, end = response.end;
+      let revoked = false;
+      t.mock.method(response, 'end', function(...values) {
+        if (revoked) events.push({ code: 'end_after_revoke', syscall: null });
+        if (mode === 'write-callback-end-throws') throw new Error('synthetic end callback exception');
+        return end.apply(this, values);
+      });
+      t.mock.method(response, 'write', function(chunk, callback) {
+        // Observe genuine callback faults; selected modes below inject only
+        // additional lifecycle negatives, never natural reproduction evidence.
+        return write.call(this, chunk, error => {
+          if (error) {
+            events.push({ code: Object.getOwnPropertyDescriptor(error, 'code')?.value ?? null,
+              syscall: error.syscall ?? null, source: 'write-callback' });
+            if (veto === 'unknown') Object.defineProperty(error, 'code',
+              { value: 'unidentified-synthetic-code' });
+          }
+          if (!mode?.startsWith('write-callback-')) { callback(error); return; }
+          if (mode.startsWith('write-callback-cancel-')) {
+            if (mode !== 'write-callback-cancel-active') {
+              revoked = true; onWriteCallback();
+              if (mode !== 'write-callback-cancel-live') request.socket.destroy();
+            }
+            let cancelled = Object.assign(new Error('synthetic cancelled callback'), { code: 'ECANCELED' });
+            if (mode === 'write-callback-cancel-accessor') Object.defineProperty(cancelled, 'code', {
+              get() { events.push({ code: 'getter_invoked' }); throw new Error('getter invoked'); } });
+            if (mode === 'write-callback-cancel-proxy') cancelled = new Proxy(cancelled, {
+              getOwnPropertyDescriptor() { events.push({ code: 'proxy_trap_invoked' }); throw new Error('proxy invoked'); },
+            });
+            if (mode === 'write-callback-cancel-event') {
+              server.emit('clientError', cancelled, request.socket);
+              callback(error);
+            } else callback(cancelled);
+            return;
+          }
+          if (mode === 'write-callback-delayed-exit') {
+            setTimeout(() => {
+              events.push({ code: 'delayed_callback_delivered', atMs: performance.now() });
+              callback(error);
+            }, 100);
+            return;
+          }
+          if (mode === 'write-callback-end-throws') { callback(error); return; }
+          if (['write-callback-revoke', 'write-callback-revoke-error'].includes(mode)) {
+            revoked = true; onWriteCallback();
+            const late = mode === 'write-callback-revoke-error'
+              ? Object.assign(new Error('synthetic teardown write callback'), { code: 'ERR_STREAM_DESTROYED' })
+              : error;
+            callback(late); return;
+          }
+          const injected = new Error('synthetic callback-only write fault');
+          injected.code = mode === 'write-callback-epipe' ? 'EPIPE' : 'unidentified-synthetic-write-code';
+          injected.syscall = 'write';
+          events.push({ code: mode === 'write-callback-epipe' ? 'callback_EPIPE' : 'callback_other',
+            syscall: 'write' });
+          callback(injected);
+        });
+      });
+    });
     server.on('clientError', (error, socket) => {
       const descriptor = Object.getOwnPropertyDescriptor(error, 'code');
-      events.push({ code: descriptor?.value ?? null, syscall: error.syscall ?? null });
+      events.push({ code: descriptor?.value ?? null, syscall: error.syscall ?? null,
+        source: 'client-error-event' });
       if (veto === 'unknown') Object.defineProperty(error, 'code', { value: 'unidentified-synthetic-code' });
     });
     if (mode === 'reuse') {
@@ -123,7 +185,8 @@ export async function settledDisconnectProbe(t, { mode = 'disconnect', prefix = 
   const fake = nativeFakeProvider();
   const fixture = nativeHttpTimeoutFixture(t, { artifact, configuration, fetchImpl: fake.fetchImpl });
   const events = [], resources = [];
-  observeDisconnectServer(t, events, { veto, mode });
+  let currentHandle;
+  observeDisconnectServer(t, events, { veto, mode, onWriteCallback: () => currentHandle.revoke() });
   let child, caseRoot, caseSocket, inner, outer, value, result, scopeAtStop;
   if (['reuse', 'late-exit'].includes(mode)) keepAliveReplyProbe(t, () => caseSocket);
   const originalRemove = fs.rmSync;
@@ -147,6 +210,7 @@ export async function settledDisconnectProbe(t, { mode = 'disconnect', prefix = 
   try {
     try {
       result = await fixture.guard.withCaseScope(fixture.capability.schedule[0], async handle => {
+        currentHandle = handle;
         try {
           value = await runNativeGatewayKernel({ artifact, roots: checkedMem0NativeArtifact(artifact),
             configuration: configuration.configuration,
@@ -157,12 +221,17 @@ export async function settledDisconnectProbe(t, { mode = 'disconnect', prefix = 
             startChild({ socket }) {
               caseRoot = dirname(socket);
               caseSocket = socket;
-              child = disconnectChild(socket, { mode, prefix, resources,
+              child = disconnectChild(socket, { mode: mode.startsWith('write-callback-') ? 'healthy' : mode,
+                prefix, resources,
                 closeDelay: mode === 'late-parser' ? 100 : 0,
                 onStop: () => { scopeAtStop = handle.snapshot(); } });
+              if (mode === 'write-callback-delayed-exit') child.once('close', () =>
+                events.push({ code: 'controlled_child_closed', atMs: performance.now() }));
               return child;
             }, stopChild: child => child.stop(), forceProcessGroupLiveForTest: veto === 'descendants',
           });
+          if (mode === 'write-callback-delayed-exit') events.push({ code: 'kernel_returned',
+            atMs: performance.now() });
           return value;
         } catch (error) { inner = error; throw error; }
       });

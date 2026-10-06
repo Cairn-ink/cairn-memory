@@ -262,6 +262,7 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
   let stderrBytes = 0;
   let activeRequest = false;
   let stopping = false;
+  let revocationStopped = false;
   let terminationAt = null;
   let watchdog;
   let stopResolver;
@@ -286,7 +287,7 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
       try { stopChild(child, 'SIGKILL'); } catch { firstFault('native_kill_failed'); }
     }
   };
-  const onRevoke = () => { terminate(); };
+  const onRevoke = () => { revocationStopped = true; terminate(); };
   handle.revocationSignal.addEventListener('abort', onRevoke, { once: true });
   const resource = new AsyncResource('Mem0NativeGatewayRequest');
   const server = http.createServer({ maxHeaderSize: configuration.headerBytes },
@@ -345,7 +346,22 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
           // trigger a keep-alive timeout while native work continues locally.
           response.writeHead(checked.status, { 'content-type': 'application/json',
             'content-length': result.length, connection: 'close' });
-          response.end(result);
+          // end(body) queues an additional zero-byte finishing write in Node.
+          // A native peer can read the complete Content-Length body and close
+          // before that empty write, falsely sealing otherwise completed work.
+          // Keep its callback within the existing pending-request drain/veto.
+          await new Promise((resolve, reject) => response.write(result, error => {
+            try {
+              if (error) {
+                if (!revokedBodyWriteCancellation(error, request.socket)) onClientError(error, request.socket);
+              }
+              else if (!response.destroyed && !stopping) response.end();
+              resolve();
+            } catch (error) {
+              firstFault('native_gateway_failed');
+              reject(error);
+            }
+          }));
         } else fail('native_response_disconnect');
       } catch (error) {
         // Complete framing/JSON faults remain global after a local seal;
@@ -382,7 +398,19 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     connection.once('close', () => connections.delete(connection));
     if (stopping || handle.snapshot().status !== 'active') connection.destroy();
   });
-  server.on('clientError', (error, connection) => {
+  function revokedBodyWriteCancellation(error, connection) {
+    try {
+      if (!error || types.isProxy(error)) return false;
+      const code = Object.getOwnPropertyDescriptor(error, 'code');
+      return code && Object.hasOwn(code, 'value') && code.value === 'ECANCELED'
+        && revocationStopped && handle.revocationSignal.aborted && stopping
+        && handle.snapshot().status === 'failed' && fault === null && !guard.isHalted()
+        && connection.destroyed && connectionStates.get(connection)?.settledResponse === true;
+    } catch { return false; }
+  }
+  function onClientError(error, connection) {
+    // Both genuine socket events and body-write callbacks retain the same
+    // closed classification; calling this does not fabricate a socket event.
     const code = clientErrorCode(error);
     const scopeStatus = handle.snapshot().status;
     const ignoredReset = (stopping || scopeStatus !== 'active') && code === 'ECONNRESET';
@@ -412,7 +440,8 @@ export async function runNativeGatewayKernel({ artifact, roots, configuration, c
     // down a revoked connection is expected cancellation, not a new fault.
     if (ignoredReset) return;
     firstFault('native_http_invalid'); terminate();
-  });
+  }
+  server.on('clientError', onClientError);
   server.on('timeout', connection => {
     if (!stopping && handle.snapshot().status === 'active') firstFault('native_http_timeout');
     connection.destroy();
