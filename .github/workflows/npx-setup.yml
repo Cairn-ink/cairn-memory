@@ -1,0 +1,23 @@
+name: One-command setup package
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22.16.0, 24.15.0]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm run test:setup
+      - run: npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP"
+        working-directory: packages/setup
