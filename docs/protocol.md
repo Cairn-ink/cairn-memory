@@ -67,7 +67,8 @@ plugin/MCP/HTTP, report, prompt, model or default-policy schemas.
 
 Private mixed Mem0 arm diagnostics may retain the legacy `nativeFailure` shape
 `{version:1,layer,reason}`. Only `runtime`/`native_http_invalid` may additionally
-carry optional `httpClientError`: the first accepted local Node clientError's
+carry optional `httpClientError`: the first accepted genuine local socket
+clientError event or response-write callback error's
 finite code, bounded connection/request state and saturated monotonic elapsed
 time, as specified in the [client-error contract](plans/native-http-client-error.md).
 The immutable diagnostic is minted privately by the runtime and associated with

@@ -1724,7 +1724,8 @@ follows, and any new paid cohort requires a fresh specific grant.
 ## Prospective native HTTP client-error provenance
 
 The [bounded diagnostic contract](plans/native-http-client-error.md) adds only
-the first accepted local Node clientError's finite code category, bounded
+the first accepted genuine local socket event or response-write callback error's
+finite code category, bounded
 connection/request counts and lifecycle phase, scope/stopping state, and
 saturated monotonic elapsed milliseconds to the existing private nativeFailure
 observation. Internally minted immutable metadata is authenticated by runtime
@@ -1755,3 +1756,30 @@ completes19requests in six batches and search with checked accounting and
 cleanup. These observations neither reproduce N9's unknown underlying event
 nor prove general product reliability. N9 remains closed, unscored and
 immutable; no replay, regrading, paid call, policy change or release follows.
+
+## Bounded native response completion
+
+The [long-batch diagnosis](plans/native-long-batch-diagnosis.md) naturally
+reproduced synthetic installed Mem0 disconnects with realistic16-fact embedding
+responses. A syscall-count-only observation found the full494943-byte body plus
+131 inferred framing/header bytes read before the peer closed; a subsequent
+zero-byte Node write failed with EPIPE. A private diagnostic suppression case
+then persisted all16
+ADDs and searched with exactly4 requests. Suppression is not the shipped fix.
+The narrow candidate instead waits for the public body-write callback before
+ending without data, avoiding the redundant finishing write. Registered tests
+observe its absence and installed persistence/search, not merely response-finish.
+
+Provider settlement/write completion alone never proves native consumption.
+Actual data-write EPIPE still seals unresolved native work; unknown callbacks,
+parser/accounting/cleanup faults stay global, including unknown teardown errors
+after revoke. No new continuation, retry, refund or budget authority is granted.
+The sole callback ECANCELED cancellation exception additionally requires actual
+own revocation/stopping, aborted signal, failed scope, destroyed owned socket,
+private fully settled response proof and no global fault/halt. ECANCELED socket
+events, active/unsettled/live-socket callbacks, proxies/accessors and arbitrary
+unknown teardown errors gain no exception or public diagnostic enum value.
+This synthetic cause does not identify historical authentic disconnect causes,
+establish a universal body-size threshold, native reliability or fair semantic
+parity/superiority. Earlier natural small/slow controls that did not reproduce
+the failure and all historical scores/journals remain unchanged.
