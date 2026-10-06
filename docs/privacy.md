@@ -13,7 +13,19 @@ The main risk in automatic memory is not bad retrieval. It is silently collectin
 
 After explicit installation, automatic capture and content-free telemetry default on. The plugin reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24 messages, and sends them to the configured service.
 
-From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude Code marks it as meta (local-command caveats, image-source notes); it is a compaction summary; it carries a tool result (the whole record is skipped); or its text starts with a Claude Code wrapper (slash-command and local-command output, bash-mode input and output, system reminders, prompt-submit hook output, task notifications). The wrapper check is skipped for a record Claude Code marks as a submitted prompt (`promptSource`), so such a prompt is sent whatever it starts with. This holds for every request 0.1.1 makes, including retries of a capture window 0.1.0 had queued before the upgrade. It does not remove anything 0.1.0 already delivered, and a request 0.1.0 had already sent may still complete. Assistant text is sent as before, including anything it quotes from those records. Only the record shapes and wrappers listed in the [plan](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter) are recognized; see [limitations](limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence).
+From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude Code marks it as meta (local-command caveats, image-source notes); it is a compaction summary; it carries a tool result (the whole record is skipped); or its text starts with a Claude Code wrapper (slash-command and local-command output, bash-mode input and output, system reminders, prompt-submit hook output, task notifications). The wrapper check is skipped for a record Claude Code marks as a submitted prompt (`promptSource`), so such a prompt is sent whatever it starts with. This holds for every request 0.1.1 makes, including retries of a capture window 0.1.0 had queued before the upgrade. It does not remove anything 0.1.0 already delivered, and a request 0.1.0 had already sent may still complete. Ordinary assistant text, including quotes from excluded records, remains eligible except for the plugin's own skill turns below. Only the recognized record shapes and wrappers are filtered; see [limitations](limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence).
+
+Cairn Memory's own skill turns (`status`, `pause`, `resume`, and future skills in
+the same plugin namespace) are withheld from invocation through the next submitted
+user prompt. The parser recognizes command XML, the `Skill` tool's qualified
+name, and meta skill expansion headers identifying this plugin's skill directory.
+Meta records and tool results do not end the turn. A plain user record also ends
+it on older hosts without `promptSource`. The cursor retains only a boolean so
+later capture hooks still withhold continued answers. Whole single-line assistant
+status/pause/resume outputs are also withheld without an invocation marker.
+Conversational mentions such as “cairn memory status” remain eligible. Filtering
+does not change the existing 24-record batch boundaries or event IDs, and does
+not remove previously stored memories.
 
 Automatic recall separately sends the current prompt after local credential
 redaction and truncation to at most 4,000 UTF-16 units without splitting Unicode
@@ -95,7 +107,8 @@ An explicitly paired plugin uses the recorded durable shared root:
 - `paired-root`: private 0600 JSON (`{"version":1,"paired":true}`) recording shared
   root history, published with the same owner/symlink checks as other private state;
 - `paused`: compatibility marker also honored as a pause;
-- `sessions/*.json`: byte cursors, pending retry bounds, generation, and incomplete-line discard state,
+- `sessions/*.json`: byte cursors, pending retry bounds, generation, incomplete-line discard state,
+  and an optional `ownSkillTurn: true` boolean (no command or response content),
   keyed by a hash of the Claude session id;
 - process-owned lock files coordinating control changes and session capture.
 

@@ -60,12 +60,48 @@ export function machineUserRecord(record) {
     : null;
 }
 
+// Claude records slash commands as command XML, and Skill tool expansion as
+// an isMeta user message headed by its base directory. Inspect these markers,
+// never conversational mentions or the skill's instructions/arguments.
+function startsPluginSkill(record) {
+  const blocks = record?.message?.content;
+  if (record.type === "assistant" && Array.isArray(blocks) && blocks.some(
+    (block) => block?.type === "tool_use" && block.name === "Skill" &&
+      /^cairn-memory:[\w-]+$/.test(block.input?.skill ?? ""),
+  )) return true;
+  if (record.type !== "user") return false;
+  const text = textBlocks(blocks).join("\n").trimStart();
+  if (record.isMeta) {
+    const directory = /^Base directory for this skill: ([^\r\n]+)/.exec(text)?.[1];
+    if (directory && /(?:^|\/)cairn-memory\/(?:[^/]+\/)*skills\/[^/]+\/?$/.test(
+      directory.replaceAll("\\", "/"),
+    )) return true;
+  }
+  if (TYPED_PROMPT_SOURCES.includes(record.promptSource) && !record.isMeta) return false;
+  if (!/^<command-(?:name|message)>/.test(text)) return false;
+  const name = /<command-name>([^<]+)<\/command-name>/.exec(text)?.[1] ??
+    /<command-message>([^<]+)<\/command-message>/.exec(text)?.[1];
+  return /^\/?cairn-memory:[\w-]+$/.test(name ?? "");
+}
+
+function pluginControlOutput(text) {
+  // Whole single-line outputs from hook.mjs control(), including quota notices.
+  // A quote in a longer answer is still ordinary conversation.
+  if (text.includes("\n") || text.includes("\r")) return false;
+  return text.startsWith("Cairn automatic memory: ") ||
+    text === "Cairn automatic memory is paused." ||
+    text.startsWith("Cairn automatic memory is active.") ||
+    text === "Cairn quota state repaired to open; automatic memory is active.";
+}
+
 /**
  * Every message 0.1.0 would parse, in order and with the same ids and content,
  * each marked `withheld` when 0.1.1 does not send it. Batch boundaries and event
  * ids are computed over all of them, so they stay exactly as 0.1.0 had them.
+ * Optional turnState carries only a boolean across incremental capture windows;
+ * it is updated even by tool-only records that the old parser did not emit.
  */
-export function transcriptWindow(jsonl, sessionId) {
+export function transcriptWindow(jsonl, sessionId, { turnState = {} } = {}) {
   const messages = [];
   for (const [lineIndex, line] of jsonl.split("\n").entries()) {
     if (!line.trim()) continue;
@@ -77,6 +113,10 @@ export function transcriptWindow(jsonl, sessionId) {
     }
     if (record?.type !== "user" && record?.type !== "assistant") continue;
     const role = record.type;
+    const machine = role === "user" && Boolean(machineUserRecord(record));
+    if (startsPluginSkill(record)) turnState.ownSkillTurn = true;
+    else if (role === "user" && !machine) turnState.ownSkillTurn = false;
+    const rawText = textBlocks(record?.message?.content).join("\n").trim();
     const content = textBlocks(record?.message?.content)
       .map(redactSecrets)
       .join("\n")
@@ -89,7 +129,8 @@ export function transcriptWindow(jsonl, sessionId) {
         : createHash("sha256")
             .update(`${sessionId}\0${lineIndex}\0${role}\0${content}`)
             .digest("hex");
-    messages.push({ id, role, content, withheld: role === "user" && Boolean(machineUserRecord(record)) });
+    messages.push({ id, role, content, withheld: machine || turnState.ownSkillTurn === true ||
+      (role === "assistant" && pluginControlOutput(rawText)) });
   }
   return messages;
 }

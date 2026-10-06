@@ -1118,6 +1118,15 @@ The evidence behind it is narrow:
   record shapes seen in F0 and in the interactive session, with canary text.
   They are not recorded transcripts. They show the rule handles those shapes,
   not that those are all the shapes Claude Code writes.
+- **Own skill turns.** The unreleased follow-up recognizes Cairn's command XML,
+  qualified `Skill` calls and meta skill-directory headers. Its
+  [synthetic status fixture](../plugins/cairn-memory/test/fixtures/claude-plugin-status.md)
+  records the shape evidence and checks multiple answers and normal followups.
+  Unrecognized future host markers can still leak command answers. An old cursor
+  that already consumed an invocation has no skill-turn boolean; only whole
+  status/pause/resume output lines can be recognized in that case. Longer quoted
+  outputs in otherwise ordinary assistant answers remain eligible. No backfill
+  or removal of already delivered memories is performed.
 
 ## Decision confirmation hides whole episode context
 

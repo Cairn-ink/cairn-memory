@@ -384,6 +384,16 @@ The tuple `(authenticated user, client, event_id)` is an idempotency key. Concur
 
 Only `user` and `assistant` text belongs in `messages`. Unknown fields are rejected. Automatic results must remain `personal` or `project` private and carry origin `agent-inferred` plus at least one Source Receipt.
 
+The Claude plugin withholds machine-written user records and its own skill turns,
+including assistant answers until the next submitted user prompt. Whole plugin
+control output lines are also withheld. Its local capture cursor may retain only
+an `ownSkillTurn: true` boolean for continued answers; this is not a wire field.
+The parser still keeps every record the 0.1.0 text parser emitted when computing
+24-record batch boundaries and `event_id`. Only the withheld subset is removed
+from `messages`; an entirely withheld batch needs no request. A frozen retry
+retains both its original byte bounds and its starting skill-turn state. See
+[Privacy](privacy.md#data-flow) for marker rules and limitations.
+
 A `200` or `202` response with `processing: true` means another request owns the short processing lease. The client must not advance its local transcript cursor and may retry later.
 
 ### `POST /api/memory/recall`

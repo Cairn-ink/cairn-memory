@@ -18,6 +18,8 @@ export async function readCaptureCursor(path) {
       generation:
         typeof state.generation === "string" ? state.generation : "initial",
       discardUntilNewline: state.discardUntilNewline === true,
+      // Claude's own skill turn can span multiple capture hooks. No content.
+      ...(state.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
       pendingEnd:
         Number.isSafeInteger(state.pendingEnd) && state.pendingEnd >= state.offset
           ? state.pendingEnd

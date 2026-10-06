@@ -232,6 +232,7 @@ async function captureLocked(hookInput, statePath, generation) {
         generation,
         discardUntilNewline: true,
         pendingEnd: undefined,
+        ...(cursor.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
       });
       return;
     }
@@ -242,6 +243,7 @@ async function captureLocked(hookInput, statePath, generation) {
       generation,
       discardUntilNewline: false,
       pendingEnd: undefined,
+      ...(cursor.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
     });
   }
   const lastNewline = slice.lastIndexOf(0x0a);
@@ -249,13 +251,15 @@ async function captureLocked(hookInput, statePath, generation) {
   const consumed = slice.subarray(0, lastNewline + 1);
   // Batches keep 0.1.0's boundaries and event ids, including for a window 0.1.0
   // froze before an upgrade; only messages 0.1.1 keeps are ever sent.
-  const window = transcriptWindow(consumed.toString("utf8"), hookInput.session_id);
+  const turnState = { ownSkillTurn: cursor.ownSkillTurn === true };
+  const window = transcriptWindow(consumed.toString("utf8"), hookInput.session_id, { turnState });
   if (!window.some((message) => !message.withheld)) {
     await writeCaptureCursor(statePath, {
       offset: offset + consumed.length,
       generation,
       discardUntilNewline: false,
       pendingEnd: undefined,
+      ...(turnState.ownSkillTurn ? { ownSkillTurn: true } : {}),
     });
     return;
   }
@@ -269,6 +273,8 @@ async function captureLocked(hookInput, statePath, generation) {
       generation,
       discardUntilNewline: false,
       pendingEnd,
+      // Retries must start from the original turn state, not this window's end.
+      ...(cursor.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
     });
   }
 
@@ -300,6 +306,7 @@ async function captureLocked(hookInput, statePath, generation) {
     generation,
     discardUntilNewline: false,
     pendingEnd: undefined,
+    ...(turnState.ownSkillTurn ? { ownSkillTurn: true } : {}),
   });
   await telemetry("capture_succeeded");
 }

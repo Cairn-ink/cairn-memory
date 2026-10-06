@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — exclude Cairn's own skill turns from automatic capture
+
+- Withhold Cairn Memory skill invocation records and all answers until the next
+  submitted user prompt, using Claude Code command/skill markers. Keep only a
+  content-free boolean in the capture cursor across hook processes and retries.
+- Also withhold whole assistant status/pause/resume output lines when the
+  invocation marker is absent. Ordinary mentions remain conversation.
+- Preserve 0.1.0 batch boundaries, message identities and capture event IDs.
+
 ## Unreleased — truthful Claude Code credential status
 
 - Read hook-written credential observations when the status skill's Bash command
