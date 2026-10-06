@@ -1837,3 +1837,13 @@ load credentials and dispatch after the outstanding gates pass; no repeated
 per-round permission request is needed within the standing authority. No new
 paid result, historical recovery, semantic superiority or general native
 reliability claim follows from this preparation.
+
+The later N12 documentation candidate `bd90347c` passed both independent
+nonauthor review axes with zero findings; committed-document validation and
+latest-head runtime/preparation CI also passed. Root then started the sole
+supervised paid six-case dispatch at approximately 08:43 UTC on 2026-10-06.
+Execution is in progress with no exit or score yet. This does not retroactively
+turn the preparation checkpoint into an execution result: completion, durable
+generation/scoring and accounting still require post-run audit. Standing
+US$400 authority does not change this run's enforced US$300 / US$20 / US$30
+limits, fixed roster or no-restart rule. Historical results remain unchanged.

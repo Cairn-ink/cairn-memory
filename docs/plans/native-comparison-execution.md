@@ -1,6 +1,6 @@
 # Frozen six-case execution under standing authority
 
-Status: authorized, not yet executed. Base `516a3d16be8d8ca00f3119698211f30a47a6a727`
+Status: execution in progress. Base `516a3d16be8d8ca00f3119698211f30a47a6a727`
 (#348); immutable runtime `7de7688e904f3626e10c4f92dd65fd9d7f84ab48` (#347).
 
 The user authorized this six-case run and reasonable subsequent work toward the
@@ -151,3 +151,23 @@ route; file hashes and Node identity verified with actual exit 0 (`7091cd`).
 No run output or supervisor intent existed. The separate finite primary observer
 returned actual exit 0 (`5df09a`), confirming the open original ledger still at
 40,833 requests / 241,899,357 microUSD, pending 0 and delta 0.
+
+## Reviewed launch checkpoint
+
+Both independent nonauthor Standards and Spec reviews passed with zero findings
+on documentation candidate `bd90347c`. Each reviewer used actual GPT-6.1
+Sol/high and independently checked all four frozen scripts on both exact Node
+versions: eight syntax checks each, all actual exit 0. Root revalidated the
+committed documentation on exact Node 24 (`f85eb9`) and 22 (`c7b728`), both
+actual exit 0, and independently matched the two-file public manifest through
+`diff` and `diff-tree` (`cebf56`). Latest-head CI remains 21/21 successful for
+runtime #347 at `7de7688e904f3626e10c4f92dd65fd9d7f84ab48` (`8e0c75`) and
+preparation #348 at `516a3d16be8d8ca00f3119698211f30a47a6a727` (`010b80`).
+
+Root started the sole supervised paid dispatch at approximately 08:43 UTC on
+2026-10-06 (session 42668, initial chunk `c7f1f9`). No process exit, completed
+generation, scoring or result is available at this checkpoint. The standing
+US$400 authority and this run's stricter enforced US$300 ledger / US$20 round /
+US$30 protection remain unchanged. Root monitors the running process; the
+bounded author only records the supplied finite status and neither reads actual
+JSON nor reruns or launches any command. No automatic restart is authorized.
