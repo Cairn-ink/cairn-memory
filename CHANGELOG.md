@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — truthful Claude Code credential status
+
+- Read hook-written credential observations when the status skill's Bash command
+  cannot see Claude Code's sensitive plugin options. Pass the substituted plugin
+  data path so status uses the same profile and binding as the hooks.
+- Distinguish configured/verified, rejected, unreachable, not yet observed, and
+  hook-confirmed missing credentials. Record only configuration presence,
+  endpoint and timestamps with a bounded auth outcome; never retain a token,
+  token hash/prefix, response body or error text.
+- Observe existing authenticated recall/capture requests without extra calls.
+  SessionStart's unauthenticated telemetry never verifies a credential.
+
 ## Unreleased — Claude Code one-command installer
 
 - Prepare dependency-free `@cairn-ink/memory` (initial version proposed at 0.1.0)

@@ -50,6 +50,37 @@ startup behavior using synthetic data only.
 
 ## Local state
 
+Claude Code exports sensitive plugin option values to hook processes, but not
+to commands Claude runs through the Bash tool. The status skill passes the
+substituted `${CLAUDE_PLUGIN_DATA}` path explicitly; it does not inspect Claude
+Code's secure credential store. See the official
+[variable environment rules](https://code.claude.com/docs/en/plugins-reference#where-each-variable-resolves)
+and [saved option rules](https://code.claude.com/docs/en/plugins-reference#reference-a-saved-value).
+
+Hooks keep a private 0600 `credential-state.json` in the plugin profile's data
+directory (even when memory uses a paired shared root). Its strict fields are
+`version: 1`, `configured` (boolean), normalized `endpoint`, `observed_at` (UTC
+ISO timestamp), and `auth` (null or `{outcome, at}`). Outcomes are limited to
+`ok`, `rejected` (HTTP 401/403), and `unreachable` (network failure or another
+unsuccessful HTTP response). This file and its atomic-write/lock files contain
+no conversation, token, token hash, token prefix, response body, or raw error.
+Only hooks write observations; status never infers missing from its own empty
+environment. Malformed, unreadable or unsafe observation files are unknown.
+Observation write failures remain silent and cannot block normal host work.
+
+Auth observations reuse actual authenticated recall/capture fetches. They add
+no requests, retries or startup probes; unauthenticated telemetry is excluded.
+An HTTP success records accepted authentication even if the memory response
+later fails protocol validation. Empty prompts, pauses and quota gates that
+prevent dispatch cannot verify credentials. SessionStart retains the last auth
+outcome for the same configured endpoint without probing; removing the token or
+changing endpoints clears that outcome. Older in-flight requests and delayed
+SessionStart writes cannot replace a newer configuration observation. A shown
+verification time is a historical observation, not a guarantee that a token
+has not since been rotated or revoked. The next actual request supplies new
+auth evidence without retaining any token identifier. The observation is local
+and never transmitted.
+
 Ordinary standalone use selects `CLAUDE_PLUGIN_DATA` when supplied, otherwise
 `~/.cairn-memory/` (the released temporary fallback applies only to a falsy home).
 The legacy-gap adoption described below retains the already-used default root.

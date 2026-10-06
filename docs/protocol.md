@@ -367,6 +367,13 @@ This document describes the public contract implemented by the plugin. JSON Sche
 
 `/api/memory/telemetry` is unauthenticated and content-free. A compatible service may return `204` without storing it.
 
+The Claude plugin's local credential status observes the HTTP results of its
+existing authenticated recall/capture requests. HTTP 2xx records `ok`; 401/403
+records `rejected`; other unsuccessful replies or fetch failures record
+`unreachable`. No raw reply or credential material is persisted and no new
+authentication route or request is added. The local observation format and
+historical-verification boundary are documented in [Privacy](privacy.md#local-state).
+
 ## Endpoints
 
 ### `POST /api/memory/capture`

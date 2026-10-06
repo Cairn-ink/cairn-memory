@@ -2,6 +2,7 @@
 
 import { open, stat } from "node:fs/promises";
 import { platform } from "node:os";
+import { isAbsolute, resolve } from "node:path";
 import { captureEvent } from "../lib/capture-event.mjs";
 import {
   captureCursorPath,
@@ -24,8 +25,11 @@ import { prepareRecallQuery } from "../lib/recall-query.mjs";
 import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
 import { VERSION } from "../lib/version.mjs";
 import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
+import { credentialDescription, readCredentialState, recordCredentialAuth,
+  recordCredentialConfiguration } from "../lib/credential-state.mjs";
 
 const action = process.argv[2] ?? "status";
+const observedAt = new Date().toISOString();
 const configuredEndpoint =
   process.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT ?? "https://cairn.ink";
 const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN ?? "";
@@ -38,6 +42,7 @@ let binding;
 let endpoint;
 let post;
 let quotaTarget;
+let credentialDir;
 try {
   endpoint = normalizeEndpoint(configuredEndpoint);
   post = createJsonPoster({ endpoint, token });
@@ -81,7 +86,22 @@ async function telemetry(event) {
 // Recheck the existing local barrier after asynchronous quota-state work.
 // The network start itself stays synchronous under the control lock.
 async function dispatchActive(generation, start) {
-  const dispatch = await startIfActive(dataDir, generation, start);
+  const dispatch = await startIfActive(dataDir, generation, () => {
+    // Observe actual authenticated fetches, before the transport sanitizes errors.
+    // Unauthenticated telemetry and locally blocked requests are not evidence.
+    const operation = start();
+    return Promise.resolve(operation).then(async (response) => {
+      const outcome = [401, 403].includes(response.status) ? "rejected" :
+        response.ok ? "ok" : "unreachable";
+      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome,
+        at: new Date().toISOString() }).catch(() => {});
+      return response;
+    }, async (error) => {
+      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome: "unreachable",
+        at: new Date().toISOString() }).catch(() => {});
+      throw error;
+    });
+  });
   if (!dispatch.started) throw new Error("dispatch_not_started");
   return dispatch.operation;
 }
@@ -307,6 +327,13 @@ async function control() {
     return;
   }
   const state = await readControlState(dataDir);
+  const credentialState = await readCredentialState(credentialDir);
+  const statusEndpoint = !token && credentialState ? credentialState.endpoint : endpoint;
+  const statusCredential = credentialState?.endpoint === statusEndpoint ? credentialState : undefined;
+  // Quota gates are endpoint-scoped, so Bash must use the observed endpoint too.
+  if (statusEndpoint.startsWith("http")) {
+    quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint: statusEndpoint }) };
+  }
   const quota = quotaTarget ? await hostedQuotaStatus(quotaTarget) : { mode: "open" };
   const quotaNote = quota.mode === "invalid" ? "; quota_state_invalid; run resume to repair" :
     quota.mode === "unavailable" || quota.status === "unavailable" ? "; quota gate unavailable" :
@@ -319,13 +346,20 @@ async function control() {
   process.stdout.write(
     `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}${quotaNote}` +
     `${binding.detail ? "; " + binding.detail : ""}; ` +
-    `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; ` +
-    `credential: ${token ? "configured" : "missing"}.\n`,
+    `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${statusEndpoint}; ` +
+    `credential: ${credentialDescription(statusCredential, { hasToken: Boolean(token) })}.\n`,
   );
 }
 
 try {
-  const { pairingRecord } = parsePairingRecord(process.argv.slice(3));
+  const { pairingRecord, rest } = parsePairingRecord(process.argv.slice(3));
+  if (rest.length) {
+    if (rest.length !== 2 || rest[0] !== "--plugin-data" || !isAbsolute(rest[1])) {
+      throw new Error("invalid_plugin_data_argument");
+    }
+    // Skill content substitutes this path; Bash does not inherit plugin env.
+    process.env.CLAUDE_PLUGIN_DATA = resolve(rest[1]);
+  }
   clientOptions = { client: "claude", pairingRecord };
   binding = await resolveClient(clientOptions);
   if (!binding.enabled) {
@@ -338,6 +372,7 @@ try {
     }
   } else {
     dataDir = binding.root;
+    credentialDir = process.env.CLAUDE_PLUGIN_DATA ?? dataDir;
     if (endpoint.startsWith("http")) {
       quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
       post = createJsonPoster({ endpoint, token, ...quotaTarget });
@@ -346,6 +381,11 @@ try {
       await control();
     } else {
       const hookInput = await input();
+      if (["start", "recall", "capture", "capture-detached"].includes(action)) {
+        await recordCredentialConfiguration(credentialDir, {
+          configured: Boolean(token), endpoint, observedAt,
+        }).catch(() => {});
+      }
       if (action === "start") await telemetry("plugin_started");
       else if (action === "recall") await recall(hookInput);
       else if (["capture", "capture-detached"].includes(action)) {
