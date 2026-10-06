@@ -367,6 +367,15 @@ This document describes the public contract implemented by the plugin. JSON Sche
 
 `/api/memory/telemetry` is unauthenticated and content-free. A compatible service may return `204` without storing it.
 
+The Claude plugin's local credential status observes the HTTP results of its
+existing authenticated recall/capture requests. HTTP 2xx records `ok`; 401/403
+records `rejected`; HTTP 429 records `server-busy`, other unsuccessful replies
+record `server-error`, and fetch failures without a response record `unreachable`.
+SessionStart clears previous auth evidence without adding a request, including
+when a replacement endpoint is invalid; only a fixed diagnostic is retained. No raw reply or credential material is persisted and no new
+authentication route or request is added. The local observation format and
+historical-verification boundary are documented in [Privacy](privacy.md#local-state).
+
 ## Endpoints
 
 ### `POST /api/memory/capture`
@@ -376,6 +385,16 @@ Accepts `schemas/capture-request.schema.json` and returns `schemas/capture-respo
 The tuple `(authenticated user, client, event_id)` is an idempotency key. Concurrent or completed replay must not create duplicate memories or overlapping extraction. A failed attempt may be retried and may consume another model call, but storage remains idempotent.
 
 Only `user` and `assistant` text belongs in `messages`. Unknown fields are rejected. Automatic results must remain `personal` or `project` private and carry origin `agent-inferred` plus at least one Source Receipt.
+
+The Claude plugin withholds machine-written user records and its own skill turns,
+including assistant answers until the next submitted user prompt. Whole plugin
+control output lines are also withheld. Its local capture cursor may retain only
+an `ownSkillTurn: true` boolean for continued answers; this is not a wire field.
+The parser still keeps every record the 0.1.0 text parser emitted when computing
+24-record batch boundaries and `event_id`. Only the withheld subset is removed
+from `messages`; an entirely withheld batch needs no request. A frozen retry
+retains both its original byte bounds and its starting skill-turn state. See
+[Privacy](privacy.md#data-flow) for marker rules and limitations.
 
 A `200` or `202` response with `processing: true` means another request owns the short processing lease. The client must not advance its local transcript cursor and may retry later.
 

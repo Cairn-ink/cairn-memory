@@ -13,7 +13,22 @@ The main risk in automatic memory is not bad retrieval. It is silently collectin
 
 After explicit installation, automatic capture and content-free telemetry default on. The plugin reads only the newly appended range of a Claude Code transcript. It selects textual blocks whose top-level role is `user` or `assistant`, redacts likely credentials, batches at most 24 messages, and sends them to the configured service.
 
-From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude Code marks it as meta (local-command caveats, image-source notes); it is a compaction summary; it carries a tool result (the whole record is skipped); or its text starts with a Claude Code wrapper (slash-command and local-command output, bash-mode input and output, system reminders, prompt-submit hook output, task notifications). The wrapper check is skipped for a record Claude Code marks as a submitted prompt (`promptSource`), so such a prompt is sent whatever it starts with. This holds for every request 0.1.1 makes, including retries of a capture window 0.1.0 had queued before the upgrade. It does not remove anything 0.1.0 already delivered, and a request 0.1.0 had already sent may still complete. Assistant text is sent as before, including anything it quotes from those records. Only the record shapes and wrappers listed in the [plan](plans/codex-client.md#second-d1-exception-plugin-011-privacy-filter) are recognized; see [limitations](limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence).
+From plugin 0.1.1, a user-role record is not sent if any of these apply: Claude Code marks it as meta (local-command caveats, image-source notes); it is a compaction summary; it carries a tool result (the whole record is skipped); or its text starts with a Claude Code wrapper (slash-command and local-command output, bash-mode input and output, system reminders, prompt-submit hook output, task notifications). The wrapper check is skipped for a record Claude Code marks as a submitted prompt (`promptSource`), so such a prompt is sent whatever it starts with. This holds for every request 0.1.1 makes, including retries of a capture window 0.1.0 had queued before the upgrade. It does not remove anything 0.1.0 already delivered, and a request 0.1.0 had already sent may still complete. Ordinary assistant text, including quotes from excluded records, remains eligible except for the plugin's own skill turns below. Only the recognized record shapes and wrappers are filtered; see [limitations](limitations.md#claude-plugin-011-filter-rests-on-narrow-evidence).
+
+Cairn Memory's own skill turns (`status`, `pause`, `resume`, and future skills in
+the same plugin namespace) are withheld from invocation through the next submitted
+user prompt. The parser recognizes command XML, the `Skill` tool's qualified
+name, and meta skill expansion headers identifying a direct skill directory
+inside the exact loaded plugin root (including marketplace/plugin/version for
+installed cache paths). A project directory or marketplace named `cairn-memory`
+does not establish ownership.
+Meta records and tool results do not end the turn. A plain user record also ends
+it on older hosts without `promptSource`. The cursor retains only a boolean so
+later capture hooks still withhold continued answers. Whole single-line assistant
+status/pause/resume outputs are also withheld without an invocation marker.
+Conversational mentions such as “cairn memory status” remain eligible. Filtering
+does not change the existing 24-record batch boundaries or event IDs, and does
+not remove previously stored memories.
 
 Automatic recall separately sends the current prompt after local credential
 redaction and truncation to at most 4,000 UTF-16 units without splitting Unicode
@@ -50,6 +65,44 @@ startup behavior using synthetic data only.
 
 ## Local state
 
+Claude Code exports sensitive plugin option values to hook processes, but not
+to commands Claude runs through the Bash tool. The status skill passes the
+substituted `${CLAUDE_PLUGIN_DATA}` path explicitly, as do pause and resume;
+these controls do not inspect Claude Code's secure credential store. See the official
+[variable environment rules](https://code.claude.com/docs/en/plugins-reference#where-each-variable-resolves)
+and [saved option rules](https://code.claude.com/docs/en/plugins-reference#reference-a-saved-value).
+
+Hooks keep a private 0600 `credential-state.json` in the plugin profile's data
+directory (even when memory uses a paired shared root). Its strict fields are
+`version: 1`, `configured` (boolean), normalized `endpoint` (or the fixed
+`invalid (HTTPS required; HTTP is loopback-only)` diagnostic), `observed_at` (UTC
+ISO timestamp), and `auth` (null or `{outcome, at}`). Outcomes are limited to
+`ok`, `rejected` (HTTP 401/403), `unreachable` (fetch failure without a reply),
+`server-busy` (HTTP 429), and `server-error` (other unsuccessful HTTP replies,
+including 5xx). Busy/error status says the server answered; it does not claim
+successful authentication. This file and its atomic-write/lock files contain
+no conversation, token, token hash, token prefix, response body, or raw error.
+Only hooks write observations; status never infers missing from its own empty
+environment. Malformed, unreadable or unsafe observation files are unknown.
+Observation write failures remain silent and cannot block normal host work.
+Invalid configured URLs retain only that fixed diagnostic, never the rejected
+raw URL, and cannot carry auth evidence. SessionStart still clears an old verdict
+when the replacement endpoint is invalid.
+
+Auth observations reuse actual authenticated recall/capture fetches. They add
+no requests, retries or startup probes; unauthenticated telemetry is excluded.
+An HTTP success records accepted authentication even if the memory response
+later fails protocol validation. Empty prompts, pauses and quota gates that
+prevent dispatch cannot verify credentials. SessionStart clears the previous
+auth outcome without probing, because a token can change while paused or quota
+gated and no credential identifier is retained. Removing the token or changing
+endpoints also clears that outcome. Older in-flight requests and delayed
+SessionStart writes cannot replace a newer configuration observation. A shown
+verification time is a historical observation, not a guarantee that a token
+has not since been rotated or revoked. The next actual request supplies new
+auth evidence without retaining any token identifier. The observation is local
+and never transmitted.
+
 Ordinary standalone use selects `CLAUDE_PLUGIN_DATA` when supplied, otherwise
 `~/.cairn-memory/` (the released temporary fallback applies only to a falsy home).
 The legacy-gap adoption described below retains the already-used default root.
@@ -64,7 +117,8 @@ An explicitly paired plugin uses the recorded durable shared root:
 - `paired-root`: private 0600 JSON (`{"version":1,"paired":true}`) recording shared
   root history, published with the same owner/symlink checks as other private state;
 - `paused`: compatibility marker also honored as a pause;
-- `sessions/*.json`: byte cursors, pending retry bounds, generation, and incomplete-line discard state,
+- `sessions/*.json`: byte cursors, pending retry bounds, generation, incomplete-line discard state,
+  and an optional `ownSkillTurn: true` boolean (no command or response content),
   keyed by a hash of the Claude session id;
 - process-owned lock files coordinating control changes and session capture.
 

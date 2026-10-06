@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { redactSecrets } from "./redact.mjs";
 
 // 0.1.1 privacy filter (the second D1 exception, chichi 2026-09-29). Claude Code
@@ -60,12 +61,69 @@ export function machineUserRecord(record) {
     : null;
 }
 
+// Claude records slash commands as command XML, and Skill tool expansion as
+// an isMeta user message headed by its base directory. Inspect these markers,
+// never conversational mentions or the skill's instructions/arguments.
+const installedPluginRoot = fileURLToPath(new URL("../", import.meta.url));
+const portablePath = (path) => path.replaceAll("\\", "/").replace(/\/+$/, "");
+
+function startsPluginSkill(record, pluginRoot) {
+  const blocks = record?.message?.content;
+  if (record.type === "assistant" && Array.isArray(blocks) && blocks.some(
+    (block) => block?.type === "tool_use" && block.name === "Skill" &&
+      /^cairn-memory:[\w-]+$/.test(block.input?.skill ?? ""),
+  )) return true;
+  if (record.type !== "user") return false;
+  const text = textBlocks(blocks).join("\n").trimStart();
+  if (record.isMeta) {
+    const directory = /^Base directory for this skill: ([^\r\n]+)/.exec(text)?.[1];
+    // Match the exact loaded plugin root, including its marketplace/plugin/version
+    // cache identity. Project names or another plugin's marketplace do not prove
+    // ownership. A skill is one direct child of this plugin's skills directory.
+    const path = directory && portablePath(directory);
+    const root = `${portablePath(pluginRoot)}/skills/`;
+    if (path && path.slice(0, root.length) === root && /^[\w-]+$/.test(path.slice(root.length))) return true;
+  }
+  if (TYPED_PROMPT_SOURCES.includes(record.promptSource) && !record.isMeta) return false;
+  if (!/^<command-(?:name|message)>/.test(text)) return false;
+  const name = /<command-name>([^<]+)<\/command-name>/.exec(text)?.[1] ??
+    /<command-message>([^<]+)<\/command-message>/.exec(text)?.[1];
+  return /^\/?cairn-memory:[\w-]+$/.test(name ?? "");
+}
+
+function pluginControlOutput(text) {
+  // Whole single-line outputs from hook.mjs control(), including quota notices.
+  // A quote in a longer answer is still ordinary conversation.
+  if (text.includes("\n") || text.includes("\r")) return false;
+  if (["Cairn automatic memory is paused.", "Cairn automatic memory is active.",
+    "Cairn quota state repaired to open; automatic memory is active."].includes(text)) return true;
+  const unavailable = "(?:pairing_needed|paired_key_missing|standalone_key_missing|" +
+    "binding_identity_mismatch|binding_history_invalid|state_unreadable|state_dir_mismatch|" +
+    "pairing_record_missing|pairing_record_mismatch|pairing_platform_unsupported)";
+  if (new RegExp(`^Cairn automatic memory: ${unavailable}(?:; (?:[\\w-]+|retired root|coordination unreadable))?\\.$`).test(text)) return true;
+  const instant = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z";
+  const reset = "(?:reset unknown|\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|\\+00:00))";
+  const notice = `(?:recall|capture): (?:one eligible attempt|busy|quota_reached; ${reset})`;
+  if (new RegExp(`^Cairn automatic memory is active\\. ${notice}(?:; ${notice})?$`).test(text)) return true;
+  const credential = `(?:missing|configured(?: \\(not verified yet\\)| \\(verified ${instant}\\)|` +
+    ` \\(unreachable ${instant}; not verified\\)| \\(server answered: (?:busy|error) ${instant}; not verified\\))?|` +
+    "not seen yet — restart Claude Code and send one message|rejected — create a new token at https?://[^\\s;]+/settings/tokens)";
+  const operation = `; (?:recall|capture): (?:cooldown; retry after ${instant}|(?:quota_reached|ready|in_flight); ${reset})`;
+  const quota = `(?:; quota_state_invalid; run resume to repair|; quota gate unavailable|(?:${operation}){1,2})?`;
+  const binding = "(?:; pairing_needed \\(existing client active\\)|; standalone_unregistered)?";
+  return new RegExp(`^Cairn automatic memory: (?:active|paused)${binding}${quota}(?:; coordination unreadable)?; ` +
+    "telemetry: (?:on|off); endpoint: (?:https?://[^\\s;]+|invalid \\(HTTPS required; HTTP is loopback-only\\)); " +
+    `credential: ${credential}\\.$`).test(text);
+}
+
 /**
  * Every message 0.1.0 would parse, in order and with the same ids and content,
  * each marked `withheld` when 0.1.1 does not send it. Batch boundaries and event
  * ids are computed over all of them, so they stay exactly as 0.1.0 had them.
+ * Optional turnState carries only a boolean across incremental capture windows;
+ * it is updated even by tool-only records that the old parser did not emit.
  */
-export function transcriptWindow(jsonl, sessionId) {
+export function transcriptWindow(jsonl, sessionId, { turnState = {}, pluginRoot = installedPluginRoot } = {}) {
   const messages = [];
   for (const [lineIndex, line] of jsonl.split("\n").entries()) {
     if (!line.trim()) continue;
@@ -77,6 +135,10 @@ export function transcriptWindow(jsonl, sessionId) {
     }
     if (record?.type !== "user" && record?.type !== "assistant") continue;
     const role = record.type;
+    const machine = role === "user" && Boolean(machineUserRecord(record));
+    if (startsPluginSkill(record, pluginRoot)) turnState.ownSkillTurn = true;
+    else if (role === "user" && !machine) turnState.ownSkillTurn = false;
+    const rawText = textBlocks(record?.message?.content).join("\n").trim();
     const content = textBlocks(record?.message?.content)
       .map(redactSecrets)
       .join("\n")
@@ -89,7 +151,8 @@ export function transcriptWindow(jsonl, sessionId) {
         : createHash("sha256")
             .update(`${sessionId}\0${lineIndex}\0${role}\0${content}`)
             .digest("hex");
-    messages.push({ id, role, content, withheld: role === "user" && Boolean(machineUserRecord(record)) });
+    messages.push({ id, role, content, withheld: machine || turnState.ownSkillTurn === true ||
+      (role === "assistant" && pluginControlOutput(rawText)) });
   }
   return messages;
 }
@@ -97,8 +160,8 @@ export function transcriptWindow(jsonl, sessionId) {
 const strip = ({ id, role, content }) => ({ id, role, content });
 
 /** The messages 0.1.1 sends. */
-export function transcriptMessages(jsonl, sessionId) {
-  return transcriptWindow(jsonl, sessionId).filter((message) => !message.withheld).map(strip);
+export function transcriptMessages(jsonl, sessionId, options) {
+  return transcriptWindow(jsonl, sessionId, options).filter((message) => !message.withheld).map(strip);
 }
 
 /** The messages 0.1.0 sent; used for batch identity and tests, never for sending. */

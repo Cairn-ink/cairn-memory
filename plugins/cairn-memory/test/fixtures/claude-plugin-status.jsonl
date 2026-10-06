@@ -1,0 +1,11 @@
+{"type":"user","uuid":"skill-command","message":{"role":"user","content":"<command-name>/cairn-memory:status</command-name>\n<command-message>cairn-memory:status</command-message>\n<command-args></command-args>"}}
+{"type":"user","uuid":"skill-expanded","isMeta":true,"message":{"role":"user","content":"Base directory for this skill: /synthetic/.claude/plugins/cache/cairn-memory/cairn-memory/0.3.0/skills/status\n\nSynthetic status skill instructions FXPLUGININSTRUCTIONS."}}
+{"type":"assistant","uuid":"skill-preface","message":{"role":"assistant","content":[{"type":"text","text":"Synthetic command preface FXPLUGINPREFACE."},{"type":"tool_use","id":"synthetic-status-tool","name":"Bash","input":{"command":"node /synthetic/plugin/scripts/hook.mjs status"}}]}}
+{"type":"user","uuid":"skill-tool-result","toolUseResult":{"type":"text"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"synthetic-status-tool","content":"Synthetic tool result FXPLUGINTOOL."}]}}
+{"type":"assistant","uuid":"skill-output","message":{"role":"assistant","content":[{"type":"text","text":"Cairn automatic memory: active; telemetry: on; endpoint: https://synthetic.invalid; credential: missing."}]}}
+{"type":"user","uuid":"skill-hook-meta","isMeta":true,"message":{"role":"user","content":"Synthetic hook context FXPLUGINMETA."}}
+{"type":"assistant","uuid":"skill-followup","message":{"role":"assistant","content":[{"type":"text","text":"Synthetic command explanation FXPLUGINFOLLOWUP."}]}}
+{"type":"user","uuid":"normal-mention","promptSource":"typed","turnOrigin":"human","message":{"role":"user","content":"Please explain cairn memory status in ordinary conversation FXNORMALMENTION."}}
+{"type":"assistant","uuid":"normal-reply","message":{"role":"assistant","content":[{"type":"text","text":"Synthetic normal answer FXNORMALREPLY."}]}}
+{"type":"user","promptSource":"typed","turnOrigin":"human","message":{"role":"user","content":"Remember that I prefer concise notes FXNORMALPREFERENCE."}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will keep notes concise FXNORMALANSWER."}]}}

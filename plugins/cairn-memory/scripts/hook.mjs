@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { open, stat } from "node:fs/promises";
+import { open, readFile, stat } from "node:fs/promises";
 import { platform } from "node:os";
+import { isAbsolute, resolve } from "node:path";
 import { captureEvent } from "../lib/capture-event.mjs";
 import {
   captureCursorPath,
@@ -24,8 +25,11 @@ import { prepareRecallQuery } from "../lib/recall-query.mjs";
 import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
 import { VERSION } from "../lib/version.mjs";
 import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
+import { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
+  recordCredentialConfiguration } from "../lib/credential-state.mjs";
 
 const action = process.argv[2] ?? "status";
+const observedAt = new Date().toISOString();
 const configuredEndpoint =
   process.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT ?? "https://cairn.ink";
 const token = process.env.CLAUDE_PLUGIN_OPTION_API_TOKEN ?? "";
@@ -38,11 +42,12 @@ let binding;
 let endpoint;
 let post;
 let quotaTarget;
+let credentialDir;
 try {
   endpoint = normalizeEndpoint(configuredEndpoint);
   post = createJsonPoster({ endpoint, token });
 } catch {
-  endpoint = "invalid (HTTPS required; HTTP is loopback-only)";
+  endpoint = INVALID_ENDPOINT;
   post = async () => {
     throw new Error("invalid_endpoint");
   };
@@ -81,7 +86,22 @@ async function telemetry(event) {
 // Recheck the existing local barrier after asynchronous quota-state work.
 // The network start itself stays synchronous under the control lock.
 async function dispatchActive(generation, start) {
-  const dispatch = await startIfActive(dataDir, generation, start);
+  const dispatch = await startIfActive(dataDir, generation, () => {
+    // Observe actual authenticated fetches, before the transport sanitizes errors.
+    // Unauthenticated telemetry and locally blocked requests are not evidence.
+    const operation = start();
+    return Promise.resolve(operation).then(async (response) => {
+      const outcome = [401, 403].includes(response.status) ? "rejected" :
+        response.ok ? "ok" : response.status === 429 ? "server-busy" : "server-error";
+      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome,
+        at: new Date().toISOString() }).catch(() => {});
+      return response;
+    }, async (error) => {
+      await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome: "unreachable",
+        at: new Date().toISOString() }).catch(() => {});
+      throw error;
+    });
+  });
   if (!dispatch.started) throw new Error("dispatch_not_started");
   return dispatch.operation;
 }
@@ -164,6 +184,15 @@ async function captureLocked(hookInput, statePath, generation) {
   const transcriptPath = hookInput.transcript_path;
   const size = (await stat(transcriptPath)).size;
   let cursor = await readCaptureCursor(statePath);
+  // Keep Claude-only turn metadata out of the frozen shared cursor helper.
+  // The caller holds this session's capture lock throughout both reads.
+  if (cursor) {
+    try {
+      if (JSON.parse(await readFile(statePath, "utf8")).ownSkillTurn === true) {
+        cursor.ownSkillTurn = true;
+      }
+    } catch { /* Missing/corrupt extension carries no verified turn state. */ }
+  }
 
   // After every pause barrier, the first hook for each session establishes a
   // fresh EOF boundary and transmits nothing. This also protects sessions the
@@ -212,6 +241,7 @@ async function captureLocked(hookInput, statePath, generation) {
         generation,
         discardUntilNewline: true,
         pendingEnd: undefined,
+        ...(cursor.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
       });
       return;
     }
@@ -222,6 +252,7 @@ async function captureLocked(hookInput, statePath, generation) {
       generation,
       discardUntilNewline: false,
       pendingEnd: undefined,
+      ...(cursor.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
     });
   }
   const lastNewline = slice.lastIndexOf(0x0a);
@@ -229,13 +260,15 @@ async function captureLocked(hookInput, statePath, generation) {
   const consumed = slice.subarray(0, lastNewline + 1);
   // Batches keep 0.1.0's boundaries and event ids, including for a window 0.1.0
   // froze before an upgrade; only messages 0.1.1 keeps are ever sent.
-  const window = transcriptWindow(consumed.toString("utf8"), hookInput.session_id);
+  const turnState = { ownSkillTurn: cursor.ownSkillTurn === true };
+  const window = transcriptWindow(consumed.toString("utf8"), hookInput.session_id, { turnState });
   if (!window.some((message) => !message.withheld)) {
     await writeCaptureCursor(statePath, {
       offset: offset + consumed.length,
       generation,
       discardUntilNewline: false,
       pendingEnd: undefined,
+      ...(turnState.ownSkillTurn ? { ownSkillTurn: true } : {}),
     });
     return;
   }
@@ -249,6 +282,8 @@ async function captureLocked(hookInput, statePath, generation) {
       generation,
       discardUntilNewline: false,
       pendingEnd,
+      // Retries must start from the original turn state, not this window's end.
+      ...(cursor.ownSkillTurn === true ? { ownSkillTurn: true } : {}),
     });
   }
 
@@ -280,6 +315,7 @@ async function captureLocked(hookInput, statePath, generation) {
     generation,
     discardUntilNewline: false,
     pendingEnd: undefined,
+    ...(turnState.ownSkillTurn ? { ownSkillTurn: true } : {}),
   });
   await telemetry("capture_succeeded");
 }
@@ -290,6 +326,13 @@ async function control() {
     process.stdout.write("Cairn automatic memory is paused.\n");
     return;
   }
+  const credentialState = await readCredentialState(credentialDir);
+  const statusEndpoint = !token && credentialState ? credentialState.endpoint : endpoint;
+  const statusCredential = credentialState?.endpoint === statusEndpoint ? credentialState : undefined;
+  // Bash controls and status must address the same observed endpoint's quota gate.
+  if (statusEndpoint.startsWith("http")) {
+    quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint: statusEndpoint }) };
+  } else quotaTarget = undefined;
   if (action === "resume") {
     const gate = quotaTarget ? await resumeHostedQuota(quotaTarget) : { status: "active" };
     if (gate.status === "unavailable") throw new Error("quota_gate_unavailable");
@@ -319,13 +362,24 @@ async function control() {
   process.stdout.write(
     `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}${quotaNote}` +
     `${binding.detail ? "; " + binding.detail : ""}; ` +
-    `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${endpoint}; ` +
-    `credential: ${token ? "configured" : "missing"}.\n`,
+    `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${statusEndpoint}; ` +
+    `credential: ${credentialDescription(statusCredential, { hasToken: Boolean(token) })}.\n`,
   );
 }
 
 try {
-  const { pairingRecord } = parsePairingRecord(process.argv.slice(3));
+  const { pairingRecord, rest } = parsePairingRecord(process.argv.slice(3));
+  if (rest.length) {
+    if (rest.length !== 2 || rest[0] !== "--plugin-data") {
+      throw new Error("invalid_plugin_data_argument");
+    }
+    // Skill content substitutes this path; Bash does not inherit plugin env.
+    // Older hosts can leave it empty or unsubstituted; retain legacy fallback.
+    if (rest[1] && rest[1] !== "${CLAUDE_PLUGIN_DATA}") {
+      if (!isAbsolute(rest[1])) throw new Error("invalid_plugin_data_argument");
+      process.env.CLAUDE_PLUGIN_DATA = resolve(rest[1]);
+    }
+  }
   clientOptions = { client: "claude", pairingRecord };
   binding = await resolveClient(clientOptions);
   if (!binding.enabled) {
@@ -338,6 +392,7 @@ try {
     }
   } else {
     dataDir = binding.root;
+    credentialDir = process.env.CLAUDE_PLUGIN_DATA ?? dataDir;
     if (endpoint.startsWith("http")) {
       quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
       post = createJsonPoster({ endpoint, token, ...quotaTarget });
@@ -346,6 +401,11 @@ try {
       await control();
     } else {
       const hookInput = await input();
+      if (["start", "recall", "capture", "capture-detached"].includes(action)) {
+        await recordCredentialConfiguration(credentialDir, {
+          configured: Boolean(token), endpoint, observedAt, resetAuth: action === "start",
+        }).catch(() => {});
+      }
       if (action === "start") await telemetry("plugin_started");
       else if (action === "recall") await recall(hookInput);
       else if (["capture", "capture-detached"].includes(action)) {

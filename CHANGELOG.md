@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.1 — 2026-10-06
+
+Plugin and marketplace 0.3.1. Protocol stays 0.3.0.
+
+### credential/control review corrections
+
+- Restore the frozen shared cursor helper and its parity hash; read Claude-only
+  skill-turn metadata in the hook without changing shared cursor semantics.
+- Clear old auth verdicts on SessionStart and distinguish server busy/error
+  replies from an unreachable service. Invalid endpoints use a fixed diagnostic
+  and clear old auth too; token rotation adds no auth probe.
+- Give pause/resume the same substituted plugin-data directory as status. Empty
+  or unsubstituted plugin-data arguments retain the legacy fallback. Resume also
+  resets the same observed endpoint quota gate that status displays.
+- Match meta skill directories inside the exact installed plugin root and match
+  complete control output lines. Project/marketplace names and appended prose
+  do not withhold ordinary answers. Token leak checks use Node fs only.
+
+### exclude Cairn's own skill turns from automatic capture
+
+- Withhold Cairn Memory skill invocation records and all answers until the next
+  submitted user prompt, using Claude Code command/skill markers. Keep only a
+  content-free boolean in the capture cursor across hook processes and retries.
+- Also withhold whole assistant status/pause/resume output lines when the
+  invocation marker is absent. Ordinary mentions remain conversation.
+- Preserve 0.1.0 batch boundaries, message identities and capture event IDs.
+
+### truthful Claude Code credential status
+
+- Read hook-written credential observations when the status skill's Bash command
+  cannot see Claude Code's sensitive plugin options. Pass the substituted plugin
+  data path so status uses the same profile and binding as the hooks.
+- Distinguish configured/verified, rejected, unreachable, not yet observed, and
+  hook-confirmed missing credentials. Record only configuration presence,
+  endpoint and timestamps with a bounded auth outcome; never retain a token,
+  token hash/prefix, response body or error text.
+- Observe existing authenticated recall/capture requests without extra calls.
+  SessionStart's unauthenticated telemetry never verifies a credential.
+
 ## Unreleased — Claude Code one-command installer
 
 - Prepare dependency-free `@cairn-ink/memory` (initial version proposed at 0.1.0)
