@@ -1806,3 +1806,34 @@ future launch inventory. Fresh binding and revalidation, independent reviews,
 latest-head CI and a specific new paid grant remain necessary. No new paid
 cohort or score has been produced, no old failed case recovered, and no semantic
 parity or general native reliability claim follows from these offline checks.
+
+## Frozen six-case launch preparation
+
+The later [execution checkpoint](plans/native-comparison-execution.md) reuses
+the exact N11 six cases and unchanged indexed-evidence operator. Root's keyless
+assembly authenticated a separate complete 1,472-file launch inventory and
+rebound preparation identity; the six-case native preparation and 279-batch
+projection still match 74,001 requests / 14,088,609 microUSD in conservative
+reservation. This is a conditional upper bound, not charges incurred, completed
+ingestion or a score. The original cumulative ledger remains unchanged at this
+checkpoint. Root subsequently passed authentic keyless preflight and four
+altered-pin/preload refusal checks with no credential/evaluator read, provider
+call, run output or ledger change. Exact Node 22.16/24.15 public tests each
+passed 581/581 and the unchanged private generic suite each passed 34/34, all
+with no skips and actual exit 0. Validation and maintainer validation also
+returned exit 0 on both runtimes. These offline checks do not replace the still
+pending independent source reviews or establish paid completion or a score.
+An independent final inventory reconstruction matched all 1,472 files and
+verified hashes/Node identity; the primary observer again confirmed an open,
+unchanged ledger with pending 0 and delta 0 before any supervisor intent.
+
+The user has now granted this run and reasonable subsequent evaluation toward
+the agreed reliability goal under a US$400 cumulative authority ceiling. This
+does not silently change enforcement: this frozen run retains the existing
+US$300 ledger, US$20 full-round ceiling and US$30 protected reserve. Later
+activation of a larger ledger limit requires preserving and validating its
+authorization chain, not resetting historical reservations. Root alone may
+load credentials and dispatch after the outstanding gates pass; no repeated
+per-round permission request is needed within the standing authority. No new
+paid result, historical recovery, semantic superiority or general native
+reliability claim follows from this preparation.
