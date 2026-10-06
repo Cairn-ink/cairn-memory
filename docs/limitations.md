@@ -1887,3 +1887,20 @@ Preliminary source-session coverage counts localize gaps in wrong cases 1 and 3,
 while case 2 represents both required sessions but remains wrong; none had
 selected-card packer omissions, and these observations do not establish ranking
 or passage-use causes or replace a red-capable offline regression before repair.
+
+The later exact-marker diagnostic supersedes unreliable broad saved-match
+counts of 0/3/2: a broad case-2 marker had also matched unrelated source.
+Exact planned-input matches are 2/1/1 for cases 1/2/3, saved receipt matches
+0/0/1, and final-context presence is false for all three, with selected cards
+1/2/1 and no packer omissions. Read-only actual-packer/SQLite probes on exact
+Node 22/24 intentionally exited 1 with identical counts; the pure prepared-source
+probe on Node 24 exited 0, with no API call or database change. These localize
+extraction/admission for cases 1/2 and candidate
+visibility/selection for case 3, not verified causes. Combined select/rank
+`shownRefs` counts do not establish unique visibility. The indexed-evidence
+contract retains selected admitted receipts, not every source window;
+successful capture and catalog metadata with unassessed semantic coverage
+cannot promise completeness, and `sourceSnapshot` cannot recover omitted
+source. Proposed synthetic wire-omission/include controls and stage-specific
+candidate-visibility fixtures remain unimplemented; no source/default change,
+benchmark-score correction or paid rerun is made by this diagnostic correction.

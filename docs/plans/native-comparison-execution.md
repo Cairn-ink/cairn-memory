@@ -256,3 +256,54 @@ passage coverage and answer use remain unresolved. No question/answer text,
 dataset ID or memory ID is published. Under `diagnosing-bugs`, a red-capable
 offline feedback loop through the actual failing path is required before a fix;
 this preliminary inspection is not a new regression, replay or paid rerun.
+
+## Narrow-marker correction and next offline boundaries
+
+An earlier broad marker for case 2 also matched unrelated source. Its broad
+saved-match counts of 0/3/2 were therefore not reliable necessary-evidence counts
+and are explicitly superseded by the exact supporting-phrase checks below.
+The phrase is not published. This corrects only a diagnostic, not the frozen
+benchmark scores, judgments or accounting.
+
+Root's narrow actual-packer/read-only SQLite probe on exact Node 24 intentionally
+returned exit 1 (`425d5c`) for absent final-context support. The exact Node 22
+repeat also intentionally exited 1 (`21c17b`) with identical planned/saved/context
+counts and zero omissions. Both kept database hashes unchanged and called no
+API. The separate pure prepared-source
+probe returned actual exit 0 (`11024b`), confirming the same key markers in
+planned capture input:
+
+| Case | Exact user-source marker matches | Planned capture-input matches | Saved exact-receipt matches | Marker in final context | Selected cards | Packer omissions |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 2 | 2 | 0 | no | 1 | 0 |
+| 2 | 1 | 1 | 0 | no | 2 | 0 |
+| 3 | 1 | 1 | 1 | no | 1 | 0 |
+
+These markers were not missing from original/read-source/planning messages.
+This does not establish what reached provider extraction input, what its output
+selected, or an admission/selection root cause. Cases 1/2 next require inspecting
+the extraction/admission boundary (planned present, saved absent); case 3 requires
+candidate visibility and selection (saved present, final context absent).
+Recall witness `shownRefs` includes both select and rank observations, not unique
+visibility; its count cannot be treated as a count of distinct visible memories.
+
+The public indexed-evidence contract retains model-selected admitted receipts,
+not all source windows or a transcript archive. Successful capture is not
+coverage: `sourceWindowCatalog.semanticCoverage` remains `unassessed`, and
+`sourceSnapshot` cannot recover source omitted from admission.
+
+Next bounded offline acceptance, not implementation or a cause declaration:
+
+- Use a synthetic user aside and verbose assistant with actual
+  `prepareMixedSourceCase`, `ingestIndexedEvidenceLongMemEvalCase`, core and
+  adapter fake HTTP. Witness the extraction wire; scripted assistant-only
+  extraction must expose the user receipt gap, while an include-user control
+  with identical input must retain it. No benchmark answer oracle enters capture.
+- Use a separate synthetic candidate fixture distinguishing a target outside
+  two allowed scan pages from one visible but omitted by model selection. Record
+  stage-specific IDs for select/rank and deduplicate only within the declared
+  stage when evaluating visibility, not through the combined `shownRefs` count.
+
+Neither probe has been implemented or run by this author. Source privacy,
+retention/defaults and frozen scores remain unchanged until validated evidence
+supports a separately scoped change; no expensive paid rerun follows here.
