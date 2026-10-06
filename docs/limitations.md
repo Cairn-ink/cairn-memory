@@ -1783,3 +1783,26 @@ This synthetic cause does not identify historical authentic disconnect causes,
 establish a universal body-size threshold, native reliability or fair semantic
 parity/superiority. Earlier natural small/slow controls that did not reproduce
 the failure and all historical scores/journals remain unchanged.
+
+## Keyless next-cohort preparation
+
+The [post-transport checkpoint](plans/native-comparison-next.md) adds only
+private keyless preparation bindings for six new cases across five types;
+preference is not covered. Exact 22.16/24.15 synthetic checks verify the unchanged
+metadata selector, durable selection/exposure before source production,
+one-shot failure retention, source-only loading and a stricter 20M full resource
+ceiling with protected funds. The producer writes a separate private evaluator;
+this is not permission to inspect it for selection or before durable generation.
+The previous-six inclusion check is not proof of a complete historical exclusion
+union. Primary subsequently authenticated the 226-ID exposure union and froze
+six new cases; an independent metadata-only ranking check matched them, and the
+enlarged exposure union is 232. Full native source preparation is ready for all six; the 279
+planned batches project 74,001 requests and 14,088,609 microUSD in conservative
+reservation, below the 20M round ceiling. Protected headroom is 14,012,034
+microUSD, and the original ledger remains unchanged. This is source/resource
+preparation, not execution, cost actually incurred, completion or a score.
+The recorded source inventory identity covers projection only, not the full
+future launch inventory. Fresh binding and revalidation, independent reviews,
+latest-head CI and a specific new paid grant remain necessary. No new paid
+cohort or score has been produced, no old failed case recovered, and no semantic
+parity or general native reliability claim follows from these offline checks.
