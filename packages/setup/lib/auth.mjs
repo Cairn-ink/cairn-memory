@@ -23,11 +23,13 @@ export function safeHostname(value = hostname()) {
 }
 
 function failure(response) {
+  if (response.status === 501) return new AuthError('protocol', 501);
   if (response.status >= 500) return new AuthError('server', response.status);
   const value = response.value;
   if (!value || typeof value.error !== 'string' || typeof value.error_description !== 'string' ||
       !(value.request_id === null || identifier(value.request_id))) return new AuthError('protocol');
   if (response.status === 429) {
+    if (value.error === 'active_token_limit') return new AuthError('active_token_limit', 429);
     const header = Number(response.retryAfter);
     if (!Number.isInteger(value.retry_after) || value.retry_after < 1 ||
         (response.retryAfter !== undefined && (!Number.isInteger(header) || header < 1))) return new AuthError('protocol');
@@ -45,7 +47,7 @@ export async function credentialCheck(endpoint, token, { signal, request = reque
   }
   const value = response.value;
   if (!value || value.valid !== true || !identifier(value.token_id) || !scopesValid(value.scopes) ||
-      !(value.expires_at === null || (date(value.expires_at) && Date.parse(value.expires_at) > Date.now()))) throw new AuthError('protocol');
+      !(value.expires_at === null || date(value.expires_at))) throw new AuthError('protocol');
   return value;
 }
 
@@ -72,6 +74,7 @@ export async function browserAuthorize(endpoint, {
 } = {}) {
   let verifier = randomBytes(32).toString('base64url');
   let proof, token, receipt, grant, configured = false, ackStarted = false;
+  let recoveryStart;
   let stop = () => {};
   const start = now();
   let deadline = start + 600000;
@@ -104,7 +107,7 @@ export async function browserAuthorize(endpoint, {
     deadline = start + Math.min(600, grant.expires_in) * 1000;
     if (now() >= deadline) throw new AuthError('timeout');
     write(`授權代碼 / Authorization code: ${grant.user_code}`);
-    write(`代碼期限最多 10 分鐘 / Code deadline (at most 10 minutes): ${new Date(Date.now() + deadline - now()).toISOString()}`);
+    write(`代碼期限最多 10 分鐘 / Code deadline (at most 10 minutes): ${new Date(Date.now() + deadline - now()).toLocaleString(undefined, { timeZoneName: 'short' })}`);
     write(`請在瀏覽器輸入代碼 / Enter the code in your browser: ${uri}`);
     if (!noBrowser) {
       try { await browse(write, uri, signal); }
@@ -115,10 +118,12 @@ export async function browserAuthorize(endpoint, {
     await pause(interval);
     while (!token) {
       let response;
+      const exchangeStart = now();
       try {
         response = await post('token', proof, { timeout: Math.max(1, Math.min(15000, deadline - now())) });
       } catch (error) {
         if (error.kind !== 'transient') throw error;
+        recoveryStart ??= exchangeStart;
         response = { status: 503 };
       }
       if (now() >= deadline) throw new AuthError('timeout');
@@ -127,17 +132,26 @@ export async function browserAuthorize(endpoint, {
         // Capture the token only after validating the complete delivery shape.
         if (!value || !validToken(value.access_token) || value.token_type !== 'Bearer' || value.scope !== scope ||
             !identifier(value.token_id) || !opaque(value.delivery_receipt) || !date(value.expires_at) ||
-            Date.parse(value.expires_at) <= Date.now() || !date(value.ack_deadline) ||
-            Date.parse(value.ack_deadline) <= Date.now() || Date.parse(value.ack_deadline) > Date.now() + 61000) throw new AuthError('protocol');
+            !date(value.ack_deadline)) throw new AuthError('protocol');
         token = value.access_token; receipt = value.delivery_receipt;
         value.access_token = undefined; value.delivery_receipt = undefined;
-        const ackDeadline = Date.parse(value.ack_deadline);
+        // The server owns absolute timestamps and expiry enforcement. Bound
+        // our work from BEFORE the potentially issuing exchange, subtracting
+        // one second for the server's timestamp rounding. Replayed responses
+        // cannot reset this budget; lost exchanges retain the earliest start.
+        const ackDeadline = Math.min(deadline, (recoveryStart ?? exchangeStart) + 60000) - 1000;
+        const remaining = () => Math.max(0, ackDeadline - now());
+        if (!remaining()) throw new AuthError('timeout');
         stop();
         stop = progress(write, 0, true);
         const checked = await credentialCheck(endpoint, token, { signal, request,
-          timeout: Math.max(1, Math.min(15000, ackDeadline - Date.now())) });
+          timeout: Math.min(15000, remaining()) });
         if (!checked || checked.token_id !== value.token_id || checked.expires_at !== value.expires_at || checked.scopes === null) throw new AuthError('protocol');
-        try { await save({ api_endpoint: endpoint, api_token: token }, Math.max(1, ackDeadline - Date.now())); }
+        try {
+          if (!remaining()) throw new AuthError('configure');
+          await save({ api_endpoint: endpoint, api_token: token }, remaining());
+          if (!remaining()) throw new AuthError('configure');
+        }
         catch (error) {
           if (signal?.aborted || error.code === 130) throw new AuthError('interrupted');
           throw new AuthError('configure');
@@ -149,8 +163,9 @@ export async function browserAuthorize(endpoint, {
         // Same receipt/proof, bounded reconciliation retries. An ambiguous ACK
         // never cancels a credential that may already have been delivered.
         for (let attempt = 0; attempt < 3; attempt++) {
+          if (!remaining()) break;
           try {
-            const ack = await post('ack', { ...proof, delivery_receipt: receipt }, { timeout: 2000 });
+            const ack = await post('ack', { ...proof, delivery_receipt: receipt }, { timeout: Math.min(15000, remaining()) });
             if (ack.status === 200 && ack.value?.delivered === true) {
               stop(); stop = () => {};
               return { expiresAt: checked.expires_at };
@@ -162,12 +177,12 @@ export async function browserAuthorize(endpoint, {
             if (signal?.aborted) throw new AuthError('interrupted');
             if (!['network', 'transient', 'server'].includes(error.kind)) throw error;
           }
-          if (attempt < 2) await sleep(500 * (2 ** attempt), undefined, { signal });
+          if (attempt < 2 && remaining()) await sleep(Math.min(500 * (2 ** attempt), remaining()), undefined, { signal });
         }
         throw new AuthError('ack_unknown');
       }
       const error = failure(response);
-      if (error.kind === 'authorization_pending' && response.status === 400) { backoff = 0; await pause(interval); }
+      if (error.kind === 'authorization_pending' && response.status === 400) { recoveryStart = undefined; backoff = 0; await pause(interval); }
       else if (error.kind === 'slow_down' && response.status === 400) { interval += 5; await pause(interval); }
       else if (error.kind === 'rate_limited') {
         write('授權請求受到限流，依伺服器指示等待 / Rate-limited; waiting as instructed by the server.');

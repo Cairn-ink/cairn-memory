@@ -12,6 +12,7 @@ export async function fakeAuthServer(t, options = {}) {
   const requests = [], violations = [];
   let grant, delivery, lastProof, polls = 0, acks = 0, endpoint;
   const sequence = [...(options.sequence ?? [])];
+  const serverNow = () => Date.now() + (options.clockSkew ?? 0);
   const server = http.createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
@@ -48,7 +49,7 @@ export async function fakeAuthServer(t, options = {}) {
       if (req.method !== 'GET' || req.headers.authorization !== `Bearer ${secret}`) { error('invalid_grant', 401); return; }
       if (grant && !['issued_unacked', 'delivered'].includes(grant.state)) { error('invalid_grant', 401); return; }
       send(200, { valid: true, token_id: delivery?.token_id ?? 'manual-token', scopes: options.legacy ? null : scope.split(' '),
-        expires_at: delivery?.expires_at ?? (options.legacy ? null : new Date(Date.now() + 180 * 86400000).toISOString()) }); return;
+        expires_at: delivery?.expires_at ?? (options.legacy ? null : options.expiresAt ?? new Date(serverNow() + 180 * 86400000).toISOString()) }); return;
     }
     if (!grant || body?.client_id !== client || body.device_code !== grant.device_code ||
         createHash('sha256').update(body.code_verifier ?? '').digest('base64url') !== grant.challenge) {
@@ -63,6 +64,7 @@ export async function fakeAuthServer(t, options = {}) {
         if (next === 'drop') { req.socket.destroy(); return; }
         if (next === 'access_denied') grant.state = 'denied';
         if (next === 'expired_token') grant.state = 'expired';
+        if (next === 'active_token_limit') { error(next, 429, { retry_after: options.retryAfter ?? 17 }); return; }
         if (next === 'rate_limited') { error(next, 429, { retry_after: options.retryAfter ?? 17 }); return; }
         if (typeof next === 'number') { error('temporary_failure', next); return; }
         error(next); return;
@@ -71,8 +73,8 @@ export async function fakeAuthServer(t, options = {}) {
       if (delivery && delivery.exchange_id !== body.exchange_id) { error('exchange_conflict', 409); return; }
       if (!delivery) {
         delivery = { access_token: secret, token_type: 'Bearer', scope,
-          expires_at: new Date(Date.now() + 180 * 86400000).toISOString(), token_id: randomUUID(),
-          delivery_receipt: opaque(), ack_deadline: new Date(Date.now() + 60000).toISOString(), exchange_id: body.exchange_id };
+          expires_at: options.expiresAt ?? new Date(serverNow() + 180 * 86400000).toISOString(), token_id: randomUUID(),
+          delivery_receipt: opaque(), ack_deadline: new Date(Math.floor(serverNow() / 1000) * 1000 + 60000).toISOString(), exchange_id: body.exchange_id };
         grant.state = 'issued_unacked';
       }
       const { exchange_id: _exchange, ...value } = delivery;
@@ -85,6 +87,7 @@ export async function fakeAuthServer(t, options = {}) {
     }
     if (route === 'ack') {
       acks++;
+      if (options.ackStatus) { error('temporary_failure', options.ackStatus); return; }
       if (options.ackRevoked) { grant.state = 'failed_revoked'; error('failed_revoked', 409, { state: 'failed_revoked' }); return; }
       if (!delivery || body.delivery_receipt !== delivery.delivery_receipt || body.exchange_id !== delivery.exchange_id) { error('invalid_grant'); return; }
       grant.state = 'delivered';

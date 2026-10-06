@@ -3,6 +3,7 @@ import { writeSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 import { release } from 'node:os';
+import { performance } from 'node:perf_hooks';
 import { SetupError, AuthError } from './errors.mjs';
 import { browserAuthorize, credentialCheck, validToken } from './auth.mjs';
 
@@ -174,14 +175,15 @@ export async function main(argv, {
   process.on('SIGINT', interrupt);
   const signal = controller.signal;
   const run = (args, input, options) => execute('claude', args, { input, signal, ...options });
+  const now = authOptions.now ?? (() => performance.now());
   const save = async (values, timeout) => {
     const args = ['plugin', 'configure', plugin, '--values-stdin'];
     let input = Buffer.from(JSON.stringify(values));
-    const deadline = Date.now() + (timeout ?? 120000);
+    const deadline = now() + (timeout ?? 120000);
     values.api_token = undefined;
     try {
       checked(await run(args, input, { timeout, discard: true }), args);
-      const saved = await configuration(run, { timeout: Math.max(1, deadline - Date.now()) });
+      const saved = await configuration(run, { timeout: Math.max(1, deadline - now()) });
       if (!['api_endpoint', 'api_token'].every(key => saved.configured.includes(key))) {
         throw new SetupError('設定未保存完整 / Configuration was not fully saved. Use /plugin configure.');
       }
@@ -264,23 +266,31 @@ export async function main(argv, {
       return 1;
     }
     if (!canList || !canConfigure) {
-      configureInstructions(write);
+      manual(write);
       throw new SetupError('請更新 Claude Code：需要 plugin list 與安全的 configure --values-stdin / Update Claude Code: plugin list and secure configure --values-stdin are required.');
     }
     const marketplaceExists = (await marketplaces(run)).some(value => value.name === 'cairn-memory');
     const previous = await installed(run);
+    const updateScopes = [...new Set(previous.map(entry => entry.scope))].filter(scope => ['user', 'project', 'local'].includes(scope));
     if (marketplaceExists && !await supports(['plugin', 'marketplace', 'update'], /Usage: claude plugin marketplace update\b/u, run)) {
       throw new SetupError('需要更新 marketplace 的 CLI 功能 / Update Claude Code: marketplace update is required.');
     }
-    if (previous.length && !await supports(['plugin', 'update'], /Usage: claude plugin update\b/u, run)) {
+    if (updateScopes.length && !await supports(['plugin', 'update'], /Usage: claude plugin update\b/u, run)) {
       throw new SetupError('需要更新 plugin 的 CLI 功能 / Update Claude Code: plugin update is required.');
     }
     const marketplaceArgs = marketplaceExists ? ['plugin', 'marketplace', 'update', 'cairn-memory'] :
       ['plugin', 'marketplace', 'add', repository];
     checked(await run(marketplaceArgs), marketplaceArgs);
     write('Marketplace 已就緒 / Marketplace ready.');
-    const installArgs = ['plugin', previous.length ? 'update' : 'install', plugin];
-    checked(await run(installArgs), installArgs);
+    const userInstalled = previous.some(entry => entry.scope === 'user');
+    for (const scope of updateScopes) {
+      const updateArgs = ['plugin', 'update', plugin, '--scope', scope];
+      checked(await run(updateArgs), updateArgs);
+    }
+    if (!userInstalled) {
+      const installArgs = ['plugin', 'install', plugin, '--scope', 'user'];
+      checked(await run(installArgs), installArgs);
+    }
     const entries = await installed(run);
     if (!entries.some(entry => entry.scope === 'user') || entries.some(entry => entry.errors?.length)) {
       throw new SetupError('安裝後無法確認 plugin / Cannot confirm plugin after installation. Inspect /plugin.');
@@ -310,7 +320,7 @@ export async function main(argv, {
         if (authorization.unsupported) {
           write('伺服器尚未支援瀏覽器授權（404/501），改用隱藏 PAT 輸入；也可使用 --manual-token / Server does not support browser authorization (404/501); falling back to hidden PAT input. --manual-token is also available.');
           manualToken = true;
-        } else write(`Cairn Memory 已連線，憑證將於 ${authorization.expiresAt.slice(0, 10)} 到期。 / Cairn Memory is connected. Credential expires ${authorization.expiresAt.slice(0, 10)}.`);
+        } else write(`Cairn Memory 已連線，憑證將於 ${new Date(authorization.expiresAt).toLocaleDateString('zh-TW')} 到期。 / Cairn Memory is connected. Credential expires ${new Date(authorization.expiresAt).toLocaleDateString('en-US')}.`);
       }
       if (manualToken) {
         let token;
@@ -324,7 +334,7 @@ export async function main(argv, {
           await save({ api_endpoint: endpoint, api_token: token });
           if (!checkedCredential) write('設定已保存，尚未驗證（舊伺服器 404/501）/ Configured, not verified (older server 404/501).');
           else write(checkedCredential.expires_at ?
-            `Cairn Memory 已連線，憑證到期日 / Cairn Memory connected; credential expires: ${checkedCredential.expires_at.slice(0, 10)}` :
+            `Cairn Memory 已連線，憑證到期日 / Cairn Memory connected; credential expires: ${new Date(checkedCredential.expires_at).toLocaleDateString()}` :
             'Cairn Memory 已連線；此人工憑證未提供到期日 / Cairn Memory connected; this manual credential has no reported expiry.');
         } finally { token = undefined; }
       }

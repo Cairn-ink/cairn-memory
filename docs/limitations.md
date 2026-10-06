@@ -1368,3 +1368,36 @@ Installer status queries configuration presence without reading the token;
 installer credential checks never write hook-owned observations. Real hook
 verification still needs a restarted Claude Code session and a submitted message.
 Installer 0.2.0 remains unpublished; chichi publishes from her laptop.
+
+
+### Installer 0.2.0 review follow-up
+
+Configure and ACK use monotonic clocks. The delivery budget starts before the
+potentially issuing exchange; an ambiguous lost exchange keeps its original
+start, and retries cannot extend it. One second is reserved for server timestamp
+rounding, including grant expiry. Each ACK attempt may wait up to 15 seconds,
+capped by the remaining budget. Connections still open afresh; this change
+lengthens the timeout rather than claiming keep-alive reuse. Absolute server
+expiry values are metadata; the server's valid/ACK result is authoritative.
+Tests simulate skew in both directions, wall-clock jumps, slow ACK replies,
+replayed exchanges and exhausted budgets over the fake HTTP wire.
+
+Remaining review P3 work:
+
+- A saved credential may remain invalid after interruption or explicit revocation.
+  No automatic removal/rollback is implemented: the installer cannot read back
+  the old sensitive token, and ambiguous ACK must preserve potentially delivered
+  configuration. Recovery messages now name `setup --reauthorize`; an unconfirmed
+  delivery first asks for a fresh hook observation after a 60-second wait.
+- `--reauthorize` does not revoke the previous PAT automatically. Its value/id is
+  unavailable without forbidden sensitive config reads. The active-token-cap
+  error now directs users to `/settings/tokens` to revoke unused credentials.
+- HTTP-date `Retry-After` remains unsupported; the client accepts integer seconds
+  plus the contract's integer JSON `retry_after`. Supporting dates needs a
+  separate header parser and skew-safe reference, beyond a one-line correction.
+
+The prior round's review also noted intentional changes in endpoint path
+validation, no-install CLI exit status, dry-run MCP queries, non-TTY setup, and
+release/readme wording. This follow-up retains those reviewed behaviors: the
+explicit authorization brief still governs endpoint/TTY/network safety and
+publication is still reserved for chichi.

@@ -11,6 +11,7 @@ const bareHost = host => host.replace(/^\[|\]$/gu, '').toLowerCase();
 export function proxyFor(url, env = process.env) {
   const noProxy = env.NO_PROXY ?? env.no_proxy ?? '';
   const host = bareHost(url.hostname);
+  if (url.protocol === 'http:' && ['localhost', '127.0.0.1', '::1'].includes(host)) return null;
   const port = url.port || (url.protocol === 'https:' ? '443' : '80');
   for (const item of noProxy.split(',')) {
     const rule = item.trim().toLowerCase();

@@ -26,7 +26,8 @@ node packages/setup/bin/memory.mjs setup
 ```
 
 Setup checks CLI capabilities, refreshes an existing marketplace (or adds it),
-then updates an installed plugin (or installs it at user scope). A disabled
+then updates installed plugins at their explicit user/project/local scopes. Project/local-only installs are
+updated and supplemented with a user-scope install. A disabled
 plugin remains disabled; enable it in `/plugin` before pairing.
 
 安裝器先檢查 CLI 功能，更新既有 marketplace，再更新已安裝的外掛；第一次使用
@@ -88,9 +89,18 @@ redirect 與協定錯誤不降級。等待授權時會依伺服器 interval、�
 
 Ctrl-C attempts cancellation and exits 130. Failed configuration attempts
 cancellation before ACK. A lost ACK is retried with identical proof/receipt;
-if delivery remains ambiguous, setup retains the saved configuration and reports
-that delivery is unconfirmed. Only an explicit revoked result asks for a fresh
-authorization. JavaScript strings cannot be zeroed in place: owned secret
+each attempt allows up to 15 seconds within the remaining monotonic window.
+The window starts before the potentially issuing exchange, reserves one second
+for server timestamp rounding, and is capped by the grant's remaining lifetime.
+Server expiry timestamps are validated as metadata, never compared with the
+client's wall clock. The server's credential check and ACK enforce expiry.
+If delivery remains ambiguous, setup retains the saved configuration and reports
+that delivery is unconfirmed. Wait 60 seconds, restart Claude Code, send a
+message and run `/cairn-memory:status`. If rejected, inspect/revoke this credential
+at the selected Cairn endpoint's `/settings/tokens`, then run
+`npx @cairn-ink/memory setup --reauthorize`. Unreachable/unknown status does not
+prove revocation; restore connectivity before deciding to replace the credential.
+JavaScript strings cannot be zeroed in place: owned secret
 references are dropped, and request/configuration buffers are zeroed.
 
 Token/proof/receipt never enter arguments, environment, URLs, logs or
@@ -106,11 +116,12 @@ hook status fix is present in plugin 0.3.1 (release dependency).
 
 ## Proxy and CA / Proxy 與企業 CA
 
-Node's HTTP, HTTPS and TLS APIs implement `HTTP_PROXY` for HTTP destinations and
-`HTTPS_PROXY` for HTTPS destinations. Both HTTP and HTTPS proxy URLs work;
+The installer implements `HTTP_PROXY` for HTTP destinations and `HTTPS_PROXY`
+for HTTPS destinations using Node's HTTP, HTTPS and TLS APIs. Both HTTP and HTTPS proxy URLs work;
 HTTPS destinations use CONNECT plus verified TLS. Optional Basic proxy
 credentials stay on the proxy request, separate from destination credentials.
 Lowercase aliases are accepted; uppercase takes precedence.
+Loopback HTTP endpoints always connect directly, even without `NO_PROXY`.
 
 `NO_PROXY` accepts comma-separated hosts, domain suffixes (with or without a
 leading dot), optional ports, bracketed IPv6 hosts and `*`. CIDR, PAC, SOCKS and

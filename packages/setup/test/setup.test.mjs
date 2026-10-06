@@ -9,12 +9,13 @@ import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { supportedNode, validEndpoint, browserCommand } from '../lib/setup.mjs';
 import { requestJSON, proxyFor } from '../lib/transport.mjs';
 import { fakeAuthServer, secret } from './fake-auth-server.mjs';
-import { safeHostname } from '../lib/auth.mjs';
+import { safeHostname, browserAuthorize } from '../lib/auth.mjs';
 import { wireChild, localWireRequest } from './http-wire.mjs';
 
 const moduleURL = new URL('../lib/setup.mjs', import.meta.url).href;
 const secretURL = new URL('./fake-auth-server.mjs', import.meta.url).href;
 const transportURL = new URL('../lib/transport.mjs', import.meta.url).href;
+const errorURL = new URL('../lib/errors.mjs', import.meta.url).href;
 const wireURL = new URL('./http-wire.mjs', import.meta.url).href;
 const bin = fileURLToPath(new URL('../bin/memory.mjs', import.meta.url));
 const command = call => call.args.join(' ');
@@ -33,14 +34,20 @@ async function fixture(t, state = {}, options = {}) {
   const promptsPath = join(workspace.path, 'prompts.jsonl'); writeFileSync(promptsPath, '');
   const sleepsPath = join(workspace.path, 'sleeps.jsonl'); writeFileSync(sleepsPath, '');
   const browsesPath = join(workspace.path, 'browses.jsonl'); writeFileSync(browsesPath, '');
+  const budgetsPath = join(workspace.path, 'budgets.jsonl'); writeFileSync(budgetsPath, '');
   const harness = join(workspace.path, 'harness.mjs');
   writeFileSync(harness, `import {main} from ${JSON.stringify(moduleURL)};
     import {secret} from ${JSON.stringify(secretURL)};
     import {requestJSON} from ${JSON.stringify(transportURL)};
+    import {AuthError} from ${JSON.stringify(errorURL)};
     import {installChildWire} from ${JSON.stringify(wireURL)};
     import {appendFileSync, writeSync} from 'node:fs';
     const disconnect = installChildWire();
     let clock = 0, pollCount = 0;
+    let wallJump = 0;
+    const wallNow = Date.now.bind(Date);
+    Date.now = () => wallNow() + ${options.clientSkew ?? 0} + wallJump;
+    const latency = ${JSON.stringify(options.latency ?? {})};
     const answers = [${JSON.stringify(options.endpoint ?? server.endpoint)}, ${options.invalidToken ? "secret + '\\n'" : 'secret'}, ${JSON.stringify(options.mcpAnswer ?? '')}];
     process.exitCode = await main(process.argv.slice(2), {
       interactive: ${options.interactive ?? true}, nodeVersion: ${JSON.stringify(options.nodeVersion ?? process.versions.node)},
@@ -51,7 +58,13 @@ async function fixture(t, state = {}, options = {}) {
           ${options.signalDuringSleep ? "process.kill(process.pid, 'SIGINT'); await new Promise(resolve => setImmediate(resolve));" : 'clock += ms;'}
         },
         request: async (url, options) => {
+          const route = url.pathname.split('/').at(-1);
+          appendFileSync(${JSON.stringify(budgetsPath)}, JSON.stringify({route, timeout: options.timeout, clock}) + '\\n');
           const response = await requestJSON(url, options);
+          const elapsed = latency[route] ?? 0;
+          clock += Math.min(elapsed, options.timeout ?? 15000);
+          if (route === 'credential') wallJump = ${options.wallJumpAfterCredential ?? 0};
+          if (elapsed > (options.timeout ?? 15000)) throw new AuthError('transient');
           if (url.pathname.endsWith('/token')) {
             pollCount++;
             ${options.interruptAfterToken ? "process.kill(process.pid, 'SIGINT'); await new Promise(resolve => setImmediate(resolve));" : ''}
@@ -81,7 +94,7 @@ async function fixture(t, state = {}, options = {}) {
     proc.on('close', code => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
   });
   const lines = path => readFileSync(path, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
-  const calls = lines(callsPath), prompts = lines(promptsPath), sleeps = lines(sleepsPath), browses = lines(browsesPath);
+  const calls = lines(callsPath), prompts = lines(promptsPath), sleeps = lines(sleepsPath), browses = lines(browsesPath), budgets = lines(budgetsPath);
   const secrets = [secret, server.grant?.device_code, server.lastProof?.code_verifier, server.delivery?.delivery_receipt].filter(Boolean);
   const allFiles = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? allFiles(join(dir, entry.name)) : [join(dir, entry.name)]);
   for (const value of secrets) {
@@ -92,7 +105,7 @@ async function fixture(t, state = {}, options = {}) {
   }
   assert.ok(!(result.stdout + result.stderr).includes('synthetic-child-output-must-stay-hidden'));
   assert.deepEqual(server.violations, []);
-  return { ...result, calls, prompts, sleeps, browses, server, state: JSON.parse(readFileSync(statePath, 'utf8')) };
+  return { ...result, calls, prompts, sleeps, browses, budgets, server, state: JSON.parse(readFileSync(statePath, 'utf8')) };
 }
 
 test('Node minimum, endpoint origins, browser launch commands and hostname sanitation', () => {
@@ -228,8 +241,8 @@ test('marketplace and already-installed plugin update before pairing; preserve e
   assert.equal(r.code, 0, r.stdout); assert.deepEqual(r.prompts, []); assert.deepEqual(r.server.requests, []);
   const commands = r.calls.map(command);
   assert.ok(commands.includes('plugin marketplace update cairn-memory'));
-  assert.ok(commands.includes('plugin update cairn-memory@cairn-memory'));
-  assert.ok(commands.indexOf('plugin marketplace update cairn-memory') < commands.indexOf('plugin update cairn-memory@cairn-memory'));
+  assert.ok(commands.includes('plugin update cairn-memory@cairn-memory --scope user'));
+  assert.ok(commands.indexOf('plugin marketplace update cairn-memory') < commands.indexOf('plugin update cairn-memory@cairn-memory --scope user'));
   assert.equal(saved(r), undefined); assert.match(r.stdout, /外掛 0\.3\.1/u);
 });
 
@@ -412,4 +425,163 @@ test('HTTPS CONNECT, TLS proxy, trusted CA, invalid certificate and proxy refusa
     assert.equal(request.headers.authorization, `Bearer ${secret}`);
     assert.equal(request.headers['proxy-authorization'], undefined);
   }
+});
+
+for (const scope of ['project', 'local']) {
+  test(`setup supplements a ${scope}-only installation with user scope`, async t => {
+    const r = await fixture(t, { marketplace: true, installed: true, entries: [{ scope, version: '0.3.0' }] });
+    assert.equal(r.code, 0, r.stdout);
+    const commands = r.calls.map(command);
+    assert.ok(commands.includes(`plugin update cairn-memory@cairn-memory --scope ${scope}`));
+    assert.ok(commands.includes('plugin install cairn-memory@cairn-memory --scope user'));
+    assert.ok(commands.indexOf('plugin marketplace update cairn-memory') < commands.indexOf(`plugin update cairn-memory@cairn-memory --scope ${scope}`));
+    assert.deepEqual(r.state.entries.map(entry => entry.scope).sort(), [scope, 'user'].sort());
+    assert.equal(r.server.grant.state, 'delivered');
+  });
+}
+
+test('mixed scopes explicitly update user scope, without installing a duplicate', async t => {
+  const r = await fixture(t, { marketplace: true, installed: true, configured: true,
+    entries: [{ scope: 'project', version: '0.3.0' }, { scope: 'user', version: '0.3.0' }] });
+  assert.equal(r.code, 0, r.stdout);
+  assert.ok(r.calls.map(command).includes('plugin update cairn-memory@cairn-memory --scope user'));
+  assert.ok(r.calls.map(command).includes('plugin update cairn-memory@cairn-memory --scope project'));
+  assert.ok(!r.calls.some(call => call.args.includes('install') && !call.args.includes('--help')));
+  assert.equal(r.state.entries.find(entry => entry.scope === 'user').version, '0.3.1');
+  assert.ok(r.state.entries.every(entry => entry.version === '0.3.1'));
+});
+
+for (const skew of [-31536000000, -61000, 3000, 31536000000]) {
+  test(`ACK succeeds with server clock skew ${skew}ms`, async t => {
+    const r = await fixture(t, {}, { server: { clockSkew: skew } });
+    assert.equal(r.code, 0, r.stdout); assert.equal(r.server.grant.state, 'delivered');
+    assert.equal(r.budgets.find(entry => entry.route === 'credential').timeout, 15000);
+    assert.equal(r.budgets.find(entry => entry.route === 'ack').timeout, 15000);
+    assert.ok(!r.server.requests.some(request => request.route === 'cancel'));
+  });
+}
+
+for (const skew of [-31536000000, -61000, 61000, 31536000000]) {
+  test(`ACK succeeds with client clock skew ${skew}ms`, async t => {
+    const r = await fixture(t, {}, { clientSkew: skew });
+    assert.equal(r.code, 0, r.stdout); assert.equal(r.server.grant.state, 'delivered');
+  });
+}
+
+for (const jump of [-86400000, 86400000]) {
+  test(`a wall-clock jump of ${jump}ms after credential check does not change the ACK budget`, async t => {
+    const r = await fixture(t, {}, { wallJumpAfterCredential: jump, latency: { token: 5000, credential: 4000 } });
+    assert.equal(r.code, 0, r.stdout); assert.equal(r.server.grant.state, 'delivered');
+    assert.equal(r.budgets.find(entry => entry.route === 'ack').timeout, 15000);
+  });
+}
+
+test('a six-second ACK response succeeds with a longer per-attempt timeout', async t => {
+  const r = await fixture(t, {}, { latency: { ack: 6000 } });
+  assert.equal(r.code, 0, r.stdout); assert.equal(r.server.grant.state, 'delivered');
+  assert.equal(r.budgets.filter(entry => entry.route === 'ack').length, 1);
+  assert.equal(r.budgets.find(entry => entry.route === 'ack').timeout, 15000);
+});
+
+// Exercise exact elapsed budgets through the same fake HTTP server and native
+// HTTP parsers, while advancing only the injected monotonic clock.
+async function timedAuthorization(t, { serverOptions = {}, tokenTimes = [], credentialTime = 0, saveTime = 0, ackConsumesTimeout = false } = {}) {
+  const server = await fakeAuthServer(t, serverOptions);
+  let clock = 0, tokenAttempts = 0, configured = false;
+  const budgets = [], messages = [];
+  let result, error;
+  try {
+    result = await browserAuthorize(server.endpoint, {
+      write: value => messages.push(value), noBrowser: true,
+      now: () => clock, sleep: async ms => { clock += ms; }, jitter: () => 0.25,
+      progress: () => () => {},
+      save: async (_values, timeout) => { budgets.push({ route: 'save', clock, timeout }); configured = true; clock += saveTime; },
+      request: async (url, options) => {
+        const route = url.pathname.split('/').at(-1);
+        budgets.push({ route, clock, timeout: options.timeout });
+        try { return await localWireRequest(server.server, requestJSON, url, { ...options, env: {} }); }
+        finally {
+          if (route === 'token') clock += tokenTimes[tokenAttempts++] ?? 0;
+          if (route === 'credential') clock += credentialTime;
+          if (route === 'ack' && ackConsumesTimeout) clock += options.timeout;
+        }
+      },
+    });
+  } catch (caught) { error = caught; }
+  for (const value of [secret, server.grant?.device_code, server.lastProof?.code_verifier, server.delivery?.delivery_receipt].filter(Boolean)) {
+    assert.ok(!messages.join('\n').includes(value)); assert.ok(!JSON.stringify(budgets).includes(value));
+  }
+  return { server, budgets, configured, result, error, clock };
+}
+
+test('replayed token response keeps the original monotonic ACK deadline', async t => {
+  const r = await timedAuthorization(t, { serverOptions: { sequence: ['lost_delivery'] }, tokenTimes: [15000, 5000], credentialTime: 10000, saveTime: 10000 });
+  assert.equal(r.error, undefined); assert.equal(r.server.grant.state, 'delivered');
+  assert.equal(r.budgets.find(entry => entry.route === 'save').timeout, 18750);
+  assert.equal(r.budgets.find(entry => entry.route === 'ack').timeout, 8750);
+  const polls = r.server.requests.filter(request => request.route === 'token');
+  assert.deepEqual(polls[0].body, polls[1].body);
+});
+
+test('ACK retries are capped by the remaining monotonic window and provide concrete recovery steps', async t => {
+  const r = await timedAuthorization(t, { serverOptions: { ackUnavailable: true }, credentialTime: 10000, saveTime: 10000, ackConsumesTimeout: true });
+  assert.equal(r.error.kind, 'ack_unknown'); assert.equal(r.configured, true);
+  assert.deepEqual(r.budgets.filter(entry => entry.route === 'ack').map(entry => entry.timeout), [15000, 15000, 7500]);
+  assert.equal(r.clock, 64000); // exchange began at 5s; conservative window is 59s
+  assert.match(r.error.message, /Wait 60 seconds.*restart Claude Code.*\/cairn-memory:status/);
+  assert.match(r.error.message, /\/settings\/tokens.*setup --reauthorize/);
+  assert.ok(!r.server.requests.some(request => request.route === 'cancel'));
+});
+
+test('saving that consumes the ACK budget cancels instead of starting another window', async t => {
+  const r = await timedAuthorization(t, { saveTime: 60000 });
+  assert.equal(r.error.kind, 'configure'); assert.equal(r.server.grant.state, 'cancelled');
+  assert.ok(!r.server.requests.some(request => request.route === 'ack'));
+  assert.match(r.error.message, /setup --reauthorize/);
+});
+
+for (const server of [{ sequence: [501] }, { ackStatus: 501 }]) {
+  test(`501 on poll/ACK stops after one attempt ${JSON.stringify(server)}`, async t => {
+    const r = await fixture(t, {}, { server });
+    assert.equal(r.code, 1);
+    if (server.sequence) {
+      assert.equal(r.server.polls, 1); assert.equal(r.server.grant.state, 'cancelled');
+      assert.match(r.stdout, /protocol error/);
+    } else {
+      assert.equal(r.server.requests.filter(request => request.route === 'ack').length, 1);
+      assert.match(r.stdout, /delivery is unconfirmed/);
+    }
+  });
+}
+
+test('active token limit is actionable instead of an indefinite rate-limit wait', async t => {
+  const r = await fixture(t, {}, { server: { sequence: ['active_token_limit'] } });
+  assert.equal(r.code, 1); assert.match(r.stdout, /Active token limit reached.*\/settings\/tokens/);
+  assert.equal(r.server.polls, 1); assert.equal(r.server.grant.state, 'cancelled');
+});
+
+test('loopback HTTP never uses a proxy, even without NO_PROXY', async t => {
+  for (const host of ['localhost', '127.0.0.1', '[::1]']) {
+    assert.equal(proxyFor(new URL(`http://${host}:3000`), { HTTP_PROXY: 'http://proxy.test:8080' }), null);
+  }
+  const r = await fixture(t, {}, { env: { HTTP_PROXY: 'http://proxy.test:8080' } });
+  assert.equal(r.code, 0); assert.ok(r.server.requests.every(request => request.url.startsWith('/api/cli-auth/v1/')));
+});
+
+test('old CLI instructions include installation before configuration', async t => {
+  const r = await fixture(t, { noConfigure: true });
+  assert.equal(r.code, 1); assert.equal(r.state.installed, undefined);
+  assert.match(r.stdout, /\/plugin marketplace add.*\n\/plugin install.*\n/s);
+  assert.ok(r.stdout.indexOf('/plugin install') < r.stdout.indexOf('/plugin configure'));
+});
+
+test('expiry uses the client timezone rather than a UTC date slice', async t => {
+  const r = await fixture(t, {}, { env: { TZ: 'America/Los_Angeles' }, server: { expiresAt: '2027-04-05T00:30:00.000Z' } });
+  assert.equal(r.code, 0, r.stdout); assert.match(r.stdout, /2027\/0?4\/0?4.*4\/4\/2027/);
+});
+
+test('ACK attempts also reserve timestamp rounding before grant expiry', async t => {
+  const r = await timedAuthorization(t, { serverOptions: { expiresIn: 10 } });
+  assert.equal(r.error, undefined); assert.equal(r.server.grant.state, 'delivered');
+  assert.equal(r.budgets.find(entry => entry.route === 'ack').timeout, 4000);
 });

@@ -16,6 +16,12 @@
   through Node APIs, with verified TLS and Node enterprise CA configuration.
 - Refresh existing marketplace caches and update installed plugins. Print the
   actual installed plugin version separately from installer 0.2.0.
+- Use monotonic configure/ACK budgets that tolerate clock skew and lost exchange
+  responses. Allow ACK attempts up to 15 seconds within the remaining window,
+  and give explicit hook/status/token-settings recovery steps when unconfirmed.
+- Supplement project/local-only plugin installations with user scope. Bypass
+  proxies for loopback HTTP, stop token/ACK 501 retries, distinguish the active
+  token cap, show local dates and name `setup --reauthorize` in recovery messages.
 - Require the hook credential-state correction already in plugin 0.3.1.
   Fake HTTP/TLS and CLI tests establish client behavior and secret handling;
   hosted/native OS acceptance and npm publication remain separate.
