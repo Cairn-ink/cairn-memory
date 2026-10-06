@@ -1337,3 +1337,34 @@ are retained in the [round 2 handoff](plans/codex-client.md#cx-4-round-2-決策�
 A file-level pass from a broken worker pipe is not evidence of case-level success;
 hung or failed CI commands require a rerun in the ordinary CI environment.
 The existing round 1 results do not qualify the revised round 2 implementation.
+
+
+## Setup 0.2.0 browser authorization
+
+The setup suite uses a fake contract HTTP server and fake Claude CLI. Actual
+Node HTTP/TLS parsers exchange bytes over duplex streams and subprocess IPC;
+loopback listeners are denied with EPERM in this execution environment. TLS
+fixtures verify explicit CA trust, certificate rejection and HTTP/HTTPS proxy
+CONNECT behavior with verification enabled. This is client protocol evidence,
+not OS TCP, deployed server, real browser approval or credential-store evidence.
+Windows/WSL/macOS launch commands are selected by simulated-platform tests;
+no native desktop launch or corporate network acceptance is claimed.
+
+The installer uses Node HTTP/HTTPS/TLS, not fetch's implicit proxy behavior.
+Supported NO_PROXY rules are hosts/domain suffixes, optional ports, bracketed
+IPv6 and `*`; no CIDR/PAC/SOCKS or OS proxy discovery. Enterprise CA files use
+Node's NODE_EXTRA_CA_CERTS at process startup. There is no insecure TLS option.
+JavaScript strings cannot be zeroed in place: owned references are dropped and
+request/configuration Buffers are zeroed. Host malware/crashes and Claude's
+own storage remain outside installer guarantees.
+
+The current task explicitly chooses automatic hidden manual fallback on create
+404/501. The copied spec's older generic-404 paragraph instead asked users to
+rerun with --manual-token; the task instruction takes precedence. Other HTTP,
+TLS, redirect or protocol failures never trigger that fallback.
+
+Plugin 0.3.1 already contains the required hook credential-state correction.
+Installer status queries configuration presence without reading the token;
+installer credential checks never write hook-owned observations. Real hook
+verification still needs a restarted Claude Code session and a submitted message.
+Installer 0.2.0 remains unpublished; chichi publishes from her laptop.

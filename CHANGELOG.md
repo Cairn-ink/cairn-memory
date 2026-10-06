@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — @cairn-ink/memory installer 0.2.0
+
+- Authorize in a browser with manually entered device codes, S256 proof, bounded
+  polling/backoff, a credential check and delivery ACK. New browser credentials
+  expire after 180 days; show the expiry on success. No code-bearing URLs.
+- Add `--manual-token`, `--reauthorize` and TTY-only `--no-browser`. Preserve
+  complete existing credentials by default. Dry run makes no network requests.
+- Cancel before ACK on configuration failure or interruption; use localized
+  denial, expiry, timeout and rate-limit messages. Reconcile lost ACKs without
+  assuming a saved credential was revoked.
+- Fall back to hidden PAT input on create 404/501. Save manual credentials as
+  unverified when the old credential route is unavailable; never downgrade
+  server/TLS/protocol errors. Support explicit HTTP(S) proxies and NO_PROXY
+  through Node APIs, with verified TLS and Node enterprise CA configuration.
+- Refresh existing marketplace caches and update installed plugins. Print the
+  actual installed plugin version separately from installer 0.2.0.
+- Require the hook credential-state correction already in plugin 0.3.1.
+  Fake HTTP/TLS and CLI tests establish client behavior and secret handling;
+  hosted/native OS acceptance and npm publication remain separate.
+
 ## 0.3.1 — 2026-10-06
 
 Plugin and marketplace 0.3.1. Protocol stays 0.3.0.
@@ -39,15 +59,15 @@ Plugin and marketplace 0.3.1. Protocol stays 0.3.0.
 - Observe existing authenticated recall/capture requests without extra calls.
   SessionStart's unauthenticated telemetry never verifies a credential.
 
-## Unreleased — Claude Code one-command installer
+## @cairn-ink/memory installer 0.1.0 — Published
 
-- Prepare dependency-free `@cairn-ink/memory` (initial version proposed at 0.1.0)
+- Add dependency-free `@cairn-ink/memory`
   with `setup`, `setup --dry-run` and `status` for the repo's plugin and hooks.
 - Use a hidden PAT prompt and Claude Code stdin configuration when available,
   otherwise exact manual instructions. Legacy MCP removal needs confirmed
   plugin configuration and affirmative user consent.
-- Add fake-CLI tests and a release checklist. No publication, tag, merge or
-  release is included in this preparation.
+- Add fake-CLI tests and a release checklist. Installer releases are separate
+  from plugin releases.
 
 ## Unreleased — Windows source installer
 
