@@ -2036,3 +2036,36 @@ separate primary-owned rebind and verified action. Old v3's exact 200M→300M
 and strict cap increase remain unchanged. No schema, price, native/runtime,
 prompt, timeout, retry or public MCP/Hermes/default change is made. N12 still
 reports Cairn 3/6 versus Mem0 4/6, with no score overwrite or bill/refund claim.
+
+## Fresh-thirty one-shot operator boundary
+
+The private [N18 operator contract](plans/fresh-thirty-operator.md) adapts the
+existing one-shot mixed orchestration to exactly thirty frozen cases, five
+available types with six each, and 15/15 arm orders. It explicitly binds indexed
+evidence plus experimental rare-query navigation, authentic v4 ancestry and a
+conditional 400M cumulative/100M round/30M protected microUSD ceiling with the
+same finite request cap. This worker supplies synthetic verification only, not
+an authentic roster, operational budget activation, paid dispatch or score.
+
+The callback refuses malformed complete evaluator schemas across all thirty
+rows before original-source access or genuine Python reference rendering, after
+whole generation has matched durable journal completion. Its 300 MiB original-
+source bound remains stricter than the preparation producer's 512 MiB limit;
+evaluator bytes remain capped at 8 MiB. Existing authenticated local-U parser/
+deadline behavior is preserved, not replaced by blanket halt or widened
+isolation. Unclassified uncertainty and unsafe accounting/cleanup still refuse
+whole-run success. Synthetic timeout reservations are not refunded or repriced.
+
+Trusted callbacks and same-UID private files are not a sandbox or signatures.
+Inventory hashes and fsynced consumption detect ordinary mutation/replay of the
+fixed execution identity, not a hostile parent's deliberate new authorization.
+Private results retain source-sensitive questions, answers and local metadata
+under their existing permissions/retention contract. No MCP/Hermes/default
+behavior or capture retention policy changes; N12 remains Cairn 3/6 versus
+Mem0 4/6, without historical causal recovery or semantic improvement claims.
+
+The author's exact Node22/24 synthetic canonical suites each completed 12/12
+with zero skips and actual exit 0, including the unchanged 60-second deadline,
+full reserved unknown outcome, later-case continuation and owned cleanup.
+Their elapsed suite times are diagnostic test cost, not product latency;
+independent review and primary operational rebind remain separate boundaries.
