@@ -25,7 +25,6 @@ const response = (body, output) => Response.json({ object: 'response', model: bo
   usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120 } });
 
 export async function writeEvidenceProbe(includeUser, assertCoverage = false) {
-  const workspace = createTestWorkspace(null, { prefix: 'cairn-evidence-write-' });
   const row = sourceRow('synthetic_evidence_gap');
   row.question.text = 'Synthetic question kept outside ingestion.';
   row.history.sessions[0].turns = [
@@ -48,10 +47,11 @@ export async function writeEvidenceProbe(includeUser, assertCoverage = false) {
     outputs.push(items);
     return response(body, { items });
   }, { cairnMemory: true });
-  const filename = join(workspace.path, 'store.sqlite');
   let core;
-  workspace.defer(() => core?.close());
+  const workspace = createTestWorkspace(null, { prefix: 'cairn-evidence-write-' });
   try {
+    workspace.defer(() => core?.close());
+    const filename = join(workspace.path, 'store.sqlite');
     core = openMemoryCore({ path: filename, captureSourcePolicy: 'indexed-evidence-v1',
       model: createOpenAIModel({ apiKey: 'synthetic-only', fetchImpl: fake.fetchImpl }) });
     // Do not pass row.question or an evaluator/reference to ingestion.
@@ -87,7 +87,6 @@ export async function writeEvidenceProbe(includeUser, assertCoverage = false) {
 
 export async function recallEvidenceProbe(mode, assertCoverage = false) {
   assert(['beyond', 'select-omit', 'rank-drop', 'include'].includes(mode));
-  const workspace = createTestWorkspace(null, { prefix: 'cairn-evidence-recall-' });
   const trace = { stored: [], enumerated: [], mapPackingTrials: [], selectInput: [], selectOutput: [], rankInput: [], rankOutput: [], final: [] };
   const marker = value => JSON.stringify(value).includes(TARGET_MARKER);
   let target;
@@ -121,8 +120,9 @@ export async function recallEvidenceProbe(mode, assertCoverage = false) {
       return output;
     } };
   let core;
-  workspace.defer(() => core?.close());
+  const workspace = createTestWorkspace(null, { prefix: 'cairn-evidence-recall-' });
   try {
+    workspace.defer(() => core?.close());
     core = openMemoryCore({ path: join(workspace.path, 'store.sqlite'), model,
       captureSourcePolicy: 'indexed-evidence-v1', sourceCandidatePolicy: 'bounded-keyset-v1' });
     for (let index = 0; index < 217; index++) {

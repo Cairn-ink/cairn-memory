@@ -182,7 +182,7 @@ positive controls. Do not increase a cap, alter prompts/defaults or build a new
 operator before that prediction is validated. No paid run or score changes
 follow from these read-only observations.
 
-Frozen helper SHA256:
+Initial verified helper SHA256 (before the teardown correction below):
 `6c799b727b28c4e00ea3586b6b9c909d7d7a54319af8529008fdb4e8dcb1f688`.
 Frozen test SHA256:
 `661aeb536d0cb8b023d3b70817ef49e7ed76f215e9e1212efb913fe7aa572f0f`.
@@ -190,3 +190,47 @@ These are synthetic reproduction tests, not a core fix, retention-default change
 or actual N12 causal finding. N12 remains Cairn 3/6 versus Mem0 4/6, with prior
 accounting unchanged. Fixed-candidate independent review, commit/PR and CI remain
 primary-owned delivery steps; any repair or larger comparison is separate work.
+
+## Independent-review teardown correction
+
+Standards review of candidate `953daf64101ffde78ae71b1248180f93e793429f`
+identified workspace allocation before pure write-fixture preparation, outside
+the cleanup `try`. Both helpers now allocate only after their pure preparation
+and immediately enter `try`; teardown registration, path construction and core
+setup all occur inside it. A pure setup failure therefore allocates no workspace,
+and a failure after allocation reaches `finally`. No production flag or extra
+setup-injection API was added; existing G4 exercises the specific post-allocation
+coverage-failure cleanup as well as success cleanup.
+
+Affected focused reruns on final helper bytes passed 6/6 with no skips and actual
+exit 0: exact Node22 `24dda3` (33,225.862 ms), exact Node24 `fce964`
+(32,976.730 ms). The test remains byte-identical. Final corrected helper SHA256:
+`1e9c60b2006c33ff84c5b4c38e8ef0cea533f13ac2fb53e9eb1f3b89ecbf69dd`.
+Earlier full-suite and RED/positive evidence above is historical to the initial
+helper; the correction changes resource ownership timing only, not data,
+extraction, recall or assertions. Primary will commit and rerun both independent
+review axes on the corrected candidate; no author commit or push occurred.
+
+## Primary stored-input presentation boundary (diagnostic only)
+
+Primary's owned-copy case-3 probe preserved the original store hashes and
+completed cleanup. It used unchanged runtime `7de`, the same query/budgets and
+local counter, but scripted oracle-target-only select/rank, not an original-model
+replay. An initial question-whitelist setup failure returned exit 1 (`aa8617`,
+`invalid_answer_question`) with cleanup intact; the corrected probe returned
+actual exit 0 (`733ff1`). Two select rounds each showed 32 candidates. The target
+ID was visible in the first round, absent in the second; its first-round label
+contained neither the necessary name anchor nor the relative-time token.
+The body score was 2; retained receipt scores were 2/9/8/2, with the necessary
+marker receipt scoring 8. Although the body retained the name anchor, its
+120-character navigation label and every receipt navigation label omitted it.
+Force-selecting the known ID delivered one rank candidate containing the full
+necessary marker and final context with that marker, with zero packer omissions.
+
+This localizes a concrete presentation loss on unchanged stored input. Oracle
+forced selection does not establish that the original model would select a
+better label or reproduce its original rank behavior. The generic beyond-page
+synthetic remains a possible mechanism, not the actual case-3 cause. No names,
+query/source text or IDs are published. Primary's post-cleanup G1/G4 acceptance
+also passed 2/2 with actual exit 0 on exact Node24 (`5283b3`) and Node22
+(`cf60e3`). Scope remains diagnostic; no score or runtime changes follow.

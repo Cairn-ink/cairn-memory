@@ -1945,3 +1945,14 @@ but, without stored original extraction output, do not prove five-item saturatio
 or why a provider selected particular evidence. The next bounded, question-blind
 coverage comparison must distinguish capacity from prioritization before any
 cap, prompt or default change; scores and paid-run history remain unchanged.
+
+Primary's later case-3 owned-copy structural probe observed the target ID in the
+first of two 32-candidate select rounds, but necessary name/time anchors were
+absent from its navigation label. The stored body retained the name anchor;
+receipt navigation labels also omitted it. Scripted oracle selection of the
+known ID recovered the full necessary marker in rank input and final context,
+with no packer omission. Original store hashes remained unchanged and cleanup
+completed. This is evidence of stored-input presentation loss, not an original
+model replay, proof that a different label would be selected, or a ranking-cause
+finding. The generic beyond-page fixture does not establish the actual case-3
+cause, and no benchmark or runtime correction is claimed.
