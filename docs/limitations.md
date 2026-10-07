@@ -2017,3 +2017,20 @@ activated. Author/tests use no authentic data or paid provider. No new cohort
 was selected or scored; N12 remains Cairn 3/6 versus Mem0 4/6. Future larger
 comparison, same-history 400-budget activation and product adoption require
 their own frozen contracts and gates, not this experimental flag.
+
+## Fresh-thirty source helper boundary
+
+The private [fresh-thirty helper contract](plans/fresh-thirty-source.md) adds
+metadata-only fixed quotas `[6,6,0,6,6,6]`, original deterministic ranking and
+dataset-order alternating arms. Synthetic prepared-v2 fixtures verify all 30
+model-facing records, integrity pins, exact supplied exposure union and bounded
+private reads. Evaluator bytes are deliberately not read or authenticated here;
+only declared file metadata and private stat checks are available to the reader.
+
+These tests do not authenticate a supplied 500-row inventory, certify semantic
+eligibility or prove that supplied exclusions include every historical exposure.
+Preference is explicitly not covered. No real IDs were selected, no authentic
+source prepared, no ledger or budget changed and no comparison/scoring launched.
+The helper-source freeze is not a complete future launch inventory; primary
+integration, actual exclusions/source acceptance and independent reviews remain
+separate gates. Public runtime and prior N12 scores are unchanged.
