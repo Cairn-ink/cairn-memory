@@ -52,14 +52,17 @@ capture replay for that old event no longer returns the pre-expiry duplicate.
 
 The saved view uses existing normalization/redaction and 800-UTF-16-unit source
 prefixes, at most24 messages, with explicit truncated-message indices. This is
-not the original byte stream or a complete transcript archive. The full capture
-digest still binds the original canonical submission. Identifiers are opaque
+not the original byte stream or a complete transcript archive. The separate
+[raw layer (RL-0)](plans/raw-layer-contract.md) is the complete archive of selected
+redacted conversations when enabled; staging remains a temporary bounded view.
+The full capture digest still binds the original canonical submission. Identifiers are opaque
 and must not contain credentials or private prose; they are not text-redacted.
 
 Each serialized payload is at most128KiB. Each exact namespace allows at most64
 payloads and1MiB of payload bytes. Overflow rejects atomically before model work;
 it never evicts another live payload silently. Fixed24-hour expiry starts with
-the original claim and is not renewed by replay or inspection. Relevant access
+the original claim and is not renewed by replay or inspection. Expiry never
+removes text independently saved by a tool's raw switch. Relevant access
 and mutation prune expired payloads using a persisted nondecreasing clock;
 observed expiry does not revive after clock rollback. No background timer runs
 when the database is idle. Content-free event fences remain for replay safety;
@@ -74,6 +77,8 @@ copies already returned to callers cannot be recalled by a local deletion.
 
 Successful correction or forgetting clears **all staged payloads in that exact
 namespace**, not just guessed-related passages, and fences their event IDs.
+This clears staging only and never deletes raw conversations; their deletion and
+forgotten-source anchor exclusion follow RL-2's D5/D6 contract.
 This includes pending work and applies through legacy and envelope facades even
 when the current connection has staging disabled. Other users/projects and other
 admitted memories are not deleted. Missing/stale rejected memory mutations do
@@ -84,6 +89,10 @@ This conservative breadth prevents retained staging from replaying a paraphrase
 of a forgotten source before precise source-lineage deletion exists. Hosts must
 explain it rather than treating staged text as a durable journal. Suppression of
 ordinary memory fingerprints alone does not establish this guarantee.
+The raw layer is the durable selected-conversation journal under D7 (no automatic
+expiry). RL-2 requires precise source lineage and D6 span exclusion so keeping raw
+cannot bring a forgotten memory back on re-extraction. Those mechanisms extend
+core separately; this staging slice does not implement them.
 
 ## Threat model and delivery limits
 
@@ -91,9 +100,11 @@ Staged text may contain personal information omitted by an extractor, failed
 interpretations or assistant suggestions. Explicit opt-in expands local
 retention, not trust, authentication, sharing or execution authority. Inspection
 requires the same trusted local caller/namespace boundary as the rest of core;
-keyless does not mean access-control-free. There is no encryption or new network
-authorization layer. Ordinary capture sends the same bounded source input to
-the already-configured model; no additional provider method or telemetry exists.
+keyless does not mean access-control-free. Staging adds no encryption or new
+network authorization layer. Separate raw text is sealed through the host port,
+encrypted per user in cloud mode and passed through locally. Ordinary capture
+sends the same bounded source input to the already-configured model; no additional
+provider method or telemetry exists.
 
 v13 migration is additive and transactional. Stop every old runtime connection
 before opening the upgraded database; older binaries reject v13 on new opens,
@@ -105,6 +116,8 @@ Verification uses synthetic stores and scripted models. It demonstrates
 retention and lifecycle boundaries, not semantic quality. Native Hermes
 exposure, precise source-lineage deletion, automatic retries, promotion,
 background maintenance and general reliability claims are outside this slice.
+Precise source-lineage deletion is nevertheless required by RL-2 before the raw
+layer launches; being outside this staging slice does not make it optional there.
 
 ## Opt-in episode ownership (SE-1)
 

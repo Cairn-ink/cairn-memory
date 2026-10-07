@@ -5,6 +5,11 @@ complete memory engine. It uses the **same SQLite storage** as `openMemoryStore`
 There is no model, MCP server, hosted account, network client, telemetry, or cloud
 fallback in this path. The released HTTP plugin is unchanged.
 
+The decided [raw-layer contract (RL-0)](plans/raw-layer-contract.md) specifies
+future full selected-conversation storage, continuation parts, encryption ports,
+reads/usage, per-tool controls and the D5/D6 cascade. RL-1–RL-3 implement it here;
+RL-4 adopts it in the host. Those operations are not yet part of this runtime.
+
 Use Node >=22.16 and a source checkout; this is not an npm-published package:
 
 ```js

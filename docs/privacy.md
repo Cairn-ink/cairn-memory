@@ -38,7 +38,37 @@ Empty queries are skipped. Neither path can guarantee detection of every secret.
 Tool blocks are excluded from capture, but ordinary conversation can include
 pasted files, terminal output, paths, and repository names.
 
-The service may retain durable Memory text and bounded redacted Source Receipts. It does not need the raw transcript. The hosted service soft-deletes a Memory immediately from recall when the owner invokes `forget_memory`; backup erasure timing is an operational policy and is not claimed by this repository.
+The service may retain durable Memory text and bounded redacted Source Receipts.
+The decided [raw-layer contract (RL-0)](plans/raw-layer-contract.md) additionally
+requires complete selected, locally redacted user/assistant conversations when
+raw mode ships, with no automatic expiry, a default-on per-tool switch and an
+initial 200 MB per-person plaintext-byte cap. Turning raw off keeps memory capture
+running and does not delete saved text. Pause still prevents saving paused text.
+This documentation does not enable retention: production backups and H6 cutover,
+account-erasure/restore fixtures, copy/listings/notices and quotas are launch gates.
+The hosted privacy page must be updated before anyone else gets raw storage;
+the plan requires all copy to merge before the production flag, including dogfood.
+
+Cloud raw text is encrypted per user through the host port; operators holding
+both database and master key can decrypt it. This is not end-to-end encryption.
+Local raw text stays in the person's database. Only selected user/assistant text
+is archived; tool calls/output/file reads stay excluded, and redaction cannot
+detect every secret. Bounded extraction may still send conversation text to the
+configured model provider. Stored raw is not a new recall/search input or a
+read-triggered model call. Explicit re-extraction ships later in RL-9, uses model
+quota and must respect suppression plus forgotten-span exclusion.
+
+RL-2 conversation deletion removes raw/episodes, suppresses source-only memories
+and removes its receipts from multi-source memories that stay. Forgetting a memory
+keeps raw but excludes its source spans from later re-extraction. Confirmed Action
+Captures, Commitments and promoted cards have their own collection deletion rules.
+Logical deletion can leave free pages/WAL/backups and cannot retract provider
+copies. Hosted backup retention is at most 30 days with erasure replay before
+restored data serves; account deletion follows the existing 60-day completion
+promise, including raw rows and wrapped owner keys. These are future RL-4/RL-5
+operational obligations, not proof they run today. The hosted service currently
+soft-deletes a Memory immediately from recall when the owner invokes
+`forget_memory`.
 
 Protocol/plugin 0.3.0 adds the existing host conversation id to prompt recall as
 optional `session_id`. Claude reads it only from the trusted hook stdin field;
@@ -422,7 +452,8 @@ neither justifies rejecting a new episode-mode batch for episode staging pressur
 E4a requires >64 captures with N=16, two concurrent sessions, about 16 KiB payloads,
 sustained interpreter failure, protected-capacity bypass and crash/restart tests.
 Conversation deletion clears descriptive policy/correction metadata as well as
-prose/sources, and conservatively forgets even multi-source derived memories.
+prose/sources. The legacy runtime conservatively forgets even multi-source derived
+memories; RL-2 replaces that rule with D5's preserved-other-source cascade.
 Existing namespace-wide staged purges and source-consumer invalidation still apply.
 
 No new field enters telemetry, payload logs or raw exception text. E1–E11 require
@@ -441,8 +472,10 @@ staging alone still never enables episodes. Hosts must stop/drain older
 connections before upgrade; already-open old processes are not retroactively
 fenced. Feature-off access retains deletion/source fences. New retained passages
 are source evidence, not receipts for remembered assertions. Capacity release
-and bypass leave content-free gaps and no active expiry, while conversation
-deletion suppresses even multi-source/historical derived memories. Inspection
+and bypass leave content-free gaps and no active expiry. Legacy conversation
+deletion suppresses even multi-source/historical derived memories. RL-2
+supersedes it: source-only memories are suppressed, others lose the deleted
+receipts and stay. Inspection
 and tag writes invoke no model. Existing source/prompt/receipt contents remain
 unchanged when neither opt-in is used.
 
@@ -540,10 +573,14 @@ instruction kind. Metadata alone is not evidence. Tag-only edits preserve
 conflict/rationale/qualification links and memory revisions, but do not certify
 recurrence or semantics. Episode corrections pin sourced prose without changing
 source text/admitted memories. Conversation deletion clears descriptive fields,
-retained passages and steps, tombstones/fences the session, suppresses all derived
-live/historical memories including multi-source deduplication, and invalidates
-source consumers. Unrelated admitted memories survive; existing namespace-wide
-staged purges and content-free replay fences remain. Neither forgetting nor
+retained passages and steps, tombstones/fences the session, and invalidates
+source consumers. The legacy implementation suppresses all derived live/historical
+memories including multi-source deduplication; RL-2's D5 cascade instead retains
+memories with other live receipts and removes only this conversation's receipts.
+Unrelated admitted memories survive; existing namespace-wide staged purges affect
+staging only, never raw conversations, and content-free replay fences remain.
+RL-2 adds precise lineage and D6 forgotten-span exclusions; these are future
+mechanisms, not a change enabled by this documentation. Neither forgetting nor
 redaction guarantees physical erasure of journals, free pages, backups or prior
 provider/caller copies. Hosted schemas/defaults and paid-pilot boundaries are unchanged.
 
