@@ -1,5 +1,15 @@
 # Session episodes retain their own sources and obey conversation deletion
 
+**Partial supersession (2026-10-07):** D5 in cairn-wiki ADR 0006 and the decided
+[raw-layer contract (RL-0)](../plans/raw-layer-contract.md) replaces the
+multi-source deletion choice below. RL-2 deletes raw/episodes and suppresses
+memories derived only from that conversation; memories with other live sources
+stay without the deleted receipts. Their wording may have come from the deleted
+conversation; chichi accepted that trade-off to preserve independently supported
+memories. Until RL-2 ships, the legacy runtime still uses the old rule. Bounded
+episode citations, staging and their retention rules remain as described here;
+raw adds a separate archive with no automatic expiry.
+
 Proposed with the [session-episode contract](../plans/session-episodes.md), not
 implemented behavior. Draft first capture, then debounce by accepted batch count
 (default 8, allowed range 2–16), coalescing PreCompact, end and next-capture catch-up
@@ -29,8 +39,9 @@ never stop ordinary admission. The 24-hour ceiling bounds live payloads, not a
 guaranteed minimum: pressure can release them earlier. Content-free replay fences
 remain; released inspection has no active expiry. Ordinary staged-v1 is unchanged.
 
-Deleting an episode means deleting that captured conversation and forgetting its
-derived memories through existing suppression, including deduplicated multi-source
+The original deletion choice was: deleting an episode means deleting that
+captured conversation and forgetting its derived memories through existing
+suppression, including deduplicated multi-source
 memories. This can discard useful independent evidence, but avoids retaining the
 conversation as a paraphrase after its deletion. Ordinary memory correction or
 forgetting invalidates dependent episode interpretations/sources; existing broad
