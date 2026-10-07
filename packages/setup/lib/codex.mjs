@@ -39,7 +39,7 @@ export async function dispatchClient(argv, context) {
   if (selection.client !== 'codex' && (selection.client || availableClient('claude') || !availableClient('codex'))) {
     return { handled: false, argv: selection.argv };
   }
-  if (!['setup', 'status'].includes(action) || flags.some(flag => !['--dry-run', '--no-browser'].includes(flag)) ||
+  if (!['setup', 'status'].includes(action) || flags.some(flag => !['--dry-run', '--no-browser', '--no-clipboard'].includes(flag)) ||
       (action === 'status' && flags.length)) {
     throw new context.SetupError('codex_unknown', 2);
   }

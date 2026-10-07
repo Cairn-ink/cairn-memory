@@ -25,7 +25,7 @@ export function supportedNode(version) {
 
 // readline owns raw mode while active; every exit closes it and restores the TTY.
 // Suppress ALL readline writes for a secret, including pasted text and redraws.
-export async function ask(question, { secret = false, input = process.stdin, output = process.stdout } = {}) {
+export async function ask(question, { secret = false, input = process.stdin, output = process.stdout, signal } = {}) {
   const visible = output;
   const hidden = new Writable({ write(_chunk, _encoding, done) { done(); } });
   const rl = createInterface({ input, output: secret ? hidden : output, terminal: Boolean(input.isTTY) });
@@ -40,7 +40,7 @@ export async function ask(question, { secret = false, input = process.stdin, out
       };
       rl.once('SIGINT', () => { fail(130); rl.close(); });
       rl.once('close', () => fail());
-      rl.question(secret ? '' : question).then(value => { settled = true; resolve(value); }, () => fail());
+      rl.question(secret ? '' : question, { signal }).then(value => { settled = true; resolve(value); }, () => fail());
     });
   } finally {
     rl.close();
@@ -199,7 +199,7 @@ export async function main(argv, {
       return 0;
     }
     if (!['setup', 'status'].includes(action) ||
-        flags.some(flag => !['--dry-run', '--no-browser', '--manual-token', '--reauthorize'].includes(flag)) ||
+        flags.some(flag => !['--dry-run', '--no-browser', '--manual-token', '--reauthorize', '--no-clipboard'].includes(flag)) ||
         (action === 'status' && flags.length)) {
       throw new SetupError('unknown_command', 2);
     }
@@ -319,7 +319,7 @@ export async function main(argv, {
       let manualToken = flags.includes('--manual-token');
       if (!manualToken) {
         const authorization = await browserAuthorize(endpoint, { ...authOptions, write, browse: launchBrowser, t,
-          noBrowser: flags.includes('--no-browser'), save, signal });
+          noBrowser: flags.includes('--no-browser'), noClipboard: flags.includes('--no-clipboard'), prompt, save, signal });
         if (authorization.unsupported) {
           write(t('browser_unsupported'));
           manualToken = true;

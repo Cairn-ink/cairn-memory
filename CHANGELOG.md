@@ -2,6 +2,12 @@
 
 ## Unreleased — @cairn-ink/memory installer 0.2.0
 
+- Highlight the one-time code with blank lines and bold/color in a TTY, or
+  brackets under NO_COLOR/non-TTY output. Wait for Enter before browser launch,
+  show a short relative expiry, and repeat the code in the approval spinner.
+- Copy only the public device code through optional local clipboard tools;
+  skip SSH sessions and tolerate missing/failing tools. Add `--no-clipboard`.
+  Enter waiting shares the grant deadline and cancellation behavior.
 - Add validated `--endpoint <origin>` and print the selected endpoint's source
   before authorization. Let readline own the visible endpoint prompt so TTY
   redraws cannot replace it with a blank question. Preserved Claude config is

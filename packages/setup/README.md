@@ -34,14 +34,17 @@ plugin remains disabled; enable it in `/plugin` before pairing.
 則加入 marketplace 並以 user scope 安裝。停用中的外掛會提示到 `/plugin` 啟用。
 
 In a TTY, confirm the endpoint, compare the displayed code, and enter it on the
-bare `/device` page. Sign in and allow the request. The code lasts at most ten
-minutes. Setup polls, checks the received credential, sends endpoint and token
+bare `/device` page. Setup highlights the one-time code on its own line and
+waits for Enter before opening the browser, keeping terminal focus until you
+have read it. A short relative deadline replaces the absolute timestamp; the
+waiting spinner repeats the code. The code lasts at most ten minutes. Setup polls, checks the received credential, sends endpoint and token
 together through `claude plugin configure --values-stdin`, and acknowledges
 successful delivery. It prints the credential's expiry date (180 days for a new
 browser grant). The browser never receives the token.
 
 在互動終端機確認 endpoint 後，開啟 `/device`，輸入終端機顯示的代碼，登入並
-允許授權。代碼最多有效 10 分鐘。setup 取得憑證並驗證後，把 endpoint 與 token
+允許授權。代碼會獨立醒目顯示，按 Enter 後才開瀏覽器，避免切換視窗前沒看到代碼。
+期限以相對時間顯示，等待授權時也會重複顯示代碼。代碼最多有效 10 分鐘。setup 取得憑證並驗證後，把 endpoint 與 token
 一起經 stdin 交給 Claude Code 保存，再確認交付，最後顯示到期日。
 瀏覽器授權的新憑證有效 180 天，瀏覽器不會拿到 token。
 
@@ -55,6 +58,8 @@ node packages/setup/bin/memory.mjs status
 
 - `--no-browser`: display the URL/code and open the page yourself, including on
   another device. Still requires a TTY.
+- `--no-clipboard`: skip optional copying of the one-time device code. No effect
+  on manual PAT/Codex pairing, which never copies a token.
 - `--manual-token`: use the hidden PAT prompt, checking it before saving.
 - `--reauthorize`: replace an existing credential. Without it, complete endpoint
   and token configuration is preserved. New authorization always confirms the
@@ -65,6 +70,22 @@ node packages/setup/bin/memory.mjs status
 `--no-browser` 仍需互動式 TTY，可在手機或其他電腦開頁面。`--manual-token` 保留
 隱藏 PAT 輸入。既有完整設定預設保留，要換發時加上 `--reauthorize`。
 `--dry-run` 不連網、不建立代碼、不寫設定。
+
+The code uses bold cyan in a TTY; `NO_COLOR` (including an empty value) disables
+that styling. Non-TTY output and no-color mode use brackets and extra spacing.
+Setup optionally copies **only the public one-time code** using a fixed local
+clipboard tool: `pbcopy` on macOS, `clip.exe` on Windows/WSL, `wl-copy` when a
+Wayland display/runtime is present, or `xclip`/`xsel` with an X display. Missing,
+failing or timed-out tools never fail authorization. SSH sessions skip automatic
+clipboard copying, even with a forwarded display. Clipboard subprocesses receive
+the code via stdin, use no shell, and never echo their output. Native clipboard
+integration is tested with fake tools; no system clipboard or real token is used.
+
+TTY 中以粗體青色突出代碼；`NO_COLOR` 或非 TTY 輸出改用方括號與空格。
+有本機剪貼簿工具時，會自動複製一次性代碼並說明；缺少工具仍可繼續。
+可用 `--no-clipboard` 略過，SSH 連線也會自動略過。PAT、token 與驗證資料不會複製。
+`--no-browser` 只印出網址，略過 Enter 提示；仍需互動式 TTY。
+等待 Enter 時，原本的授權期限照常計時，逾時或 Ctrl-C 會嘗試取消授權。
 
 If only a token is configured, setup keeps it and asks you to complete the
 endpoint through `/plugin configure`, or explicitly use `--reauthorize`.

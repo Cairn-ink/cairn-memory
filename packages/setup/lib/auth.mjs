@@ -3,7 +3,7 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { hostname } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { performance } from 'node:perf_hooks';
-import { writeSync } from 'node:fs';
+import { copyCode, formatCode, spinner } from './device-ui.mjs';
 import { requestJSON } from './transport.mjs';
 import { AuthError } from './errors.mjs';
 
@@ -52,25 +52,11 @@ export async function credentialCheck(endpoint, token, { signal, request = reque
   return value;
 }
 
-function spinner(write, remaining, saving = false, t) {
-  const message = () => {
-    const seconds = typeof remaining === 'function' ? remaining() : remaining;
-    return saving ? t('saving') :
-      t('waiting', { time: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` });
-  };
-  if (!process.stdout.isTTY) { write(message()); return () => {}; }
-  const frames = ['⠋', '⠙', '⠹', '⠸'];
-  let frame = 0;
-  const render = () => writeSync(1, `\r${frames[frame++ % frames.length]} ${message()}\x1b[K`);
-  render();
-  const timer = setInterval(render, 250);
-  return () => { clearInterval(timer); writeSync(1, '\r\x1b[K'); };
-}
-
 // Clocks, sleep and transport are injected only by tests, never by CLI flags or
 // environment. Deadlines cannot be extended by a delayed HTTP response.
 export async function browserAuthorize(endpoint, {
-  write, browse, noBrowser, save, signal, progress = spinner, t = translator(detectLanguage()),
+  write, browse, prompt, noBrowser, noClipboard, save, signal, progress = spinner, t = translator(detectLanguage()),
+  copy = copyCode, tty = Boolean(process.stdout.isTTY), env = process.env,
   request = requestJSON, now = () => performance.now(), sleep = delay, jitter = Math.random,
 } = {}) {
   let verifier = randomBytes(32).toString('base64url');
@@ -107,15 +93,42 @@ export async function browserAuthorize(endpoint, {
         grant.verification_uri !== uri || !integer(grant.expires_in) || !integer(grant.interval)) throw new AuthError('protocol');
     deadline = start + Math.min(600, grant.expires_in) * 1000;
     if (now() >= deadline) throw new AuthError('timeout');
-    write(t('authorization_code', { code: grant.user_code }));
-    write(t('code_deadline', { date: new Date(Date.now() + deadline - now()).toLocaleString(t.locale, { timeZoneName: 'short' }) }));
-    write(t('enter_code', { url: uri }));
+    write('');
+    write(t('authorization_code', { code: formatCode(grant.user_code, { tty, env }) }));
+    write('');
+    let copied = false;
+    if (!noClipboard) {
+      try { copied = await copy(grant.user_code, { signal }); } catch { /* clipboard is optional */ }
+    }
+    if (signal?.aborted) throw new AuthError('interrupted');
+    if (now() >= deadline) throw new AuthError('timeout');
+    if (noBrowser) {
+      write(uri);
+      if (copied) write(t('clipboard_copied'));
+    } else {
+      // Keep terminal focus until the user has read/copied the code. Bound this
+      // prompt by the same grant deadline; abort restores readline's raw mode.
+      const gate = new AbortController();
+      const interrupt = () => gate.abort(new AuthError('interrupted'));
+      signal?.addEventListener('abort', interrupt, { once: true });
+      if (signal?.aborted) interrupt();
+      const timer = setTimeout(() => gate.abort(new AuthError('timeout')), Math.max(1, deadline - now()));
+      try {
+        await prompt(t('open_device', { url: uri.replace(/^https?:\/\//u, ''), copied: copied ? ` ${t('clipboard_copied')}` : '' }), { signal: gate.signal });
+        if (gate.signal.aborted) throw gate.signal.reason;
+      } catch (error) { throw gate.signal.aborted ? gate.signal.reason : error; }
+      finally { clearTimeout(timer); signal?.removeEventListener('abort', interrupt); }
+    }
+    if (signal?.aborted) throw new AuthError('interrupted');
+    if (now() >= deadline) throw new AuthError('timeout');
+    const seconds = Math.ceil((deadline - now()) / 1000);
+    write(seconds >= 60 ? t('code_deadline', { minutes: Math.ceil(seconds / 60) }) : t('code_deadline_seconds', { seconds }));
     if (!noBrowser) {
       try { await browse(write, uri, signal); }
       catch { if (!signal?.aborted) write(t('open_manually', { url: uri })); }
     }
     let interval = Math.max(5, grant.interval), backoff = 0;
-    stop = progress(write, () => Math.max(0, Math.ceil((deadline - now()) / 1000)), false, t);
+    stop = progress(write, () => Math.max(0, Math.ceil((deadline - now()) / 1000)), false, t, grant.user_code, { tty });
     await pause(interval);
     while (!token) {
       let response;
@@ -144,7 +157,7 @@ export async function browserAuthorize(endpoint, {
         const remaining = () => Math.max(0, ackDeadline - now());
         if (!remaining()) throw new AuthError('timeout');
         stop();
-        stop = progress(write, 0, true, t);
+        stop = progress(write, 0, true, t, grant.user_code, { tty });
         const checked = await credentialCheck(endpoint, token, { signal, request,
           timeout: Math.min(15000, remaining()) });
         if (!checked || checked.token_id !== value.token_id || checked.expires_at !== value.expires_at || checked.scopes === null) throw new AuthError('protocol');

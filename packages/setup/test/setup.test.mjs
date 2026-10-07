@@ -1,3 +1,4 @@
+import './device-ui.test.mjs';
 import { PassThrough, Writable } from 'node:stream';
 import { detectLanguage, messages, translator } from '../lib/messages.mjs';
 import { selectEndpoint } from '../lib/options.mjs';
@@ -21,6 +22,7 @@ const secretURL = new URL('./fake-auth-server.mjs', import.meta.url).href;
 const transportURL = new URL('../lib/transport.mjs', import.meta.url).href;
 const errorURL = new URL('../lib/errors.mjs', import.meta.url).href;
 const wireURL = new URL('./http-wire.mjs', import.meta.url).href;
+const deviceURL = new URL('../lib/device-ui.mjs', import.meta.url).href;
 const bin = fileURLToPath(new URL('../bin/memory.mjs', import.meta.url));
 const command = call => call.args.join(' ');
 const saved = result => result.calls.find(call => call.args.includes('--values-stdin'));
@@ -39,13 +41,20 @@ async function fixture(t, state = {}, options = {}) {
   const sleepsPath = join(workspace.path, 'sleeps.jsonl'); writeFileSync(sleepsPath, '');
   const browsesPath = join(workspace.path, 'browses.jsonl'); writeFileSync(browsesPath, '');
   const budgetsPath = join(workspace.path, 'budgets.jsonl'); writeFileSync(budgetsPath, '');
+  const clipboardPath = join(workspace.path, 'clipboard.jsonl'); writeFileSync(clipboardPath, '');
+  if (['present', 'failure', 'hang'].includes(options.clipboard)) writeFileSync(join(fakeBin, 'wl-copy'),
+    `#!${process.execPath}\nimport {readFileSync,appendFileSync} from 'node:fs';
+    appendFileSync(${JSON.stringify(clipboardPath)}, JSON.stringify({args:process.argv.slice(2),input:readFileSync(0,'utf8')})+String.fromCharCode(10));
+    process.stdout.write('clipboard-child-output-hidden');process.stderr.write('clipboard-child-output-hidden');
+    ${options.clipboard === 'hang' ? 'setInterval(()=>{},1000);' : `process.exit(${options.clipboard === 'failure' ? 1 : 0});`}`, {mode:0o755});
   const harness = join(workspace.path, 'harness.mjs');
   writeFileSync(harness, `import {main} from ${JSON.stringify(moduleURL)};
     import {secret} from ${JSON.stringify(secretURL)};
     import {requestJSON} from ${JSON.stringify(transportURL)};
     import {AuthError} from ${JSON.stringify(errorURL)};
+    import {copyCode} from ${JSON.stringify(deviceURL)};
     import {installChildWire} from ${JSON.stringify(wireURL)};
-    import {appendFileSync, writeSync} from 'node:fs';
+    import {appendFileSync, readFileSync, writeSync} from 'node:fs';
     const disconnect = installChildWire();
     let clock = 0, pollCount = 0;
     let wallJump = 0;
@@ -57,7 +66,8 @@ async function fixture(t, state = {}, options = {}) {
       interactive: ${options.interactive ?? true}, nodeVersion: ${JSON.stringify(options.nodeVersion ?? process.versions.node)},
       ...( ${options.locale !== undefined} ? { locale: ${JSON.stringify(options.locale ?? 'en-US')} } : {} ),
       authOptions: {
-        now: () => clock, jitter: () => 0.25,
+        now: () => clock, jitter: () => 0.25, tty: ${options.outputTTY ?? false},
+        copy: (code, options) => copyCode(code, {...options, platform: 'linux', wsl:false}),
         sleep: async ms => {
           appendFileSync(${JSON.stringify(sleepsPath)}, JSON.stringify(ms) + '\\n');
           ${options.signalDuringSleep ? "process.kill(process.pid, 'SIGINT'); await new Promise(resolve => setImmediate(resolve));" : 'clock += ms;'}
@@ -79,6 +89,13 @@ async function fixture(t, state = {}, options = {}) {
       },
       prompt: async (question, options) => {
         appendFileSync(${JSON.stringify(promptsPath)}, JSON.stringify({question, options}) + '\\n');
+        if (/Press Enter|按 Enter/u.test(question)) {
+          if (readFileSync(${JSON.stringify(browsesPath)}, 'utf8')) throw new Error('browser opened before Enter');
+          writeSync(1, question + '\\n');
+          clock += ${options.enterDelay ?? 0};
+          ${options.interruptEnter ? "const interrupted = new Promise(resolve => options.signal.addEventListener('abort', resolve, {once:true})); process.kill(process.pid, 'SIGINT'); await interrupted;" : ''}
+          return '';
+        }
         return options?.secret ? ${options.invalidToken ? "secret + '\\n'" : 'secret'} :
           /MCP cairn|legacy MCP/iu.test(question) ? ${JSON.stringify(options.mcpAnswer ?? '')} : ${JSON.stringify(options.endpoint ?? server.endpoint)};
       }, browse: async (_write, url) => {
@@ -90,7 +107,7 @@ async function fixture(t, state = {}, options = {}) {
   const result = await new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, [options.realBin ? bin : harness, ...(options.args ?? ['setup', '--no-browser'])], {
       cwd: workspace.path, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      env: { LANG: 'en_US.UTF-8', PATH: fakeBin, HOME: workspace.path, FAKE_CALLS: callsPath, FAKE_STATE: statePath, ...options.env },
+      env: { LANG: 'en_US.UTF-8', PATH: fakeBin, HOME: workspace.path, FAKE_CALLS: callsPath, FAKE_STATE: statePath, ...(options.clipboard ? {WAYLAND_DISPLAY:'fixture',XDG_RUNTIME_DIR:workspace.path} : {}), ...options.env },
     });
     wireChild(proc, server.server);
     let stdout = '', stderr = '';
@@ -100,7 +117,7 @@ async function fixture(t, state = {}, options = {}) {
     proc.on('close', code => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
   });
   const lines = path => readFileSync(path, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
-  const calls = lines(callsPath), prompts = lines(promptsPath), sleeps = lines(sleepsPath), browses = lines(browsesPath), budgets = lines(budgetsPath);
+  const calls = lines(callsPath), prompts = lines(promptsPath), sleeps = lines(sleepsPath), browses = lines(browsesPath), budgets = lines(budgetsPath), clipboard = lines(clipboardPath);
   const secrets = [secret, server.grant?.device_code, server.lastProof?.code_verifier, server.delivery?.delivery_receipt].filter(Boolean);
   const allFiles = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? allFiles(join(dir, entry.name)) : [join(dir, entry.name)]);
   for (const value of secrets) {
@@ -111,7 +128,7 @@ async function fixture(t, state = {}, options = {}) {
   }
   assert.ok(!(result.stdout + result.stderr).includes('synthetic-child-output-must-stay-hidden'));
   assert.deepEqual(server.violations, []);
-  return { ...result, calls, prompts, sleeps, browses, budgets, server, state: JSON.parse(readFileSync(statePath, 'utf8')) };
+  return { ...result, calls, prompts, sleeps, browses, budgets, clipboard, server, state: JSON.parse(readFileSync(statePath, 'utf8')) };
 }
 
 test('Node minimum, endpoint origins, browser launch commands and hostname sanitation', () => {
@@ -133,7 +150,7 @@ test('browser happy path uses S256, safe stdin, credential check then ACK and re
   assert.equal(saved(r).tokenDigest, createHash('sha256').update(secret).digest('hex'));
   assert.deepEqual(saved(r).keys, ['api_endpoint', 'api_token']);
   assert.equal(saved(r).endpoint, r.server.endpoint);
-  assert.deepEqual(r.prompts.length, 1);
+  assert.deepEqual(r.prompts.length, 2);
   assert.deepEqual(r.sleeps, [5000, 5000]);
   assert.deepEqual(r.browses, [`${r.server.endpoint}/device`]);
   assert.deepEqual(r.server.requests.map(r => r.route), ['device-authorizations', 'token', 'token', 'credential', 'ack']);
@@ -498,7 +515,7 @@ async function timedAuthorization(t, { serverOptions = {}, tokenTimes = [], cred
   let result, error;
   try {
     result = await browserAuthorize(server.endpoint, {
-      write: value => messages.push(value), noBrowser: true,
+      write: value => messages.push(value), noBrowser: true, copy: async () => false,
       now: () => clock, sleep: async ms => { clock += ms; }, jitter: () => 0.25,
       progress: () => () => {},
       save: async (_values, timeout) => { budgets.push({ route: 'save', clock, timeout }); configured = true; clock += saveTime; },
@@ -621,11 +638,11 @@ for (const [name, env, locale, language] of [
     const r = await fixture(t, {}, { env, locale });
     assert.equal(r.code, 0, r.stdout);
     if (language === 'zh') {
-      assert.match(r.stdout, /安裝器.*授權代碼.*Cairn Memory 已連線/su);
-      assert.doesNotMatch(r.stdout, /Installer|Authorization code|Waiting for approval|is connected/);
+      assert.match(r.stdout, /安裝器.*複製這組一次性代碼.*Cairn Memory 已連線/su);
+      assert.doesNotMatch(r.stdout, /Installer|Copy this one-time code|Waiting for approval|is connected/);
       assert.match(r.prompts[0].question, /確認 Cairn endpoint/u);
     } else {
-      assert.match(r.stdout, /Installer.*Authorization code.*Cairn Memory is connected/s);
+      assert.match(r.stdout, /Installer.*Copy this one-time code.*Cairn Memory is connected/s);
       assert.doesNotMatch(r.stdout + JSON.stringify(r.prompts), /[\p{Script=Han}]/u);
     }
   });
@@ -711,4 +728,114 @@ test('TTY redraw retains the visible endpoint question; hidden paste never echoe
     assert.equal(rawModes.at(-1), false);
     input.destroy(); output.destroy();
   }
+});
+
+
+for (const lang of ['en', 'zh']) {
+  test(`device code stands out and Enter gates browser open (${lang})`, async t => {
+    const r = await fixture(t, {}, { args: ['setup', '--lang', lang, '--no-clipboard'], outputTTY: true });
+    assert.equal(r.code, 0, r.stdout); assert.equal(r.prompts.length, 2);
+    assert.match(r.stdout, /\n\n! .*\x1b\[1;36mABCD-EFGH\x1b\[0m\n\n(?:Press Enter|按 Enter)/u);
+    assert.match(r.prompts[1].question, lang === 'zh' ? /按 Enter.*127\.0\.0\.1:31415\/device/u : /Press Enter.*127\.0\.0\.1:31415\/device/);
+    assert.ok(r.stdout.indexOf('browser opened') > r.stdout.indexOf(lang === 'zh' ? '按 Enter' : 'Press Enter'));
+    assert.match(r.stdout, lang === 'zh' ? /代碼將於 10 分鐘後到期/u : /Code expires in 10 minutes/);
+    assert.match(r.stdout, lang === 'zh' ? /等待你在瀏覽器允許（代碼 ABCD-EFGH）/u : /Waiting for approval \(code ABCD-EFGH\)/);
+    assert.doesNotMatch(r.stdout, /GMT|Code deadline|AM |PM /);
+  });
+}
+
+test('non-TTY output brackets the code, prints only the URL with --no-browser, and repeats it while waiting', async t => {
+  const r = await fixture(t, {}, { args: ['setup', '--no-browser', '--no-clipboard'] });
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, /\n\n! Copy this one-time code: \[ ABCD-EFGH \]\n\nhttp:\/\/127\.0\.0\.1:31415\/device\n/);
+  assert.doesNotMatch(r.stdout, /\x1b|Press Enter/); assert.equal(r.prompts.length, 1); assert.deepEqual(r.browses, []);
+  assert.match(r.stdout, /Waiting for approval \(code ABCD-EFGH\)… 10:00/);
+});
+
+test('NO_COLOR suppresses bold/color in a TTY but preserves a prominent code', async t => {
+  const r = await fixture(t, {}, { outputTTY: true, env: {NO_COLOR:''} });
+  assert.equal(r.code, 0); assert.match(r.stdout, /! Copy this one-time code: \[ ABCD-EFGH \]/);
+  assert.doesNotMatch(r.stdout, /\x1b\[1;36m/);
+});
+
+for (const clipboard of ['present', 'absent', 'failure', 'hang']) {
+  test(`optional clipboard tool ${clipboard} never blocks successful authorization`, async t => {
+    const r = await fixture(t, {}, {args:['setup'],clipboard});
+    assert.equal(r.code, 0, r.stdout);
+    assert.doesNotMatch(r.stdout, /clipboard-child-output-hidden/);
+    if (clipboard === 'present') {
+      assert.match(r.prompts[1].question, /copied to clipboard/);
+      assert.deepEqual(r.clipboard, [{args:['--type','text/plain'],input:'ABCD-EFGH'}]);
+    } else assert.doesNotMatch(r.stdout, /copied to clipboard/);
+    assert.ok(!JSON.stringify(r.clipboard).includes(secret));
+  });
+}
+
+test('--no-clipboard skips an available tool, and SSH avoids a forwarded clipboard', async t => {
+  for (const options of [{args:['setup','--no-clipboard']}, {env:{SSH_CONNECTION:'fixture'}}]) {
+    const r = await fixture(t, {}, {clipboard:'present',...options});
+    assert.equal(r.code, 0); assert.deepEqual(r.clipboard, []); assert.doesNotMatch(r.stdout, /copied to clipboard/);
+  }
+});
+
+test('Ctrl-C at the Enter gate cancels before browser open or token polling', async t => {
+  const r = await fixture(t, {}, {args:['setup','--no-clipboard'],interruptEnter:true});
+  assert.equal(r.code, 130); assert.deepEqual(r.browses, []); assert.equal(saved(r), undefined);
+  assert.deepEqual(r.server.requests.map(request=>request.route), ['device-authorizations','cancel']);
+  assert.equal(r.server.grant.state, 'cancelled');
+});
+
+test('waiting for Enter cannot reset or outlive the grant budget', async t => {
+  const delayed = await fixture(t, {}, {args:['setup','--no-clipboard'],enterDelay:61000});
+  assert.equal(delayed.code, 0); assert.match(delayed.stdout, /Code expires in 9 minutes/);
+  const expired = await fixture(t, {}, {args:['setup','--no-clipboard'],enterDelay:600000});
+  assert.equal(expired.code, 1); assert.match(expired.stdout, /Authorization timed out/);
+  assert.deepEqual(expired.browses, []); assert.equal(saved(expired), undefined);
+  assert.equal(expired.server.grant.state, 'cancelled');
+});
+
+
+test('Enter prompt timeout aborts readline, restores raw mode, and cancels without opening a browser', async t => {
+  const server = await fakeAuthServer(t, {expiresIn:1});
+  const input = new PassThrough(); input.isTTY=true;
+  const rawModes=[]; input.setRawMode=value=>rawModes.push(value);
+  let output='';const terminal = new Writable({write(chunk,_encoding,done){output+=chunk;done();}});
+  terminal.columns=100;terminal.isTTY=true;
+  let clock=0,browsed=false;
+  await assert.rejects(browserAuthorize(server.endpoint, {
+    t:translator('en'),write:()=>{},copy:async()=>false,tty:false,now:()=>clock,
+    prompt:(question,options)=>ask(question,{...options,input,output:terminal}),
+    browse:async()=>{browsed=true;},
+    request:async(url,options)=>{
+      const response=await localWireRequest(server.server,requestJSON,url,{...options,env:{}});
+      if(url.pathname.endsWith('/device-authorizations'))clock=999;
+      return response;
+    },
+  }), error=>error.kind==='timeout');
+  assert.match(output,/Press Enter/);assert.equal(rawModes.at(-1),false);assert.equal(browsed,false);
+  assert.deepEqual(server.requests.map(request=>request.route),['device-authorizations','cancel']);
+  assert.equal(server.grant.state,'cancelled');input.destroy();terminal.destroy();
+});
+
+
+test('real readline Enter gates browser opening and polling until the code is visible', async t => {
+  const server=await fakeAuthServer(t);
+  const input=new PassThrough();input.isTTY=true;input.setRawMode=()=>{};
+  let screen='';const output=new Writable({write(chunk,_encoding,done){screen+=chunk;done();}});
+  output.isTTY=true;output.columns=100;
+  let clock=0,browsed=false,atGate;
+  const gate=new Promise(resolve=>{atGate=resolve;});
+  const pending=browserAuthorize(server.endpoint,{
+    t:translator('en'),write:line=>{screen+=line+'\n';},tty:false,copy:async()=>false,
+    now:()=>clock,sleep:async ms=>{clock+=ms;},
+    prompt:(question,options)=>{const answer=ask(question,{...options,input,output});atGate();return answer;},
+    browse:async()=>{browsed=true;},save:async values=>{values.api_token=undefined;},
+    request:(url,options)=>localWireRequest(server.server,requestJSON,url,{...options,env:{}}),
+  });
+  await gate;
+  assert.match(screen,/! Copy this one-time code: \[ ABCD-EFGH \].*Press Enter/s);
+  assert.equal(browsed,false);assert.deepEqual(server.requests.map(request=>request.route),['device-authorizations']);
+  input.write('\r');const result=await pending;
+  assert.ok(result.expiresAt);assert.equal(browsed,true);assert.equal(server.grant.state,'delivered');
+  input.destroy();output.destroy();
 });
