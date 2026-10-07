@@ -2036,3 +2036,25 @@ separate primary-owned rebind and verified action. Old v3's exact 200M→300M
 and strict cap increase remain unchanged. No schema, price, native/runtime,
 prompt, timeout, retry or public MCP/Hermes/default change is made. N12 still
 reports Cairn 3/6 versus Mem0 4/6, with no score overwrite or bill/refund claim.
+
+## Fresh-thirty one-shot wiring contract
+
+The [execution wiring contract](plans/fresh-thirty-execution.md) has thin wiring
+and author keyless synthetic acceptance (24/24, actual exit0 on exact22/24).
+It requires primary final-runtime rebinding of the already
+frozen thirty-case projection, complete v4 ancestry, unchanged840000 request
+cap and conditional100M round/400M cumulative/30M protected microUSD bounds.
+Projection identity is not a complete launch inventory or spending grant.
+
+Independent fixed-source reviews, authentic keyless acceptance and primary
+delivery/dispatch gates are pending. Synthetic source/native/budget adapters
+do not replace actual integration. No paid execution or new score is
+claimed. The author cannot access authentic source/evaluator/key/ledger files;
+primary alone owns authentic modes and decisions. No retry, replacement cohort,
+historical resume, ledger reset/refund, new model/prompt/native policy or product
+adoption is authorized by this contract.
+
+Revision2 corrects only the synthetic explicit-cleanup test to register its
+workspace hook immediately; four production hashes stay unchanged. Exact22/24
+full suites each24/24, actual exit0; prior evidence and failures remain retained.
+Independent rereviews of the new public candidate remain a delivery gate.
