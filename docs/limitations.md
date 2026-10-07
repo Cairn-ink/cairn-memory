@@ -1904,3 +1904,44 @@ cannot promise completeness, and `sourceSnapshot` cannot recover omitted
 source. Proposed synthetic wire-omission/include controls and stage-specific
 candidate-visibility fixtures remain unimplemented; no source/default change,
 benchmark-score correction or paid rerun is made by this diagnostic correction.
+
+## Synthetic write-retention and recall-gap reproduction
+
+The [bounded evidence-gap reproduction](plans/evidence-gap-reproduction.md)
+now verifies the proposed mechanisms offline on exact Node 22.16/24.15, using
+synthetic data, actual preparation/ingestion/core paths, the OpenAI adapter with
+fake HTTP, and the local tokenizer. Identical extraction input containing a short
+user aside and verbose assistant text completes capture with assistant-only
+scripted output but omits the user marker from a cold admitted-source read;
+the include-user output control retains it. This is consistent with the
+selected-admitted-receipt contract, not a promise to archive every source window.
+
+Actual recall over 217 publicly admitted candidates separately distinguishes a
+target not delivered in two bounded select rounds, one visible but select-omitted,
+one rank-dropped, and a retained positive control. Stored-set enumeration,
+map-packing trials (including rejected oversized trials), delivered select input,
+select output, rank input/output and final context are not interchangeable;
+combined `shownRefs` is not unique visibility. All four controls have no
+answer-packer omission. Opt-in coverage assertions are intentionally red for
+losses and green for matched positives; ordinary tests pass, including immediate
+owned-workspace cleanup after assertion failures. Full LongMemEval passes
+287/287 with no skips on both versions.
+
+These scripted responses demonstrate possible mechanisms, not the actual N12
+model's cause. Primary's preparation-only check found necessary-marker counts
+2/1/1 inside individual indexed windows, ruling out marker splitting for those
+probes but not establishing actual extraction wire/output or admission behavior.
+No runtime, prompt, schema, privacy or retention default changed, and no paid
+request, score overwrite or historical cleanup occurred. The separate future
+raw-layer contract is not implemented here. N12 stays Cairn 3/6 versus Mem0 4/6;
+the earlier diagnostic checkpoints remain historical, not benchmark revisions.
+
+Primary's later read-only SQL probe found five distinct admitted memories and
+zero suppressed items in each matching batch of wrong cases 1/2/3; all
+45/47/43 batches completed, with zero suppression or deleted memories. The
+database hash was unchanged; a preceding query-literal setup failure was not a
+data or provider failure. These counts weaken suppression/deletion explanations
+but, without stored original extraction output, do not prove five-item saturation
+or why a provider selected particular evidence. The next bounded, question-blind
+coverage comparison must distinguish capacity from prioritization before any
+cap, prompt or default change; scores and paid-run history remain unchanged.
