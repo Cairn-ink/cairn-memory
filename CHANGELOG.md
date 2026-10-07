@@ -2,6 +2,14 @@
 
 ## Unreleased — @cairn-ink/memory installer 0.2.0
 
+- Add validated `--endpoint <origin>` and print the selected endpoint's source
+  before authorization. Let readline own the visible endpoint prompt so TTY
+  redraws cannot replace it with a blank question. Preserved Claude config is
+  identified without reading back sensitive values.
+- Print one language per invocation across Claude and Codex flows: use LC_ALL,
+  LC_MESSAGES, LANG, then Intl locale; `zh*` selects Traditional Chinese, other
+  locales select English. Add `--lang zh|en` and a central message table,
+  preserving error kinds and exit codes.
 - Authorize in a browser with manually entered device codes, S256 proof, bounded
   polling/backoff, a credential check and delivery ACK. New browser credentials
   expire after 180 days; show the expiry on success. No code-bearing URLs.

@@ -70,6 +70,60 @@ If only a token is configured, setup keeps it and asks you to complete the
 endpoint through `/plugin configure`, or explicitly use `--reauthorize`.
 已有 token 但缺少 endpoint 時會保留憑證，提示補齊設定或明確重新授權。
 
+## Endpoint and language / Endpoint 與語言
+
+```sh
+node packages/setup/bin/memory.mjs setup --reauthorize --endpoint https://auth.example.com --lang zh
+node packages/setup/bin/memory.mjs status --lang en
+```
+
+`--endpoint <origin>` selects the authorization server before any API request. It
+uses the same validation as the prompt: HTTPS, or HTTP on localhost/loopback,
+without credentials, a path, query or fragment. It skips the endpoint prompt;
+without the flag, new Claude authorization always asks and Enter selects
+`https://cairn.ink`. Setup prints the selected origin and its source before
+opening a browser or contacting the authorization service. Production with the
+auth gate disabled still returns 404 and falls back to manual PAT input; use an
+explicit endpoint to test a server with the gate enabled.
+
+`--endpoint` 指定授權伺服器，驗證規則與互動提示相同。加上旗標後不再詢問 endpoint；
+未指定時，Claude 的新授權一定會詢問，直接按 Enter 才選用 `https://cairn.ink`。
+連線前會印出 origin 與來源，讓你確認目標。正式站未開啟授權功能時仍會回 404，
+改用 PAT；測試其他伺服器時請明確指定 endpoint。
+
+Complete Claude credentials are preserved unless `--reauthorize` is supplied.
+The CLI exposes only configured/unset metadata, so the preserved-config line
+honestly reports that the existing endpoint value is not read back and no auth
+connection is made. `--endpoint` with a preserved credential requires
+`--reauthorize`; it never attaches the old token to a new origin. New Claude
+authorization does not infer an endpoint from presence metadata. Codex displays
+its validated existing origin and refuses a conflicting `--endpoint`, preserving
+its existing entry for explicit editing/removal in Codex.
+
+既有 Claude 憑證預設保留。CLI 只提供設定有無，安裝器不讀回敏感設定，因此會明說
+endpoint 沿用既有設定、值未讀回、本次不進行授權連線。要用 `--endpoint` 換發憑證，
+請同時加 `--reauthorize`。Codex 可顯示既有設定中通過驗證的 origin；旗標與既有
+origin 衝突時會停止，提示先在 Codex 明確修改或移除該設定。
+
+Each invocation prints **one language**, including help, prompts, progress and
+errors. Selection uses the first non-empty `LC_ALL`, then `LC_MESSAGES`, then
+`LANG`, falling back to `Intl.DateTimeFormat().resolvedOptions().locale`.
+A `zh*` locale selects Traditional Chinese (including `zh_CN`); all others,
+including `C`, select English. `--lang zh|en` overrides that selection for either
+client. Locale selection changes presentation only; error kinds and exit codes
+stay the same. All installer messages live in `lib/messages.mjs`.
+
+每次執行只顯示一種語言。依序讀取非空的 `LC_ALL`、`LC_MESSAGES`、`LANG`，
+都未設定時使用 Intl 的系統 locale。`zh*` 一律顯示繁體中文，其餘顯示英文；
+可用 `--lang zh` 或 `--lang en` 覆寫，Claude 與 Codex 都適用。錯誤種類與 exit code 不變。
+
+The old endpoint prompt was written outside readline, then `question('')`
+redrew an empty line in a TTY. Non-secret prompts now belong to readline, so
+redraws retain the question; hidden PAT prompts still suppress every echo.
+
+舊版先在 readline 外印出 endpoint 提示，再以空字串呼叫 `question`，TTY 重畫時
+會清掉提示。現在一般提示由 readline 顯示與重畫，PAT 仍維持隱藏輸入。
+
 ## Compatibility and failures / 相容性與錯誤
 
 Claude Code must support plugin installation/listing and secure

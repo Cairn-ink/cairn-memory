@@ -1,3 +1,4 @@
+import { detectLanguage, translator } from './messages.mjs';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { hostname } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -51,11 +52,11 @@ export async function credentialCheck(endpoint, token, { signal, request = reque
   return value;
 }
 
-function spinner(write, remaining, saving = false) {
+function spinner(write, remaining, saving = false, t) {
   const message = () => {
     const seconds = typeof remaining === 'function' ? remaining() : remaining;
-    return saving ? '正在安全地儲存憑證… / Saving credential securely…' :
-      `等待你在瀏覽器允許… / Waiting for approval… ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    return saving ? t('saving') :
+      t('waiting', { time: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` });
   };
   if (!process.stdout.isTTY) { write(message()); return () => {}; }
   const frames = ['⠋', '⠙', '⠹', '⠸'];
@@ -69,7 +70,7 @@ function spinner(write, remaining, saving = false) {
 // Clocks, sleep and transport are injected only by tests, never by CLI flags or
 // environment. Deadlines cannot be extended by a delayed HTTP response.
 export async function browserAuthorize(endpoint, {
-  write, browse, noBrowser, save, signal, progress = spinner,
+  write, browse, noBrowser, save, signal, progress = spinner, t = translator(detectLanguage()),
   request = requestJSON, now = () => performance.now(), sleep = delay, jitter = Math.random,
 } = {}) {
   let verifier = randomBytes(32).toString('base64url');
@@ -106,15 +107,15 @@ export async function browserAuthorize(endpoint, {
         grant.verification_uri !== uri || !integer(grant.expires_in) || !integer(grant.interval)) throw new AuthError('protocol');
     deadline = start + Math.min(600, grant.expires_in) * 1000;
     if (now() >= deadline) throw new AuthError('timeout');
-    write(`授權代碼 / Authorization code: ${grant.user_code}`);
-    write(`代碼期限最多 10 分鐘 / Code deadline (at most 10 minutes): ${new Date(Date.now() + deadline - now()).toLocaleString(undefined, { timeZoneName: 'short' })}`);
-    write(`請在瀏覽器輸入代碼 / Enter the code in your browser: ${uri}`);
+    write(t('authorization_code', { code: grant.user_code }));
+    write(t('code_deadline', { date: new Date(Date.now() + deadline - now()).toLocaleString(t.locale, { timeZoneName: 'short' }) }));
+    write(t('enter_code', { url: uri }));
     if (!noBrowser) {
       try { await browse(write, uri, signal); }
-      catch { if (!signal?.aborted) write(`請手動開啟 / Open manually: ${uri}`); }
+      catch { if (!signal?.aborted) write(t('open_manually', { url: uri })); }
     }
     let interval = Math.max(5, grant.interval), backoff = 0;
-    stop = progress(write, () => Math.max(0, Math.ceil((deadline - now()) / 1000)));
+    stop = progress(write, () => Math.max(0, Math.ceil((deadline - now()) / 1000)), false, t);
     await pause(interval);
     while (!token) {
       let response;
@@ -143,7 +144,7 @@ export async function browserAuthorize(endpoint, {
         const remaining = () => Math.max(0, ackDeadline - now());
         if (!remaining()) throw new AuthError('timeout');
         stop();
-        stop = progress(write, 0, true);
+        stop = progress(write, 0, true, t);
         const checked = await credentialCheck(endpoint, token, { signal, request,
           timeout: Math.min(15000, remaining()) });
         if (!checked || checked.token_id !== value.token_id || checked.expires_at !== value.expires_at || checked.scopes === null) throw new AuthError('protocol');
@@ -185,7 +186,7 @@ export async function browserAuthorize(endpoint, {
       if (error.kind === 'authorization_pending' && response.status === 400) { recoveryStart = undefined; backoff = 0; await pause(interval); }
       else if (error.kind === 'slow_down' && response.status === 400) { interval += 5; await pause(interval); }
       else if (error.kind === 'rate_limited') {
-        write('授權請求受到限流，依伺服器指示等待 / Rate-limited; waiting as instructed by the server.');
+        write(t('rate_wait'));
         if (Math.max(interval, error.retryAfter) * 1000 >= deadline - now()) throw error;
         await pause(Math.max(interval, error.retryAfter));
       } else if (error.kind === 'server') {

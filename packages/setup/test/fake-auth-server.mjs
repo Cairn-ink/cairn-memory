@@ -97,7 +97,7 @@ export async function fakeAuthServer(t, options = {}) {
     }
     violations.push(`unexpected route ${route}`); error('invalid_request');
   });
-  endpoint = 'http://127.0.0.1:31415';
+  endpoint = options.endpoint ?? 'http://127.0.0.1:31415';
   t.after(() => server.closeAllConnections());
   return { endpoint, server, requests, violations, get grant() { return grant; }, get delivery() { return delivery; },
     get lastProof() { return lastProof; }, get polls() { return polls; } };

@@ -1,10 +1,9 @@
+import { selectEndpoint } from './options.mjs';
 import { constants, accessSync } from 'node:fs';
 import { lstat, mkdir, open, readFile, rename, rm, mkdtemp, realpath } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { delimiter, join, resolve, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
-
-const tokenURL = 'https://cairn.ink/settings/tokens';
 
 // Keep routing and all Codex behavior here; browser authorization can supply
 // credentials at the prompt seam without changing the config transaction.
@@ -15,7 +14,7 @@ export function parseClient(argv, SetupError) {
     if (argv[index] !== '--client') { remaining.push(argv[index]); continue; }
     const value = argv[++index];
     if (client || !['claude', 'codex'].includes(value)) {
-      throw new SetupError('無效 client 選項 / Invalid client option. Use --client claude or --client codex.', 2);
+      throw new SetupError('client_invalid', 2);
     }
     client = value;
   }
@@ -34,7 +33,7 @@ export async function dispatchClient(argv, context) {
   const selection = parseClient(argv, context.SetupError);
   const [action, ...flags] = selection.argv;
   if (action === undefined || ['--help', '-h'].includes(action)) {
-    if (selection.client === 'codex' || availableClient('codex')) context.write('Client: --client claude|codex（setup 與 status）；只有 Codex 時自動選用 / Auto-detect Codex when Claude is absent.');
+    if (selection.client === 'codex' || availableClient('codex')) context.write(context.t('client_help'));
     return { handled: false, argv: selection.argv };
   }
   if (selection.client !== 'codex' && (selection.client || availableClient('claude') || !availableClient('codex'))) {
@@ -42,30 +41,30 @@ export async function dispatchClient(argv, context) {
   }
   if (!['setup', 'status'].includes(action) || flags.some(flag => !['--dry-run', '--no-browser'].includes(flag)) ||
       (action === 'status' && flags.length)) {
-    throw new context.SetupError('未知 Codex 指令或選項 / Unknown Codex command or option. Use --help.', 2);
+    throw new context.SetupError('codex_unknown', 2);
   }
   if (!context.supportedNode(context.nodeVersion)) {
-    throw new context.SetupError('需要 Node.js ≥22.16 / Node.js ≥22.16 is required. Upgrade Node and retry.');
+    throw new context.SetupError('node_required');
   }
   try {
     return { handled: true, code: await setupCodex({ ...context, action, flags }) };
   } catch (error) {
     if (error instanceof context.SetupError) throw error;
-    throw new context.SetupError('Codex 設定失敗；請檢查設定檔的 owner、權限與格式後重跑 / Codex setup failed; inspect config ownership, permissions and format, then retry.');
+    throw new context.SetupError('codex_failed');
   }
 }
 
-function fallback(write) {
-  write('請在互動終端機重跑 / Retry in an interactive terminal:');
-  write('npx @cairn-ink/memory setup --client codex');
-  write('或用 Codex 的 bearer-token-env-var，從你管理的安全環境載入 PAT / Or load a PAT from your managed secure environment:');
-  write('codex mcp add cairn --url https://cairn.ink/api/mcp --bearer-token-env-var CAIRN_MCP_TOKEN');
-  write('這個命令只設定環境變數名稱，不會保存 PAT；每次啟動 Codex 都需載入該環境 / This stores the variable name only; load it whenever Codex starts.');
+function fallback(write, t) {
+  write(t('interactive_retry'));
+  write(t('codex_retry_command'));
+  write(t('codex_env_fallback'));
+  write(t('codex_env_command'));
+  write(t('codex_env_explanation'));
 }
 
-function automaticStatus(write) {
-  write('Codex 自動擷取與自動回憶：尚未接線 / Automatic capture and recall: not yet wired.');
-  write('MCP 可供明確 remember／recall；完整自動記憶仍需 CX-5 與新版 transcript 驗證 / Use explicit MCP remember/recall; automatic memory needs CX-5 and current transcript qualification.');
+function automaticStatus(write, t) {
+  write(t('codex_automatic'));
+  write(t('codex_explicit_only'));
 }
 
 async function snapshot(path) {
@@ -113,11 +112,11 @@ function runCodex(args, { env = process.env, cwd } = {}) {
 }
 
 export async function setupCodex({ action, flags, write, prompt, interactive, browse,
-  SetupError, validEndpoint }) {
+  SetupError, validEndpoint, t, endpointOverride }) {
   const fail = message => new SetupError(message);
   if (process.platform === 'win32') {
-    write('此安裝器尚未驗證 Windows 憑證檔權限 / Windows credential-file permissions are not qualified.');
-    fallback(write); automaticStatus(write); return 0;
+    write(t('codex_windows'));
+    fallback(write, t); automaticStatus(write, t); return 0;
   }
   const home = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
   const configPath = join(home, 'config.toml');
@@ -129,7 +128,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     for (let directory = neutral; ; directory = dirname(directory)) {
       try {
         await lstat(join(directory, '.codex', 'config.toml'));
-        throw fail('暫存目錄位於 Codex 專案設定下；請將 TMPDIR 設為中立目錄 / TMPDIR has ancestor project config; choose a neutral temporary directory.');
+        throw fail('codex_tmpdir');
       } catch (error) { if (error.code !== 'ENOENT') throw error; }
       if (directory === dirname(directory)) break;
     }
@@ -137,7 +136,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     for (const path of ['/etc/codex/config.toml', '/etc/codex/managed_config.toml']) {
       try {
         await lstat(path);
-        throw fail('存在系統管理設定，請手動設定 Cairn / System-managed Codex config exists; configure Cairn manually.');
+        throw fail('codex_managed');
       } catch (error) { if (error.code !== 'ENOENT') throw error; }
     }
     const inspectionHome = join(neutral, 'user-file');
@@ -151,27 +150,27 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     const checked = (result, args) => {
       if (result.error || result.status !== 0) {
         const code = Number.isInteger(result.status) && result.status > 0 ? result.status : 1;
-        throw new SetupError(`指令失敗 / Command failed: codex ${args.join(' ')} (exit ${code}).`, code);
+        throw new SetupError('command_failed', code, { client: 'codex', args: args.join(' '), code });
       }
       return result.stdout;
     };
     const json = (result, args, valid) => {
       const output = checked(result, args);
       try { const value = JSON.parse(output); if (valid(value)) return value; } catch { /* secret-bearing output stays private */ }
-      throw fail('無法解析 Codex 狀態 / Cannot read Codex CLI state.');
+      throw fail('codex_state_error');
     };
     const supports = async (args, pattern) => {
       const result = await run([...args, '--help']);
       return !result.error && result.status === 0 && pattern.test(result.stdout);
     };
     const version = await run(['--version']);
-    if (version.error?.code === 'ENOENT') throw fail('找不到 codex CLI / codex CLI not found on PATH. Install Codex CLI, then retry.');
+    if (version.error?.code === 'ENOENT') throw fail('codex_missing');
     checked(version, ['--version']);
-    write('Node.js 與 Codex CLI 可用 / Node.js and Codex CLI are available.');
+    write(t('codex_available'));
     if (!await supports(['mcp', 'add'], /--url\b/u) ||
         !await supports(['mcp', 'get'], /--json\b/u)) {
-      write('此 Codex CLI 無法安全確認 HTTP MCP 設定 / This CLI cannot verify HTTP MCP configuration. Update Codex CLI.');
-      fallback(write); automaticStatus(write); return 0;
+      write(t('codex_update_required'));
+      fallback(write, t); automaticStatus(write, t); return 0;
     }
     const getArgs = ['mcp', 'get', 'cairn', '--json'];
     const get = async (options, allowAbsent = false) => {
@@ -190,55 +189,63 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     const hasHeader = typeof header === 'string' && /^Bearer [^\s\x00-\x1f\x7f]+$/u.test(header);
     const credential = hasHeader || (typeof envName === 'string' && Boolean(process.env[envName]));
     const usable = transport?.type === 'streamable_http' && validURL(transport.url);
-    write(`User-level MCP cairn: ${present ? '已設定 / configured' : '未設定 / absent'}`);
+    write(t('codex_user_status', { state: present ? t('configured') : t('absent') }));
     if (present) {
-      write(`Connection: ${usable ? 'HTTP endpoint 格式符合 / compatible HTTP endpoint' : '既有設定需手動檢查 / inspect existing configuration'}`);
-      write(`Enabled: ${existing.enabled ? '已啟用 / enabled' : '停用 / disabled'}`);
-      write(`Credential: ${credential ? '已設定 / configured' : '尚未確認 / unverified'}`);
+      write(t('codex_connection', { state: usable ? t('compatible_endpoint') : t('inspect_config') }));
+      write(t('codex_enabled', { state: existing.enabled ? t('enabled') : t('disabled') }));
+      write(t('codex_credential', { state: credential ? t('configured') : t('unverified') }));
+    }
+    if (endpointOverride && usable && endpointOverride !== new URL(transport.url).origin) {
+      throw new SetupError('codex_endpoint_conflict', 2);
+    }
+    if (endpointOverride || usable) {
+      write(t(endpointOverride ? 'endpoint_flag' : 'endpoint_config', {
+        endpoint: endpointOverride ?? new URL(transport.url).origin,
+      }));
+    } else if (!existing && (action === 'status' || flags.includes('--dry-run') || !interactive)) {
+      write(t('endpoint_default', { endpoint: 'https://cairn.ink' }));
     }
     if (action === 'status' || flags.includes('--dry-run')) {
       if (flags.includes('--dry-run')) {
-        write('預演：只檢查，不修改 / Dry run: inspect only, no changes.');
-        write('以隱藏輸入取得 PAT，寫入 CODEX_HOME/config.toml 的 Cairn http_headers（0600，明文）/ Hidden PAT → native http_headers (0600, plaintext).');
-        write('既有有效設定不重寫，衝突或停用設定保留 / Preserve configured, conflicting or disabled entries.');
+        write(t('dry_run'));
+        write(t('codex_dry_token'));
+        write(t('codex_preserve'));
       }
-      automaticStatus(write);
-      write('未驗證 PAT、遠端服務或 hook 執行 / PAT, remote service and hooks are not tested.');
+      automaticStatus(write, t);
+      write(t('dry_unverified'));
       return 0;
     }
     if (existing && (!usable || !existing.enabled || (!credential &&
         (envName || transport.http_headers_helper || Object.keys(transport.http_headers || {}).length ||
           Object.keys(transport.env_http_headers || {}).length)))) {
-      write('保留既有 Cairn 設定；請先在 Codex 修復連線、啟用或載入原有憑證 / Existing Cairn entry preserved; repair, enable or load its credential in Codex.');
-      automaticStatus(write); return 0;
+      write(t('codex_repair'));
+      automaticStatus(write, t); return 0;
     }
     if (credential && usable) {
-      write('保留既有 endpoint 與憑證 / Existing endpoint and credential preserved.');
-      automaticStatus(write); return 0;
+      write(t('codex_credential_kept'));
+      automaticStatus(write, t); return 0;
     }
     if (existing) {
-      write(`User-level endpoint: ${transport.url}`);
-      write('支援 OAuth 的服務可交由 Codex 登入，避免明文 PAT / For an OAuth service, let Codex manage login instead of a plaintext PAT:');
-      write('請從沒有專案覆寫的中立目錄執行 / Run from a neutral directory without project overrides:');
-      write('codex mcp login cairn');
-      if (!interactive || (await prompt('保留 OAuth 登入路徑，或改存 PAT？/ Keep OAuth login or save a PAT? [OAuth/pat]: ')).trim().toLowerCase() !== 'pat') {
-        write('保留 user-level 設定；請執行上方登入指令 / User-level configuration preserved; run the login command above.');
-        automaticStatus(write); return 0;
+      write(t('codex_oauth'));
+      write(t('codex_neutral'));
+      write(t('codex_login_command'));
+      if (!interactive || (await prompt(t('codex_oauth_prompt'))).trim().toLowerCase() !== 'pat') {
+        write(t('codex_login_kept'));
+        automaticStatus(write, t); return 0;
       }
     }
     if (!interactive) {
-      write('尚待設定，未收取 PAT / Configuration pending; no PAT collected.');
-      fallback(write); automaticStatus(write); return 0;
+      write(t('codex_pending'));
+      fallback(write, t); automaticStatus(write, t); return 0;
     }
     await mkdir(home, { recursive: true, mode: 0o700 });
     const homeStat = await lstat(home);
     if (!homeStat.isDirectory() || homeStat.isSymbolicLink() ||
         (process.getuid && homeStat.uid !== process.getuid()) || (homeStat.mode & 0o022)) {
-      throw fail('Codex 目錄權限不安全 / Unsafe Codex directory; inspect ownership and permissions.');
+      throw fail('codex_directory');
     }
-    const endpoint = existing ? transport.url.slice(0, -8) :
-      ((await prompt('Cairn endpoint [https://cairn.ink]: ')).trim() || 'https://cairn.ink').replace(/\/$/u, '');
-    if (!validEndpoint(endpoint)) throw fail('Endpoint 必須是 HTTPS 或本機 loopback HTTP，且不含帳密或 query / Invalid endpoint.');
+    const endpoint = await selectEndpoint({ endpointOverride, existingEndpoint: existing ? transport.url.slice(0, -8) : undefined,
+      prompt, write: existing || endpointOverride ? () => {} : write, t });
     // No secrets in argv/env. Native Codex TOML parsing validates the whole candidate
     // in a private isolated CODEX_HOME before atomically replacing the user's file.
     const candidate = token => before.text + (before.text ? (before.text.endsWith('\n') ? '\n' : '\n\n') : '') +
@@ -253,7 +260,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
         const saved = await get({ env: { ...process.env, CODEX_HOME: validationHome } });
         if (!saved.enabled || saved.transport.type !== 'streamable_http' ||
             saved.transport.url !== endpoint + '/api/mcp' || saved.transport.http_headers?.Authorization !== 'Bearer ' + token) {
-          throw fail('Codex 未讀取候選設定；原設定保留 / Codex did not read the candidate; original configuration preserved.');
+          throw fail('codex_candidate');
         }
       } finally { await rm(candidatePath, { force: true }); }
     };
@@ -261,36 +268,36 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     const lockPath = join(home, '.cairn-setup.lock');
     try {
       await validate('cairn-synthetic-config-check');
-      write(`將保存的 endpoint / Endpoint to save: ${endpoint + '/api/mcp'}`);
-      write('PAT 會以明文保存在 Codex config.toml（0600）；Codex 原生讀取，不使用 keyring / PAT stored in native config.toml (0600, plaintext; no keyring).');
-      write(`建立 PAT，稍後貼上一次 / Create a PAT, then paste once: ${tokenURL}`);
-      if (!flags.includes('--no-browser')) await browse(write, tokenURL);
-      const token = await prompt('PAT（隱藏輸入 / hidden input）: ', { secret: true });
-      if (!token || token.length > 8192 || /[\s\x00-\x1f\x7f]/u.test(token)) throw fail('PAT 不可為空白或包含空白字元 / Invalid PAT.');
+      write(t('codex_endpoint_save', { url: endpoint + '/api/mcp' }));
+      write(t('codex_plaintext'));
+      write(t('create_pat', { url: new URL('/settings/tokens', endpoint).href }));
+      if (!flags.includes('--no-browser')) await browse(write, new URL('/settings/tokens', endpoint).href);
+      const token = await prompt(t('token_prompt'), { secret: true });
+      if (!token || token.length > 8192 || /[\s\x00-\x1f\x7f]/u.test(token)) throw fail('token_invalid');
       await validate(token);
       try { lock = await open(lockPath, 'wx', 0o600); }
       catch (error) {
-        if (error.code === 'EEXIST') throw fail('另一個安裝器正在設定；確認已停止後再移除 .cairn-setup.lock / Setup lock exists; remove it only after checking other setup processes have stopped.');
+        if (error.code === 'EEXIST') throw fail('codex_lock');
         throw error;
       }
-      if (!unchanged(before, await snapshot(configPath))) throw fail('設定在輸入期間已變更，請重跑 / Configuration changed while pairing; retry.');
+      if (!unchanged(before, await snapshot(configPath))) throw fail('codex_concurrent');
       stage = join(home, `.cairn-config-${process.pid}-${Date.now()}.tmp`);
       await privateWrite(stage, candidate(token));
-      if (!unchanged(before, await snapshot(configPath))) throw fail('設定已變更，請重跑 / Configuration changed; retry.');
+      if (!unchanged(before, await snapshot(configPath))) throw fail('codex_changed');
       await rename(stage, configPath); stage = null;
       const saved = await get({ env: { ...process.env, CODEX_HOME: home } });
       if (!saved.enabled || saved.transport.url !== endpoint + '/api/mcp' ||
           saved.transport.http_headers?.Authorization !== 'Bearer ' + token) {
-        throw fail('已保存，但 user-level 驗證失敗；請檢查 Codex 設定 / Saved, but neutral user-level verification failed; inspect Codex config.');
+        throw fail('codex_saved_unverified');
       }
-      write('Cairn MCP 與 PAT 已保存 / Cairn MCP and PAT saved.');
+      write(t('codex_saved'));
     } finally {
       if (stage) await rm(stage, { force: true });
       if (lock) { await lock.close(); await rm(lockPath); }
       await rm(validationHome, { recursive: true, force: true });
     }
-    automaticStatus(write);
-    write('重新啟動 Codex，以 /mcp 檢查工具 / Restart Codex and inspect tools with /mcp.');
+    automaticStatus(write, t);
+    write(t('codex_restart'));
     return 0;
   } finally { await rm(neutral, { recursive: true, force: true }); }
 }

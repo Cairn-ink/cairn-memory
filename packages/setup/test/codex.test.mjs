@@ -46,7 +46,7 @@ async function fixture(t, options = {}) {
   const result = await new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [harness, ...(options.args ?? ['setup', '--client', 'codex', '--no-browser'])], {
       cwd: workspace.path, stdio: ['ignore', 'pipe', 'pipe'],
-      env: { PATH: options.relativePath ? 'bin' : fakeBin, HOME: workspace.path, TMPDIR: options.projectTmp ? projectTmp : process.env.TMPDIR, FAKE_CALLS: callsPath, FAKE_STATE: statePath,
+      env: { LANG: 'en_US.UTF-8', PATH: options.relativePath ? 'bin' : fakeBin, HOME: workspace.path, TMPDIR: options.projectTmp ? projectTmp : process.env.TMPDIR, FAKE_CALLS: callsPath, FAKE_STATE: statePath,
         ...(options.customHome ? { CODEX_HOME: home } : {}), ...options.env },
     });
     let stdout = '', stderr = '';
@@ -104,7 +104,7 @@ test('configured Codex is idempotent and status never prints native secret outpu
     const result = await fixture(t, { config: configured, args: [action, '--client', 'codex'] });
     assert.equal(result.code, 0); assert.equal(result.config, configured); assert.equal(result.mode, 0o644);
     assert.deepEqual(result.prompts, []); assert.deepEqual(result.files, ['config.toml']);
-    assert.match(result.stdout, /Credential: 已設定/);
+    assert.match(result.stdout, /Credential: configured/);
   }
 });
 
@@ -112,7 +112,7 @@ test('existing HTTP endpoint without credential prompts only for PAT', async t =
   const result = await fixture(t, { config: endpoint, answers: ['pat', secret] });
   assert.equal(result.code, 0, result.stdout); assert.equal(result.prompts.length, 2);
   assert.equal(result.prompts[1].options.secret, true); assert.equal(result.mode, 0o600);
-  assert.match(result.stdout, /User-level endpoint: https:\/\/cairn\.ink\/api\/mcp/);
+  assert.match(result.stdout, /Cairn endpoint: https:\/\/cairn\.ink \(from existing config\)/);
 });
 
 for (const config of [endpoint + 'enabled = false\n', '[mcp_servers.cairn]\ncommand = "other"\n',
@@ -244,7 +244,7 @@ test('trusted-project-only Cairn entry cannot select a header-only user config o
 test('project layer cannot override the existing user-level Cairn endpoint', async t => {
   const result = await fixture(t, { config: endpoint, projectConfig: '[mcp_servers.cairn]\nurl = "http://127.0.0.1:18768/api/mcp"\n', answers: ['pat', secret] });
   assert.equal(result.code, 0, result.stdout); assert.ok(result.config.includes('url = "https://cairn.ink/api/mcp"'));
-  assert.doesNotMatch(result.stdout, /18768/); assert.match(result.stdout, /User-level endpoint: https:\/\/cairn\.ink/);
+  assert.doesNotMatch(result.stdout, /18768/); assert.match(result.stdout, /Cairn endpoint: https:\/\/cairn\.ink \(from existing config\)/);
 });
 
 for (const authStatus of ['not_logged_in', 'unknown', 'unsupported']) {
@@ -278,4 +278,27 @@ test('an incomplete user header table fails rather than borrowing a project tran
 test('relative CLI PATH entries still work after moving to neutral cwd', async t => {
   const result = await fixture(t, { relativePath: true });
   assert.equal(result.code, 0, result.stdout); assert.equal(result.mode, 0o600);
+});
+
+
+test('Codex shares language selection and explicit endpoint precedence', async t => {
+  const result = await fixture(t, { args: ['setup', '--client', 'codex', '--no-browser', '--endpoint', 'https://selected.example/', '--lang', 'zh'], answers: [secret], env: { LANG: 'C' } });
+  assert.equal(result.code, 0, result.stdout);
+  assert.match(result.config, /url = "https:\/\/selected\.example\/api\/mcp"/);
+  assert.equal(result.prompts.length, 1); assert.equal(result.prompts[0].options.secret, true);
+  assert.match(result.stdout, /Cairn endpoint：https:\/\/selected\.example（來自 --endpoint）/u);
+  assert.match(result.stdout, /Cairn MCP 與 PAT 已保存/u); assert.doesNotMatch(result.stdout, /Cairn MCP and PAT saved/);
+});
+
+test('Codex explicit endpoint cannot silently replace an existing credential target', async t => {
+  const result = await fixture(t, { config: configured, args: ['setup', '--client', 'codex', '--endpoint', 'https://selected.example'] });
+  assert.equal(result.code, 2); assert.equal(result.config, configured); assert.deepEqual(result.prompts, []);
+  assert.match(result.stdout, /differs from existing Codex config/);
+});
+
+test('Codex reports the existing origin when preserving configuration', async t => {
+  const result = await fixture(t, { config: configured });
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Cairn endpoint: https:\/\/cairn\.ink \(from existing config\)/);
+  assert.doesNotMatch(result.stdout, /[\p{Script=Han}]/u);
 });

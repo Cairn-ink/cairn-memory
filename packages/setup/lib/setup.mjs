@@ -1,3 +1,6 @@
+import { parseOptions, selectEndpoint, validEndpoint } from './options.mjs';
+export { validEndpoint } from './options.mjs';
+import { detectLanguage, translator } from './messages.mjs';
 import { dispatchClient } from './codex.mjs';
 import { spawn } from 'node:child_process';
 import { writeSync, readFileSync } from 'node:fs';
@@ -20,37 +23,28 @@ export function supportedNode(version) {
   return major > 22 || (major === 22 && minor >= 16);
 }
 
-export function validEndpoint(value) {
-  try {
-    const url = new URL(value);
-    return !/[\s\x00-\x1f\x7f]/u.test(value) && !url.username && !url.password &&
-      !url.search && !url.hash && url.pathname === '/' &&
-      (url.protocol === 'https:' || (url.protocol === 'http:' &&
-        ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)));
-  } catch { return false; }
-}
-
 // readline owns raw mode while active; every exit closes it and restores the TTY.
 // Suppress ALL readline writes for a secret, including pasted text and redraws.
-export async function ask(question, { secret = false } = {}) {
-  const output = secret ? new Writable({ write(_chunk, _encoding, done) { done(); } }) : process.stdout;
-  const rl = createInterface({ input: process.stdin, output, terminal: Boolean(process.stdin.isTTY) });
-  writeSync(1, question);
+export async function ask(question, { secret = false, input = process.stdin, output = process.stdout } = {}) {
+  const visible = output;
+  const hidden = new Writable({ write(_chunk, _encoding, done) { done(); } });
+  const rl = createInterface({ input, output: secret ? hidden : output, terminal: Boolean(input.isTTY) });
+  if (secret) visible.write(question);
   try {
     return await new Promise((resolve, reject) => {
       let settled = false;
       const fail = (code = 1) => {
         if (settled) return;
         settled = true;
-        reject(new SetupError('輸入已取消 / Input cancelled.', code));
+        reject(new SetupError('input_cancelled', code));
       };
       rl.once('SIGINT', () => { fail(130); rl.close(); });
       rl.once('close', () => fail());
-      rl.question('').then(value => { settled = true; resolve(value); }, () => fail());
+      rl.question(secret ? '' : question).then(value => { settled = true; resolve(value); }, () => fail());
     });
   } finally {
     rl.close();
-    if (secret) writeSync(1, '\n');
+    if (secret) visible.write('\n');
   }
 }
 
@@ -90,7 +84,7 @@ function checked(result, args) {
   if (result.error?.code === 130) throw result.error;
   if (result.error || result.status !== 0) {
     const code = Number.isInteger(result.status) && result.status > 0 ? result.status : 1;
-    throw new SetupError(`指令失敗 / Command failed: claude ${args.join(' ')} (exit ${code}).`, code);
+    throw new SetupError('command_failed', code, { client: 'claude', args: args.join(' '), code });
   }
   return result.stdout;
 }
@@ -101,7 +95,7 @@ function json(result, args, isValid) {
     const parsed = JSON.parse(value);
     if (isValid(parsed)) return parsed;
   } catch { /* Never reproduce invalid output. */ }
-  throw new SetupError(`無法解析 CLI 狀態 / Cannot read CLI state: claude ${args.join(' ')}.`);
+  throw new SetupError('claude_state_error', 1, { args: args.join(' ') });
 }
 
 async function supports(args, pattern, runCLI = run) {
@@ -109,20 +103,18 @@ async function supports(args, pattern, runCLI = run) {
   return !result.error && result.status === 0 && pattern.test(result.stdout);
 }
 
-function manual(write) {
-  write('請在 Claude Code 執行 / Run inside Claude Code:');
-  write(`/plugin marketplace add ${repository}`);
-  write(`/plugin install ${plugin}`);
-  configureInstructions(write);
+function manual(write, t) {
+  write(t('claude_manual'));
+  write(t('manual_marketplace', { repository }));
+  write(t('manual_install', { plugin }));
+  configureInstructions(write, t);
 }
 
-function configureInstructions(write) {
-  write(`建立 PAT / Create a PAT: ${tokenURL}`);
-  write(`/plugin configure ${plugin}`);
-  write('在 Configure options 填入 api_endpoint（預設 https://cairn.ink）與敏感欄位 api_token。');
-  write('Enter api_endpoint (default https://cairn.ink) and api_token in Configure options.');
-  write('也可開啟 /plugin → Installed → Cairn.ink Memory → Configure options。');
-  write('Or open /plugin → Installed → Cairn.ink Memory → Configure options.');
+function configureInstructions(write, t) {
+  write(t('create_pat', { url: tokenURL }));
+  write(t('manual_configure', { plugin }));
+  write(t('configure_options'));
+  write(t('configure_menu'));
 }
 
 async function oldMCP(runCLI = run) {
@@ -160,17 +152,20 @@ export function browserCommand(url, platform = process.platform, wsl = /microsof
     wsl ? ['rundll32.exe', ['url.dll,FileProtocolHandler', url]] : ['xdg-open', [url]];
 }
 
-async function openBrowser(write, url, signal) {
+async function openBrowser(write, url, signal, t = translator(detectLanguage())) {
   const command = browserCommand(url);
   const result = await execute(command[0], command[1], { discard: true, timeout: 10000, signal });
-  if (result.error || result.status !== 0) write(`請手動開啟 / Open manually: ${url}`);
+  if (result.error || result.status !== 0) write(t('open_manually', { url }));
 }
 
 export async function main(argv, {
   write = line => writeSync(1, `${line}\n`), prompt = ask,
   interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY),
   browse = openBrowser, nodeVersion = process.versions.node, authOptions = {},
+  env = process.env, locale = Intl.DateTimeFormat().resolvedOptions().locale,
 } = {}) {
+  let t = translator(detectLanguage(env, locale));
+  const launchBrowser = (write, url, signal) => browse(write, url, signal, t);
   const controller = new AbortController();
   const interrupt = () => controller.abort();
   process.on('SIGINT', interrupt);
@@ -186,36 +181,38 @@ export async function main(argv, {
       checked(await run(args, input, { timeout, discard: true }), args);
       const saved = await configuration(run, { timeout: Math.max(1, deadline - now()) });
       if (!['api_endpoint', 'api_token'].every(key => saved.configured.includes(key))) {
-        throw new SetupError('設定未保存完整 / Configuration was not fully saved. Use /plugin configure.');
+        throw new SetupError('configuration_incomplete');
       }
     } finally { input.fill(0); input = undefined; }
   };
   try {
-    const dispatch = await dispatchClient(argv, { write, prompt, interactive, browse,
-      nodeVersion, supportedNode, SetupError, validEndpoint });
+    const options = parseOptions(argv);
+    if (options.lang) t = translator(options.lang);
+    const endpointOverride = options.endpoint;
+    const dispatch = await dispatchClient(options.argv, { write, prompt, interactive, browse: launchBrowser,
+      nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride });
     if (dispatch.handled) return dispatch.code;
     argv = dispatch.argv;
     const [action, ...flags] = argv;
     if (action === '--help' || action === '-h' || action === undefined) {
-      write('用法 / Usage: npx @cairn-ink/memory setup [--dry-run] [--no-browser] [--manual-token] [--reauthorize]');
-      write('             npx @cairn-ink/memory status');
+      write(t('help'));
       return 0;
     }
     if (!['setup', 'status'].includes(action) ||
         flags.some(flag => !['--dry-run', '--no-browser', '--manual-token', '--reauthorize'].includes(flag)) ||
         (action === 'status' && flags.length)) {
-      throw new SetupError('未知指令或選項 / Unknown command or option. Use --help.', 2);
+      throw new SetupError('unknown_command', 2);
     }
     if (!supportedNode(nodeVersion)) {
-      throw new SetupError('需要 Node.js ≥22.16 / Node.js ≥22.16 is required. Upgrade Node and retry.');
+      throw new SetupError('node_required');
     }
-    write(`安裝器 / Installer @cairn-ink/memory ${installerVersion}（與外掛版本不同 / separate from plugin version）`);
+    write(t('installer_version', { version: installerVersion }));
     const version = await run(['--version']);
     if (version.error?.code === 'ENOENT') {
-      throw new SetupError('找不到 claude CLI / claude CLI not found on PATH. Install Claude Code: https://code.claude.com/docs/en/setup');
+      throw new SetupError('claude_missing');
     }
     checked(version, ['--version']);
-    write('Node.js 與 Claude Code 可用 / Node.js and Claude Code are available.');
+    write(t('claude_available'));
 
     const canInstall = await supports(['plugin', 'marketplace', 'add'], /Usage: claude plugin marketplace add\b/u, run) &&
       await supports(['plugin', 'install'], /Usage: claude plugin install\b/u, run);
@@ -225,68 +222,68 @@ export async function main(argv, {
       await supports(['plugin', 'configure'], /--json\b/u, run);
 
     if (action === 'status') {
-      if (!canList) throw new SetupError('此版本無法讀取 plugin 狀態 / This CLI cannot list plugin state. Update Claude Code.');
-      write(`Marketplace: ${(await marketplaces(run)).some(value => value.name === 'cairn-memory') ? '已加入 / added' : '未加入 / absent'}`);
+      if (!canList) throw new SetupError('claude_list_required');
+      write(t('marketplace_status', { state: (await marketplaces(run)).some(value => value.name === 'cairn-memory') ? t('added') : t('absent') }));
       const entries = await installed(run);
-      if (!entries.length) write('Plugin: 未安裝 / not installed');
+      if (!entries.length) write(t('plugin_absent'));
       for (const entry of entries) {
         const scope = ['user', 'project', 'local', 'managed'].includes(entry.scope) ? entry.scope : 'unknown';
-        write(`Plugin (${scope}): ${entry.enabled === true ? '已啟用 / enabled' : '停用 / disabled'}`);
-        if (entry.errors?.length) throw new SetupError('Plugin 載入失敗 / Plugin has load errors. Inspect /plugin in Claude Code.');
+        write(t('plugin_status', { scope, state: entry.enabled === true ? t('enabled') : t('disabled') }));
+        if (entry.errors?.length) throw new SetupError('plugin_load_error');
       }
       if (entries.length && canConfigure) {
         const config = await configuration(run);
         for (const key of ['api_endpoint', 'api_token']) {
-          write(`${key}: ${config.configured.includes(key) ? '已設定 / configured' : '未設定 / unset'}`);
+          write(t('option_status', { key, state: config.configured.includes(key) ? t('configured') : t('unset') }));
         }
-      } else if (entries.length) write('設定狀態無法確認 / Configuration status unavailable; inspect /plugin configure.');
-      write(`Legacy MCP cairn: ${await oldMCP(run) ? '存在 / present (duplicate tools possible)' : '不存在 / absent'}`);
-      write('此狀態未驗證 PAT、遠端服務或 hook 執行 / Status does not test the PAT, service or hooks.');
+      } else if (entries.length) write(t('configuration_unavailable'));
+      write(t('legacy_status', { state: await oldMCP(run) ? t('legacy_present') : t('legacy_absent') }));
+      write(t('status_unverified'));
       return 0;
     }
 
     if (flags.includes('--dry-run')) {
-      write('預演：只檢查，不修改 / Dry run: inspect only, no changes.');
-      write('1. 檢查 Node ≥22.16 與 claude CLI / Check Node ≥22.16 and claude CLI.');
-      write(`2. claude plugin marketplace add ${repository} (if absent)`);
-      write('   claude plugin marketplace update cairn-memory (if already present)');
-      write(`3. claude plugin install ${plugin} (user scope); plugin update if already installed`);
-      write('4. 確認 endpoint，瀏覽器授權（S256），或 --manual-token 隱藏輸入 / Confirm endpoint and authorize in browser (S256), or hidden manual token.');
-      write(canConfigure ? `5. claude plugin configure ${plugin} --values-stdin (JSON through stdin; token never printed)` :
-        '5. 由 Claude Code 詢問 endpoint 與 token / Configure endpoint and token inside Claude Code.');
-      write('6. claude mcp get cairn; if present, ask before: claude mcp remove cairn');
-      write('7. 重新啟動 Claude Code / Restart Claude Code.');
-      if (!canInstall) manual(write);
+      write(t('dry_run'));
+      write(t(endpointOverride ? 'endpoint_flag' : 'endpoint_default', { endpoint: endpointOverride ?? endpointDefault }));
+      write(t('dry_checks'));
+      write(t('dry_marketplace', { repository }));
+      write(t('dry_plugin', { plugin }));
+      write(t('dry_authorize'));
+      write(canConfigure ? t('dry_configure', { plugin }) :
+        t('dry_manual'));
+      write(t('dry_remove'));
+      write(t('dry_restart'));
+      if (!canInstall) manual(write, t);
       else if (canList) {
-        write(`Marketplace: ${(await marketplaces(run)).some(value => value.name === 'cairn-memory') ? '已加入 / added' : '未加入 / absent'}`);
-        write(`Plugin: ${(await installed(run)).length ? '已安裝 / installed' : '未安裝 / absent'}`);
+        write(t('marketplace_status', { state: (await marketplaces(run)).some(value => value.name === 'cairn-memory') ? t('added') : t('absent') }));
+        write(t('plugin_presence', { state: (await installed(run)).length ? t('installed') : t('absent') }));
       }
-      write('Legacy MCP: 預演不執行可能連網的 mcp get / Dry run skips potentially networked mcp get.');
+      write(t('dry_legacy'));
       return 0;
     }
-    if (!interactive) throw new SetupError('授權需要互動式 TTY / Authorization requires an interactive TTY. Use setup in a terminal.', 2);
+    if (!interactive) throw new SetupError('tty_required', 2);
     if (!canInstall) {
-      write('此 CLI 不支援自動安裝 / This CLI needs manual installation.');
-      manual(write);
+      write(t('claude_manual_required'));
+      manual(write, t);
       return 1;
     }
     if (!canList || !canConfigure) {
-      manual(write);
-      throw new SetupError('請更新 Claude Code：需要 plugin list 與安全的 configure --values-stdin / Update Claude Code: plugin list and secure configure --values-stdin are required.');
+      manual(write, t);
+      throw new SetupError('claude_capabilities_required');
     }
     const marketplaceExists = (await marketplaces(run)).some(value => value.name === 'cairn-memory');
     const previous = await installed(run);
     const updateScopes = [...new Set(previous.map(entry => entry.scope))].filter(scope => ['user', 'project', 'local'].includes(scope));
     if (marketplaceExists && !await supports(['plugin', 'marketplace', 'update'], /Usage: claude plugin marketplace update\b/u, run)) {
-      throw new SetupError('需要更新 marketplace 的 CLI 功能 / Update Claude Code: marketplace update is required.');
+      throw new SetupError('marketplace_update_required');
     }
     if (updateScopes.length && !await supports(['plugin', 'update'], /Usage: claude plugin update\b/u, run)) {
-      throw new SetupError('需要更新 plugin 的 CLI 功能 / Update Claude Code: plugin update is required.');
+      throw new SetupError('plugin_update_required');
     }
     const marketplaceArgs = marketplaceExists ? ['plugin', 'marketplace', 'update', 'cairn-memory'] :
       ['plugin', 'marketplace', 'add', repository];
     checked(await run(marketplaceArgs), marketplaceArgs);
-    write('Marketplace 已就緒 / Marketplace ready.');
+    write(t('marketplace_ready'));
     const userInstalled = previous.some(entry => entry.scope === 'user');
     for (const scope of updateScopes) {
       const updateArgs = ['plugin', 'update', plugin, '--scope', scope];
@@ -298,49 +295,50 @@ export async function main(argv, {
     }
     const entries = await installed(run);
     if (!entries.some(entry => entry.scope === 'user') || entries.some(entry => entry.errors?.length)) {
-      throw new SetupError('安裝後無法確認 plugin / Cannot confirm plugin after installation. Inspect /plugin.');
+      throw new SetupError('plugin_unconfirmed');
     }
     for (const entry of entries) {
       const version = typeof entry.version === 'string' && /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/u.test(entry.version) ? entry.version : null;
-      if (!version) throw new SetupError('無法確認已安裝的外掛版本 / Cannot confirm installed plugin version. Inspect /plugin.');
-      write(`已安裝 Cairn Memory 外掛 ${version} / Installed Cairn Memory plugin ${version} (${entry.scope === 'user' ? 'user' : 'other'} scope).`);
+      if (!version) throw new SetupError('plugin_version_unconfirmed');
+      write(t('plugin_version', { version, scope: ['user', 'project', 'local', 'managed'].includes(entry.scope) ? entry.scope : 'unknown' }));
     }
     if (!entries.every(entry => entry.enabled === true)) {
-      write('Plugin 已停用，請到 /plugin 啟用 / Plugin is disabled; enable it in /plugin.');
+      write(t('plugin_disabled'));
       return 0;
     }
     const config = await configuration(run);
     let ready = ['api_endpoint', 'api_token'].every(key => config.configured.includes(key));
     if (ready && !flags.includes('--reauthorize')) {
-      write('保留既有憑證；要換發請使用 --reauthorize / Keeping existing credential; use --reauthorize to replace it.');
+      if (endpointOverride) throw new SetupError('endpoint_reauthorize', 2);
+      write(t('endpoint_config_private'));
+      write(t('credential_kept'));
     } else if (config.configured.includes('api_token') && !flags.includes('--reauthorize')) {
-      throw new SetupError('保留既有憑證，但 endpoint 尚未設定；請以 /plugin configure 補齊，或 --reauthorize 重新授權 / Existing credential kept, but endpoint is unset. Complete /plugin configure or use --reauthorize.');
+      throw new SetupError('credential_endpoint_unset');
     } else {
-      const endpoint = ((await prompt('確認 Cairn endpoint / Confirm endpoint [https://cairn.ink]: ')).trim() || endpointDefault).replace(/\/$/u, '');
-      if (!validEndpoint(endpoint)) throw new SetupError('Endpoint 必須是 HTTPS 或本機 loopback HTTP 的 origin，且不含帳密或 query / Invalid endpoint. Use an HTTPS or loopback HTTP origin without credentials or a query.');
+      const endpoint = await selectEndpoint({ endpointOverride, prompt, write, t });
       let manualToken = flags.includes('--manual-token');
       if (!manualToken) {
-        const authorization = await browserAuthorize(endpoint, { ...authOptions, write, browse,
+        const authorization = await browserAuthorize(endpoint, { ...authOptions, write, browse: launchBrowser, t,
           noBrowser: flags.includes('--no-browser'), save, signal });
         if (authorization.unsupported) {
-          write('伺服器尚未支援瀏覽器授權（404/501），改用隱藏 PAT 輸入；也可使用 --manual-token / Server does not support browser authorization (404/501); falling back to hidden PAT input. --manual-token is also available.');
+          write(t('browser_unsupported'));
           manualToken = true;
-        } else write(`Cairn Memory 已連線，憑證將於 ${new Date(authorization.expiresAt).toLocaleDateString('zh-TW')} 到期。 / Cairn Memory is connected. Credential expires ${new Date(authorization.expiresAt).toLocaleDateString('en-US')}.`);
+        } else write(t('connected_expiry', { date: new Date(authorization.expiresAt).toLocaleDateString(t.locale) }));
       }
       if (manualToken) {
         let token;
         try {
           const url = new URL('/settings/tokens', endpoint).href;
-          write(`建立 PAT，稍後貼上一次 / Create a PAT, then paste it once: ${url}`);
-          if (!flags.includes('--no-browser')) await browse(write, url, signal);
-          token = await prompt('PAT（隱藏輸入 / hidden input）: ', { secret: true });
-          if (!validToken(token)) throw new SetupError('PAT 不可為空白或包含空白字元 / PAT must be non-empty and contain no whitespace.');
+          write(t('create_pat', { url }));
+          if (!flags.includes('--no-browser')) await launchBrowser(write, url, signal);
+          token = await prompt(t('token_prompt'), { secret: true });
+          if (!validToken(token)) throw new SetupError('token_invalid');
           const checkedCredential = await credentialCheck(endpoint, token, { ...authOptions, signal });
           await save({ api_endpoint: endpoint, api_token: token });
-          if (!checkedCredential) write('設定已保存，尚未驗證（舊伺服器 404/501）/ Configured, not verified (older server 404/501).');
+          if (!checkedCredential) write(t('manual_unverified'));
           else write(checkedCredential.expires_at ?
-            `Cairn Memory 已連線，憑證到期日 / Cairn Memory connected; credential expires: ${new Date(checkedCredential.expires_at).toLocaleDateString()}` :
-            'Cairn Memory 已連線；此人工憑證未提供到期日 / Cairn Memory connected; this manual credential has no reported expiry.');
+            t('manual_expiry', { date: new Date(checkedCredential.expires_at).toLocaleDateString(t.locale) }) :
+            t('manual_no_expiry'));
         } finally { token = undefined; }
       }
       ready = true;
@@ -348,22 +346,23 @@ export async function main(argv, {
 
     const existingMCP = await oldMCP(run);
     if (existingMCP && ready && interactive) {
-      const answer = await prompt('找到舊 MCP cairn，移除以避免重複工具？/ Remove legacy MCP cairn to avoid duplicate tools? [y/N]: ');
+      const answer = await prompt(t('legacy_prompt'));
       if (/^(?:y|yes)$/iu.test(answer.trim())) {
         const args = ['mcp', 'remove', 'cairn'];
         checked(await run(args), args);
-        write('已移除舊 MCP / Legacy MCP removed.');
-      } else write('保留舊 MCP / Legacy MCP kept.');
+        write(t('legacy_removed'));
+      } else write(t('legacy_kept'));
     } else if (existingMCP) {
-      write('舊 MCP 已保留；完成 plugin 設定後，再確認是否移除 / Legacy MCP kept; confirm removal after plugin configuration.');
-      write('claude mcp remove cairn');
+      write(t('legacy_pending'));
+      write(t('legacy_remove_command'));
     }
-    write('重新啟動 Claude Code 並送一則訊息，再用 /cairn-memory:status 檢查 / Restart Claude Code and send a message, then run /cairn-memory:status.');
+    write(t('claude_restart'));
     return 0;
   } catch (error) {
     // Unexpected exceptions may embed secret-bearing child data: do not log them.
+    if (error.language) t = translator(error.language);
     if (signal.aborted) error = new AuthError('interrupted');
-    write(error instanceof SetupError ? error.message : '設定失敗 / Setup failed. Retry or use the manual plugin steps.');
+    write(error instanceof SetupError ? t(error.key, error.params) : t('setup_failed'));
     return error instanceof SetupError ? error.code : 1;
   } finally { process.off('SIGINT', interrupt); }
 }
