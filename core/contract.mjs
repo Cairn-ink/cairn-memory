@@ -18,6 +18,7 @@ import { captureMessages } from './capture.mjs';
 import { planCaptureMessageBatches } from './capture-batch-planning.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
+import { createRareQueryLabels, RARE_QUERY_WINDOW_VERSION } from './rare-query-preview.mjs';
 import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT,
   SOURCE_QUERY_CANDIDATE_VERSION, SOURCE_QUERY_RECEIPT_LIMIT,
   BOUNDED_KEYSET_SOURCE_CANDIDATES } from './query-candidates.mjs';
@@ -150,7 +151,7 @@ function failure(error) {
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
   object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
-    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview']);
+    'captureDeadlineMs', 'sourceCandidatePolicy', 'navigationLabelPolicy', 'sessionEpisodes', 'decisionReview']);
   const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
   const captureSourcePolicy = policyDescriptor?.value;
@@ -164,6 +165,13 @@ export function openMemoryCore(input) {
   const sourceCandidateDescriptor = Object.getOwnPropertyDescriptor(input, 'sourceCandidatePolicy');
   const sourceCandidatePolicy = sourceCandidateDescriptor?.value;
   if (sourceCandidateDescriptor && (!Object.hasOwn(sourceCandidateDescriptor, 'value') ||
+      sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version)) {
+    throw new MemoryStoreError('invalid_input');
+  }
+  const navigationLabelDescriptor = Object.getOwnPropertyDescriptor(input, 'navigationLabelPolicy');
+  const navigationLabelPolicy = navigationLabelDescriptor?.value;
+  if (navigationLabelDescriptor && (!Object.hasOwn(navigationLabelDescriptor, 'value') ||
+      navigationLabelPolicy !== RARE_QUERY_WINDOW_VERSION ||
       sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version)) {
     throw new MemoryStoreError('invalid_input');
   }
@@ -653,6 +661,7 @@ export function openMemoryCore(input) {
         physicalPage: BOUNDED_KEYSET_SOURCE_CANDIDATES.page,
         top: BOUNDED_KEYSET_SOURCE_CANDIDATES.top,
       });
+      if (navigation?.rareLabels) Object.assign(binding, { labelPolicy: RARE_QUERY_WINDOW_VERSION });
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
@@ -664,7 +673,8 @@ export function openMemoryCore(input) {
         if (!snapshot) {
           snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt,
             ...(navigation.sourceMode ? { sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT } : {}),
-            ...(navigation.sourceCandidatePolicy ? { sourceCandidatePolicy: navigation.sourceCandidatePolicy } : {}) });
+            ...(navigation.sourceCandidatePolicy ? { sourceCandidatePolicy: navigation.sourceCandidatePolicy } : {}),
+            ...(navigation.rareLabels ? { rareLabels: navigation.rareLabels } : {}) });
           navigation.pages.set(key, snapshot);
         }
         if (cursor && cursor.e !== snapshot.epoch) throw new MemoryStoreError('cursor_stale');
@@ -760,11 +770,14 @@ export function openMemoryCore(input) {
       const query = boundedText(input.query, 4000);
       const count = contractRevision(input.limit ?? 6);
       if (count > 12) throw new MemoryStoreError('invalid_input');
+      const rarePreview = navigationLabelPolicy && isSourceContext(contextMode);
       const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
         ...(isSourceContext(contextMode) ? { sourceMode: contextMode } : {}),
         ...(sourceCandidatePolicy && isSourceContext(contextMode) ? { sourceCandidatePolicy } : {}),
+        ...(rarePreview ? { rareLabels: createRareQueryLabels(query) } : {}),
         queryDigest: createHmac('sha256', cursorSecret)
-          .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
+          .update(JSON.stringify(rarePreview ? [QUERY_EXCERPT_VERSION, query, RARE_QUERY_WINDOW_VERSION]
+            : [QUERY_EXCERPT_VERSION, query])).digest('base64url') };
       const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
         namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
         revision: candidate.revision,

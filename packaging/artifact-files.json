@@ -49,6 +49,7 @@
   "core/qualification-text-catalog.mjs",
   "core/query-candidates.mjs",
   "core/query-excerpt.mjs",
+  "core/rare-query-preview.mjs",
   "core/qualified-transition-schema.mjs",
   "core/qualified-transition-storage.mjs",
   "core/rationale-schema.mjs",

@@ -372,13 +372,15 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     THEN moc.title ELSE NULL END`;
 
   function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
-    sourceCandidatePolicy = null }) {
+    sourceCandidatePolicy = null, rareLabels }) {
     return transaction(db, () => {
       if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
       const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
       if (sourceCandidatePolicy !== null && (!keyset || sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT)) {
         fail('invalid_input');
       }
+      if (rareLabels !== undefined && (typeof rareLabels !== 'function' || !keyset ||
+          sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT)) fail('invalid_input');
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
       // The existing partial index excludes history/tombstones before traversal.
@@ -392,10 +394,12 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         const bodyScore = score(memory.content);
         let candidateScore = bodyScore;
         let winningExcerpt;
+        const sources = rareLabels ? [memory.content] : undefined;
         if (receiptSources) {
           const receipts = receiptSources.all(memory.id, sourceReceiptLimit);
           for (const receipt of receipts) {
             const source = validateSourceReceipt(memory.id, receipt, receiptKey);
+            if (sources) sources.push(source.excerpt);
             const receiptScore = score(source.excerpt);
             // Stable receipt-ID order and strict improvement preserve the first
             // receipt on ties and retain the body label on a body/receipt tie.
@@ -405,7 +409,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
             }
           }
         }
-        return { memory, score: candidateScore, winningExcerpt };
+        return { memory, score: candidateScore, winningExcerpt, ...(sources ? { sources } : {}) };
       };
       const compare = (left, right) => right.score - left.score ||
         (left.memory.id < right.memory.id ? -1 : left.memory.id > right.memory.id ? 1 : 0);
@@ -458,7 +462,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         // into a plausible current result before the model/cursor checks.
         if (epoch(ns) !== currentEpoch) fail('index_revision_conflict');
         scanExhausted = !more && !pruned;
-        for (const candidate of eligible) {
+        for (const candidate of rareLabels ? [] : eligible) {
           candidate.sourceLabel = candidate.winningExcerpt === undefined
             ? undefined : memoryLabel(candidate.winningExcerpt);
         }
@@ -479,6 +483,11 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         scanExhausted = scanned.length <= QUERY_SCAN_LIMIT;
       }
       eligible.sort(compare);
+      if (rareLabels) {
+        const labels = rareLabels(eligible.map(candidate => candidate.sources));
+        if (epoch(ns) !== currentEpoch) fail('index_revision_conflict');
+        eligible.forEach((candidate, index) => { candidate.sourceLabel = labels[index]; });
+      }
       const rows = eligible.map(({ memory, sourceLabel }) => {
         const placement = projectPrepare(`SELECT r.* FROM moc_memory_refs r
           JOIN mocs parent ON parent.id = r.moc_id
