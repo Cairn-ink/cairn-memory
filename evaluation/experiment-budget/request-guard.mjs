@@ -2548,9 +2548,14 @@ function mixedManifest(value) {
     if (typeof value[key] !== 'string' || !SHA256_HEX.test(value[key])) fail('invalid_capability');
   }
   const evidenceOnly = own(value.cairn ?? {}, 'comparisonProfile');
+  const navigation = own(value.cairn ?? {}, 'navigationLabelPolicy');
   exactKeys(value.cairn, ['runtimeArtifactSha256', 'adapterConfigurationSha256',
     'qualificationInputProfile', 'captureSourcePolicy',
-    ...(evidenceOnly ? ['comparisonProfile'] : [])], 'invalid_capability');
+    ...(evidenceOnly ? ['comparisonProfile'] : []),
+    ...(navigation ? ['navigationLabelPolicy'] : [])], 'invalid_capability');
+  if (navigation && (!evidenceOnly || value.cairn.navigationLabelPolicy !== 'rare-query-window-v1')) {
+    fail('invalid_capability');
+  }
   for (const key of ['runtimeArtifactSha256', 'adapterConfigurationSha256']) {
     if (typeof value.cairn[key] !== 'string' || !SHA256_HEX.test(value.cairn[key])) {
       fail('invalid_capability');
@@ -2674,7 +2679,9 @@ function mixedCapabilityRecord(config) {
     experimentDigest: pairHash('cairn.lme.mixed-source-pair.experiment.v1', {
       checkpoint: config.checkpoint, manifest: config.manifest, roster: config.roster,
       limits: config.limits }), schedule: mixedSchedule(config.roster),
-    methodProfile: config.manifest.cairn.comparisonProfile === 'indexed-evidence-v1'
+    methodProfile: own(config.manifest.cairn, 'navigationLabelPolicy')
+      ? 'cairn-mem0-indexed-evidence-rare-query-navigation-source-pair-v1'
+      : config.manifest.cairn.comparisonProfile === 'indexed-evidence-v1'
       ? 'cairn-mem0-indexed-evidence-source-pair-v1' : MIXED_SOURCE_PAIR_METHOD_PROFILE };
 }
 

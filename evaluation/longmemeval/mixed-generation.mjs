@@ -133,7 +133,7 @@ function staticNativeFit(input) {
 }
 
 function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArtifactSha256,
-  comparisonProfile }) {
+  comparisonProfile }, navigationLabelPolicy) {
   const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
   if (typeof cairnRuntimeArtifactSha256 !== 'string' || !SHA256.test(cairnRuntimeArtifactSha256)) {
     fail('invalid_cairn_artifact_descriptor');
@@ -162,6 +162,7 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
     context.captureSourcePolicy = 'indexed-evidence-v1';
     delete context.qualificationDispatchPolicy;
   }
+  if (navigationLabelPolicy) context.navigationLabelPolicy = navigationLabelPolicy;
   const answer = { version: 'mixed-answer-v1', model: MIXED_ANSWER_MODEL,
     instruction: PUBLIC_ANSWER_INSTRUCTION, contextWindow: MIXED_ANSWER_CONTEXT_WINDOW,
     outputTokens: MIXED_ANSWER_OUTPUT_TOKENS, timeoutMs: MIXED_ANSWER_TIMEOUT_MS,
@@ -190,17 +191,22 @@ function protocolManifest({ nativeArtifact, nativeConfiguration, cairnRuntimeArt
       adapterConfigurationSha256: hash(CAIRN_ADAPTER_DOMAIN, cairnAdapter),
       qualificationInputProfile: evidenceOnly ? 'not-requested' : 'adaptive-text-catalog-v1',
       captureSourcePolicy: evidenceOnly ? 'indexed-evidence-v1' : 'indexed-windows-v1',
-      ...(evidenceOnly ? { comparisonProfile } : {}) },
+      ...(evidenceOnly ? { comparisonProfile } : {}),
+      ...(navigationLabelPolicy ? { navigationLabelPolicy } : {}) },
     mem0: { version: '2.2.0', sourceTreeSha256, dependencyLockSha256,
       configurationSha256, wireProfile: structuredClone(mem0WireProfile()) } });
 }
 
 export function prepareMixedComparison(options) {
   const profileDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'comparisonProfile');
+  const navigationDescriptor = Object.getOwnPropertyDescriptor(options ?? {}, 'navigationLabelPolicy');
   const raw = ownOptions(options, ['sourceCases', 'armOrders', 'nativeArtifact',
     'nativeConfiguration', 'cairnRuntimeArtifactSha256',
-    ...(profileDescriptor ? ['comparisonProfile'] : [])], 'invalid_mixed_preparation');
+    ...(profileDescriptor ? ['comparisonProfile'] : []),
+    ...(navigationDescriptor ? ['navigationLabelPolicy'] : [])], 'invalid_mixed_preparation');
   if (profileDescriptor && raw.comparisonProfile !== 'indexed-evidence-v1') fail('invalid_mixed_preparation');
+  if (navigationDescriptor && (raw.navigationLabelPolicy !== 'rare-query-window-v1'
+    || raw.comparisonProfile !== 'indexed-evidence-v1')) fail('invalid_mixed_preparation');
   const source = sourceSnapshot({ sourceCases: raw.sourceCases, armOrders: raw.armOrders });
   dense(source.sourceCases, 1, 250, 'invalid_source_cases');
   dense(source.armOrders, source.sourceCases.length, source.sourceCases.length,
@@ -213,7 +219,7 @@ export function prepareMixedComparison(options) {
       fail('invalid_arm_orders');
     }
   }
-  const manifest = protocolManifest(raw);
+  const manifest = protocolManifest(raw, navigationDescriptor ? raw.navigationLabelPolicy : undefined);
   const preflight = [];
   const plans = [];
   const batchCounts = [];
@@ -304,6 +310,8 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
   const folder = mkdtempSync(path.join(root, 'mixed-cairn-'));
   const modelDiagnostics = createMixedModelDiagnosticObserver();
   const comparisonProfile = guard.mixedSourcePairCapability.manifest.cairn.comparisonProfile;
+  const navigationLabelPolicy = Object.getOwnPropertyDescriptor(
+    guard.mixedSourcePairCapability.manifest.cairn, 'navigationLabelPolicy')?.value;
   const evidenceOnly = comparisonProfile === 'indexed-evidence-v1';
   const model = createOpenAIModel({ apiKey, fetchImpl: transport.track(guard.cairnFetch),
     ...(evidenceOnly ? {} : { qualificationInputMode: 'adaptive-text-catalog-v1' }),
@@ -314,7 +322,8 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
     const core = openMemoryCore({ path: path.join(folder, 'store.db'), model: witness?.model ?? model,
       ...(evidenceOnly ? { captureSourcePolicy: 'indexed-evidence-v1' }
         : { captureQualification: 'source-bound-v2', captureSourcePolicy: 'indexed-windows-v1' }),
-      sourceCandidatePolicy: 'bounded-keyset-v1' });
+      sourceCandidatePolicy: 'bounded-keyset-v1',
+      ...(navigationLabelPolicy ? { navigationLabelPolicy } : {}) });
     holdCore(core);
     verifyMixedCapturePlan({ history: plan.renderedHistory, namespace: row.namespace,
       expectedPlan: plan.cairnPlan, comparisonProfile });

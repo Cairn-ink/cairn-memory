@@ -1996,3 +1996,24 @@ and raw process-memory samples are not latency, peak-memory or production-scale
 guarantees. Default core dependency boundaries, public maps, rank packing,
 final-source selection and capture/privacy defaults remain unchanged. N12 still
 reports Cairn 3/6 versus Mem0 4/6; no new paid run or score overwrite occurred.
+
+## Experimental mixed navigation-policy integration
+
+The [controlled mixed binding](plans/mixed-navigation-policy.md) explicitly
+propagates `rare-query-window-v1` only with the existing indexed-evidence
+comparison. It binds preparation/context, grant method, journal and resource
+identity; omission keeps historical objects/digests unchanged. Real local core
+capture/recall with fake HTTP and a controlled native child demonstrates actual
+select-label anchor visibility, not just configuration echo. This scripted
+selection is not a real-model replay or semantic score. A small complete map
+can bypass select; the diagnostic uses 15 admitted candidates to cross its
+existing 12-candidate namespace boundary, without changing the boundary.
+
+Source/adapter/native protocols and numeric resource ceilings are unchanged;
+the opt-in projection names navigation, not a capture or budget extension.
+Missing-at-write evidence is not recovered, capture remains selected receipts
+rather than a source archive, and public MCP/Hermes/default behavior is not
+activated. Author/tests use no authentic data or paid provider. No new cohort
+was selected or scored; N12 remains Cairn 3/6 versus Mem0 4/6. Future larger
+comparison, same-history 400-budget activation and product adoption require
+their own frozen contracts and gates, not this experimental flag.
