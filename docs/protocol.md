@@ -695,7 +695,7 @@ candidate navigation may score the first four retained receipt excerpts for
 each already current, namespace-owned and published-projection-eligible memory.
 It reads receipts in stable opaque-ID order, which is not event chronology, and
 uses the greatest distinct literal query-token overlap across the generated body
-and those four excerpts. A receipt supplies the existing 120-code-point select
+and those four excerpts. With the default label policy, a receipt supplies the existing 120-code-point select
 preview only when it scores strictly above the body; the first stable-ID receipt
 wins a receipt tie, while a body tie keeps the body preview. The default scans
 at most 1,024 current physical memories per namespace and scores at most 4,096
@@ -713,6 +713,27 @@ relevance. Before any receipt can contribute a score or preview, the core applie
 the same authoritative stored identity, ownership, role, canonical excerpt and
 receipt-key validation used by source output; corrupted rows fail before selector
 invocation.
+
+Experimental trusted embedded callers may additionally set
+`navigationLabelPolicy: 'rare-query-window-v1'`, only together with
+`sourceCandidatePolicy: 'bounded-keyset-v1'`. Default behavior is unchanged.
+For explicit source-mode query navigation only, the already eligible top 1,024
+memories form a temporary text pool: each body and the same first four validated
+receipts, never foreign, historical, deleted or projection-excluded source.
+Each memory contributes at most once per distinct whole query token to document
+frequency within each namespace, not a merged readSet. A token's deterministic
+integer weight is `N + 1 - df`, where N is that namespace's actual top candidate
+memory count and df counts those candidate memories containing the token; the label is
+the highest-weight contiguous original 120-codepoint window across those sources.
+Ties prefer body, stable receipt-ID order and earliest start; no overlap retains
+the body prefix. Ranking score/ID order, scan limits and authoritative final
+source are not changed. No stopword list, normalization, telemetry, persistence
+or model increment is introduced. Only opted-in source-mode cursor bindings and
+query digests include the new label policy version; old/default bindings remain
+unchanged. Every source must still pass the existing validation and epoch fences.
+This pool is authorized transient read processing, not new captured fields,
+permissions or a transcript archive. It cannot guarantee semantic relevance,
+all relevant source windows or continuity across different receipts.
 
 Default recall and automatic rationale discovery remain body-only; public maps
 and the classification topic catalog remain unchanged. Source-aware cursor

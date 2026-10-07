@@ -1956,3 +1956,43 @@ completed. This is evidence of stored-input presentation loss, not an original
 model replay, proof that a different label would be selected, or a ranking-cause
 finding. The generic beyond-page fixture does not establish the actual case-3
 cause, and no benchmark or runtime correction is claimed.
+
+## Experimental rare-query navigation preview
+
+The [bounded opt-in](plans/bounded-navigation-preview.md) changes presentation,
+not candidate scoring/order or retention. Its `N + 1 - df` literal token weights
+are computed separately per namespace: N is its actual top candidate memory count,
+and df counts those memories containing the token across body and the same first
+four validated receipts, once per memory, not across a merged readSet. Labels are
+one original contiguous window of at most 120
+codepoints. Generic-word density can hide a useful literal anchor under the
+default policy. Synthetic label-based selection, independent exhaustive-window
+oracles, Unicode/short A/B/tie/no-overlap cases and privacy/epoch/corruption
+controls exercise the alternative. No semantic oracle target-ID selection is
+used to establish a score.
+
+Primary's owned-copy presentation-only observation kept original store hashes
+unchanged and made no provider, rank or answer calls. On the same query/budgets,
+default select pages showed 32/32 candidates, with canonical complete
+select-input token counts 3,815/3,820; opt-in pages showed 33/33 at 3,697/3,730,
+all within the existing 6,000-token input limit. These use `modelRequestText`
+(system prompt plus input), not map envelopes. Earlier serialized-JSON-only
+diagnostics were 3,819/3,824 → 3,701/3,734 and are not canonical request counts.
+The target remained visible
+in the first page; necessary name/time anchors changed from absent to present
+in its label. Maximum label width remained 120, and common delivered IDs kept
+their relative order, but packed page membership/counts changed. Both reported
+`budget_exhausted`. This is not an original-model replay, semantic recovery,
+ranking-cause proof or benchmark result. The mechanism changes both source choice
+and window weighting, so no actual failure is attributed to either step alone.
+
+One 120-point window still cannot cover widely separated tokens or evidence
+spread across receipts. Rare literal tokens may be irrelevant, and CJK maximal
+runs are not dictionary-segmented; there is no translation, normalization or
+stopword heuristic. No extra model call is made by label construction, though
+successful selection can enable the ordinary rank stage previously skipped.
+Temporary top-memory text pools add local CPU/heap work; small synthetic timing
+and raw process-memory samples are not latency, peak-memory or production-scale
+guarantees. Default core dependency boundaries, public maps, rank packing,
+final-source selection and capture/privacy defaults remain unchanged. N12 still
+reports Cairn 3/6 versus Mem0 4/6; no new paid run or score overwrite occurred.

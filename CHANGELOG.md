@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — experimental bounded rare-query navigation previews
+
+- Trusted embedded callers may opt into `navigationLabelPolicy:
+  'rare-query-window-v1'` together with `sourceCandidatePolicy:
+  'bounded-keyset-v1'`. Explicit source-context recall then chooses a
+  120-codepoint preview using rare literal query terms within the already
+  authorized top candidates. Default labels, ranking/order and source output
+  remain unchanged. This is a bounded presentation experiment, not semantic
+  relevance, complete coverage or a benchmark-score improvement. See the
+  [acceptance](docs/plans/bounded-navigation-preview.md).
+
 ## Unreleased — indexed evaluation batches fit local extraction
 
 - Indexed-window and indexed-evidence LongMemEval preparation now splits

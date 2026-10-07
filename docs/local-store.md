@@ -191,6 +191,31 @@ their own logging, retention, filesystem security, and backup deletion.
 
 ## Limits and next stages
 
+An experimental embedded opt-in is available only with bounded source candidates:
+
+```js
+openMemoryCore({
+  path, model,
+  sourceCandidatePolicy: 'bounded-keyset-v1',
+  navigationLabelPolicy: 'rare-query-window-v1',
+});
+```
+
+It changes only previews for explicit `source-evidence`/`rationale-evidence`
+query navigation. It preserves candidate score and ID order, reads no additional
+receipts, and selects one contiguous original substring of at most 120 Unicode
+codepoints from the body or first four validated receipts. Literal query terms
+less common across the authorized top candidates receive more integer weight;
+there is no stopword list, translation, stemming or language-specific segmentation.
+The option is validated as own data and rejected without bounded-keyset mode.
+No source is persisted by preview generation and no model call is made by it;
+normal selection may legitimately reach an existing rank call previously skipped.
+Public maps, default recall, rank packing, final source output and privacy
+boundaries are unchanged. Text pools are temporary, not an archive or a new
+capture capability. A single window cannot cover separated or cross-receipt
+evidence, and a better-looking label does not establish relevance or semantic
+quality. See [the diagnostic limits](limitations.md#experimental-rare-query-navigation-preview).
+
 Search counts literal, normalized query-token substrings in active content;
 ties use update time and ID. It is not embedding similarity, performs no
 stemming/translation, and can match substrings such as `or` in `storage`.
