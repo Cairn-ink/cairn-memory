@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — same-history cumulative benchmark budget v4
+
+- A separate evaluation-only v4 lineage permits exactly US$300→US$400 on the
+  same ledger and finite request cap. Immutable authorization precedes the
+  transactional limit update; old rows, unknown-cost reserves and ancestry are
+  preserved. Older v3 behavior is unchanged. This does not authorize a paid
+  run, select a cohort, change scores or activate an MCP/Hermes default. See
+  the [contract](docs/plans/benchmark-budget-400.md).
+
 ## Unreleased — experimental mixed navigation-policy binding
 
 - Controlled mixed evaluation may explicitly opt into `navigationLabelPolicy:

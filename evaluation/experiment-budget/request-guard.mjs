@@ -20,12 +20,14 @@ import {
   inspectEmbeddingExperimentBudgetSnapshot,
   projectEmbeddingBudgetCapPrefix,
   projectEmbeddingBudgetCapsPrefix,
+  projectEmbeddingBudgetLimitV4Prefix,
   openBoundExperimentBudget,
   openBoundEmbeddingExperimentBudget,
   reopenExperimentBudget,
   transitionExperimentBudgetCaps,
   transitionEmbeddingExperimentBudgetRequestCap,
   transitionEmbeddingExperimentBudgetCaps,
+  transitionEmbeddingExperimentBudgetLimitV4,
 } from './index.mjs';
 import {
   DEFAULT_MODEL,
@@ -69,6 +71,7 @@ const BENCHMARK_BUDGET_EXTENSION_VERSION = 'benchmark-budget-extension-v1';
 const BENCHMARK_BUDGET_CHAIN_VERSION = 'benchmark-budget-chain-v1';
 const BENCHMARK_REQUEST_CAP_V2_VERSION = 'benchmark-request-cap-v2';
 const BENCHMARK_BUDGET_V3_VERSION = 'benchmark-budget-v3';
+const BENCHMARK_BUDGET_V4_VERSION = 'benchmark-budget-v4';
 const CASE_DEADLINE_VERSION = 'case-deadline-v1';
 const SOURCE_PAIR_VERSION = 'qualified-source-pair-case-v1';
 const SOURCE_PAIR_METHOD_PROFILE = 'qualified-source-pair-v1';
@@ -2120,6 +2123,127 @@ export function loadChainedBenchmarkBudgetV3(options) {
   return deepFreeze(extension);
 }
 
+function budgetV4Filename(directory, parentAuthorizationId) {
+  return path.join(directory, `experiment-benchmark-budget-v4-${parentAuthorizationId}.json`);
+}
+
+function budgetV4Configuration(options) {
+  const snapshot = detachEmbeddingLineage(options);
+  exactKeys(snapshot, ['oldLedger', 'policy', 'parentBudgetExtension', 'authorizationId',
+    'newLimitMicroUsd', 'newRequestCap', 'expectedCheckpoint', 'expectedOldHistorySha256'],
+  'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.oldLedger, policy: snapshot.policy,
+    fetchImpl: () => {} });
+  const oldLedger = structuredClone(snapshot.oldLedger);
+  oldLedger.directory = path.resolve(oldLedger.directory);
+  const parentBudgetExtension = snapshotExtension(snapshot.parentBudgetExtension);
+  exactKeys(snapshot.expectedCheckpoint, ['requestCount', 'reservedMicroUsd'], 'invalid_extension');
+  if (oldLedger.limitMicroUsd !== 300_000_000 || snapshot.newLimitMicroUsd !== 400_000_000
+    || typeof snapshot.authorizationId !== 'string' || !MIXED_ID.test(snapshot.authorizationId)
+    || !safeInteger(snapshot.newRequestCap, 1) || snapshot.newRequestCap !== oldLedger.requestCap
+    || !safeInteger(snapshot.expectedCheckpoint.requestCount)
+    || !safeInteger(snapshot.expectedCheckpoint.reservedMicroUsd)
+    || snapshot.expectedCheckpoint.requestCount > oldLedger.requestCap
+    || snapshot.expectedCheckpoint.reservedMicroUsd > oldLedger.limitMicroUsd
+    || typeof snapshot.expectedOldHistorySha256 !== 'string'
+    || !SHA256_HEX.test(snapshot.expectedOldHistorySha256)) fail('invalid_extension');
+  verifyBudgetV3(parentBudgetExtension, oldLedger, policy);
+  if (snapshot.expectedCheckpoint.requestCount < parentBudgetExtension.checkpoint.requestCount
+    || snapshot.expectedCheckpoint.reservedMicroUsd < parentBudgetExtension.checkpoint.reservedMicroUsd) {
+    fail('invalid_extension');
+  }
+  return deepFreeze({ authorizationId: snapshot.authorizationId, oldLedger,
+    ledger: { ...oldLedger, limitMicroUsd: 400_000_000, requestCap: snapshot.newRequestCap },
+    policy, parentBudgetExtension, checkpoint: snapshot.expectedCheckpoint,
+    expectedOldHistorySha256: snapshot.expectedOldHistorySha256 });
+}
+
+function budgetV4Record(config, witness, digest) {
+  return { ...requestCapV2Record(config, witness, []), version: BENCHMARK_BUDGET_V4_VERSION,
+    historicalDigest: digest };
+}
+
+function verifyBudgetV4(extension, ledger, policy, expected = {}) {
+  exactKeys(extension, ['version', 'authorizationId', 'priorLedger', 'ledger', 'policy', 'method',
+    'stages', 'parentBudgetExtension', 'checkpoint', 'oldPrefixHistorySha256',
+    'newPrefixHistorySha256', 'historicalDigest'], 'invalid_extension');
+  if (extension.version !== BENCHMARK_BUDGET_V4_VERSION
+    || typeof extension.newPrefixHistorySha256 !== 'string'
+    || !SHA256_HEX.test(extension.newPrefixHistorySha256)
+    || typeof extension.historicalDigest !== 'string'
+    || !SHA256_HEX.test(extension.historicalDigest)) fail('invalid_extension');
+  const config = budgetV4Configuration({ oldLedger: extension.priorLedger, policy,
+    parentBudgetExtension: extension.parentBudgetExtension, authorizationId: extension.authorizationId,
+    newLimitMicroUsd: extension.ledger?.limitMicroUsd, newRequestCap: extension.ledger?.requestCap,
+    expectedCheckpoint: extension.checkpoint, expectedOldHistorySha256: extension.oldPrefixHistorySha256 });
+  const expectedLedger = structuredClone(ledger);
+  expectedLedger.directory = path.resolve(expectedLedger.directory);
+  if (canonical(config.ledger) !== canonical(expectedLedger)
+    || canonical(extension) !== canonical(budgetV4Record(config, extension, extension.historicalDigest))
+    || (expected.authorizationId !== undefined && extension.authorizationId !== expected.authorizationId)
+    || (expected.parentBudgetAuthorizationId !== undefined
+      && extension.parentBudgetExtension.authorizationId !== expected.parentBudgetAuthorizationId)) {
+    fail('invalid_extension');
+  }
+  readBinding(budgetV4Filename(config.ledger.directory, config.parentBudgetExtension.authorizationId),
+    extension);
+  return extension;
+}
+
+export function authorizeChainedBenchmarkBudgetV4(options) {
+  const config = budgetV4Configuration(options);
+  const filename = budgetV4Filename(config.ledger.directory, config.parentBudgetExtension.authorizationId);
+  let callbackFailure;
+  let extension;
+  try {
+    transitionEmbeddingExperimentBudgetLimitV4({ oldConfiguration: config.oldLedger,
+      newConfiguration: config.ledger, expectedCheckpoint: config.checkpoint,
+      expectedOldHistorySha256: config.expectedOldHistorySha256,
+      authorize({ mode, checkpointAttempts, witness }) {
+        try {
+          verifyPairParent(config.parentBudgetExtension, config.oldLedger, config.policy,
+            witness.oldPrefixSnapshot, witness.oldPrefixSnapshot);
+          extension = budgetV4Record(config, witness, historicalDigest(checkpointAttempts));
+          let existing;
+          try { existing = lstatSync(filename); }
+          catch (error) { if (error?.code !== 'ENOENT') fail('unsafe_policy_binding'); }
+          if (existing) syncAuthorizationBinding(config.ledger.directory, filename, extension);
+          else {
+            if (mode !== 'transition') fail('policy_mismatch');
+            writeAuthorizationBinding(config.ledger.directory, filename, extension);
+            readBinding(filename, extension);
+          }
+        } catch (error) {
+          if (error instanceof ExperimentRequestGuardError) callbackFailure = error;
+          throw error;
+        }
+      } });
+  } catch (error) { throw callbackFailure ?? error; }
+  return deepFreeze(extension);
+}
+
+export function loadChainedBenchmarkBudgetV4(options) {
+  const snapshot = detachEmbeddingLineage(options);
+  exactKeys(snapshot, ['ledger', 'policy', 'parentBudgetAuthorizationId', 'authorizationId', 'stages'],
+    'invalid_extension');
+  const policy = validateConstructor({ ledger: snapshot.ledger, policy: snapshot.policy,
+    fetchImpl: () => {} });
+  for (const id of [snapshot.parentBudgetAuthorizationId, snapshot.authorizationId]) {
+    if (typeof id !== 'string' || !MIXED_ID.test(id)) fail('invalid_extension');
+  }
+  const ledger = structuredClone(snapshot.ledger);
+  ledger.directory = path.resolve(ledger.directory);
+  const extension = snapshotExtension(readBinding(budgetV4Filename(ledger.directory,
+    snapshot.parentBudgetAuthorizationId)));
+  verifyBudgetV4(extension, ledger, policy, snapshot);
+  if (canonical(extension.stages) !== canonical(snapshot.stages)) fail('policy_mismatch');
+  const state = inspectEmbeddingExperimentBudgetSnapshot(ledger);
+  assertChainedBenchmarkParentForEmbeddingSnapshot({ ledger, policy,
+    benchmarkExtension: extension, snapshot: state });
+  return deepFreeze(extension);
+}
+
+
 // A separate operator action. It grants exactly the two chat-completion stages
 // below and never alters an older capability file or the ledger allowance.
 export function authorizeBenchmarkExtension(options) {
@@ -2312,6 +2436,26 @@ function adaptivePairContext(value, roster) {
 }
 
 function verifyPairParent(extension, ledger, policy, state, issuedSnapshot = null) {
+  if (extension?.version === BENCHMARK_BUDGET_V4_VERSION && ledger.limitMicroUsd === 400_000_000) {
+    verifyBudgetV4(extension, ledger, policy);
+    let witness;
+    try {
+      witness = projectEmbeddingBudgetLimitV4Prefix({ snapshot: issuedSnapshot,
+        oldConfiguration: extension.priorLedger, newConfiguration: extension.ledger,
+        checkpoint: extension.checkpoint });
+    } catch { fail('policy_mismatch'); }
+    if (witness.oldPrefixHistorySha256 !== extension.oldPrefixHistorySha256
+      || witness.newPrefixHistorySha256 !== extension.newPrefixHistorySha256
+      || issuedSnapshot.historySha256 !== state.historySha256
+      || historicalDigest(witness.oldPrefixSnapshot.attempts) !== extension.historicalDigest) {
+      fail('policy_mismatch');
+    }
+    // One fixed v4→v3 ancestor step, never a recursive arbitrary-money path.
+    verifyPairParent(extension.parentBudgetExtension, extension.priorLedger, policy,
+      witness.oldPrefixSnapshot, witness.oldPrefixSnapshot);
+    return;
+  }
+
   if (extension?.version === BENCHMARK_BUDGET_V3_VERSION && ledger.limitMicroUsd === 300_000_000) {
     verifyBudgetV3(extension, ledger, policy);
     let witness;
@@ -2446,7 +2590,7 @@ function embeddingParentEnvelope(options) {
     || !isPlainObject(extension.value)) return null;
   const version = Object.getOwnPropertyDescriptor(extension.value, 'version');
   return version?.enumerable && own(version, 'value')
-    && [BENCHMARK_REQUEST_CAP_V2_VERSION, BENCHMARK_BUDGET_V3_VERSION]
+    && [BENCHMARK_REQUEST_CAP_V2_VERSION, BENCHMARK_BUDGET_V3_VERSION, BENCHMARK_BUDGET_V4_VERSION]
       .includes(version.value) ? 'request-cap-v2' : null;
 }
 
@@ -2517,7 +2661,8 @@ export function assertChainedBenchmarkParentForEmbeddingSnapshot(options) {
   const extension = snapshotExtension(detached.benchmarkExtension);
   if (!(ledger.limitMicroUsd === 200_000_000
     && [BENCHMARK_BUDGET_CHAIN_VERSION, BENCHMARK_REQUEST_CAP_V2_VERSION].includes(extension.version))
-    && !(ledger.limitMicroUsd === 300_000_000 && extension.version === BENCHMARK_BUDGET_V3_VERSION)) {
+    && !(ledger.limitMicroUsd === 300_000_000 && extension.version === BENCHMARK_BUDGET_V3_VERSION)
+    && !(ledger.limitMicroUsd === 400_000_000 && extension.version === BENCHMARK_BUDGET_V4_VERSION)) {
     fail('invalid_capability');
   }
   verifyPairParent(extension, ledger, policy, detached.snapshot, issuedSnapshot);
@@ -2662,7 +2807,8 @@ function mixedConfiguration(value) {
   const benchmarkExtension = snapshotExtension(value.benchmarkExtension);
   const checkpoint = mixedCheckpoint(value.checkpoint, ledger);
   if (ledger.limitMicroUsd !== 200_000_000
-    && !(ledger.limitMicroUsd === 300_000_000 && benchmarkExtension.version === BENCHMARK_BUDGET_V3_VERSION)) {
+    && !(ledger.limitMicroUsd === 300_000_000 && benchmarkExtension.version === BENCHMARK_BUDGET_V3_VERSION)
+    && !(ledger.limitMicroUsd === 400_000_000 && benchmarkExtension.version === BENCHMARK_BUDGET_V4_VERSION)) {
     fail('invalid_capability');
   }
   return { ledger, policy, benchmarkExtension, authorizationId: value.authorizationId,

@@ -243,6 +243,16 @@ checkpoint prefix. This historical projection is a lineage witness, not a grant
 to dispatch or a replacement for inspecting the current ledger. Cloned snapshots
 are refused. The old same-money request-cap helper is unchanged.
 
+`projectEmbeddingBudgetLimitV4Prefix` and
+`transitionEmbeddingExperimentBudgetLimitV4` add a separate exact
+300,000,000→400,000,000-microUSD transition with the same finite request cap,
+run and directory. The origin-bound, settled checkpoint projects both history
+hashes and an authentic 300M prefix snapshot. A later pending suffix does not
+invalidate historical projection; it is not permission to dispatch. The actual
+cap transition/replay still requires every attempt settled and preserves all
+rowids/order/costs/unknown reservations. It updates only the money ceiling,
+never schema or request cap. See the [v4 contract](plans/benchmark-budget-400.md).
+
 A separate [experiment HTTP guard](experiment-request-guard.md) now connects
 this ledger to explicitly injected, bounded host/Cairn transports and verifies
 them with fake HTTP. The ledger API itself remains accounting-only; the new

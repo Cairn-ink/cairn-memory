@@ -738,6 +738,26 @@ prices, timeouts and request shapes remain unchanged. This does not recreate
 an allowance or establish provider billing totals; retained unknown attempts
 continue to consume their full reservations. See the [bounded continuation
 contract](plans/benchmark-budget-300.md).
+The separate `authorizeChainedBenchmarkBudgetV4` / `loadChainedBenchmarkBudgetV4`
+path binds exactly 300M→400M with the same finite request cap, run, path and
+policy. Its `benchmark-budget-v4` record requires authentic immutable v3 and
+the complete earlier ancestry. Exclusive private record write, file fsync and
+directory sync occur inside the write transaction before the cap update;
+exact crash recovery reuses identical durable evidence. Partial/conflicting
+records are not repaired. Old binding bytes and historical accounting rows
+remain unchanged, and unknown actual costs consume their original reserves.
+V3 still requires exactly 200M→300M and an increasing cap; it is not generalized.
+
+Fresh 400M mixed capabilities require verified v4 ancestry, including any
+explicit experimental navigation manifest. Old consumed, unused and live
+capabilities/configurations cannot dispatch after transition. Historical prefix
+projection permits a pending suffix, but the existing serialized guard still
+refuses a second overlapping request as `guard_busy`, without halting owned
+work; unowned history changes remain fail-closed. Cap authorization/transition
+always refuses pending work. This technical path neither replenishes the
+ledger nor activates standing cumulative spending authority on its own. See
+the [v4 acceptance](plans/benchmark-budget-400.md).
+
 There are no paid runs, user profiles, production writes, release or deployment
 changes in this slice. V05 remains incomplete until the remaining host/budget
 gates pass. See [acceptance and verification](plans/experiment-request-guard.md).

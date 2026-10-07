@@ -2017,3 +2017,22 @@ activated. Author/tests use no authentic data or paid provider. No new cohort
 was selected or scored; N12 remains Cairn 3/6 versus Mem0 4/6. Future larger
 comparison, same-history 400-budget activation and product adoption require
 their own frozen contracts and gates, not this experimental flag.
+
+## Same-history cumulative benchmark budget v4
+
+The [v4 budget path](plans/benchmark-budget-400.md) is narrowly exact 300M→400M
+with the same finite request cap and complete immutable prior ancestry. It
+preserves logical attempt rows/order/rowids, actual costs and unknown-cost
+reservations; the SQLite file necessarily changes when its limit changes.
+Immutable authorization/binding evidence files remain byte-identical.
+Synthetic crash, fault and race controls do not establish durability against
+OS compromise or hostile same-UID mutation. A prefix witness is not dispatch
+authority: pending current work blocks a cap transition, and stale grants fail.
+
+This implementation does not read or activate the operational ledger, load a
+provider credential, call a provider or select/run a fresh cohort. Standing
+US$400 authority is cumulative, not new money; its operational use remains a
+separate primary-owned rebind and verified action. Old v3's exact 200M→300M
+and strict cap increase remain unchanged. No schema, price, native/runtime,
+prompt, timeout, retry or public MCP/Hermes/default change is made. N12 still
+reports Cairn 3/6 versus Mem0 4/6, with no score overwrite or bill/refund claim.
