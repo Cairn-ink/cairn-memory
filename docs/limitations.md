@@ -2017,3 +2017,22 @@ activated. Author/tests use no authentic data or paid provider. No new cohort
 was selected or scored; N12 remains Cairn 3/6 versus Mem0 4/6. Future larger
 comparison, same-history 400-budget activation and product adoption require
 their own frozen contracts and gates, not this experimental flag.
+
+## Fresh-thirty preparation and projection boundary
+
+The private [fresh-thirty preparation contract](plans/fresh-thirty-preparation.md)
+freezes metadata selection/exposure before the statically imported original
+producer can read source bytes. Failures retain the frozen cohort and authorize
+no replacement or retry. Previous-six corroboration remains six excluded IDs,
+not proof that supplied metadata or historical exposure is complete.
+
+Projection explicitly binds indexed-evidence plus rare-query navigation,
+requires all 30 preflight rows ready, and derives whole-phase and maximum-
+singleton caps under the conditional 400M cumulative/100M round/30M protected
+microUSD bounds and remaining request cap. These supplied checkpoint numbers
+are not authenticated ledger state, a v4 grant, vendor charges or authority to
+spend. Native configuration/hash equality is metadata-only; actual execution
+requires its own branded gateway/artifact validation and final runtime freeze.
+Synthetic tests do not select an authentic cohort, read evaluator bytes, launch
+a comparison or change previous scores. Primary source acceptance, accounting
+authority, dispatch integration and independent reviews remain separate gates.
