@@ -16,6 +16,12 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [same-history budget v4](docs/plans/benchmark-budget-400.md) extends
+  existing budget/guard offline coverage for exact 300M→400M with an unchanged
+  finite request cap, complete immutable ancestry, crash recovery and stale
+  capability refusal. This is engineering evidence, not ledger activation,
+  new money, fresh-case selection or a comparison/score/adoption claim.
+
 - The [native HTTP timeout diagnosis](docs/plans/native-http-timeout-diagnosis.md)
   adds portable gateway regression coverage to the existing Node 22.16/24
   request-guard CI matrix; latest-head CI remains a separate delivery gate.

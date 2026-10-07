@@ -130,11 +130,13 @@ test("thin guard entry preserves the caller environment and fails swallowed viol
   for (const name of guarded)
     assert.match(scripts[name], /integrations\/client\/testing\/run.mjs/);
   for (const [name, command] of Object.entries(base)) {
-    // The independently accepted benchmark continuation adds exactly one test
-    // to its adapter-equipped suite. Keep the historical fixture immutable and
-    // keep every other pre-pairing command exact, rather than ignore this suite.
+    // Exact benchmark registrations keep ledger-only CI dependency-free and
+    // ancestry/transport tests in the adapter-equipped guard suite. Preserve
+    // the historical fixture and every other pre-pairing command verbatim.
     const expected = name === "test:experiment-request-guard"
-      ? `${command} evaluation/experiment-budget/test/budget-v3.test.mjs`
+      ? `${command} evaluation/experiment-budget/test/budget-v3.test.mjs evaluation/experiment-budget/test/budget-v4-guard.test.mjs`
+      : name === "test:experiment-budget"
+      ? `${command} evaluation/experiment-budget/test/budget-v4-ledger.test.mjs`
       : command;
     if (!guarded.includes(name)) assert.equal(scripts[name], expected, name);
   }
