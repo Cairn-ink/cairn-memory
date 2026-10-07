@@ -2040,6 +2040,30 @@ test('PO1-PO4: case artifacts distinguish adapter and core rejection without cha
   }
 });
 
+test('N20E public pilot retains finite refined and legacy extraction diagnostics only', async t => {
+  const reasons = ['invalid_extraction_receipt_duplicate', 'invalid_extraction_text_original_bounds',
+    'invalid_extraction_text_nfkc_bounds', 'invalid_extraction_text_redaction_bounds',
+    'invalid_extraction_text_normalized_bounds', 'invalid_extraction_source_duplicate'];
+  const f = await setup(t, { source: [fixture({ id: 'boundaryfinite', answerTurn: 'Synthetic amber.' })] });
+  let session, observed = false;
+  session = f.session(null, null, (body, record, method) => {
+    const input = JSON.parse(body.input[0].content[0].text);
+    if (method === 'extract' && !observed) {
+      observed = true;
+      for (const reason of [...reasons, 'invalid_extraction_unknown']) session.memoryModel.onDiagnostic({
+        version: 1, stage: 'extract', layer: 'core_validation', reason });
+    }
+    return Response.json(responsesEnvelope(body.model, scripted[method](input)));
+  });
+  const output = f.output('boundary-finite');
+  try { await runPublicPilot({ pilot: f.pilot, session, directory: output }); }
+  finally { session.close(); }
+  const diagnostic = await readJson(output, 'cases', opaqueQuestionId('boundaryfinite'), 'diagnostics.json');
+  assert.deepEqual(diagnostic.memoryModel.records, reasons.map(reason => ({ version: 1,
+    stage: 'extract', layer: 'core_validation', reason })));
+  assert.equal(diagnostic.memoryModel.droppedRecords, 0);
+});
+
 test('PO2-PO4: stop and length stay private while unknown finish rejection is unchanged', async (t) => {
   const f = await setup(t, { source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
   const lengthChat = (body) => {

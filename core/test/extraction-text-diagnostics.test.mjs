@@ -6,6 +6,8 @@ import { setImmediate } from 'node:timers/promises';
 import { openMemoryCore } from '../contract.mjs';
 import { boundedText } from '../validation.mjs';
 import { emitDiagnostic } from '../model-diagnostics.mjs';
+import { extractedWindowItems, sourceWindowCatalog } from '../source-windows.mjs';
+import { captureSnapshot } from '../capture-input.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
 import { interpretation } from '../testing/episode-capture-helpers.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
@@ -15,6 +17,34 @@ import { createMixedModelDiagnosticObserver } from '../../evaluation/longmemeval
 const namespace = { ownerId: 'synthetic-text-shape', scope: 'personal', projectId: null };
 const failed = { ok: false, error: { code: 'invalid_model_output', retryable: false } };
 const source = 'Synthetic source fact';
+test('N20A canonical receipt duplicates are distinct from selected-index duplicates', () => {
+  const snapshot = captureSnapshot({ namespace, client: 'synthetic', sessionId: 'session', eventId: 'event',
+    messages: [{ id: 'message', role: 'user', content: 'x'.repeat(1600) }] }, undefined, 'indexed-evidence-v1');
+  const reasons = [];
+  assert.throws(() => extractedWindowItems({ items: [{ content: source, kind: 'fact', confidence: 0.8,
+    sourceIndices: [0, 1] }] }, snapshot, sourceWindowCatalog(snapshot), reason => reasons.push(reason)),
+  { code: 'invalid_model_output' });
+  assert.deepEqual(reasons, ['invalid_extraction_receipt_duplicate']);
+});
+
+test('N20B checkpoint precedence and legacy hook arity do not change text acceptance', () => {
+  for (const [value, expected] of [[false, ['type']], ['x'.repeat(20001), ['raw_bounds']],
+    [' ', ['empty']], ['sk-' + 's'.repeat(20), ['redacted']], ['\0', ['nul']],
+    ['x'.repeat(601), ['normalized_bounds', 'original_bounds']],
+    ['ﬁ'.repeat(301), ['normalized_bounds', 'nfkc_bounds']],
+    ['x'.repeat(582) + ' password=abcdefgh', ['normalized_bounds', 'redaction_bounds']],
+    // An earlier checkpoint can exceed the bound even if a later step shrinks it.
+    ['e\u0301'.repeat(200) + 'x'.repeat(382) + ' password=abcdefgh', ['normalized_bounds', 'original_bounds']],
+    ['ﬁ'.repeat(301) + ' sk-' + 's'.repeat(20), ['normalized_bounds', 'nfkc_bounds']]]) {
+    let observed;
+    assert.throws(() => boundedText(value, 600, false, (...args) => { observed = args; }), { code: 'invalid_text' });
+    assert.deepEqual(observed, expected);
+  }
+  let reads = 0;
+  const model = Object.defineProperty({}, 'onDiagnostic', { get() { reads++; throw Error('synthetic observer'); } });
+  assert.doesNotThrow(() => emitDiagnostic(model, 'extract', 'core_validation', 'invalid_extraction_receipt_duplicate'));
+  assert.equal(reads, 1);
+});
 const secret = 'sk-' + 's'.repeat(20);
 const rejectionCases = [
   ['type', false, 'invalid_extraction_text_type'],
@@ -22,7 +52,9 @@ const rejectionCases = [
   ['empty', ' \t\n ', 'invalid_extraction_text_empty'],
   ['redacted', secret, 'invalid_extraction_text_redacted'],
   ['nul', 'Synthetic\0fact', 'invalid_extraction_text_nul'],
-  ['normalized-bound', 'x'.repeat(601), 'invalid_extraction_text_normalized_bounds'],
+  ['original-bound', 'x'.repeat(601), 'invalid_extraction_text_original_bounds'],
+  ['nfkc-bound', 'ﬁ'.repeat(301), 'invalid_extraction_text_nfkc_bounds'],
+  ['redaction-bound', 'x'.repeat(582) + ' password=abcdefgh', 'invalid_extraction_text_redaction_bounds'],
   ['unicode', '\ud800', 'invalid_extraction_text_unicode', { captureQualification: 'source-bound-v1' }],
 ];
 
@@ -108,7 +140,7 @@ test('ET1/ET3 rejection precedence remains raw-before-normalized and qualified-U
   for (const [content, options, reason] of [
     [' '.repeat(20001), {}, 'invalid_extraction_text_raw_bounds'],
     ['\0' + 'x'.repeat(20000), {}, 'invalid_extraction_text_raw_bounds'],
-    ['ﬁ'.repeat(301), {}, 'invalid_extraction_text_normalized_bounds'],
+    ['ﬁ'.repeat(301), {}, 'invalid_extraction_text_nfkc_bounds'],
     ['\0' + 'x'.repeat(601), {}, 'invalid_extraction_text_nul'],
     ['\ud800' + 'x'.repeat(20000), {}, 'invalid_extraction_text_raw_bounds'],
     ['\ud800' + 'x'.repeat(20000), { captureQualification: 'source-bound-v1' }, 'invalid_extraction_text_unicode'],
@@ -149,6 +181,10 @@ test('ET5 actual core text failures pass through pilot slots and mixed finite co
   const events = [];
   emitDiagnostic({ onDiagnostic: event => events.push(event) }, 'extract', 'core_validation', 'invalid_extraction_text');
   assert.equal(events.length, 1, 'legacy category remains allowlisted');
+  emitDiagnostic({ onDiagnostic: event => events.push(event) }, 'extract', 'core_validation', 'invalid_extraction_text_normalized_bounds');
+  assert.equal(events.length, 2, 'legacy final-bound category remains allowlisted');
+  emitDiagnostic({ onDiagnostic: event => events.push(event) }, 'extract', 'core_validation', 'invalid_extraction_text_unknown_bounds');
+  assert.equal(events.length, 2, 'unknown refinements remain filtered');
 });
 
 for (const [name, content, reason, options] of rejectionCases) {

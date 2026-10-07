@@ -9,6 +9,8 @@ const reasons = {
     'invalid_extraction_text_raw_bounds', 'invalid_extraction_text_empty',
     'invalid_extraction_text_redacted', 'invalid_extraction_text_nul',
     'invalid_extraction_text_normalized_bounds',
+    'invalid_extraction_text_original_bounds', 'invalid_extraction_text_nfkc_bounds',
+    'invalid_extraction_text_redaction_bounds', 'invalid_extraction_receipt_duplicate',
     'invalid_extraction_source_shape', 'invalid_extraction_source_duplicate',
     'invalid_extraction_source_range', 'invalid_qualification',
     'qualification_citation_budget', 'qualification_citation_integrity',

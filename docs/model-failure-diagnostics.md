@@ -37,7 +37,7 @@ Each event is a frozen object with exactly four fields:
 | --- | --- |
 | `adapter` | `response_envelope`, `response_usage`, `response_message`, `response_content`, `output_json`, `output_shape`, `output_bounds`, `request_invalid`, `request_bounds`, `token_count_response`, `transport_failure`, `response_body_bounds`, `response_json`, `model_cancelled` |
 | `core_call` | `model_not_configured`, `context_budget_exceeded`, `token_count_unavailable`, `model_timeout`, `model_cancelled`, `provider_failure`, `adapter_output_invalid`, `output_serialization`, `output_bounds` |
-| `core_validation` | `invalid_extraction_output_shape`, `invalid_extraction_item_shape`, the extraction-text reasons below, `invalid_extraction_value`, `invalid_extraction_source_shape`, `invalid_extraction_source_duplicate`, `invalid_extraction_source_range`, legacy `invalid_extraction`, `invalid_classification`, `invalid_qualification`, `invalid_reconciliation`, `invalid_rationale`, `malformed_refs`, `duplicate_ref`, `non_visible_ref`, `namespace_selection_limit` |
+| `core_validation` | `invalid_extraction_output_shape`, `invalid_extraction_item_shape`, the extraction-text reasons below, `invalid_extraction_value`, `invalid_extraction_source_shape`, `invalid_extraction_source_duplicate`, `invalid_extraction_receipt_duplicate`, `invalid_extraction_source_range`, legacy `invalid_extraction`, `invalid_classification`, `invalid_qualification`, `invalid_reconciliation`, `invalid_rationale`, `malformed_refs`, `duplicate_ref`, `non_visible_ref`, `namespace_selection_limit` |
 
 An adapter failure can also produce a core-call event. These are failing
 boundaries, not unique-operation counters. Success is silent. Invalid input
@@ -60,7 +60,27 @@ Prospective extraction-text rejection distinguishes the existing checks:
 | `invalid_extraction_text_empty` | Existing NFKC/redaction/whitespace normalization produces empty text |
 | `invalid_extraction_text_redacted` | Normalized text is exactly `[REDACTED]` |
 | `invalid_extraction_text_nul` | Normalized text contains NUL |
-| `invalid_extraction_text_normalized_bounds` | Normalized extraction text exceeds the existing 600-unit bound |
+| `invalid_extraction_text_original_bounds` | Final bound fails and whitespace-collapsed/trimmed original text already exceeds 600 units |
+| `invalid_extraction_text_nfkc_bounds` | Final bound fails; original checkpoint fits, but whitespace-collapsed/trimmed NFKC text exceeds 600 units |
+| `invalid_extraction_text_redaction_bounds` | Final bound fails while both earlier checkpoints fit |
+| `invalid_extraction_text_normalized_bounds` | Legacy final-bound category; retained artifacts do not identify a checkpoint |
+
+The checkpoints are evaluated only after the unchanged final canonical-text
+bound rejects. Precedence is original, then NFKC, then redaction. Each uses the
+same whitespace collapse and trim as the final pipeline; raw text over 600 can
+still contract and pass. Mixed expansion/shrinkage can make an earlier
+checkpoint exceed the limit while a later one fits: the code classifies that
+checkpoint, not a transformation's causal contribution or actual model cause.
+For example, 300 synthetic ligatures can normalize to the accepted boundary,
+while 301 fail the NFKC checkpoint. No text or length enters an event.
+
+Under the refined emitter, `invalid_extraction_source_duplicate` denotes repeated
+selected indices, before index-range validation. `invalid_extraction_receipt_duplicate` denotes
+distinct indices yielding identical canonical receipt identities. Both reject
+the whole extraction batch; there is no deduplication or partial admission.
+Older emitters used `source_duplicate` for both branches. A historical event is
+therefore ambiguous unless its producing runtime is independently known; event
+version remains 1 and cannot identify the refined runtime by itself.
 
 These are fixed codes, not captured text, values or lengths. Check precedence,
 normalization, redaction and surrogate-safe receipt truncation are unchanged.
@@ -153,3 +173,5 @@ and its [offline acceptance plan](plans/source-pair-failure-diagnostics.md).
 Acceptance: [installed collection plan](plans/hermes-diagnostic-collection.md).
 
 Acceptance: [diagnostic plan](plans/model-failure-diagnostics.md).
+
+Acceptance: [extraction boundary refinement](plans/extraction-boundary-diagnostics.md).

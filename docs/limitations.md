@@ -2036,3 +2036,19 @@ separate primary-owned rebind and verified action. Old v3's exact 200M→300M
 and strict cap increase remain unchanged. No schema, price, native/runtime,
 prompt, timeout, retry or public MCP/Hermes/default change is made. N12 still
 reports Cairn 3/6 versus Mem0 4/6, with no score overwrite or bill/refund claim.
+
+## Extraction boundary diagnostics
+
+The [finite refinement](plans/extraction-boundary-diagnostics.md) distinguishes
+repeated selected indices from identical canonical receipts and classifies
+failed final text bounds using original/NFKC/redaction checkpoints. It does not
+repair, deduplicate, truncate, retry or admit previously rejected outputs.
+Checkpoint precedence is observational, not proof of a transformation's causal
+contribution or a real model's rejected payload. Older normalized-bound events
+remain readable but cannot be retroactively refined. Historical
+`source_duplicate` also covered both index and receipt duplication;
+only a known refined producing runtime narrows its interpretation. Event version
+1 alone does not provide that identity. Synthetic actual-adapter
+fake-HTTP tests establish unchanged errors, atomicity and collector propagation,
+not improved reliability, recall or scores. No authentic data or provider calls
+are used; existing frozen evaluation results remain unchanged.

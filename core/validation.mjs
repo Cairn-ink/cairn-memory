@@ -36,19 +36,28 @@ export function identifier(value) {
 
 export function boundedText(value, max, truncate = false, onInvalid) {
   // Internal observation of existing checks only; never pass text or lengths.
-  const reject = (reason) => {
+  const reject = (reason, checkpoint) => {
     try {
-      if (typeof onInvalid === 'function') Promise.resolve(onInvalid(reason)).catch(() => {});
+      if (typeof onInvalid === 'function') {
+        Promise.resolve(checkpoint === undefined ? onInvalid(reason) : onInvalid(reason, checkpoint)).catch(() => {});
+      }
     } catch { /* Observation cannot replace invalid_text. */ }
     fail("invalid_text");
   };
   if (typeof value !== "string") reject('type');
   if (value.length > 20_000) reject('raw_bounds');
-  const clean = redactSecrets(value.normalize("NFKC")).replace(/\s+/gu, " ").trim();
+  const normalized = value.normalize("NFKC");
+  const clean = redactSecrets(normalized).replace(/\s+/gu, " ").trim();
   if (!clean) reject('empty');
   if (clean === "[REDACTED]") reject('redacted');
   if (clean.includes("\0")) reject('nul');
-  if (!truncate && clean.length > max) reject('normalized_bounds');
+  if (!truncate && clean.length > max) {
+    // Observe checkpoints only after the existing final check fails. Keep the
+    // hook's first category compatible; a checkpoint is not a causal attribution.
+    const checkpoint = value.replace(/\s+/gu, ' ').trim().length > max ? 'original_bounds'
+      : normalized.replace(/\s+/gu, ' ').trim().length > max ? 'nfkc_bounds' : 'redaction_bounds';
+    reject('normalized_bounds', checkpoint);
+  }
   let result = "";
   for (const point of clean) {
     if (result.length + point.length > max) break;

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — finite extraction boundary diagnostics
+
+- Optional trusted model diagnostics distinguish repeated source indices from
+  duplicate canonical receipts and refine failed final text bounds into finite
+  original/NFKC/redaction checkpoints. Legacy codes remain readable but historical
+  `source_duplicate` events remain ambiguous without runtime identity. Validation,
+  normalization, admission and retry behavior are unchanged; these checkpoints
+  are not model-cause or score claims. See the
+  [contract](docs/plans/extraction-boundary-diagnostics.md).
+
 ## Unreleased — same-history cumulative benchmark budget v4
 
 - A separate evaluation-only v4 lineage permits exactly US$300→US$400 on the

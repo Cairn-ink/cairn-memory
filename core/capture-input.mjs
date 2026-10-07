@@ -84,7 +84,7 @@ export function extractedItems(output, snapshot, retainedMessages, onInvalid = (
         }
       }
       const content = boundedText(item.content, 600, false,
-        category => { reason = `invalid_extraction_text_${category}`; });
+        (category, checkpoint) => { reason = `invalid_extraction_text_${checkpoint ?? category}`; });
       reason = 'invalid_extraction_value';
       if (!kinds.includes(item.kind) || typeof item.confidence !== 'number' ||
           !Number.isFinite(item.confidence) || item.confidence < 0 || item.confidence > 1) {
@@ -109,7 +109,7 @@ export function extractedItems(output, snapshot, retainedMessages, onInvalid = (
         ...(snapshot.causal ? { sourceIndices: [...indices] } : {}) };
     });
   } catch {
-    try { onInvalid(reason); } catch { /* Diagnostics never change validation. */ }
+    try { Promise.resolve(onInvalid(reason)).catch(() => {}); } catch { /* Diagnostics never change validation. */ }
     fail('invalid_model_output');
   }
 }

@@ -39,7 +39,7 @@ export function sourceWindowCatalog(snapshot) {
 
 /** Model indices are never authority for receipt identity or ordered chronology. */
 export function extractedWindowItems(output, snapshot, catalog, onInvalid) {
-  const diagnose = reason => { try { onInvalid?.(reason); } catch { /* Diagnostics cannot change validation. */ } };
+  const diagnose = reason => { try { Promise.resolve(onInvalid?.(reason)).catch(() => {}); } catch { /* Diagnostics cannot change validation. */ } };
   let detached;
   try { detached = structuredClone(output); }
   catch { diagnose('invalid_extraction_output_shape'); fail('invalid_model_output'); }
@@ -51,7 +51,7 @@ export function extractedWindowItems(output, snapshot, catalog, onInvalid) {
         receipt.client, receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt,
       ]));
       if (new Set(identities).size !== identities.length) {
-        diagnose('invalid_extraction_source_duplicate'); fail('invalid_model_output');
+        diagnose('invalid_extraction_receipt_duplicate'); fail('invalid_model_output');
       }
       if (snapshot.causal) item.sourceIndices = indices.map(index => catalog.entries[index].messageIndex);
     }
