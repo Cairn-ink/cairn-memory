@@ -171,7 +171,7 @@ wiring does not replace their mandatory native/mixed/guard acceptance.
 
 ## Author synthetic evidence
 
-Final seven MJS were stable for canonical exact22 and24 runs: each24/24,
+Revision1 seven MJS were stable for canonical exact22 and24 runs: each24/24,
 actual exit0, zero failed/cancelled/skipped/todo. Node22 session42070/chunk7b4600
 and Node24 session88870/chunk42d60f; durations24054.326288ms/23902.039402ms.
 All seven `node --check` commands on each exact version exited0; `git diff
@@ -204,3 +204,17 @@ Additional author-owned delivery files are exactly `N19-SOURCE-SHA256.json`,
 `N19-verification.json`, `n19-node22-final.stdout.log` and
 `n19-node24-final.stdout.log`. Primary authentic keyless assembly, refusal
 receipt and final independent review/CI must precede any dispatch decision.
+
+### Revision2 cleanup-hook correction
+
+Standards P2 identified that the explicit success/refusal cleanup test passed
+`null` without an outer `finally`. The bounded correction changes only that
+test to `async t` and `fixture(t)`, registering cleanup before setup/assertions
+while retaining explicit cleanup/absence checks. Existing workspace lifecycle
+coverage supplies assertion/setup-failure hook acceptance; no new framework.
+All four production source hashes are unchanged. Final canonical exact22 and24
+each24/24, actual exit0, zero fail/cancel/skip/todo: session85129/chunk499558
+(22408.224681ms), session32345/chunk88167a (22371.612875ms). Fourteen syntax
+checks exited0 (`970f8a`). Revision1 manifest/evidence are retained in the named
+`previousRevision` field, and final stdout logs append Revision2 without erasure.
+Primary owns the new public candidate and both fixed-source rereviews.

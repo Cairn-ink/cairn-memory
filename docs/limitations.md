@@ -2053,3 +2053,8 @@ claimed. The author cannot access authentic source/evaluator/key/ledger files;
 primary alone owns authentic modes and decisions. No retry, replacement cohort,
 historical resume, ledger reset/refund, new model/prompt/native policy or product
 adoption is authorized by this contract.
+
+Revision2 corrects only the synthetic explicit-cleanup test to register its
+workspace hook immediately; four production hashes stay unchanged. Exact22/24
+full suites each24/24, actual exit0; prior evidence and failures remain retained.
+Independent rereviews of the new public candidate remain a delivery gate.
