@@ -112,7 +112,7 @@ function keepRequest(model, request, deadline) {
 }
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
-export async function captureMessages({ model, input, operations, captureQualification,
+export async function captureMessages({ model, modelCallTimeoutMs, input, operations, captureQualification,
   captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun }) {
   deadline?.check();
   const snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
@@ -145,7 +145,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
   try {
     deadline?.check();
     const output = episodeRun?.skip ? { items: [] } : await callModel(model, 'extract', request.system, request.input,
-      { failureCode: 'extraction_failed', deadline });
+      { failureCode: 'extraction_failed', deadline, modelCallTimeoutMs });
     let items = catalog ? extractedWindowItems(output, snapshot, catalog,
       reason => emitDiagnostic(model, 'extract', 'core_validation', reason)) : extractedItems(output, snapshot, retained?.messages,
       reason => emitDiagnostic(model, 'extract', 'core_validation', reason));
@@ -156,15 +156,15 @@ export async function captureMessages({ model, input, operations, captureQualifi
     if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
       ? await qualifyCandidateItems(model, items, deadline,
         captureEvidence ? () => unwrap(operations.assertCaptureEvidence(owned)) : undefined, Boolean(episodeRun),
-        qualificationReport)
-      : await qualifyExtractedItems(model, items, deadline, qualificationReport);
+        qualificationReport, modelCallTimeoutMs)
+      : await qualifyExtractedItems(model, items, deadline, qualificationReport, modelCallTimeoutMs);
     deadline?.check();
     if (snapshot.causal) {
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
       deadline?.check();
       const judged = captureQualification
         ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
-        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline });
+        : await reconcileCapture({ model, modelCallTimeoutMs, snapshot, items, discovery: prepared.discovery, deadline });
       deadline?.check();
       finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
     } else finished = unwrap(operations.finishAdmission({ ...owned, items }));

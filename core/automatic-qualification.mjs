@@ -48,13 +48,13 @@ function plan(model, items, deadline) {
  * Produce inspectable model assertions, never trusted identity or retirement
  * authority. `report` receives how many items were shortened or left unqualified.
  */
-export async function qualifyExtractedItems(model, items, deadline, report = {}) {
+export async function qualifyExtractedItems(model, items, deadline, report = {}, modelCallTimeoutMs) {
   deadline?.check();
   const { groups, unqualified } = plan(model, items, deadline);
   const qualifications = new Map();
   for (const group of groups) {
     const output = await callModel(model, 'qualify', system, request(group),
-      { failureCode: 'qualification_failed', deadline });
+      { failureCode: 'qualification_failed', deadline, modelCallTimeoutMs });
     try {
       object(output, ['qualifications']);
       const entries = denseArray(output.qualifications, group.length, group.length);

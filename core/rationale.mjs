@@ -6,13 +6,13 @@ import { emitDiagnostic } from './model-diagnostics.mjs';
 const system = readFileSync(new URL('./prompts/relate-rationale.md', import.meta.url), 'utf8');
 const focusGuidance = readFileSync(new URL('./prompts/relate-claim-focus.md', import.meta.url), 'utf8');
 
-export async function proposeRationale(model, sources, validateFresh, deadline) {
+export async function proposeRationale(model, sources, validateFresh, deadline, modelCallTimeoutMs) {
   const focused = sources.some(source => source.focus);
   const output = await callModel(model, 'relate', focused ? `${system}\n${focusGuidance}` : system, {
     memories: sources.map((source, index) => ({ index,
       ...(source.focus ? { focus: { content: source.focus.content, interpretationStatus: 'unverified' } } : {}),
       receipts: source.receipts.map(({ role, excerpt }, index) => ({ index, role, excerpt })) })),
-  }, { validateFresh, failureCode: 'rationale_failed', deadline });
+  }, { validateFresh, failureCode: 'rationale_failed', deadline, modelCallTimeoutMs });
   try {
     object(output, ['edges']);
     const seen = new Set();
