@@ -72,7 +72,7 @@ function selection(output, allowed, maximum, model, stage) {
   } catch { emitDiagnostic(model, stage, 'core_validation', reason); fail('invalid_model_output'); }
 }
 
-export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize, recentReceipts,
+export async function recallMemories({ model, modelCallTimeoutMs, readSet, query, limit, map, fetch, finalize, recentReceipts,
   validateFresh = () => {}, includeQualification = false, contextMode, selectionMode }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
@@ -116,7 +116,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     }
     if (packed.omitted && !packed.overflow && packed.input.maps.every((page) => !page.items.length)) continue;
     const output = await callModel(model, 'select', selectPrompt, packed.input,
-      { validateFresh: () => validateFresh([...chosen.values()]) });
+      { validateFresh: () => validateFresh([...chosen.values()]), modelCallTimeoutMs });
     const selected = selection(output, allowed, maxRefs, model, 'select');
     for (let i = 0; i < readSet.length; i++) {
       if (selected.filter((ref) => ref.namespaceIndex === i).length > 12) {
@@ -187,7 +187,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     const shown = packed.included.map((index) => candidates[index]);
     if (shown.length || packed.overflow) {
       const rankOutput = await callModel(model, 'rank', prompt, packed.input,
-        { validateFresh: () => validateFresh(candidates) });
+        { validateFresh: () => validateFresh(candidates), modelCallTimeoutMs });
       ranked = selection(rankOutput, new Map(shown.map((ref) => [key(ref), ref])), limit, model, 'rank');
     }
   }

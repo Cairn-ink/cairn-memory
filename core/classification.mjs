@@ -7,13 +7,13 @@ import { packClassification } from './model-packing.mjs';
 
 const system = readFileSync(new URL('./prompts/classify-placement.md', import.meta.url), 'utf8');
 
-export async function classify({ model, snapshot, map, validateFresh, deadline }) {
+export async function classify({ model, modelCallTimeoutMs, snapshot, map, validateFresh, deadline }) {
   // A request that does not fit is packed; placement may use only the topics it shows.
   const packed = packClassification(model, system,
     { memories: snapshot.memories, map: map.items, mapExhausted: map.exhausted }, deadline);
   const { input } = packed;
   const output = await callModel(model, 'classify', system, input,
-    { validateFresh, failureCode: 'classification_failed', deadline });
+    { validateFresh, failureCode: 'classification_failed', deadline, modelCallTimeoutMs });
   let proposal;
   try {
     proposal = placementProposal(output, snapshot.memories.map((memory) => memory.id));

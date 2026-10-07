@@ -761,6 +761,15 @@ original member makes that initial status unknown. Manual and older batches
 also remain unknown. There is no persistent retry queue or durable history of
 later classification attempts. By default, a whole capture may run several
 separately bounded model stages, so it has no single 30-second deadline. Trusted
+embedded callers may explicitly configure the immutable per-core
+`modelCallTimeoutMs` from 1–120000 milliseconds (default 30000). One clock covers
+the complete adapter invocation, not pure provider latency: remote counting,
+guarded transport and generation share it. Independent host/HTTP deadlines may
+expire sooner. Longer multi-stage work can outlast unchanged 125-second leases;
+freshness and lease fencing still refuse stale commits. No retry is added, no
+MCP/Hermes option or evaluation activation is included, and a longer cap does
+not establish performance or accuracy or repair a historical timeout.
+Trusted
 embedded callers can configure an opt-in monotonic `captureDeadlineMs` of 1–120000
 for the whole invocation. It does not preempt synchronous SQLite or token
 accounting mid-instruction, guarantee a wall-clock return bound, or change

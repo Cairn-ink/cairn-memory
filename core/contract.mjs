@@ -151,7 +151,15 @@ function failure(error) {
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
   object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
-    'captureDeadlineMs', 'sourceCandidatePolicy', 'navigationLabelPolicy', 'sessionEpisodes', 'decisionReview']);
+    'captureDeadlineMs', 'modelCallTimeoutMs', 'sourceCandidatePolicy', 'navigationLabelPolicy', 'sessionEpisodes', 'decisionReview']);
+  const callTimeoutDescriptor = Object.getOwnPropertyDescriptor(input, 'modelCallTimeoutMs');
+  if ((!callTimeoutDescriptor && Reflect.has(input, 'modelCallTimeoutMs')) ||
+      callTimeoutDescriptor && (!Object.hasOwn(callTimeoutDescriptor, 'value') ||
+        !Number.isSafeInteger(callTimeoutDescriptor.value) ||
+        callTimeoutDescriptor.value < 1 || callTimeoutDescriptor.value > 120_000)) {
+    throw new MemoryStoreError('invalid_input');
+  }
+  const modelCallTimeoutMs = callTimeoutDescriptor ? callTimeoutDescriptor.value : 30_000;
   const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
   const captureSourcePolicy = policyDescriptor?.value;
@@ -785,7 +793,7 @@ export function openMemoryCore(input) {
         const page = navigation.pages.get(namespaceBinding(namespace));
         return page ? [{ namespace, indexRevision: page.epoch }] : [];
       }));
-      return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
+      return success(await recallMemories({ model, modelCallTimeoutMs, readSet: namespaces.map(publicNamespace), query,
         limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
         validateFresh,
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
@@ -816,7 +824,7 @@ export function openMemoryCore(input) {
         }
       };
       deadline?.check();
-      const proposals = await proposeRationale(model, snapshot.sources, validateFresh, deadline);
+      const proposals = await proposeRationale(model, snapshot.sources, validateFresh, deadline, modelCallTimeoutMs);
       deadline?.check();
       return success({ ...runtime.commitRationale(ns, refs, snapshot, proposals, deadline),
         ...(inputMode ? { inputMode } : {}) });
@@ -842,7 +850,7 @@ export function openMemoryCore(input) {
           throw new MemoryStoreError('revision_conflict');
         }
       };
-      const proposal = await reviewSourceBasis(model, snapshot.sources, validateFresh, inputMode);
+      const proposal = await reviewSourceBasis(model, snapshot.sources, validateFresh, inputMode, modelCallTimeoutMs);
       const result = { ...proposal, sources: snapshot.sources, indexRevision: snapshot.indexRevision,
         ...(inputMode ? { inputMode } : {}),
         status: 'unassessed', interpretationStatus: 'model-proposed', persistence: 'not-stored' };
@@ -874,7 +882,7 @@ export function openMemoryCore(input) {
       const namespace = publicNamespace(ns);
       const captureKey = value => keepInput ? { ...value, [keepAdmissionKey]: true } : value;
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
-      return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
+      return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, modelCallTimeoutMs, captureQualification, captureSourcePolicy,
         runtime, ns, sessionEpisodes, keepInput,
         startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
         captureRationale, captureEvidence,
@@ -943,7 +951,7 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       episodeClient(input.client);
       for (const key of ['sessionId', 'generation', 'eventId']) contractId(input[key]);
-      return success(await endEpisode({ runtime, ns, model, input }));
+      return success(await endEpisode({ runtime, ns, model, modelCallTimeoutMs, input }));
     } catch (error) { return failure(error); }
   }
 
@@ -978,7 +986,7 @@ export function openMemoryCore(input) {
       if (mapped.value.indexRevision !== index) throw new MemoryStoreError('index_revision_conflict');
       const validateFresh = () => runtime.classificationSnapshot(ns, ids, guards, index);
       deadline?.check();
-      const value = await classify({ model, snapshot, map: mapped.value, validateFresh, deadline });
+      const value = await classify({ model, modelCallTimeoutMs, snapshot, map: mapped.value, validateFresh, deadline });
       deadline?.check();
       return success(value);
     } catch (error) { return failure(error); }

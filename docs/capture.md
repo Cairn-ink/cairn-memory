@@ -31,10 +31,29 @@ are redacted and truncated to 800 units without splitting Unicode code points.
 Indices establish provenance binding, not proof that a model's claim is true.
 
 The model budget is at most 6,000 input and 1,024 output tokens, a 1,024-token
-reserve, minimum 8,192-token context and a 30-second abort deadline per call.
+reserve, minimum 8,192-token context and a default 30-second abort deadline per call.
 Fresh work claims a fixed 125-second lease. Extraction and token counting happen
 outside write transactions. Failure attempts fenced abandonment for safe retry;
 an expired worker cannot commit or release its successor's lease.
+
+Trusted embedded callers may explicitly set
+`openMemoryCore({ path, model, modelCallTimeoutMs: 60000 })`. This constructor-only
+option accepts an own data-property safe integer from 1 through 120000; explicit
+undefined, accessors and inherited options are rejected without invoking getters,
+before opening storage. The value is snapshotted once for this core, not stored
+on the model or read again from caller configuration. It applies to every model
+call, including standalone recall/classification/rationale/basis operations and
+batch, lazy and end-of-session episode interpretation. It does not enter a model
+request, create retries, or change token limits.
+
+One call clock covers the complete adapter invocation, including any remote token
+count followed by generation; generation does not receive a fresh timer. A capture
+aggregate deadline, when configured, supplies the tighter remaining limit. Episode
+interpretation still precedes the admission capture's aggregate deadline. Independent
+HTTP or host deadlines can expire earlier. Multiple longer stages can outlast the
+unchanged 125-second leases; an explicit aggregate capture budget can bound admission
+work more tightly. This option is not exposed by MCP/Hermes startup flags or profiles,
+and increasing it is not a latency, performance or accuracy guarantee.
 
 ### Planning capture batches
 
@@ -77,7 +96,8 @@ CLI flag; its ordinary transport limits do not change.
 Each capture then has one monotonic budget starting before input normalization
 and spanning extraction, optional qualification/reconciliation, admission,
 initial classification and automatic rationale. Every model call still has its
-own 30-second ceiling; the smaller remaining limit applies. Deadline checks
+own configured ceiling (30000 milliseconds by default); the smaller remaining
+limit applies. Deadline checks
 before capture-owned transaction commits roll back late admission, placement or
 rationale writes. This is cooperative for synchronous token counting and SQLite,
 not a hard wall-clock response guarantee. Failure cleanup may run after expiry.
@@ -136,7 +156,7 @@ a new MCP, HTTP or capture input field. Legacy mode is explicitly unprotected
 against semantic errors in automatic retirement.
 
 For nonempty extraction, call `model.qualify` before admission, under the
-same 6000-input/1024-output token ceilings and 30-second deadline: once for all
+same 6000-input/1024-output token ceilings and configured call deadline: once for all
 items, or once per item when they cannot fit together. The input is
 `{items:[{itemIndex,content,kind,sources:[{receiptIndex,role,excerpt}]}]}`; receipt
 indices are local to each item, regardless of original message index order.
@@ -444,7 +464,8 @@ This check survives release/restart for messages registered after the v16 upgrad
 For B batches and P distinct PreCompact batches, calls are bounded by
 `min(B, 1 + floor((B-1)/N) + P) + E + L`, where E and L are at most one each.
 One capture drains at most one older session before its own draft: at most two
-30-second provider waits. Frequent real PreCompact events can approach per-batch
+default 30-second adapter waits (or explicitly configured call caps). Frequent
+real PreCompact events can approach per-batch
 cost. Failed attempts consume their allowance. Interpretation uses exact local
 counting, at most 6,000 input/1,024 output tokens, and no repair call. Current batch
 sources are mandatory; add newest undrafted whole messages next, then prior cited

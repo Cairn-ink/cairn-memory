@@ -34,7 +34,7 @@ function decisions(output, items, candidates, messages) {
   }).filter(decision => decision !== null);
 }
 
-export async function reconcileCapture({ model, snapshot, items, discovery, deadline }) {
+export async function reconcileCapture({ model, modelCallTimeoutMs, snapshot, items, discovery, deadline }) {
   deadline?.check();
   const { candidates } = discovery;
   if (discovery.reason || !items.length || !candidates.length) {
@@ -48,7 +48,7 @@ export async function reconcileCapture({ model, snapshot, items, discovery, dead
   };
   let output;
   try { output = await callModel(model, 'reconcile', system, input,
-    { failureCode: 'reconciliation_failed', deadline }); }
+    { failureCode: 'reconciliation_failed', deadline, modelCallTimeoutMs }); }
   catch (error) {
     if (error.code === 'context_budget_exceeded') return { decisions: [], reason: 'context_budget' };
     throw error;

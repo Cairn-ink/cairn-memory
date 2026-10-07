@@ -7,6 +7,13 @@ Every core model call goes through one guard, `callModel` in
 `context_budget_exceeded` before the adapter runs. Output is capped at 1,024
 tokens, and the context window must be at least 8,192.
 
+Trusted core construction may separately set `modelCallTimeoutMs` (own data-property
+safe integer 1–120000; omitted defaults to 30000). The immutable per-core call cap
+covers the adapter's complete invocation, including remote counting and generation
+on one clock, and is tightened by a capture's remaining `captureDeadlineMs` when
+present. It changes no input/output limit, packing decision or retry behavior.
+See [capture](capture.md) for validation, aggregate scope and lease limitations.
+
 The guard never fails silently. Beyond that, no call's allowed input may exceed
 its budget: each call is either **fixed** (it packs or plans its input to fit),
 **degrades** (a smaller part is skipped and reported, the operation completes),

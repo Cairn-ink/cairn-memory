@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — explicit per-core model-call timeout
+
+- Add trusted constructor-only `modelCallTimeoutMs` (own data-property safe integer
+  1–120000; default 30000), snapshotted per core without changing the supplied model.
+  All ten model-call sites use the cap; count and generation share one clock and
+  a capture's remaining aggregate deadline still wins when tighter. Timeout
+  provenance, token limits, leases and no-retry behavior are unchanged. No
+  MCP/Hermes or evaluation activation is included; longer budgets do not establish
+  latency/accuracy gains or repair frozen historical cases.
+
 ## Unreleased — finite extraction boundary diagnostics
 
 - Optional trusted model diagnostics distinguish repeated source indices from

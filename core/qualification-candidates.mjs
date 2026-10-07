@@ -237,7 +237,7 @@ function shortenedSingleton(local, cap) {
  * fails the capture. `report` receives how many items were shortened or left
  * unqualified.
  */
-export async function qualifyCandidateItems(model, items, deadline, assertCaptureEvidence, episode = false, report = {}) {
+export async function qualifyCandidateItems(model, items, deadline, assertCaptureEvidence, episode = false, report = {}, modelCallTimeoutMs) {
   deadline?.check();
   const system = episode ? episodeSystem : legacySystem;
   const snapshot = createQualificationCandidateSnapshot(items);
@@ -294,7 +294,7 @@ export async function qualifyCandidateItems(model, items, deadline, assertCaptur
     assertCaptureEvidence?.();
     deadline?.check();
     const output = await callModel(model, 'qualifyCandidates', system, planned.input,
-      { failureCode: 'qualification_failed', deadline,
+      { failureCode: 'qualification_failed', deadline, modelCallTimeoutMs,
         // Count callbacks run after the outer group check. Recheck the scoped
         // staged source after counting and before dispatch, and after response.
         validateFresh: assertCaptureEvidence });

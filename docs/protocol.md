@@ -182,6 +182,15 @@ does not change the public core, plugin, MCP, HTTP, or telemetry protocol.
 
 ### Private public-pilot diagnostic boundary
 
+The embedded JavaScript core separately accepts trusted constructor-only
+`modelCallTimeoutMs`: an own data-property safe integer 1–120000, default 30000.
+It snapshots one cap per core and explicitly forwards it to model-call helpers;
+counting and generation share one invocation clock. Capture's aggregate remainder
+still tightens it, and genuine core-created abort provenance is unchanged. It is
+not an MCP/Hermes flag or profile, tool/HTTP/model request field, benchmark
+capability or diagnostic payload. Host defaults, provider spending allowance,
+retries and independent HTTP deadlines do not change.
+
 The source-only embedded core may opt in to `captureDeadlineMs` at trusted
 construction. The local MCP server can now forward a validated own constructor
 option or `--capture-deadline-ms` CLI flag, only with explicit source-qualified

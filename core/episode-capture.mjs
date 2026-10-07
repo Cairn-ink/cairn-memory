@@ -83,7 +83,7 @@ function recordDraftFailure(runtime, ns, failure) {
     token: failure.token, busyTimeoutMs: remaining });
 }
 
-async function interpret({ runtime, ns, model, episodeId, generation, writerToken,
+async function interpret({ runtime, ns, model, modelCallTimeoutMs, episodeId, generation, writerToken,
   trigger, watermark, staging, onPendingFailure }) {
   let owned, started = false, retryable = false;
   try {
@@ -97,7 +97,7 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
     const planned = episodeRequest(model, snapshot);
     let checks = 0;
     const output = await callModel(model, 'interpretEpisode', system, planned.input, {
-      failureCode: 'episode_failed', validateFresh: () => {
+      failureCode: 'episode_failed', modelCallTimeoutMs, validateFresh: () => {
         runtime.episodeDraftSnapshot(ns, owned);
         // callModel checks once during preparation and again immediately before
         // invoking the port. Consume only at that second check, with no await.
@@ -166,7 +166,7 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
   }
 }
 
-async function auxiliary({ runtime, ns, model, episodeId, generation, trigger }) {
+async function auxiliary({ runtime, ns, model, modelCallTimeoutMs, episodeId, generation, trigger }) {
   const state = runtime.episodeCaptureState(ns, { episodeId });
   if (!state || (state.observed <= state.attempted && !state.unfinishedAttempt)) {
     return { id: episodeId, status: 'not-run', reason: 'no-undrafted-evidence' };
@@ -178,24 +178,24 @@ async function auxiliary({ runtime, ns, model, episodeId, generation, trigger })
     if (state.observed <= state.attempted) {
       return { id: episodeId, status: 'not-run', reason: 'no-undrafted-evidence' };
     }
-    return await interpret({ runtime, ns, model, episodeId, generation, writerToken: writer.token,
+    return await interpret({ runtime, ns, model, modelCallTimeoutMs, episodeId, generation, writerToken: writer.token,
       trigger, watermark: state.observed });
   } finally { runtime.releaseEpisodeWriter(ns, { episodeId, token: writer.token }); }
 }
 
-export async function endEpisode({ runtime, ns, model, input }) {
+export async function endEpisode({ runtime, ns, model, modelCallTimeoutMs, input }) {
   // Validate controls even when no session/evidence exists. End IDs are host metadata only.
   const control = runtime.getCaptureControl(ns);
   if (control.generation !== input.generation) fail('generation_conflict');
   if (control.paused || !control.enabled) fail('capture_disabled');
   const state = runtime.episodeCaptureState(ns, { client: input.client, sessionId: input.sessionId });
   if (!state) return { episode: { status: 'not-run', reason: 'no-undrafted-evidence' } };
-  return { episode: await auxiliary({ runtime, ns, model, episodeId: state.episodeId,
+  return { episode: await auxiliary({ runtime, ns, model, modelCallTimeoutMs, episodeId: state.episodeId,
     generation: input.generation, trigger: 'end' }) };
 }
 
 export async function captureEpisodeMessages(options) {
-  const { runtime, ns, model, input, startAdmission, captureQualification, captureSourcePolicy } = options;
+  const { runtime, ns, model, modelCallTimeoutMs, input, startAdmission, captureQualification, captureSourcePolicy } = options;
   const snapshot = episodeSnapshot(input);
   // Before staging, lazy interpretation or any claim: an oversized batch is an input error.
   checkExtractionFits(model, extractionRequest(snapshot, { captureQualification, captureSourcePolicy, episode: true }));
@@ -213,7 +213,7 @@ export async function captureEpisodeMessages(options) {
   let lazy;
   if (!checked.duplicate) {
     const pending = runtime.pendingEpisodeSession(ns, batch);
-    if (pending) lazy = await auxiliary({ runtime, ns, model, episodeId: pending,
+    if (pending) lazy = await auxiliary({ runtime, ns, model, modelCallTimeoutMs, episodeId: pending,
       generation: batch.generation, trigger: 'lazy' });
   }
   const registered = runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
@@ -236,7 +236,7 @@ export async function captureEpisodeMessages(options) {
     const due = !state.draftConsumed && state.admission !== 'completed' && (state.attempted === 0 ||
       registered.position - state.attempted >= state.draftEvery ||
       snapshot.episodeContext.origin === 'precompact');
-    if (due && writerToken) episode = await interpret({ runtime, ns, model, episodeId,
+    if (due && writerToken) episode = await interpret({ runtime, ns, model, modelCallTimeoutMs, episodeId,
       generation: batch.generation,
       writerToken, trigger: 'batch', watermark: registered.position, staging: registered.staging,
       onPendingFailure: failure => { pendingFailure = failure; } });

@@ -15,7 +15,8 @@ export const modelRequestText = (system, input) =>
 
 /** A bounded adapter call. No database transaction may surround this helper. */
 export async function callModel(model, method, system, input,
-  { validateFresh = () => {}, failureCode = 'recall_failed', deadline } = {}) {
+  { validateFresh = () => {}, failureCode = 'recall_failed', deadline, modelCallTimeoutMs = 30_000 } = {}) {
+  if (!Number.isSafeInteger(modelCallTimeoutMs) || modelCallTimeoutMs < 1 || modelCallTimeoutMs > 120_000) fail('invalid_input');
   const reject = (code, reason = code) => { emitDiagnostic(model, method, 'core_call', reason); fail(code); };
   let controller;
   let deadlineReported = false;
@@ -69,7 +70,7 @@ export async function callModel(model, method, system, input,
           coreDeadlineSignals.add(controller.signal);
           controller.abort();
           reject(new MemoryStoreError('model_timeout'));
-        }, deadline ? deadline.remainingMs() : 30_000);
+        }, deadline ? deadline.remainingMs(modelCallTimeoutMs) : modelCallTimeoutMs);
       }),
     ]);
   } catch (error) {

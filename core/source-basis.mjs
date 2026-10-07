@@ -93,7 +93,7 @@ export function compileDecisionBasis(output, sources, inputMode) {
   return { units, links };
 }
 
-export async function reviewSourceBasis(model, sources, validateFresh, inputMode) {
+export async function reviewSourceBasis(model, sources, validateFresh, inputMode, modelCallTimeoutMs) {
   if (inputMode !== undefined && !['source-context-v1', 'source-addressed-v1'].includes(inputMode)) fail('invalid_input');
   const addressed = inputMode === 'source-addressed-v1';
   const prompt = addressed ? addressedSystem : system + (inputMode ? contextInstructions : '');
@@ -102,7 +102,7 @@ export async function reviewSourceBasis(model, sources, validateFresh, inputMode
     memories: sources.map((source, index) => ({ index,
       receipts: source.receipts.map(({ role, excerpt }, index) => ({ index, role, excerpt,
         ...(addressed ? { parts: sourceParts(excerpt) } : {}) })) })),
-  }, { validateFresh, failureCode: 'rationale_failed' });
+  }, { validateFresh, failureCode: 'rationale_failed', modelCallTimeoutMs });
   // Adapter objects may have changing getters. Recheck the detached proposal
   // that compilation actually consumes, not an earlier serialization of it.
   let snapshot, text;
