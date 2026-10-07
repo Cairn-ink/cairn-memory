@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { scryptSync } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
@@ -147,7 +147,7 @@ test('browser happy path uses S256, safe stdin, credential check then ACK and re
   const r = await fixture(t, {}, { args: ['setup'], server: { sequence: ['authorization_pending'] } });
   assert.equal(r.code, 0, r.stdout);
   assert.equal(r.state.configured, true);
-  assert.equal(saved(r).tokenDigest, createHash('sha256').update(secret).digest('hex'));
+  assert.equal(saved(r).tokenDigest, scryptSync(secret, 'cairn-fake-claude', 16).toString('hex'));
   assert.deepEqual(saved(r).keys, ['api_endpoint', 'api_token']);
   assert.equal(saved(r).endpoint, r.server.endpoint);
   assert.deepEqual(r.prompts.length, 2);

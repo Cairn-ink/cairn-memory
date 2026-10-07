@@ -1,14 +1,18 @@
-import { createHash } from 'node:crypto';
+import { scryptSync } from 'node:crypto';
 import { appendFileSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 
 // Write directly to the child descriptors so the recorder does not depend on
 // asynchronous console flushing at process exit.
 const console = { log: value => writeSync(1, `${value}\n`), error: value => writeSync(2, `${value}\n`) };
 
+// Record a one-way digest, never the token. scrypt, not a bare hash, keeps
+// CodeQL's password-hash rule quiet for this synthetic fixture.
+export function tokenDigest(token) { return scryptSync(token, 'cairn-fake-claude', 16).toString('hex'); }
+
 const args = process.argv.slice(2);
 const input = readFileSync(0, 'utf8');
 const values = input ? JSON.parse(input) : {};
-appendFileSync(process.env.FAKE_CALLS, `${JSON.stringify({ args, env: process.env, keys: Object.keys(values), endpoint: values.api_endpoint, tokenDigest: values.api_token ? createHash('sha256').update(values.api_token).digest('hex') : undefined })}\n`);
+appendFileSync(process.env.FAKE_CALLS, `${JSON.stringify({ args, env: process.env, keys: Object.keys(values), endpoint: values.api_endpoint, tokenDigest: values.api_token ? tokenDigest(values.api_token) : undefined })}\n`);
 const state = JSON.parse(readFileSync(process.env.FAKE_STATE, 'utf8'));
 const scopeIndex = args.indexOf('--scope');
 const command = (scopeIndex < 0 ? args : args.filter((_, index) => index !== scopeIndex && index !== scopeIndex + 1)).join(' ');
