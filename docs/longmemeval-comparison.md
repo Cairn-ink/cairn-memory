@@ -180,6 +180,28 @@ and request caps against the versioned plan.
 
 ### Explicit indexed-evidence mixed profile
 
+The controlled mixed preparation additionally accepts the experimental,
+programmatic `navigationLabelPolicy: 'rare-query-window-v1'` only with
+`comparisonProfile: 'indexed-evidence-v1'`. Its source recall already fixes
+`sourceCandidatePolicy: 'bounded-keyset-v1'`; the policy reaches that real core
+caller, not Mem0 or capture planning. Omission preserves historical preparation
+objects and digests. Explicit undefined, unknown values, getters and unsupported
+profile combinations reject before preparation work.
+
+The explicit field is retained in `manifest.cairn`, included in the context hash
+and therefore the case/roster/grant/journal identity. The adapter configuration,
+native/source/answer/scorer protocols and numeric limits remain unchanged.
+`projectMixedResources` accepts the same pair of options and identifies its output
+as `mixed-indexed-evidence-rare-query-navigation-resource-projection-v1`, with
+`navigationLabelPolicy` and unchanged conditional ceilings. It is not a
+semantic estimate or grant to spend. See the
+[propagation contract](plans/mixed-navigation-policy.md).
+
+This experiment changes navigation source/window presentation only, not default
+MOC/MCP/Hermes settings, capture coverage, candidate score/order or final source.
+Label construction adds no model call; restored selection may enable existing
+ranking. Synthetic label-driven selection is not a real-model quality result.
+
 `prepareMixedComparison({...options, comparisonProfile: 'indexed-evidence-v1'})`
 selects the public core's already explicit evidence-only capture lane. Omit the
 option to retain the qualified protocol and its existing digests. Own undefined,

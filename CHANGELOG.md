@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — experimental mixed navigation-policy binding
+
+- Controlled mixed evaluation may explicitly opt into `navigationLabelPolicy:
+  'rare-query-window-v1'` with `comparisonProfile: 'indexed-evidence-v1'`.
+  Preparation, grant, journal and resource identities bind the policy before it
+  reaches source-mode core navigation. Omission preserves historical identities;
+  Mem0, capture and budgets remain unchanged. This is evaluation-only, not a
+  released MCP/Hermes default or semantic/score improvement. See the
+  [contract](docs/plans/mixed-navigation-policy.md).
+
 ## Unreleased — experimental bounded rare-query navigation previews
 
 - Trusted embedded callers may opt into `navigationLabelPolicy:

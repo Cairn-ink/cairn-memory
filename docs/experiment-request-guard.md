@@ -695,6 +695,19 @@ metadata fails capability validation; the ordinary qualified capability retains
 its original wire. This is an explicit new grant identity, never a fallback or
 an extension of an old grant. See the [comparison contract](plans/indexed-evidence-comparison.md).
 
+An additional explicit evaluation-only manifest field
+`cairn.navigationLabelPolicy: 'rare-query-window-v1'` is accepted only with that
+indexed-evidence profile. It binds a distinct method profile,
+`cairn-mem0-indexed-evidence-rare-query-navigation-source-pair-v1`, through the
+existing experiment digest, stored grant and replay checks. Adding or stripping
+the policy cannot reuse an old method/grant identity. Omitted-policy capabilities
+keep their exact old shapes and method values. Getters and unknown combinations
+are refused by strict own-data validation before reservation or transport.
+The request routes, model settings, native arm, deadlines, caps and pricing do
+not change. This is experimental navigation presentation, not semantic recovery,
+new capture authority or a budget extension; see
+[the bounded contract](plans/mixed-navigation-policy.md).
+
 The separate [contained native gateway](plans/mem0-native-gateway.md) now
 inspects a pinned local Mem0/Python installation, rehashes before/after one
 case, and runs actual Mem0 add/get/search in a fresh bwrap child behind a

@@ -39,6 +39,14 @@ The unchanged phase reports remain generation/scoring v1. All authority,
 source policies, prompts, model settings, guard validation, evaluator separation,
 failure reasons and fixed-N denominators retain their existing behavior.
 
+The experimental mixed `navigationLabelPolicy: 'rare-query-window-v1'` is an
+optional Cairn manifest field, valid only with `indexed-evidence-v1`. Its
+context/manifest/roster identity is retained and checked on phase writes and
+offline reads. A changed, added or stripped policy cannot preserve the old
+identity, even if an outer record digest is recomputed. The journal version and
+omitted-policy identity objects remain unchanged; accepting this optional
+manifest does not authorize execution, alter capture, or attest semantic quality.
+
 The journal also composes with the existing explicit generation observations:
 `phaseTiming: 'bounded-tail-v1'` and `recallWitness: 'bounded-v1'`. Their
 bounded diagnostics are retained in the terminal arm and completed generation
