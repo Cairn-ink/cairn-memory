@@ -1,5 +1,9 @@
 # Staged capture evidence — explicit opt-in
 
+The established prefix policy below is unchanged. A distinct core-only
+[canonical submission policy](#canonical-submission-staging-indexed-staged-v1)
+retains complete bounded canonical messages without qualification.
+
 `captureEvidence: 'staged-v1'` separates a bounded submitted source view from
 successful interpretation. It requires source-bound-v2 capture and is off by
 default. This is a shared-core feature, not a new memory engine or hosted
@@ -105,6 +109,64 @@ Verification uses synthetic stores and scripted models. It demonstrates
 retention and lifecycle boundaries, not semantic quality. Native Hermes
 exposure, precise source-lineage deletion, automatic retries, promotion,
 background maintenance and general reliability claims are outside this slice.
+
+## Canonical submission staging (`indexed-staged-v1`)
+
+```js
+const core = openMemoryCore({ path, model,
+  captureSourcePolicy: 'indexed-staged-v1' });
+```
+
+This explicit own-data constructor option uses indexed extraction without
+qualification. Omit own qualification, rationale, captureEvidence and sessionEpisodes
+options; any own causal capture field rejects. No new MCP/CLI/Hermes option is exposed.
+Hosts must obtain consent before retaining real conversational data; default capture
+does not retain full transcripts.
+
+After existing validation, canonical-window creation and input fit checks, the
+full canonical submission is staged atomically with admission ownership before
+extraction. Empty, invalid-output and provider-failed extractions leave inspectable
+source even when zero memories exist. Pre-claim validation/context/capacity refusal
+leaves no new source and calls no generation. Successful nonempty capture admits
+only valid extractor proposals with existing selected receipts; unselected staged
+source is not promoted into memory or semantic truth.
+
+Exact inspection after keyless cold reopen returns:
+
+```js
+view: {
+  format: 'canonical-messages-v1',
+  messages: [{ id: 'message-1', role: 'user', content: 'Complete canonical content.' }],
+  retainedSourceWindow: { maxUnitsPerMessage: 4000, truncatedMessageIndices: [] }
+}
+```
+
+Canonical is existing NFKC/whitespace normalization and secret redaction, not raw
+transcript bytes. The unchanged input limit is24 messages,4,000 UTF-16 units per
+message and20,000 total; exact IDs/roles/order are retained. Indexed extraction
+still uses at-most800-unit windows, at most5 items and4 windows/item. Full staging
+is independent of that selection. Inspection is detached from storage and remains
+`untrusted-data-not-instructions`.
+
+Serialized UTF-8 must also fit128KiB (escaping/identity overhead counts). Existing
+64-payload/1MiB exact-namespace quotas reject atomically without truncating or
+evicting another payload. Fixed24-hour monotonic expiry, no replay renewal,
+discard, correction/forget namespace purging and content-free replay fences are
+shared with prefix staging. Pending discard/forget blocks late admission.
+Ordinary get/list/search/MOC/fetch/recall/sourceSnapshot excludes staged source.
+Known-event inspection is not automatic discovery or improved recall.
+
+Schema19 adds a checked format marker; schema18 prefix payload bytes and identities
+and clocks remain unchanged. Inspection validates format against payload shape;
+it never reinterprets a prefix as complete source. A policy-separated event digest
+prevents old-event replay from enabling new retention. Stop all old runtime
+processes/connections before upgrade: older binaries refuse schema19 on new opens,
+but already-open processes are not retroactively fenced. Logical expiry/discard
+does not erase SQLite free pages, journals or backups. This opt-in can retain
+sensitive details absent from extracted memories and adds no encryption/authentication.
+
+Synthetic tests establish bounded persistence/lifecycle, not semantic quality,
+MCP integration, permanent archive, automatic repair/re-extraction or paid scores.
 
 ## Opt-in episode ownership (SE-1)
 

@@ -163,9 +163,9 @@ export function openMemoryCore(input) {
   const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
   const captureSourcePolicy = policyDescriptor?.value;
-  const evidenceOnly = captureSourcePolicy === 'indexed-evidence-v1';
+  const evidenceOnly = ['indexed-evidence-v1', 'indexed-staged-v1'].includes(captureSourcePolicy);
   if (policyDescriptor && (!Object.hasOwn(policyDescriptor, 'value') ||
-      !['indexed-windows-v1', 'indexed-evidence-v1'].includes(captureSourcePolicy) ||
+      !['indexed-windows-v1', 'indexed-evidence-v1', 'indexed-staged-v1'].includes(captureSourcePolicy) ||
       evidenceOnly && ['captureQualification', 'captureEvidence', 'captureRationale', 'sessionEpisodes']
         .some(key => Object.hasOwn(input, key)))) {
     throw new MemoryStoreError('invalid_input');

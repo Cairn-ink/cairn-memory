@@ -2156,3 +2156,17 @@ telemetry. Malformed/unavailable observations, accounting or persistence faults
 halt remaining work without replay. A consumed claim is retained even if no
 request was sent. Offline green grants no paid authority; any future execution
 needs its own accepted freeze and immediate original-ledger validation.
+
+## Opt-in canonical staging is retention, not retrieval quality
+
+The core-only [`indexed-staged-v1`](staged-capture-evidence.md#canonical-submission-staging-indexed-staged-v1)
+policy independently retains complete bounded canonical submitted messages for
+24-hour exact keyless inspection, including empty/failed extraction. Canonical
+means normalized, secret-redacted input, not raw transcript bytes. This expands
+sensitive local retention only by explicit opt-in; default capture and existing
+prefix staging are unchanged. Staged source is untrusted, not admitted memory or
+ordinary retrieval input. Known-event lookup does not provide automatic discovery,
+MCP/Hermes exposure, semantic verification, reliable recall or a better benchmark
+score. Existing quotas/expiry/purge fences apply; logical deletion does not erase
+SQLite free pages or backups. Synthetic tests demonstrate persistence/lifecycle,
+not those broader product goals or permission for real-conversation retention.

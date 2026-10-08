@@ -4,7 +4,8 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16/v17 data now upgrades it to v18 for
+v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16/v17/v18 data now upgrades it to v19 for
+[opt-in canonical source staging](staged-capture-evidence.md#canonical-submission-staging-indexed-staged-v1),
 [opt-in decision confirmation](plans/confirmation-state.md),
 [episode storage and explicit procedural tags](#episode-storage-foundation-se-1),
 [opt-in staged capture evidence](staged-capture-evidence.md),
@@ -15,7 +16,7 @@ v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16/v17 data now upgrades it to 
 [historical currentness](supersession.md), preserving index generations,
 [conflict hints](conflicts.md), [admission claims](admission-claims.md) and
 the bounded [initial capture classification journal](capture.md).
-Draft-v2 and unknown formats are rejected; older binaries cannot open v18.
+Draft-v2 and unknown formats are rejected; older binaries cannot open v19.
 Stop all older-runtime processes/connections, including idle readers, before
 the upgrade. Previously opened old runtimes are not retroactively fenced;
 mixed-version coexistence is unsupported.
@@ -246,12 +247,12 @@ Episode mode now enables debounced capture through an injected interpretation po
 quick handling, explicit keep and automatic source-bound procedural tags.
 Mode-off capture remains unchanged. See [capture](capture.md#opt-in-session-episodes).
 
-Every open atomically upgrades an older committed format to v18, including with
+Every open atomically upgrades an older committed format to v19, including with
 episodes off. Explicit procedural tags are available immediately in both modes;
 no request triggers a lazy upgrade. Inspection and memory correction/forgetting
 still enforce episode dependencies with the feature off. The host must stop/drain
 **all** older-runtime processes and connections, including idle readers, before
-opening the store for upgrade. Older binaries reject v18 on subsequent opens;
+opening the store for upgrade. Older binaries reject v19 on subsequent opens;
 an already-open old process is not retroactively fenced. There is no downgrade.
 
 The upgrade runs within the existing immediate transaction with foreign keys on.
@@ -260,6 +261,17 @@ classification journal) before rebuilding the admission parent, then restores
 both children. Reserved parents have no token, lease, or result. Released staging
 retains event ownership, reason and source disposition, with no payload charge.
 Foreign-key checking precedes commit; any failure restores the prior schema/data.
+
+The v18→v19 step adds a checked `payload_format` column to staging rows, defaulting
+to `prefix-messages-v1`, without rewriting old payload bytes, receipt identities,
+admission claims or clocks. New `canonical-messages-v1` rows exist only after explicit
+embedded `captureSourcePolicy: 'indexed-staged-v1'` capture. Their complete bounded
+canonical messages remain untrusted local source, not memories or automatic retrieval
+input. Existing staging quotas and24-hour lifecycle apply. Format/payload mismatch
+fails closed on inspection. Changed policy for a used event conflicts rather than
+retrospectively retaining more source. This may retain sensitive details omitted by
+an extractor; no encryption or new access-control layer is added. Logical purge is
+not physical erasure.
 
 Episode identity uses a dedicated 256-bit store HMAC key and a versioned tuple of
 exact namespace, client and host session. New episode rows retain only the derived

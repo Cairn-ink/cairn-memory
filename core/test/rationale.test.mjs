@@ -157,7 +157,7 @@ test('R9 schema 11 upgrade preserves previous state and migration failure is ato
   assert.equal(f.db.prepare("SELECT count(*) n FROM sqlite_master WHERE type='trigger' AND name LIKE 'rationale_%'").get().n, 0);
   f.db.exec('DROP TABLE rationale_edges');
   const migrated = openMemoryCore({ path: f.path }); t.after(() => migrated.close());
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 19);
   assert.deepEqual(f.db.prepare('SELECT * FROM memories ORDER BY id').all().map(({ review_state, ...row }) => row), before.map(row => ({ ...row })));
   assert.deepEqual(f.db.prepare('SELECT * FROM receipts ORDER BY id').all(), receipts);
   assert.deepEqual(f.db.prepare('SELECT * FROM store_metadata').all(), identity);

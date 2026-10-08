@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — opt-in canonical source staging
+
+- Add embedded `captureSourcePolicy: 'indexed-staged-v1'`: unchanged indexed
+  extraction plus atomic24-hour staging of the full bounded canonical submission,
+  independent of extractor selection and available through exact keyless cold
+  inspection even after empty/failed extraction. Existing quotas, purge/replay
+  fences, defaults, prompts and receipt limits are unchanged; staged source is
+  untrusted and excluded from ordinary reads/recall. No MCP/CLI/Hermes flag or
+  semantic-quality claim is added.
+- Eager transactional schema19 distinguishes canonical and unchanged prefix
+  payloads without rewriting old source bytes or identities. Older openers refuse
+  the new schema; stop all older runtime connections before upgrade.
+
 ## Unreleased — explicit per-core model-call timeout
 
 - Add trusted constructor-only `modelCallTimeoutMs` (own data-property safe integer

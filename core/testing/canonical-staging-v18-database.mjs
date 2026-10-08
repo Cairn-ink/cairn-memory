@@ -1,25 +1,26 @@
+// Frozen from 1a7a4826ea310a07b281a7c2133cd51826db1dc9; only import paths relocated.
 import { randomBytes, randomUUID } from "node:crypto";
 import { closeSync, lstatSync, mkdirSync, openSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { migrateVersion17 } from './confirmation-schema.mjs';
-import { fail } from "./validation.mjs";
-import { migrateVersion6, installIndexReaders } from "./index-schema.mjs";
-import { migrateVersion8 } from './ordered-capture-schema.mjs';
-import { migrateVersion9 } from './claim-qualification-schema.mjs';
-import { migrateVersion10 } from './qualified-transition-schema.mjs';
-import { migrateVersion11 } from './rationale-schema.mjs';
-import { migrateVersion12, migrateVersion18, CANONICAL_STAGING_SCHEMA_VERSION } from './staged-evidence-schema.mjs';
-import { migrateVersion13 } from './classification-journal-schema.mjs';
+import { migrateVersion17, CONFIRMATION_SCHEMA_VERSION } from '../confirmation-schema.mjs';
+import { fail } from "../validation.mjs";
+import { migrateVersion6, installIndexReaders } from "../index-schema.mjs";
+import { migrateVersion8 } from '../ordered-capture-schema.mjs';
+import { migrateVersion9 } from '../claim-qualification-schema.mjs';
+import { migrateVersion10 } from '../qualified-transition-schema.mjs';
+import { migrateVersion11 } from '../rationale-schema.mjs';
+import { migrateVersion12 } from '../staged-evidence-schema.mjs';
+import { migrateVersion13 } from '../classification-journal-schema.mjs';
 
-import { migrateVersion14, migrateVersion15, migrateVersion16 } from './episode-schema.mjs';
+import { migrateVersion14, migrateVersion15, migrateVersion16 } from '../episode-schema.mjs';
 
 export const STORAGE_BUSY_TIMEOUT_MS = 5_000;
 export const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
   Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff);
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = CANONICAL_STAGING_SCHEMA_VERSION;
+const VERSION = CONFIRMATION_SCHEMA_VERSION;
 
 function createVersion3(db) {
   db.exec(`
@@ -412,20 +413,17 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
       }
-      if (!(appId === APPLICATION_ID && version === 18)) {
-        if (!(appId === APPLICATION_ID && version === 17)) {
-          if (!(appId === APPLICATION_ID && version === 16)) {
-            if (!(appId === APPLICATION_ID && version === 15)) {
-              upgradeCommittedSchema();
-              migrateVersion14(db);
-            }
-            migrateVersion15(db);
+      if (!(appId === APPLICATION_ID && version === 17)) {
+        if (!(appId === APPLICATION_ID && version === 16)) {
+          if (!(appId === APPLICATION_ID && version === 15)) {
+            upgradeCommittedSchema();
+            migrateVersion14(db);
           }
-          migrateVersion16(db);
+          migrateVersion15(db);
         }
-        migrateVersion17(db);
+        migrateVersion16(db);
       }
-      migrateVersion18(db);
+      migrateVersion17(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
     });
     return db;

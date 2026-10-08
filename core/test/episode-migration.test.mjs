@@ -36,7 +36,7 @@ test('E11 fresh v15 and current-v14 transactional child-first migration preserve
   const f=legacy(t),before=oldTables.map(name=>f.db.prepare(`SELECT * FROM ${name}`).all());
   assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,14);
   const core=openMemoryCore({path:f.path,...options});t.after(()=>core.close());
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,18);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 19);
   for(let i=0;i<oldTables.length;i++) for(const [j,row]of before[i].entries()) {
     const actual=f.db.prepare(`SELECT * FROM ${oldTables[i]}`).all()[j];for(const [key,value]of Object.entries(row))assert.equal(actual[key],value);
   }
@@ -63,7 +63,7 @@ test('E10 frozen v14 prompt/request/output/stored-field/digest parity with episo
     assert.deepEqual(await captureEpisodeParity(root, path, config), expected);
     const db = new DatabaseSync(path);
     try {
-      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 19);
       for (const name of ['session_episodes', 'episode_events', 'procedural_tags']) {
         assert.equal(db.prepare('SELECT count(*) n FROM ' + name).get().n, 0);
       }
@@ -76,7 +76,7 @@ test('E11 eager feature-off open upgrades v14 before requests, independent of DD
   assert.notEqual(reformatted, schemaV14);
   const f = legacy(t, reformatted);
   const core = openMemoryCore({ path: f.path }); t.after(() => core.close());
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 19);
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(), []);
   const before = f.db.prepare('SELECT * FROM sqlite_master ORDER BY name').all();
   const result = core.admit({ namespace: ns, memory: { content: 'Rejected fact tag', kind: 'fact' },
@@ -99,7 +99,7 @@ test('E11 original v13 synthetic schema migrates through v14 journal into v15',t
   const f=legacy(t);f.db.exec('DROP TABLE capture_initial_classification; PRAGMA user_version=13');
   const before=f.db.prepare('SELECT * FROM admission_claims').all();
   openMemoryCore({path:f.path,...options}).close();
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version,18);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 19);
   assert.deepEqual(f.db.prepare('SELECT * FROM admission_claims').all(),before);
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
 });
@@ -150,7 +150,7 @@ test('E10/E11 indexed evidence rejects episode options before getters or eager m
   assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 14);
   assert.deepEqual(f.db.prepare('SELECT * FROM sqlite_master ORDER BY name').all(), before);
   const core = openMemoryCore({ path: f.path, captureSourcePolicy: 'indexed-evidence-v1' }); t.after(() => core.close());
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 19);
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(), []);
   assert.equal(core.inspectAdmission({ namespace: ns, client: 'synthetic', eventId: 'old',
     includeInitialClassification: true }).value.initialClassification.status, 'skipped_empty');
@@ -166,7 +166,7 @@ test('E11 v15 committed fixture eagerly upgrades to v16 with empty content-free 
       db.prepare(`INSERT INTO ${name}(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(()=>'?').join(',')})`).run(...Object.values(row));
   });
   openMemoryCore({path}).close();
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version,18);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 19);
   assert.equal(db.prepare('SELECT count(*) n FROM episode_messages').get().n,0);
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
   for(const [name,rows]of Object.entries(data.tables)) {
@@ -221,7 +221,7 @@ for (const version of [14,15,16]) test(`E11 committed v${version} upgrades atomi
         db.prepare(`INSERT INTO ${name}(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(()=>'?').join(',')})`).run(...Object.values(row));
     });
     openMemoryCore({path,...mode}).close();
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version,18);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 19);
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
     for(const [name,rows] of Object.entries(data.tables)) {
       const actual=db.prepare('SELECT * FROM '+name).all().map(row=>Object.fromEntries(Object.keys(rows[0]??{}).map(key=>[key,row[key]])));
