@@ -2,25 +2,41 @@
 
 The [source-role extraction ablation](plans/source-role-ablation.md) freezes twelve
 fresh synthetic sources, a separate evaluator rubric, two evaluation-only prompts
-and 24 prospective arm slots. Actual core preparation and fake-HTTP adapter
+and 24 frozen arm slots. Actual core preparation and fake-HTTP adapter
 controls establish fit, source binding and atomic refusal, not model quality,
 durable admission, recovery of historical evidence or a benchmark score.
 Validated retained spans do not establish summary entailment or attribution.
-Independent blind semantic review remains unknown; it must assess all slots,
-report baseline and candidate promotions separately, and block advancement on
-candidate promotion, required assistant-evidence omission or structural regression.
+Semantic review must assess all slots, report baseline and candidate promotions
+separately, and block advancement on candidate promotion, required
+assistant-evidence omission or structural regression.
 The intentionally over-capacity case is reported separately from achievable
 episode gains. No production prompt, additional extraction call, provider CLI,
 paid transport, ledger grant or shared-engine default changes in the N28 package.
 
+The [one-shot N30 result](plans/source-role-ablation-results.md) completed all 24
+synthetic extraction slots, but both arms retained 12/12 eligible direct anchors
+and 2/2 required assistant anchors: zero direct gain fails the frozen minimum
+of two. Both retained 5/21 anchors in the separate over-capacity case. Two
+independent blind GPT-6.1 Sol/high reviews of all 24 records/57 items agreed on
+one borderline baseline reported-speech promotion and one candidate citation
+defect: a full-input-supported claim lacked sufficient receipts on its own item.
+Zero observed candidate promotions does not mean zero semantic errors. These
+same-family reviews are not human gold or an accuracy score. Actual core
+qualification/admission was not executed, so the result proves neither that bad
+extraction was admitted nor recall improvement. No prompt is promoted, and the
+earlier thirty-case development comparison is unchanged. This is not evidence
+of general reliability, lightweight resource use or MCP/Hermes end-to-end quality.
+
 The separate [one-shot extraction transport](plans/source-role-ablation-execution.md)
-adds prospective programmatic authority for only the frozen 24 slots through the
+provides bounded programmatic authority for only the frozen 24 slots through the
 existing reserve/settle guard and original cumulative ledger. Synthetic fake HTTP
 and controlled genuine core-timer/SQLite failure paths establish ordering, bounds,
 halt, no replay and private persistence boundaries, not provider access, invoices,
 latency, semantic quality or advancement. N28 assets and shared-engine defaults
-are unchanged. Actual ledger/key access and paid execution remain separate;
-delivery or test success provisions no live capability. Grant-file verification
+are unchanged. Actual ledger/key access and any further paid execution require
+separate authority; delivery or test success provisions no live capability.
+The N30 reservation is conservative, not a complete bill: 24 actual-cost entries
+remain unknown. Grant-file verification
 immediately precedes reservation, while the ledger witness is checked inside
 SQLite; these are not one atomic transaction. Private source/model output and local
 identity hashes require controlled retention. Callback completion is not independent

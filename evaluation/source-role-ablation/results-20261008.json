@@ -1,0 +1,229 @@
+{
+  "version": "source-role-ablation-result-v1",
+  "date": "2026-10-08",
+  "scope": "synthetic-extraction-only",
+  "decision": "do-not-advance",
+  "reason": "Zero eligible direct-anchor gain fails frozen minimum of two.",
+  "method": {
+    "runtimeCommit": "56d383cdfafa371c2bbe05ef695dc4c099507cc2",
+    "runtimeSha256": "b506fef36f65dd2a13ed194d8446de4bbbd4d1f1c9f2806efd9469868c63f03c",
+    "protocolSha256": "d5c659ff7abd995f10570e0392258a9f25e7cfad6171302a5badb83479a5defc",
+    "nodeVersion": "24.15.0",
+    "model": "gpt-4.1-mini-2025-04-14",
+    "sourcePolicy": "indexed-evidence-v1",
+    "cases": 12,
+    "slots": 24,
+    "requestsPerSlot": 2,
+    "retries": 0,
+    "replacements": 0,
+    "caps": {
+      "inputTokens": 6000,
+      "outputTokens": 1024,
+      "items": 5,
+      "windowsPerItem": 4,
+      "contentUnits": 600
+    },
+    "frozenAssetBase": "a1f2354d9ea84220f81dbe59cec1ce83cfbdfcfe",
+    "frozenSha256": {
+      "frozen-manifest.json": "7221ed0298852d6cc6fe5428852236753db3e0713441c7a150a506b6d7153ef0",
+      "compiler.mjs": "a31224732179185a7f8940e70e2e941e2224e0f0465517fdca875ddefb619ba6",
+      "cases.mjs": "1911e6bab25f63b881940d8096d97e50b60135230efd6e6346c31a6e15c18819",
+      "rubric.mjs": "93dd2dbd12f2850bad9ff81cb495aaab18a19ec9dd08dac19fd305008980fbc6",
+      "baseline.md": "4326fcc05140c5bb9fb0b9b6fb6e7c8c7f341605bc8b10bd89137994497d80b6",
+      "candidate.md": "272f5b2fc46f2d3b8a75fe8b36f8bd36e53228c2d4ddc537dd8835396a43df2f"
+    }
+  },
+  "execution": {
+    "completed": 24,
+    "refused": 0,
+    "notRun": 0,
+    "extractedItems": 57,
+    "artifactOsExit": "unknown",
+    "separatelyObservedOuterOsExit": 0,
+    "slotJournalPersistence": "pending-at-publication",
+    "finalReportSlotPersistence": "persisted",
+    "captureQualificationExecuted": false,
+    "admissionExecuted": false,
+    "mocFilingExecuted": false,
+    "recallExecuted": false
+  },
+  "perArm": {
+    "baseline": {
+      "completedSlots": 12,
+      "extractedItems": 32,
+      "eligibleDirectAnchors": {
+        "retained": 12,
+        "total": 12
+      },
+      "requiredAssistantAnchors": {
+        "retained": 2,
+        "total": 2
+      },
+      "overCapacityDirectAnchors": {
+        "retained": 5,
+        "total": 21
+      },
+      "structuralRefusals": 0
+    },
+    "candidate": {
+      "completedSlots": 12,
+      "extractedItems": 25,
+      "eligibleDirectAnchors": {
+        "retained": 12,
+        "total": 12
+      },
+      "requiredAssistantAnchors": {
+        "retained": 2,
+        "total": 2
+      },
+      "overCapacityDirectAnchors": {
+        "retained": 5,
+        "total": 21
+      },
+      "structuralRefusals": 0
+    }
+  },
+  "slots": [
+    {"slot":1,"caseOrdinal":1,"arm":"baseline","status":"completed","extractedItems":4,"directRetained":1,"directTotal":1,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":2,"caseOrdinal":1,"arm":"candidate","status":"completed","extractedItems":1,"directRetained":1,"directTotal":1,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":3,"caseOrdinal":2,"arm":"candidate","status":"completed","extractedItems":1,"directRetained":1,"directTotal":1,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":4,"caseOrdinal":2,"arm":"baseline","status":"completed","extractedItems":1,"directRetained":1,"directTotal":1,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":5,"caseOrdinal":3,"arm":"baseline","status":"completed","extractedItems":2,"directRetained":2,"directTotal":2,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":6,"caseOrdinal":3,"arm":"candidate","status":"completed","extractedItems":3,"directRetained":2,"directTotal":2,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":7,"caseOrdinal":4,"arm":"candidate","status":"completed","extractedItems":5,"directRetained":5,"directTotal":5,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":8,"caseOrdinal":4,"arm":"baseline","status":"completed","extractedItems":5,"directRetained":5,"directTotal":5,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":9,"caseOrdinal":5,"arm":"baseline","status":"completed","extractedItems":5,"directRetained":5,"directTotal":21,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":true},
+    {"slot":10,"caseOrdinal":5,"arm":"candidate","status":"completed","extractedItems":2,"directRetained":5,"directTotal":21,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":true},
+    {"slot":11,"caseOrdinal":6,"arm":"candidate","status":"completed","extractedItems":1,"directRetained":1,"directTotal":1,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":12,"caseOrdinal":6,"arm":"baseline","status":"completed","extractedItems":3,"directRetained":1,"directTotal":1,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":13,"caseOrdinal":7,"arm":"baseline","status":"completed","extractedItems":1,"directRetained":0,"directTotal":0,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":14,"caseOrdinal":7,"arm":"candidate","status":"completed","extractedItems":2,"directRetained":0,"directTotal":0,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":15,"caseOrdinal":8,"arm":"candidate","status":"completed","extractedItems":1,"directRetained":0,"directTotal":0,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":16,"caseOrdinal":8,"arm":"baseline","status":"completed","extractedItems":2,"directRetained":0,"directTotal":0,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":17,"caseOrdinal":9,"arm":"baseline","status":"completed","extractedItems":2,"directRetained":0,"directTotal":0,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":18,"caseOrdinal":9,"arm":"candidate","status":"completed","extractedItems":2,"directRetained":0,"directTotal":0,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":19,"caseOrdinal":10,"arm":"candidate","status":"completed","extractedItems":2,"directRetained":1,"directTotal":1,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":20,"caseOrdinal":10,"arm":"baseline","status":"completed","extractedItems":2,"directRetained":1,"directTotal":1,"assistantRetained":0,"assistantTotal":0,"beyondCapacity":false},
+    {"slot":21,"caseOrdinal":11,"arm":"baseline","status":"completed","extractedItems":2,"directRetained":0,"directTotal":0,"assistantRetained":1,"assistantTotal":1,"beyondCapacity":false},
+    {"slot":22,"caseOrdinal":11,"arm":"candidate","status":"completed","extractedItems":2,"directRetained":0,"directTotal":0,"assistantRetained":1,"assistantTotal":1,"beyondCapacity":false},
+    {"slot":23,"caseOrdinal":12,"arm":"candidate","status":"completed","extractedItems":3,"directRetained":1,"directTotal":1,"assistantRetained":1,"assistantTotal":1,"beyondCapacity":false},
+    {"slot":24,"caseOrdinal":12,"arm":"baseline","status":"completed","extractedItems":3,"directRetained":1,"directTotal":1,"assistantRetained":1,"assistantTotal":1,"beyondCapacity":false}
+  ],
+  "advancement": {
+    "minimumAdditionalDirect": 2,
+    "additionalDirect": 0,
+    "assistantLoss": false,
+    "candidateRequiredMissing": 0,
+    "capsUnchanged": true,
+    "baselineStructuralFailures": 0,
+    "candidateStructuralFailures": 0,
+    "semanticReview": "reviewed-zero-observed-promotions",
+    "semanticReviewAppliesTo": "candidate unsupported promotions only; not all semantic errors",
+    "baselineUnsupportedPromotions": 1,
+    "candidateUnsupportedPromotions": 0,
+    "decision": "do-not-advance",
+    "overCapacityExcludedFromEligibleGain": true
+  },
+  "semanticReview": {
+    "status": "independent-blind-reviewed",
+    "reviewers": 2,
+    "reviewerModel": "gpt-6.1-sol",
+    "reviewerEffort": "high",
+    "shuffledRecordsPerReviewer": 24,
+    "extractedItemsPerReviewer": 57,
+    "baselineUnsupportedPromotions": 1,
+    "candidateUnsupportedPromotions": 0,
+    "baselineOtherFindings": 0,
+    "candidateOtherFindings": 1,
+    "promotionFinding": {
+      "caseOrdinal": 7,
+      "arm": "baseline",
+      "itemIndex": 1,
+      "kind": "reported-speech-promotion",
+      "reviewersAgree": true,
+      "borderlineReportedByReviewerA": true
+    },
+    "otherFinding": {
+      "caseOrdinal": 5,
+      "arm": "candidate",
+      "itemIndex": 1,
+      "kind": "incomplete-selected-evidence-support",
+      "reviewersAgree": true,
+      "fullInputSupportsClaim": true,
+      "ownReceiptsCoverDays": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "claimDayRange": [
+        1,
+        21
+      ],
+      "countedAsUnsupportedPromotion": false
+    },
+    "limits": [
+      "Same model family; not human gold or statistical certainty.",
+      "Zero observed candidate promotions does not mean zero semantic errors.",
+      "Coverage does not establish summary entailment or attribution; no accuracy score is inferred."
+    ]
+  },
+  "accounting": {
+    "unit": "microUSD",
+    "newReserved": 240000,
+    "cumulativeReserved": 309057185,
+    "cumulativeCeiling": 400000000,
+    "protectedReserve": 30000000,
+    "newRequests": 48,
+    "succeeded": 48,
+    "failed": 0,
+    "pending": 0,
+    "unknownTransportOutcomes": 0,
+    "unknownActualCostEntries": 24,
+    "knownActualCostPortion": 8060,
+    "fullActualBillKnown": false,
+    "budgetReset": false,
+    "refundClaimed": false,
+    "prefixUnchangedObservedByLauncher": true,
+    "prefixCheckScope": "Ordered public snapshot fields; not an independent raw-rowid audit.",
+    "postRunAuditorInspectedActualLedger": false
+  },
+  "artifacts": {
+    "executionFiles": 27,
+    "composition": "identity + 24 slots + final report + closure",
+    "primaryHashChainVerified": true,
+    "independentPostRunHashChainVerified": true,
+    "sha256": {
+      "result.json": "cccb668c02493605c0b1ccab00c02fd798b78582d5840ced464ce560b439e98b",
+      "identity.json": "3c626fdc32dedda049a784affd7036e7206fe390e7951a8f2b91c8020c2449bc",
+      "report.json": "d7437bf48d0416c11cd23d4a8c39cdd284c0384a67f3be963aa80b16b8cfe384",
+      "closure.json": "ebee8959a11b5f75cd0ab39c6562edefeb949f27254ac64d21f9aae9b987d726",
+      "blind-packet.json": "6e8f2c0e4b0f1e23ca2fac0193873f383c1da38e62b63a4d77eab30658907681",
+      "semantic-review-a.json": "abe083532af2d3f5414b14a682068da19d1d3d964c7b60fd424ba6e88474df35",
+      "semantic-review-b.json": "acf7d3a6dbecc40c67d6f01d2f1523d14d37c548644c3a791c6b37d3ea6d66d1",
+      "semantic-adjudication.json": "3e7bfbb5672884d6ee9ce4e24f773b7726c31e04f935580453ae32b65d59681e"
+    },
+    "hashLimit": "Hashes identify evidence bytes, not authentication."
+  },
+  "separateEarlierDevelopment30": {
+    "unchanged": true,
+    "newBenchmarkScore": false,
+    "cairn": {
+      "correct": 13,
+      "incorrect": 10,
+      "unresolved": 7
+    },
+    "nativeMem0": {
+      "correct": 21,
+      "incorrect": 8,
+      "unresolved": 1
+    }
+  },
+  "limits": [
+    "One frozen synthetic extraction-only run; no general reliability or production improvement is established.",
+    "Extracted items are not admitted cards; downstream qualification/admission was not executed.",
+    "The over-capacity case has 21 required windows against a maximum of 20 and uses a separate denominator.",
+    "No evidence of benchmark parity, lightweight resource use, production latency or MCP/Hermes end-to-end quality.",
+    "No prompt promotion or further paid-run authorization follows from this result."
+  ]
+}
