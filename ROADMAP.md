@@ -16,6 +16,17 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [fresh thirty-case development pilot](docs/plans/fresh-thirty-results.md)
+  has now obtained durable full-denominator comparison results; primary and two
+  independent result audits passed. Documentation review/delivery remain
+  pending. Cairn is 13/10/7 and Mem0 21/8/1 correct/incorrect/unresolved at fixed
+  N=30, with generation completion 23/30 versus 29/30. The common-resolved 23
+  cases yield 13 versus 17 correct, not Mem0's overall 21/29 conditional score.
+  Five types have six cases each; preferences are not sampled. No retry,
+  replacement or runtime change occurred. This is development evidence, not
+  the full official benchmark, independent holdout, competitive parity or
+  achieved reliability. The prior N12 six-case 3/6 versus 4/6 result stays separate.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It
@@ -44,9 +55,10 @@ service must use the same public core, not separate engines.
   completion/paired-scoreability gate: Cairn 5/6 ingestions and answers,
   Mem0 6/6, common resolved N=5. Judgments were Cairn 3/2/1 and Mem0 3/3/0
   correct/incorrect/unresolved. One Cairn capture timed out; the cause remains
-  unproven. Do not expand to fixed-30 now. Diagnose the timeout, empty
-  multi-session retrieval and temporal evidence path offline, then separately
-  review any new proposal. Default MOC and product semantic gates remain open.
+  unproven. That packet failed its own fixed-30 expansion gate. Its timeout,
+  empty multi-session retrieval and temporal evidence path remain retained
+  failures, separate from the later fresh-30 development record above.
+  Default MOC and product semantic gates remain open.
 
 - The [fresh official-six v3 observation](docs/evidence/qualification-official-v3.md)
   halted during generation: six planned cases and twelve arms retain one
@@ -60,7 +72,8 @@ service must use the same public core, not separate engines.
   indexed-evidence core slice was independently planned before this halt and
   remains an experiment, not an adopted remedy. Separately review future
   protocol, resource and fresh cases only after accounting is safe. No consumed
-  case replay, replacement, old-run resume or fixed-30 expansion is authorized.
+  case replay, replacement or old-run resume is authorized; its failed gate
+  did not authorize the separately frozen later fresh-30 development packet.
 
 - The [fresh qualification meaning diagnostic](docs/evidence/qualification-meaning-probe.md)
   completed 24/24 attempts and 31 cards, but adjudicated full-six semantic success
@@ -70,7 +83,8 @@ service must use the same public core, not separate engines.
   common-resolution gate, while source fidelity remains an unresolved product
   gate. No consumed cohort tuning/replay or reliability/promotion claim. Its
   source-only operator and resource projection were reviewed before dispatch;
-  fixed-30 remains blocked. Ordinary installed Hermes/MCP is a separate gate.
+  its own expansion gate remains failed. The later fresh-30 development record
+  does not repair that cohort. Ordinary installed Hermes/MCP is a separate gate.
 
 - The [paired ingestion semantic probe](docs/evidence/ingestion-semantic-probe.md)
   concludes **do not adopt combined**: mechanical completion was 23/24 baseline
@@ -118,6 +132,19 @@ distinguishes main from pending PRs and proposed behavior; it is not a release
 claim or authorization for a paid experiment. Its staged order guides the
 reliability work below without declaring older failure gates resolved.
 
+For the latest fresh-30 development evidence, prioritize the seven execution
+failures separately from ten completed-but-incorrect Cairn answers. First
+review bounded ingestion, classification and cooperative timeout behavior in
+the existing engine, preserving validation and committed partial-admission
+semantics. Then diagnose the temporal evidence chain through retention,
+candidate reachability, selection and answer use (observed 0/6 versus Mem0
+3/6, not a population guarantee). Deterministic regressions and independent
+review precede one newly frozen fresh comparison; no parity/100% target is
+predeclared and no future paid experiment is granted or started here. Keep
+ordinary installed MCP/Hermes, lightweight cost/growth and onboarding gates.
+The dated cohorts below remain history, not permission to replay them or a
+claim that the new development comparison has completed the product goal.
+
 1. Resolve source-support and unjustified-update failures; evaluate under the
    reliability contract's frozen-case and independent holdout rules. Any paid
    rerun needs scoped authorization; earlier one-shot approvals do not roll over.
@@ -130,8 +157,10 @@ reliability work below without declaring older failure gates resolved.
    time preservation, and scalable bounded ingestion/output capacity. Preserve
    pool uniqueness, all bounds and foreign-citation rejection. After offline
    checks and independent review, freeze NEW held-out paid cases with a new
-   reviewed operator manifest and budget audit within the already authorized
-   cumulative US$200 cap. The completed one-shot manifest supplies no additional
+   reviewed operator manifest and current cumulative budget audit. Earlier
+   US$200 checkpoints are historical; the fresh-30 checkpoint records US$400
+   authority, US$308.817185 reserved and US$30 protected. The completed
+   one-shot manifest supplies no additional
    dispatch or consumed official-case replay. Only after completion
    gating return to an official-style Cairn/Mem0 fixed-N score, then ordinary
    installed Hermes/MCP validation. Post-hoc commitment sensitivity and fewer
@@ -162,8 +191,8 @@ reliability work below without declaring older failure gates resolved.
    separate 60,000 ms guard deadline; it does not establish a provider cause or
    fix. Focused and live-offline safety gates pass on both Node 22.16 and 24.15.
    Independently review a new prospectively frozen policy/protocol before any
-   separately authorized fixed pilot; under the current halt, do not start a
-   new paid run, automatic retry or new session, and do not treat an increased
+   separately authorized fixed pilot; at that halted-run checkpoint no new
+   paid run, automatic retry or new session was authorized. Do not treat an increased
    timeout as a proven remedy. The
    [benchmark count diagnostic](docs/plans/guard-count-reason.md) preserves a
    future structurally validated count without changing the adapter, ceiling or
@@ -191,8 +220,8 @@ reliability work below without declaring older failure gates resolved.
    [fresh six-type official pilot](docs/evidence/qualification-official-pilot.md)
    completed without a global halt but Cairn answered 0/6 and left all six
    judgments unresolved; Mem0 answered 6/6 with four correct and two
-   incorrect, leaving common resolved denominator 0/6. Do not expand to a
-   fixed-30 comparison yet. The context-fit capacity boundary has been
+   incorrect, leaving common resolved denominator 0/6. That failed gate did
+   not authorize a fixed-30 comparison. The context-fit capacity boundary has been
    reproduced offline, and the [bounded qualification partition](docs/plans/bounded-qualification-partitions.md)
    passed engineering gates; neither establishes semantic accuracy or a paid
    result. Qualification slot mapping and source fidelity still need separate
