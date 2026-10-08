@@ -1,5 +1,18 @@
 # Known limitations
 
+The [source-role extraction ablation](plans/source-role-ablation.md) freezes twelve
+fresh synthetic sources, a separate evaluator rubric, two evaluation-only prompts
+and 24 prospective arm slots. Actual core preparation and fake-HTTP adapter
+controls establish fit, source binding and atomic refusal, not model quality,
+durable admission, recovery of historical evidence or a benchmark score.
+Validated retained spans do not establish summary entailment or attribution.
+Independent blind semantic review remains unknown; it must assess all slots,
+report baseline and candidate promotions separately, and block advancement on
+candidate promotion, required assistant-evidence omission or structural regression.
+The intentionally over-capacity case is reported separately from achievable
+episode gains. No production prompt, additional extraction call, provider CLI,
+paid transport, ledger grant or shared-engine default changes in this package.
+
 The [accounted native response-disconnection correction](plans/native-settled-write-disconnect.md)
 locally seals native work only for an identified EPIPE on the connection whose
 bounded, validated provider response has a successful priced settlement in the
