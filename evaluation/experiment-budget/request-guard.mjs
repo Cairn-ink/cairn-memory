@@ -2694,10 +2694,14 @@ function mixedManifest(value) {
   }
   const evidenceOnly = own(value.cairn ?? {}, 'comparisonProfile');
   const navigation = own(value.cairn ?? {}, 'navigationLabelPolicy');
+  const timeout = own(value.cairn ?? {}, 'modelCallTimeoutMs');
   exactKeys(value.cairn, ['runtimeArtifactSha256', 'adapterConfigurationSha256',
     'qualificationInputProfile', 'captureSourcePolicy',
     ...(evidenceOnly ? ['comparisonProfile'] : []),
-    ...(navigation ? ['navigationLabelPolicy'] : [])], 'invalid_capability');
+    ...(navigation ? ['navigationLabelPolicy'] : []),
+    ...(timeout ? ['modelCallTimeoutMs'] : [])], 'invalid_capability');
+  if (timeout && (!safeInteger(value.cairn.modelCallTimeoutMs, 1)
+    || value.cairn.modelCallTimeoutMs > 120_000)) fail('invalid_capability');
   if (navigation && (!evidenceOnly || value.cairn.navigationLabelPolicy !== 'rare-query-window-v1')) {
     fail('invalid_capability');
   }

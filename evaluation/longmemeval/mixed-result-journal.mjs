@@ -66,9 +66,13 @@ function validateManifest(manifest) {
   const cairn = manifest.cairn, mem0 = manifest.mem0;
   const evidence = Object.hasOwn(cairn ?? {}, 'comparisonProfile');
   const navigation = Object.hasOwn(cairn ?? {}, 'navigationLabelPolicy');
+  const timeout = Object.hasOwn(cairn ?? {}, 'modelCallTimeoutMs');
   exact(cairn, ['runtimeArtifactSha256', 'adapterConfigurationSha256', 'qualificationInputProfile',
     'captureSourcePolicy', ...(evidence ? ['comparisonProfile'] : []),
-    ...(navigation ? ['navigationLabelPolicy'] : [])], CODE);
+    ...(navigation ? ['navigationLabelPolicy'] : []),
+    ...(timeout ? ['modelCallTimeoutMs'] : [])], CODE);
+  if (timeout && (!safeInteger(cairn.modelCallTimeoutMs, 1)
+    || cairn.modelCallTimeoutMs > 120_000)) fail(CODE);
   if (!SHA.test(cairn.runtimeArtifactSha256) || !SHA.test(cairn.adapterConfigurationSha256)
     || cairn.qualificationInputProfile !== (evidence ? 'not-requested' : 'adaptive-text-catalog-v1')
     || cairn.captureSourcePolicy !== (evidence ? 'indexed-evidence-v1' : 'indexed-windows-v1')
