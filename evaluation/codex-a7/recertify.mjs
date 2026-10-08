@@ -27,7 +27,7 @@ export function recertifyRecord({ original, rolloutText, eventsText, port }) {
   const delivery = verifyDelivery(scenario, original.run, port, rollout);
   const analysis = analyze({ events: lines, toolCalls: extractToolCalls(rolloutText), toolOutputs: extractToolOutputs(rolloutText),
     rolloutAssistant: rollout.assistant, rolloutReasoning: rollout.reasoning,
-    rolloutRows: rolloutText.split('\n').flatMap(line => { try { return line ? [JSON.parse(line)] : []; } catch { return []; } }),
+    rolloutRows: rolloutText.split('\n').filter(Boolean).map(line => { try { return JSON.parse(line); } catch { return { type: 'unparseable' }; } }),
     before: {}, after: {}, codexBefore: {}, codexAfter: {}, server: [], secret: '<SYNTHETIC_SECRET>',
     repo: '$REPO', codexHome: '$CODEX_HOME', port, positive: scenario.positive });
   const carried = (original.harmful ?? []).filter(item => CARRIED.includes(item.kind));

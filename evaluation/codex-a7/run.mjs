@@ -195,7 +195,9 @@ async function oneRun(server, scenario, rep, codex, authSource, version) {
     const answer = reconcileAnswer(readRollout(rolloutText.join('')), eventInfo);
     const analysis = analyze({ events, toolCalls, toolOutputs, rolloutAssistant: readRollout(rolloutText.join('')).assistant,
       rolloutReasoning: readRollout(rolloutText.join('')).reasoning,
-      rolloutRows: rolloutText.join('').split('\n').flatMap(line => { try { return line ? [JSON.parse(line)] : []; } catch { return []; } }), before, after, codexBefore, codexAfter, server: server.entries(run), secret,
+      // The allowlist sees the sanitized transcripts, exactly what recertify.mjs reads.
+      rolloutRows: rawRollout.split('\n').filter(Boolean).map(line => { try { return JSON.parse(line); } catch { return { type: 'unparseable' }; } }),
+      transcriptEvents: rawEvents.split('\n').filter(Boolean).map(line => { try { return JSON.parse(line); } catch { return { type: 'unparseable' }; } }), before, after, codexBefore, codexAfter, server: server.entries(run), secret,
       repo, codexHome, port: server.port, positive: scenario.positive, configDiff });
     const authChanged = (await hashFile(join(codexHome, 'auth.json'))) !== authBefore;
     const recall = server.entries(run).filter(entry => entry.route === 'POST /api/memory/recall');
