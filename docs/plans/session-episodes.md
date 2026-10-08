@@ -9,6 +9,9 @@ Read with [capture](../capture.md), [staged evidence](../staged-capture-evidence
 [reliability contract](memory-reliability-contract.md).
 
 Confirmation state is specified in the [CF-1 appendix](confirmation-state.md).
+The [raw-layer contract (RL-0)](raw-layer-contract.md) adds full selected
+conversation storage and supersedes this plan's original multi-source deletion
+rule under D5. It is a decided future contract, not deployed behavior.
 
 ## Product decisions supplied by the coordinator (2026-09-27)
 
@@ -19,7 +22,8 @@ Confirmation state is specified in the [CF-1 appendix](confirmation-state.md).
    activity and next step, for weekly review, cross-tool continuation and timelines.
 3. Commitments are not a new memory kind here; the hosted product keeps its flow.
 4. Diary entry is an ordinary source and consent to organize it. Controls are at
-   entry: pause, stop capturing a project, delete a conversation. Never share
+   entry: pause, stop capturing a project, delete a conversation, and the per-tool
+   raw-saving switch (which leaves memory capture running). Never share
    personal items automatically.
 5. Episodes are model interpretations of submitted evidence, with source anchors;
    they are never verified truth or current assertions.
@@ -83,7 +87,7 @@ units on both raw and normalized prose. Null means absent/unknown, not inferred.
 | `type`, `language` | Nullable before success. Type: `work`, `research`, `meeting`, `diary`, `quick-one-off-question`. Language: BCP-47 ≤35 ASCII characters or `mixed`. |
 | `gist`, `outcome`, `nextStep.text` | Gist 1–400 units on success; outcome and next step null or 1–240. Preserve speaker, uncertainty and proposal versus completed work. |
 | `nextStep` | Nullable; core UUID, text, `open`/`closed`/`replaced`, anchors and namespace receipt ordinal. No commitment, due date or reminder fields. |
-| `anchors`, `sources` | Each nonnull type/gist/outcome/step has 1–4 passage anchors; ≤16 distinct passages per episode, each exact canonical prefix ≤800 units with claimed user/assistant role. Anchors contain UUID, SHA256 digest and code-point-safe UTF-16 offsets. Core binds original session/batch/message and truncation metadata. |
+| `anchors`, `sources` | Each nonnull type/gist/outcome/step has 1–4 passage anchors; ≤16 distinct passages per episode, each exact canonical prefix ≤800 units with claimed user/assistant role. These remain citations; raw mode retains complete selected messages separately and adds message/span links. Anchors contain UUID, SHA256 digest and code-point-safe UTF-16 offsets. Core binds original session/batch/message and truncation metadata. |
 | `memoryLinks` | Admission lineage to memories admitted/deduplicated from the session, with admission revision and receipt IDs; separately paged, default 20/max 50. Revalidate targets; omit deleted content. |
 | `modelMetadata` | Actual host-configured adapter/model/profile IDs, nullable or 1–100 units each; prompt version ≤64, digest 64 hex digits, port version `episode-v1`. No secrets, URLs, raw prompts/responses. |
 | `processing` | `pending`/`ready`/`incomplete`/`failed`/`invalidated`; observed, attempted and covered batch positions, missing/expired/omitted counts, error code ≤64 ASCII characters. No raw errors. A failed first draft has null prose; an incomplete revision is explicitly stale. |
@@ -222,7 +226,9 @@ released for capacity under R1; unadmitted source payloads are protected. A late
 *new* draft may inspect still-live payloads from admitted/failed batches without
 reopening their admission; missing payloads remain explicit gaps.
 Selected episode passages survive staged expiry until replacement/invalidation/
-deletion. No full transcript, old-prose audit log or automatic age TTL is added.
+deletion. Raw mode independently adds complete selected conversations, retained
+until conversation/account deletion with no automatic age TTL (D7); citation
+limits and staging expiry remain. No old-prose audit log is added.
 Expiry leaves content-free gap/fence metadata. No invisible loss or unbounded retry.
 
 ### Episode-mode staging release and capacity
@@ -343,13 +349,19 @@ supplies the idempotent end signal; opaque fields retain the 200-unit bound.
 These are host controls, not model-controlled MCP arguments. They do not stop
 independently configured devices. Existing hosted-hook wiring remains gated below.
 
-`forgetEpisode({namespace,episodeId,expectedRevision})` deletes the captured
-conversation: clear episode prose/labels/profile/passages/steps and descriptive
-policy rows, tombstone its session and fence capture/keep/replay. Forget all live
-and historical memories with admission lineage from it using normal suppression,
-including multi-source deduplicated memories. Unrelated admitted memories survive.
+Under RL-2, `deleteConversation` and the legacy
+`forgetEpisode({namespace,episodeId,expectedRevision})` facade share the D5
+cascade in the [raw-layer contract](raw-layer-contract.md): delete raw text,
+clear episode prose/labels/profile/passages/steps and descriptive policy rows,
+tombstone the session and fence capture/keep/replay. Forget with suppression only
+live/historical memories whose every live receipt comes from this conversation.
+Memories with another conversation or an explicit receipt stay, without this
+conversation's receipts. Unrelated admitted memories survive. This supersedes
+the currently implemented conservative multi-source forgetting rule.
 Keep only content-free lineage/action/digest/fence metadata; no restore/unsuppress.
-Preserve existing namespace-wide staged purge when memory forgetting invokes it.
+The existing namespace-wide purge covers staging only, never raw conversations.
+Forgetting one memory keeps raw but records D6 anchor exclusions so keep or later
+re-extraction cannot restore it as a paraphrase from the same source span.
 
 Track passage origin and consumers as well as memory lineage. Removing a source
 invalidates dependent episode text/passages/steps even when no memory was admitted;
@@ -377,7 +389,10 @@ permission to reprocess previously completed batches.
 retained passages through normal inferred extraction/qualification, suppression,
 deduplication and placement, never from the gist. Persist explicit-keep intent,
 source coverage and outcome; identical action replay makes no model call. Stale,
-deleted or unavailable sources reject. Keep cannot recover omitted/expired text.
+deleted or unavailable sources reject. After raw integration, keep may read saved
+conversation text through bounded source windows and normal suppression/D6
+exclusion, without widening ordinary provider budgets. Without saved raw, keep
+cannot recover omitted/expired text. This does not ship automatic re-extraction.
 
 ## Bounded time-range reads and local MCP
 
@@ -1083,9 +1098,11 @@ an SE package's allowed paths. No merge, push or PR is authorized by this packet
 - **Hosted compatibility:** the released Claude hook calls the hosted service;
   new metadata requires protocol compatibility/versioning and pinned-core cutover
   decisions owned by the coordinator. This plan does not change that service.
-- **Entry disclosure:** the one-brain client must disclose durable selected-passage
-  retention when enabling capture; how private UI communicates that remains with
-  its owner. Existing staging opt-in must not silently acquire permanent retention.
+- **Entry disclosure:** the one-brain client must disclose full selected-conversation
+  retention, the default-on per-tool raw switch, encryption/local boundaries and
+  deletion when connecting capture. RL-0 defines the notice on every credential
+  path before the first batch; it adds no confirmation. Existing staging opt-in
+  must not silently acquire permanent retention: raw is a separate core option.
 - **SE-5 review notes 3/4:** retain existing test database `t.after` teardown and
   dynamic builtin imports in this round. A later test-style cleanup can align
   them with `workspace.defer` and sibling static imports.
@@ -1099,6 +1116,9 @@ an SE package's allowed paths. No merge, push or PR is authorized by this packet
   with `expectedTagRevision`; until then the docs say so.
 
 Non-goals: hosted behavior, UI, commitments, shared scope, automatic capture for
-additional unsupported clients, complete archives/backfill, cross-store identity
+additional unsupported clients, automatic backfill, cross-store identity
 synchronization, semantic certification or secure backup/provider erasure. Use an
 injected episode-interpretation port; any specific classifier is out of scope.
+Complete selected-conversation archives are in scope through raw mode, outside
+episode citation storage. Explicit ChatGPT export import follows later in RL-8;
+it is not automatic backfill from connected tools.
