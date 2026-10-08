@@ -1,0 +1,1487 @@
+{
+  "version": "source-competition-results-v1",
+  "date": "2026-10-09",
+  "decision": "do-not-advance",
+  "scope": "one-pass synthetic extraction only; not LongMemEval, Mem0 or product quality",
+  "runtime": {
+    "commit": "cbaffce15b1c119fa6d93d82641d93a5ed4077ef",
+    "nodeVersion": "24.15.0",
+    "model": "gpt-4.1-mini-2025-04-14",
+    "profile": "indexed-evidence-v1",
+    "prompt": "unchanged baseline extract-source-windows",
+    "caps": {
+      "inputTokens": 6000,
+      "outputTokens": 1024,
+      "items": 5,
+      "windowsPerItem": 4,
+      "contentUnits": 600
+    }
+  },
+  "method": {
+    "cases": 8,
+    "messages": 96,
+    "logicalArms": 16,
+    "batchSlots": 24,
+    "achievableAnchorsPerArm": 16,
+    "requiredAssistantAnchorsPerArm": 2,
+    "candidateMaximumWindowsPerBatch": 10,
+    "wholeMessagesUnchanged": true,
+    "alternatingArmOrderByCase": true,
+    "caseRetriesOrReplacements": false,
+    "qualificationAdmissionFilingRecallExecuted": false,
+    "answerScoringMem0Executed": false,
+    "fiveWindowBoundaryExcludedFromAnchorDenominator": true,
+    "fiveWindowBoundaryIncludedInSafetyReview": true,
+    "parsedObservation": "bounded unmodified parsed JSON before binding; not raw HTTP bytes",
+    "generatedInterpretationsExcludedFromExistingIndexedSourceOnlyAnswerContext": true
+  },
+  "execution": {
+    "completed": 24,
+    "refused": 0,
+    "not_run": 0,
+    "logicalArmsCompleted": 16,
+    "items": 97,
+    "parsedProposals": 97,
+    "parsedObservationSlots": 24,
+    "rejectedProposals": 0,
+    "outerOsExitObservedByPrimary": 0,
+    "closureOsExit": "unknown",
+    "hashVerifiedArtifacts": 27,
+    "slotJournalPersistence": "pending at publication",
+    "finalReportPersistence": "persisted"
+  },
+  "perArm": {
+    "control": {
+      "batches": 8,
+      "items": 38,
+      "logicalRefusals": 0,
+      "retainedAnchors": 12,
+      "totalAnchors": 16,
+      "assistantAnchors": 2,
+      "reviewerRetained": [
+        12,
+        13
+      ],
+      "reviewerUnsupportedItems": [
+        11,
+        10
+      ],
+      "jointlyUnsupportedItems": 10,
+      "itemDisagreements": 7,
+      "supportStatusDisagreements": 1,
+      "errorCategoryDisagreements": 7,
+      "anchorDisagreements": 1,
+      "mechanicalSourceCoverage": 14,
+      "preparedInputTokens": 5114,
+      "physicalRequests": 16,
+      "aggregateItemCapacity": 40,
+      "reviewerErrors": [
+        {
+          "reviewer": "A",
+          "unsupportedItems": 11,
+          "errorCategoryCounts": {
+            "unsupported_promotion": 7,
+            "citation_insufficiency": 5,
+            "chronology_error": 1
+          }
+        },
+        {
+          "reviewer": "B",
+          "unsupportedItems": 10,
+          "errorCategoryCounts": {
+            "unsupported_promotion": 1,
+            "citation_insufficiency": 10,
+            "chronology_error": 1
+          }
+        }
+      ]
+    },
+    "candidate": {
+      "batches": 16,
+      "items": 59,
+      "logicalRefusals": 0,
+      "retainedAnchors": 14,
+      "totalAnchors": 16,
+      "assistantAnchors": 2,
+      "reviewerRetained": [
+        14,
+        14
+      ],
+      "reviewerUnsupportedItems": [
+        9,
+        8
+      ],
+      "jointlyUnsupportedItems": 8,
+      "itemDisagreements": 7,
+      "supportStatusDisagreements": 1,
+      "errorCategoryDisagreements": 7,
+      "anchorDisagreements": 0,
+      "mechanicalSourceCoverage": 15,
+      "preparedInputTokens": 6706,
+      "physicalRequests": 32,
+      "aggregateItemCapacity": 80,
+      "reviewerErrors": [
+        {
+          "reviewer": "A",
+          "unsupportedItems": 9,
+          "errorCategoryCounts": {
+            "unsupported_promotion": 6,
+            "citation_insufficiency": 3,
+            "chronology_error": 0
+          }
+        },
+        {
+          "reviewer": "B",
+          "unsupportedItems": 8,
+          "errorCategoryCounts": {
+            "unsupported_promotion": 2,
+            "citation_insufficiency": 8,
+            "chronology_error": 0
+          }
+        }
+      ]
+    }
+  },
+  "review": {
+    "model": "GPT-6.1 Sol",
+    "reasoningEffort": "high",
+    "independentReviewers": 2,
+    "phases": [
+      "all-item fidelity frozen before anchor disclosure",
+      "independent same-item anchor mapping"
+    ],
+    "recordsPerReviewerPerPhase": 16,
+    "itemsPerReviewer": 97,
+    "anchorPositionsPerReviewer": 32,
+    "missingOrNullJudgments": 0,
+    "labelBlinded": true,
+    "treatmentBlindingGuaranteed": false,
+    "humanGold": false,
+    "additionalAgreedAnchors": 2,
+    "individualReviewerGains": [
+      2,
+      1
+    ],
+    "lostControlAnchors": [],
+    "disagreementsBlockAdvance": true,
+    "errorCategoriesCanOverlap": true,
+    "gates": {
+      "gainAtLeastTwo": true,
+      "noControlAnchorLoss": true,
+      "bothAssistantAnchors": true,
+      "noRefusalIncrease": true,
+      "candidateZeroObservedErrors": false,
+      "noUnknownOrDisagreement": false,
+      "allExecuted": true
+    },
+    "limitationNotes": [
+      "World truth of synthetic source statements is not independently verified.",
+      "Relative dates lack enough timestamps for absolute-date resolution; preserved relative context is reviewed.",
+      "These caveats are not null or missing judgments.",
+      "Same-model-family independent review is not statistical certainty.",
+      "Support-status and category disagreements overlap; their counts must not be added.",
+      "Both phases remain frozen; no favorable reviewer is selected."
+    ]
+  },
+  "cases": [
+    {
+      "ordinal": 1,
+      "type": "early-incidental-disclosure",
+      "armOrder": [
+        "control",
+        "candidate"
+      ],
+      "eligibleAnchorCount": 2,
+      "arms": {
+        "control": {
+          "status": "completed",
+          "batches": 1,
+          "slots": [
+            1
+          ],
+          "items": 5,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 2,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 2,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 2,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 2,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-1-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-1-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": [
+            {
+              "batch": 1,
+              "itemIndex": 3,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "citation_insufficiency"
+                ]
+              ]
+            },
+            {
+              "batch": 1,
+              "itemIndex": 4,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "citation_insufficiency"
+                ]
+              ]
+            }
+          ]
+        },
+        "candidate": {
+          "status": "completed",
+          "batches": 2,
+          "slots": [
+            2,
+            3
+          ],
+          "items": 7,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 1,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 1,
+                "citation_insufficiency": 1,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-1-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-1-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": [
+            {
+              "batch": 1,
+              "itemIndex": 5,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "unsupported_promotion",
+                  "citation_insufficiency"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ordinal": 2,
+      "type": "late-disclosure",
+      "armOrder": [
+        "candidate",
+        "control"
+      ],
+      "eligibleAnchorCount": 2,
+      "arms": {
+        "control": {
+          "status": "completed",
+          "batches": 1,
+          "slots": [
+            6
+          ],
+          "items": 5,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 4,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 1,
+                "citation_insufficiency": 4,
+                "chronology_error": 1
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 4,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 1,
+                "citation_insufficiency": 4,
+                "chronology_error": 1
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-2-1",
+              "sourceCoverage": false,
+              "reviewerRetained": [
+                false,
+                false
+              ],
+              "retainedByBoth": false,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-2-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": []
+        },
+        "candidate": {
+          "status": "completed",
+          "batches": 2,
+          "slots": [
+            4,
+            5
+          ],
+          "items": 10,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 2,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 2,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 1,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-2-1",
+              "sourceCoverage": false,
+              "reviewerRetained": [
+                false,
+                false
+              ],
+              "retainedByBoth": false,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-2-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": [
+            {
+              "batch": 2,
+              "itemIndex": 3,
+              "reviewerSupported": [
+                false,
+                true
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "citation_insufficiency"
+                ],
+                []
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ordinal": 3,
+      "type": "independent-facts",
+      "armOrder": [
+        "control",
+        "candidate"
+      ],
+      "eligibleAnchorCount": 4,
+      "arms": {
+        "control": {
+          "status": "completed",
+          "batches": 1,
+          "slots": [
+            7
+          ],
+          "items": 4,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 0,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 0,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-3-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-3-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-3-3",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-3-4",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": []
+        },
+        "candidate": {
+          "status": "completed",
+          "batches": 2,
+          "slots": [
+            8,
+            9
+          ],
+          "items": 6,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 0,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 0,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-3-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-3-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-3-3",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-3-4",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": []
+        }
+      }
+    },
+    {
+      "ordinal": 4,
+      "type": "dated-state-changes",
+      "armOrder": [
+        "candidate",
+        "control"
+      ],
+      "eligibleAnchorCount": 2,
+      "arms": {
+        "control": {
+          "status": "completed",
+          "batches": 1,
+          "slots": [
+            12
+          ],
+          "items": 4,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 1,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 1,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-4-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-4-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": [
+            {
+              "batch": 1,
+              "itemIndex": 4,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "citation_insufficiency"
+                ]
+              ]
+            }
+          ]
+        },
+        "candidate": {
+          "status": "completed",
+          "batches": 2,
+          "slots": [
+            10,
+            11
+          ],
+          "items": 7,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 1,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 1,
+                "citation_insufficiency": 1,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-4-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-4-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": [
+            {
+              "batch": 1,
+              "itemIndex": 4,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "unsupported_promotion",
+                  "citation_insufficiency"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ordinal": 5,
+      "type": "correction-and-non-adoption",
+      "armOrder": [
+        "control",
+        "candidate"
+      ],
+      "eligibleAnchorCount": 2,
+      "arms": {
+        "control": {
+          "status": "completed",
+          "batches": 1,
+          "slots": [
+            13
+          ],
+          "items": 5,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 1,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 1,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-5-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-5-2",
+              "sourceCoverage": false,
+              "reviewerRetained": [
+                false,
+                false
+              ],
+              "retainedByBoth": false,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": [
+            {
+              "batch": 1,
+              "itemIndex": 3,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "citation_insufficiency"
+                ]
+              ]
+            }
+          ]
+        },
+        "candidate": {
+          "status": "completed",
+          "batches": 2,
+          "slots": [
+            14,
+            15
+          ],
+          "items": 7,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 1,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 1,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-5-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-5-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": [
+            {
+              "batch": 1,
+              "itemIndex": 3,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "citation_insufficiency"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ordinal": 6,
+      "type": "assistant-only-evidence",
+      "armOrder": [
+        "candidate",
+        "control"
+      ],
+      "eligibleAnchorCount": 2,
+      "arms": {
+        "control": {
+          "status": "completed",
+          "batches": 1,
+          "slots": [
+            18
+          ],
+          "items": 5,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 0,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 0,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-6-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-6-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": []
+        },
+        "candidate": {
+          "status": "completed",
+          "batches": 2,
+          "slots": [
+            16,
+            17
+          ],
+          "items": 7,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 1,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 1,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-6-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-6-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": [
+            {
+              "batch": 1,
+              "itemIndex": 5,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "citation_insufficiency"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ordinal": 7,
+      "type": "four-window-supported-relationship",
+      "armOrder": [
+        "control",
+        "candidate"
+      ],
+      "eligibleAnchorCount": 2,
+      "arms": {
+        "control": {
+          "status": "completed",
+          "batches": 1,
+          "slots": [
+            19
+          ],
+          "items": 5,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 1,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 0,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-7-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                false,
+                false
+              ],
+              "retainedByBoth": false,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-7-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                false,
+                true
+              ],
+              "retainedByBoth": false,
+              "agreement": false
+            }
+          ],
+          "itemDisagreements": [
+            {
+              "batch": 1,
+              "itemIndex": 5,
+              "reviewerSupported": [
+                false,
+                true
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "citation_insufficiency"
+                ],
+                []
+              ]
+            }
+          ]
+        },
+        "candidate": {
+          "status": "completed",
+          "batches": 2,
+          "slots": [
+            20,
+            21
+          ],
+          "items": 7,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 1,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 1,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 1,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [
+            {
+              "anchorId": "anchor-7-1",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                false,
+                false
+              ],
+              "retainedByBoth": false,
+              "agreement": true
+            },
+            {
+              "anchorId": "anchor-7-2",
+              "sourceCoverage": true,
+              "reviewerRetained": [
+                true,
+                true
+              ],
+              "retainedByBoth": true,
+              "agreement": true
+            }
+          ],
+          "itemDisagreements": []
+        }
+      }
+    },
+    {
+      "ordinal": 8,
+      "type": "five-window-boundary",
+      "armOrder": [
+        "candidate",
+        "control"
+      ],
+      "eligibleAnchorCount": 0,
+      "arms": {
+        "control": {
+          "status": "completed",
+          "batches": 1,
+          "slots": [
+            24
+          ],
+          "items": 5,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 2,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 2,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 2,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 2,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [],
+          "itemDisagreements": [
+            {
+              "batch": 1,
+              "itemIndex": 2,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "citation_insufficiency"
+                ]
+              ]
+            },
+            {
+              "batch": 1,
+              "itemIndex": 5,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "citation_insufficiency"
+                ]
+              ]
+            }
+          ]
+        },
+        "candidate": {
+          "status": "completed",
+          "batches": 2,
+          "slots": [
+            22,
+            23
+          ],
+          "items": 8,
+          "reviewerErrors": [
+            {
+              "reviewer": "A",
+              "unsupportedItems": 2,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 2,
+                "citation_insufficiency": 0,
+                "chronology_error": 0
+              }
+            },
+            {
+              "reviewer": "B",
+              "unsupportedItems": 2,
+              "errorCategoryCounts": {
+                "unsupported_promotion": 0,
+                "citation_insufficiency": 2,
+                "chronology_error": 0
+              }
+            }
+          ],
+          "anchors": [],
+          "itemDisagreements": [
+            {
+              "batch": 1,
+              "itemIndex": 2,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "citation_insufficiency"
+                ]
+              ]
+            },
+            {
+              "batch": 1,
+              "itemIndex": 5,
+              "reviewerSupported": [
+                false,
+                false
+              ],
+              "reviewerErrorCategories": [
+                [
+                  "unsupported_promotion"
+                ],
+                [
+                  "citation_insufficiency"
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "representativeFailure": {
+    "ordinal": 7,
+    "arm": "candidate",
+    "batch": 1,
+    "itemIndex": 5,
+    "content": "In inventory management, distinguish container labels from object labels, keep unresolved links recorded, use dated photographs for supplementing written inventory, ensure tags remain readable when boxes are turned, use stable shelf names when cabinets look alike, and keep purpose-assigned empty cases in the inventory rather than discarding them.",
+    "kind": "instruction",
+    "attachedSources": [
+      {
+        "role": "assistant",
+        "excerpt": "For a storage audit, distinguish a container label from the label of an object inside it."
+      },
+      {
+        "role": "assistant",
+        "excerpt": "Write down an unresolved link instead of guessing which neighboring shelf was intended."
+      },
+      {
+        "role": "assistant",
+        "excerpt": "A photograph can supplement a written inventory, but retain the date on which it was taken."
+      },
+      {
+        "role": "assistant",
+        "excerpt": "Check that tags remain readable when boxes are turned around."
+      }
+    ],
+    "unattachedSourcesPresentInSameBatch": [
+      {
+        "role": "assistant",
+        "excerpt": "Use a stable shelf name when two cabinets look alike."
+      },
+      {
+        "role": "assistant",
+        "excerpt": "Keep an empty case in the inventory if it has a assigned purpose rather than treating it as discarded."
+      }
+    ],
+    "reviewerJudgments": [
+      {
+        "reviewer": "A",
+        "supported": false,
+        "errors": [
+          "citation_insufficiency"
+        ],
+        "reason": "Four receipts support the first four instructions; stable shelf names and purpose-assigned empty cases require two uncited passages."
+      },
+      {
+        "reviewer": "B",
+        "supported": false,
+        "errors": [
+          "citation_insufficiency"
+        ],
+        "reason": "The two added instructions occur in the full batch but not among this items attached receipts."
+      }
+    ],
+    "classification": "same-item citation insufficiency, not full-input fabrication or proof of admission",
+    "fourWindowRelationship": {
+      "mechanicalSourceCoverageBothArms": true,
+      "semanticRetentionBothArms": false,
+      "separateValidLinksNotCompleteChainCredit": true
+    }
+  },
+  "accounting": {
+    "newRequests": 48,
+    "totalRequests": 55389,
+    "succeeded": 48,
+    "failed": 0,
+    "pending": 0,
+    "unknownTransportOutcomes": 0,
+    "roundCeilingMicroUsd": 1000000,
+    "newReservedMicroUsd": 240000,
+    "totalReservedMicroUsd": 321282281,
+    "cumulativeCeilingMicroUsd": 400000000,
+    "protectedReserveMicroUsd": 30000000,
+    "knownActualPortionMicroUsd": 11321,
+    "unknownActualCostEntries": 24,
+    "fullBillKnown": false,
+    "refundOrBudgetReset": false,
+    "historyPrefix": "unchanged ordered public-snapshot observation; not independent raw-rowid audit"
+  },
+  "hashes": {
+    "originalCorpus": "a5169b632c8a986fea37e6fec0d6def3e50b3c096d1b2ca2c5813c277ef83daa",
+    "assets": {
+      "sources.json": "264ea389ba745fcb22a9de2b0d3e714da3ed4731a9152e707cdcc2e94c6695bf",
+      "evaluator.json": "c39ea215067f3a67efed12c35d27221ff763460dea43b2d680122e8e2c541416",
+      "protocol.md": "f90858329149fa690b27a9d28eee07dff132411502e9fc7eb01991a5f216a7e3"
+    },
+    "executionProtocol": "bab3e0e3f275ab7d9f26a8578d47450fc63dab7ebf294f2e1c7e47fc4fffd119",
+    "runtimeSources": "cbfd371e3d4b1e971b0c5d784a4ad002edbc2966de98604ef8fe612c4710bf31",
+    "nodeBinary": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c",
+    "identity": "ec523c6823778672872e375586d5d0203dbdb5d380fa78964620ed06c2462bb8",
+    "report": "fe559c51af7a315a0cd63e6c94ae1ef814f0b129b1fd05d7e4362f8da17c42cf",
+    "closure": "f2d7b08deb8ae4ea41cb8baf2848b6c9b2d2885ba1eca889ba492afaaefb3ff2",
+    "outerResult": "cc2a5830b48eedeb02a69500762bc4fef285e3d06fd3415c42f179a963930090",
+    "labelMapping": "a1f3fa880761cadab2cd491503d56e5c50d7c74ade2c6039a0f192be791df87e",
+    "phaseOnePacket": "9c141a5c4da28179005450cdd672c1fa6a976a1bba906b0160cceedb942b48f5",
+    "phaseTwoPacket": "c57f4a33cc0e5d1c886f6eb8d2449c6bc12b1fb4d20ce1e1e412729035e14def",
+    "adjudicatedResultV2": "dd5f1ad416a5c8e579f9804ec98ec0b40626119147e73e49c83840b13a100dad",
+    "artifactAudit": "8465eba6fdd4f134daafe60edce46ebe871ccfdd5452001513ae9fc705ca01e9",
+    "sourceCoverage": "2d9c0725f11a2d616fa631da10bf95cb6e5955656be31412632c3f7c9f1af76e",
+    "phaseOneReviewers": [
+      "11b53ecbca5665415723807bedc38bdf36aec4adef7c1f1f0e69b08fb98db5b9",
+      "e66f63427b70f7c334e915b9e3ac8bea6fcd86c07f57564d8932af37a61af155"
+    ],
+    "phaseTwoReviewers": [
+      "fcccad1f9d76e53755507e10a647121daf12e5807ce98a0503efa3c4afa6c5cc",
+      "128c48d15e7b467a669c5fa9150fe3843c822d92416fa22c61eaa6b8963e2780"
+    ],
+    "executionArtifacts": {
+      "closure.json": "f2d7b08deb8ae4ea41cb8baf2848b6c9b2d2885ba1eca889ba492afaaefb3ff2",
+      "identity.json": "ec523c6823778672872e375586d5d0203dbdb5d380fa78964620ed06c2462bb8",
+      "report.json": "fe559c51af7a315a0cd63e6c94ae1ef814f0b129b1fd05d7e4362f8da17c42cf",
+      "slot-01.json": "fe346db9faddda9ab9afb24546461b0c6a71a2f42196c0017b3285806be3345f",
+      "slot-02.json": "84b61e0bd57510fd281b1db006e4de1d4f097148f91634d48c731673fb4d3a62",
+      "slot-03.json": "5e4808f4811f77e677b43d6890c225eea9eae2df697026912479c3d39d408a02",
+      "slot-04.json": "c2d08fa118ff29298854eb70a83ca1194231a7935e07a605a268193f614132f5",
+      "slot-05.json": "86d50981038fc91fe2dd981c62fda90dd503538ad2b62dacf3ec3658a7e2d584",
+      "slot-06.json": "ffbb2d31b6a231ece83e8eee37fb8501f6f5f81566d9661e77b61334bd5f299b",
+      "slot-07.json": "87e6f4cabcea99f18f2b207b8203bf6b59308cb47b6a61f32ced21fe9c604683",
+      "slot-08.json": "34d628c6bdda0841c0ed1473bedd80216b9e876619bc4e63780e57209e28d0f9",
+      "slot-09.json": "e38ed8a65ededf74b74c0c012e43ca4dcd544daac0ca754d99f9605705e58f1b",
+      "slot-10.json": "0e9dc55ea037053e8652c37c8ff2f7466ba03c22d6c1a07b5fc14d902f23d7fb",
+      "slot-11.json": "a284e1ea5820f523a712f0ea194851e6c04b39e618fb6e2f587161b74da8198d",
+      "slot-12.json": "be4d9bf3e6cd328b95aa4be711dae499a67d7c0d625d500fe12797a50e74f38a",
+      "slot-13.json": "d762245d22aa0da47de1d5c56f1e806af3ef875eb60544983a5ecbbc16d33f7b",
+      "slot-14.json": "02d773bc5572a6a76298f6dfeb15ccb8504663bf9c89f988f2cbca526a5c7ae7",
+      "slot-15.json": "6d9d3f7f92e46251f3e7ce365497ce4b020cb95a49464c96042d5be057468b6e",
+      "slot-16.json": "45eb89680cb5d3b89f26f86c23636e90c3ecd77a4c5af7771e5e81f249fa81d3",
+      "slot-17.json": "c870ebfeae7ef534e49c27552b135c2e32bfd596c8de800231545e3c0a307f5a",
+      "slot-18.json": "3a57dd1509be6591f8fafafd63e58548b0a2f910c274338a69cf6c0f6b564510",
+      "slot-19.json": "d7d6200902190a9d105bd0c9c4471d2cabe99b7f5a9d5164afcb9fc653d5679a",
+      "slot-20.json": "f136d8826bb0c0e7fded8bed628836f83477892b2e53538d2c8d10a9e0590dc9",
+      "slot-21.json": "5779fb44eb7bac02117f0617952727e07abe166ae12cd2907b3ea090d75c4621",
+      "slot-22.json": "3b7a5640ab598abe660404d22f9cc973408b31a3d010ffd874284e4c701a5ff5",
+      "slot-23.json": "b58198c844cabd6a553cd9829cb13c7eb9ffedfbdd3e95b2677e8a332526b51d",
+      "slot-24.json": "89808d3ac2ad381ac8fdd4f6a486f730754a8597ef9056b1ff9f4c324c90c98d"
+    }
+  },
+  "nextDecision": {
+    "batchPolicy": "experimental; do not advance",
+    "nextStep": "planning-only opt-in bounded canonical-source staging independent of extraction selection, reusing expiry, quotas, discard/replay fences and exact MCP cold reads",
+    "qualificationCannotRecoverUnselectedWindows": true,
+    "currentStagingPrefixAndIndexedCompatibilityLimits": true,
+    "realUsageNeedsExplicitRetentionConsent": true,
+    "freshOfflineColdSessionAcceptanceRequired": true,
+    "noDefaultTranscriptRetention": true,
+    "noAdditionalProviderPassOrPaidExtensionAuthorized": true,
+    "noHermesRolloutAuthorized": true
+  },
+  "limits": [
+    "No core qualification, admission, filing, recall or answer scoring was executed.",
+    "Extracted items are not admitted memories; receipt coverage is not summary entailment.",
+    "No old benchmark score or closed experiment was revised or pooled.",
+    "Existing indexed source-only answer contexts omit generated interpretations; these extraction findings are not proven causes of past answer errors.",
+    "No complete-source-retention, current-state reconciliation, default MOC, lightweight resource or end-to-end MCP/Hermes quality guarantee.",
+    "Doubling batches increases aggregate item capacity and calls; classification costs are unmeasured.",
+    "Twenty-four actual-cost entries are unknown; the known portion is not a full bill."
+  ]
+}
