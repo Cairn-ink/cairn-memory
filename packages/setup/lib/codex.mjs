@@ -4,6 +4,8 @@ import { lstat, mkdir, open, readFile, rename, rm, mkdtemp, realpath } from 'nod
 import { homedir, tmpdir } from 'node:os';
 import { delimiter, join, resolve, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
+import { qualifiedHost } from '../runtime/integrations/codex/parser.mjs';
+import { setupInstalledCodex, installedStatus, controlCodex } from './codex-runtime.mjs';
 
 // Keep routing and all Codex behavior here; browser authorization can supply
 // credentials at the prompt seam without changing the config transaction.
@@ -39,8 +41,9 @@ export async function dispatchClient(argv, context) {
   if (selection.client !== 'codex' && (selection.client || availableClient('claude') || !availableClient('codex'))) {
     return { handled: false, argv: selection.argv };
   }
-  if (!['setup', 'status'].includes(action) || flags.some(flag => !['--dry-run', '--no-browser', '--no-clipboard'].includes(flag)) ||
-      (action === 'status' && flags.length)) {
+  if (!['setup', 'status','disable','uninstall','pause','resume'].includes(action) || flags.some(flag =>
+      !['--dry-run', '--no-browser', '--no-clipboard','--manual-token','--reauthorize'].includes(flag)) ||
+      (action !== 'setup' && flags.length)) {
     throw new context.SetupError('codex_unknown', 2);
   }
   if (!context.supportedNode(context.nodeVersion)) {
@@ -112,13 +115,16 @@ function runCodex(args, { env = process.env, cwd } = {}) {
 }
 
 export async function setupCodex({ action, flags, write, prompt, interactive, browse,
-  SetupError, validEndpoint, t, endpointOverride }) {
+  SetupError, validEndpoint, t, endpointOverride, authOptions, signal }) {
   const fail = message => new SetupError(message);
   if (process.platform === 'win32') {
     write(t('codex_windows'));
     fallback(write, t); automaticStatus(write, t); return 0;
   }
   const home = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
+  if (['disable','uninstall','pause','resume'].includes(action)) {
+    return controlCodex({action,home,write,t,snapshot,unchanged});
+  }
   const configPath = join(home, 'config.toml');
   const before = await snapshot(configPath);
   // Inspect only a copy of the user's file. No trusted-project layer or OAuth
@@ -166,6 +172,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     const version = await run(['--version']);
     if (version.error?.code === 'ENOENT') throw fail('codex_missing');
     checked(version, ['--version']);
+    const hostVersion = version.stdout.trim().replace(/^codex-cli /u,'');
     write(t('codex_available'));
     if (!await supports(['mcp', 'add'], /--url\b/u) ||
         !await supports(['mcp', 'get'], /--json\b/u)) {
@@ -205,6 +212,14 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     } else if (!existing && (action === 'status' || flags.includes('--dry-run') || !interactive)) {
       write(t('endpoint_default', { endpoint: 'https://cairn.ink' }));
     }
+    if (qualifiedHost(hostVersion)) {
+      return await setupInstalledCodex({action,flags,home,hostVersion,write,prompt,interactive,browse,
+        SetupError,t,endpointOverride,authOptions,signal,before,configPath,existing,usable,
+        neutral,get,snapshot,unchanged});
+    }
+    // Unknown writers remain MCP-only. An older installed runtime independently
+    // checks the current binary on every hook and worker, so upgrades fail closed.
+    await installedStatus({home,hostVersion,write,t,snapshot});
     if (action === 'status' || flags.includes('--dry-run')) {
       if (flags.includes('--dry-run')) {
         write(t('dry_run'));

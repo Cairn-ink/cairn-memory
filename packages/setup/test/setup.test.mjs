@@ -3,6 +3,7 @@ import { PassThrough, Writable } from 'node:stream';
 import { detectLanguage, messages, translator } from '../lib/messages.mjs';
 import { selectEndpoint } from '../lib/options.mjs';
 import './codex.test.mjs';
+import './codex-hooks.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
@@ -155,7 +156,7 @@ test('browser happy path uses S256, safe stdin, credential check then ACK and re
   assert.deepEqual(r.browses, [`${r.server.endpoint}/device`]);
   assert.deepEqual(r.server.requests.map(r => r.route), ['device-authorizations', 'token', 'token', 'credential', 'ack']);
   assert.equal(r.server.grant.state, 'delivered');
-  assert.match(r.stdout, /plugin 0\.3\.1/); assert.match(r.stdout, /Installer @cairn-ink\/memory 0\.2\.0/);
+  assert.match(r.stdout, /plugin 0\.3\.1/); assert.match(r.stdout, /Installer @cairn-ink\/memory 0\.3\.0/);
   assert.match(r.stdout, /Cairn Memory is connected.*expires/);
   const second = await localWireRequest(r.server.server, requestJSON, new URL('/api/cli-auth/v1/token', r.server.endpoint), { body: r.server.lastProof, env: {} });
   assert.equal(second.status, 400); assert.equal(second.value.error, 'invalid_grant');

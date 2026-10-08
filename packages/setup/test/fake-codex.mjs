@@ -4,14 +4,15 @@ readFileSync(0, 'utf8');
 const args = process.argv.slice(2);
 const state = JSON.parse(readFileSync(process.env.FAKE_STATE, 'utf8'));
 const home = process.env.CODEX_HOME || join(process.env.HOME, '.codex');
-appendFileSync(process.env.FAKE_CALLS, JSON.stringify({ args, home, cwd: process.cwd() }) + '\n');
+appendFileSync(process.env.FAKE_CALLS, JSON.stringify({ args, home, cwd: process.cwd(),
+  ...(state.recordEnv ? {env:process.env} : {}) }) + '\n');
 if (state.fail === args.join(' ') || (state.failValidation && home.includes('.cairn-validate-'))) {
   writeSync(2, state.token); process.exit(7);
 }
 if (args.includes('--help')) {
   writeSync(1, state.old ? 'old CLI' : '--url --json'); process.exit(0);
 }
-if (args[0] === '--version') { writeSync(1, 'codex-cli 0.160.0'); process.exit(0); }
+if (args[0] === '--version') { writeSync(1, 'codex-cli ' + (state.version ?? '0.160.0')); process.exit(0); }
 if (state.badJSON) { writeSync(1, state.token); process.exit(0); }
 let text = '';
 try { text = readFileSync(join(home, 'config.toml'), 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }

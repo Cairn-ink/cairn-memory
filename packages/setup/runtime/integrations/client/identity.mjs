@@ -1,0 +1,3 @@
+// Identity facade. Publication and explicit repair share private state in pairing.mjs;
+// no repair capability or unchecked restore function crosses the export boundary.
+export { installId, opaqueProjectId, projectKey, rootMarker } from "./pairing.mjs";
