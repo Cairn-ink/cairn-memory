@@ -312,3 +312,16 @@ Primary owns candidate commit, independent nonauthor Standards/Spec reviews and
 latest-head CI/mergeability, which remain pending. These offline gates establish
 mechanical host/install boundaries, not semantic quality, paid authority, a
 release, named-client compatibility or permission to merge.
+
+## Review correction round1
+
+Independent Standards review of candidate `1dcd6779db190ca4a3266fb5ac810674e8ad6a2f`
+identified one low-severity documentation inconsistency: the existing protocol
+deadline paragraph still restricted MCP to source-qualified capture. It now
+also names explicit `indexed-staged-v1` canonical capture, matching H2 and the
+already tested implementation. The adjacent native Hermes v2-only restriction
+remains unchanged. Only this protocol wording and this appended record change;
+no production/test byte, acceptance requirement or earlier evidence is revised.
+This is a documentation correction, not a semantic/runtime bug. Primary owns
+the corrected candidate commit and both independent review axes; no author
+commit/push or additional test run is made.

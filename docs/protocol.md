@@ -230,7 +230,7 @@ retries and independent HTTP deadlines do not change.
 The source-only embedded core may opt in to `captureDeadlineMs` at trusted
 construction. The local MCP server can now forward a validated own constructor
 option or `--capture-deadline-ms` CLI flag, only with explicit source-qualified
-capture. It is not an MCP tool argument, hosted HTTP field, provider request
+capture or explicit `indexed-staged-v1` canonical capture. It is not an MCP tool argument, hosted HTTP field, provider request
 parameter, benchmark capability, or diagnostic payload. The monotonic budget
 belongs to one capture invocation; its core-created abort signal retains private
 provenance so a provider error string or external abort cannot authorize case-deadline
