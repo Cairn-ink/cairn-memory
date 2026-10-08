@@ -2090,6 +2090,48 @@ are used; existing frozen evaluation results remain unchanged.
 
 ## Fixed source-competition extraction study
 
+The [closed result](plans/source-competition-results.md) is **do not advance**.
+All 24 batch slots/16 logical arms completed, producing 38 control and 59
+candidate items, not admitted memories. Mechanical receipt coverage was 14/16
+versus 15/16; independent agreement-based semantic retention was 12/16 versus
+14/16. Reviewer A/B gains were +2/+1, with one control-anchor disagreement.
+Both retained the two required assistant anchors. Both reviewers judged 10/38
+control and 8/59 candidate items unsupported; individual counts were 11/10 and
+9/8. Each arm had one support-status and seven error-category disagreements.
+All 97 items and 32 anchor positions were reviewed, with zero null judgments.
+World-truth and relative-time caveats are not missing reviews or human gold.
+Safety failures and disagreements independently block advancement.
+
+In candidate case 7, batch 1, item 5, six assistant instructions were compressed
+into one item citing only the first four instructions' passages. The other two
+were present in the full input but absent from that item's receipts: a concrete
+citation gap, distinct from judge-sensitive advice/fact/preference labeling.
+Neither arm retained the required four-window relationship as one supported
+complete-chain item; separate valid links and distributed coverage earn no such
+credit. The five-window boundary stays outside the 16-anchor denominator and
+inside all-item safety review. The [aggregate evidence](../evaluation/source-competition/results-20261009.json)
+preserves per-case judgments, disagreements, synthetic excerpts and hashes.
+
+The closed run used 48 succeeded requests and US$0.24 new conservative
+reservation, making cumulative reservation US$321.282281 within US$400 with
+US$30 protected. US$0.011321 is only the known actual portion; 24 entries remain
+unknown. There were no pending/unknown transport outcomes or retries/replacements.
+Primary observed outer exit 0; artifact `osExit` remains unknown. All 27 retained
+artifacts were hash-checked. No capture qualification/admission, MOC filing,
+recall, Mem0 comparison or benchmark scoring was performed, and earlier scores
+are unchanged. Structural completion does not establish fidelity or product
+reliability/lightweight behavior.
+The existing indexed source-only answer context omits generated interpretations;
+these extraction-claim findings are not proven causes of old answer errors.
+
+Keep batching experimental. A planning-only follow-up may investigate explicitly
+consented bounded canonical-source staging independent of extraction selection,
+using existing expiry/quota/discard fences and MCP cold reads. Current staged
+prefixes are incomplete and incompatible with indexed capture; qualification
+cannot recover unselected windows. Separate privacy/compatibility and fresh
+cold-session acceptance are required. No default raw-transcript retention,
+additional provider pass, Hermes rollout or paid extension follows here.
+
 The [source-competition packet](plans/source-competition-study.md) uses eight
 fresh synthetic sources, unchanged extraction prompt/model/caps, and a distinct
 one-shot extraction-only capability. Control has eight batches; the ten-window,
@@ -2099,9 +2141,10 @@ can separate an early statement from its correction and break cross-message
 relationships; it supplies no supersession, admission or retention-all guarantee.
 
 Offline fake-HTTP results establish preparation, exact request binding and
-accounting safety, not faithful extraction or semantic gain. Sixteen achievable
-anchors and the separate five-window boundary require two independent,
-label-blinded reviews under the frozen [protocol](../evaluation/source-competition/protocol.md).
+accounting safety, not faithful extraction or semantic gain. The closed result
+above separately reports the two independent label-blinded reviews of sixteen
+achievable anchors and the five-window boundary under the frozen
+[protocol](../evaluation/source-competition/protocol.md).
 Receipt coverage alone is not semantic credit. Rejected parsed proposals remain
 diagnostics, never repaired or credited; unknown review or an unexecuted slot
 blocks advancement. No competitive score, MOC quality or product default changes.
