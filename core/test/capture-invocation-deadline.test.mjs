@@ -109,38 +109,46 @@ test('D2 monotonic budget checks before scheduled adapter invocation and after t
   }
 });
 
-test('D2/D4 late extraction is ignored, core signal provenance is private, and another capture is independent', async t => {
-  let release;
-  let savedSignal;
-  let classifyCalls = 0;
-  const model = scripted();
-  model.extract = ({ input: request, signal }) => {
-    if (request.messages[0].content.includes('stalled')) {
-      savedSignal = signal;
-      return new Promise(resolve => { release = resolve; });
-    }
-    return { items: [{ content: request.messages[0].content, kind: 'fact',
-      confidence: 0.8, sourceIndices: [0] }] };
+test('D2/D4 late extraction is ignored, core signal provenance is private, and another capture is independent', async () => {
+  const { isAbsolute } = await import('node:path');
+  const { lstatSync } = await import('node:fs');
+  const childEnv = { NODE_DISABLE_COMPILE_CACHE: '1' };
+  for (const key of ['TMPDIR', 'TMP', 'TEMP']) {
+    const value = process.env[key];
+    if (value === undefined) continue;
+    assert.ok(isAbsolute(value) && !value.includes('\0') && lstatSync(value).isDirectory(),
+      'valid runner temp directory');
+    childEnv[key] = value;
+  }
+  const child = fileURLToPath(new URL('../testing/capture-independence-clock-child.mjs', import.meta.url));
+  const run = mutation => spawnSync(process.execPath, [child, ...(mutation ? [mutation] : [])],
+    { encoding: 'utf8', env: childEnv, timeout: 30_000 }); // Hang guard, not a speed assertion.
+  const inspect = (result, status) => {
+    assert.equal(result.error, undefined); assert.equal(result.signal, null);
+    assert.equal(result.status, status, result.stderr);
+    assert.match(result.stderr, /INDEPENDENCE_CLOCK_CLEANUP_COMPLETED:true/u);
+    const observed = JSON.parse(result.stdout);
+    assert.equal(observed.firstChecksPassed, true, 'timeout and late-result checks passed first');
+    assert.equal(observed.firstErrorCode, 'model_timeout');
+    assert.equal(observed.firstSignalAborted, true); assert.equal(observed.firstSignalBranded, true);
+    assert.equal(observed.externalSignalBranded, false);
+    assert.equal(observed.elapsedMs, 1_001);
+    assert.deepEqual(observed.afterLate, { memories: 0, receipts: 0, initialRows: 0 });
+    return observed;
   };
-  model.classify = ({ input: request }) => {
-    classifyCalls++;
-    return { items: request.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) };
-  };
-  const { core, db } = fixture(t, { model, captureDeadlineMs: 1_000 });
-  const pending = core.capture(input('stalled'));
-  assert.equal((await pending).error.code, 'model_timeout');
-  assert.equal(savedSignal.aborted, true);
-  assert.equal(isCoreModelDeadlineSignal(savedSignal), true);
-  assert.equal(isCoreModelDeadlineSignal(AbortSignal.abort('model_timeout')), false);
-  assert.equal(count(db, 'memories'), 0);
-  assert.equal(count(db, 'receipts'), 0);
-  release({ items: [{ content: 'Late synthetic answer.', kind: 'fact',
-    confidence: 0.8, sourceIndices: [0] }] });
-  await wait(10);
-  assert.equal(count(db, 'memories'), 0);
-  assert.equal(classifyCalls, 0);
-  assert.equal(ok(await core.capture(input('later'))).classification.status, 'applied');
-  assert.equal(classifyCalls, 1);
+  const actual = inspect(run(), 0);
+  assert.equal(actual.mutatedModules, 0); assert.equal(actual.extractCalls, 2);
+  assert.equal(actual.classifyCalls, 1); assert.equal(actual.secondSignalFresh, true);
+  assert.equal(actual.secondSignalInitiallyAborted, false);
+  assert.equal(actual.classificationStatus, 'applied'); assert.equal(actual.initialStatus, 'applied');
+  assert.deepEqual(actual.finalCounts, { memories: 1, receipts: 1, initialRows: 1 });
+  const mutant = run('reuse-first-deadline');
+  const counterfactual = inspect(mutant, 2);
+  assert.match(mutant.stderr,
+    /INDEPENDENCE_ASSERTION_FAILED:second-independence:fresh same-core capture must succeed/u);
+  assert.equal(counterfactual.mutatedModules, 1); assert.equal(counterfactual.extractCalls, 1);
+  assert.equal(counterfactual.classifyCalls, 0); assert.equal(counterfactual.secondErrorCode, 'model_timeout');
+  assert.deepEqual(counterfactual.finalCounts, { memories: 0, receipts: 0, initialRows: 0 });
 });
 
 test('D4 post-admission classifier expiry retains receipts and cold failed journal without later rationale', async t => {
