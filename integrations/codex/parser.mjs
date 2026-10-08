@@ -2,6 +2,15 @@ import { normalizeBlocks, hash, PROFILE } from '../client/common-profile.mjs';
 
 export const CODEX_COMMIT = '36650394c5b38c2990ccf2a3457165ca3e9d9726';
 export const FORMAT = 'codex-0.157.1-paginated-v1';
+// Exact pins, not a semver range. The 0.160.1 binary evidence is frozen in
+// test/fixtures/format-evidence-0.160.1.json. Its canonical capture layout is
+// unchanged; retain the cursor/profile ID so existing pending ranges are stable.
+export const QUALIFIED_CREATORS = Object.freeze(['0.157.1', '0.160.1']);
+export const QUALIFIED_HOSTS = Object.freeze(['0.160.1']);
+export const qualifiedHost = version => QUALIFIED_HOSTS.includes(version);
+// Output-schema support is not A7 authority acceptance. No model was invoked
+// in the offline 0.160.1 qualification, so installed context stays fail-closed.
+export const qualifiedContextHost = _version => false;
 export const MAX_READ = 1048576, MAX_LINE = 262144;
 const tops = new Set(['session_meta','response_item','inter_agent_communication',
   'inter_agent_communication_metadata','compacted','turn_context','token_usage_record',
@@ -13,7 +22,8 @@ const items = new Set(['UserMessage','FunctionCallOutput','HookPrompt','AgentMes
 const events = new Set(['item_completed','task_started','turn_started','task_complete','turn_complete',
   'token_count','thread_settings_applied','thread_goal_updated','thread_rolled_back','turn_aborted',
   'user_message','agent_message','agent_reasoning','agent_reasoning_raw_content','context_compacted',
-  'item_started','agent_message_content_delta']);
+  'item_started','agent_message_content_delta','hook_started','hook_completed',
+  'error','warning','turn_moderation_metadata']);
 const keys = (value, allowed) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).every(k => allowed.includes(k));
 const unsupported = () => { throw new Error('unsupported_format'); };
@@ -24,7 +34,7 @@ export function verifyHeader(line, sessionId) {
   try { row = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(line)); }
   catch { unsupported(); }
   const meta = row?.payload;
-  if (row.type !== 'session_meta' || meta?.cli_version !== '0.157.1' ||
+  if (row.type !== 'session_meta' || !QUALIFIED_CREATORS.includes(meta?.cli_version) ||
       meta.history_mode !== 'paginated' || meta.id !== sessionId ||
       !['cli','exec'].includes(meta.source) || meta.history_base != null ||
       meta.forked_from_id != null || meta.parent_thread_id != null ||
