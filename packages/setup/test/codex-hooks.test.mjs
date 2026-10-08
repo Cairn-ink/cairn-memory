@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir, lstat, readdir, symlink, unlink, cp, chmod } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { translator } from '../lib/messages.mjs';
+import { supportsClaudePairing, CLAUDE_PAIRING_MINIMUM } from '../lib/codex-runtime.mjs';
 import { hookCommand } from '../lib/codex-runtime.mjs';
 import { policyPath } from '../../../integrations/client/automatic-policy.mjs';
 import { join } from 'node:path';
@@ -25,7 +27,7 @@ const mainURL = new URL('../lib/setup.mjs',import.meta.url).href;
 const transportURL = new URL('../lib/transport.mjs',import.meta.url).href;
 const wireURL = new URL('./http-wire.mjs',import.meta.url).href;
 
-async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,claudePolicy=true,claudeInstalled=true,claudeEnabled=true,claudeConfigureFailOnce=false,auth={},state={},
+async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,claudePolicy=true,claudeInstalled=true,claudeEnabled=true,claudeConfigureFailOnce=false,claudeVersion,auth={},state={},
   cliModule=mainURL,nativeBinary,networkSandbox}={}) {
   const ws = createTestWorkspace(t,{prefix:'cx5-install-'});
   const bin = join(ws.path,'bin');await mkdir(bin);
@@ -41,7 +43,8 @@ async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,c
     `process.env.FAKE_STATE=${JSON.stringify(statePath)};process.env.FAKE_CALLS=${JSON.stringify(calls)};\n${source}`;
   await writeFile(join(bin,'codex'),`#!${process.execPath}\n${command}`,{mode:0o755});
   const profileRoot = join(home,'.claude/plugins/data/cairn-memory-cairn-memory');
-  let originalProjectId;
+  let originalProjectId;const claudeState=join(ws.path,'claude-state.json');
+  await writeFile(claudeState,JSON.stringify({installed:claudeInstalled,enabled:claudeEnabled,version:claudeVersion??(claudePolicy?'0.3.2':'0.1.1')}));
   if (paired) {
     await mkdir(profileRoot,{recursive:true,mode:0o700});
     // Exercise adoption of Claude's existing (not newly minted) identity.
@@ -49,11 +52,12 @@ async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,c
     await writeFile(join(bin,'claude'),`#!${process.execPath}\nimport{readFileSync,writeFileSync,writeSync,existsSync,appendFileSync}from'node:fs';
       const args=process.argv.slice(2),path=${JSON.stringify(join(ws.path,'claude-options.json'))};
       appendFileSync(${JSON.stringify(join(ws.path,'claude-calls.jsonl'))},JSON.stringify(args)+'\\n');
+      const state=JSON.parse(readFileSync(${JSON.stringify(claudeState)},'utf8'));
       const values=readFileSync(0,'utf8');if(values) {
         writeFileSync(path,values);
         const marker=path+'.configure-failed';if(${claudeConfigureFailOnce} && !existsSync(marker)){writeFileSync(marker,'yes');process.exitCode=1;}
       }
-      if(args[1]==='list' && args.includes('--json'))writeSync(1,JSON.stringify(${claudeInstalled}?[{id:'cairn-memory@cairn-memory',scope:'user',enabled:${claudeEnabled},version:${JSON.stringify(claudePolicy?'0.3.2':'0.3.1')}}]:[]));
+      if(args[1]==='list' && args.includes('--json'))writeSync(1,JSON.stringify(state.installed?[{id:'cairn-memory@cairn-memory',scope:'user',enabled:state.enabled,version:state.version}]:[]));
       else if(args.includes('--json'))writeSync(1,JSON.stringify({configured:['api_token','api_endpoint','pairing_record'],unconfigured:[]}));
     `,{mode:0o755});
   }
@@ -69,8 +73,8 @@ async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,c
       browse:async()=>{},authOptions:{now:()=>clock,sleep:async ms=>{clock+=ms;},
         request:(url,options)=>requestJSON(url,{...options,env:{}}),copy:async()=>false,progress:()=>()=>{}}});disconnect();`);
   const env = {HOME:home,CODEX_HOME:codexHome,PATH:bin,LANG:'en_US.UTF-8',TMPDIR:process.env.TMPDIR};
-  async function run(flags,{executable=process.execPath,module=cliModule}={}) {
-    const child = spawn(executable,[harness,...flags],{cwd:ws.path,env:{...env,CX5_TEST_CLI_MODULE:module},stdio:['ignore','pipe','pipe','ipc']});
+  async function run(flags,{executable=process.execPath,module=cliModule,envOverrides={}}={}) {
+    const child = spawn(executable,[harness,...flags],{cwd:ws.path,env:{...env,...envOverrides,CX5_TEST_CLI_MODULE:module},stdio:['ignore','pipe','pipe','ipc']});
     wireChild(child,server.server);
     let stdout='',stderr='';child.stdout.on('data',x=>stdout+=x);child.stderr.on('data',x=>stderr+=x);
     const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});
@@ -84,7 +88,7 @@ async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,c
   const records=()=>readFile(calls,'utf8').then(text=>text.trim().split('\n').filter(Boolean).map(JSON.parse));
   assert.ok(!(await readFile(calls,'utf8')).includes(secret));
   assert.ok(!(await readFile(calls,'utf8')).includes(mcpSecret));
-  return {...result,ws,home,codexHome,installation,installed,server,env,bin,profileRoot,originalProjectId,run,records,statePath,screens};
+  return {...result,ws,home,codexHome,installation,installed,server,env,bin,profileRoot,originalProjectId,run,records,statePath,claudeState,screens};
 }
 
 test('CX-5 browser credential is saved before ACK; OAuth MCP, private stable runtime and four user hooks',async t=>{
@@ -173,11 +177,19 @@ for (const upgrade of ['node','runtime']) {
     const auth={};const f=await fixture(t,{auth});assert.equal(f.code,0,f.stdout);
     const before=await readFile(f.installation);auth.createStatus=404;
     let module=mainURL,executable=process.execPath;
-    if (upgrade==='node') executable=process.execPath.includes('v22.')?
-      '/home/chichieh/.nvm/versions/node/v24.15.0/bin/node':'/home/chichieh/.nvm/versions/node/v22.16.0/bin/node';
+    if (upgrade==='node') {
+      // CI needs only the running Node. The second executable has a genuinely
+      // different execPath, using a fake node shim that preserves IPC/stdio.
+      executable=join(f.ws.path,'second-node');
+      await writeFile(executable,`#!${process.execPath}\nimport{pathToFileURL}from'node:url';import{writeFileSync}from'node:fs';
+        Object.defineProperty(process,'execPath',{value:import.meta.filename});
+        writeFileSync(${JSON.stringify(join(f.ws.path,'second-node-used'))},process.execPath);
+        process.argv.splice(1,1);await import(pathToFileURL(process.argv[1]).href);`,{mode:0o700});
+    }
     else module=await upgradedModule(f);
     const failed=await f.run(['setup','--client','codex','--no-browser','--reauthorize'],{module,executable});
     assert.equal(failed.code,1,failed.stdout);assert.deepEqual(await readFile(f.installation),before);
+    if(upgrade==='node')assert.equal(await readFile(join(f.ws.path,'second-node-used'),'utf8'),executable);
     // Include stale handlers from earlier registrations, with a different runtime
     // and node path. A current-config-only cleanup would leave these behind.
     const hookFile=join(f.codexHome,'hooks.json');const hooks=JSON.parse(await readFile(hookFile,'utf8'));
@@ -527,4 +539,110 @@ test('CX-5 fresh standalone Codex never claims a future Claude default root',asy
   assert.notEqual(await clientProjectId(claude,'/synthetic/project'),before);
   assert.equal((await f.run(['setup','--client','codex','--no-browser'])).code,0);
   assert.equal(await clientProjectId(codex,'/synthetic/project'),before);
+});
+
+
+test('CX-5 pairing compatibility is a same-major capability range tied to current plugin metadata',async()=>{
+  const metadata=JSON.parse(await readFile(new URL('../../../plugins/cairn-memory/.claude-plugin/plugin.json',import.meta.url),'utf8'));
+  assert.ok(metadata.userConfig.pairing_record);assert.ok(supportsClaudePairing(metadata.version));
+  assert.ok(supportsClaudePairing(CLAUDE_PAIRING_MINIMUM));
+  for(const version of ['0.3.1','0.3.2','0.3.3','0.4.0','0.99.0'])assert.ok(supportsClaudePairing(version),version);
+  for(const version of ['0.1.1','1.0.0','0.3.3-alpha','v0.3.3','0.03.3','unknown',null])assert.equal(supportsClaudePairing(version),false,String(version));
+});
+for(const claudeVersion of ['0.3.1','0.3.3'])test('CX-5 released/future compatible Claude '+claudeVersion+' pairs successfully',async t=>{
+  const f=await fixture(t,{paired:true,claudeVersion,answers:['yes','100','']});assert.equal(f.code,0,f.stdout);
+  assert.equal(f.installed.usesClaude,true);
+  assert.equal(await clientProjectId({client:'claude',home:f.home,pairingRecord:f.installed.pairingRecord,
+    env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}},'/synthetic/project'),f.originalProjectId);
+});
+test('CX-5 both locales describe identity-only consent and a Codex-only daily cap',()=>{
+  for(const locale of ['zh','en']) {
+    const t=translator(locale);
+    assert.match(t('codex_cap_prompt'),locale==='zh'?/僅適用 Codex/:/Codex-only/);
+    assert.ok(!/updating|scopes|更新|共用的每日/u.test(t('codex_sharing')+t('codex_cap_prompt')));
+    assert.match(t('codex_sharing'),/pairing record/);
+  }
+});
+for(const pending of [false,true])test('CX-5 uninstall unpairs '+(pending?'pending':'completed')+' identity and restores actual Claude pause',async t=>{
+  const f=await fixture(t,{paired:true,answers:['yes','100',''],claudeConfigureFailOnce:pending});
+  assert.equal(f.code,pending?1:0,f.stdout);
+  const key=await readFile(join(f.profileRoot,'project-key'));
+  const removed=await f.run(['uninstall','--client','codex']);assert.equal(removed.code,0,removed.stdout);
+  const native=JSON.parse(await readFile(join(f.ws.path,'claude-options.json'),'utf8'));assert.equal(native.pairing_record,'');
+  const claude={client:'claude',home:f.home,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot,CLAUDE_PLUGIN_OPTION_PAIRING_RECORD:native.pairing_record}};
+  assert.equal((await resolveClient(claude)).enabled,true);
+  assert.equal(await clientProjectId(claude,'/synthetic/project'),f.originalProjectId);
+  assert.deepEqual(await readFile(join(f.profileRoot,'project-key')),key);
+  assert.equal((await readControlState(f.profileRoot)).paused,false);
+  const hook=new URL('../../../plugins/cairn-memory/scripts/hook.mjs',import.meta.url).pathname;
+  const child=spawn(process.execPath,[hook,'pause'],{env:{...claude.env,PATH:f.bin,
+    CLAUDE_PLUGIN_OPTION_API_ENDPOINT:f.server.endpoint,CLAUDE_PLUGIN_OPTION_TELEMETRY:'false'},stdio:'ignore'});
+  assert.equal(await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);}),0);
+  assert.equal((await readControlState(f.profileRoot)).paused,true);
+  await assert.rejects(readFile(f.installation),error=>error.code==='ENOENT');
+  await assert.rejects(readFile(join(f.codexHome,'cairn/credential.json')),error=>error.code==='ENOENT');
+  assert.equal((await f.run(['uninstall','--client','codex'])).code,0);
+});
+test('CX-5 unpair failure never reports uninstall success; removes credential/state and retry restores Claude',async t=>{
+  const f=await fixture(t,{paired:true,answers:['yes','100',''],claudeConfigureFailOnce:true});assert.equal(f.code,1);
+  const native=join(f.bin,'claude'),backup=native+'-saved';await cp(native,backup);await unlink(native);
+  const failed=await f.run(['uninstall','--client','codex']);assert.equal(failed.code,1);assert.match(failed.stdout,/recovery could not be verified/);
+  assert.ok(!failed.stdout.includes('memory: uninstalled'));
+  await assert.rejects(readFile(f.installation),error=>error.code==='ENOENT');
+  await assert.rejects(readFile(join(f.codexHome,'cairn/credential.json')),error=>error.code==='ENOENT');
+  await cp(backup,native);
+  const retry=await f.run(['uninstall','--client','codex']);assert.equal(retry.code,0,retry.stdout);
+  const claude={client:'claude',home:f.home,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}};
+  assert.equal((await resolveClient(claude)).enabled,true);
+  assert.equal(await clientProjectId(claude,'/synthetic/project'),f.originalProjectId);
+});
+for(const unsafe of ['permissions','symlink'])test('CX-5 unsafe policy '+unsafe+' cannot retain hook credential/installation',async t=>{
+  const f=await fixture(t);assert.equal(f.code,0,f.stdout);
+  const dir=join(f.installed.root,'automatic-policy');
+  if(unsafe==='permissions')await chmod(dir,0o755);
+  else {
+    const target=join(f.ws.path,'foreign-policy');await mkdir(target,{mode:0o700});
+    await writeFile(join(target,'canary'),'untouched');
+    await cp(dir,join(f.ws.path,'retained-policy'),{recursive:true});
+    const {rm}=await import('node:fs/promises');await rm(dir,{recursive:true});await symlink(target,dir);
+  }
+  const result=await f.run(['uninstall','--client','codex']);assert.equal(result.code,0,result.stdout);assert.match(result.stdout,/policy directory\/file is unsafe/);
+  await assert.rejects(readFile(f.installation),error=>error.code==='ENOENT');
+  await assert.rejects(readFile(join(f.codexHome,'cairn/credential.json')),error=>error.code==='ENOENT');
+  if(unsafe==='symlink')assert.equal(await readFile(join(f.ws.path,'foreign-policy/canary'),'utf8'),'untouched');
+});
+test('CX-5 standalone rerun discloses new pairing capability and preserves old memory target',async t=>{
+  const f=await fixture(t,{paired:true,claudeInstalled:false});assert.equal(f.code,0,f.stdout);
+  const before=await readFile(f.installation);
+  await writeFile(f.claudeState,JSON.stringify({installed:true,enabled:true,version:'0.3.3'}));
+  const again=await f.run(['setup','--client','codex','--no-browser']);assert.equal(again.code,0,again.stdout);
+  assert.match(again.stdout,/keeps the existing Codex standalone target/);assert.match(again.stdout,/uninstall --client codex/);
+  assert.deepEqual(await readFile(f.installation),before);
+});
+
+test('CX-5 uninstall from another CODEX_HOME cannot unpair a successful installation',async t=>{
+  const f=await fixture(t,{paired:true,answers:['yes','100','']});assert.equal(f.code,0,f.stdout);
+  const options=await readFile(join(f.ws.path,'claude-options.json'));
+  const record=await readFile(f.installed.pairingRecord);
+  const other=join(f.home,'other-codex');await mkdir(other,{mode:0o700});
+  const result=await f.run(['uninstall','--client','codex'],{envOverrides:{CODEX_HOME:other}});
+  assert.equal(result.code,0,result.stdout);
+  assert.deepEqual(await readFile(join(f.ws.path,'claude-options.json')),options);
+  assert.deepEqual(await readFile(f.installed.pairingRecord),record);
+  assert.equal((await readInstallation(f.installation)).enabled,true);
+});
+
+test('CX-5 unpair never mints a lost Claude key or exits successfully with disabled memory',async t=>{
+  const f=await fixture(t,{paired:true,answers:['yes','100',''],claudeConfigureFailOnce:true});assert.equal(f.code,1);
+  const path=join(f.profileRoot,'project-key'),key=await readFile(path);await unlink(path);
+  const failed=await f.run(['uninstall','--client','codex']);assert.equal(failed.code,1,failed.stdout);
+  assert.match(failed.stdout,/recovery could not be verified/);
+  await assert.rejects(readFile(path),error=>error.code==='ENOENT');
+  await assert.rejects(readFile(f.installation),error=>error.code==='ENOENT');
+  await assert.rejects(readFile(join(f.codexHome,'cairn/credential.json')),error=>error.code==='ENOENT');
+  await writeFile(path,key,{mode:0o600}); // only original-key repair, never a replacement identity
+  const retry=await f.run(['uninstall','--client','codex']);assert.equal(retry.code,0,retry.stdout);
+  const claude={client:'claude',home:f.home,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}};
+  assert.equal((await resolveClient(claude)).enabled,true);
+  assert.equal(await clientProjectId(claude,'/synthetic/project'),f.originalProjectId);
 });

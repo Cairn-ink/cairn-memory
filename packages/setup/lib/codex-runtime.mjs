@@ -13,8 +13,9 @@ import { inspectAutomaticPolicy, automaticGuard, policyPath, rotateAutomaticBoun
 import { hostedTargetId, resumeHostedQuota } from '../runtime/integrations/client/transport-hosted.mjs';
 import { validateUsage } from '../runtime/integrations/client/runtime-usage.mjs';
 import { conforms } from '../runtime/integrations/client/hosted-contract.mjs';
+import { stateLock } from '../runtime/integrations/client/state-lock.mjs';
 import { hostedPauseStatus } from '../runtime/integrations/client/hosted-pause.mjs';
-import { readInstallation, readCredential, writeCredential, clientOptions } from '../runtime/integrations/codex/installed-state.mjs';
+import { readInstallation, validateInstallation, readCredential, writeCredential, clientOptions } from '../runtime/integrations/codex/installed-state.mjs';
 import { qualifiedHost } from '../runtime/integrations/codex/parser.mjs';
 
 const version = JSON.parse(readFileSync(new URL('../package.json',import.meta.url))).version;
@@ -124,13 +125,23 @@ async function localClaude(args, input, { cwd }) {
   });
 }
 
+// 0.1.2 introduced the explicit pairing_record/project-key contract (ba33fb1).
+// Capability discovery is still required. Prereleases/unknown versions refuse.
+export const CLAUDE_PAIRING_MINIMUM = '0.1.2';
+export function supportsClaudePairing(version) {
+  const match = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u.exec(version ?? '');
+  if (!match) return false;
+  const current = match.slice(1).map(Number), minimum = CLAUDE_PAIRING_MINIMUM.split('.').map(Number);
+  return current.every(Number.isSafeInteger) && current[0] === minimum[0] &&
+    (current[1] > minimum[1] || (current[1] === minimum[1] && current[2] >= minimum[2]));
+}
 async function compatibleClaude(neutral) {
   try {
     const inspected = await localClaude(['plugin','list','--json'],undefined,{cwd:neutral});
     const entries = JSON.parse(inspected.stdout).filter(entry=>entry.id==='cairn-memory@cairn-memory');
     if (inspected.code!==0 || !entries.length || entries.some(entry=>!entry.enabled || entry.errors?.length ||
       !['user','project','local'].includes(entry.scope) ||
-      entry.version !== '0.3.2')) return false;
+      !supportsClaudePairing(entry.version))) return false;
     const config = await localClaude(['plugin','configure','cairn-memory@cairn-memory','--json'],undefined,{cwd:neutral});
     const metadata = JSON.parse(config.stdout);
     return config.code===0 && [...metadata.configured,...metadata.unconfigured].includes('pairing_record');
@@ -148,6 +159,7 @@ async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome,
       // Never silently switch an established memory identity when a plugin is
       // removed/downgraded. Codex can retain its already delivered binding.
       if (previous.usesClaude && !await compatibleClaude(neutral)) write(t('codex_existing_pair_kept'));
+      if (!previous.usesClaude && await compatibleClaude(neutral)) write(t('codex_standalone_kept'));
       return async () => ({ root:previous.root,usesClaude:previous.usesClaude,pairingRecord:previous.pairingRecord });
     }
   }
@@ -243,12 +255,89 @@ export async function installedStatus({home,hostVersion,write,t,snapshot}) {
   } catch { write(t('codex_hooks_status',{state:'not_installed_or_unsafe'})); }
 }
 
-export async function controlCodex({action,home,write,t,snapshot,unchanged}) {
+// Remove only Codex's binding. Keep the Claude root, key, pause and immutable
+// binding history so old project memories remain addressable and a lost key can
+// never silently mint a replacement. The shared setup lock serializes pairing.
+async function restoreClaude(config, neutral) {
+  if (config && !config.usesClaude) return;
+  const home = config?.home ?? await realpath(homedir());
+  const options = {home,setup:true,standardClaudeOrigin:true,env:{HOME:home}};
+  const initial = await detectClients(options);
+  if (!initial.install.clients.codex && !initial.install.shared && !initial.record) {
+    if (config?.usesClaude) {
+      const profile = initial.install.clients.claude?.profileRoot;
+      const restored = await resolveClient({client:'claude',home,env:{HOME:home,...(profile?{CLAUDE_PLUGIN_DATA:profile}:{})}});
+      if (!restored.enabled || restored.root !== config.root) throw new Error('claude_restore_failed');
+    }
+    return;
+  }
+  if (!initial.install.shared || !initial.record || !initial.install.clients.claude?.profileRoot ||
+      (config && (initial.record.root !== config.root || initial.locations.pairing !== config.pairingRecord)))
+    throw new Error('claude_restore_failed');
+  await stateLock(join(initial.locations.coordination,'setup.lock'),async () => {
+    const current = await detectClients(options);
+    const {install,record,locations} = current;
+    if (!record || record.id !== initial.record.id || record.root !== initial.record.root ||
+        install.resetPending || install.shared?.id !== record.id) throw new Error('claude_restore_failed');
+    const binding = install.clients.claude;
+    const claude = {client:'claude',home,env:{HOME:home,CLAUDE_PLUGIN_DATA:binding.profileRoot}};
+    const installBytes = await privateRead(locations.install), recordBytes = await privateRead(locations.pairing);
+    // Native configure is authoritative for the option write. Never echo native
+    // output, which may contain unrelated credentials. Do not update any scope.
+    const saved = await localClaude(['plugin','configure','cairn-memory@cairn-memory','--values-stdin'],
+      JSON.stringify({pairing_record:''}),{cwd:neutral});
+    if (saved.code !== 0) throw new Error('claude_restore_failed');
+    try {
+      const solo = {...install,clients:{claude:{...binding,state:'established'}}};
+      delete solo.shared;
+      await privateWrite(locations.install,JSON.stringify(solo));
+      await unlink(locations.pairing);
+      const restored = await resolveClient(claude);
+      if (!restored.enabled || restored.root !== record.root) throw new Error('claude_restore_failed');
+    } catch (error) {
+      await privateWrite(locations.install,installBytes);
+      await privateWrite(locations.pairing,recordBytes);
+      await localClaude(['plugin','configure','cairn-memory@cairn-memory','--values-stdin'],
+        JSON.stringify({pairing_record:locations.pairing}),{cwd:neutral});
+      throw error;
+    }
+  },{timeoutMs:2000});
+}
+
+const unpairReceipt = (userHome, installation) => join(userHome,'.cairn-memory-clients',
+  'codex-uninstall-'+createHash('sha256').update(installation).digest('hex')+'.json');
+
+export async function controlCodex({action,home,write,t,snapshot,unchanged,neutral}) {
   const directory = join(home,'cairn');
   const path = join(directory,'installation.json');
   let config;
   try {config = await readInstallation(path);} catch(error) {
     if (error.code==='ENOENT' && ['disable','uninstall'].includes(action)) {
+      if (action==='uninstall') {
+        try {
+          const userHome = await realpath(homedir());
+          const receiptPath = unpairReceipt(userHome,path);
+          const bytes = await privateRead(receiptPath,{missing:true});
+          if (bytes !== undefined) {
+            const previous = validateInstallation(JSON.parse(bytes));
+            if (previous.home !== userHome || !previous.usesClaude) throw new Error('claude_restore_failed');
+            await restoreClaude(previous,neutral);
+            await unlink(receiptPath);
+          } else {
+            // No ownership receipt: never unpair a different CODEX_HOME install.
+            // Also never mask a pending shared Claude binding as successful cleanup.
+            const detected = await detectClients({home:userHome,setup:true,standardClaudeOrigin:true,env:{HOME:userHome}});
+            const profile = detected.install.clients.claude?.profileRoot;
+            if (profile) {
+              const existing = await resolveClient({client:'claude',home:userHome,
+                pairingRecord:detected.record ? detected.locations.pairing : undefined,
+                env:{HOME:userHome,CLAUDE_PLUGIN_DATA:profile}});
+              if (!existing.enabled) throw new Error('claude_restore_failed');
+            } else if (detected.install.shared) throw new Error('claude_restore_failed');
+          }
+        }
+        catch {write(t('codex_unpair_failed'));return 1;}
+      }
       write(t('codex_control_done',{state:'not_installed'}));return 0;
     }
     throw error;
@@ -278,12 +367,25 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged}) {
     if (action==='uninstall') {
       // Cairn owns this entire private directory. Memory, identity, pause/quota
       // and MCP authorization are intentionally retained for the other client.
-      const policyFile = policyPath(config.root,config.endpoint);
-      if (await checkedPath(dirname(policyFile),{directory:true,missing:true})) {
-        await unlink(policyFile).catch(error=>{if(error.code!=='ENOENT')throw error;});
+      let restored = true;
+      try {
+        const receipt = unpairReceipt(config.home,path);
+        // Secret-free recovery ownership survives removal of installation.json.
+        if (config.usesClaude) await privateWrite(receipt,JSON.stringify(config));
+        await restoreClaude(config,neutral);
+        if (config.usesClaude) await unlink(receipt);
       }
+      catch {restored=false;write(t('codex_unpair_failed'));}
+      const policyFile = policyPath(config.root,config.endpoint);
+      try {
+        if (await checkedPath(dirname(policyFile),{directory:true,missing:true})) {
+          await unlink(policyFile).catch(error=>{if(error.code!=='ENOENT')throw error;});
+        }
+      } catch {write(t('codex_policy_cleanup_unsafe'));}
+      // An unsafe optional policy leaf cannot retain the plaintext credential.
       await checkedPath(directory,{directory:true});
       await rm(directory,{recursive:true});
+      if (!restored) return 1;
     }
     write(t('codex_control_done',{state:action==='uninstall'?'uninstalled':'disabled'}));return 0;
   } finally {await lock.close();await unlink(lockPath);}

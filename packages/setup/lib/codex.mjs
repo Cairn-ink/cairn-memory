@@ -123,7 +123,9 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
   }
   const home = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
   if (['disable','uninstall','pause','resume'].includes(action)) {
-    return controlCodex({action,home,write,t,snapshot,unchanged});
+    const neutral = await realpath(await mkdtemp(join(tmpdir(), 'cairn-codex-control-')));
+    try {return await controlCodex({action,home,write,t,snapshot,unchanged,neutral});}
+    finally {await rm(neutral,{recursive:true,force:true});}
   }
   const configPath = join(home, 'config.toml');
   const before = await snapshot(configPath);
