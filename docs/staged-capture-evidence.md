@@ -1,6 +1,6 @@
 # Staged capture evidence — explicit opt-in
 
-The established prefix policy below is unchanged. A distinct core-only
+The established prefix policy below is unchanged. A distinct shared-core
 [canonical submission policy](#canonical-submission-staging-indexed-staged-v1)
 retains complete bounded canonical messages without qualification.
 
@@ -119,9 +119,12 @@ const core = openMemoryCore({ path, model,
 
 This explicit own-data constructor option uses indexed extraction without
 qualification. Omit own qualification, rationale, captureEvidence and sessionEpisodes
-options; any own causal capture field rejects. No new MCP/CLI/Hermes option is exposed.
-Hosts must obtain consent before retaining real conversational data; default capture
-does not retain full transcripts.
+options; any own causal capture field rejects. Local MCP now exposes the same
+explicit policy through `--capture-source-policy indexed-staged-v1` or an own-data
+server option; see [manual local opt-in](standalone-mcp.md#opt-in-canonical-submitted-source-staging).
+The existing exact inspection/discard tools are reused. No installer/Hermes option,
+automatic capture or source discovery is added. Hosts must obtain consent before
+retaining real conversational data; default capture does not retain full transcripts.
 
 After existing validation, canonical-window creation and input fit checks, the
 full canonical submission is staged atomically with admission ownership before
@@ -165,8 +168,10 @@ but already-open processes are not retroactively fenced. Logical expiry/discard
 does not erase SQLite free pages, journals or backups. This opt-in can retain
 sensitive details absent from extracted memories and adds no encryption/authentication.
 
-Synthetic tests establish bounded persistence/lifecycle, not semantic quality,
-MCP integration, permanent archive, automatic repair/re-extraction or paid scores.
+Core synthetic tests establish bounded persistence/lifecycle; separate local MCP
+stdio/installed tests exercise explicit capture and keyless exact recovery over
+that same contract. Neither establishes semantic quality, a permanent archive,
+automatic repair/re-extraction, Hermes integration or paid scores.
 
 ## Opt-in episode ownership (SE-1)
 

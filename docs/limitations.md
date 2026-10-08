@@ -1,5 +1,19 @@
 # Known limitations
 
+The [explicit canonical-staging MCP host](plans/indexed-canonical-mcp.md) exposes
+bounded exact recovery, not source discovery or reliable interpretation. Manual
+opt-in retains complete canonical normalized, best-effort secret-redacted
+submitted text for24 hours even after empty/failed extraction; this is broader
+local personal-data retention than selected receipts or legacy prefixes. An
+explicit call without a model may retain failed source while returning
+`model_not_configured`, never successful memory ingestion. Access-only management
+does not capture or retain new source. Existing64-KiB input and256-KiB encoded
+result checks are additional bounds, not whole-host prompt or total MCP-framing
+budgets. Logical deletion does not erase journals, backups or provider copies.
+Submitted roles, source preservation and scripted installed tests establish
+neither truth nor semantic quality; no closed evaluation result is revised.
+Installer/Hermes enablement, automatic capture and source search remain separate.
+
 The [source-role extraction ablation](plans/source-role-ablation.md) freezes twelve
 fresh synthetic sources, a separate evaluator rubric, two evaluation-only prompts
 and 24 prospective arm slots. Actual core preparation and fake-HTTP adapter
@@ -2159,14 +2173,16 @@ needs its own accepted freeze and immediate original-ledger validation.
 
 ## Opt-in canonical staging is retention, not retrieval quality
 
-The core-only [`indexed-staged-v1`](staged-capture-evidence.md#canonical-submission-staging-indexed-staged-v1)
+The shared-core [`indexed-staged-v1`](staged-capture-evidence.md#canonical-submission-staging-indexed-staged-v1)
 policy independently retains complete bounded canonical submitted messages for
 24-hour exact keyless inspection, including empty/failed extraction. Canonical
 means normalized, secret-redacted input, not raw transcript bytes. This expands
 sensitive local retention only by explicit opt-in; default capture and existing
 prefix staging are unchanged. Staged source is untrusted, not admitted memory or
-ordinary retrieval input. Known-event lookup does not provide automatic discovery,
-MCP/Hermes exposure, semantic verification, reliable recall or a better benchmark
-score. Existing quotas/expiry/purge fences apply; logical deletion does not erase
+ordinary retrieval input. [Local MCP](standalone-mcp.md#opt-in-canonical-submitted-source-staging)
+now exposes explicit submitted capture and exact management through manual
+`--capture-source-policy indexed-staged-v1`; defaults remain unchanged. Known-event
+lookup does not provide automatic discovery, installer/Hermes enablement, semantic
+verification, reliable recall or a better benchmark score. Existing quotas/expiry/purge fences apply; logical deletion does not erase
 SQLite free pages or backups. Synthetic tests demonstrate persistence/lifecycle,
 not those broader product goals or permission for real-conversation retention.

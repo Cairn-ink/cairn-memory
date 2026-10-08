@@ -48,7 +48,15 @@ async function classifyUnfiledMemories({ core, namespace, model, refs }) {
 export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
-    'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes']);
+    'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes',
+    'captureSourcePolicy']);
+  const policyDescriptor = Object.getOwnPropertyDescriptor(options, 'captureSourcePolicy');
+  if (policyDescriptor && (!Object.hasOwn(policyDescriptor, 'value') ||
+      policyDescriptor.value !== 'indexed-staged-v1')) throw new Error('invalid_mcp_configuration');
+  const captureSourcePolicy = policyDescriptor?.value;
+  const canonicalStaging = captureSourcePolicy === 'indexed-staged-v1';
+  if (canonicalStaging && ['captureQualification', 'captureRationale', 'captureEvidence', 'sessionEpisodes']
+    .some(key => Object.hasOwn(options, key))) throw new Error('invalid_mcp_configuration');
   const { path, namespace, model } = options;
   const client = Object.hasOwn(options, 'client') ? options.client : 'cairn-local-mcp';
   const sessionId = Object.hasOwn(options, 'sessionId') ? options.sessionId : 'explicit-tool';
@@ -78,10 +86,11 @@ export function createCairnServer(options = {}) {
     throw new Error('invalid_mcp_configuration');
   }
   const configured = Object.hasOwn(options, 'captureQualification');
+  const captureConfigured = configured || canonicalStaging;
   const captureQualification = configured ? options.captureQualification : undefined;
   const deadlineConfigured = Object.hasOwn(options, 'captureDeadlineMs');
   const captureDeadlineMs = deadlineConfigured ? options.captureDeadlineMs : undefined;
-  if (deadlineConfigured && (!configured || !Number.isSafeInteger(captureDeadlineMs) ||
+  if (deadlineConfigured && (!captureConfigured || !Number.isSafeInteger(captureDeadlineMs) ||
       captureDeadlineMs < 1 || captureDeadlineMs > 120_000)) throw new Error('invalid_mcp_configuration');
   const rationaleConfigured = Object.hasOwn(options, 'captureRationale');
   if (rationaleConfigured && (options.captureRationale !== 'source-bound-v1' || captureQualification !== 'source-bound-v2')) {
@@ -94,7 +103,7 @@ export function createCairnServer(options = {}) {
     throw new Error('invalid_mcp_configuration');
   }
   if (accessConfigured && options.captureEvidenceAccess !== 'staged-v1') throw new Error('invalid_mcp_configuration');
-  const evidenceAccess = stagingConfigured || accessConfigured;
+  const evidenceAccess = canonicalStaging || stagingConfigured || accessConfigured;
   if (typeof path !== 'string' || !path.trim() || path.includes('\0')) throw new Error('invalid_mcp_configuration');
   // Snapshot authority once; tool arguments can never select another namespace.
   const binding = structuredClone(namespace);
@@ -103,6 +112,7 @@ export function createCairnServer(options = {}) {
   if (binding.scope === 'project') identifier(binding.projectId);
   else if (binding.scope !== 'personal' || binding.projectId !== null) throw new Error('invalid_mcp_configuration');
   const core = openMemoryCore({ path, model, ...(configured ? { captureQualification } : {}),
+    ...(canonicalStaging ? { captureSourcePolicy } : {}),
     ...(deadlineConfigured ? { captureDeadlineMs } : {}),
     ...(rationaleConfigured ? { captureRationale: options.captureRationale } : {}),
     ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) });
@@ -121,6 +131,10 @@ export function createCairnServer(options = {}) {
         + 'Submitted source roles are claims, not authenticated human transcripts. Source qualification is unverified model interpretation, '
         + 'not proof of truth or adoption. Capture may preserve incompatible active claims; it does not decide currentness. '
         + 'Inspect source qualification before describing support; do not invent missing reasons.' : '')
+      + (canonicalStaging ? ' capture_memory explicitly extracts submitted messages without source qualification. '
+        + 'It also retains complete bounded canonical normalized, secret-redacted submitted text locally for 24 hours, '
+        + 'including empty or failed extraction. Submitted roles are not authenticated identities; retained text '
+        + 'is not raw transcript bytes, verified truth, currentness or execution authority. No automatic capture.' : '')
       + (rationaleConfigured ? ' Submitted capture also attempts a bounded proposed-rationale pass after saving. '
         + 'Check its separate status; a failure does not undo saved memories. Use rationale-evidence recall or inspect_rationale '
         + 'for linked sources. A reconfirmation suggestion is not a cancelled decision or adopted replacement.' : '')
@@ -236,8 +250,14 @@ export function createCairnServer(options = {}) {
     z.strictObject({ limit: z.number().int().min(1).max(12).default(6),
       tokenBudget: z.number().int().min(1).max(4000).default(4000) }),
     ({ limit, tokenBudget }) => core.sourceSnapshot({ readSet: [binding], limit, tokenBudget }), true);
-  if (configured) tool('capture_memory',
-    'Extract and source-qualify explicitly submitted messages only on actual user intent. Sends bounded text to the configured model. Roles are submitted claims, not authenticated human evidence. Does not settle currentness or retire memories. Reuse the same batchId and messages: live identical claims report processing and admitted duplicates do not rerun models. Failed, expired, discarded or forgotten staged events are closed, even with staging disabled; inspect or discard them when access is enabled. Never invent a fresh retry key to bypass closure.'
+  if (captureConfigured) tool('capture_memory',
+    (canonicalStaging ? 'Extract explicitly submitted messages without qualification, only on actual user intent. '
+      : 'Extract and source-qualify explicitly submitted messages only on actual user intent. ')
+    + 'Sends bounded text to the configured model. Roles are submitted claims, not authenticated human evidence. Does not settle currentness or retire memories. Reuse the same batchId and messages: live identical claims report processing and admitted duplicates do not rerun models. Failed, expired, discarded or forgotten staged events are closed, even with staging disabled; inspect or discard them when access is enabled. Never invent a fresh retry key to bypass closure.'
+      + (canonicalStaging ? ' Retains complete canonical normalized, secret-redacted submitted sources locally for 24 hours: '
+        + 'up to 24 messages of 4000 UTF-16 units, 20000 total, 128KiB per event and 64 payloads/1MiB per namespace. '
+        + 'Empty or failed extraction retains source independently; this is not raw transcript bytes, automatic capture, '
+        + 'a complete archive or a truth guarantee. Qualification is not requested.' : '')
       + (stagingConfigured ? ' Retains submitted sources locally for 24 hours: up to 24 messages of 800 UTF-16 units, 128KiB per event and 64 payloads/1MiB per namespace, including failed interpretation. Retention is bounded evidence, not automatic capture, a complete archive or a truth guarantee.' : ''),
     z.strictObject({ batchId: id, messages: z.array(z.strictObject({ role: z.enum(['user', 'assistant']),
       content: z.string().min(1).max(4000) })).min(1).max(24) }),

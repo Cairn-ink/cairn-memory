@@ -13,6 +13,7 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-deadline-ms 120000
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-evidence-access staged-v1
+  cairn-memory --db PATH --owner ID [--project ID] --capture-source-policy indexed-staged-v1 [--capture-deadline-ms 120000]
   cairn-memory --db PATH --owner ID [--project ID] --source-snapshot current-admitted-v1
   cairn-memory --db PATH --owner ID [--project ID] --recall-context source-evidence
   cairn-memory --db PATH --owner ID [--project ID] --classification-recovery guarded-v1
@@ -55,7 +56,7 @@ qualification), explicit remember, correction and forgetting remain keyless.
 V2 uses core-owned source candidates; v1 retains model-written source anchors.
 Neither mode proves meaning, resolves currentness or grants update authority.
 --capture-deadline-ms 1..120000 requires --capture-qualification
-source-bound-v1 or source-bound-v2.
+source-bound-v1/source-bound-v2 or --capture-source-policy indexed-staged-v1.
 It applies one cooperative monotonic budget to each submitted capture, not to
 other tools or server lifetime. It is not a hard return guarantee or API spend cap.
 Admission can commit before classification. Opt into --classification-recovery
@@ -75,6 +76,19 @@ Successful correction or forgetting clears ALL staged payloads in the exact conf
 namespace, even with staging disabled; other admitted memories remain. Discarding a
 stage does not forget an admitted memory. Retention is not an archive, a semantic
 quality guarantee or physical erasure; local journals and backups may retain copies.
+--capture-source-policy indexed-staged-v1 explicitly adds submitted capture and
+keyless inspect_capture_evidence/discard_capture_evidence without qualification.
+It retains COMPLETE BOUNDED canonical normalized, secret-redacted submitted text
+for 24 hours, including empty or failed extraction: 24 messages/4000 UTF-16 units
+per message/20000 total, 128KiB per event, 64 payloads/1MiB per exact namespace.
+This broader local retention is not raw transcript bytes, authenticated roles,
+verified facts or execution authority. Qualification is not requested. No background
+capture or hooks are enabled. Capture still needs a configured model and may incur
+charges; access-only management makes no model calls and enables no retention.
+An explicit canonical capture can retain failed source even without a model;
+model_not_configured is not successful memory ingestion. Inspect or discard it.
+Do not combine with qualification, rationale, legacy capture-evidence or episode
+generation. Explicit capture-deadline-ms and access-only management are compatible.
 --capture-rationale source-bound-v1 requires --capture-qualification source-bound-v2.
 It attempts proposed rationale after saving/classification and adds keyless inspect_rationale.
 Check the separate rationale status; duplicate batches do not repeat this pass.
@@ -103,7 +117,8 @@ export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
-    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client']);
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client',
+    '--capture-source-policy']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -119,10 +134,13 @@ export function parseConfiguration(args) {
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
     throw new Error('invalid_mcp_configuration');
   }
+  if (values.has('--capture-source-policy') && (values.get('--capture-source-policy') !== 'indexed-staged-v1' ||
+      ['--capture-qualification', '--capture-rationale', '--capture-evidence', '--session-episodes']
+        .some(flag => values.has(flag)))) throw new Error('invalid_mcp_configuration');
   let captureDeadlineMs;
   if (values.has('--capture-deadline-ms')) {
     const raw = values.get('--capture-deadline-ms');
-    if (!values.has('--capture-qualification') || !/^[1-9][0-9]*$/u.test(raw)) {
+    if ((!values.has('--capture-qualification') && !values.has('--capture-source-policy')) || !/^[1-9][0-9]*$/u.test(raw)) {
       throw new Error('invalid_mcp_configuration');
     }
     captureDeadlineMs = Number(raw);
@@ -167,6 +185,7 @@ export function parseConfiguration(args) {
     ...(values.has('--session-episodes-access') ? { sessionEpisodesAccess: 'episode-v1' } : {}),
     ...(values.has('--session-episodes') ? { sessionEpisodes: { mode: 'episode-v1', draftEveryBatches } } : {}),
     ...(values.has('--capture-qualification') ? { captureQualification: values.get('--capture-qualification') } : {}),
+    ...(values.has('--capture-source-policy') ? { captureSourcePolicy: values.get('--capture-source-policy') } : {}),
     ...(values.has('--capture-deadline-ms') ? { captureDeadlineMs } : {}),
     ...(values.has('--capture-rationale') ? { captureRationale: values.get('--capture-rationale') } : {}),
     ...(values.has('--capture-evidence') ? { captureEvidence: values.get('--capture-evidence') } : {}),
@@ -202,6 +221,11 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       ...(config.captureQualification ? { captureQualification: config.captureQualification,
         capture: key ? 'configured-not-verified' : 'model_not_configured',
         qualificationModel: key ? DEFAULT_MODEL : null } : {}),
+      ...(config.captureSourcePolicy ? { captureSourcePolicy: config.captureSourcePolicy,
+        capture: key ? 'configured-not-verified' : 'model_not_configured', qualificationStatus: 'not-requested',
+        sourceTrust: 'canonical-submitted-untrusted-not-raw-transcript',
+        canonicalRetention: { expiresAfterHours: 24, maxMessages: 24, maxUnitsPerMessage: 4000,
+          maxTotalUnits: 20000, maxEventBytes: 131072, maxNamespacePayloads: 64, maxNamespaceBytes: 1048576 } } : {}),
       ...(Object.hasOwn(config, 'captureDeadlineMs') ? { captureDeadlineMs: config.captureDeadlineMs } : {}),
       ...(config.classificationRecovery ? { classificationRecovery: config.classificationRecovery,
         classification: key ? 'configured-not-verified' : 'model_not_configured' } : {}),
@@ -209,8 +233,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       ...(config.captureRationale ? { captureRationale: config.captureRationale,
         rationale: key ? 'configured-not-verified' : 'model_not_configured' } : {}),
       ...(config.captureEvidence ? { captureEvidence: config.captureEvidence } : {}),
-      ...(config.captureEvidence || config.captureEvidenceAccess ? {
-        captureEvidenceAccess: 'staged-v1', stagedRetentionEnabled: Boolean(config.captureEvidence),
+      ...(config.captureSourcePolicy || config.captureEvidence || config.captureEvidenceAccess ? {
+        captureEvidenceAccess: 'staged-v1', stagedRetentionEnabled: Boolean(config.captureSourcePolicy || config.captureEvidence),
       } : {}),
       unverified: ['database-readiness', 'credential-validity', 'model-availability'],
     }, null, 2));
