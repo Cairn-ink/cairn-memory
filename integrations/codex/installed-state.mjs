@@ -37,5 +37,6 @@ export function childEnvironment(home) {
 }
 export function clientOptions(config) {
   return { client: 'codex', home: config.home, root: config.root, usesClaude: config.usesClaude,
+    isolatedCodex: !config.usesClaude && config.root !== join(config.home, '.cairn-memory'),
     pairingRecord: config.pairingRecord ?? undefined, env: childEnvironment(config.home) };
 }

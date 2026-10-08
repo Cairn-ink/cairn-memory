@@ -7,7 +7,28 @@ import { hostedTargetId } from './transport-hosted.mjs';
 
 // H5 source evidence: cairn-wiki origin/main app/api/memory/pause-state/route.ts.
 // A missing, unenforced or regressing state never authorizes capture/injection.
+const statusPath = config => join(config.root, 'hosted-pause-status', hostedTargetId(config) + '.json');
+export async function hostedPauseStatus(config) {
+  try {
+    const bytes = await privateRead(statusPath(config), { missing: true });
+    const value = bytes === undefined ? null : JSON.parse(bytes);
+    if (!value || value.version !== 1 || !['available','unavailable'].includes(value.state) ||
+      !Number.isFinite(Date.parse(value.observedAt)) || Date.now() - Date.parse(value.observedAt) > 300000 ||
+      Date.parse(value.observedAt) > Date.now()) return { state: 'unavailable (unverified or stale)' };
+    return { state: value.state, observedAt: value.observedAt };
+  } catch { return { state: 'unavailable (invalid observation)' }; }
+}
 export async function observeHostedPause(config, token, signal) {
+  try {
+    const remote = await observe(config, token, signal);
+    await privateWrite(statusPath(config), JSON.stringify({version:1,state:'available',observedAt:new Date().toISOString()})).catch(() => {});
+    return remote;
+  } catch (error) {
+    await privateWrite(statusPath(config), JSON.stringify({version:1,state:'unavailable',observedAt:new Date().toISOString()})).catch(() => {});
+    throw error;
+  }
+}
+async function observe(config, token, signal) {
   signal?.throwIfAborted();
   const response = await fetch(config.endpoint + '/api/memory/pause-state', {
     headers: { authorization: `Bearer ${token}`, 'cache-control': 'no-store' },

@@ -29,7 +29,7 @@ export function currentHost(config, timeoutMs = 300) {
   });
 }
 
-function launchWorker(configPath, config, content, hostedGeneration) {
+function launchWorker(configPath, config, content) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [join(config.runtime,'integrations/codex/entry.mjs'),
       configPath, 'worker'], { detached: true, cwd: config.home,
@@ -37,7 +37,7 @@ function launchWorker(configPath, config, content, hostedGeneration) {
     child.once('error', reject);
     child.stdin.once('error', reject);
     child.once('spawn', () => {
-      child.stdin.end(JSON.stringify({ ...JSON.parse(content), hostedGeneration }), () => {
+      child.stdin.end(content, () => {
         child.unref(); resolve();
       });
     });
@@ -55,13 +55,12 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   if (!resolved.enabled || resolved.root !== config.root || signal.aborted) return '';
   const policy = await automaticPolicy(config.root, config.endpoint);
   if (!policy || policy.dailyCap !== config.dailyCap) return '';
-  const token = await readCredential(configPath, config.endpoint);
-  const remote = await observeHostedPause(config, token, signal);
-  if (remote.paused || signal.aborted) return '';
   const targetId = hostedTargetId(config);
   if (event === 'worker') {
-    const { hostedGeneration, ...handoff } = input;
-    if (!Number.isSafeInteger(hostedGeneration) || hostedGeneration !== remote.generation || signal.aborted) return '';
+    const token = await readCredential(configPath, config.endpoint);
+    const remote = await observeHostedPause(config, token, signal);
+    if (remote.paused || signal.aborted) return '';
+    const handoff = input;
     const guard = automaticGuard(config.root, config.endpoint, policy);
     const transport = installedTransport(config, token, remote.generation);
     await workerFromHandoff(handoff, { clientOptions: options, targetId, transport, guard,
@@ -72,8 +71,14 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   if (hook.event !== event || input.agent_id != null || input.agent_type != null) return '';
   const projectId = await clientProjectId(options, hook.cwd, resolved);
   if (signal.aborted) return '';
-  if (event === 'UserPromptSubmit') return recallContext(input, config, token, projectId, signal);
+  if (event === 'UserPromptSubmit') {
+    const token = await readCredential(configPath, config.endpoint);
+    return recallContext(input, config, token, projectId, signal);
+  }
   if (event === 'SessionStart') {
+    const token = await readCredential(configPath, config.endpoint);
+    const remote = await observeHostedPause(config, token, signal);
+    if (remote.paused || signal.aborted) return '';
     if (hook.path) await establishPauseBoundary({ root: config.root,targetId,projectId,
       sessionId: hook.sessionId,path: hook.path });
     // Protocol 0.3.0 startup context requires a qualified local o200k counter
@@ -85,7 +90,7 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   const result = await handleHook(input, { clientOptions: options, targetId,
     launch: async content => {
       if (signal.aborted) return;
-      await launch(configPath, config, content, remote.generation);
+      await launch(configPath, config, content);
     } });
   return result.output;
 }

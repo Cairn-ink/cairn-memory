@@ -1037,6 +1037,26 @@ async function selectCodexBinding(options, snapshot, delivered) {
   const { client = "claude", env = process.env } = options;
   const { locations, install, record, keys } = snapshot;
   const binding = install.clients[client];
+  if (options.isolatedCodex === true) {
+    // Explicit installer-only standalone root, outside every known Claude/pair root.
+    // An existing key must carry Codex's creator fingerprint; never adopt another key.
+    const root = options.root;
+    if (client !== "codex" || options.usesClaude !== false || delivered !== undefined ||
+        !absolute(root) || await sameRoot(root, locations.defaultRoot) ||
+        await sameRoot(root, locations.knownClaudeRoot) || await sameRoot(root, locations.claudeRoot) ||
+        await containsRoot(recordedPairRoots(snapshot), root) ||
+        await rootMarker(root, "paired-root") || await retiredRoot(root) || await hasClaudeEvidence(root))
+      return disabled("isolated_root_conflict");
+    const creator = await creatorRecord(root);
+    if (creator.state === "unknown") failUnreadable(creator.code);
+    const hasKey = await keyPresent(root, { strict: true });
+    if (creator.state === "present" && (creator.value.client !== "codex" ||
+        (hasKey && creator.value.fingerprint !== identityFingerprint(await projectKey(root, { create: false })))))
+      return disabled("binding_identity_mismatch");
+    if (hasKey && creator.state !== "present") return disabled("isolated_root_conflict");
+    if (!hasKey && creator.state === "present") return disabled("standalone_key_missing");
+    return activeBinding(root, env, "single", false);
+  }
   if (
     snapshot.durableHistory?.state === "valid" &&
     (snapshot.coordination !== "readable" || !binding?.fingerprint)

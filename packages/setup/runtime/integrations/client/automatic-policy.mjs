@@ -7,8 +7,8 @@ import { privateWrite } from './private-state.mjs';
 import { readControlState } from './control-state.mjs';
 import { randomUUID } from 'node:crypto';
 
-// Installer-owned, secret-free policy. Missing keeps standalone Claude's
-// released behavior; Codex requires it and refuses a conflicting declaration.
+// Installer-owned, secret-free Codex policy. Claude only diagnoses it on status;
+// it never applies this local cap or requires the Codex hosted-pause gate.
 export const policyPath = (root, endpoint) => join(root,'automatic-policy',hostedTargetId({endpoint})+'.json');
 export async function automaticPolicy(root, endpoint) {
   const raw = await privateRead(policyPath(root,endpoint), { missing: true });
@@ -19,6 +19,14 @@ export async function automaticPolicy(root, endpoint) {
     throw new Error('invalid_automatic_policy');
   }
   return value;
+}
+// Best-effort diagnostics: malformed/unreadable/future policies are never authority
+// for Claude controls or hooks. Never include file contents or exception text.
+export async function inspectAutomaticPolicy(root, endpoint) {
+  try {
+    const policy = await automaticPolicy(root, endpoint);
+    return policy ? { state: 'available', policy } : { state: 'absent' };
+  } catch { return { state: 'invalid' }; }
 }
 export function automaticGuard(root, endpoint, policy) {
   return createRuntimeGuard({ root, targetId: hostedTargetId({endpoint}), client: 'shared',
