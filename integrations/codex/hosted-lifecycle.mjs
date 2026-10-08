@@ -77,5 +77,8 @@ export async function recallContext(input, config, token, projectId, signal, ena
     } });
   });
   if (!output || signal.aborted || await enabled() !== true) return '';
+  // The switch read is asynchronous: pause/generation or cancellation may change
+  // during it. Re-check both under the control lock; nothing awaits after this.
+  if (!await runIfActive(config.root, local.generation, () => {}) || signal.aborted) return '';
   return output;
 }

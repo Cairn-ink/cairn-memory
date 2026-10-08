@@ -6,7 +6,8 @@ import { createHash } from 'node:crypto';
 import { translator } from '../lib/messages.mjs';
 import { supportsClaudePairing, CLAUDE_PAIRING_MINIMUM } from '../lib/codex-runtime.mjs';
 import { hookCommand } from '../lib/codex-runtime.mjs';
-import { policyPath } from '../../../integrations/client/automatic-policy.mjs';
+import { policyPath, rotateAutomaticBoundary } from '../../../integrations/client/automatic-policy.mjs';
+import { recallContext } from '../../../integrations/codex/hosted-lifecycle.mjs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
@@ -463,6 +464,36 @@ test('CX-5 switching prompt recall off during an in-flight recall injects nothin
   assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000)}),'');
   assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
   assert.equal(JSON.parse(await readFile(switchPath,'utf8')).enabled,false);
+});
+
+test('CX-5 pause, generation change or cancellation during the final kill-switch read withholds context',async t=>{
+  const f=await memoryRuntime(t);
+  f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',
+    scope:'personal',projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
+    receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
+  const input={hook_event_name:'UserPromptSubmit',session_id:session,cwd:f.project,transcript_path:null,prompt:'Preferences?'};
+  const run=async during=>{
+    const controller=new AbortController();let reads=0;
+    const output=await recallContext(input,f.installed,secret,f.projectId,controller.signal,async()=>{
+      reads++;await during(controller);return true;});
+    return {output,reads};
+  };
+  // Control: nothing changes during the read, so context is returned.
+  const control=await run(async()=>{});
+  assert.equal(control.reads,1);assert.match(control.output,/untrusted source-attributed recollections/);
+  for(const [name,during] of [
+    ['pause and generation increment',async()=>{await setPaused(f.installed.root,true,{rotate:true});}],
+    ['generation increment',async()=>{await rotateAutomaticBoundary(f.installed.root);}],
+    ['cancellation',async controller=>{controller.abort();}],
+  ]){
+    const result=await run(during);
+    assert.equal(result.reads,1,name);assert.equal(result.output,'',name);
+    if((await readControlState(f.installed.root)).paused)await setPaused(f.installed.root,false);
+  }
+  // A missing switch reader fails closed before any recall request.
+  const before=f.requests.length;
+  assert.equal(await recallContext(input,f.installed,secret,f.projectId,AbortSignal.timeout(2000)),'');
+  assert.equal(f.requests.length,before);
 });
 
 test('CX-5 remote generation change between recall fetch and injection withholds context',async t=>{

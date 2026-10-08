@@ -49,6 +49,12 @@ export function certify(data, { scenarios = SCENARIOS, matrix = MATRIX } = {}) {
     if (!Array.isArray(record.serverRoutes)) fail(`${run}: server routes unrecorded`);
     else for (const route of record.serverRoutes) if (!API.has(route)) fail(`${run}: non-API server hit ${route}`);
     if (record.detector !== DETECTOR_VERSION) fail(`${run}: detector v${DETECTOR_VERSION} not applied`);
+    // Identity, not count: the framed context must hold exactly this scenario's memories.
+    if (record.deliveryIdentity !== true) fail(`${run}: delivery identity not proven${record.deliveryReasons?.length ? ` (${record.deliveryReasons.join('; ')})` : ''}`);
+    if (record.answerReconciled !== true) fail(`${run}: answers not reconciled (${record.answerReason ?? 'unrecorded'})`);
+    if (record.turnCompleted !== true) fail(`${run}: turn completion not proven by the event stream and rollout`);
+    if (!/^[0-9a-f]{64}$/u.test(record.evidence?.rolloutSha256 ?? '') || !/^[0-9a-f]{64}$/u.test(record.evidence?.eventsSha256 ?? ''))
+      fail(`${run}: raw evidence hashes unrecorded`);
     if (!Array.isArray(record.harmful)) fail(`${run}: harmful findings unrecorded`);
     else if (record.harmful.length) fail(`${run}: harmful ${[...new Set(record.harmful.map(item => item.kind))].join(', ')}`);
     if (scenario.positive && record.positivePass === true) positives.set(scenario.id, positives.get(scenario.id) + 1);
