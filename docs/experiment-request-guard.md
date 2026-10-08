@@ -840,3 +840,52 @@ a passing comparison.
 There are no paid runs, user profiles, production writes, release or deployment
 changes in this slice. V05 remains incomplete until the remaining host/budget
 gates pass. See [acceptance and verification](plans/experiment-request-guard.md).
+
+## Fixed source-competition profile
+
+The explicit maintainer functions `prepareSourceCompetitionExecution()`,
+`authorizeSourceCompetitionCapability(options)` and
+`createSourceCompetitionRequestGuard(options)` support only the frozen
+[source-competition study](plans/source-competition-study.md).
+They reuse the existing extraction-only reserve/send/settle/history engine.
+Generic indexed-extraction denial and N28's distinct source-role authority
+remain unchanged; neither a pair grant nor an old study claim authorizes this
+corpus. Legacy imports do not load the optional source-competition assets.
+
+The closed profile has 24 ordered sub-batch slots: eight control and sixteen
+candidate, odd cases control-first/even cases candidate-first. `withSlotScope`
+requires the exact own-data `{slot, ordinal, arm, subBatch}` identity. Actual
+whole-message planning, canonical windows, prompt/schema and adapter serialization
+are bound before execution; the evaluator is hashed, never read into model input.
+The capability binds asset/runtime source hashes and Node version, all request-body digests,
+the original policy and settled v4 checkpoint. Separate create-only binding and
+exclusive durable claim names prevent cross-study reuse. A claim is consumed
+before guard return, including zero-send constructor failure.
+
+The fixed limits are 48 physical requests and 1,000,000 microUSD new conservative
+reservations, under the unchanged 400,000,000 cumulative limit and 30,000,000
+protected reserve. The complete envelope must fit before authorization.
+Count precedes generation; retries, overlap, reordered slots and late descendants
+are refused. Full owned-history rechecks and the existing transactional ledger
+witness remain in force. Filesystem grant checks immediately precede reserve,
+not an invented atomic filesystem-plus-SQLite transaction.
+
+`runSourceCompetition` accepts explicit trusted credentials, guarded transport
+and a private persistence callback; no CLI, environment lookup or default fetch.
+It performs actual fit, `callModel` and canonical source binding, not capture or
+admission. Complete parsed output is detached before binding, bounded by 64,000
+serialized UTF-8 bytes, 4,096 structural nodes and depth 10. Observation states
+`observed`, `unavailable` and `not_observed` distinguish structural binding
+refusal from missing evidence; nothing is truncated, repaired or redacted into
+a false complete observation. Parsed observations are not raw HTTP transcripts.
+
+The callback runs before scope advancement. Its record is persistence-pending;
+only its successful resolution changes the returned observation to persisted.
+Callback rejection and post-persist accounting halt remain distinct. Reports
+retain all 24 batch and 16 logical-arm positions; any refused sub-batch makes
+its logical arm refused, while its other valid bound items remain reviewable.
+Unexecuted positions stay not-run. Settled ordinary binding refusal may continue;
+malformed/unavailable observation or unsafe accounting/persistence halts.
+The frozen semantic protocol is independent of transport and cannot authorize,
+repair or score a model request. No offline result establishes retention quality
+or permission for paid execution.

@@ -3431,6 +3431,65 @@ const SOURCE_ROLE_COMPILER_SHA256 = 'a31224732179185a7f8940e70e2e941e2224e0f0465
 const sourceRoleHash = value => createHash('sha256').update(value).digest('hex');
 const sourceRoleFile = name => new URL(`../../${name}`, import.meta.url);
 
+const SOURCE_COMPETITION_VERSION = 'source-competition-capability-v1';
+const SOURCE_COMPETITION_ASSETS = Object.freeze({
+  'sources.json': '264ea389ba745fcb22a9de2b0d3e714da3ed4731a9152e707cdcc2e94c6695bf',
+  'evaluator.json': 'c39ea215067f3a67efed12c35d27221ff763460dea43b2d680122e8e2c541416',
+  'protocol.md': 'f90858329149fa690b27a9d28eee07dff132411502e9fc7eb01991a5f216a7e3',
+});
+
+function sourceCompetitionIdentities() {
+  try {
+    for (const [name, digest] of Object.entries(SOURCE_COMPETITION_ASSETS)) {
+      if (sourceRoleHash(readFileSync(sourceRoleFile(`evaluation/source-competition/${name}`))) !== digest) {
+        fail('policy_mismatch');
+      }
+    }
+    const files = ['evaluation/experiment-budget/request-guard.mjs', 'evaluation/experiment-budget/index.mjs',
+      'evaluation/source-competition/index.mjs', 'evaluation/source-competition/operator.mjs',
+      'evaluation/longmemeval/mixed-validation.mjs', 'plugins/cairn-memory/lib/redact.mjs'];
+    for (const directory of ['core', 'core/prompts', 'adapters/openai']) {
+      for (const name of readdirSync(sourceRoleFile(`${directory}/`)).sort()) {
+        if (name.endsWith('.mjs') || name.endsWith('.md')) files.push(`${directory}/${name}`);
+      }
+    }
+    const hashes = Object.fromEntries(files.sort().map(name =>
+      [name, sourceRoleHash(readFileSync(sourceRoleFile(name)))]));
+    return { assets: { ...SOURCE_COMPETITION_ASSETS }, nodeVersion: process.versions.node,
+      runtimeSha256: sourceRoleHash(canonical(hashes)) };
+  } catch (error) {
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    fail('invalid_capability');
+  }
+}
+
+/** Fixed whole-message study preparation; optional assets are never loaded by legacy imports. */
+export async function prepareSourceCompetitionExecution() {
+  const identities = sourceCompetitionIdentities();
+  let compileSourceCompetitionBatch;
+  try { ({ compileSourceCompetitionBatch } = await import('../source-competition/index.mjs')); }
+  catch { fail('invalid_capability'); }
+  const slots = [];
+  for (let ordinal = 1; ordinal <= 8; ordinal++) {
+    for (const arm of ordinal % 2 ? ['control', 'candidate'] : ['candidate', 'control']) {
+      for (let subBatch = 1; subBatch <= (arm === 'control' ? 1 : 2); subBatch++) {
+        const compiled = await compileSourceCompetitionBatch({ ordinal, arm, subBatch, scriptedOutput: { items: [] } });
+        if (compiled.httpBodies.length !== 2) fail('invalid_capability');
+        slots.push({ slot: slots.length + 1, ordinal, arm, subBatch,
+          messageIndices: compiled.messageIndices,
+          sourcePayloadSha256: compiled.snapshot.payloadDigest,
+          inputTokens: compiled.localInputTokens, windows: compiled.catalog.entries.length,
+          countBodySha256: sourceRoleHash(compiled.httpBodies[0].bodyText),
+          generationBodySha256: sourceRoleHash(compiled.httpBodies[1].bodyText) });
+      }
+    }
+  }
+  if (canonical(identities) !== canonical(sourceCompetitionIdentities())) fail('policy_mismatch');
+  return deepFreeze({ version: 'source-competition-protocol-v1', ...identities,
+    model: DEFAULT_MODEL, caps: { inputTokens: 6000, outputTokens: 1024,
+      items: 5, windowsPerItem: 4, contentUnits: 600 }, slots });
+}
+
 function sourceRoleIdentitySnapshot() {
   const root = 'evaluation/source-role-ablation/';
   const manifestBytes = readFileSync(sourceRoleFile(`${root}frozen-manifest.json`));
@@ -3491,12 +3550,15 @@ export async function prepareSourceRoleExecution() {
       items: 5, windowsPerItem: 4, contentUnits: 600 }, slots });
 }
 
-function sourceRoleFiles(directory, executionId) {
+function sourceRoleFiles(directory, executionId, competition = false) {
+  if (competition) return { binding: path.join(directory, `experiment-source-competition-${executionId}.json`),
+    claim: path.join(directory, `experiment-source-competition-claim-${executionId}.json`) };
   return { binding: path.join(directory, `experiment-source-role-extraction-${executionId}.json`),
     claim: path.join(directory, `experiment-source-role-extraction-claim-${executionId}.json`) };
 }
 
-function sourceRoleConfiguration(value) {
+function sourceRoleConfiguration(value, competition = false) {
+  const ceiling = competition ? 1_000_000 : 2_000_000;
   const config = detachEmbeddingLineage(value, null, 'request-cap-v2');
   exactKeys(config, ['ledger', 'policy', 'benchmarkExtension', 'authorizationId', 'executionId', 'checkpoint']);
   config.policy = validateConstructor({ ledger: config.ledger, policy: config.policy, fetchImpl() {} });
@@ -3508,7 +3570,7 @@ function sourceRoleConfiguration(value) {
   mixedCheckpoint(config.checkpoint, config.ledger);
   if (config.policy.cairnCount.model !== DEFAULT_MODEL || config.policy.cairnGeneration.model !== DEFAULT_MODEL
     || 24 * (config.policy.cairnCount.reservedMicroUsd + config.policy.cairnGeneration.reservedMicroUsd)
-      > 2_000_000 || config.checkpoint.reservedMicroUsd + 2_000_000 > 370_000_000
+      > ceiling || config.checkpoint.reservedMicroUsd + ceiling > 370_000_000
     || config.ledger.requestCap - config.checkpoint.requestCount < 48) fail('invalid_capability');
   return config;
 }
@@ -3520,32 +3582,40 @@ function sourceRoleBaseline(capability, state) {
     || state.historySha256 !== capability.checkpoint.historySha256) fail('policy_mismatch');
 }
 
-function verifySourceRoleCapability(capability, ledger, policy, benchmark, protocol) {
+function verifySourceRoleCapability(capability, ledger, policy, benchmark, protocol, competition = false) {
   exactKeys(capability, ['version', 'authorizationId', 'executionId', 'ledger', 'policy',
     'benchmarkExtension', 'checkpoint', 'protocol', 'schedule', 'limits'], 'invalid_capability');
   const config = sourceRoleConfiguration(Object.fromEntries(['ledger', 'policy', 'benchmarkExtension',
-    'authorizationId', 'executionId', 'checkpoint'].map(key => [key, capability[key]])));
-  if (capability.version !== SOURCE_ROLE_VERSION || canonical(config.ledger) !== canonical(ledger)
+    'authorizationId', 'executionId', 'checkpoint'].map(key => [key, capability[key]])), competition);
+  if (capability.version !== (competition ? SOURCE_COMPETITION_VERSION : SOURCE_ROLE_VERSION) || canonical(config.ledger) !== canonical(ledger)
     || canonical(config.policy) !== canonical(policy) || canonical(config.benchmarkExtension) !== canonical(benchmark)
     || canonical(capability.protocol) !== canonical(protocol)
     || canonical(capability.schedule) !== canonical(protocol.slots.map(slot =>
-      ({ phase: 'generation', caseId: `source-role-slot-${slot.slot}` })))
-    || canonical(capability.limits) !== canonical({ requestCap: 48, reservedMicroUsd: 2_000_000,
+      ({ phase: 'generation', caseId: `${competition ? 'source-competition' : 'source-role'}-slot-${slot.slot}` })))
+    || canonical(capability.limits) !== canonical({ requestCap: 48, reservedMicroUsd: competition ? 1_000_000 : 2_000_000,
       protectedMicroUsd: 30_000_000 })) fail('policy_mismatch');
-  const identities = sourceRoleIdentities();
+  const identities = competition ? sourceCompetitionIdentities() : sourceRoleIdentities();
   for (const key of ['assets', 'nodeVersion', 'runtimeSha256']) {
     if (canonical(identities[key]) !== canonical(protocol[key])) fail('policy_mismatch');
   }
-  readBinding(sourceRoleFiles(ledger.directory, capability.executionId).binding, capability);
+  readBinding(sourceRoleFiles(ledger.directory, capability.executionId, competition).binding, capability);
 }
 
 /** Explicit operator authorization; never discovers or repairs an existing grant. */
 export async function authorizeSourceRoleAblationCapability(options) {
-  const config = sourceRoleConfiguration(options);
-  const protocol = await prepareSourceRoleExecution();
-  const capability = deepFreeze({ version: SOURCE_ROLE_VERSION, ...config, protocol,
-    schedule: protocol.slots.map(slot => ({ phase: 'generation', caseId: `source-role-slot-${slot.slot}` })),
-    limits: { requestCap: 48, reservedMicroUsd: 2_000_000, protectedMicroUsd: 30_000_000 } });
+  return authorizeExtractionStudy(options, false);
+}
+
+export async function authorizeSourceCompetitionCapability(options) {
+  return authorizeExtractionStudy(options, true);
+}
+
+async function authorizeExtractionStudy(options, competition) {
+  const config = sourceRoleConfiguration(options, competition);
+  const protocol = competition ? await prepareSourceCompetitionExecution() : await prepareSourceRoleExecution();
+  const capability = deepFreeze({ version: competition ? SOURCE_COMPETITION_VERSION : SOURCE_ROLE_VERSION, ...config, protocol,
+    schedule: protocol.slots.map(slot => ({ phase: 'generation', caseId: `${competition ? 'source-competition' : 'source-role'}-slot-${slot.slot}` })),
+    limits: { requestCap: 48, reservedMicroUsd: competition ? 1_000_000 : 2_000_000, protectedMicroUsd: 30_000_000 } });
   if (Buffer.byteLength(canonical(capability)) > 1_000_000) fail('invalid_capability');
   let failure;
   let bound;
@@ -3555,7 +3625,7 @@ export async function authorizeSourceRoleAblationCapability(options) {
         assertChainedBenchmarkParentForEmbeddingSnapshot({ ledger: config.ledger, policy: config.policy,
           benchmarkExtension: config.benchmarkExtension, snapshot: state });
         sourceRoleBaseline(capability, state);
-        const files = sourceRoleFiles(config.ledger.directory, config.executionId);
+        const files = sourceRoleFiles(config.ledger.directory, config.executionId, competition);
         assertPairClaimUnused(files.claim);
         try { writeAuthorizationBinding(config.ledger.directory, files.binding, capability); }
         catch { fail('unsafe_policy_binding'); }
@@ -3569,7 +3639,16 @@ export async function authorizeSourceRoleAblationCapability(options) {
 
 /** One-shot extraction-only HTTP authority, backed by the existing guard engine. */
 export async function createSourceRoleAblationRequestGuard(options) {
-  exactAdaptiveKeys(options, ['ledger', 'policy', 'benchmarkExtension', 'sourceRoleAblationCapability', 'fetchImpl']);
+  return createExtractionStudyGuard(options, false);
+}
+
+export async function createSourceCompetitionRequestGuard(options) {
+  return createExtractionStudyGuard(options, true);
+}
+
+async function createExtractionStudyGuard(options, competition) {
+  const capabilityKey = competition ? 'sourceCompetitionCapability' : 'sourceRoleAblationCapability';
+  exactAdaptiveKeys(options, ['ledger', 'policy', 'benchmarkExtension', capabilityKey, 'fetchImpl']);
   const descriptors = Object.getOwnPropertyDescriptors(options);
   const fetchImpl = descriptors.fetchImpl.value;
   if (typeof fetchImpl !== 'function') fail('invalid_options');
@@ -3578,23 +3657,23 @@ export async function createSourceRoleAblationRequestGuard(options) {
   null, 'request-cap-v2');
   const policy = validateConstructor({ ledger: data.ledger, policy: data.policy, fetchImpl });
   data.ledger.directory = path.resolve(data.ledger.directory);
-  const capability = deepFreeze(data.sourceRoleAblationCapability);
-  const protocol = await prepareSourceRoleExecution();
-  verifySourceRoleCapability(capability, data.ledger, policy, data.benchmarkExtension, protocol);
+  const capability = deepFreeze(data[capabilityKey]);
+  const protocol = competition ? await prepareSourceCompetitionExecution() : await prepareSourceRoleExecution();
+  verifySourceRoleCapability(capability, data.ledger, policy, data.benchmarkExtension, protocol, competition);
   let bound;
   let baseline;
   let failure;
   try {
     bound = openBoundEmbeddingExperimentBudget({ configuration: data.ledger, authorize(state) {
       try {
-        verifySourceRoleCapability(capability, data.ledger, policy, data.benchmarkExtension, protocol);
+        verifySourceRoleCapability(capability, data.ledger, policy, data.benchmarkExtension, protocol, competition);
         assertChainedBenchmarkParentForEmbeddingSnapshot({ ledger: data.ledger, policy,
           benchmarkExtension: data.benchmarkExtension, snapshot: state });
         sourceRoleBaseline(capability, state);
-        const files = sourceRoleFiles(data.ledger.directory, capability.executionId);
+        const files = sourceRoleFiles(data.ledger.directory, capability.executionId, competition);
         assertPairClaimUnused(files.claim);
         try { writeAuthorizationBinding(data.ledger.directory, files.claim,
-          { version: 'source-role-extraction-claim-v1', executionId: capability.executionId,
+          { version: competition ? 'source-competition-claim-v1' : 'source-role-extraction-claim-v1', executionId: capability.executionId,
             capabilityDigest: sourceRoleHash(canonical(capability)) }); }
         catch (error) {
           if (error?.code === 'EEXIST' || error?.code === 'ELOOP') fail('capability_consumed');
@@ -3604,15 +3683,16 @@ export async function createSourceRoleAblationRequestGuard(options) {
       } catch (error) { failure = error instanceof ExperimentRequestGuardError ? error : null; throw error; }
     } });
     const engine = constructBenchmarkGuard({ ledger: data.ledger, policy, fetchImpl },
-      data.benchmarkExtension, capability, baseline, null, { sourceRole: true, bound, protocol });
+      data.benchmarkExtension, capability, baseline, null, { sourceRole: true, competition, bound, protocol });
     const { withCaseScope, ...publicEngine } = engine;
     return Object.freeze({ ...publicEngine,
-      sourceRoleAblationCapability: deepFreeze({ ...capability, protocol }),
+      [capabilityKey]: deepFreeze({ ...capability, protocol }),
       async withSlotScope(identity, operation) {
         const requested = detachEmbeddingLineage(identity);
-        exactKeys(requested, ['slot', 'ordinal', 'arm'], 'case_schedule_mismatch');
+        exactKeys(requested, ['slot', 'ordinal', 'arm', ...(competition ? ['subBatch'] : [])], 'case_schedule_mismatch');
         const slot = protocol.slots[requested.slot - 1];
-        if (!slot || canonical(requested) !== canonical({ slot: slot.slot, ordinal: slot.ordinal, arm: slot.arm })) {
+        if (!slot || canonical(requested) !== canonical({ slot: slot.slot, ordinal: slot.ordinal, arm: slot.arm,
+          ...(competition ? { subBatch: slot.subBatch } : {}) })) {
           fail('case_schedule_mismatch');
         }
         return withCaseScope(capability.schedule[slot.slot - 1], operation);
@@ -3656,7 +3736,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
   const verify = () => {
     if (pairProfile?.sourceRole) {
       verifySourceRoleCapability(caseCapability, ledgerConfiguration, policy, benchmark,
-        pairProfile.protocol);
+        pairProfile.protocol, pairProfile.competition ?? false);
     } else if (pairProfile?.pair) {
       verifyPairCapability(caseCapability, ledgerConfiguration, policy, benchmark,
         pairProfile.adaptive);
@@ -3731,7 +3811,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     if (unsettled(scoped ? guardedVerify() : verify())) { halted = true; fail('paid_work_halted'); }
     if (pairProfile?.sourceRole && (records.length >= 48
       || records.reduce((sum, record) => sum + record.reservedMicroUsd, 0)
-        + channel.reservedMicroUsd > 2_000_000)) {
+        + channel.reservedMicroUsd > caseCapability.limits.reservedMicroUsd)) {
       halted = true;
       fail('paid_work_halted');
     }
@@ -4032,7 +4112,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     caseScopeSnapshot() {
       return lastScopeSnapshot === null ? null : deepFreeze(structuredClone(lastScopeSnapshot));
     },
-    ...(pairProfile?.sourceRole ? { sourceRoleAblationCapability: caseCapability }
+    ...(pairProfile?.sourceRole ? { [pairProfile.competition ? 'sourceCompetitionCapability' : 'sourceRoleAblationCapability']: caseCapability }
       : pairProfile?.pair ? { qualifiedSourcePairCapability: caseCapability }
       : { caseDeadlineCapability: caseCapability }),
     ...(transportCollector ? { transportDiagnostics() {

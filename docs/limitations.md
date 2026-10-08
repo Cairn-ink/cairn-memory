@@ -2087,3 +2087,29 @@ only a known refined producing runtime narrows its interpretation. Event version
 fake-HTTP tests establish unchanged errors, atomicity and collector propagation,
 not improved reliability, recall or scores. No authentic data or provider calls
 are used; existing frozen evaluation results remain unchanged.
+
+## Fixed source-competition extraction study
+
+The [source-competition packet](plans/source-competition-study.md) uses eight
+fresh synthetic sources, unchanged extraction prompt/model/caps, and a distinct
+one-shot extraction-only capability. Control has eight batches; the ten-window,
+whole-message candidate has sixteen. Its larger aggregate item capacity and
+count/generation work are treatment costs, not equal-budget accuracy. Splitting
+can separate an early statement from its correction and break cross-message
+relationships; it supplies no supersession, admission or retention-all guarantee.
+
+Offline fake-HTTP results establish preparation, exact request binding and
+accounting safety, not faithful extraction or semantic gain. Sixteen achievable
+anchors and the separate five-window boundary require two independent,
+label-blinded reviews under the frozen [protocol](../evaluation/source-competition/protocol.md).
+Receipt coverage alone is not semantic credit. Rejected parsed proposals remain
+diagnostics, never repaired or credited; unknown review or an unexecuted slot
+blocks advancement. No competitive score, MOC quality or product default changes.
+
+Private evidence retains bounded unmodified *parsed* extractor output, not raw
+HTTP bytes, before source binding. Bound valid claims and exact receipts are
+separate; model text may itself contain sensitive content and is not safe public
+telemetry. Malformed/unavailable observations, accounting or persistence faults
+halt remaining work without replay. A consumed claim is retained even if no
+request was sent. Offline green grants no paid authority; any future execution
+needs its own accepted freeze and immediate original-ledger validation.
