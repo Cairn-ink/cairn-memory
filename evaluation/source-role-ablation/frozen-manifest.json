@@ -1,0 +1,39 @@
+{
+  "version": "source-role-ablation-v1",
+  "base": "a1f2354d9ea84220f81dbe59cec1ce83cfbdfcfe",
+  "model": "gpt-4.1-mini-2025-04-14",
+  "sourcePolicy": "indexed-evidence-v1",
+  "sha256": {
+    "cases.mjs": "1911e6bab25f63b881940d8096d97e50b60135230efd6e6346c31a6e15c18819",
+    "rubric.mjs": "93dd2dbd12f2850bad9ff81cb495aaab18a19ec9dd08dac19fd305008980fbc6",
+    "baseline.md": "4326fcc05140c5bb9fb0b9b6fb6e7c8c7f341605bc8b10bd89137994497d80b6",
+    "candidate.md": "272f5b2fc46f2d3b8a75fe8b36f8bd36e53228c2d4ddc537dd8835396a43df2f"
+  },
+  "caps": { "inputTokens": 6000, "outputTokens": 1024, "items": 5, "windowsPerItem": 4, "contentUnits": 600 },
+  "slots": [
+    { "slot": 1, "ordinal": 1, "arm": "baseline" },
+    { "slot": 2, "ordinal": 1, "arm": "candidate" },
+    { "slot": 3, "ordinal": 2, "arm": "candidate" },
+    { "slot": 4, "ordinal": 2, "arm": "baseline" },
+    { "slot": 5, "ordinal": 3, "arm": "baseline" },
+    { "slot": 6, "ordinal": 3, "arm": "candidate" },
+    { "slot": 7, "ordinal": 4, "arm": "candidate" },
+    { "slot": 8, "ordinal": 4, "arm": "baseline" },
+    { "slot": 9, "ordinal": 5, "arm": "baseline" },
+    { "slot": 10, "ordinal": 5, "arm": "candidate" },
+    { "slot": 11, "ordinal": 6, "arm": "candidate" },
+    { "slot": 12, "ordinal": 6, "arm": "baseline" },
+    { "slot": 13, "ordinal": 7, "arm": "baseline" },
+    { "slot": 14, "ordinal": 7, "arm": "candidate" },
+    { "slot": 15, "ordinal": 8, "arm": "candidate" },
+    { "slot": 16, "ordinal": 8, "arm": "baseline" },
+    { "slot": 17, "ordinal": 9, "arm": "baseline" },
+    { "slot": 18, "ordinal": 9, "arm": "candidate" },
+    { "slot": 19, "ordinal": 10, "arm": "candidate" },
+    { "slot": 20, "ordinal": 10, "arm": "baseline" },
+    { "slot": 21, "ordinal": 11, "arm": "baseline" },
+    { "slot": 22, "ordinal": 11, "arm": "candidate" },
+    { "slot": 23, "ordinal": 12, "arm": "candidate" },
+    { "slot": 24, "ordinal": 12, "arm": "baseline" }
+  ]
+}
