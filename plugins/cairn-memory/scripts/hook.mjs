@@ -19,12 +19,14 @@ import {
   startIfActive,
 } from "../lib/control-state.mjs";
 import { withFileLock } from "../lib/file-lock.mjs";
-import { createJsonPoster, hostedQuotaStatus, hostedTargetId, resumeHostedQuota }
+import { createJsonPoster, hostedQuotaStatus, hostedTargetId, resumeHostedQuota, resetBoundary }
   from "../lib/http.mjs";
 import { prepareRecallQuery } from "../lib/recall-query.mjs";
 import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
 import { VERSION } from "../lib/version.mjs";
 import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
+import { automaticPolicy, automaticGuard } from "../lib/automatic-policy.mjs";
+import { observeHostedPause } from "../lib/hosted-pause.mjs";
 import { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
   recordCredentialConfiguration } from "../lib/credential-state.mjs";
 
@@ -43,6 +45,10 @@ let endpoint;
 let post;
 let quotaTarget;
 let credentialDir;
+let installedPolicy;
+let sharedGuard;
+let hostedGeneration;
+let automaticSignal;
 try {
   endpoint = normalizeEndpoint(configuredEndpoint);
   post = createJsonPoster({ endpoint, token });
@@ -85,8 +91,12 @@ async function telemetry(event) {
 
 // Recheck the existing local barrier after asynchronous quota-state work.
 // The network start itself stays synchronous under the control lock.
-async function dispatchActive(generation, start) {
-  const dispatch = await startIfActive(dataDir, generation, () => {
+async function dispatchActive(generation, start, permit) {
+  if (installedPolicy) {
+    const remote = await observeHostedPause({root:dataDir,endpoint},token,automaticSignal??AbortSignal.timeout(2000));
+    if (remote.paused || remote.generation!==hostedGeneration) throw new Error("dispatch_not_started");
+  }
+  const launch = () => startIfActive(dataDir, generation, () => {
     // Observe actual authenticated fetches, before the transport sanitizes errors.
     // Unauthenticated telemetry and locally blocked requests are not evidence.
     const operation = start();
@@ -102,6 +112,9 @@ async function dispatchActive(generation, start) {
       throw error;
     });
   });
+  const guarded = permit ? await sharedGuard.dispatch(permit.id,launch) : null;
+  if (guarded && !guarded.ok) throw new Error("capture_unavailable");
+  const dispatch = guarded ? guarded.dispatch : await launch();
   if (!dispatch.started) throw new Error("dispatch_not_started");
   return dispatch.operation;
 }
@@ -118,9 +131,13 @@ async function recall(hookInput) {
     "/api/memory/recall",
     { query, ...(projectId === undefined ? {} : { project_id: projectId }), limit: 6,
       ...(sessionId === undefined ? {} : { session_id: sessionId }) },
-    2_000, true, (start) => dispatchActive(control.generation, start),
+    2_000, true, (start) => dispatchActive(control.generation, start),automaticSignal,
   );
   if (!Array.isArray(result?.memories) || result.memories.length === 0) return;
+  if (installedPolicy) {
+    const remote = await observeHostedPause({root:dataDir,endpoint},token,automaticSignal);
+    if (remote.paused || remote.generation!==hostedGeneration) return;
+  }
   const lines = result.memories.map((memory) => {
     const receipt = memory.receipts?.[0];
     const source = receipt
@@ -129,6 +146,7 @@ async function recall(hookInput) {
     return `- [${memory.id}] (${memory.origin}, ${memory.scope}, confidence ${Number(memory.confidence).toFixed(2)}${source}) ${memory.content}`;
   });
   const emitted = await runIfActive(dataDir, control.generation, () => {
+    if (automaticSignal?.aborted) return;
     process.stdout.write(
       JSON.stringify({
         hookSpecificOutput: {
@@ -295,7 +313,10 @@ async function captureLocked(hookInput, statePath, generation) {
       .map(({ id, role, content }) => ({ id, role, content }));
     // A batch of machine records only has nothing to send; it completes as is.
     if (messages.length === 0) continue;
-    const result = await post(
+    const permit = sharedGuard ? await sharedGuard.reserve() : null;
+    if (permit && !permit.ok) throw new Error("capture_unavailable");
+    let result;
+    try { result = await post(
       "/api/memory/capture",
       {
         client: "claude-code",
@@ -304,8 +325,16 @@ async function captureLocked(hookInput, statePath, generation) {
         project_id: projectId,
         messages,
       },
-      25_000, true, (start) => dispatchActive(generation, start),
+      25_000, true, (start) => dispatchActive(generation, start,permit),
     );
+    } catch (error) {
+      if (sharedGuard && error.message==="quota_reached") await sharedGuard.refuse({
+        resetAt:error.resetAt===null || error.resetAt===undefined ? null : resetBoundary(error.resetAt),
+      });
+      throw error;
+    } finally {
+      if (permit?.ok) await sharedGuard.release(permit.id,{terminated:true,accepted:Boolean(result&&!result.processing)});
+    }
     // A concurrent/recovered capture still holding its short lease returns
     // processing. Do not advance the cursor: the next hook can retry safely.
     if (result?.processing) throw new Error("capture_processing");
@@ -332,8 +361,11 @@ async function control() {
   // Bash controls and status must address the same observed endpoint's quota gate.
   if (statusEndpoint.startsWith("http")) {
     quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint: statusEndpoint }) };
+    const policy = await automaticPolicy(dataDir,statusEndpoint);
+    sharedGuard = policy ? automaticGuard(dataDir,statusEndpoint,policy) : undefined;
   } else quotaTarget = undefined;
   if (action === "resume") {
+    if (sharedGuard) await sharedGuard.resume();
     const gate = quotaTarget ? await resumeHostedQuota(quotaTarget) : { status: "active" };
     if (gate.status === "unavailable") throw new Error("quota_gate_unavailable");
     await setPaused(dataDir, false);
@@ -396,11 +428,19 @@ try {
     if (endpoint.startsWith("http")) {
       quotaTarget = { root: dataDir, targetId: hostedTargetId({ endpoint, token }) };
       post = createJsonPoster({ endpoint, token, ...quotaTarget });
+      installedPolicy = await automaticPolicy(dataDir,endpoint);
+      if (installedPolicy) sharedGuard = automaticGuard(dataDir,endpoint,installedPolicy);
     }
     if (["status", "pause", "resume"].includes(action)) {
       await control();
     } else {
       const hookInput = await input();
+      if (installedPolicy && action==="recall") automaticSignal = AbortSignal.timeout(2000);
+      if (installedPolicy && token) {
+        const remote = await observeHostedPause({root:dataDir,endpoint},token,automaticSignal??AbortSignal.timeout(2000));
+        hostedGeneration = remote.generation;
+        if (remote.paused) process.exit(0);
+      }
       if (["start", "recall", "capture", "capture-detached"].includes(action)) {
         await recordCredentialConfiguration(credentialDir, {
           configured: Boolean(token), endpoint, observedAt, resetAuth: action === "start",

@@ -402,7 +402,7 @@ export async function runWorker(
     ...options
   } = {},
 ) {
-  if (!["hosted-stub", "local-stub"].includes(mode) || !transport || !guard)
+  if (!["hosted", "hosted-stub", "local-stub"].includes(mode) || !transport || !guard)
     return { status: "transport_unavailable" };
   requestMs ??= mode === "local-stub" ? 150000 : 25000;
   overallMs ??= mode === "local-stub" ? 155000 : 60000;

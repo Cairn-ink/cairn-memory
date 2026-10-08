@@ -191,7 +191,7 @@ export async function hostedQuotaStatus(target) {
       code: error.message, repairHint: error.message === "quota_state_invalid" ? "run resume" : null };
   }
 }
-function resetBoundary(value) {
+export function resetBoundary(value) {
   const fraction = /\.(\d+)/.exec(value)?.[1] ?? "";
   return Date.parse(value) + (/[1-9]/.test(fraction.slice(3)) ? 1 : 0);
 }
@@ -293,7 +293,23 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
       return response.json();
     }
     let value;
-    try { value = await response.json(); } catch { value = null; }
+    try {
+      if (client !== "codex") value = await response.json();
+      else {
+        const reader = response.body.getReader();
+        let size = 0; const chunks = [];
+        try {
+          for (;;) {
+            const { done, value: chunk } = await reader.read();
+            if (done) break;
+            size += chunk.byteLength;
+            if (size > 65536) throw new Error("invalid_reply");
+            chunks.push(chunk);
+          }
+          value = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        } finally { await reader.cancel().catch(() => {}); }
+      }
+    } catch { value = null; }
     if (path === recallPath && Object.hasOwn(body, "session_id") &&
         rejectsSessionId(response.status, value)) {
       const { session_id, ...legacy } = body;
@@ -320,11 +336,11 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
     };
     return target && routes.has(path) ? guardedReply(target, path.endsWith("recall") ? "recall" : "capture", timeoutMs, attempt) : attempt();
   }
-  const post = async (path, body, timeoutMs, authenticated = true, dispatch) => {
+  const post = async (path, body, timeoutMs, authenticated = true, dispatch, signal) => {
     if (!routes.has(path) && path !== "/api/memory/session-start") {
-      return request(path, body, timeoutMs, authenticated);
+      return request(path, body, timeoutMs, authenticated, undefined, signal);
     }
-    const result = await reply(path, body, timeoutMs, undefined, undefined, dispatch);
+    const result = await reply(path, body, timeoutMs, undefined, signal, dispatch);
     if (result.status === "quota_reached") {
       const error = new Error("quota_reached"); error.resetAt = result.resetAt; throw error;
     }

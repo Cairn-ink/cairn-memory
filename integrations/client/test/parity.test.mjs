@@ -11,6 +11,9 @@ import { observeHosted, observeMechanisms } from './observe-legacy.mjs';
 const client = fileURLToPath(new URL('../', import.meta.url));
 const plugin = fileURLToPath(new URL('../../../plugins/cairn-memory/', import.meta.url));
 const golden = JSON.parse(await readFile(new URL('./fixtures/claude-hosted-93e52b7.json', import.meta.url), 'utf8'));
+// CX-5 adds bounded Codex replies and an optional caller cancellation signal.
+// Preserve the old observed outputs below; do not regenerate historical goldens.
+const cx5TransportHash = '400ca332c50add89291504818305617d7b69287a1be0d86b17147bde01fa9e1e';
 
 test('pinned shared source hashes include the revised hosted transport', async () => {
   assert.equal(golden.base, '93e52b7afb298d728cb4831c34bbda6dcf750704');
@@ -19,7 +22,7 @@ test('pinned shared source hashes include the revised hosted transport', async (
     if (['identity.mjs', 'file-lock.mjs', 'control-state.mjs', 'pairing.mjs', 'private-state.mjs'].includes(source)) continue;
     const bytes = await readFile(join(client, source));
     assert.equal(createHash('sha256').update(bytes).digest('hex'),
-      golden.sourceHashes[`plugins/cairn-memory/lib/${original}`], source);
+      source==='transport-hosted.mjs' ? cx5TransportHash : golden.sourceHashes[`plugins/cairn-memory/lib/${original}`], source);
   }
 });
 
