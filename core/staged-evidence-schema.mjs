@@ -29,3 +29,11 @@ export function migrateVersion12(db) {
     ) STRICT;
   `);
 }
+
+export const CANONICAL_STAGING_SCHEMA_VERSION = 19;
+
+/** Version 19 distinguishes complete canonical submissions without rewriting prefix payloads. */
+export function migrateVersion18(db) {
+  db.exec(`ALTER TABLE staged_capture_evidence ADD COLUMN payload_format TEXT NOT NULL
+    DEFAULT 'prefix-messages-v1' CHECK(payload_format IN ('prefix-messages-v1','canonical-messages-v1'));`);
+}

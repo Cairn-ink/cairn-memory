@@ -137,6 +137,28 @@ selected receipts remain untrusted evidence, not a complete archive or verified
 decision. No new captured storage field, schema, host flag or paid authorization
 is added. See [indexed evidence capture](indexed-evidence-capture.md).
 
+The distinct embedded `captureSourcePolicy: 'indexed-staged-v1'` opts into full
+**canonical submitted** source retention independently of extraction selection,
+including empty/failed extraction. It uses the same indexed prompt and input,
+token, item and receipt limits without qualification. Own qualification, rationale,
+captureEvidence and episode settings, and any own capture causal field, reject.
+The constructor snapshots an own data property; accessors/unsupported values fail
+before opening a database. An inherited policy remains ignored and cannot enable
+retention. Default capture is unchanged.
+
+After input/catalog/fit validation, admission ownership and staging commit atomically
+before extraction. Exact `inspectCaptureEvidence` returns `canonical-messages-v1`
+with complete normalized, secret-redacted messages (24 messages, 4,000 UTF-16
+units/message, 20,000 total), IDs and roles; retained-window max is4,000 and truncated
+indices are empty. This is not raw transcript bytes, verified truth or recall
+authority. Existing24-hour expiry,128-KiB/event,64-payload/1-MiB exact-namespace quotas
+and deletion/replay fences apply. Staged source never enters ordinary
+get/list/search/MOC/fetch/recall or sourceSnapshot; cold exact inspection needs no
+model. Schema19 distinguishes this payload from unchanged prefix staging. No
+MCP/CLI/Hermes flag or default retention is added. Privacy opt-in and useful source
+discovery remain separate host work. See
+[staged capture evidence](staged-capture-evidence.md#canonical-submission-staging-indexed-staged-v1).
+
 Trusted embedded construction may select `captureSourcePolicy: 'indexed-windows-v1'`
 only with `source-bound-v2` qualification and without active rationale or
 staged evidence. Core sends the configured extractor bounded canonical

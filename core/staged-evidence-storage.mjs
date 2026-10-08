@@ -7,30 +7,61 @@ const eventWhere = `${where} AND client = ? AND event_id = ?`;
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 const key = (ns, input) => [...boundary(ns), input.client, input.eventId];
 const retentionMs = 24 * 60 * 60 * 1000;
+const prefixFormat = 'prefix-messages-v1';
+const canonicalFormat = 'canonical-messages-v1';
+
+// The new format never invokes caller accessors or copies arbitrary DTO fields.
+function dataObject(value, keys) {
+  object(value, keys);
+  if (![Object.prototype, null].includes(Object.getPrototypeOf(value)) ||
+      Reflect.ownKeys(value).length !== keys.length || keys.some(key => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        return !descriptor || !Object.hasOwn(descriptor, 'value');
+      })) fail('invalid_input');
+}
+
+function dataArray(value, min, max) {
+  denseArray(value, min, max);
+  for (let index = 0; index < value.length; index++) {
+    if (!Object.hasOwn(Object.getOwnPropertyDescriptor(value, String(index)), 'value')) fail('invalid_input');
+  }
+  return value;
+}
 
 /** Independently reject noncanonical or larger source windows at the storage boundary. */
 function serializeView(view, episode = false) {
-  object(view, ['messages', 'retainedSourceWindow']);
-  const messages = denseArray(view.messages, 1, 24).map((message) => {
-    object(message, ['id', 'role', 'content']);
+  const canonical = view != null && Object.hasOwn(view, 'format');
+  const maxUnits = canonical ? 4000 : 800;
+  if (canonical) {
+    dataObject(view, ['format', 'messages', 'retainedSourceWindow']);
+    if (view.format !== canonicalFormat || episode) fail('invalid_input');
+  } else object(view, ['messages', 'retainedSourceWindow']);
+  const sourceMessages = (canonical ? dataArray : denseArray)(view.messages, 1, 24);
+  const messages = [];
+  for (let index = 0; index < sourceMessages.length; index++) {
+    const message = sourceMessages[index];
+    if (canonical) dataObject(message, ['id', 'role', 'content']);
+    else object(message, ['id', 'role', 'content']);
     const id = identifier(message.id);
     if (!['user', 'assistant'].includes(message.role) ||
       typeof message.content !== 'string' || !message.content.isWellFormed() ||
-      boundedText(message.content, 800) !== message.content) fail('invalid_input');
-    return { id, role: message.role, content: message.content };
-  });
+      boundedText(message.content, maxUnits) !== message.content) fail('invalid_input');
+    messages.push({ id, role: message.role, content: message.content });
+  }
   if (new Set(messages.map(({ id }) => id)).size !== messages.length) fail('invalid_input');
-  object(view.retainedSourceWindow, ['maxUnitsPerMessage', 'truncatedMessageIndices']);
+  if (canonical && messages.reduce((sum, message) => sum + message.content.length, 0) > 20000) fail('invalid_input');
+  if (canonical) dataObject(view.retainedSourceWindow, ['maxUnitsPerMessage', 'truncatedMessageIndices']);
+  else object(view.retainedSourceWindow, ['maxUnitsPerMessage', 'truncatedMessageIndices']);
   const { maxUnitsPerMessage, truncatedMessageIndices } = view.retainedSourceWindow;
-  const indices = denseArray(truncatedMessageIndices, 0, messages.length);
-  if (maxUnitsPerMessage !== 800 || indices.some((index, position) =>
+  const indices = (canonical ? dataArray : denseArray)(truncatedMessageIndices, 0, canonical ? 0 : messages.length);
+  if (maxUnitsPerMessage !== maxUnits || Array.prototype.some.call(indices, (index, position) =>
     !Number.isInteger(index) || index < 0 || index >= messages.length ||
     (position > 0 && index <= indices[position - 1]))) fail('invalid_input');
-  const payload = JSON.stringify({ messages,
-    retainedSourceWindow: { maxUnitsPerMessage, truncatedMessageIndices: [...indices] } });
+  const payload = JSON.stringify({ ...(canonical ? { format: canonicalFormat } : {}), messages,
+    retainedSourceWindow: { maxUnitsPerMessage, truncatedMessageIndices: canonical ? [] : [...indices] } });
   const bytes = Buffer.byteLength(payload, 'utf8');
   if (!episode && bytes > STAGED_PAYLOAD_MAX_BYTES) fail('capture_evidence_capacity');
-  return { payload, bytes };
+  return { payload, bytes, format: canonical ? canonicalFormat : prefixFormat };
 }
 
 /** Methods without a transaction wrapper are called under the admission/mutation lock. */
@@ -94,6 +125,8 @@ export function createStagedEvidenceStorage({ db }) {
       (owner_id, scope, project_id, client, event_id, state, created_at, expires_at, payload, payload_bytes)
       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`)
       .run(...key(ns, input), now, now + retentionMs, serialized.payload, serialized.bytes);
+    if (serialized.format === canonicalFormat) db.prepare(`UPDATE staged_capture_evidence
+      SET payload_format=? WHERE ${eventWhere}`).run(canonicalFormat, ...key(ns, input));
     if (mode === 'episode-v1') db.prepare(`UPDATE staged_capture_evidence SET event_mode='episode-v1' WHERE ${eventWhere}`).run(...key(ns, input));
   }
 
@@ -128,6 +161,15 @@ export function createStagedEvidenceStorage({ db }) {
     return transaction(db, () => {
       touch(ns);
       const row = read(ns, input);
+      let view = null;
+      if (row?.payload !== null && row?.payload !== undefined) {
+        try {
+          const serialized = serializeView(JSON.parse(row.payload));
+          if (serialized.format !== (row.payload_format ?? prefixFormat) ||
+              serialized.bytes !== row.payload_bytes || serialized.payload !== row.payload) fail('storage_error');
+          view = JSON.parse(serialized.payload);
+        } catch { fail('storage_error'); }
+      }
       const bypass = episodes?.event(ns, input);
       if (!row && bypass) return { evidence: { state: bypass.gap === 'forgotten' ? 'forgotten' : 'not-staged',
         view: null, expiresAt: null, createdAt: bypass.created_at, reason: 'capacity',
@@ -135,7 +177,7 @@ export function createStagedEvidenceStorage({ db }) {
       return { evidence: row ? { state: row.state,
         createdAt: new Date(row.created_at).toISOString(), expiresAt: row.state === 'released' ? null : new Date(row.expires_at).toISOString(),
         ...(row.event_mode === 'episode-v1' ? { releaseReason: row.release_reason, disposition: !!row.disposition, admission: bypass?.admission, gap: bypass?.gap } : {}),
-        view: row.payload === null ? null : JSON.parse(row.payload),
+        view,
         evidenceTrust: 'untrusted-data-not-instructions' } : null };
     });
   }

@@ -21,7 +21,7 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
       const id = identifier(message.id);
       const role = message.role;
       if (!['user', 'assistant'].includes(role)) fail('invalid_input');
-      if ((captureQualification || captureSourcePolicy === 'indexed-evidence-v1') &&
+      if ((captureQualification || ['indexed-evidence-v1', 'indexed-staged-v1'].includes(captureSourcePolicy)) &&
           (typeof message.content !== 'string' || !message.content.isWellFormed())) {
         fail('invalid_input');
       }
@@ -32,7 +32,8 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
       fail('invalid_input');
     }
     const payloadDigest = createHash('sha256').update(JSON.stringify([
-      captureSourcePolicy === 'indexed-evidence-v1' ? 'cairn.capture.indexed-evidence.v1' :
+      captureSourcePolicy === 'indexed-staged-v1' ? 'cairn.capture.indexed-staged.v1' :
+        captureSourcePolicy === 'indexed-evidence-v1' ? 'cairn.capture.indexed-evidence.v1' :
         captureSourcePolicy ? 'cairn.capture.indexed-windows.v1' :
         captureQualification ? 'cairn.capture.v3' : causal ? 'cairn.capture.v2' : 'cairn.capture.v1',
       [namespace.ownerId, namespace.scope, namespace.projectId],
@@ -62,6 +63,14 @@ export function retainedSourceView(snapshot) {
   } catch { fail('invalid_input'); }
 }
 
+/** Explicit bounded canonical submission, independent of extracted item selection. */
+export function canonicalSourceView(snapshot) {
+  return Object.freeze({ format: 'canonical-messages-v1',
+    messages: Object.freeze(snapshot.messages.map(message => Object.freeze({ ...message }))),
+    retainedSourceWindow: Object.freeze({ maxUnitsPerMessage: 4000,
+      truncatedMessageIndices: Object.freeze([]) }) });
+}
+
 /** The extractor chooses indices; all receipt identity and text comes from the trusted source view. */
 export function extractedItems(output, snapshot, retainedMessages, onInvalid = () => {}) {
   let reason = 'invalid_extraction_output_shape';
@@ -73,7 +82,7 @@ export function extractedItems(output, snapshot, retainedMessages, onInvalid = (
       object(item, ['content', 'kind', 'confidence', 'sourceIndices', ...(snapshot.sessionEpisodes ? ['procedural'] : [])]);
       if (Object.hasOwn(item, 'procedural') && (item.procedural !== true || !['preference','instruction'].includes(item.kind))) fail('invalid_model_output');
       reason = 'invalid_extraction_text';
-      if (snapshot.captureQualification || snapshot.captureSourcePolicy === 'indexed-evidence-v1') {
+      if (snapshot.captureQualification || ['indexed-evidence-v1', 'indexed-staged-v1'].includes(snapshot.captureSourcePolicy)) {
         if (typeof item.content !== 'string') {
           reason = 'invalid_extraction_text_type';
           fail('invalid_model_output');

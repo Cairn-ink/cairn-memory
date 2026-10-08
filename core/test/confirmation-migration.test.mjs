@@ -30,14 +30,14 @@ function baseline(t) {
 const tables = db => Object.fromEntries(db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all()
   .map(({ name }) => [name, db.prepare('SELECT * FROM ' + name).all()]));
 
-test('CF1 eager v17 migration preserves old values, revisions and epoch; actual older opener refuses v18', t => {
+test('CF1 eager v17 migration preserves old values, revisions and epoch; actual older opener refuses v19', t => {
   const { ws, old } = baseline(t); const path = join(ws.path, 'store.sqlite');
   const seedDb = old.openSeedDatabase({ path }); seedDb.seed(); seedDb.close();
   const db = new DatabaseSync(path); ws.defer(() => db.close());
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, 17);
   const before = tables(db);
   openMemoryCore({ path }).close();
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 19);
   const after = tables(db);
   for (const [name, rows] of Object.entries(before)) {
     assert.deepEqual(after[name].map(row => Object.fromEntries(Object.keys(rows[0] ?? {}).map(key => [key, row[key]]))),

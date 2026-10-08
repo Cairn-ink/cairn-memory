@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isStorageBusy } from './database.mjs';
-import { captureSnapshot, extractedItems, retainedSourceView } from './capture-input.mjs';
+import { captureSnapshot, extractedItems, retainedSourceView, canonicalSourceView } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fittingCap, prefixUnits, requestFits } from './model-packing.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
@@ -130,11 +130,13 @@ export async function captureMessages({ model, modelCallTimeoutMs, input, operat
   // Retention coverage of this submitted snapshot, not an attestation of which
   // extraction policy executed an earlier duplicate batch.
   const coverage = { ...(catalog?.coverage ?? (retained ? { retainedSourceWindow: retained.retainedSourceWindow } : {})),
-    ...(captureSourcePolicy === 'indexed-evidence-v1' ? { qualificationStatus: 'not-requested' } : {}) };
+    ...(['indexed-evidence-v1', 'indexed-staged-v1'].includes(captureSourcePolicy) ? { qualificationStatus: 'not-requested' } : {}) };
+  const staged = captureEvidence || captureSourcePolicy === 'indexed-staged-v1';
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
   const claim = episodeRun ? episodeRun.claim : snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
-    : captureEvidence ? unwrap(operations.claimCaptureEvidence({ ...key, view: retained }))
+    : staged ? unwrap(operations.claimCaptureEvidence({ ...key,
+      view: captureSourcePolicy === 'indexed-staged-v1' ? canonicalSourceView(snapshot) : retained }))
       : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
   if (claim.processing || claim.duplicate) return { ...claim, ...coverage,
     ...(captureRationale ? { rationale: { status: 'not-run', reason: claim.processing ? 'processing' : 'duplicate',
@@ -152,7 +154,7 @@ export async function captureMessages({ model, modelCallTimeoutMs, input, operat
     deadline?.check();
     // Do not start another interpretation stage after explicit discard/forget.
     // A provider request already in flight cannot be recalled by local deletion.
-    if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned));
+    if (staged) unwrap(operations.assertCaptureEvidence(owned));
     if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
       ? await qualifyCandidateItems(model, items, deadline,
         captureEvidence ? () => unwrap(operations.assertCaptureEvidence(owned)) : undefined, Boolean(episodeRun),
