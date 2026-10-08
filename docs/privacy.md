@@ -605,7 +605,14 @@ directory, separate from MCP authorization; save/verification precedes delivery
 ACK. They never enter config.toml, argv, child environment or logs. A hashed,
 versioned runtime survives npx cache removal. Disable/uninstall removes all owned
 registrations across node/runtime upgrades; uninstall also removes its credential,
-runtime and endpoint policy, retaining memory/key/MCP. This local policy caps only
+runtime and endpoint policy, retaining memory/key/MCP. Codex uninstall also unpairs
+pending/completed bindings and verifies Claude is enabled at its original root/key;
+no new identity is minted. A private token-free uninstall ownership receipt survives
+failed restoration and is removed after success; another config home cannot use
+its absence to detach that binding. Failed recovery is explicitly nonzero while Codex
+credential/state cleanup continues; unsafe policy paths are reported and never
+followed. Claude status alarms only on observed endpoint problems, not absent or
+stale healthy Codex observations. This local policy caps only
 Codex workers. Missing/incompatible Claude plugins use an explicitly disclosed
 standalone Codex target, preserving Claude keys/config. Pairing delivers only the
 shared identity record; same account/endpoint remains the person's choice. Local

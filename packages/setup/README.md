@@ -123,22 +123,35 @@ Existing MCP credentials and unrelated settings/hooks are preserved.
 
 Claude/Codex pairing adopts the existing project key after explicit stopped-host
 consent and delivers only `pairing_record` to both configurations. New pairing
-requires an enabled Cairn plugin 0.3.2 with that configure capability. Missing,
+requires an enabled Cairn plugin `>=0.1.2 <1.0.0` (stable semver) with that configure
+capability. Version 0.1.2 introduced the pairing contract; released 0.3.1 already qualifies.
+A test binds compatibility to the current plugin metadata. Missing,
 old or disabled plugins select Codex standalone with an explicit notice, without
 changing Claude keys/settings or updating its marketplace. New Codex standalone always uses
 `$CODEX_HOME/cairn-standalone`, preserving Claude's existing or future default
 root. Existing successful bindings never
 silently switch target on plugin removal/downgrade. Use the same account and
-endpoint to share memory after pairing; standalone targets are separate.
+endpoint to share memory after pairing; standalone targets are separate. If a compatible
+plugin appears later, rerun explains why the existing standalone target is retained: to
+adopt Claude’s target, stop hosts/workers, uninstall Codex, then setup again. Old standalone
+memories stay at their original target.
 
 Only Codex workers consume the selected daily capture cap and concurrency 2.
 Claude retains its existing capture/recall/controls and server quota; it does not
 require Codex's enforced pause-state endpoint. Its status reports invalid policies
-and unavailable/stale shared-pause observations without failing controls. No
+and actual last-observed shared-pause errors without failing controls. Fresh/unobserved and stale healthy observations do not trigger an endpoint alarm. No
 policy means unchanged Claude status. Uninstall removes all Cairn hook commands
 for this installation regardless of old node/runtime paths, plus its credential,
 runtime and endpoint policy. MCP, identity/key (including standalone) and memory
-remain. Failed reauthorization preserves the last successful installation.
+remain. Uninstall also unpairs completed or pending pairing: clear Claude’s native pairing
+option, remove Codex’s binding/shared record under the setup lock, and verify Claude remains
+enabled on the same root/key. Recovery failure returns exit 1 with an explicit warning,
+still removes Codex credential/installation, and can be retried after restoring the Claude
+CLI without browser authorization. A private token-free recovery ownership receipt under
+`~/.cairn-memory-clients/codex-uninstall-<installation hash>.json` supports retry and
+prevents another CODEX_HOME from unpairing this installation; success removes it. Unsafe
+policy paths are reported and skipped while credential/installation cleanup continues.
+Failed reauthorization preserves the last successful installation.
 Browser/candidate failure on first pairing leaves Claude identity untouched.
 Partial native pairing delivery prints a pending notice; keep hosts/workers
 stopped and rerun to finish the same identity.
@@ -158,11 +171,14 @@ identity／控制已接線；prompt recall 的接線與離線測試已交付，�
 等待 A7 真實 host authority 驗收。SessionStart 先建立 pause EOF boundary，
 startup context 另待本機 tokenizer。使用前在 `/hooks` 檢閱並信任 handlers。
 Hook 憑證是私有 0600 明文檔，與可選的 MCP PAT 分開；MCP 優先採用原生 OAuth。
-新配對要求已安裝、啟用且相容的 Claude plugin 0.3.2；缺少或舊版時改用 standalone，
+新配對要求已安裝、啟用且相容的 Claude plugin `>=0.1.2 <1.0.0`，另驗證 pairing capability；`0.3.1` 已符合。缺少或不相容時改用 standalone，
 不改 Claude key／設定、不停止 Codex 安裝。Standalone 尚未共用 target。兩個 client
 配對後要使用同一帳號與 endpoint。本機每日 cap 只限制 Codex workers；Claude
 capture、recall、pause／resume 維持既有行為，只在 status 顯示可用的 policy／gate 診斷。
-Uninstall 同時移除 Codex policy，不刪 memory、key 或 MCP。
+Uninstall 同時 unpair（含 pending）、清空 Claude pairing option 並驗證原 identity 已恢復 enabled；不刪
+memory、key 或 MCP。恢復失敗回傳 exit 1，仍移除 Codex credential／installation，恢復 CLI 後可重試。Unsafe policy
+清除會略過並明說，不保留 credential。新外掛出現後 standalone rerun 會解釋保留 target 的原因與卸載後重新配對的步驟；本機 cap 提示明列僅限
+Codex。
 
 See [Codex evidence, gate table and recovery](../../docs/codex-setup.md).
 

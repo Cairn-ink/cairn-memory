@@ -21,29 +21,41 @@
 - Preserve the last successful installation when new node/runtime authorization
   fails. Remove every installer-owned handler for this installation across old
   node/runtime digests, prevent duplicate registration, and delete the Codex
-  endpoint policy on uninstall while retaining memory/key/MCP. First browser/
+  endpoint policy on uninstall while retaining memory/key/MCP. Uninstall unpairs
+  pending/completed bindings, clears the native Claude pairing option and verifies
+  Claude enabled on its original key/root. Unverified recovery is nonzero and
+  retryable without browser auth; credential/state cleanup proceeds despite an
+  unsafe optional policy path. First browser/
   candidate failure leaves Claude identity unchanged; partial native pairing
   delivery is visible and rerun completes the same identity.
 - Adopt the existing Claude key and deliver only pairing_record after explicit
   stopped-host consent; test equal project IDs for the same literal path. Pair
-  only an installed/enabled compatible 0.3.2 plugin. Missing/old/disabled plugins
+  only an installed/enabled compatible stable plugin (`>=0.1.2 <1.0.0`) with native
+  pairing_record capability. Released 0.3.1 qualifies; current plugin metadata is
+  tested against the predicate. Missing/old/disabled plugins
   select disclosed Codex standalone instead; no automatic marketplace/plugin
   update or unused automatic_memory_policy userConfig.
 - **Claude plugin/marketplace 0.3.2 changes relative to released 0.3.1:** status
   alone adds best-effort diagnostics when a Codex policy exists (invalid or
-  unreadable/future policy, last observed unavailable/stale shared pause gate,
+  unreadable/future policy, actual last observed shared pause error with timestamp,
   and a notice that Codex's daily cap does not limit Claude). No policy retains
   the exact status text; relative/empty plugin-data retains legacy behavior.
   Claude start/capture/recall/pause/resume, payloads, cursor and server-quota
   behavior stay as on origin/main: no local Codex cap or new pause-state request.
   Distributed shared helpers include the Codex-only binding/diagnostic paths;
   the version reported in telemetry is 0.3.2. There is no new Claude setting.
+  Fresh/unobserved or stale healthy pause state
+  does not generate an endpoint alarm; only actual observed problems do.
 - Deliver a bounded UserPromptSubmit recall/context port, whole-entry authority
   filter, complete receipt framing and one 2 s budget. **Injection remains
   disabled pending A7 real pinned-host adversarial authority acceptance**, even
   though 0.160.1 supports additionalContext. MCP recall stays available.
   SessionStart establishes the pause boundary; startup context also awaits a
   qualified local o200k counter and sibling acceptance.
+- Use a private second-node shim for portable CI upgrade tests on Node 22/24.
+  Both locales disclose identity-only consent and Codex-only cap; a newly
+  compatible plugin on a standalone rerun explains target retention and migration
+  steps instead of silently falling back.
 - Add fake-Codex/browser/worker E2E and privacy tests using in-memory HTTP/IPC,
   without sockets or real credentials. Record actual check exits; legacy suites
   requiring loopback listen are blocked by this sandbox’s EPERM. No network,

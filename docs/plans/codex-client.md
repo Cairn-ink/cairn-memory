@@ -2830,3 +2830,28 @@ also removes that endpoint's Codex policy; identity/key/MCP are retained.
 A7 prompt injection and startup tokenizer/authority gates remain closed. Full
 legacy suites must still pass on a host that permits their loopback fixtures;
 this sandbox's EPERM is a validation limitation, never a passing release gate.
+
+
+### CX-5 round 3 review corrections (2026-10-08)
+
+The re-review reports the round-2 real-host baseline passing at 630 plugin,
+270 pairing, 149 Codex and 196 setup tests. This is independently supplied baseline
+evidence, not proof for the round-3 tree. Machine-specific Node paths are removed
+from installer tests; the second executable is a private shim around process.execPath.
+Pairing needs stable `>=0.1.2 <1.0.0` and native pairing_record capability; 0.3.1
+already provides it. The latest plugin metadata is explicitly tested against the
+compatibility predicate, so a major bump requires deliberate contract review.
+
+Codex uninstall is explicit unpair: serialize with the shared setup lock, clear
+Claude's native record option, retain Claude's established root/key and immutable
+fingerprint history, remove Codex's binding/shared record, and verify Claude enabled
+before exit 0. This includes pending native delivery. An unverified restore returns
+exit 1, removes Codex credential/installation, and is retryable without a grant.
+Optional unsafe policy paths cannot retain credentials or follow symlink targets.
+No direct plugin mutation export is added; ordinary Claude resolution remains intact.
+
+Fresh or stale healthy pause observations do not authorize capture and do not
+produce endpoint-failure alarms. Only an actual observed failure is shown as
+unavailable, with a timestamp/historical label. Both locales describe identity-only
+consent and a Codex-only cap. Existing standalone identity is preserved when a new
+plugin appears; setup explains why and gives stopped-host uninstall/setup steps.

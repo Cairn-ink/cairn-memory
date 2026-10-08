@@ -132,3 +132,20 @@ only daily-cap refusal becomes automatically eligible on the next UTC day.
 An unconfigured refusal guard does not mark that intent latched. Installed
 clients supply named policy declarations to the shared guard; disagreement
 refuses with `policy_conflict` until installer repair aligns them.
+
+
+Round 3 installer corrections: the node-upgrade test uses the running Node and a
+private second-node shim, with no machine-specific executable paths. Pairing
+accepts stable `>=0.1.2 <1.0.0` plus the native `pairing_record` capability, including
+0.3.1 and future patches; current plugin metadata is covered by a compatibility
+regression test. Standalone reruns disclose target retention and uninstall/setup
+steps instead of silently implying a new pairing.
+
+`uninstall --client codex` now unpairs completed and pending bindings under the
+shared setup lock. It clears Claude's native pairing option, retains Claude's
+root/key/fingerprint history and local pause, and checks enabled resolution before
+reporting success. Recovery failure returns exit 1, cleans Codex credential/state,
+and supports retry without another grant. Unsafe optional policy paths are reported
+and skipped; cleanup never follows their symlinks. Claude status reports only an
+observed endpoint problem, with its timestamp, rather than treating a fresh or
+stale healthy observation as unavailable. Capture's strict H5 guard is unchanged.
