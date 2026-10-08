@@ -368,7 +368,8 @@ async function control() {
     if (policy.state === "invalid") policyNote = "; Codex policy invalid or unreadable (Claude unchanged)";
     else if (policy.state === "available") {
       const gate = await hostedPauseStatus({ root: dataDir, endpoint: statusEndpoint });
-      policyNote = `; shared pause gate ${gate.state}` +
+      policyNote = (gate.state === 'unavailable' ?
+        `; shared pause gate unavailable (last observed ${gate.observedAt}${gate.stale ? '; historical' : ''})` : '') +
         "; Codex daily cap applies only to Codex; Claude keeps existing local pause/server quota";
     }
   }

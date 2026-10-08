@@ -11,12 +11,17 @@ const statusPath = config => join(config.root, 'hosted-pause-status', hostedTarg
 export async function hostedPauseStatus(config) {
   try {
     const bytes = await privateRead(statusPath(config), { missing: true });
-    const value = bytes === undefined ? null : JSON.parse(bytes);
+    if (bytes === undefined) return {state:'not yet observed'};
+    const value = JSON.parse(bytes);
     if (!value || value.version !== 1 || !['available','unavailable'].includes(value.state) ||
-      !Number.isFinite(Date.parse(value.observedAt)) || Date.now() - Date.parse(value.observedAt) > 300000 ||
-      Date.parse(value.observedAt) > Date.now()) return { state: 'unavailable (unverified or stale)' };
-    return { state: value.state, observedAt: value.observedAt };
-  } catch { return { state: 'unavailable (invalid observation)' }; }
+      typeof value.observedAt !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value.observedAt) ||
+      !Number.isFinite(Date.parse(value.observedAt)) ||
+      new Date(value.observedAt).toISOString() !== value.observedAt ||
+      Date.parse(value.observedAt) > Date.now()) return { state: 'observation invalid' };
+    return { state: value.state, observedAt: value.observedAt,
+      stale: Date.now() - Date.parse(value.observedAt) > 300000 };
+  } catch { return { state: 'observation unreadable' }; }
 }
 export async function observeHostedPause(config, token, signal) {
   try {

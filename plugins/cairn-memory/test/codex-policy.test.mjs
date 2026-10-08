@@ -103,3 +103,27 @@ for(const response of [()=>Response.json({error:'missing'},{status:404}),()=>Res
     assert.equal((await guard.status()).state.used,1); // Claude never reserves/charges the local Codex guard.
   });
 }
+
+for(const state of ['fresh','available','stale-available','invalid'])test('Claude status does not invent a pause endpoint alarm: '+state,async t=>{
+  const f=await fixture(t);await privateWrite(f.policyFile,JSON.stringify({version:1,dailyCap:100,concurrency:2}));
+  if(state!=='fresh') {
+    const {hostedTargetId}=await import('../lib/http.mjs');
+    const path=join(f.root,'hosted-pause-status',hostedTargetId({endpoint})+'.json');
+    await privateWrite(path,state==='invalid'?'{':JSON.stringify({version:1,state:'available',observedAt:
+      new Date(Date.now()-(state==='stale-available'?600000:0)).toISOString()}));
+  }
+  const result=await f.run('status');assert.equal(result.code,0,result.stderr);
+  assert.ok(!result.stdout.includes('shared pause gate unavailable'),result.stdout);
+});
+
+
+test('Claude status never echoes noncanonical observation timestamps or secret-like comments',async t=>{
+  const f=await fixture(t);await privateWrite(f.policyFile,JSON.stringify({version:1,dailyCap:100,concurrency:2}));
+  const {hostedTargetId}=await import('../lib/http.mjs');const path=join(f.root,'hosted-pause-status',hostedTargetId({endpoint})+'.json');
+  const canary='synthetic-status-secret-canary';
+  for(const observedAt of ['Thu, 08 Oct 2026 11:00:00 GMT ('+canary+')',12345,'2026-02-30T00:00:00.000Z']) {
+    await privateWrite(path,JSON.stringify({version:1,state:'unavailable',observedAt}));
+    const result=await f.run('status');assert.equal(result.code,0,result.stderr);
+    assert.ok(!(result.stdout+result.stderr).includes(canary));assert.ok(!result.stdout.includes('shared pause gate unavailable'));
+  }
+});
