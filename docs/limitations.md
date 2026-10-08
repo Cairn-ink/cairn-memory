@@ -1,5 +1,21 @@
 # Known limitations
 
+The [prospective mixed core-call timeout](plans/mixed-model-call-timeout.md)
+is an explicit preparation-time option, bound to the manifest, context and
+adapter configuration digests, guard and private journal. Omission retains
+the 30,000-ms core default. A configured call may take up to 120,000 ms across
+its shared count/generation clock, but each guarded HTTP request remains
+limited to 60,000 ms. This does not extend the 125,000-ms admission lease,
+create a whole-capture budget or add an aggregate Cairn case wall timer.
+Multistage work can still fail other bounds or lose ownership. Synthetic
+clock controls establish wiring, abort/accounting and late-output fencing,
+not provider latency, historical cause, semantic quality or completion gains.
+The proposed fresh six-case round, at most US$20 generation plus scoring within
+the original US$400/protected US$30, is not a grant. It still requires source
+selection, resource-fit checks, settled accounting, explicit outer limits,
+a frozen operation and independent review. Neither N30's failed prompt
+advancement nor N32's non-quality window partition is activated here.
+
 The [accounted native response-disconnection correction](plans/native-settled-write-disconnect.md)
 locally seals native work only for an identified EPIPE on the connection whose
 bounded, validated provider response has a successful priced settlement in the

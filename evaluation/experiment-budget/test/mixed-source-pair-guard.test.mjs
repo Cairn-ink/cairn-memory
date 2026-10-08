@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { holdReader } from '../testing/reader-lock.mjs';
 
 import { createExperimentBudget, inspectEmbeddingExperimentBudgetSnapshot,
@@ -119,9 +120,9 @@ function add(configuration, amount, outcome, actual) {
   } finally { handle.close(); }
 }
 
-function fixture(t, changed = {}) {
-  const root = mkdtempSync(join(tmpdir(), 'cairn-mixed-guard-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+function fixture(t, changed = {}, workspace) {
+  const root = workspace?.path ?? mkdtempSync(join(tmpdir(), 'cairn-mixed-guard-'));
+  if (!workspace) t.after(() => rmSync(root, { recursive: true, force: true }));
   const first = { directory: join(root, 'ledger space'), runId: randomUUID(),
     limitMicroUsd: 50_000_000, requestCap: 5 };
   createExperimentBudget(first).close();
@@ -162,6 +163,42 @@ function fixture(t, changed = {}) {
 const create = (f, capability, fetchImpl) => createMixedSourcePairExperimentRequestGuard({
   ledger: f.ledger, policy: f.policy, benchmarkExtension: f.benchmarkExtension,
   mixedSourcePairCapability: capability, fetchImpl });
+
+test('T2 optional core timeout rejects invalid binding and drift before claim or reservation', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-mixed-guard-timeout-' });
+  const f = fixture(t, {}, workspace);
+  const filename = join(f.ledger.directory, 'experiment-mixed-source-pair-mixed-execution.json');
+  const claim = join(f.ledger.directory, 'experiment-mixed-source-pair-mixed-execution.claim.json');
+  let reads = 0, sends = 0;
+  for (const value of [undefined, null, 0, 120_001, 1.5, '120000']) {
+    const bad = structuredClone(f.options);
+    bad.manifest.cairn.modelCallTimeoutMs = value;
+    assert.throws(() => authorizeMixedSourcePairCapability(bad), error =>
+      ['invalid_options', 'invalid_capability'].includes(error.code));
+    assert.equal(existsSync(filename), false);
+  }
+  const bad = structuredClone(f.options);
+  Object.defineProperty(bad.manifest.cairn, 'modelCallTimeoutMs', {
+    enumerable: true, get() { reads++; return 120_000; } });
+  assert.throws(() => authorizeMixedSourcePairCapability(bad));
+  assert.equal(reads, 0);
+  f.options.manifest.cairn.modelCallTimeoutMs = 120_000;
+  const capability = authorizeMixedSourcePairCapability(f.options);
+  f.options.manifest.cairn.modelCallTimeoutMs = 1;
+  assert.equal(capability.manifest.cairn.modelCallTimeoutMs, 120_000);
+  const changed = structuredClone(capability);
+  changed.manifest.cairn.modelCallTimeoutMs = 1;
+  assert.throws(() => create(f, changed, () => { sends++; }), rejected('invalid_capability'));
+  assert.equal(existsSync(claim), false);
+  assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(f.ledger), f.snapshot);
+  const guard = create(f, capability, () => { sends++; assert.fail('no HTTP expected'); });
+  workspace.defer(() => guard.close());
+  assert.equal(guard.mixedSourcePairCapability.manifest.cairn.modelCallTimeoutMs, 120_000);
+  assert.equal(sends, 0);
+  assert.deepEqual(guard.getState().attempts, f.snapshot.attempts);
+  await workspace.cleanup();
+  assert.equal(existsSync(workspace.path), false);
+});
 
 test('X1/X2/X6/X7 real nonempty chained v2 parent, bounded binding and one-shot claim', t => {
   const f = fixture(t);
