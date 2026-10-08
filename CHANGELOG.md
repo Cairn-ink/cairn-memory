@@ -1,6 +1,42 @@
 # Changelog
 
-## Unreleased — @cairn-ink/memory installer 0.2.0
+## Unreleased — @cairn-ink/memory installer 0.3.0 (CX-5)
+
+- Qualify the installed codex-cli 0.160.1 using generated app-server schemas,
+  embedded hook schemas, a network-blocked synthetic native exec session and
+  serde/type evidence. Freeze hashes and synthetic fixtures; accept exact
+  qualified creator pins, refuse every unknown installed host/layout.
+- Install four user-level Codex hooks and a 0700/0600 versioned runtime copied
+  from a packaged hash manifest, independent of ephemeral npx caches. Preserve
+  unrelated config/hooks; add offline status/dry-run and disable/uninstall/pause/
+  resume. Use native hook trust review without bypass flags.
+- Save memory-scoped browser credentials privately before delivery ACK; never
+  use broad MCP PATs for workers or put hook credentials in config, argv, env or
+  logs. Prefer the offered native MCP OAuth login; retain explicit MCP PAT paths.
+- Wire Stop/PreCompact incremental hosted capture with the Codex discriminator,
+  existing redaction/profile bounds, stable retries and shared enforced pause /
+  generation / EOF barriers. Bound automatic launch to 750 ms; internal errors
+  exit 0 quietly. Share endpoint quota, concurrency and explicit daily cap.
+- Adopt the existing Claude project key and deliver both pairing bindings; test
+  equal project IDs for the same path. The accompanying Claude bundle adds
+  `automatic_memory_policy` capability and shared guards. After stopped-host
+  consent, refresh/update existing Cairn scopes through native commands and
+  recheck capability; unsupported/disabled/failed updates refuse before adoption. Bump the accompanying plugin/marketplace patch to
+  0.3.2 so native plugin update can distinguish this bundle; publishing the
+  installer alone cannot update an already-installed plugin runtime.
+- Deliver a bounded UserPromptSubmit recall/context port, whole-entry authority
+  filter, complete receipt framing and one 2 s budget. **Injection remains
+  disabled pending A7 real pinned-host adversarial authority acceptance**, even
+  though 0.160.1 supports additionalContext. MCP recall stays available.
+  SessionStart establishes the pause boundary; startup context also awaits a
+  qualified local o200k counter and sibling acceptance.
+- Add fake-Codex/browser/worker E2E and privacy tests using in-memory HTTP/IPC,
+  without sockets or real credentials. Record actual check exits; legacy suites
+  requiring loopback listen are blocked by this sandbox’s EPERM. No network,
+  production access, model call or publication in this delivery. Installer
+  publication and real host/endpoint acceptance remain with chichi.
+
+## @cairn-ink/memory installer 0.2.0 — published
 
 - Highlight the one-time code with blank lines and bold/color in a TTY, or
   brackets under NO_COLOR/non-TTY output. Wait for Enter before browser launch,

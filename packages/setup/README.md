@@ -1,21 +1,23 @@
 # @cairn-ink/memory
 
-One-command setup of the Cairn Memory **Claude Code plugin** and its automatic
-capture/recall hooks. Node ≥22.16 and `claude` on PATH are required.
-The installer has no runtime dependencies. Other clients use the MCP connector.
+One-command setup of the Cairn Memory **Claude Code plugin**, or private automatic
+capture hooks for qualified **Codex CLI 0.160.1**. Node ≥22.16 and the selected
+CLI on PATH are required. No runtime dependencies. Codex context injection
+remains disabled pending the design contract’s A7 authority acceptance; recall
+is available through MCP.
 
-安裝 Cairn Memory 的 Claude Code 外掛與自動擷取、回憶 hooks。
-需要 Node ≥22.16，以及 PATH 裡的 `claude`，沒有 runtime dependencies。
-其他工具使用 MCP connector。
+安裝 Claude Code 外掛，或已驗收 Codex CLI 0.160.1 的私有自動 capture hooks。
+需要 Node ≥22.16，以及 PATH 裡的選定 CLI，沒有 runtime dependencies。
+Codex context 注入仍受 A7 authority gate 保護；可透過 MCP recall。
 
 ## Setup / 安裝
 
-**Installer 0.1.0 is published; 0.2.0 in this checkout awaits publication by chichi.**
+**Installer 0.2.0 is published; 0.3.0 in this checkout is unpublished and awaits chichi.**
 The installer version is independent of the installed plugin version (currently
-0.3.1). Setup prints both, reading the installed version from Claude Code.
+0.3.2 in this unpublished bundle). Setup prints both, reading the installed version from Claude Code.
 
-**安裝器 0.1.0 已發布，這份原始碼的 0.2.0 等待 chichi 發布。**
-安裝器與外掛是兩個版本，外掛目前為 0.3.1；setup 會分別顯示，外掛版本由
+**安裝器 0.2.0 已發布，這份原始碼的 0.3.0 尚未發布，交由 chichi 審核。**
+安裝器與外掛是兩個版本，配套外掛為未發布的 0.3.2；setup 會分別顯示，外掛版本由
 Claude Code 的安裝狀態讀取。
 
 ```sh
@@ -90,6 +92,63 @@ TTY 中以粗體青色突出代碼；`NO_COLOR` 或非 TTY 輸出改用方括號
 If only a token is configured, setup keeps it and asks you to complete the
 endpoint through `/plugin configure`, or explicitly use `--reauthorize`.
 已有 token 但缺少 endpoint 時會保留憑證，提示補齊設定或明確重新授權。
+
+## Codex automatic capture / Codex 自動記憶
+
+```sh
+# Source 0.3.0; @latest still has the published 0.2.0 behavior
+node packages/setup/bin/memory.mjs setup --client codex
+node packages/setup/bin/memory.mjs status --client codex
+node packages/setup/bin/memory.mjs setup --client codex --dry-run
+node packages/setup/bin/memory.mjs pause --client codex
+node packages/setup/bin/memory.mjs resume --client codex
+node packages/setup/bin/memory.mjs disable --client codex
+node packages/setup/bin/memory.mjs uninstall --client codex
+```
+
+On Linux/WSL with exact host 0.160.1, setup installs SessionStart,
+UserPromptSubmit, Stop and PreCompact in user `hooks.json`. It copies a hashed,
+versioned runtime under `$CODEX_HOME/cairn` (default `~/.codex/cairn`), with 0700
+directories and 0600 files, independent of the npx cache. Review/trust with
+`/hooks`; setup uses no trust bypass. Unknown hosts never capture.
+
+Hooks use device browser authorization. The memory-scoped credential is stored
+as a private **0600 plaintext file, not a keyring**; it never enters Codex’s
+config.toml, argv, environment or logs. Registered commands clear the inherited
+environment before the first Node process; children also use a closed environment.
+Saving/verification precedes delivery
+ACK. There is no broad PAT fallback for hooks. `--manual-token` selects only
+MCP PAT setup; MCP defaults to the offered `codex mcp login cairn` OAuth path.
+Existing MCP credentials and unrelated settings/hooks are preserved.
+
+Claude/Codex pairing adopts the existing project key after explicit stopped-host
+consent, delivers the record to both configurations, and uses one literal-path
+HMAC identity. It requires the updated Claude bundle’s
+`automatic_memory_policy` capability. After stopped-host consent, setup refreshes
+and updates this installed Cairn plugin at its existing scopes, then rechecks
+the capability; missing/disabled/unsupported or failed updates refuse before
+adoption/authorization. Use the same Cairn account and endpoint in both clients.
+Both runtimes share local pause, endpoint quota, concurrency 2 and the required
+user-selected daily capture request cap. Uninstall removes only Codex’s private
+runtime/credential/hooks; MCP, shared identity and memory remain.
+
+Stop/PreCompact launch capture within 750 ms with no text or credential in the
+handoff; worker failures exit 0 and emit no logs. SessionStart establishes the
+protocol 0.3.0 pause/resume EOF boundary. Prompt recall’s redaction, full receipt
+framing, authority filter, 8,000-unit bound and single 2 s budget are tested, but
+**automatic injection is disabled pending A7 pinned-host adversarial acceptance**.
+SessionStart context also needs a qualified local o200k counter. MCP recall is
+available. Status reports registration/credential presence and last observed
+hosted pause; it does not verify trust, server reachability or account parity.
+
+本次 0.3.0 尚未發布。Codex 自動 capture、browser credential、私有 runtime 與共享
+identity／控制已接線；prompt recall 的接線與離線測試已交付，但注入預設關閉，
+等待 A7 真實 host authority 驗收。SessionStart 先建立 pause EOF boundary，
+startup context 另待本機 tokenizer。使用前在 `/hooks` 檢閱並信任 handlers。
+Hook 憑證是私有 0600 明文檔，與可選的 MCP PAT 分開；MCP 優先採用原生 OAuth。
+兩個 client 要使用同一帳號與 endpoint，Claude 外掛須先具備本次共享 policy 能力。
+
+See [Codex evidence, gate table and recovery](../../docs/codex-setup.md).
 
 ## Endpoint and language / Endpoint 與語言
 

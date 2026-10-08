@@ -1,102 +1,98 @@
-# Codex 一行安裝：現在可用的範圍
+# Codex 安裝與自動記憶：CX-5
 
-2026-10-07 核對。cairn-memory 基準 `0c7aa20a9cb490bac4d15eca28b2036823a5f48e`，plugin 0.3.1、protocol 0.3.0、installer 0.1.0。cairn-wiki 使用本機 `origin/main` 的 `5b972d53289a04df3b116613554cf7fccf58cc29`。能力研究只讀本機 binary 與既有 repo refs，沒有更新 remote refs、讀取真實 transcript、執行模型或驗證 production 部署。第一輪的 `mcp list` 可能觸發 unauthenticated OAuth discovery；本輪移除此查詢，真實 binary 回歸僅使用 loopback URL。
+2026-10-08 核對，基準為 `d7f52b95`（已發布的 installer 0.2.0）。這份原始碼將 installer 升為 **0.3.0，尚未發布**。配套 plugin 升為未發布的 0.3.2，protocol 維持 0.3.0；本次 plugin bundle 增加共享 policy 能力，既有已安裝的 0.3.1 不因此自動取得新程式。
 
-## 先講結論
+本機是 **codex-cli 0.160.1**。CX-5 已接上 browser credential、私有 runtime、四個 user hooks、Stop／PreCompact capture，以及 SessionStart pause EOF boundary。UserPromptSubmit recall 的接線與離線測試已交付；**注入預設關閉，等待 A7 authority 驗收**。MCP recall 仍可使用。這不是 hooks 不存在，而是設計契約對 developer context 的安全 gate。
 
-本機 `codex --version` 是 **codex-cli 0.160.0**。Codex 已支援 hooks、lifecycle events、plugin marketplace 安裝與 HTTP MCP；不能再把「等 Codex upstream 提供 hooks」當成未開工的理由。
+這輪只讀安裝的 binary 與本機 repo refs，使用自製 synthetic sessions，沒有讀真實對話、成功模型呼叫、遠端查詢、production 操作或發布。
 
-現在可以交付 Codex 的一行 **MCP 安裝**。要做到 Claude Code 那樣的自動擷取與自動回憶，仍需完成我們的 CX-5 接線，以及目前 Codex 版本的 transcript、hook 執行與 context 注入驗收。這次安裝器會清楚顯示「自動記憶尚未接線」。
+## 版本與格式證據
 
-## 本機證據
+[格式證據與 hash](../integrations/codex/test/fixtures/format-evidence-0.160.1.json) 記錄原生 ELF 的 SHA-256、完整 generated schema 的 SHA-256，以及每個 fixture 的 hash。
 
-以下都來自安裝的 binary/help 或 binary 產生的 schema，沒有查網路：
+| 證據 | 結果與界線 |
+| --- | --- |
+| `codex --version` | `codex-cli 0.160.1`，exit 0 |
+| `codex app-server generate-json-schema --out <private-dir>` | exit 0；HookEventName 包含四個事件，HookMetadata 支援 user source、trust status 與 spill threshold |
+| binary 內嵌 command schemas | 八份 input/output schema；UserPromptSubmit output 明確允許 `hookSpecificOutput.additionalContext`；不是猜測的版本範圍 |
+| 隔離 app-server `hooks/list` | 四個 hooks 被讀為 user source、enabled、untrusted；沒有 trust bypass |
+| 原生 `codex exec` synthetic session | 產生 flat paginated ordinal JSONL、`source:exec`／`thread_source:user` header 與 canonical UserMessage/item_completed；網路 socket 被 seccomp 禁止，重試後中斷，exit 130 |
+| assistant fixture | 依該 binary 的 generated ThreadItem／AgentMessageInputContent 與 serde enum／`AgentMessageContent::Text with 1 element` markers 撰寫 synthetic AgentMessage；沒有成功模型回覆的原生 assistant transcript |
+| 重現 | [qualify-codex.mjs](../scripts/qualify-codex.mjs) 對指定 native binary 產生私有 schema evidence；本次重跑的完整 schema hash 相同，九份選取 schema 逐一核對 |
 
-| 能力 | 本機證據 | 能證明的範圍 |
-| --- | --- | --- |
-| Hooks | `codex features list`：`hooks stable true`；`codex --help` 有 hook trust bypass 選項 | 功能已存在；安裝器不使用 trust bypass |
-| Lifecycle | `codex app-server generate-json-schema --out <隔離目錄>`，`v2.HookEventName` | 列出 `sessionStart`、`sessionEnd`、`userPromptSubmit`、`stop`、`preCompact`，另有 `postCompact`、tool、subagent、interrupt events；這是介面定義，沒有宣稱逐事件的實際執行已驗收 |
-| Plugin 安裝 | `codex plugin --help`、`codex plugin add --help`、`codex plugin marketplace add --help` | 有 add/list/remove 與 local/Git marketplace；我們尚未交付可啟用 Cairn 自動記憶的 Codex plugin package |
-| HTTP MCP | `codex mcp add --help`、`codex mcp get --help`、`codex mcp list --help` | 支援 `--url`、`--bearer-token-env-var`、JSON 狀態 |
-| OAuth | `codex mcp login --help` | Cairn MCP 支援 OAuth，可用此命令把授權與 token 保存交給 Codex，避免在 config.toml 保存明文 PAT；與另一分支的 Cairn browser authorization 是不同協定 |
-| PAT 的原生設定 | 隔離 `CODEX_HOME` 寫入 `mcp_servers.cairn.http_headers.Authorization`，再用真正 binary 執行 `mcp get cairn --json` | 0.160.0 原生讀到 HTTP URL 與 Authorization header；沒有連線遠端 |
-
-舊 [Codex 設計契約](plans/codex-client.md#evidence-and-version-boundary) 記錄的 `hooks.json`／inline hooks、developer context 與 trust 流程，是 0.157.1 時的研究基準。這次沒有把舊版格式或 F0 的實測結果直接延伸成 0.160.0 的相容性承諾。
+Capture creator 精確接受 `0.157.1` 與 `0.160.1` 的已驗收 cli/exec paginated layout；保留舊 cursor/profile ID，避免改變 frozen retry identity。安裝與每次 hook 啟動只接受 host **0.160.1**。0.160.0、0.160.2、其他 minor、未知 suffix 都不自動擷取；版本不在清單時先拒絕，再接觸 source。Fork、subagent、非 CLI source、未知 discriminator 同樣拒絕。Schema pin 不代表所有 resumed writer 或真實 compaction 已完成 host 驗收。
 
 ## 使用方式
 
-這次新增的 Codex 流程尚未發布，從 source checkout 執行：
-
 ```sh
+# 本次未發布，先從 source 執行
 node packages/setup/bin/memory.mjs setup --client codex
-node packages/setup/bin/memory.mjs setup --client codex --dry-run
 node packages/setup/bin/memory.mjs status --client codex
+node packages/setup/bin/memory.mjs setup --client codex --dry-run
+
+# 0.3.0 經 chichi 發布後才會包含本次功能
+npx @cairn-ink/memory@latest setup --client codex
 ```
 
-包含這份改動的 installer 發布後，可使用：
+需要 Node ≥22.16、Linux／WSL，以及已驗收的 Codex。安裝在互動終端機確認 endpoint、設定每日 capture 請求 cap，再走與 Claude 相同的 device browser authorization。Hooks 不接受 broad PAT fallback；授權 route 不支援時保留 disabled 狀態，明說原因。`--no-browser` 顯示代碼供手動開頁，`--reauthorize` 換發 hook credential；保存成功並讀回驗證後才 ACK。
+
+MCP 是獨立授權：預設保留或新增裸 HTTP entry，提供 `codex mcp login cairn`，由 Codex 保存 OAuth credential。請在中立目錄登入，避免專案設定覆寫。既有有效 PAT／env credential 路徑保留；明確選 `pat` 或 `--manual-token` 時才用隱藏 prompt 保存 MCP PAT。**MCP PAT 為 config.toml 裡的 0600 明文；它不會被拿來當 hook credential。**
+
+### 兩個 client 共用 identity
+
+發現 Claude CLI／既有 Claude identity 時，setup 要求先退出兩個 host 與 capture workers，確認採用既有 identity。它使用既有 pairing transaction，不重鑄已有 project key，將 pairing record 分別交給 Claude plugin configure 與 Codex 私有設定，驗證交付後才完成配對。有衝突 key／無法安全採用時拒絕，沒有自動 migration 或 backfill。
+
+Claude plugin 必須有本次 `automatic_memory_policy` 能力；安裝器先透過 configure metadata 檢查。確認 stopped-host 配對後，會以原生指令 refresh Cairn marketplace、更新既有 Cairn plugin scopes，再重查 capability。未安裝、停用、managed-only、更新失敗或仍無能力時，在 identity／授權寫入前拒絕。安裝器檢查 capability，而不只相信版本字串。這條更新路徑只用 fake CLI 測試，本輪未執行真實更新。兩個 client 仍須在 browser 使用**同一 Cairn 帳號、同一 endpoint**；credential API 沒有提供另一個 client 的 owner comparison，安裝器不能冒稱已驗證帳號相同。配對只寫 identity／policy 選項，保留 Claude 原有 endpoint 與 hidden credential，避免把看不到的 token 改綁另一個 origin。
+
+Opaque project ID 使用同一 root 的既有 HMAC key 與相同的 literal project path。配對安裝測試直接比較 Claude、Codex 的結果；不使用新 salt、client discriminator 或 realpath 重寫 project path。Codex-only 首次安裝使用既有 standalone identity transaction。
+
+## 安裝位置與控制
+
+`$CODEX_HOME` 未設定時為 `~/.codex`。安裝器只維護自己的 command，保留 config.toml 註解、無關 MCP、hooks.json 其他 hooks／屬性。
+
+| 位置 | 內容與權限 |
+| --- | --- |
+| `$CODEX_HOME/hooks.json` | 四個 user command hooks；只含固定 node/runtime/config 路徑與事件名，不含 token |
+| `$CODEX_HOME/cairn/installation.json` | 0600，固定 endpoint／binding／cap／runtime metadata |
+| `$CODEX_HOME/cairn/credential.json` | 0600，memory-scoped browser credential；所在目錄 0700，明文私有檔，非 keyring |
+| `$CODEX_HOME/cairn/runtime/0.3.0-<manifest-hash>/` | runtime 目錄 0700、檔案 0600；從 npm 包的 frozen hash manifest 複製，不依賴 npx cache，不在原路徑覆寫不同程式 |
+| 共享 private root | identity、control generation、endpoint quota、usage、secret-free automatic policy 與 hosted-pause 最後觀察；Codex cursor 與 Claude cursor 分開 |
 
 ```sh
-npx @cairn-ink/memory setup --client codex
-npx @cairn-ink/memory setup --client codex --dry-run
-npx @cairn-ink/memory status --client codex
+node packages/setup/bin/memory.mjs pause --client codex
+node packages/setup/bin/memory.mjs resume --client codex
+node packages/setup/bin/memory.mjs disable --client codex
+node packages/setup/bin/memory.mjs uninstall --client codex
 ```
 
-Node 需 ≥22.16。省略 `--client` 時，PATH 只有 Codex 就選 Codex；兩者都有則保留 Claude 的既有預設。`--client claude` 可明確選 Claude，`--no-browser` 可手動開啟 PAT 頁面。
+Pause／resume 操作共享本機控制；不擅自解除 hosted pause。Disable 先撤銷 installation／舊 generation，再移除自己登記的 handlers。Uninstall 另刪除自己的 runtime／credential，保留 MCP、共享 project key、記憶與另一個 client 的控制。重跑 setup 可重新啟用；重複 disable／uninstall 安全。卸載不是 server token revocation，必要時到帳號設定撤銷 credential。
 
-沒有 user-level Cairn entry 時，互動安裝會詢問 endpoint，再以隱藏輸入取得 PAT。已有 user-level 裸 HTTP entry 時，先顯示該 endpoint，預設保留 OAuth 路徑並提供 `codex mcp login cairn`；只有明確輸入 `pat` 才補入 header。登入指令應從沒有專案覆寫的中立目錄執行。預設連線為 `https://cairn.ink/api/mcp`。遠端 endpoint 需 HTTPS，本機 HTTP 只接受 localhost／127.0.0.1／[::1]；不接受 URL 帳密、query 或 fragment。
+`status` 與 dry-run 不授權、不查 endpoint、不讀 transcript。Status 顯示 host／installer、registration、credential presence、policy、local pause、UTC 日 cap usage、quota，以及 hosted pause 最後觀察；不把「已登記」寫成「已信任／已連線」。重新啟動 Codex，在 `/hooks` 檢閱並信任四個 handlers。安裝器不使用任何 trust bypass flag。
 
-安裝器寫入 `$CODEX_HOME/config.toml`，未設定 CODEX_HOME 時使用 `~/.codex/config.toml`：
+## Capture、recall 與 privacy
 
-```toml
-[mcp_servers.cairn]
-url = "https://cairn.ink/api/mcp"
-[mcp_servers.cairn.http_headers]
-Authorization = "Bearer <PAT>"
-```
+Stop／PreCompact 的入口總 budget 750 ms，host timeout 1 s；只回 `{}`，透過 stdin 交付 closed、無正文的 handoff，detached worker 讀私有 credential。Worker 最長 62.5 s，失敗不污染 host stdout/stderr；所有自動入口內部失敗 exit 0。登記的 command 先以 `/usr/bin/env -i` 建立 HOME／固定 node PATH／LANG，再啟動第一個 Node process，避免 host preloads 先於 entry 執行。Worker／version 子程序亦使用封閉環境，不繼承 Node preloads、proxy credential 或 plugin token。
 
-**PAT 是明文，檔案權限為 0600，並非 keyring。** 安裝前會告知保存方式。PAT 不放在 argv、安裝器設定的環境變數或 logs；所有 Codex 子程序輸出只在記憶體解析，不轉印，因為 `mcp get --json` 本身可能含 token。判定只讀此 user config 的私有 0600 副本，透過原生 TOML parser 解析；不使用 trusted project 的有效設定。候選設定與保存後驗證都以中立 cwd 執行 `mcp get cairn --json`；暫存目錄的祖先有 `.codex/config.toml` 或存在系統管理設定時拒絕自動安裝。驗證成功後原子替換正式設定；正常結束會於 finally 清除私有暫存副本與候選檔。
+Capture 只讀 hook 授權的 source，選 canonical submitted user／assistant text。Tool、reasoning、mirror、HookPrompt、hook context、compaction summary、環境 metadata 都不送出；使用既有 redactor、4,000／20,000 UTF-16 units、24 messages、65,536 DTO bytes、frozen idempotent event IDs。`client:codex`，不傳原始路徑或 session ID。Processing、lost reply、quota refusal 保留 pending range；有效 acknowledge 才前進。
 
-已有可用 endpoint 與 header／已載入環境變數憑證時，重跑不重寫、不重新詢問 PAT。沒有 header 的既有 user-level HTTP entry 可在明確選擇 `pat` 後補入 header；若原生 parser 拒絕合併，原檔保留。安裝器不查詢 `auth_status`，也不因 `not_logged_in` 或 `unknown` 而跳過此選擇。OAuth token 可能已由 Codex 保存，因此預設不新增 PAT。有其他 header、helper、未載入的憑證環境變數、停用或衝突的 entry 時，保留原設定並提示修復。安裝器不移除其他 MCP，不安裝 Claude plugin 到 Codex。
+Hosted `/api/memory/pause-state` 必須是有效、enforced 的 protocol 0.3.0 state；缺失、未 enforce、regressing generation 都拒絕 capture。觀察到新 generation 時，在共享 control lock 下旋轉本機 generation，不清掉使用者 pause。Resume 後第一次授權 hook 對 stale／missing cursor 建立 EOF boundary，不補送 paused／offline／unseen session 的舊文字。兩個更新過的 runtime 共用 cap、concurrency 2、endpoint quota 與 resume probe；daily cap 必須由使用者設定，沒有擅自給無限額度。
 
-無關設定與註解保留。拒絕 symlink／非一般檔案、hardlink、其他 owner 與 group/world 可寫設定。Setup lock 阻止同一安裝器同時保存，保存前重新比較 user config 的內容與檔案身份；Codex 本身不使用這個 lock，這不是跨所有外部編輯器的交易鎖。
+UserPromptSubmit port 有同一 2 s budget、redacted 4,000-unit query、project/session binding、完整 receipts、固定 untrusted framing、whole-entry authority filter、8,000-unit／32 KiB context cap，以及注入前 generation 重查。**Production entry 的 A7 predicate 目前為 false；不查 recall、不注入。** Test-only qualification seam 用於檢驗接線，hook JSON／argv／env 無法打開它。SessionStart 只處理 pause boundary，不呼叫或 acknowledge `/session-start` context。
 
-Dry-run 和 status 不改 user config、不收 token、不開瀏覽器，但會建立私有暫存目錄；Codex 本身也可能建立 `tmp/arg0` 等 runtime 檔案，不能宣稱完全不建立目錄。所有解析改用中立 cwd 的 `mcp get`，不再使用會對 endpoint 發送 OAuth discovery GET 的 `mcp list`，不驗證 PAT、服務端或 hooks。15 秒 timeout 現在只限制本機解析，不等待 endpoint discovery。非互動、舊 CLI 或 Windows 未驗證檔案權限時，會顯示待設定與 fallback，不收 PAT。fallback 的 `--bearer-token-env-var CAIRN_MCP_TOKEN` 只保存變數名稱，需由使用者的安全環境在每次啟動 Codex 時提供值；安裝器不把真實 token 拼進 shell 命令。
+## Gate table
 
-CLI 失敗傳回實際非零退出碼，未知選項回傳 2，先決條件／狀態解析失敗回傳 1。完成後重啟 Codex，用 `/mcp` 檢查工具，再明確要求 remember／recall。
-
-## 還卡在哪裡，誰負責解除
-
-| 項目 | 目前狀態與責任 | 精確解除條件 |
+| Gate | 本次狀態 | 解除條件 |
 | --- | --- | --- |
-| CX-4 public protocol | **已完成這一層，屬於我們的工作。** [CHANGELOG 0.2.0](../CHANGELOG.md) 與 [protocol](protocol.md) 已有 Codex discriminator、quota/reset、session-start、pause/generation；目前協定為 0.3.0 | 不需再等 CX-4 提供 hooks 或 discriminator；指定 endpoint 的相容性仍需驗證 |
-| H5 hosted server | **source 已合併，部署驗收屬 cairn-wiki／coordinator。** wiki `docs/plans/h6-cutover.md` 記載 H5 在 pin `7467aebc`；`lib/memory/contracts.ts` 接受 codex，`tests/helpers/hosted-protocol-conformance.ts` 有 Codex、quota、pause conformance | 在欲支援的部署 SHA／endpoint 上完成 authenticated protocol、pause、quota 與 rollout 驗收；離線 source inspection 不能代替它 |
-| 0.160.0 capture source | **我們的 CX-3／qualification 工作。** [parser](../integrations/codex/parser.mjs) 嚴格要求 metadata `cli_version === '0.157.1'`，且只接受指定 flat paginated cli/exec layout | 取得 0.160.0 primary types/schema pin 與 synthetic fixtures，驗證格式、flush、resume writer、fork／subagent 拒絕與安全讀取；重新驗收 A1/A4/A5/A9。不可只放寬版本字串 |
-| CX-5 installed lifecycle | **我們尚未完成。** [Codex README](../integrations/codex/README.md) 明確說 uninstalled、disabled；UserPromptSubmit 是 `context_unavailable`，SessionStart 只有 pause-boundary building block | 可分發 launcher／worker 與 host registration；串接 credential、target/project identity、shared pause/quota guard、session-start／session-end 與 resume EOF barrier；通過 A7、hook trust 與真實兩 client 驗收，包含 developer context 注入。不能用 MCP 成功代替自動記憶驗收 |
-| LAC／HMA local target | **我們尚未完成，repo 沒有這兩個 production adapter 目錄。** 不是 hosted MCP 安裝的前置條件 | 若要本機自動記憶，需 model-capable local transport、host-model isolation/termination、同意與 shared budget，加上 reviewed episode deadline configuration、A6/A9；若先交付 hosted 自動記憶，可依 CX-5 契約明確 defer LAC |
-| 完整 CX-7 distribution | **我們的整合／發布工作。** 這次是 packages/setup 的可獨立交付切片 | 上述 automatic-memory gates 完成後再開啟 hooks；browser auth 另分支整合，npm 發布另行核准。本次不升版、不發布 |
+| 0.160.1 格式與 installed lifecycle | 已交付精確 pin、binary schema evidence、synthetic fixtures、private runtime 與 fake-Codex E2E | 真實 interactive trust／flush／resume／PreCompact matrix 仍須 release acceptance；未知版本繼續拒絕 |
+| Browser hook credential／identity | 接線完成，私有保存先於 ACK；配對 parity 測試通過 | 兩個 client 使用同一帳號；Claude 已安裝／原生更新取得本次 capability bundle |
+| Prompt recall A7 | Schema 支援 context，port 與離線 adversarial tests 已交付，**預設關閉** | 明確授權的 pinned-host adversarial model evaluation；離線 framing 不證明 developer-layer 安全性 |
+| SessionStart context | Pause boundary 完成，context **關閉** | 本機 qualified o200k counter、A7 與 sibling context authority／lifecycle acceptance |
+| Hosted H5／U-6 | 從本機 wiki refs 核對 pause-state serving source；沒有 endpoint 驗收 | 指定部署 SHA／endpoint 的 authenticated capture、pause、quota 與 context conformance；本次禁止網路與 production |
+| LAC／HMA | 不在此次 hosted runtime scope | 原設計契約的 model isolation／usage／latency gates；沒有宣稱 local adapter 已完成 |
+| 發布 | Installer minor 升為 0.3.0；沒有 publish | chichi 審核 patch groups、更新 Claude bundle 與 release gates 後發布 |
 
-上述沒有一項需要等 Codex upstream「新增 hooks／plugin install／MCP」。Upstream transcript 格式仍會變動，這是我們需要按版本 qualification 的原因，不是可以一直不做安裝器的理由。
+## 驗證與剩餘限制
 
-wiki 的規劃以 `git -C /home/chichieh/Github/cairn-wiki show origin/main:<path>` 讀取，主要交叉核對 `docs/plans/one-brain-v1.md` 的 CX/HMA/LAC 順序、`docs/plans/one-brain-hosted.md` 的 H5 ownership、`docs/plans/h6-cutover.md` 的 deployed client gates，以及 `docs/plans/cli-browser-auth.md`。前述 source 狀態以此處記錄的 SHA 為準，沒有宣稱是 production 狀態。
+新增測試使用 fake CLI、synthetic HOME、記憶體 HTTP／IPC，涵蓋 install/re-run/status/disable/uninstall、browser ACK、OAuth／PAT 分離、secret argv/env/log canaries、paired identity、Stop／PreCompact、pause/resume EOF、quota processing、版本拒絕、open stdin 與 2 s recall deadline。實際執行與 exit code 記於 delivery manifest；不從 log 尾端推斷成功。
 
-## 與 browser authorization 分支整合
-
-Codex 的 routing、狀態、檔案 transaction 與 CLI runner 都在 [lib/codex.mjs](../packages/setup/lib/codex.mjs)。`setup.mjs` 只新增 import 與一個 dispatch hook；client parsing、help 補充、Codex 的 Node／flags 驗證都在本模組，不改 Claude 的 help、credential block 或共用 execute。`setup.test.mjs` 只新增一個測試 import。不修改 browser-auth 正在重寫的 packages/setup README 與 package manifest，版本保持 0.1.0。
-
-已讀取 `feat/setup-browser-auth` 的工作目錄：它正在新增 auth/errors/transport 模組與 `--manual-token`／`--reauthorize`。合併時保留雙方的 flags/help，Codex 仍走本模組的 PAT 路徑，直到 browser-auth 的 save callback 接到 Codex transaction。Cairn browser auth 會在保存成功後送 ack，因此不能只把它當成「取得 token」函式，先 ack 再寫檔。未接完前不可宣稱 Codex 支援 browser authorization 或 reauthorize；新的 client flags 應由各 client 明確驗證。
-
-## 建議與驗證
-
-對支援 OAuth 的 Cairn MCP，優先建議 Codex 原生 `mcp add cairn --url https://cairn.ink/api/mcp` 與 `mcp login cairn`：登入由 Codex 管理，可避免 config.toml 的明文 PAT，但需要互動 browser／服務端 OAuth 與 Codex 的 token storage，這輪未執行真實帳號登入。PAT 路徑適合不支援 OAuth 的 self-hosted endpoint 或明確選擇 PAT 的使用者。
-
-現在先交付「Codex 一行連上 Cairn MCP」，同時排 **0.160.0 qualification + hosted CX-5**。這條路不必等待 LAC；LAC/HMA 留給本機自動記憶。對外等 CX-5 驗收後才說 Codex 有 Claude Code 等級的自動記憶。
-
-`npm run test:setup` 包含 fake codex／fake claude，驗證 hidden PAT、argv/output 不含 token、0600 原生設定、無關設定保留、idempotence、dry-run/status、fallback、client 選擇、CLI 失敗、symlink、lock 與 concurrent edit。另用真正 0.160.0，從 trusted project 啟動安裝，再從中立目錄執行 `mcp get` 與 `features list`，驗證完整 URL／header、重跑保留、OAuth 提示與 user URL。測試只使用 synthetic PAT 與 loopback URL，沒有模型呼叫；是否成功監聽 loopback、觀察到的 discovery request 數與實際退出碼記錄於交付 evidence。
-
-交付的 manifest 記錄 Node 22.16.0／24.15.0、指定 TMPDIR 的 `test:setup` 與 `validate` 實際退出碼、patch groups、檔案清單交叉核對與 delivery commit。
-
-## Round 2 review 處理
-
-P1-1 已修正：只根據 user config 副本決定 full entry／header-only，兩次驗證使用中立目錄，收 PAT 前顯示 user endpoint。P2-1 已修正：移除 discovery 狀態判斷，裸 HTTP entry 提供原生 OAuth 登入指令與明確 PAT 選擇，fake 的預設 OAuth 狀態也改成 `not_logged_in`。P3-1 補上 OAuth／PAT 的取捨；P3-2 修正文案並移除 `mcp list`；P3-3 與 README 統一使用 `CAIRN_MCP_TOKEN`；P3-5 移除新設定檔開頭的空白行。Claude-only help 不再先印 Codex Client 行，這輪不另交付 tarball。
-
-**剩餘 P3-4：中斷後的暫存檔與 lock 回收。** SIGKILL／斷電可能留下 `.cairn-validate-*/config.toml`、私有 `cairn-codex-inspect-*` 副本、stage 檔與 `.cairn-setup.lock`。副本可能含 PAT，模式為目錄 0700／檔案 0600；正常錯誤與捕捉到的輸入取消會清除。這不是一行可安全修正的問題：自動回收需要 owner／檔案身份、活躍程序與 generation 的判定，不能刪除另一個仍在設定的程序持有的資料。確認所有安裝程序已停止後，才能手動清除以上 leftovers，再重跑。
+既有部分 suite 需監聽 loopback，本環境回傳 `listen EPERM`，完整 suite 的非零退出碼保留為受限驗證，不能列作通過。新離線 suite 與 shared guards 不開 socket。原先 SIGKILL／斷電留下 setup lock、stage 或私有 PAT 副本的回收限制仍存在；只有確認所有 setup processes 已停止後才能人工清理，沒有不安全的自動回收。Atomic rename 不宣稱 directory-fsync 的斷電保證。

@@ -14,6 +14,14 @@ Status: proposed, docs-only contract against `codex-cli 0.157.1`, researched 202
 Revision: public quota protocol ownership, integrated evidence and deadline-review inputs.
 Nothing here claims a shipped client.
 
+2026-10-08 CX-5 implementation update: installer 0.3.0 is an unpublished hosted
+slice on exact installed Codex 0.160.1. Binary-generated evidence, private
+runtime/credential, four user hooks, capture and pause-boundary wiring are
+implemented. Prompt recall port/filter fixtures are implemented but the installed
+A7 predicate remains false; startup context also lacks a qualified local
+o200k counter. See [current evidence and remaining gates](../codex-setup.md).
+This update does not relax the authority, real endpoint or local-model gates.
+
 A person switching between Claude Code and Codex must use one memory target and
 one opaque identity for the same project path. **Submitted evidence** is client-
 supplied source text and claimed speaker roles. A **source receipt** ties an

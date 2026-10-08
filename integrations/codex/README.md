@@ -1,53 +1,50 @@
-# Codex capture building blocks (CX-3)
+# Codex installed runtime and capture building blocks (CX-5)
 
-These are uninstalled, disabled-by-default building blocks. No hosted endpoint,
-host credentials, host hook registration or context injection is enabled. The
-only network adapter in this package is a test-only loopback stub. CX-4 owns the
-public protocol; LAC and CX-5 own installed transport/lifecycle integration.
+Installer 0.3.0 wires the hosted runtime for exact **codex-cli 0.160.1** on
+Linux/WSL. It installs four user-level command hooks, a private versioned runtime,
+browser memory-scoped credential, adopted/shared project identity and endpoint
+policy. It is unpublished. See [setup, qualification and gates](../../docs/codex-setup.md).
 
-`parser.mjs` pins openai/codex commit
-`36650394c5b38c2990ccf2a3457165ca3e9d9726` (`rust-v0.157.1`). Primary type files,
-hashes and discriminators are in [format-evidence.json](test/fixtures/format-evidence.json)
-and the [design contract](../../docs/plans/codex-client.md#cx-3-primary-format-pin).
-Only flat paginated `cli`/`exec` sessions with exact metadata version 0.157.1 are
-qualified. Legacy, fork, inherited and subagent layouts refuse. This is no general
-version-range promise. Fixtures are synthetic, authored from Rust types.
-The metadata version describes the file's creator: Codex does not emit new
-metadata on resume. Installed launchers must independently qualify the current
-host before enabling capture; a newer resumed writer is not qualified by this pin.
+`entry.mjs` owns exit-0/no-log automatic failures and process deadlines:
+750 ms for Stop/PreCompact, 2 s for context events, 62.5 s for a detached worker.
+It dynamically imports the runtime so missing/corrupt modules also fail quietly.
+Only vetted context JSON or capture `{}` may reach stdout. The bounded output
+write has its own 50 ms flush deadline; worker stdout/stderr are discarded.
 
-The installed launcher must call `resolveClient({client:'codex', usesClaude,
-home, root, pairingRecord, ...})` with installation-supplied options; `usesClaude`
-is a required explicit boolean. It must resolve again in its worker. `handleHook`
-and `workerFromHandoff` implement that seam without installing anything.
-`readHookInput` bounds JSON stdin at 64 KiB and 750 ms. Launchers must implement
-a bounded direct stdin pipe, ignore worker stdout/stderr, use no shell and pass
-only the closed handoff. Never pass tokens or expanded hook input. Recall and
-SessionStart context remain unavailable here. Callers catch automatic-hook
-errors and exit 0; explicit controls report failures.
-The installed hook process must flush the bounded result and exit 0 immediately;
-it must not wait for an identity operation still completing after its deadline.
-`handleHook` bounds binding, identity, preparation and launcher waits together
-at 750 ms (2.5 s for disabled context events), and fences late completion;
-the launcher must enforce its own process/pipe lifetime. SessionStart establishes
-a stale pause generation's EOF using only the last byte, without history parsing.
+`installed.mjs` reads owner-private installation/credential state, checks the
+current binary on every invocation, verifies pairing/policy and observes enforced
+hosted pause. A closed stdin handoff carries byte range/binding metadata and
+hosted generation, never source text, credentials or hook extras. Worker/version
+children receive a closed environment without Node preloads, proxies or plugin
+tokens. Npx cache paths are never installed as commands.
 
-The hook input's conversation identity is `session_id`, alongside `cwd`,
-`hook_event_name` and nullable `transcript_path`. There is no `conversation_id`
-alias or model-derived fallback. `UserPromptSubmit` currently returns
-`context_unavailable`; it makes no recall request and injects no context.
-SessionStart retains only its original capture pause-boundary work.
+The exact creator qualification accepts 0.157.1 and 0.160.1 flat paginated CLI/exec
+JSONL. The latter is derived from the installed binary’s schemas, embedded hook
+wire schemas, native synthetic UserMessage transcript and serde/type evidence;
+no successful model assistant response was observed. Unknown versions/layouts,
+fork/subagent/non-CLI metadata fail closed. Binary and fixture hashes are frozen
+in `test/fixtures/format-evidence-0.160.1.json`. Reproduce schema evidence with
+`scripts/qualify-codex.mjs <native-binary> <new-private-dir>`.
 
-If a qualified caller uses the shared `createHostedTransport().recall` port,
-protocol 0.3.0 accepts optional `binding.sessionId`, in the same wire
-representation as capture: SHA-256 of the JSON tuple
-`["wire-session-v1","codex",hostSessionId]`. Supply that existing opaque binding,
-not a new id. The transport sends only ids in the 1–200 character ASCII allowlist
-(`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`), explicitly rejecting line terminators.
-Unavailable or invalid ids are omitted. The server stores only an owner-scoped SHA-256 of the
-wire id. The id is never logged or sent as telemetry. A precise legacy recall
-schema rejection gets one retry without it, with the original deadline and quota
-reservation. This adds no per-prompt Codex recall, host registration or credentials.
+`hosted-lifecycle.mjs` adapts the protocol 0.3.0 transport to CX-3’s capture
+worker, retaining processing/quota/uncertain ranges and sharing quota/cap controls
+with the updated Claude bundle. `SessionStart` establishes pause EOF boundaries;
+no startup context is acknowledged without a qualified local o200k counter.
+
+The UserPromptSubmit recall port redacts/bounds queries, hashes the host session
+identity, rechecks hosted/local generations before dispatch and injection, and
+uses one 2 s signal. `context.mjs` quotes bounded complete entries/receipts under
+a fixed trusted untrusted-data preamble and rejects execution/authority attempts.
+The installed `qualifiedContextHost` predicate is **false**: offline schema and
+filter fixtures do not satisfy A7 pinned-host adversarial authority acceptance.
+Production prompt hooks do not call recall or inject context. MCP recall remains
+available; test-only dependency injection exercises the port without changing
+this default. Startup context stays independently disabled.
+
+The lower-level `hook.mjs` seam remains usable by CX-3 synthetic callers, with
+no implicit network transport, credential read or registration. The installed
+launcher supplies those responsibilities explicitly. The hook conversation ID is
+`session_id`; no model-derived alias or old-session discovery/drain is allowed.
 
 `prepareCapture(binding)` durably freezes a content-free pending manifest before
 launch. `runWorker(binding,{transport,guard,mode})` revalidates the supplied source
@@ -75,9 +72,9 @@ back to its old cwd or skip the resumed project's first turn.
 
 The injected transport must provide idempotent admission by event ID, return an
 exact `{status:'complete'|'duplicate'|'empty'|'processing', eventId}` descriptor,
-honor AbortSignal and expose synchronous `terminated()`. The test-only refusal
+honor AbortSignal and expose synchronous `terminated()`. The internal refusal
 descriptor is `{status:'refused', code:'quota_reached', resetAt?: epochMs}`; this is
-not a claim about CX-4's future public wire schema. Unknown replies stop automatic
+adapted from the public quota reply; it is not a new wire schema. Unknown replies stop automatic
 retry. Lost replies replay stable IDs; uncertainty is never acknowledgement.
 The `invalid_reply` latch survives project changes and SessionStart; the
 documented explicit stopped reset/repair remains required.

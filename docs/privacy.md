@@ -588,12 +588,30 @@ provider/caller copies. Hosted schemas/defaults and paid-pilot boundaries are un
 ### Hosted 0.2.0 client boundary
 
 The Codex discriminator identifies filtered user/assistant conversation text;
-it admits no tools, credentials, metadata or transcript paths. Its reader remains
-disabled pending installed-host/target acceptance. Telemetry stays disabled for
-Codex. Session-start may return owner-bound episode sources, memory receipts and
+it admits no tools, credentials, metadata or transcript paths. CX-5 installs
+its reader only for exact qualified host 0.160.1 and qualified CLI/exec layouts;
+unknown versions/layouts refuse before source capture. Telemetry stays disabled
+for Codex. Session-start may return owner-bound episode sources, memory receipts and
 accessible claimed commitment provenance, all untrusted and budgeted together.
 These fields can contain personal text; clients must not log response bodies.
-Publishing and parsing do not wire session-start or hosted pause into hooks.
+CX-5 now consumes enforced hosted pause state and establishes SessionStart EOF
+boundaries. Startup context and prompt recall injection remain disabled pending
+the Codex A7 authority gate; startup also requires a trusted local tokenizer.
+An output schema supporting additionalContext is not host instruction-following
+acceptance. MCP recall remains available.
+
+The Codex installer copies a hash-checked private runtime and stores the browser
+memory-scoped credential in a 0600 plaintext file under a 0700 config directory,
+not in a keyring. It verifies this save before authorization delivery ACK. The
+credential never enters Codex config.toml, argv, child environment or logs; it
+is separate from optional plaintext MCP PATs. Disable revokes launch/generation
+and removes only its handlers; uninstall also removes its credential/runtime,
+while retaining shared identity, memory and MCP. Local deletion does not revoke
+the server token. The updated Claude bundle and Codex consume one secret-free
+explicit cap/concurrency policy and hosted-pause observation under the paired
+root. Rotation preserves concurrent local user pause. Missing/unenforced or
+regressing remote state fails closed. Same account/endpoint must be selected by
+the person; the installer cannot compare another client’s hidden account owner.
 
 Upgraded Claude honors the shared hosted quota gate as the explicit D1 exception.
 The selected private root retains `hosted-quota/<target digest>.json` and its
