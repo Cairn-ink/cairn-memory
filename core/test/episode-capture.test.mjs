@@ -575,12 +575,11 @@ for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
       const f = setup(t), runtime = createMemoryRuntime({ path: f.path, sessionEpisodes: { mode: 'episode-v1' } });
       t.after(() => runtime.close());
       let snapshots = 0, locked = false, failureWrites = 0, failureStart, writesBeforeAdmission;
-      let admitted = false, readLocked = false, finalWriteStarted, originalToken;
+      let admitted = false, readLocked = false, originalToken;
       const wrapped = { ...runtime,
         failEpisodeDraft(...args) {
           failureStart ??= performance.now(); failureWrites++;
           originalToken ??= args[1].token;
-          if (admitted) finalWriteStarted = performance.now();
           if (admitted && ['recovered', 'read-locked'].includes(finalWrite)) {
             // A separate connection recovers the genuinely stranded attempt just
             // before its original owner makes the extra post-admission write.
@@ -618,12 +617,15 @@ for (const boundary of ['commitEpisodeDraft', 'snapshot-4', 'snapshot-5']) {
         },
         episodeDraftOutcome(...args) {
           assert.ok(args[1].busyTimeoutMs >= 0 && args[1].busyTimeoutMs <= 250);
+          const readStarted = performance.now();
           try { return runtime.episodeDraftOutcome(...args); }
           finally {
+            const readElapsed = performance.now() - readStarted;
             if (readLocked) {
               f.db.exec('ROLLBACK'); readLocked = false;
+              // Exclude successor setup and rollback from the actual locked read.
               // Allow scheduling overhead while rejecting the former 5 s wait.
-              assert.ok(performance.now() - finalWriteStarted < 1000);
+              assert.ok(readElapsed < 1000);
             }
           }
         },

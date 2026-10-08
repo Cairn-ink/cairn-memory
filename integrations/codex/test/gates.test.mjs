@@ -15,6 +15,7 @@ import { createRuntimeGuard } from "../../client/runtime-usage.mjs";
 import { withHeldLock } from "../../client/testing/lock-contention.mjs";
 import { observedHook } from "./lock-contention.mjs";
 import { withFileLock } from "../../client/file-lock.mjs";
+import { deferred } from "../../client/testing/deferred.mjs";
 
 test("A4 partial lines and appends preserve frozen IDs and coverage", async (t) => {
   const first = header() + Array.from({ length: 50 }, (_, i) => item(`Human ${i}`, i)).join("");
@@ -315,26 +316,81 @@ test(
 
 test("A9 stalled fake headless startup never extends the 750ms hook wait", async (t) => {
   const f = await fixture(t, { text: header() + item("Bounded startup") });
+  const entered = deferred(), release = deferred();
+  let watched, cleanup;
+  const finish = () => cleanup ??= (async () => {
+    release.resolve();
+    try { await watched?.drainHookWork(); }
+    finally { t.mock.timers.reset(); }
+  })();
+  f.ws.defer(finish);
   let launches = 0;
-  const began = performance.now();
-  const result = await handleHook(
-    { hook_event_name: "Stop", session_id: session, cwd: "/synthetic", transcript_path: f.path },
-    {
-      clientOptions: { home: f.home, root: f.root, usesClaude: false, env: {} },
-      targetId: f.binding.targetId,
-      launch: () => {
-        launches++;
-        return new Promise(() => {});
+  let clock = 1000000, settled = false;
+  try {
+    watched = await observedHook(f.ws.path);
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const hook = watched.handleHook(
+      { hook_event_name: "Stop", session_id: session, cwd: "/synthetic", transcript_path: f.path },
+      {
+        clientOptions: { home: f.home, root: f.root, usesClaude: false, env: {} },
+        targetId: f.binding.targetId,
+        now: () => clock,
+        launch: () => {
+          launches++;
+          entered.resolve();
+          return release.promise;
+        },
       },
-    },
-  );
-  assert.equal(result.output, "{}");
-  assert.equal(result.status, "capture_unavailable");
-  assert.equal(launches, 1);
-  assert.ok(performance.now() - began < 1100);
-  assert.equal(f.calls.length, 0);
-  assert.ok((await f.cursor()).pending);
-  assert.equal((await f.cursor()).accepted, 0);
+    );
+    hook.then(() => { settled = true; });
+    await Promise.race([entered.promise, hook.then(() => {
+      throw new Error("startup fixture did not enter launch");
+    })]);
+    assert.equal(launches, 1);
+    clock += 749;
+    t.mock.timers.tick(749);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, false, "stalled launch remains pending before the deadline");
+    clock++;
+    t.mock.timers.tick(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, true, "the unchanged 750ms deadline ends the hook wait");
+    const result = await hook;
+    assert.equal(result.output, "{}");
+    assert.equal(result.status, "capture_unavailable");
+    assert.equal(launches, 1);
+    assert.equal(f.calls.length, 0);
+    assert.ok((await f.cursor()).pending);
+    assert.equal((await f.cursor()).accepted, 0);
+  } finally { await finish(); }
+});
+
+test("A9 prelaunch expiry never dispatches after the hook work settles", async (t) => {
+  const f = await fixture(t, { text: header() + item("Expired before startup") });
+  let watched;
+  const finish = async () => { await watched?.drainHookWork(); };
+  f.ws.defer(finish);
+  let launches = 0, clockReads = 0;
+  try {
+    watched = await observedHook(f.ws.path);
+    const result = await watched.handleHook(
+      { hook_event_name: "Stop", session_id: session, cwd: "/synthetic", transcript_path: f.path },
+      {
+        clientOptions: { home: f.home, root: f.root, usesClaude: false, env: {} },
+        targetId: f.binding.targetId,
+        // Expire at the first real post-resolution check, before launch setup.
+        now: () => clockReads++ === 0 ? 1000000 : 1000750,
+        launch: () => { launches++; },
+      },
+    );
+    await finish();
+    assert.equal(result.output, "{}");
+    assert.equal(result.status, "capture_unavailable");
+    assert.equal(launches, 0);
+    assert.equal(f.calls.length, 0);
+    assert.equal(await f.cursor(), null);
+    assert.equal(clockReads, 2, "the real prelaunch deadline check was reached");
+  } finally { await finish(); }
 });
 
 test(
