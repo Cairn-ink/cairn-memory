@@ -5,6 +5,8 @@ import {
   fstatSync,
   lstatSync,
   openSync,
+  readFileSync,
+  readdirSync,
   readSync,
   realpathSync,
   writeFileSync,
@@ -438,7 +440,8 @@ function validateHostBody(body, channel, byteLength) {
 function deepEqual(left, right) { return canonical(left) === canonical(right); }
 
 function validateCairnBody(body, channel, generation, reconciliation = false, qualificationMethod = null,
-  modelControl = false, pairArm = null, adaptiveQualification = false, mixedCairn = false) {
+  modelControl = false, pairArm = null, adaptiveQualification = false, mixedCairn = false,
+  sourceRole = false) {
   const baseKeys = ['input', 'instructions', 'model', 'text', 'truncation'];
   const expectedKeys = generation
     ? [...baseKeys, 'max_output_tokens', 'store', 'stream']
@@ -475,7 +478,9 @@ function validateCairnBody(body, channel, generation, reconciliation = false, qu
   let input;
   try { input = JSON.parse(body.input[0].content[0].text); } catch { fail('unsupported_request'); }
   // The optional indexed-window adapter schema is not a live budget grant.
-  if (pairArm !== null) {
+  if (sourceRole) {
+    if (match?.[1] !== 'extract' || input?.inputMode !== 'indexed-windows-v1') fail('unsupported_request');
+  } else if (pairArm !== null) {
     if (!isPlainObject(input)) fail('unsupported_request');
     if (match?.[1] === 'extract'
       && (pairArm === 'indexed-windows' || mixedCairn ? input?.inputMode !== 'indexed-windows-v1'
@@ -3420,6 +3425,202 @@ function createPairExperimentRequestGuard(options, adaptive) {
   }
 }
 
+const SOURCE_ROLE_VERSION = 'source-role-extraction-capability-v1';
+const SOURCE_ROLE_MANIFEST_SHA256 = '7221ed0298852d6cc6fe5428852236753db3e0713441c7a150a506b6d7153ef0';
+const SOURCE_ROLE_COMPILER_SHA256 = 'a31224732179185a7f8940e70e2e941e2224e0f0465517fdca875ddefb619ba6';
+const sourceRoleHash = value => createHash('sha256').update(value).digest('hex');
+const sourceRoleFile = name => new URL(`../../${name}`, import.meta.url);
+
+function sourceRoleIdentitySnapshot() {
+  const root = 'evaluation/source-role-ablation/';
+  const manifestBytes = readFileSync(sourceRoleFile(`${root}frozen-manifest.json`));
+  if (sourceRoleHash(manifestBytes) !== SOURCE_ROLE_MANIFEST_SHA256) fail('policy_mismatch');
+  const manifest = JSON.parse(manifestBytes);
+  const assets = { ...manifest.sha256, 'frozen-manifest.json': SOURCE_ROLE_MANIFEST_SHA256,
+    'compiler.mjs': SOURCE_ROLE_COMPILER_SHA256 };
+  for (const [name, digest] of Object.entries(assets)) {
+    if (sourceRoleHash(readFileSync(sourceRoleFile(`${root}${name}`))) !== digest) fail('policy_mismatch');
+  }
+  // Fixed local execution files, not a caller-supplied runtime declaration.
+  const files = ['evaluation/experiment-budget/request-guard.mjs',
+    'evaluation/experiment-budget/index.mjs', 'evaluation/source-role-ablation/operator.mjs',
+    'evaluation/source-role-ablation/compiler.mjs', 'evaluation/source-role-ablation/cases.mjs',
+    'evaluation/longmemeval/mixed-validation.mjs', 'plugins/cairn-memory/lib/redact.mjs'];
+  for (const directory of ['core', 'core/prompts', 'adapters/openai']) {
+    for (const name of readdirSync(sourceRoleFile(`${directory}/`)).sort()) {
+      if (name.endsWith('.mjs') || name.endsWith('.md')) files.push(`${directory}/${name}`);
+    }
+  }
+  const sourceHashes = Object.fromEntries(files.sort().map(name =>
+    [name, sourceRoleHash(readFileSync(sourceRoleFile(name)))]));
+  return { assets, nodeVersion: process.versions.node,
+    runtimeSha256: sourceRoleHash(canonical(sourceHashes)) };
+}
+
+function sourceRoleIdentities() {
+  try { return sourceRoleIdentitySnapshot(); }
+  catch (error) {
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    fail('invalid_capability');
+  }
+}
+
+/** Request-free preparation: actual adapter serialization through N28's fixed fake HTTP. */
+export async function prepareSourceRoleExecution() {
+  let identities;
+  try { identities = sourceRoleIdentities(); } catch (error) {
+    if (error instanceof ExperimentRequestGuardError) throw error;
+    fail('invalid_capability');
+  }
+  const slots = [];
+  let compileSourceRoleArm;
+  try { ({ compileSourceRoleArm } = await import('../source-role-ablation/compiler.mjs')); }
+  catch { fail('invalid_capability'); }
+  for (let ordinal = 1; ordinal <= 12; ordinal += 1) {
+    for (const arm of ordinal % 2 ? ['baseline', 'candidate'] : ['candidate', 'baseline']) {
+      const compiled = await compileSourceRoleArm({ caseOrdinal: ordinal, arm, scriptedOutput: { items: [] } });
+      if (compiled.status !== 'completed' || compiled.httpBodies.length !== 2) fail('invalid_capability');
+      slots.push({ slot: slots.length + 1, ordinal, arm,
+        countBodySha256: sourceRoleHash(compiled.httpBodies[0].bodyText),
+        generationBodySha256: sourceRoleHash(compiled.httpBodies[1].bodyText) });
+    }
+  }
+  if (canonical(identities) !== canonical(sourceRoleIdentities())) fail('policy_mismatch');
+  return deepFreeze({ version: 'source-role-extraction-protocol-v1', ...identities,
+    model: DEFAULT_MODEL, caps: { inputTokens: 6000, outputTokens: 1024,
+      items: 5, windowsPerItem: 4, contentUnits: 600 }, slots });
+}
+
+function sourceRoleFiles(directory, executionId) {
+  return { binding: path.join(directory, `experiment-source-role-extraction-${executionId}.json`),
+    claim: path.join(directory, `experiment-source-role-extraction-claim-${executionId}.json`) };
+}
+
+function sourceRoleConfiguration(value) {
+  const config = detachEmbeddingLineage(value, null, 'request-cap-v2');
+  exactKeys(config, ['ledger', 'policy', 'benchmarkExtension', 'authorizationId', 'executionId', 'checkpoint']);
+  config.policy = validateConstructor({ ledger: config.ledger, policy: config.policy, fetchImpl() {} });
+  config.ledger.directory = path.resolve(config.ledger.directory);
+  if (config.ledger.limitMicroUsd !== 400_000_000
+    || config.benchmarkExtension?.version !== BENCHMARK_BUDGET_V4_VERSION
+    || typeof config.authorizationId !== 'string' || typeof config.executionId !== 'string'
+    || !MIXED_ID.test(config.authorizationId) || !MIXED_ID.test(config.executionId)) fail('invalid_capability');
+  mixedCheckpoint(config.checkpoint, config.ledger);
+  if (config.policy.cairnCount.model !== DEFAULT_MODEL || config.policy.cairnGeneration.model !== DEFAULT_MODEL
+    || 24 * (config.policy.cairnCount.reservedMicroUsd + config.policy.cairnGeneration.reservedMicroUsd)
+      > 2_000_000 || config.checkpoint.reservedMicroUsd + 2_000_000 > 370_000_000
+    || config.ledger.requestCap - config.checkpoint.requestCount < 48) fail('invalid_capability');
+  return config;
+}
+
+function sourceRoleBaseline(capability, state) {
+  if (state.state !== 'open' || state.attempts.some(row => row.outcome === null)) fail('capability_busy');
+  if (state.requestCount !== capability.checkpoint.requestCount
+    || state.reservedMicroUsd !== capability.checkpoint.reservedMicroUsd
+    || state.historySha256 !== capability.checkpoint.historySha256) fail('policy_mismatch');
+}
+
+function verifySourceRoleCapability(capability, ledger, policy, benchmark, protocol) {
+  exactKeys(capability, ['version', 'authorizationId', 'executionId', 'ledger', 'policy',
+    'benchmarkExtension', 'checkpoint', 'protocol', 'schedule', 'limits'], 'invalid_capability');
+  const config = sourceRoleConfiguration(Object.fromEntries(['ledger', 'policy', 'benchmarkExtension',
+    'authorizationId', 'executionId', 'checkpoint'].map(key => [key, capability[key]])));
+  if (capability.version !== SOURCE_ROLE_VERSION || canonical(config.ledger) !== canonical(ledger)
+    || canonical(config.policy) !== canonical(policy) || canonical(config.benchmarkExtension) !== canonical(benchmark)
+    || canonical(capability.protocol) !== canonical(protocol)
+    || canonical(capability.schedule) !== canonical(protocol.slots.map(slot =>
+      ({ phase: 'generation', caseId: `source-role-slot-${slot.slot}` })))
+    || canonical(capability.limits) !== canonical({ requestCap: 48, reservedMicroUsd: 2_000_000,
+      protectedMicroUsd: 30_000_000 })) fail('policy_mismatch');
+  const identities = sourceRoleIdentities();
+  for (const key of ['assets', 'nodeVersion', 'runtimeSha256']) {
+    if (canonical(identities[key]) !== canonical(protocol[key])) fail('policy_mismatch');
+  }
+  readBinding(sourceRoleFiles(ledger.directory, capability.executionId).binding, capability);
+}
+
+/** Explicit operator authorization; never discovers or repairs an existing grant. */
+export async function authorizeSourceRoleAblationCapability(options) {
+  const config = sourceRoleConfiguration(options);
+  const protocol = await prepareSourceRoleExecution();
+  const capability = deepFreeze({ version: SOURCE_ROLE_VERSION, ...config, protocol,
+    schedule: protocol.slots.map(slot => ({ phase: 'generation', caseId: `source-role-slot-${slot.slot}` })),
+    limits: { requestCap: 48, reservedMicroUsd: 2_000_000, protectedMicroUsd: 30_000_000 } });
+  if (Buffer.byteLength(canonical(capability)) > 1_000_000) fail('invalid_capability');
+  let failure;
+  let bound;
+  try {
+    bound = openBoundEmbeddingExperimentBudget({ configuration: config.ledger, authorize(state) {
+      try {
+        assertChainedBenchmarkParentForEmbeddingSnapshot({ ledger: config.ledger, policy: config.policy,
+          benchmarkExtension: config.benchmarkExtension, snapshot: state });
+        sourceRoleBaseline(capability, state);
+        const files = sourceRoleFiles(config.ledger.directory, config.executionId);
+        assertPairClaimUnused(files.claim);
+        try { writeAuthorizationBinding(config.ledger.directory, files.binding, capability); }
+        catch { fail('unsafe_policy_binding'); }
+        readBinding(files.binding, capability);
+      } catch (error) { failure = error instanceof ExperimentRequestGuardError ? error : null; throw error; }
+    } });
+  } catch (error) { throw failure ?? error; }
+  finally { bound?.close(); }
+  return capability;
+}
+
+/** One-shot extraction-only HTTP authority, backed by the existing guard engine. */
+export async function createSourceRoleAblationRequestGuard(options) {
+  exactAdaptiveKeys(options, ['ledger', 'policy', 'benchmarkExtension', 'sourceRoleAblationCapability', 'fetchImpl']);
+  const descriptors = Object.getOwnPropertyDescriptors(options);
+  const fetchImpl = descriptors.fetchImpl.value;
+  if (typeof fetchImpl !== 'function') fail('invalid_options');
+  const data = detachEmbeddingLineage(Object.fromEntries(Object.entries(descriptors)
+    .filter(([key]) => key !== 'fetchImpl').map(([key, descriptor]) => [key, descriptor.value])),
+  null, 'request-cap-v2');
+  const policy = validateConstructor({ ledger: data.ledger, policy: data.policy, fetchImpl });
+  data.ledger.directory = path.resolve(data.ledger.directory);
+  const capability = deepFreeze(data.sourceRoleAblationCapability);
+  const protocol = await prepareSourceRoleExecution();
+  verifySourceRoleCapability(capability, data.ledger, policy, data.benchmarkExtension, protocol);
+  let bound;
+  let baseline;
+  let failure;
+  try {
+    bound = openBoundEmbeddingExperimentBudget({ configuration: data.ledger, authorize(state) {
+      try {
+        verifySourceRoleCapability(capability, data.ledger, policy, data.benchmarkExtension, protocol);
+        assertChainedBenchmarkParentForEmbeddingSnapshot({ ledger: data.ledger, policy,
+          benchmarkExtension: data.benchmarkExtension, snapshot: state });
+        sourceRoleBaseline(capability, state);
+        const files = sourceRoleFiles(data.ledger.directory, capability.executionId);
+        assertPairClaimUnused(files.claim);
+        try { writeAuthorizationBinding(data.ledger.directory, files.claim,
+          { version: 'source-role-extraction-claim-v1', executionId: capability.executionId,
+            capabilityDigest: sourceRoleHash(canonical(capability)) }); }
+        catch (error) {
+          if (error?.code === 'EEXIST' || error?.code === 'ELOOP') fail('capability_consumed');
+          fail('unsafe_policy_binding');
+        }
+        baseline = deepFreeze(historicalRows(state));
+      } catch (error) { failure = error instanceof ExperimentRequestGuardError ? error : null; throw error; }
+    } });
+    const engine = constructBenchmarkGuard({ ledger: data.ledger, policy, fetchImpl },
+      data.benchmarkExtension, capability, baseline, null, { sourceRole: true, bound, protocol });
+    const { withCaseScope, ...publicEngine } = engine;
+    return Object.freeze({ ...publicEngine,
+      sourceRoleAblationCapability: deepFreeze({ ...capability, protocol }),
+      async withSlotScope(identity, operation) {
+        const requested = detachEmbeddingLineage(identity);
+        exactKeys(requested, ['slot', 'ordinal', 'arm'], 'case_schedule_mismatch');
+        const slot = protocol.slots[requested.slot - 1];
+        if (!slot || canonical(requested) !== canonical({ slot: slot.slot, ordinal: slot.ordinal, arm: slot.arm })) {
+          fail('case_schedule_mismatch');
+        }
+        return withCaseScope(capability.schedule[slot.slot - 1], operation);
+      },
+    });
+  } catch (error) { bound?.close(); throw failure ?? error; }
+}
+
 function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinnedBaseline = null,
   transportDiagnostics = null, pairProfile = null) {
   const policy = validateConstructor(options);
@@ -3432,6 +3633,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
   }
   const inFlightIds = new Set();
   const records = [];
+  const sourceRolePending = pairProfile?.sourceRole ? new Set() : null;
   let closed = false;
   let inFlight = 0;
   let halted = false;
@@ -3452,7 +3654,10 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
   const unsettled = (state) => state.attempts.some((attempt) =>
     attempt.outcome === null && !inFlightIds.has(attempt.attemptId));
   const verify = () => {
-    if (pairProfile?.pair) {
+    if (pairProfile?.sourceRole) {
+      verifySourceRoleCapability(caseCapability, ledgerConfiguration, policy, benchmark,
+        pairProfile.protocol);
+    } else if (pairProfile?.pair) {
       verifyPairCapability(caseCapability, ledgerConfiguration, policy, benchmark,
         pairProfile.adaptive);
     } else {
@@ -3460,7 +3665,8 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       if (scoped) verifyCaseCapability(caseCapability, ledgerConfiguration, policy, benchmark);
     }
     const state = ledger.getState();
-    if (pairProfile?.pair) verifyPairParent(benchmark, ledgerConfiguration, policy, state);
+    if (pairProfile?.sourceRole) verifyPairParent(benchmark, ledgerConfiguration, policy, state, state);
+    else if (pairProfile?.pair) verifyPairParent(benchmark, ledgerConfiguration, policy, state);
     else verifyBenchmarkCheckpoint(benchmark, state);
     if (scoped) {
       const expectedAttempts = [...pinnedBaseline, ...records.map((record) => ({
@@ -3498,6 +3704,7 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     if (!scoped) return null;
     const scope = scopeStorage.getStore();
     if (!scope || scope !== activeScope || !scope.open) fail('case_scope_required');
+    if (pairProfile?.sourceRole && route !== 'cairn') fail('case_scope_violation');
     if ((scope.phase === 'generation' && route === 'judge')
       || (scope.phase === 'scoring' && route !== 'judge')) fail('case_scope_violation');
     if (sealedCases.has(scope.caseId)) fail('case_timeout_halted');
@@ -3522,6 +3729,12 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     // Snapshotting caller-owned request/header objects can execute accessors.
     // Recheck the capability and the shared ledger after those callbacks, before reserving.
     if (unsettled(scoped ? guardedVerify() : verify())) { halted = true; fail('paid_work_halted'); }
+    if (pairProfile?.sourceRole && (records.length >= 48
+      || records.reduce((sum, record) => sum + record.reservedMicroUsd, 0)
+        + channel.reservedMicroUsd > 2_000_000)) {
+      halted = true;
+      fail('paid_work_halted');
+    }
     const attemptId = randomUUID();
     const startedAt = Date.now();
     try { ledger.reserve({ attemptId, channel: CHANNELS[kind], reservedMicroUsd: channel.reservedMicroUsd }); }
@@ -3617,8 +3830,10 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
         const observed = deadline ? terminationCause
           : terminationCause === 'external_abort' ? 'external_abort'
             : terminationCause === 'transport_failure' ? 'transport_failure' : 'other_failure';
-        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure', deadline, observed);
+        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure',
+          deadline && !pairProfile?.sourceRole, observed);
         if (deadline) {
+          if (pairProfile?.sourceRole) fail('request_timeout');
           sealDeadline(caseScope, terminationCause);
           fail('case_deadline_exceeded');
         }
@@ -3642,8 +3857,10 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
         const observed = deadline ? terminationCause
           : terminationCause === 'external_abort' ? 'external_abort'
             : terminationCause === 'body_failure' ? 'body_failure' : 'other_failure';
-        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure', deadline, observed);
+        settle('unknown', null, null, null, deadline ? terminationCause : 'other_failure',
+          deadline && !pairProfile?.sourceRole, observed);
         if (deadline) {
+          if (pairProfile?.sourceRole) fail('request_timeout');
           sealDeadline(caseScope, terminationCause);
           fail('case_deadline_exceeded');
         }
@@ -3710,13 +3927,27 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       const snapshot = requestSnapshot(url, requestOptions, channel);
       validateCairnBody(snapshot.body, channel, kind === 'cairnGeneration', false,
         pairProfile?.pair ? CANDIDATE_QUALIFICATION_KIND.method : null, false,
-        pairProfile?.pair ? pairArms.get(caseScope.caseId) : null, pairProfile?.adaptive ?? false);
+        pairProfile?.pair ? pairArms.get(caseScope.caseId) : null, pairProfile?.adaptive ?? false,
+        false, pairProfile?.sourceRole ?? false);
+      if (pairProfile?.sourceRole) {
+        const slot = caseCapability.protocol.slots[scheduleIndex];
+        const expectedState = kind === 'cairnCount' ? 'unused' : 'count_succeeded';
+        if (caseScope.requestState !== expectedState) fail('case_scope_violation');
+        const digest = sourceRoleHash(snapshot.bodyText);
+        if (digest !== slot[kind === 'cairnCount' ? 'countBodySha256' : 'generationBodySha256']) {
+          fail('unsupported_request');
+        }
+        caseScope.requestState = kind === 'cairnCount' ? 'count_pending' : 'generation_pending';
+      }
       const method = kind === 'cairnCount' ? 'unknown' : ({ cairn_extract: 'extract',
         cairn_classify: 'classify', cairn_select: 'select', cairn_rank: 'rank',
         cairn_qualifyCandidates: 'qualifyCandidates' })[
         snapshot.body.text.format.name] ?? 'unknown';
-      return await send(CHANNELS[kind], kind, channel, snapshot,
+      const response = await send(CHANNELS[kind], kind, channel, snapshot,
         kind === 'cairnGeneration' ? snapshot.body.max_output_tokens : 0, caseScope, method);
+      if (pairProfile?.sourceRole) caseScope.requestState = kind === 'cairnCount'
+        ? 'count_succeeded' : 'generation_succeeded';
+      return response;
     } catch (error) { fatalizeRouteError(error); }
   };
   const scopedStageFetch = (name) => async (url, requestOptions) => {
@@ -3766,7 +3997,8 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       if (!expected || canonical(requested) !== canonical(expected)) fail('case_schedule_mismatch');
       guardedVerify();
       const scope = { phase: expected.phase, caseId: expected.caseId, open: true,
-        status: sealedCases.has(expected.caseId) ? 'blocked' : 'active' };
+        status: sealedCases.has(expected.caseId) ? 'blocked' : 'active',
+        ...(pairProfile?.sourceRole ? { requestState: 'unused' } : {}) };
       activeScope = scope;
       if (transportCollector) {
         try { transportCollector.openScope(scheduleIndex, expected.phase); }
@@ -3800,7 +4032,8 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
     caseScopeSnapshot() {
       return lastScopeSnapshot === null ? null : deepFreeze(structuredClone(lastScopeSnapshot));
     },
-    ...(pairProfile?.pair ? { qualifiedSourcePairCapability: caseCapability }
+    ...(pairProfile?.sourceRole ? { sourceRoleAblationCapability: caseCapability }
+      : pairProfile?.pair ? { qualifiedSourcePairCapability: caseCapability }
       : { caseDeadlineCapability: caseCapability }),
     ...(transportCollector ? { transportDiagnostics() {
       return observeTransport(() => transportCollector.snapshot());
@@ -3810,9 +4043,15 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
   return Object.freeze({
     cairnFetch(url, requestOptions) {
       const text = url instanceof URL ? url.href : url;
-      if (text === policy.cairnCount.endpoint) return cairnFetch('cairnCount')(url, requestOptions);
-      if (text === policy.cairnGeneration.endpoint) return cairnFetch('cairnGeneration')(url, requestOptions);
-      fail('invalid_request');
+      let pending;
+      if (text === policy.cairnCount.endpoint) pending = cairnFetch('cairnCount')(url, requestOptions);
+      else if (text === policy.cairnGeneration.endpoint) pending = cairnFetch('cairnGeneration')(url, requestOptions);
+      else fail('invalid_request');
+      if (sourceRolePending) {
+        sourceRolePending.add(pending);
+        pending.then(() => sourceRolePending.delete(pending), () => sourceRolePending.delete(pending));
+      }
+      return pending;
     },
     answerFetch: stageFetch('answer'),
     judgeFetch: stageFetch('judge'),
@@ -3825,6 +4064,8 @@ function constructBenchmarkGuard(options, benchmark, caseCapability = null, pinn
       return Object.freeze(records.map((record) => deepFreeze(structuredClone(record))));
     },
     isHalted() { return halted; },
+    ...(pairProfile?.sourceRole ? { halt() { halted = true; },
+      async awaitSettlement() { await Promise.allSettled([...sourceRolePending]); } } : {}),
     close() {
       if (closed) return;
       if (inFlight !== 0 || activeScope !== null) fail('guard_busy');

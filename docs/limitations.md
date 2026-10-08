@@ -11,7 +11,20 @@ report baseline and candidate promotions separately, and block advancement on
 candidate promotion, required assistant-evidence omission or structural regression.
 The intentionally over-capacity case is reported separately from achievable
 episode gains. No production prompt, additional extraction call, provider CLI,
-paid transport, ledger grant or shared-engine default changes in this package.
+paid transport, ledger grant or shared-engine default changes in the N28 package.
+
+The separate [one-shot extraction transport](plans/source-role-ablation-execution.md)
+adds prospective programmatic authority for only the frozen 24 slots through the
+existing reserve/settle guard and original cumulative ledger. Synthetic fake HTTP
+and controlled genuine core-timer/SQLite failure paths establish ordering, bounds,
+halt, no replay and private persistence boundaries, not provider access, invoices,
+latency, semantic quality or advancement. N28 assets and shared-engine defaults
+are unchanged. Actual ledger/key access and paid execution remain separate;
+delivery or test success provisions no live capability. Grant-file verification
+immediately precedes reservation, while the ledger witness is checked inside
+SQLite; these are not one atomic transaction. Private source/model output and local
+identity hashes require controlled retention. Callback completion is not independent
+proof of durable artifact storage.
 
 The [accounted native response-disconnection correction](plans/native-settled-write-disconnect.md)
 locally seals native work only for an identified EPIPE on the connection whose
