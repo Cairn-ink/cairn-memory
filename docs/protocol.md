@@ -158,7 +158,14 @@ model. Schema19 distinguishes this payload from unchanged prefix staging.
 The local MCP host now exposes only explicit `--capture-source-policy indexed-staged-v1`
 or an own-data `captureSourcePolicy` server option. Defaults remain unchanged;
 this mode adds submitted capture plus existing exact inspection/discard, not
-qualification, source discovery, an installer/Hermes flag or automatic capture.
+qualification, source discovery, an installer flag or automatic capture. The
+separate [native Hermes provider](../integrations/hermes/cairn/README.md) now accepts
+an explicit profile-local `capture_source_policy: indexed-staged-v1` and independent
+`capture_evidence_access: staged-v1`; these are not MCP tool arguments or installer
+options. Canonical capture conflicts with native qualification. Access-only may
+coexist with qualified capture or recovery and enables no capture or retention.
+Native defaults, UUID/profile binding and MCP-derived message identity remain
+unchanged; an actual Hermes session ID is not newly forwarded.
 Own qualification/rationale/legacy staging/episode-generation combinations reject
 before database/model work; access-only management and explicit capture deadlines
 remain compatible. Startup namespace/client/session and source-ID derivation are
@@ -236,7 +243,8 @@ belongs to one capture invocation; its core-created abort signal retains private
 provenance so a provider error string or external abort cannot authorize case-deadline
 isolation. MCP omission retains the previous default and tool schemas. The
 native Hermes provider also forwards a validated profile-local
-`capture_deadline_ms` string from 1 through 110000 only with v2 capture. It
+`capture_deadline_ms` string from 1 through 110000 only with v2 qualification or
+explicit `indexed-staged-v1` canonical capture. It
 adds no model-controlled field or default. Its cooperative checks are not a
 hard response-time SLA or API spending cap.
 

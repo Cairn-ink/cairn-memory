@@ -18,12 +18,21 @@ CAPTURE_HELPER_TIMEOUT_SECONDS = 125
 async def exchange(request):
     args = [request["executable_path"], "--db", request["database"], "--owner", request["owner"]]
     if "capture_qualification" in request:
-        if request["capture_qualification"] != "source-bound-v2":
+        if request["capture_qualification"] != "source-bound-v2" or "capture_source_policy" in request:
             raise ValueError("invalid_capture_configuration")
         args += ["--capture-qualification", "source-bound-v2"]
+    if "capture_source_policy" in request:
+        if request["capture_source_policy"] != "indexed-staged-v1":
+            raise ValueError("invalid_capture_configuration")
+        args += ["--capture-source-policy", "indexed-staged-v1"]
+    if "capture_evidence_access" in request:
+        if request["capture_evidence_access"] != "staged-v1":
+            raise ValueError("invalid_capture_configuration")
+        args += ["--capture-evidence-access", "staged-v1"]
     if "capture_deadline_ms" in request:
         deadline = request["capture_deadline_ms"]
-        if (request.get("capture_qualification") != "source-bound-v2" or not isinstance(deadline, str)
+        if ((request.get("capture_qualification") != "source-bound-v2"
+             and request.get("capture_source_policy") != "indexed-staged-v1") or not isinstance(deadline, str)
                 or not deadline.isascii() or not deadline or deadline[0] not in "123456789"
                 or not deadline.isdecimal() or len(deadline) > 6 or int(deadline) > 110000):
             raise ValueError("invalid_capture_configuration")

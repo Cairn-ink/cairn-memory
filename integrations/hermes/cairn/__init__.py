@@ -24,8 +24,12 @@ CAPTURE_TIMEOUT_SECONDS = 135
 
 def configured_tools(config):
     tools = TOOLS
-    if config and config.get("capture_qualification") == "source-bound-v2":
+    if config and (config.get("capture_qualification") == "source-bound-v2"
+                   or config.get("capture_source_policy") == "indexed-staged-v1"):
         tools = tools | {"capture_memory"}
+    if config and (config.get("capture_source_policy") == "indexed-staged-v1"
+                   or config.get("capture_evidence_access") == "staged-v1"):
+        tools = tools | {"inspect_capture_evidence", "discard_capture_evidence"}
     if config and config.get("classification_recovery") == "guarded-v1":
         tools = tools | {"inspect_capture_admission", "classify_unfiled_memories"}
     return tools
@@ -63,14 +67,21 @@ def configuration(home):
 
 def validate_config(value):
     required = {"node_path", "executable_path"}
-    optional = {"capture_qualification", "capture_deadline_ms", "classification_recovery", "recall_context"}
+    optional = {"capture_qualification", "capture_source_policy", "capture_evidence_access",
+                "capture_deadline_ms", "classification_recovery", "recall_context"}
     if not isinstance(value, dict) or not required <= set(value) or not set(value) <= required | optional:
         raise ValueError("cairn_invalid_configuration")
     if "capture_qualification" in value and value["capture_qualification"] != "source-bound-v2":
         raise ValueError("cairn_invalid_configuration")
+    if "capture_source_policy" in value and (value["capture_source_policy"] != "indexed-staged-v1"
+                                            or "capture_qualification" in value):
+        raise ValueError("cairn_invalid_configuration")
+    if "capture_evidence_access" in value and value["capture_evidence_access"] != "staged-v1":
+        raise ValueError("cairn_invalid_configuration")
     if "capture_deadline_ms" in value:
         deadline = value["capture_deadline_ms"]
-        if (value.get("capture_qualification") != "source-bound-v2" or not isinstance(deadline, str)
+        if ((value.get("capture_qualification") != "source-bound-v2"
+             and value.get("capture_source_policy") != "indexed-staged-v1") or not isinstance(deadline, str)
                 or not re.fullmatch(r"[1-9][0-9]*", deadline) or len(deadline) > 6
                 or int(deadline) > 110000):
             raise ValueError("cairn_invalid_configuration")
@@ -157,9 +168,15 @@ class CairnMemoryProvider(MemoryProvider):
         optional = [{"key": "capture_qualification",
                          "description": "Optional source-bound-v2 for explicitly submitted capture (paid). Omit on fresh setup for five tools; existing setting is retained. No passive capture.",
                          "required": False},
+                        {"key": "capture_source_policy",
+                         "description": "Optional indexed-staged-v1 for explicit capture with full bounded canonical source retention for 24 hours (paid extraction, no qualification). Conflicts with capture_qualification. No automatic capture.",
+                         "required": False},
+                        {"key": "capture_evidence_access",
+                         "description": "Optional staged-v1 for exact keyless source inspection/discard, including after capture is disabled. Does not enable capture or retention.",
+                         "required": False},
                         {"key": "capture_deadline_ms",
-                         "description": "Optional capture-only deadline, canonical decimal string 1–110000 milliseconds. No hard response-time or spend guarantee; blank retains an existing value.",
-                         "when": {"capture_qualification": "source-bound-v2"}, "required": False},
+                         "description": "Optional capture-only deadline, canonical decimal string 1–110000 milliseconds; requires source-bound-v2 qualification OR indexed-staged-v1 source policy. No hard response-time or spend guarantee; blank retains an existing value.",
+                         "required": False},
                         {"key": "classification_recovery",
                          "description": "Optional guarded-v1 for keyless batch admission inspection and explicit paid classification recovery. No automatic retry.",
                          "required": False},
