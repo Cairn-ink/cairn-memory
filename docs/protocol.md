@@ -124,6 +124,44 @@ caused a malformed output. No public core/plugin/MCP/HTTP or hosted telemetry
 schema changes.
 
 
+### Optional private mixed recall lineage
+
+The maintainer-only mixed evaluation caller may explicitly request
+`recallWitness: 'bounded-lineage-v2'` for 1–30 prepared cases. Omission and
+`bounded-v1` keep their prior outputs. V2 adds only a private diagnostic snapshot
+after recall observation closes and before its ephemeral mappings are disposed:
+bounded token-only select/rank events, final outcome/ref/receipt tokens, existing
+uncertainty/counts and `{token,kind,digest}` identity rows. It retains at most
+four calls, 128 ref slots and 256 receipt slots per call and 1,024 identities;
+overflow/projection failure remain partial/unknown, never evidence absent.
+
+Each export uses fresh random 32-byte salt. Identity SHA-256 encodes the exact
+JSON tuple `[versionedDomain,salt,kind,privateMappingKey]` as UTF-8; JSON escapes
+lone surrogates rather than collapsing distinct malformed identifiers to the
+replacement character. Ref keys bind namespace index, memory ID and revision;
+receipt keys additionally bind their exact ref association and receipt ID.
+The offline digest helper accepts strict enumerable own-data shapes, not
+accessors, proxies, coercion or `toJSON`; it performs no storage/source lookup.
+An authorized private DB reader can match identities only using the correct
+case/read-set index and persisted identity/revision. Digests authenticate
+neither record membership, source validity, namespace authority nor the supplied
+core result. Adapter-returned refs remain distinct from core acceptance.
+
+No raw IDs, namespace/source/question/answer/prompt text, provider bodies,
+keys, paths or error strings enter this snapshot. These salted identity links
+and graph tokens are still private linkable metadata, not anonymized data or
+outward telemetry. Keep them within the existing private report/journal access,
+backup and retention boundary. Per-case salts prevent a stable exported
+cross-run identifier, not dictionary matching by someone holding the salt and
+candidate identities. Disposal clears witness mappings/events; detached V2
+metadata remains in the private report. Export before close or after disposal
+fails with fixed lifecycle errors. A mixed export failure retains only
+`{version:2,status:'unavailable',reason:'export_failed'}` and still disposes;
+it cannot change arm outcomes, calls, validation, budget, retries or settlement.
+There is no core, model, host, HTTP/MCP, scoring or default-policy schema change,
+paid activation or retrospective recovery of a disposed historical trace.
+See the [bounded lineage contract](plans/recall-lineage-diagnostics.md).
+
 ### Optional embedded indexed source-window boundary
 
 The separate explicit `captureSourcePolicy: 'indexed-evidence-v1'` uses this

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -6,7 +7,9 @@ import { createOpenAIModel, countOpenAITokens } from '../../../adapters/openai/i
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createRecallWitness } from '../../long-history/recall-witness.mjs';
+import * as recallLineage from '../../long-history/recall-witness.mjs';
 import { packMixedAnswer } from '../mixed-answer.mjs';
+import { reportSnapshot } from '../mixed-validation.mjs';
 
 const namespace = { ownerId: 'synthetic-witness-owner', scope: 'personal', projectId: null };
 const foreign = { ...namespace, ownerId: 'synthetic-foreign-owner' };
@@ -145,6 +148,226 @@ function comparable(value, aliases) {
     raw => aliases.get(raw) ?? raw).replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/gu, '<generated-time>');
 }
 const ref = (memoryId, revision = 1, namespaceIndex = 0) => ({ namespaceIndex, memoryId, revision });
+const expectedDigest = (salt, kind, reference, receiptId) => {
+  const association = JSON.stringify([reference.namespaceIndex, reference.memoryId, reference.revision]);
+  const key = kind === 'ref' ? `ref:${association}` : `receipt:${association}:${receiptId}`;
+  return createHash('sha256').update(JSON.stringify([
+    'cairn.recall-witness.identity.v2', salt, kind, key,
+  ]), 'utf8').digest('hex');
+};
+
+test('N27B actual core witness exports a detached bounded join before disposal', async t => {
+  const f = await fixture(t, 'success', true);
+  const result = await f.recall();
+  assert.equal(result.ok, true);
+  f.witness.finish(result);
+  assert.equal(typeof f.witness.exportAfterClose, 'function');
+  const exported = f.witness.exportAfterClose();
+  assert.equal(exported.version, 2);
+  assert.equal(exported.status, 'available');
+  assert.match(exported.salt, /^[a-f0-9]{64}$/u);
+  assert.equal(exported.events.length, 2);
+  assert.equal(typeof recallLineage.recallWitnessIdentityDigest, 'function');
+  const memory = result.value.memories[0];
+  const reference = ref(memory.memory.id, memory.memory.revision);
+  const digest = recallLineage.recallWitnessIdentityDigest({ salt: exported.salt,
+    kind: 'ref', ref: reference });
+  const identity = exported.identities.find(row => row.digest === digest);
+  assert.ok(identity);
+  assert.equal(digest, expectedDigest(exported.salt, 'ref', reference));
+  assert.equal(identity.kind, 'ref');
+  assert.ok(exported.final.refs.includes(identity.token));
+  const before = structuredClone(exported);
+  f.witness.dispose();
+  assert.deepEqual(exported, before);
+  assert.throws(() => f.witness.exportAfterClose(), /recall_witness_disposed/u);
+});
+
+test('N27D exported joins retain actual shown/selected/rank/final loss and uncertainty controls', async t => {
+  for (const mode of ['bounded-visibility', 'empty-select', 'empty-rank', 'success',
+    'invalid-refs', 'correction', 'projection', 'overflow', 'complete-map']) {
+    const { observed, snapshot, result } = await pair(t, mode);
+    const exported = observed.witness.exportAfterClose();
+    assert.deepEqual(exported.events, snapshot.events);
+    assert.deepEqual(exported.final, snapshot.final);
+    assert.deepEqual(exported.limits, mode === 'overflow'
+      ? { calls: 1, refs: 1, receipts: 1, identities: 1 }
+      : { calls: 4, refs: 128, receipts: 256, identities: 1024 });
+    const select = exported.events.find(event => event.stage === 'select');
+    const rank = exported.events.find(event => event.stage === 'rank');
+    const identities = new Map(exported.identities.map(row => [row.digest, row]));
+    for (const item of observed.seeded) {
+      const reference = ref(item.memoryId);
+      const expected = expectedDigest(exported.salt, 'ref', reference);
+      const lookup = observed.witness.lookupRefAfterClose(reference);
+      if (lookup.status === 'known') assert.deepEqual(identities.get(expected), {
+        token: lookup.token, kind: 'ref', digest: expected,
+      });
+      else assert.equal(identities.has(expected), false);
+    }
+    if (mode === 'bounded-visibility') {
+      const unshown = observed.seeded.find(item => !identities.has(
+        expectedDigest(exported.salt, 'ref', ref(item.memoryId))));
+      assert.ok(unshown);
+      assert.equal(ok(observed.core.get({ namespace, memoryId: unshown.memoryId }))
+        .receipts[0].excerpt, unshown.source, 'stored source exists despite no shown token');
+      assert.equal(select.input.pages[0].exhausted, false);
+    } else if (mode === 'empty-select') {
+      assert.equal(select.input.refs.length, 2);
+      assert.equal(select.returned.refs.length, 0);
+      assert.equal(rank, undefined);
+    } else if (mode === 'empty-rank') {
+      assert.deepEqual(rank.input.refs, select.returned.refs);
+      assert.equal(rank.returned.refs.length, 0);
+      assert.equal(exported.final.refs.length, 0);
+    } else if (mode === 'success') {
+      assert.deepEqual(exported.final.refs, rank.returned.refs);
+      for (const memory of result.value.memories) {
+        const reference = ref(memory.memory.id, memory.memory.revision);
+        for (const receipt of memory.receipts) {
+          const row = identities.get(expectedDigest(exported.salt, 'receipt', reference, receipt.id));
+          assert.ok(row);
+          assert.equal(row.kind, 'receipt');
+          assert.ok(rank.input.candidates.some(candidate => candidate.receipts.includes(row.token)));
+          assert.ok(exported.final.receipts.includes(row.token));
+        }
+      }
+    } else if (['invalid-refs', 'correction'].includes(mode)) {
+      assert.equal(exported.final.outcome, 'failed');
+      assert.equal(exported.summary.referenceAcceptance, 'not-observed');
+    } else if (['projection', 'overflow'].includes(mode)) {
+      assert.equal(exported.summary.observation, 'partial');
+    } else assert.equal(exported.summary.selectVisibility, 'unobservable');
+    const serialized = JSON.stringify(exported);
+    for (const forbidden of ['fixture alpha', 'Synthetic summary', namespace.ownerId,
+      foreign.ownerId, ...observed.aliases.keys()]) assert.equal(serialized.includes(forbidden), false);
+    observed.witness.dispose();
+    assert.deepEqual(exported.events, snapshot.events, 'disposal cannot erase detached trace');
+    exported.events.length = 0;
+    assert.equal(observed.witness.snapshot().events.length, 0);
+  }
+});
+
+test('N27B/N27C exact associated digests separate namespaces/revisions/receipts and malformed Unicode', () => {
+  const canary = 'PRIVATE_N27_MEMORY_CANARY', receipt = 'PRIVATE_N27_RECEIPT_CANARY';
+  const references = [ref(canary), ref(canary, 1, 1), ref(canary, 2),
+    ref('\ud800'), ref('\ufffd')];
+  const model = { countTokens: () => 1, select: () => ({ refs: [] }),
+    rank: () => ({ refs: references }) };
+  const witness = createRecallWitness(model);
+  assert.throws(() => witness.exportAfterClose(), /recall_witness_not_closed/u);
+  const request = { input: { candidates: references.map(reference => ({
+    namespaceIndex: reference.namespaceIndex,
+    memory: { id: reference.memoryId, revision: reference.revision },
+    receipts: [{ id: receipt }, { id: `${receipt}_OTHER` }, { id: '\ud800' }, { id: '\ufffd' }],
+  })) } };
+  witness.model.rank(request);
+  witness.close();
+  const first = witness.exportAfterClose(), second = witness.exportAfterClose();
+  assert.notEqual(first.salt, second.salt);
+  const refs = references.map(reference => expectedDigest(first.salt, 'ref', reference));
+  assert.equal(new Set(refs).size, references.length);
+  assert.ok(refs.every(digest => first.identities.some(row => row.digest === digest)));
+  const receipts = references.flatMap(reference => [receipt, `${receipt}_OTHER`, '\ud800', '\ufffd']
+    .map(receiptId => expectedDigest(first.salt, 'receipt', reference, receiptId)));
+  assert.equal(new Set(receipts).size, receipts.length);
+  assert.ok(receipts.every(digest => first.identities.some(row => row.digest === digest)));
+  for (const reference of references) for (const receiptId of [receipt, '\ud800', '\ufffd']) {
+    assert.equal(recallLineage.recallWitnessIdentityDigest({ salt: first.salt,
+      kind: 'receipt', ref: reference, receiptId }),
+    expectedDigest(first.salt, 'receipt', reference, receiptId));
+  }
+  request.input.candidates[0].memory.id = 'PRIVATE_MUTATION_CANARY';
+  references[0].memoryId = 'PRIVATE_MUTATION_CANARY';
+  assert.deepEqual(witness.exportAfterClose().events, first.events);
+  first.identities[0].digest = 'mutated';
+  first.events[0].input.refs.length = 0;
+  assert.deepEqual(witness.exportAfterClose().events, second.events);
+  assert.ok(witness.exportAfterClose().identities.every(row => row.digest !== 'mutated'));
+  for (const text of [canary, receipt, 'PRIVATE_MUTATION_CANARY', '\ud800', '\ufffd']) {
+    assert.equal(JSON.stringify(second).includes(text), false);
+  }
+  witness.dispose();
+  assert.throws(() => witness.exportAfterClose(), /recall_witness_disposed/u);
+  assert.deepEqual(witness.lookupRefAfterClose(ref(canary)), { status: 'unknown' });
+});
+
+test('N27D digest helper rejects exact-shape/accessor/proxy/malformed inputs without getter execution', () => {
+  let reads = 0;
+  const value = { salt: 'a'.repeat(64), kind: 'ref', ref: ref('private') };
+  const getterRef = { namespaceIndex: 0, revision: 1 };
+  Object.defineProperty(getterRef, 'memoryId', { enumerable: true,
+    get() { reads++; return 'private'; } });
+  const getterOptions = { ...value };
+  Object.defineProperty(getterOptions, 'kind', { enumerable: true,
+    get() { reads++; return 'ref'; } });
+  const proxy = new Proxy(value, { getOwnPropertyDescriptor() { reads++; throw Error('PRIVATE'); } });
+  const proxyRef = new Proxy(value.ref, {
+    getPrototypeOf() { reads++; throw Error('PRIVATE'); },
+    ownKeys() { reads++; throw Error('PRIVATE'); },
+  });
+  const hiddenRef = { ...value.ref };
+  Object.defineProperty(hiddenRef, 'memoryId', { value: 'private', enumerable: false });
+  const revoked = Proxy.revocable(value, {}); revoked.revoke();
+  for (const options of [null, [], proxy, revoked.proxy, getterOptions,
+    { ...value, ref: getterRef }, { ...value, ref: proxyRef }, { ...value, ref: hiddenRef },
+    { ...value, toJSON() { reads++; return value; } }, { ...value, extra: 'private' },
+    { ...value, salt: 'private' }, { ...value, kind: 'unknown' },
+    { ...value, ref: { ...value.ref, extra: true } },
+    { ...value, ref: Object.create(value.ref) },
+    ...[-1, -0, NaN, Infinity, 0.5].map(namespaceIndex => ({ ...value,
+      ref: { ...value.ref, namespaceIndex } })),
+    { ...value, ref: { ...value.ref, revision: 0 } },
+    { ...value, ref: { ...value.ref, memoryId: 'x'.repeat(201) } },
+    { ...value, kind: 'receipt', receiptId: '' },
+    { ...value, receiptId: 'not_allowed_for_ref' },
+  ]) assert.throws(() => recallLineage.recallWitnessIdentityDigest(options), /invalid_recall_witness/u);
+  assert.equal(reads, 0);
+});
+
+test('N27D pending early close, failed finish and disposal retain finite unknown/partial observations', async () => {
+  for (const failed of [false, true]) {
+    let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    const model = { countTokens: () => 1, select: () => ({ refs: [] }), rank: () => pending };
+    const witness = createRecallWitness(model);
+    assert.equal(witness.model.rank({ input: { candidates: [] } }), pending);
+    if (failed) witness.finish({ ok: false, error: Error('PRIVATE_ERROR_CANARY') });
+    else witness.close();
+    const exported = witness.exportAfterClose();
+    assert.equal(exported.summary.observation, failed ? 'partial' : 'unknown');
+    assert.equal(exported.events[0].returned.boundary, 'pending');
+    witness.dispose();
+    release({ refs: [] });
+    await pending;
+    assert.equal(exported.events[0].returned.boundary, 'pending');
+    assert.equal(witness.summary().observation, failed ? 'partial' : 'unknown');
+    assert.equal(JSON.stringify(exported).includes('PRIVATE_ERROR_CANARY'), false);
+  }
+});
+
+test('N27B thirty maximal lineage subtrees fit alone in the existing report envelope', () => {
+  const model = { countTokens: () => 1, select: () => ({ refs: [] }), rank: () => ({ refs: [] }) };
+  const witness = createRecallWitness(model);
+  for (let call = 0; call < 5; call++) witness.model.rank({ input: {
+    candidates: Array.from({ length: 32 }, (_, index) => ({ namespaceIndex: 0,
+      memory: { id: `PRIVATE_MAX_${call}_${index}`, revision: 1 },
+      receipts: Array.from({ length: 8 }, (_, receiptIndex) => ({ id: `PRIVATE_RECEIPT_${receiptIndex}` })),
+    })),
+  } });
+  witness.close();
+  const exported = witness.exportAfterClose();
+  assert.equal(exported.events.length, 4);
+  assert.equal(exported.identities.length, 1024);
+  assert.equal(exported.summary.overflow, true);
+  assert.equal(exported.summary.omittedCalls, 1);
+  assert.equal(exported.summary.observation, 'partial');
+  assert.ok(Buffer.byteLength(JSON.stringify(exported), 'utf8') < 192 * 1024);
+  assert.doesNotThrow(() => reportSnapshot({ cases: Array.from({ length: 30 }, () => ({
+    arms: [{ diagnostics: { recallWitness: exported } }],
+  })) }), 'lineage subtrees alone fit; this is not worst-case combined diagnostics');
+  witness.dispose();
+});
 
 async function pair(t, mode) {
   const baseline = await fixture(t, mode, false);
