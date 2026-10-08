@@ -154,9 +154,23 @@ indices are empty. This is not raw transcript bytes, verified truth or recall
 authority. Existing24-hour expiry,128-KiB/event,64-payload/1-MiB exact-namespace quotas
 and deletion/replay fences apply. Staged source never enters ordinary
 get/list/search/MOC/fetch/recall or sourceSnapshot; cold exact inspection needs no
-model. Schema19 distinguishes this payload from unchanged prefix staging. No
-MCP/CLI/Hermes flag or default retention is added. Privacy opt-in and useful source
-discovery remain separate host work. See
+model. Schema19 distinguishes this payload from unchanged prefix staging.
+The local MCP host now exposes only explicit `--capture-source-policy indexed-staged-v1`
+or an own-data `captureSourcePolicy` server option. Defaults remain unchanged;
+this mode adds submitted capture plus existing exact inspection/discard, not
+qualification, source discovery, an installer/Hermes flag or automatic capture.
+Own qualification/rationale/legacy staging/episode-generation combinations reject
+before database/model work; access-only management and explicit capture deadlines
+remain compatible. Startup namespace/client/session and source-ID derivation are
+unchanged; tool arguments cannot select another authority boundary. Missing-model
+capture fails explicitly but may retain failed source under the requested policy;
+access-only inspection/discard makes no model/provider calls and enables no retention.
+CLI configuration checking discloses retention without opening a database or
+contacting a provider. The65,536-byte input buffer and262,144-byte encoded-result
+ceiling remain separate from total MCP framing. Manual opt-in, source trust and
+same-schema/stop-older-connections limits are documented in
+[the local host guide](standalone-mcp.md#opt-in-canonical-submitted-source-staging).
+Useful source discovery remains separate host work. See
 [staged capture evidence](staged-capture-evidence.md#canonical-submission-staging-indexed-staged-v1).
 
 Trusted embedded construction may select `captureSourcePolicy: 'indexed-windows-v1'`

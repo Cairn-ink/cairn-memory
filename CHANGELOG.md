@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — explicit canonical staging through local MCP
+
+- Add opt-in `--capture-source-policy indexed-staged-v1` and the corresponding
+  own-data server option. Submitted capture uses existing indexed extraction
+  without qualification and retains bounded canonical source independently of
+  empty/failed interpretation. Exact keyless inspection/discard reuse the shared
+  core; default tools, transport limits, core policy and provider configuration
+  remain unchanged. Existing explicit capture deadlines remain compatible.
+- Document manual local `stdio.args` opt-in and broader local retention threats.
+  No installer/Hermes flag, automatic capture, source search or semantic-quality
+  claim is added. Schema19 still requires stopping all older connections.
+
 ## Unreleased — opt-in canonical source staging
 
 - Add embedded `captureSourcePolicy: 'indexed-staged-v1'`: unchanged indexed

@@ -249,6 +249,72 @@ does not capture transcripts or install hooks. Forgetting is not secure disk
 erasure; SQLite/WAL/backups may retain old bytes. Protect the database directory
 and review provider retention policy before handling real conversations.
 
+## Opt-in canonical submitted-source staging
+
+For explicit local recovery independent of extraction selection, manually add
+`--capture-source-policy indexed-staged-v1` to an existing local MCP server's
+`stdio.args`. For example, append these two arguments to the installed receipt's
+existing database/owner/project/client/session arguments:
+
+```json
+["--capture-source-policy", "indexed-staged-v1"]
+```
+
+The preview installer does not accept this new flag and does not edit client
+configuration. Do not combine it with `--capture-qualification`,
+`--capture-rationale`, legacy `--capture-evidence` or episode generation.
+Existing `--capture-evidence-access staged-v1` and an explicit
+`--capture-deadline-ms 1..120000` are compatible. Programmatic hosts may supply
+an own data property `captureSourcePolicy: 'indexed-staged-v1'`; accessors,
+unsupported values and conflicting own fields (including undefined) reject
+before database/model work. An inherited policy cannot enable retention.
+
+Defaults and the five default tools are unchanged. This mode adds exactly
+`capture_memory`, `inspect_capture_evidence` and `discard_capture_evidence`.
+Submit the same bounded `{batchId,messages}` schema shown below; startup
+namespace/client/session and deterministic message IDs are unchanged. Extraction
+uses existing indexed source windows and selected receipt limits, without a
+qualifier: successful capture reports `qualificationStatus: 'not-requested'`.
+Nonempty admission preserves selected receipts only, never promotes every staged
+source to memory or ordinary recall. Source roles are submitted claims, not
+authenticated identities, truth, adoption or execution authority.
+
+The explicit policy retains COMPLETE BOUNDED canonical normalized, best-effort
+secret-redacted submitted text, including empty/failed extraction. Exact
+inspection returns `canonical-messages-v1`, IDs/roles and all accepted messages:
+at most24 messages,4,000 UTF-16 units/message,20,000 total; retained-window max4,000
+and an empty truncation list. This is not raw transcript bytes or a complete
+conversation archive. Legacy prefix evidence remains distinctly labeled by its
+existing800-unit metadata; access-only reading never relabels it as complete.
+
+Retention remains24 hours,128KiB/event and64 payloads/1MiB/exact namespace. Replay
+does not renew expiry or call models; policy/content conflicts stay explicit.
+Discard fences pending late admission and replay without forgetting admitted
+memories. Successful correction/forgetting still clears all staged payloads in
+that exact namespace. Staged source is absent from ordinary inspect/list/recall
+and current-admitted source snapshots; this slice adds no source search.
+The65,536-byte CLI input buffer and262,144-byte encoded-result check also apply:
+oversize input may close transport without a tool response; result overflow is
+an explicit `response_too_large`, not a truncated source. The result ceiling is
+not total MCP framing or host-prompt size. Reserve framing/prompt headroom.
+
+Capture sends bounded text to the configured model and may incur charges; no
+provider fallback or account spending cap is added. Without a model, an explicit
+call returns `model_not_configured`, admits no memory, but may still retain failed
+source because staging precedes extraction. Inspect/discard that source rather
+than treating failure as successful ingestion or inventing a fresh retry ID.
+Access-only startup with `--capture-evidence-access staged-v1` has no capture tool,
+retains no new source, and performs keyless cold inspection/discard with no
+model/provider calls. `--check-config` reports syntax, broader retention and
+qualification-not-requested without database/provider access or printing keys
+or submitted content, whether a key is present or absent.
+
+This broader local personal-data retention needs deliberate privacy consent.
+Protect the database and backups; logical deletion is not physical erasure.
+Schema19 still requires stopping every older runtime connection before upgrade;
+mixed-version coexistence is unsupported. No passive capture, installer/Hermes
+enablement, semantic reliability or competitive benchmark parity is established.
+
 ## Opt-in submitted source-qualified capture
 
 Add `--capture-qualification source-bound-v2` (or the compatible v1 mode) to expose
