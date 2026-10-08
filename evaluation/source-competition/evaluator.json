@@ -1,0 +1,272 @@
+{
+  "version": "source-competition-evaluator-v1",
+  "frozenCorpusSha256": "a5169b632c8a986fea37e6fec0d6def3e50b3c096d1b2ca2c5813c277ef83daa",
+  "cases": [
+    {
+      "ordinal": 1,
+      "type": "early-incidental-disclosure",
+      "evaluator": {
+        "achievable": true,
+        "anchors": [
+          {
+            "id": "anchor-1-1",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-1-m-1",
+                "text": "I lent my brass compass to Mira yesterday and expect it back on Saturday."
+              }
+            ]
+          },
+          {
+            "id": "anchor-1-2",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-1-m-12",
+                "text": "I moved my spare shed key into the blue tin beside the kitchen clock."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 2,
+      "type": "late-disclosure",
+      "evaluator": {
+        "achievable": true,
+        "anchors": [
+          {
+            "id": "anchor-2-1",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-2-m-11",
+                "text": "I bought my folding workbench from the Alder cooperative last month."
+              }
+            ]
+          },
+          {
+            "id": "anchor-2-2",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-2-m-12",
+                "text": "I have agreed to lend my battery drill to Rowan; the saw is not included."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 3,
+      "type": "independent-facts",
+      "evaluator": {
+        "achievable": true,
+        "anchors": [
+          {
+            "id": "anchor-3-1",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-3-m-1",
+                "text": "I keep the orchard gate code in the paper envelope labeled WEST."
+              }
+            ]
+          },
+          {
+            "id": "anchor-3-2",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-3-m-4",
+                "text": "My canvas harvest bag is stored on the second hook in the pantry."
+              }
+            ]
+          },
+          {
+            "id": "anchor-3-3",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-3-m-7",
+                "text": "I collect the weekly seed order from the village shop on Thursday afternoons."
+              }
+            ]
+          },
+          {
+            "id": "anchor-3-4",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-3-m-12",
+                "text": "My repaired wheelbarrow now has a solid front tire, not an inflatable one."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 4,
+      "type": "dated-state-changes",
+      "evaluator": {
+        "achievable": true,
+        "anchors": [
+          {
+            "id": "anchor-4-1",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-4-m-1",
+                "text": "On 2026-02-12 I used locker Cedar for my swimming kit."
+              }
+            ]
+          },
+          {
+            "id": "anchor-4-2",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-4-m-12",
+                "text": "On 2026-03-03 my storage assignment changed to locker Birch; Cedar was my earlier locker."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 5,
+      "type": "correction-and-non-adoption",
+      "evaluator": {
+        "achievable": true,
+        "anchors": [
+          {
+            "id": "anchor-5-1",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-5-m-11",
+                "text": "Correction: rehearsal starts at 19:00, not 18:00. Room Pine has not changed."
+              }
+            ]
+          },
+          {
+            "id": "anchor-5-2",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-5-m-12",
+                "text": "I am not adopting the suggestion to buy a larger case; I will continue using my existing case."
+              }
+            ]
+          }
+        ],
+        "correctionMessageIndices": [
+          9,
+          10
+        ]
+      }
+    },
+    {
+      "ordinal": 6,
+      "type": "assistant-only-evidence",
+      "evaluator": {
+        "achievable": true,
+        "anchors": [
+          {
+            "id": "anchor-6-1",
+            "kind": "assistant",
+            "support": [
+              {
+                "messageId": "sc-6-m-1",
+                "text": "For a small tabletop loom, thread the heddles before attaching the warp ends to the front beam."
+              }
+            ]
+          },
+          {
+            "id": "anchor-6-2",
+            "kind": "assistant",
+            "support": [
+              {
+                "messageId": "sc-6-m-12",
+                "text": "If warp tension is uneven, adjust the loose section gradually; do not pull every thread tighter at once."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 7,
+      "type": "four-window-supported-relationship",
+      "evaluator": {
+        "achievable": true,
+        "anchors": [
+          {
+            "id": "anchor-7-1",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-7-m-1",
+                "text": "In my cabinet log, parcel A contains the protective lens case; the case itself is marked LC."
+              },
+              {
+                "messageId": "sc-7-m-2",
+                "text": "The same log records that case LC holds the cleaning card marked CC."
+              },
+              {
+                "messageId": "sc-7-m-3",
+                "text": "Card CC names shelf Slate as the place for the replacement cloth."
+              },
+              {
+                "messageId": "sc-7-m-4",
+                "text": "The cloth on shelf Slate is the one I reserved for camera Kit North. These entries form one recorded lookup chain."
+              }
+            ]
+          },
+          {
+            "id": "anchor-7-2",
+            "kind": "direct-or-context",
+            "support": [
+              {
+                "messageId": "sc-7-m-12",
+                "text": "I have not authorized anyone to remove the reserved cloth from shelf Slate."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ordinal": 8,
+      "type": "five-window-boundary",
+      "evaluator": {
+        "achievable": false,
+        "anchors": [],
+        "separateBoundary": {
+          "requiredDistinctWindows": 5,
+          "fullChainEligible": false,
+          "expectedSafety": "narrow-or-omit-full-chain"
+        }
+      }
+    }
+  ],
+  "prospectiveGate": {
+    "achievableAnchors": 16,
+    "requiredAssistantAnchors": 2,
+    "additionalCandidateAnchorsMinimum": 2,
+    "noControlAnchorLoss": true,
+    "noStructuralRefusalIncrease": true,
+    "candidateUnsupportedPromotionsMaximum": 0,
+    "candidateCitationInsufficiencyMaximum": 0,
+    "candidateChronologyErrorsMaximum": 0,
+    "independentBlindReviewers": 2,
+    "logicalArms": 16,
+    "unknownReviewBlocksAdvancement": true,
+    "case8ExcludedFromAchievableDenominator": true
+  }
+}

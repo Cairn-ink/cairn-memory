@@ -1,0 +1,533 @@
+{
+  "version": "source-competition-sources-v1",
+  "cases": [
+    {
+      "ordinal": 1,
+      "type": "early-incidental-disclosure",
+      "messages": [
+        {
+          "id": "sc-1-m-1",
+          "role": "user",
+          "content": "Before we plan the harbor walk: I lent my brass compass to Mira yesterday and expect it back on Saturday."
+        },
+        {
+          "id": "sc-1-m-2",
+          "role": "assistant",
+          "content": "The east pier route follows the tide board, then turns inland at the painted bollard."
+        },
+        {
+          "id": "sc-1-m-3",
+          "role": "assistant",
+          "content": "The market shelter has a drinking fountain; use the public tap rather than a hose marked for maintenance."
+        },
+        {
+          "id": "sc-1-m-4",
+          "role": "assistant",
+          "content": "On windy mornings the outer gate may swing shut, so leave room for people carrying baskets."
+        },
+        {
+          "id": "sc-1-m-5",
+          "role": "assistant",
+          "content": "The covered walkway avoids the loading bay. Delivery crews use that bay before lunch."
+        },
+        {
+          "id": "sc-1-m-6",
+          "role": "assistant",
+          "content": "A folded map is useful where buildings interrupt a phone's satellite signal."
+        },
+        {
+          "id": "sc-1-m-7",
+          "role": "assistant",
+          "content": "The ferry notice board lists service changes separately from the ordinary timetable."
+        },
+        {
+          "id": "sc-1-m-8",
+          "role": "assistant",
+          "content": "If a path is closed, follow the signed diversion instead of stepping over the temporary rail."
+        },
+        {
+          "id": "sc-1-m-9",
+          "role": "assistant",
+          "content": "The small quay café can explain which table belongs to the ticket office and which is private."
+        },
+        {
+          "id": "sc-1-m-10",
+          "role": "assistant",
+          "content": "Bring a light jacket; a warm inland street does not predict wind on an exposed pier."
+        },
+        {
+          "id": "sc-1-m-11",
+          "role": "assistant",
+          "content": "For an evening visit, check that the return footpath is lit before taking the long loop."
+        },
+        {
+          "id": "sc-1-m-12",
+          "role": "user",
+          "content": "A separate reminder: I moved my spare shed key into the blue tin beside the kitchen clock."
+        }
+      ]
+    },
+    {
+      "ordinal": 2,
+      "type": "late-disclosure",
+      "messages": [
+        {
+          "id": "sc-2-m-1",
+          "role": "assistant",
+          "content": "For a community workshop, mark a clear walking lane between the door and the worktables."
+        },
+        {
+          "id": "sc-2-m-2",
+          "role": "assistant",
+          "content": "Keep a small first-aid kit visible instead of hiding it behind stored timber."
+        },
+        {
+          "id": "sc-2-m-3",
+          "role": "assistant",
+          "content": "Put ear protection beside noisy tools so visitors see it before entering that area."
+        },
+        {
+          "id": "sc-2-m-4",
+          "role": "assistant",
+          "content": "An adjustable lamp helps with fine work, but route its cable away from the main aisle."
+        },
+        {
+          "id": "sc-2-m-5",
+          "role": "assistant",
+          "content": "Dry paint brushes on a rack where bristles do not touch another person's project."
+        },
+        {
+          "id": "sc-2-m-6",
+          "role": "assistant",
+          "content": "Separate food tables from glue and solvent storage; a label alone is not a physical barrier."
+        },
+        {
+          "id": "sc-2-m-7",
+          "role": "assistant",
+          "content": "Use trays to collect small fasteners and return them to their labeled drawers."
+        },
+        {
+          "id": "sc-2-m-8",
+          "role": "assistant",
+          "content": "Check that window handles remain accessible when temporary shelving is installed."
+        },
+        {
+          "id": "sc-2-m-9",
+          "role": "assistant",
+          "content": "Post the cleanup checklist near the exit so the closing volunteer can follow it."
+        },
+        {
+          "id": "sc-2-m-10",
+          "role": "assistant",
+          "content": "A sign-in sheet can help the coordinator contact people about misplaced tools."
+        },
+        {
+          "id": "sc-2-m-11",
+          "role": "user",
+          "content": "Workshop journal, written after the open day. I arrived before the visitors and walked from the entrance to each worktable to check the walking lane. A stack of unfinished frames had drifted into the lane, so I moved the stack to the marked storage area. At the demonstration table I checked the lamp cable and kept its plug clear of the washbasin. The coordinator's checklist distinguishes preparing a safe space from committing to a new project; this entry is an account of that morning, not instructions to another person.\n\nDuring the brush-cleaning demonstration I used two shallow trays, one for clean water and one for rinse water. I did not pour leftover finish into either tray. I wrote the brush sizes on removable labels and let the handles dry on the rack. The sign-in sheet belongs to the coordinator and is not a public contact list. When a visitor asked about borrowing the planer, I referred them to the tool custodian rather than treating my own access to the workshop as permission to lend its equipment.\n\nAt lunchtime I compared the planned material list with the pieces actually delivered. One board had a split at the end; I kept it aside instead of counting it as usable stock. The storeroom window still opened after the temporary shelf was moved. I also checked the closing rota so I would not assume that another volunteer would lock the door. Ruth said, \"A rotating bench might make the demonstrations easier.\" That was Ruth's tentative suggestion; I have not adopted it or ordered such a bench.\n\nThe afternoon entry concerns my own portable equipment, which is separate from the workshop's shared tools. My cloth tool roll has a label on its outer flap, and I keep the small clamps inside it while traveling. I clean sawdust from the bench hinges before folding the legs so that the latch can close fully. I checked the maker's instructions instead of assuming the latch could support extra weight. At the end of the entry I recorded the purchase detail I wanted to remember: I bought my folding workbench from the Alder cooperative last month."
+        },
+        {
+          "id": "sc-2-m-12",
+          "role": "user",
+          "content": "For tomorrow's session, I have agreed to lend my battery drill to Rowan; the saw is not included."
+        }
+      ]
+    },
+    {
+      "ordinal": 3,
+      "type": "independent-facts",
+      "messages": [
+        {
+          "id": "sc-3-m-1",
+          "role": "user",
+          "content": "I keep the orchard gate code in the paper envelope labeled WEST."
+        },
+        {
+          "id": "sc-3-m-2",
+          "role": "assistant",
+          "content": "Avoid writing access details on a public notice board; use the location agreed by the group."
+        },
+        {
+          "id": "sc-3-m-3",
+          "role": "assistant",
+          "content": "For a fruit count, record damaged produce separately from fruit ready for collection."
+        },
+        {
+          "id": "sc-3-m-4",
+          "role": "user",
+          "content": "My canvas harvest bag is stored on the second hook in the pantry."
+        },
+        {
+          "id": "sc-3-m-5",
+          "role": "assistant",
+          "content": "A shaded sorting table reduces glare while inspecting skins for bruises."
+        },
+        {
+          "id": "sc-3-m-6",
+          "role": "assistant",
+          "content": "Rinse reusable crates and allow them to dry before putting clean fruit into them."
+        },
+        {
+          "id": "sc-3-m-7",
+          "role": "user",
+          "content": "I collect the weekly seed order from the village shop on Thursday afternoons."
+        },
+        {
+          "id": "sc-3-m-8",
+          "role": "assistant",
+          "content": "A delivery sheet should distinguish what was ordered from what actually arrived."
+        },
+        {
+          "id": "sc-3-m-9",
+          "role": "assistant",
+          "content": "For seedlings, test soil moisture below the surface rather than judging only the top layer."
+        },
+        {
+          "id": "sc-3-m-10",
+          "role": "assistant",
+          "content": "Tie labels loosely to young branches so the ties do not constrict new growth."
+        },
+        {
+          "id": "sc-3-m-11",
+          "role": "assistant",
+          "content": "If visitors join the picking session, explain which rows are reserved for the later harvest."
+        },
+        {
+          "id": "sc-3-m-12",
+          "role": "user",
+          "content": "My repaired wheelbarrow now has a solid front tire, not an inflatable one."
+        }
+      ]
+    },
+    {
+      "ordinal": 4,
+      "type": "dated-state-changes",
+      "messages": [
+        {
+          "id": "sc-4-m-1",
+          "role": "user",
+          "content": "On 2026-02-12 I used locker Cedar for my swimming kit."
+        },
+        {
+          "id": "sc-4-m-2",
+          "role": "assistant",
+          "content": "For a pool visit, check whether equipment storage closes earlier than the reception desk."
+        },
+        {
+          "id": "sc-4-m-3",
+          "role": "assistant",
+          "content": "Keep wet towels separate from goggles to reduce scratching while packing."
+        },
+        {
+          "id": "sc-4-m-4",
+          "role": "assistant",
+          "content": "A printed training card is easier to read poolside than a phone in a sealed pouch."
+        },
+        {
+          "id": "sc-4-m-5",
+          "role": "assistant",
+          "content": "Ask staff which lanes are reserved for lessons before joining an empty lane."
+        },
+        {
+          "id": "sc-4-m-6",
+          "role": "assistant",
+          "content": "A slower warm-up can help you check how you feel before doing a demanding set."
+        },
+        {
+          "id": "sc-4-m-7",
+          "role": "assistant",
+          "content": "Return shared kickboards to their rack, not the emergency exit corridor."
+        },
+        {
+          "id": "sc-4-m-8",
+          "role": "assistant",
+          "content": "If the pool is busy, agree on passing etiquette with other swimmers in the lane."
+        },
+        {
+          "id": "sc-4-m-9",
+          "role": "assistant",
+          "content": "A bottle with a secure lid is preferable to an open cup at the edge of the pool."
+        },
+        {
+          "id": "sc-4-m-10",
+          "role": "assistant",
+          "content": "Record planned distance and completed distance separately in a training log."
+        },
+        {
+          "id": "sc-4-m-11",
+          "role": "assistant",
+          "content": "Check the last admission time rather than assuming entry is allowed until closing."
+        },
+        {
+          "id": "sc-4-m-12",
+          "role": "user",
+          "content": "On 2026-03-03 my storage assignment changed to locker Birch; Cedar was my earlier locker."
+        }
+      ]
+    },
+    {
+      "ordinal": 5,
+      "type": "correction-and-non-adoption",
+      "messages": [
+        {
+          "id": "sc-5-m-1",
+          "role": "assistant",
+          "content": "For a rehearsal, put the instrument stand where its legs do not block the fire exit."
+        },
+        {
+          "id": "sc-5-m-2",
+          "role": "assistant",
+          "content": "Use a clip-on light only if its clamp will not scratch the music desk."
+        },
+        {
+          "id": "sc-5-m-3",
+          "role": "assistant",
+          "content": "A tuning break is useful after moving an instrument from a cold room into a warmer hall."
+        },
+        {
+          "id": "sc-5-m-4",
+          "role": "assistant",
+          "content": "A quiet warm-up area keeps practice sounds from interrupting another group."
+        },
+        {
+          "id": "sc-5-m-5",
+          "role": "assistant",
+          "content": "Mark borrowed cases with removable tags rather than permanent ink."
+        },
+        {
+          "id": "sc-5-m-6",
+          "role": "assistant",
+          "content": "Check the chair height before making changes to a player's habitual position."
+        },
+        {
+          "id": "sc-5-m-7",
+          "role": "assistant",
+          "content": "A felt pad under a stand can reduce floor marks, but it must not make the stand unstable."
+        },
+        {
+          "id": "sc-5-m-8",
+          "role": "assistant",
+          "content": "Pack sheet music in order of use and keep duplicate pages distinct from revisions."
+        },
+        {
+          "id": "sc-5-m-9",
+          "role": "assistant",
+          "content": "Buying a larger instrument case is an option if your current case no longer fits; it is only a suggestion."
+        },
+        {
+          "id": "sc-5-m-10",
+          "role": "user",
+          "content": "My rehearsal starts at 18:00 in room Pine."
+        },
+        {
+          "id": "sc-5-m-11",
+          "role": "user",
+          "content": "Correction: rehearsal starts at 19:00, not 18:00. Room Pine has not changed."
+        },
+        {
+          "id": "sc-5-m-12",
+          "role": "user",
+          "content": "I am not adopting the suggestion to buy a larger case; I will continue using my existing case."
+        }
+      ]
+    },
+    {
+      "ordinal": 6,
+      "type": "assistant-only-evidence",
+      "messages": [
+        {
+          "id": "sc-6-m-1",
+          "role": "assistant",
+          "content": "For a small tabletop loom, thread the heddles before attaching the warp ends to the front beam."
+        },
+        {
+          "id": "sc-6-m-2",
+          "role": "assistant",
+          "content": "Check the loom manual for the intended warp path; a generic diagram may show a different frame."
+        },
+        {
+          "id": "sc-6-m-3",
+          "role": "assistant",
+          "content": "Keep scissors in a shallow tray so their tips do not snag loose yarn."
+        },
+        {
+          "id": "sc-6-m-4",
+          "role": "assistant",
+          "content": "A sample strip can reveal tension problems before you begin the final cloth."
+        },
+        {
+          "id": "sc-6-m-5",
+          "role": "assistant",
+          "content": "Use contrasting waste yarn for a temporary header, then remove it when finishing."
+        },
+        {
+          "id": "sc-6-m-6",
+          "role": "assistant",
+          "content": "Record yarn type and batch separately if you want to repeat a color combination."
+        },
+        {
+          "id": "sc-6-m-7",
+          "role": "assistant",
+          "content": "Pause if the beater catches on the frame rather than forcing it past the obstruction."
+        },
+        {
+          "id": "sc-6-m-8",
+          "role": "assistant",
+          "content": "Measure fabric away from the tight edge where tension can distort the reading."
+        },
+        {
+          "id": "sc-6-m-9",
+          "role": "assistant",
+          "content": "Keep spare shuttles dry and away from adhesive used for unrelated projects."
+        },
+        {
+          "id": "sc-6-m-10",
+          "role": "assistant",
+          "content": "Label a trial pattern as a trial so it is not mistaken for a committed design."
+        },
+        {
+          "id": "sc-6-m-11",
+          "role": "assistant",
+          "content": "A ruler attached to the frame can help compare progress, provided it does not obstruct moving parts."
+        },
+        {
+          "id": "sc-6-m-12",
+          "role": "assistant",
+          "content": "If warp tension is uneven, adjust the loose section gradually; do not pull every thread tighter at once."
+        }
+      ]
+    },
+    {
+      "ordinal": 7,
+      "type": "four-window-supported-relationship",
+      "messages": [
+        {
+          "id": "sc-7-m-1",
+          "role": "user",
+          "content": "In my cabinet log, parcel A contains the protective lens case; the case itself is marked LC."
+        },
+        {
+          "id": "sc-7-m-2",
+          "role": "user",
+          "content": "The same log records that case LC holds the cleaning card marked CC."
+        },
+        {
+          "id": "sc-7-m-3",
+          "role": "user",
+          "content": "Card CC names shelf Slate as the place for the replacement cloth."
+        },
+        {
+          "id": "sc-7-m-4",
+          "role": "user",
+          "content": "The cloth on shelf Slate is the one I reserved for camera Kit North. These entries form one recorded lookup chain."
+        },
+        {
+          "id": "sc-7-m-5",
+          "role": "assistant",
+          "content": "For a storage audit, distinguish a container label from the label of an object inside it."
+        },
+        {
+          "id": "sc-7-m-6",
+          "role": "assistant",
+          "content": "Write down an unresolved link instead of guessing which neighboring shelf was intended."
+        },
+        {
+          "id": "sc-7-m-7",
+          "role": "assistant",
+          "content": "A photograph can supplement a written inventory, but retain the date on which it was taken."
+        },
+        {
+          "id": "sc-7-m-8",
+          "role": "assistant",
+          "content": "Check that tags remain readable when boxes are turned around."
+        },
+        {
+          "id": "sc-7-m-9",
+          "role": "assistant",
+          "content": "Use a stable shelf name when two cabinets look alike."
+        },
+        {
+          "id": "sc-7-m-10",
+          "role": "assistant",
+          "content": "Keep an empty case in the inventory if it has a assigned purpose rather than treating it as discarded."
+        },
+        {
+          "id": "sc-7-m-11",
+          "role": "assistant",
+          "content": "If an item moves, record the move separately from the previous storage entry."
+        },
+        {
+          "id": "sc-7-m-12",
+          "role": "user",
+          "content": "I have not authorized anyone to remove the reserved cloth from shelf Slate."
+        }
+      ]
+    },
+    {
+      "ordinal": 8,
+      "type": "five-window-boundary",
+      "messages": [
+        {
+          "id": "sc-8-m-1",
+          "role": "assistant",
+          "content": "A specimen transfer record should separate the container, seal, and receiving location."
+        },
+        {
+          "id": "sc-8-m-2",
+          "role": "assistant",
+          "content": "A batch name is not an authenticated identity of the person handling it."
+        },
+        {
+          "id": "sc-8-m-3",
+          "role": "assistant",
+          "content": "If a label is damaged, retain the uncertainty instead of completing it from memory."
+        },
+        {
+          "id": "sc-8-m-4",
+          "role": "assistant",
+          "content": "Use a dedicated field for a handover date so it is not confused with the collection date."
+        },
+        {
+          "id": "sc-8-m-5",
+          "role": "assistant",
+          "content": "A documented chain can include an empty transport sleeve if its label links two records."
+        },
+        {
+          "id": "sc-8-m-6",
+          "role": "assistant",
+          "content": "Keep original log references when rewriting a readable summary of a transfer."
+        },
+        {
+          "id": "sc-8-m-7",
+          "role": "assistant",
+          "content": "When a relationship cannot be expressed with sufficient support, narrow the statement rather than guessing the missing link."
+        },
+        {
+          "id": "sc-8-m-8",
+          "role": "user",
+          "content": "My transfer log says jar JA was put inside sleeve SB."
+        },
+        {
+          "id": "sc-8-m-9",
+          "role": "user",
+          "content": "A separate entry says sleeve SB was sealed in crate CD."
+        },
+        {
+          "id": "sc-8-m-10",
+          "role": "user",
+          "content": "The crate CD entry names trolley TE as its carrier."
+        },
+        {
+          "id": "sc-8-m-11",
+          "role": "user",
+          "content": "The trolley TE entry says it was delivered to room RF."
+        },
+        {
+          "id": "sc-8-m-12",
+          "role": "user",
+          "content": "The room RF entry identifies cabinet VG as the final storage location. A complete JA-to-VG chain requires all five entries."
+        }
+      ]
+    }
+  ]
+}

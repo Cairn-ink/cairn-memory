@@ -134,7 +134,7 @@ test("thin guard entry preserves the caller environment and fails swallowed viol
     // ancestry/transport tests in the adapter-equipped guard suite. Preserve
     // the historical fixture and every other pre-pairing command verbatim.
     const expected = name === "test:experiment-request-guard"
-      ? `${command} evaluation/experiment-budget/test/budget-v3.test.mjs evaluation/experiment-budget/test/budget-v4-guard.test.mjs evaluation/experiment-budget/test/source-role-ablation-guard.test.mjs`
+      ? `${command} evaluation/experiment-budget/test/budget-v3.test.mjs evaluation/experiment-budget/test/budget-v4-guard.test.mjs evaluation/experiment-budget/test/source-role-ablation-guard.test.mjs evaluation/experiment-budget/test/source-competition-guard.test.mjs`
       : name === "test:experiment-budget"
       ? `${command} evaluation/experiment-budget/test/budget-v4-ledger.test.mjs`
       : command;
