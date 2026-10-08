@@ -366,9 +366,16 @@ async function cairnCase({ guard, apiKey, root, row, plan, handle, transport, ho
     if (witness) {
       witness.close();
       const summary = witness.summary();
-      witness.dispose();
+      let lineage;
+      try {
+        if (recallObservation.mode === 'bounded-lineage-v2') {
+          try { lineage = witness.exportAfterClose(); }
+          catch { lineage = { version: 2, status: 'unavailable', reason: 'export_failed' }; }
+        }
+      } finally { witness.dispose(); }
       // Disposal clears private events; retain their bounded historical counts.
-      recallObservation.summary = { ...summary, disposed: witness.summary().disposed };
+      recallObservation.summary = { ...summary, disposed: witness.summary().disposed,
+        ...(lineage ? { version: 2, lineage } : {}) };
     }
     await transport.drain();
   }
@@ -439,7 +446,9 @@ export async function runMixedGeneration(options) {
   const { prepared, guard, apiKey, cairnStoreRoot, resultJournal } = raw;
   const phaseTiming = phaseDescriptor ? raw.phaseTiming : undefined;
   if (phaseDescriptor && phaseTiming !== 'bounded-tail-v1') fail('invalid_mixed_generation');
-  if (witnessDescriptor && raw.recallWitness !== 'bounded-v1') fail('invalid_mixed_generation');
+  if (witnessDescriptor && !['bounded-v1', 'bounded-lineage-v2'].includes(raw.recallWitness)) {
+    fail('invalid_mixed_generation');
+  }
   const privateData = PREPARED.get(prepared);
   if (!privateData || USED.has(prepared)) fail('prepared_identity_required');
   if (phaseTiming && prepared.counts.fixedN > 30) fail('invalid_mixed_generation');
@@ -477,7 +486,8 @@ export async function runMixedGeneration(options) {
       if (journalDescriptor) enterMixedJournalArm(resultJournal, 'generation', journalOrdinal);
       let outcome, local = null, entered = false, workSettled = false, ownedCore = null;
       let phaseObserver = null;
-      const recallObservation = witnessDescriptor && name === 'cairn' ? { summary: null } : null;
+      const recallObservation = witnessDescriptor && name === 'cairn'
+        ? { mode: raw.recallWitness, summary: null } : null;
       try {
         outcome = await guard.withCaseScope(identity, async handle => {
           entered = true;

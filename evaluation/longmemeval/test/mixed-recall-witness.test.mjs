@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 
 import { prepareMixedComparison, runMixedGeneration } from '../mixed-generation.mjs';
 import { sourceRow } from '../testing/mixed-fixture.mjs';
@@ -10,6 +14,100 @@ const preparedFor = count => prepareMixedComparison({
   nativeArtifact: { sourceTreeSha256: '1'.repeat(64), dependencyLockSha256: '2'.repeat(64) },
   nativeConfiguration: { configurationSha256: '3'.repeat(64), configuration: {} },
   cairnRuntimeArtifactSha256: '4'.repeat(64) });
+
+test('N27A bounded-lineage-v2 admits only small rosters before prepared consumption', async () => {
+  for (const count of [1, 30, 31]) {
+    const prepared = preparedFor(count);
+    const options = { prepared, guard: {}, apiKey: 'synthetic-only', cairnStoreRoot: '/unused',
+      recallWitness: 'bounded-lineage-v2' };
+    await assert.rejects(runMixedGeneration(options), {
+      code: count <= 30 ? 'mixed_guard_mismatch' : 'invalid_mixed_generation',
+    });
+    if (count > 30) {
+      await assert.rejects(runMixedGeneration({ ...options,
+        recallWitness: 'bounded-v1' }), { code: 'invalid_mixed_generation' });
+      const { recallWitness: _omitted, ...defaultOptions } = options;
+      await assert.rejects(runMixedGeneration(defaultOptions), { code: 'mixed_guard_mismatch' });
+    }
+  }
+});
+
+test('N27A explicit v2 rejects hidden/accessor options without invoking getters or consuming identity', async () => {
+  const prepared = preparedFor(1);
+  let reads = 0;
+  const base = { prepared, guard: {}, apiKey: 'synthetic-only', cairnStoreRoot: '/unused' };
+  for (const descriptor of [
+    { enumerable: true, get() { reads++; return 'bounded-lineage-v2'; } },
+    { value: 'bounded-lineage-v2' },
+  ]) {
+    const options = { ...base };
+    Object.defineProperty(options, 'recallWitness', descriptor);
+    await assert.rejects(runMixedGeneration(options), { code: 'invalid_mixed_generation' });
+  }
+  assert.equal(reads, 0);
+  await assert.rejects(runMixedGeneration({ ...base, recallWitness: 'bounded-lineage-v2' }),
+    { code: 'mixed_guard_mismatch' });
+});
+
+test('N27C actual mixed core/fake-HTTP export, unavailable fault and v1/default retain result and cleanup', t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-mixed-lineage-subprocess-' });
+  const outputs = [];
+  for (const mode of ['default', 'v1', 'v2', 'export-fault', 'assertion-failure']) {
+    const child = spawnSync(process.execPath, [fileURLToPath(new URL(
+      '../testing/recall-lineage-child.mjs', import.meta.url)), mode, workspace.path], {
+      env: { PATH: process.env.PATH, TMPDIR: workspace.path, NODE_DISABLE_COMPILE_CACHE: '1' },
+      encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
+    });
+    assert.equal(child.error, undefined);
+    assert.equal(child.signal, null);
+    assert.equal(child.status, mode === 'assertion-failure' ? 1 : 0,
+      `${mode}: ${child.stdout} ${child.stderr}`);
+    const output = JSON.parse(child.stdout.trim());
+    assert.equal(output.remainingOwnedEntries, 0, 'child cleans owned success and failure scratch');
+    assert.deepEqual(readdirSync(workspace.path), []);
+    assert.equal(child.stdout.includes('PRIVATE_N27_RNG_ERROR_CANARY'), false);
+    if (mode !== 'assertion-failure') {
+      assert.equal(output.completedCairn, 2);
+      assert.equal(output.answerMatched, true);
+      assert.equal(output.nativeSkipped, 2);
+      outputs.push(output);
+    } else assert.equal(output.intentionalFailure, true);
+  }
+  for (const output of outputs) assert.deepEqual(output.routes, outputs[0].routes,
+    'observation/export failure cannot add or change provider/count stage order');
+  assert.deepEqual(outputs[0].witnessDisposed, [null, null]);
+  assert.ok(outputs.slice(1).every(output => output.witnessDisposed.every(value => value === true)));
+  assert.ok(outputs[2].joinedRefs > 0 && outputs[2].joinedReceipts > 0);
+  assert.notEqual(outputs[2].lineage[0].salt, outputs[2].lineage[1].salt);
+  assert.deepEqual(outputs[3].lineage, Array.from({ length: 2 }, () => ({
+    version: 2, status: 'unavailable', reason: 'export_failed',
+  })));
+});
+
+test('N27C actual mixed pre-recall ingestion failure exports unknown not-run lineage and disposes', t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-lineage-ingestion-failure-' });
+  const child = spawnSync(process.execPath, [fileURLToPath(new URL(
+    '../testing/recall-lineage-child.mjs', import.meta.url)), 'ingestion-failure', workspace.path], {
+    env: { PATH: process.env.PATH, TMPDIR: workspace.path, NODE_DISABLE_COMPILE_CACHE: '1' },
+    encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
+  });
+  assert.equal(child.error, undefined);
+  assert.equal(child.signal, null);
+  assert.equal(child.status, 0, `${child.stdout} ${child.stderr}`);
+  const output = JSON.parse(child.stdout.trim());
+  assert.equal(output.completedCairn, 0);
+  assert.equal(output.failedCairn, 2);
+  assert.deepEqual(output.witnessDisposed, [true, true]);
+  assert.equal(output.remainingOwnedEntries, 0);
+  assert.deepEqual(readdirSync(workspace.path), []);
+  for (const lineage of output.lineage) {
+    assert.equal(lineage.status, 'available');
+    assert.equal(lineage.summary.observation, 'unknown');
+    assert.equal(lineage.final.observation, 'not-run');
+    assert.equal(lineage.events.length, 0);
+  }
+  assert.equal(child.stdout.includes('PRIVATE_N27_INVALID_SOURCE_CANARY'), false);
+});
 
 test('W301 witness option rejects unknown/accessor values and large rosters before consumption', async () => {
   for (const count of [1, 6, 30, 31, 250]) {

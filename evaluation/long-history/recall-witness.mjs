@@ -1,5 +1,9 @@
-// Maintainer-only observation. This module is not wired into paid generation.
+import { createHash, randomBytes } from 'node:crypto';
+import { types } from 'node:util';
+
+// Maintainer-only observation; mixed generation requires explicit opt-in.
 const MAXIMUM = Object.freeze({ calls: 4, refs: 128, receipts: 256, identities: 1024 });
+const IDENTITY_DOMAIN = 'cairn.recall-witness.identity.v2';
 const invalid = () => { throw new TypeError('invalid_recall_witness'); };
 const own = (value, key) => {
   if (!value || typeof value !== 'object') invalid();
@@ -28,6 +32,34 @@ const refKey = value => JSON.stringify([integer(own(value, 'namespaceIndex')),
   id(own(value, 'memoryId')), integer(own(value, 'revision'), 1)]);
 const memoryRef = (value, namespaceIndex) => ({ namespaceIndex,
   memoryId: own(value, 'id'), revision: own(value, 'revision') });
+
+const identityDigest = (salt, kind, key) => createHash('sha256')
+  // JSON escapes lone surrogates before UTF-8 encoding; concatenating raw IDs
+  // into hash bytes would collapse them to replacement characters.
+  .update(JSON.stringify([IDENTITY_DOMAIN, salt, kind, key]), 'utf8').digest('hex');
+const identityFields = (value, keys) => {
+  if (!value || typeof value !== 'object' || types.isProxy(value)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) invalid();
+  const actual = Reflect.ownKeys(value);
+  if (actual.length !== keys.length || keys.some(key => !actual.includes(key))) invalid();
+  return Object.fromEntries(keys.map(key => [key, own(value, key)]));
+};
+
+/** Offline matching only: this digest authenticates neither identity nor source. */
+export function recallWitnessIdentityDigest(options) {
+  // Determine the exact shape from a data descriptor, never a caller getter.
+  if (!options || typeof options !== 'object' || types.isProxy(options)) invalid();
+  const kind = own(options, 'kind');
+  if (!['ref', 'receipt'].includes(kind)) invalid();
+  const value = identityFields(options, ['salt', 'kind', 'ref',
+    ...(kind === 'receipt' ? ['receiptId'] : [])]);
+  if (typeof value.salt !== 'string' || !/^[a-f0-9]{64}$/u.test(value.salt)) invalid();
+  const reference = identityFields(value.ref, ['namespaceIndex', 'memoryId', 'revision']);
+  if (Object.is(reference.namespaceIndex, -0)) invalid();
+  const key = kind === 'ref' ? `ref:${refKey(reference)}`
+    : `receipt:${refKey(reference)}:${id(value.receiptId)}`;
+  return identityDigest(value.salt, kind, key);
+}
 
 function limitsOf(options) {
   if (!options || Object.getPrototypeOf(options) !== Object.prototype) invalid();
@@ -258,6 +290,19 @@ export function createRecallWitness(model, options = {}) {
     },
     close() { closed = true; },
     snapshot() { return structuredClone({ version: 1, closed, disposed, events, final }); },
+    exportAfterClose() {
+      if (disposed) throw new Error('recall_witness_disposed');
+      if (!closed) throw new Error('recall_witness_not_closed');
+      const salt = randomBytes(32).toString('hex');
+      const identities = [];
+      for (const [key, valueToken] of mappings) {
+        const kind = key.startsWith('ref:') ? 'ref' : 'receipt';
+        identities.push({ token: valueToken, kind, digest: identityDigest(salt, kind, key) });
+      }
+      // Only collector-constructed bounded metadata, never request/DTO objects.
+      return structuredClone({ version: 2, status: 'available', salt, limits,
+        summary: summary(), events, final, identities });
+    },
     summary,
     lookupRefAfterClose(ref) {
       if (!closed) throw new Error('recall_witness_not_closed');

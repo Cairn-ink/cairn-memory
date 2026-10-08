@@ -1611,6 +1611,36 @@ mechanics, not explanations of retained paid omissions or new semantic scores.
 Native roots are containment prerequisites for synthetic stores/ledgers only.
 No provider key, corpus, operational ledger or paid call is used by these gates.
 
+## Private opt-in recall lineage is a post-close observation join
+
+The [bounded lineage diagnostic](plans/recall-lineage-diagnostics.md) adds explicit
+maintainer mixed-runner `recallWitness: 'bounded-lineage-v2'` for 1–30 cases;
+default and aggregate-only `bounded-v1` remain unchanged. Its post-close,
+pre-disposal snapshot retains existing bounded per-call tokens/final state plus
+salted identity digests. An authorized offline reader can join exact stored
+memory/receipt identities, namespace indexes and revisions without exporting
+their raw keys. Digest encoding is a domain-separated JSON tuple, preserving
+distinct malformed Unicode; receipt identity binds its full ref association.
+
+Fresh per-case 32-byte salt avoids a stable cross-run exported identifier but
+does not anonymize linkable local metadata or authenticate source validity,
+membership, core acceptance or semantic relevance. The same four-call,
+128-ref/256-receipt slot and 1,024-identity bounds apply; malformed projections,
+overflow, pending calls and bypass remain explicit uncertainty. Missing tokens
+do not prove a stored source was absent or irrelevant. Disposal still clears
+private mappings; only detached bounded metadata remains in private reports.
+Unavailable export is a finite observer state, not a new arm failure or retry.
+
+The primary's closed development inspection of ordinals 15/17 found direct
+user candidate windows unretained, relevant assistant receipts retained and
+empty ranking. The already disposed per-call mappings do not identify which
+retained candidates were shown and cannot be reconstructed by this new option.
+A separate synthetic date-gap probe was not an observed whole-unit loss in
+ordinals 14/16/18. These findings motivate an observation join, not date-field,
+raw-layer or semantic retrieval work. No historical artifact is rewritten,
+consumed case replayed, paid run activated or score improvement established.
+The same open-source memory engine and ordinary product defaults are unchanged.
+
 ## Prospective mixed transport classification
 
 The [native failure diagnostic](plans/native-failure-diagnosis.md) retains finite
