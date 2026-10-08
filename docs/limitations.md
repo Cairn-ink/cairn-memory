@@ -1,5 +1,37 @@
 # Known limitations
 
+The [fresh six-case timeout/lineage development round](plans/fresh-six-timeout-results.md)
+closed with all twelve generation arms and judgments resolved: Cairn 2 correct,
+4 incorrect, 0 unresolved versus native Mem0 4, 2, 0, each with fixed N=6.
+Its five represented types include two knowledge-update cases and no preference
+cases. Source-only flat `bounded-source-scan` recall was evaluated, not default
+MOC navigation. The core default remains 30,000 ms. The explicit 120,000-ms
+core-call budget and bounded lineage were frozen
+before this new cohort; 60,000-ms Cairn HTTP caps, admission lease and absence of
+an aggregate case timer remained unchanged. Native chat input/output caps were
+32,768/2,000 tokens versus Cairn 6,000/1,024; the per-call caps were not equal.
+Completion on different new cases
+does not establish timeout efficacy or recover the earlier thirty-case run,
+whose 13/10/7 versus 21/8/1 outcomes remain separate and unchanged.
+Post-close exact joins found missing critical admitted source receipts in
+ordinals 1/6, a needed retained source shown but unselected in ordinal 2, and
+both needed dated receipts packed despite an incorrect answer in ordinal 5.
+These are bounded observations, not exclusive causes or a 20-window-cap cure.
+Completed exact-batch claims had zero suppression and five references, with no
+deleted/null memories or qualification records. Under verified atomic receipt
+attachment, the critical windows in 1/6 were not selected in accepted valid
+extraction items, rather than lost through the checked later admission paths.
+Raw extraction replies were not retained: why they were omitted, whether a
+summary paraphrased their information, and total information loss remain unknown.
+The guard-inclusive operation took 3h12m42.291s; last-64 phase samples cannot
+attribute CPU or separate provider time from evaluation accounting. Conservative
+new reservation was US$11.985096, cumulative US$321.042281 within US$400 with
+US$30 protected; US$2.696317 is only the known actual-cost portion, with 626
+unknown entries. Tiny development counts and one-pass model judgments establish
+neither parity, general reliability, lightweight resource use, production speed
+nor MCP/Hermes end-to-end quality. No product default or prompt changes, or new
+paid-run permission, follow from this result.
+
 The [prospective mixed core-call timeout](plans/mixed-model-call-timeout.md)
 is an explicit preparation-time option, bound to the manifest, context and
 adapter configuration digests, guard and private journal. Omission retains
@@ -10,11 +42,10 @@ create a whole-capture budget or add an aggregate Cairn case wall timer.
 Multistage work can still fail other bounds or lose ownership. Synthetic
 clock controls establish wiring, abort/accounting and late-output fencing,
 not provider latency, historical cause, semantic quality or completion gains.
-The proposed fresh six-case round, at most US$20 generation plus scoring within
-the original US$400/protected US$30, is not a grant. It still requires source
-selection, resource-fit checks, settled accounting, explicit outer limits,
-a frozen operation and independent review. Neither N30's failed prompt
-advancement nor N32's non-quality window partition is activated here.
+The separately frozen fresh six-case round above completed after source
+selection, resource-fit, accounting and independent operation review; this
+option itself grants no future run. Neither N30's failed prompt advancement
+nor N32's non-quality window partition was activated.
 
 The [accounted native response-disconnection correction](plans/native-settled-write-disconnect.md)
 locally seals native work only for an identified EPIPE on the connection whose
