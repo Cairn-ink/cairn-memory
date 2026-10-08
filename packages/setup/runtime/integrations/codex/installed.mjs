@@ -7,7 +7,7 @@ import { hostedTargetId } from '../client/transport-hosted.mjs';
 import { handleHook, readHookInput, validateHook, workerFromHandoff } from './hook.mjs';
 import { establishPauseBoundary } from './worker.mjs';
 import { qualifiedHost,qualifiedContextHost } from './parser.mjs';
-import { readInstallation, readCredential, clientOptions, childEnvironment } from './installed-state.mjs';
+import { readInstallation, readCredential, clientOptions, childEnvironment, promptRecallEnabled } from './installed-state.mjs';
 import { observeHostedPause, installedTransport, recallContext } from './hosted-lifecycle.mjs';
 
 export function currentHost(config, timeoutMs = 300) {
@@ -48,7 +48,8 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   contextQualification = qualifiedContextHost } = {}) {
   const config = await readInstallation(configPath);
   if (!config.enabled || !await currentHost(config) || signal.aborted) return '';
-  if (event==='UserPromptSubmit' && !contextQualification(config.hostVersion)) return '';
+  if (event==='UserPromptSubmit' && (!contextQualification(config.hostVersion) ||
+    !await promptRecallEnabled(configPath))) return '';
   const input = await readHookInput(stream, { deadlineMs: event === 'worker' ? 750 : 300 });
   const options = clientOptions(config);
   const resolved = await resolveClient(options);

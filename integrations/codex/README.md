@@ -39,11 +39,13 @@ The UserPromptSubmit recall port redacts/bounds queries, hashes the host session
 identity, rechecks hosted/local generations before dispatch and injection, and
 uses one 2 s signal. `context.mjs` quotes bounded complete entries/receipts under
 a fixed trusted untrusted-data preamble and rejects execution/authority attempts.
-The installed `qualifiedContextHost` predicate is **false**: offline schema and
-filter fixtures do not satisfy A7 pinned-host adversarial authority acceptance.
-Production prompt hooks do not call recall or inject context. MCP recall remains
-available; test-only dependency injection exercises the port without changing
-this default. Startup context stays independently disabled.
+The installed `qualifiedContextHost` predicate is true only for exact 0.160.1,
+which passed the A7 pinned-host adversarial evaluation
+([results](../../evaluation/codex-a7/RESULTS.md)). Other hosts do not call recall
+or inject. The owner-private `prompt-recall.json` kill switch beside the
+installation (`prompt-recall-off|on --client codex`) disables injection; a missing
+file means on, and an unreadable/unsafe/malformed file means off. Startup context
+stays independently disabled.
 
 The lower-level `hook.mjs` seam remains usable by CX-3 synthetic callers, with
 no implicit network transport, credential read or registration. The installed

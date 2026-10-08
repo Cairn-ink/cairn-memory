@@ -128,7 +128,7 @@ for (const legacy of [false, true]) {
   });
 }
 
-test('Codex keeps prompt recall disabled; its hosted recall port uses capture wire identity and omits invalid ids', async t => {
+test('Codex lower-level hook seam has no recall transport; its hosted recall port uses capture wire identity and omits invalid ids', async t => {
   const f=await codexFixture(t, {text:header()+item('Synthetic preference')});
   await runWorker(f.binding, {guard:f.guard,transport:f.transport});
   const wireId=f.calls[0].session_id;

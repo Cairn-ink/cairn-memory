@@ -272,7 +272,7 @@ async function memoryRuntime(t,options={}) {
     const stream=new PassThrough();stream.end(JSON.stringify(event==='worker'?handoff:{hook_event_name:event,
       session_id:session,cwd:project,transcript_path:path,...extras}));
     return runInstalled(f.installation,event,stream,{signal:AbortSignal.timeout(event==='worker'?60000:2000),
-      contextQualification:()=>true, // exercise the port; production A7 remains closed
+      contextQualification:()=>true, // explicit seam; the production default is A7-qualified for 0.160.1
       launch:launch??(async(_p,_c,content)=>{handoff=JSON.parse(content);})});
   };
   return {...f,path,project,projectId,requests,invoke,handoff:()=>handoff,pause:value=>{pause=value;},
@@ -419,12 +419,35 @@ test('CX-5 cached host handler stays silent and exits 0 after its runtime entry 
   let out='',err='';child.stdout.on('data',x=>out+=x);child.stderr.on('data',x=>err+=x);child.stdin.end('{}');
   assert.equal(await new Promise(resolve=>child.on('close',resolve)),0);assert.equal(out,'');assert.equal(err,'');
 });
-test('CX-5 default installed prompt hook keeps A7 closed even with valid context schema',async t=>{
+test('CX-5 default installed prompt hook injects on the A7-qualified host; the kill switch withholds recall',async t=>{
   const f=await memoryRuntime(t);
-  const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,
-    cwd:f.project,transcript_path:null,prompt:'Preferences?',contextQualification:true}));
-  assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000)}),'');
-  assert.equal(f.requests.length,0);
+  f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',
+    scope:'personal',projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
+    receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
+  // No qualification seam: the production default decides. Hook JSON cannot change it.
+  const prompt=()=>{const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,
+    cwd:f.project,transcript_path:null,prompt:'Preferences?',contextQualification:false}));
+    return runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000)});};
+  assert.match(JSON.parse(await prompt()).hookSpecificOutput.additionalContext,/untrusted source-attributed recollections/);
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
+  const switchPath=join(f.codexHome,'cairn/prompt-recall.json');
+  const off=await f.run(['prompt-recall-off','--client','codex']);assert.equal(off.code,0,off.stdout);
+  assert.equal((await lstat(switchPath)).mode&0o777,0o600);
+  const status=await f.run(['status','--client','codex']);assert.match(status.stdout,/prompt recall injection \(UserPromptSubmit\): off/i);
+  const count=f.requests.length;
+  assert.equal(await prompt(),'');assert.equal(f.requests.length,count);
+  // An unreadable, unsafe or malformed switch fails closed rather than re-enabling.
+  for(const [text,mode] of [['{"version":1,"enabled":true}',0o644],['{"enabled":true}',0o600],['nope',0o600]]){
+    await writeFile(switchPath,text);await chmod(switchPath,mode);
+    assert.equal(await prompt(),'');assert.equal(f.requests.length,count);
+  }
+  await chmod(switchPath,0o600);
+  const on=await f.run(['prompt-recall-on','--client','codex']);assert.equal(on.code,0,on.stdout);
+  assert.match((await f.run(['status','--client','codex'])).stdout,/prompt recall injection \(UserPromptSubmit\): on/i);
+  assert.notEqual(await prompt(),'');assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,2);
+  // Disable/uninstall remain the coarse switches; uninstall removes the switch with the install directory.
+  assert.equal((await f.run(['uninstall','--client','codex'])).code,0);
+  await assert.rejects(lstat(switchPath),{code:'ENOENT'});
 });
 
 test('CX-5 remote generation change between recall fetch and injection withholds context',async t=>{

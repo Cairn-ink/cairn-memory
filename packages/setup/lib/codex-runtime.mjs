@@ -15,8 +15,9 @@ import { validateUsage } from '../runtime/integrations/client/runtime-usage.mjs'
 import { conforms } from '../runtime/integrations/client/hosted-contract.mjs';
 import { stateLock } from '../runtime/integrations/client/state-lock.mjs';
 import { hostedPauseStatus } from '../runtime/integrations/client/hosted-pause.mjs';
-import { readInstallation, validateInstallation, readCredential, writeCredential, clientOptions } from '../runtime/integrations/codex/installed-state.mjs';
-import { qualifiedHost } from '../runtime/integrations/codex/parser.mjs';
+import { readInstallation, validateInstallation, readCredential, writeCredential, clientOptions,
+  promptRecallEnabled, writePromptRecall } from '../runtime/integrations/codex/installed-state.mjs';
+import { qualifiedHost, qualifiedContextHost } from '../runtime/integrations/codex/parser.mjs';
 
 const version = JSON.parse(readFileSync(new URL('../package.json',import.meta.url))).version;
 const events = ['SessionStart','UserPromptSubmit','Stop','PreCompact'];
@@ -233,6 +234,8 @@ export async function installedStatus({home,hostVersion,write,t,snapshot}) {
       inspectedPolicy.state==='invalid'?'policy_invalid_or_unreadable':
       !policy || policy.dailyCap!==config.dailyCap?'policy_missing_or_conflicting':'registered'}));
     write(t('codex_runtime_version',{version,host:hostVersion}));
+    write(t('codex_prompt_recall_status',{state:!qualifiedContextHost(config.hostVersion)?'off (host not A7-qualified)':
+      await promptRecallEnabled(path)?'on':'off'}));
     write(t('codex_hooks_trust'));
     const control = await readControlState(config.root);
     const target = hostedTargetId(config);
@@ -343,6 +346,12 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged,neutr
     throw error;
   }
   if (action==='pause') {await setPaused(config.root,true);write(t('codex_control_done',{state:'paused'}));return 0;}
+  if (action==='prompt-recall-off' || action==='prompt-recall-on') {
+    const enabled = action==='prompt-recall-on';
+    await writePromptRecall(path,enabled);
+    if (await promptRecallEnabled(path)!==enabled) throw new Error('prompt_recall_unverified');
+    write(t('codex_prompt_recall_status',{state:enabled?'on':'off'}));return 0;
+  }
   if (action==='resume') {
     const {policy} = await inspectAutomaticPolicy(config.root,config.endpoint);
     if (policy) await automaticGuard(config.root,config.endpoint,policy).resume();

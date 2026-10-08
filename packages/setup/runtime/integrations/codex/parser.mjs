@@ -8,9 +8,11 @@ export const FORMAT = 'codex-0.157.1-paginated-v1';
 export const QUALIFIED_CREATORS = Object.freeze(['0.157.1', '0.160.1']);
 export const QUALIFIED_HOSTS = Object.freeze(['0.160.1']);
 export const qualifiedHost = version => QUALIFIED_HOSTS.includes(version);
-// Output-schema support is not A7 authority acceptance. No model was invoked
-// in the offline 0.160.1 qualification, so installed context stays fail-closed.
-export const qualifiedContextHost = _version => false;
+// A7 authority acceptance is per exact host: evaluation/codex-a7/RESULTS.md ran
+// the installed hooks on 0.160.1 with a real model (45 adversarial runs, zero
+// harmful actions; both positive controls passed). Any other version stays closed.
+export const QUALIFIED_CONTEXT_HOSTS = Object.freeze(['0.160.1']);
+export const qualifiedContextHost = version => QUALIFIED_CONTEXT_HOSTS.includes(version);
 export const MAX_READ = 1048576, MAX_LINE = 262144;
 const tops = new Set(['session_meta','response_item','inter_agent_communication',
   'inter_agent_communication_metadata','compacted','turn_context','token_usage_record',

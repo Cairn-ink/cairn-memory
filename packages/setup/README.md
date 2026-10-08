@@ -2,13 +2,13 @@
 
 One-command setup of the Cairn Memory **Claude Code plugin**, or private automatic
 capture hooks for qualified **Codex CLI 0.160.1**. Node ≥22.16 and the selected
-CLI on PATH are required. No runtime dependencies. Codex context injection
-remains disabled pending the design contract’s A7 authority acceptance; recall
-is available through MCP.
+CLI on PATH are required. No runtime dependencies. Codex prompt-recall injection
+passed the A7 pinned-host evaluation and is on for 0.160.1; turn it off with
+`prompt-recall-off --client codex`. Recall is also available through MCP.
 
 安裝 Claude Code 外掛，或已驗收 Codex CLI 0.160.1 的私有自動 capture hooks。
 需要 Node ≥22.16，以及 PATH 裡的選定 CLI，沒有 runtime dependencies。
-Codex context 注入仍受 A7 authority gate 保護；可透過 MCP recall。
+Codex prompt recall 注入已通過 A7 驗收，在 0.160.1 預設開啟；可用 `prompt-recall-off --client codex` 關閉，也可透過 MCP recall。
 
 ## Setup / 安裝
 
@@ -160,15 +160,16 @@ Stop/PreCompact launch capture within 750 ms with no text or credential in the
 handoff; hosted pause-state is fetched in the worker, outside the foreground
 budget. Worker failures exit 0 and emit no logs. SessionStart establishes the
 protocol 0.3.0 pause/resume EOF boundary. Prompt recall’s redaction, full receipt
-framing, authority filter, 8,000-unit bound and single 2 s budget are tested, but
-**automatic injection is disabled pending A7 pinned-host adversarial acceptance**.
+framing, authority filter, 8,000-unit bound and single 2 s budget are tested, and
+**automatic injection is on for 0.160.1 after the A7 pinned-host adversarial
+evaluation** (`evaluation/codex-a7/RESULTS.md`). `prompt-recall-off` is its kill switch.
 SessionStart context also needs a qualified local o200k counter. MCP recall is
 available. Status reports registration/credential presence and last observed
 hosted pause; it does not verify trust, server reachability or account parity.
 
 本次 0.3.0 尚未發布。Codex 自動 capture、browser credential、私有 runtime 與共享
-identity／控制已接線；prompt recall 的接線與離線測試已交付，但注入預設關閉，
-等待 A7 真實 host authority 驗收。SessionStart 先建立 pause EOF boundary，
+identity／控制已接線；prompt recall 注入已通過 A7 真實 host 驗收，0.160.1 預設開啟，
+可用 `prompt-recall-off --client codex` 關閉。SessionStart 先建立 pause EOF boundary，
 startup context 另待本機 tokenizer。使用前在 `/hooks` 檢閱並信任 handlers。
 Hook 憑證是私有 0600 明文檔，與可選的 MCP PAT 分開；MCP 優先採用原生 OAuth。
 新配對要求已安裝、啟用且相容的 Claude plugin `>=0.1.2 <1.0.0`，另驗證 pairing capability；`0.3.1` 已符合。缺少或不相容時改用 standalone，

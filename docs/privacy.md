@@ -82,8 +82,10 @@ Recall continues to inject the existing explicitly untrusted memory context;
 SessionStart retains its original telemetry-only behavior and sends no memory
 read. Codex does not currently recall per prompt; its shared hosted recall port
 accepts the same already opaque wire binding as capture if used by a qualified
-caller. CX-5 installs qualified Codex hooks; context injection remains disabled
-pending the separate A7 acceptance gate.
+caller. CX-5 installs qualified Codex hooks. Prompt-recall injection passed the
+A7 pinned-host evaluation for codex-cli 0.160.1 and is on by default there,
+with the same redacted query, untrusted framing and receipts. `memory
+prompt-recall-off --client codex` turns it off without stopping capture.
 
 The exact old strict recall schema rejection permits one retry without the id,
 with the same query/scope/limit and cancellation. Its two-second deadline starts
@@ -597,8 +599,9 @@ accessible claimed commitment provenance, all untrusted and budgeted together.
 These fields can contain personal text; clients must not log response bodies.
 Codex workers consume enforced hosted pause state and establish pause-generation
 EOF boundaries; Stop/PreCompact foreground performs no remote pause query.
-Codex startup context and prompt injection remain disabled pending A7 authority
-acceptance; startup also needs a qualified local tokenizer. MCP recall is available.
+Codex prompt injection is on for the A7-qualified 0.160.1 host, with an owner-private
+kill switch. Startup context remains disabled pending a qualified local tokenizer
+and sibling context acceptance. MCP recall is available.
 
 Codex browser hook credentials are private 0600 plaintext under a 0700 config
 directory, separate from MCP authorization; save/verification precedes delivery

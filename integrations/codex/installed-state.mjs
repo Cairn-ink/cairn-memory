@@ -26,6 +26,19 @@ export async function readCredential(path, endpoint) {
     /[\s\x00-\x1f\x7f]/u.test(value.token)) throw new Error('invalid_credential');
   return value.token;
 }
+// Prompt-recall kill switch: owner-private prompt-recall.json beside the
+// installation. Absent means the A7-qualified default (on). {"version":1,
+// "enabled":false} turns injection off; unreadable, unsafe or malformed fails closed.
+export async function promptRecallEnabled(path) {
+  try {
+    const bytes = await privateRead(join(dirname(path), 'prompt-recall.json'), { missing: true });
+    if (bytes === undefined) return true;
+    const value = JSON.parse(bytes);
+    return exact(value, ['version','enabled']) && value.version === 1 && value.enabled === true;
+  } catch { return false; }
+}
+export const writePromptRecall = (path, enabled) => privateWrite(join(dirname(path), 'prompt-recall.json'),
+  JSON.stringify({ version: 1, enabled }));
 export const writeCredential = (path, endpoint, token) => privateWrite(join(dirname(path), 'credential.json'),
   JSON.stringify({ version: 1, endpoint, token }));
 

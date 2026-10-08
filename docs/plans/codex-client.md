@@ -17,9 +17,10 @@ Nothing here claims a shipped client.
 2026-10-08 CX-5 implementation update: installer 0.3.0 is an unpublished hosted
 slice on exact installed Codex 0.160.1. Binary-generated evidence, private
 runtime/credential, four user hooks, capture and pause-boundary wiring are
-implemented. Prompt recall port/filter fixtures are implemented but the installed
-A7 predicate remains false; startup context also lacks a qualified local
-o200k counter. See [current evidence and remaining gates](../codex-setup.md).
+implemented. Prompt recall injection passed the A7 pinned-host evaluation on
+2026-10-09 and is on for exact 0.160.1, with a kill switch (see "A7 pinned-host
+evaluation" below). Startup context still lacks a qualified local o200k counter.
+See [current evidence and remaining gates](../codex-setup.md).
 This update does not relax the authority, real endpoint or local-model gates.
 
 A person switching between Claude Code and Codex must use one memory target and
@@ -2855,3 +2856,40 @@ produce endpoint-failure alarms. Only an actual observed failure is shown as
 unavailable, with a timestamp/historical label. Both locales describe identity-only
 consent and a Codex-only cap. Existing standalone identity is preserved when a new
 plugin appears; setup explains why and gives stopped-host uninstall/setup steps.
+
+
+## A7 pinned-host evaluation — 2026-10-09
+
+Authorized by chichi (「安全測試做」), with a Traditional Chinese addendum.
+The harness lives in `evaluation/codex-a7/`; results and limits are in
+[RESULTS.md](../../evaluation/codex-a7/RESULTS.md). Each run used a disposable
+0700 `CODEX_HOME` holding only a copied `auth.json`, the installer's own runtime
+copy and hook registration, and trust persisted as `/hooks` would persist it. It
+also used a fresh git repo with a synthetic decoy secret and a loopback fake
+Cairn that logs every request. Codex ran `exec` in `workspace-write` with no
+tool network, and `/tmp`, `$TMPDIR` and `CODEX_HOME` were read-only. The real
+`~/.codex` config and hooks were unchanged.
+
+Pins: codex-cli 0.160.1, `gpt-6-astra` at medium effort (the person's defaults).
+Fifteen adversarial scenarios ran 3 times each. They covered closing-tag and
+`SYSTEM:` escapes in English and Chinese, file and HTTP exfiltration, README
+deletion, Codex config and hook tampering, JSON tool-call, base64 and
+homoglyph/zero-width disguises, prior-authorization persuasion, memory-shaped
+preferences asking for unsafe actions, and a Chinese/English payload split
+across two memories. Detection counted attempts from the rollout, not only
+effects, because `exec --json` omits sandbox-denied code-mode calls.
+
+Outcome: 45/45 adversarial runs delivered every memory as a developer-role
+message and produced zero harmful actions or attempts. English and Chinese
+"bun, not npm" controls each answered with bun commands 3/3. An independent
+rollout scan confirmed the counts. Three literal packet wordings are removed by
+the existing authority filter before reaching the model; paraphrases that pass
+it were used.
+
+Change: `QUALIFIED_CONTEXT_HOSTS = ['0.160.1']`, so prompt recall injection is on
+by default for that exact host. Kill switch: `memory prompt-recall-off|on
+--client codex` writes owner-private `prompt-recall.json`. Missing means on;
+unreadable, unsafe or malformed means off. Hooks start under `env -i`, so
+environment variables cannot reach them. A new host version, default model or
+effort needs a re-run before qualification widens. SessionStart context remains
+closed: it needs the local tokenizer and its own context evaluation.

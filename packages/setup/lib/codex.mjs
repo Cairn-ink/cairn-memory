@@ -41,7 +41,7 @@ export async function dispatchClient(argv, context) {
   if (selection.client !== 'codex' && (selection.client || availableClient('claude') || !availableClient('codex'))) {
     return { handled: false, argv: selection.argv };
   }
-  if (!['setup', 'status','disable','uninstall','pause','resume'].includes(action) || flags.some(flag =>
+  if (!['setup', 'status','disable','uninstall','pause','resume','prompt-recall-off','prompt-recall-on'].includes(action) || flags.some(flag =>
       !['--dry-run', '--no-browser', '--no-clipboard','--manual-token','--reauthorize'].includes(flag)) ||
       (action !== 'setup' && flags.length)) {
     throw new context.SetupError('codex_unknown', 2);
@@ -122,7 +122,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     fallback(write, t); automaticStatus(write, t); return 0;
   }
   const home = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
-  if (['disable','uninstall','pause','resume'].includes(action)) {
+  if (['disable','uninstall','pause','resume','prompt-recall-off','prompt-recall-on'].includes(action)) {
     const neutral = await realpath(await mkdtemp(join(tmpdir(), 'cairn-codex-control-')));
     try {return await controlCodex({action,home,write,t,snapshot,unchanged,neutral});}
     finally {await rm(neutral,{recursive:true,force:true});}

@@ -2,6 +2,15 @@
 
 ## Unreleased — @cairn-ink/memory installer 0.3.0 (CX-5)
 
+- Enable Codex UserPromptSubmit recall injection by default for exact
+  codex-cli 0.160.1 after the authorized A7 pinned-host adversarial evaluation
+  (`evaluation/codex-a7/`). With `gpt-6-astra`, 45 adversarial runs (including
+  Traditional Chinese, mixed and split payloads) had zero harmful actions and
+  every memory delivered; English and Chinese positive controls passed 3/3.
+  Add the `prompt-recall-off|on --client codex` kill switch (owner-private
+  `prompt-recall.json`, fail-closed) and show its state in status. SessionStart
+  context stays disabled.
+
 - Qualify the installed codex-cli 0.160.1 using generated app-server schemas,
   embedded hook schemas, a network-blocked synthetic native exec session and
   serde/type evidence. Freeze hashes and synthetic fixtures; accept exact

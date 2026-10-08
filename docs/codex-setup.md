@@ -2,9 +2,9 @@
 
 2026-10-08 核對，基準為 `d7f52b95`（已發布的 installer 0.2.0）。這份原始碼將 installer 升為 **0.3.0，尚未發布**。配套 plugin 升為未發布的 0.3.2，protocol 維持 0.3.0；配套 plugin 僅增加 Codex policy／pause gate 的離線 status 診斷；Claude capture、recall、pause／resume 維持 origin/main 的行為。既有 0.3.1 不自動取得新程式。
 
-本機是 **codex-cli 0.160.1**。CX-5 已接上 browser credential、私有 runtime、四個 user hooks、Stop／PreCompact capture，以及 SessionStart pause EOF boundary。UserPromptSubmit recall 的接線與離線測試已交付；**注入預設關閉，等待 A7 authority 驗收**。MCP recall 仍可使用。這不是 hooks 不存在，而是設計契約對 developer context 的安全 gate。
+本機是 **codex-cli 0.160.1**。CX-5 已接上 browser credential、私有 runtime、四個 user hooks、Stop／PreCompact capture，以及 SessionStart pause EOF boundary。UserPromptSubmit recall 注入已通過 [A7 pinned-host adversarial evaluation](../evaluation/codex-a7/RESULTS.md)，**在 0.160.1 預設開啟**，可用 kill switch 關閉。MCP recall 仍可使用。
 
-這輪只讀安裝的 binary 與本機 repo refs，使用自製 synthetic sessions，沒有讀真實對話、成功模型呼叫、遠端查詢、production 操作或發布。
+格式驗收只讀安裝的 binary 與本機 repo refs，使用自製 synthetic sessions，沒有讀真實對話。A7 另經 chichi 授權，以真實模型跑在隔離的 disposable CODEX_HOME／repo 與本機 fake Cairn 上；沒有遠端 Cairn 查詢、production 操作或發布。
 
 ## 版本與格式證據
 
@@ -65,7 +65,11 @@ node packages/setup/bin/memory.mjs pause --client codex
 node packages/setup/bin/memory.mjs resume --client codex
 node packages/setup/bin/memory.mjs disable --client codex
 node packages/setup/bin/memory.mjs uninstall --client codex
+node packages/setup/bin/memory.mjs prompt-recall-off --client codex
+node packages/setup/bin/memory.mjs prompt-recall-on --client codex
 ```
+
+`prompt-recall-off` 是只針對 UserPromptSubmit 注入的 kill switch：在 installation 旁寫入 owner-private `prompt-recall.json`（0600，`{"version":1,"enabled":false}`），之後 prompt hook 不查 recall、不注入；capture、pause 與 MCP 不受影響。檔案不存在代表 A7 預設（開啟）；不可讀、權限不安全或內容不合法時一律 fail closed（關閉）。Status 會顯示目前狀態。Hook 以 `env -i` 啟動，shell 環境變數無法傳入，所以 kill switch 是檔案設定而非 env；`pause` 與 `disable` 仍是較粗的開關。
 
 Pause／resume 操作共享本機控制；不擅自解除 hosted pause。Disable 先撤銷 installation／舊 generation，再移除自己登記的 handlers。**Uninstall 同時執行 unpair**：先撤銷 Codex workers，再在共享 setup lock 下以 native configure 清空 Claude 的 `pairing_record`，移除 Codex binding／shared record，保留 Claude 原 root、project key、pause、fingerprint history 與記憶，驗證 Claude 已 enabled。這也處理 pairing pending。若 Claude CLI 不可用或恢復無法驗證，回傳 exit 1、明說恢復失敗；Codex credential／installation 仍移除，恢復 CLI 後重跑 uninstall 可重試，不需 browser auth。失敗時保留私有、無 token 的 `~/.cairn-memory-clients/codex-uninstall-<installation hash>.json` ownership receipt；成功後移除，避免從其他 CODEX_HOME 誤解除配對。Uninstall 另刪除自己的 runtime 與該 endpoint 的 Codex policy，保留 MCP；policy 目錄不安全時明說略過清除，仍移除 credential／installation，不跟隨 symlink。Standalone 的 `cairn-standalone` key 也保留。重跑 setup 可重新啟用；重複 disable／uninstall 安全。新 node／digest 的授權或 candidate validation 失敗，保留上次成功 installation；Browser 授權／MCP candidate 驗證成功前不變動 identity；其後保存並讀回 disabled binding，交付／完成配對，再寫 policy／hooks 與 activation。若原生 pairing delivery 中途失敗，明說 pairing pending、要求 hosts／workers 維持停止；重跑完成同一個 identity。卸載不是 server token revocation，必要時到帳號設定撤銷 credential。
 
@@ -79,7 +83,7 @@ Capture 只讀 hook 授權的 source，選 canonical submitted user／assistant 
 
 Hosted `/api/memory/pause-state` 必須是有效、enforced 的 protocol 0.3.0 state；缺失、未 enforce、regressing generation 都拒絕 capture。觀察到新 generation 時，在共享 control lock 下旋轉本機 generation，不清掉使用者 pause。Resume 後第一次授權 hook 對 stale／missing cursor 建立 EOF boundary，不補送 paused／offline／unseen session 的舊文字。Codex workers 使用 concurrency 2 與使用者明確設定的 daily cap；**這個本機 cap 不套到 Claude**。Endpoint 的既有 server quota 與 local pause 仍共用。Claude 不呼叫或要求 Codex 的 H5 pause-state，不因 404、unenforced、invalid policy 停止記憶；server 已有的 quota／pause 回覆照既有 transport 處理。Claude status 以 best-effort private reads 顯示 malformed／unreadable／future policy 與 shared pause availability；沒有 policy 時輸出維持原樣，relative／empty plugin-data 不進入新的 private policy reader。Availability 只讀 secret-free 最後觀察，不把它當 capture 授權。尚未觀察、僅已過期的 healthy state，或 observation file 本身異常，都不誤報 endpoint unavailable。只有實際觀察到 endpoint／protocol 問題時 Claude status 才報 unavailable，附觀察時間；舊的失敗觀察會標示 historical。Codex status 分別顯示 not yet observed／observation invalid 等狀態，仍不宣稱目前已連線。
 
-UserPromptSubmit port 有同一 2 s budget、redacted 4,000-unit query、project/session binding、完整 receipts、固定 untrusted framing、whole-entry authority filter、8,000-unit／32 KiB context cap，以及注入前 generation 重查。**Production entry 的 A7 predicate 目前為 false；不查 recall、不注入。** Test-only qualification seam 用於檢驗接線，hook JSON／argv／env 無法打開它。SessionStart 只處理 pause boundary，不呼叫或 acknowledge `/session-start` context。
+UserPromptSubmit port 有同一 2 s budget、redacted 4,000-unit query、project/session binding、完整 receipts、固定 untrusted framing、whole-entry authority filter、8,000-unit／32 KiB context cap，以及注入前 generation 重查。**A7 predicate 只對精確的 0.160.1 為 true**（`QUALIFIED_CONTEXT_HOSTS`），其他版本不查 recall、不注入；kill switch 關閉時亦同。Codex 把 hook `additionalContext` 放在 developer 層，因此安全性來自 framing 與 JSON quoting，A7 已以真實模型驗證。Hook JSON／argv／env 無法改變 qualification。SessionStart 只處理 pause boundary，不呼叫或 acknowledge `/session-start` context。
 
 ## Gate table
 
@@ -87,8 +91,8 @@ UserPromptSubmit port 有同一 2 s budget、redacted 4,000-unit query、project
 | --- | --- | --- |
 | 0.160.1 格式與 installed lifecycle | 已交付精確 pin、binary schema evidence、synthetic fixtures、private runtime 與 fake-Codex E2E | 真實 interactive trust／flush／resume／PreCompact matrix 仍須 release acceptance；未知版本繼續拒絕 |
 | Browser hook credential／identity | 接線完成，私有保存先於 ACK；配對 parity 測試通過 | 兩個 client 使用同一帳號；相容的 Claude plugin 已安裝；否則 standalone 可用但尚未共用 target |
-| Prompt recall A7 | Schema 支援 context，port 與離線 adversarial tests 已交付，**預設關閉** | 明確授權的 pinned-host adversarial model evaluation；離線 framing 不證明 developer-layer 安全性 |
-| SessionStart context | Pause boundary 完成，context **關閉** | 本機 qualified o200k counter、A7 與 sibling context authority／lifecycle acceptance |
+| Prompt recall A7 | **通過，0.160.1 預設開啟**：2026-10-09 以 `gpt-6-astra`／medium 跑 15 組 adversarial（含 6 組繁中／中英混合）× 3 = 45 runs，0 harmful、45/45 delivered；英文與中文 positive control 皆 3/3。[結果](../evaluation/codex-a7/RESULTS.md)；kill switch `prompt-recall-off` | 新 host 版本、預設模型或 reasoning effort 變更時，以 `evaluation/codex-a7/` 重跑後才擴充 `QUALIFIED_CONTEXT_HOSTS` |
+| SessionStart context | Pause boundary 完成，context **關閉** | 本機 qualified o200k counter、sibling context authority／lifecycle acceptance，以及對 session context 重跑 A7 |
 | Hosted H5／U-6 | Codex worker 要求 enforced pause-state；Claude 保留既有行為，不受未驗收 gate 阻擋；沒有 endpoint 驗收 | 指定部署 SHA／endpoint 的 authenticated capture、pause、quota 與 context conformance；本次禁止網路與 production |
 | LAC／HMA | 不在此次 hosted runtime scope | 原設計契約的 model isolation／usage／latency gates；沒有宣稱 local adapter 已完成 |
 | 發布 | Installer minor 升為 0.3.0；沒有 publish | chichi 審核 patch groups、更新 Claude bundle 與 release gates 後發布 |
