@@ -5,13 +5,37 @@ third-party `memory.provider: cairn` plugin, not a manual MCP config entry or a
 Hermes core change. The installed public core executes five default tools;
 explicit native `capture_qualification: source-bound-v2` adds submitted capture,
 and independent `classification_recovery: guarded-v1` adds admission inspection
-and explicit classification. The inventories are five, six, seven or eight tools
-for neither, capture, recovery or both settings. A v2-only optional
-`capture_deadline_ms` string (1–110000) adds no tool. See the setup guide for
+and explicit classification. The legacy inventories are five, six, seven or eight tools
+for neither, qualified capture, recovery or both settings. Separate native
+`capture_source_policy: indexed-staged-v1` exposes canonical submitted capture
+and exact inspection/discard (eight tools, ten with recovery), without qualification.
+Independent `capture_evidence_access: staged-v1` adds only exact inspection/discard
+and may remain after capture is disabled. An optional
+`capture_deadline_ms` string (1–110000) for either capture mode adds no tool. See the setup guide for
 configuration, restart and cost boundaries. Historical evidence below predates
 these opt-ins and does not certify semantic quality.
 
 ## Native deadline and recovery offline gate
+
+The separate [canonical-host acceptance](plans/hermes-canonical-staging.md) uses
+`test_canonical_staging.py` plus the existing five files below. New fixtures prove
+exact recovery after synthetic empty/malformed/failed extraction and a keyless
+access-only restart, no qualification, selected receipts, replay/policy/profile
+fences and scripted actual AIAgent dispatch. Real tokenizer fit, native argument
+characters, configuration-envelope bytes and encoded bridge output are distinct
+bounds. Oversized SDK output uses a synthetic MCP server, not an actual core
+oversized-output claim. Envelope refusal may create profile identity directories
+but no database or captured source. No natural tool choice or semantic-quality
+claim follows.
+
+Verification runs the authenticated host archive in fresh owned extraction with
+read-only dependency reuse, in-process source-path/hash assertions and a freshly
+installed/hash-checked Cairn archive. The canonical runner writes bytecode and
+duration caches only in owned source; owned TMP/TEMP and explicit all-path cleanup
+cover success and intentional fixture failure. Do not run it in a user profile or
+silently mutate the retained host/dependencies. Use the explicit six-file command
+below for current full acceptance; missing prerequisites fail
+instead of being counted as a skip.
 
 The focused `test_capture_recovery.py` uses the real pinned Hermes
 MemoryManager and scripted AIAgent routing, an SDK subprocess and a locally
@@ -27,8 +51,8 @@ unchanged. A stale reference rejects before another model request. This is
 mechanical evidence, not natural tool choice, general semantic quality or a
 hard wall-clock guarantee.
 
-From the pinned Hermes checkout, pass all five native files to its canonical
-runner with retries disabled and the separately installed local executable:
+From the pinned Hermes checkout, pass all six native files to its canonical
+runner with one worker, retries disabled and the separately installed local executable:
 
 ```sh
 scripts/run_tests.sh /absolute/cairn/integrations/hermes/test/test_provider.py \
@@ -36,11 +60,13 @@ scripts/run_tests.sh /absolute/cairn/integrations/hermes/test/test_provider.py \
   /absolute/cairn/integrations/hermes/test/test_qualified_provider.py \
   /absolute/cairn/integrations/hermes/test/test_qualified_conversation.py \
   /absolute/cairn/integrations/hermes/test/test_capture_recovery.py \
-  --file-retries 0 -- --cairn-executable /absolute/installed/bin/cairn-memory.mjs \
+  /absolute/cairn/integrations/hermes/test/test_canonical_staging.py \
+  --jobs 1 --file-retries 0 -- --cairn-executable /absolute/installed/bin/cairn-memory.mjs \
   --cairn-node /absolute/node -q -p no:cacheprovider
 ```
 
-The five-file matrix passed **22 tests on each of Node 22.16.0 and 24.15.0**
+Historical five-file result, before canonical staging: the matrix passed
+**22 tests on each of Node 22.16.0 and 24.15.0**
 with `--file-retries 0`. The independently built private archive was
 `f77d837dc8940e94535d227e27e272863ffc47c5af0397d21a7e6e4398a5b8ad`;
 all 72 listed packaged source-file hashes matched the offline installation.

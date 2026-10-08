@@ -122,7 +122,11 @@ qualification. Omit own qualification, rationale, captureEvidence and sessionEpi
 options; any own causal capture field rejects. Local MCP now exposes the same
 explicit policy through `--capture-source-policy indexed-staged-v1` or an own-data
 server option; see [manual local opt-in](standalone-mcp.md#opt-in-canonical-submitted-source-staging).
-The existing exact inspection/discard tools are reused. No installer/Hermes option,
+The existing exact inspection/discard tools are reused. The separate
+[native Hermes provider](../integrations/hermes/cairn/README.md) accepts explicit
+`capture_source_policy: indexed-staged-v1` and independent keyless
+`capture_evidence_access: staged-v1` profile fields, without changing defaults.
+No installer option,
 automatic capture or source discovery is added. Hosts must obtain consent before
 retaining real conversational data; default capture does not retain full transcripts.
 
@@ -171,7 +175,9 @@ sensitive details absent from extracted memories and adds no encryption/authenti
 Core synthetic tests establish bounded persistence/lifecycle; separate local MCP
 stdio/installed tests exercise explicit capture and keyless exact recovery over
 that same contract. Neither establishes semantic quality, a permanent archive,
-automatic repair/re-extraction, Hermes integration or paid scores.
+automatic repair/re-extraction or paid scores. Separately scoped
+[native Hermes validation](hermes-memory-provider.md) covers synthetic pinned-host
+routing and keyless exact recovery, not natural tool selection or semantic quality.
 
 ## Opt-in episode ownership (SE-1)
 

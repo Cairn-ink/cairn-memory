@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — explicit canonical staging in the native Hermes provider
+
+- The separately configured native provider accepts `capture_source_policy:
+  indexed-staged-v1` for explicit submitted capture without qualification and
+  bounded canonical source retention for 24 hours, including empty/failed extraction.
+  Independent `capture_evidence_access: staged-v1` enables keyless exact inspection/
+  discard after capture is disabled; access alone retains nothing.
+- Qualified and canonical capture conflict. The optional decimal-string deadline
+  (1–110000) works with either capture mode; discovery/manual/evidence management
+  remain keyless. Defaults, UUID/profile identity, transport bounds and no-retry
+  behavior are unchanged. Pinned-host synthetic routing is not natural tool choice,
+  source truth or improved semantic quality. No installer option or passive capture.
+
 ## Unreleased — explicit canonical staging through local MCP
 
 - Add opt-in `--capture-source-policy indexed-staged-v1` and the corresponding

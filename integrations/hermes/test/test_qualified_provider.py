@@ -77,7 +77,7 @@ def test_strict_config_and_actual_native_wizard_optional_blank(provider_factory,
     context = next(field for field in schema if field["key"] == "recall_context")
     assert not context.get("required") and not context.get("default") and not context.get("choices")
     deadline = next(field for field in schema if field["key"] == "capture_deadline_ms")
-    assert deadline["when"] == {"capture_qualification": "source-bound-v2"}
+    assert "when" not in deadline and not deadline["required"]
 
 
 def test_strict_deadline_and_independent_recovery_configuration(provider_factory):
@@ -118,7 +118,7 @@ def test_full_native_setup_preserves_existing_cairn_values_on_blank(provider_fac
     monkeypatch.setattr(memory_setup, "masked_secret_prompt", lambda *args, **kwargs: next(secrets))
     monkeypatch.setattr(memory_setup, "_write_env_vars", lambda values: written_secrets.append(dict(values)))
     assert "  cairn:" not in (home / "config.yaml").read_text()
-    monkeypatch.setattr(sys, "stdin", io.StringIO(config["node_path"] + "\n" + config["executable_path"] + "\n\n\n\n"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(config["node_path"] + "\n" + config["executable_path"] + "\n" * 6))
     memory_setup.cmd_setup([])
     minimal = {"node_path": config["node_path"], "executable_path": config["executable_path"]}
     assert json.loads((home / "cairn.json").read_text()) == minimal
@@ -127,16 +127,16 @@ def test_full_native_setup_preserves_existing_cairn_values_on_blank(provider_fac
     assert not (home / "cairn").exists()
     enabled = {**minimal, "capture_qualification": "source-bound-v2", "capture_deadline_ms": "1500",
                "classification_recovery": "guarded-v1", "recall_context": "source-evidence"}
-    monkeypatch.setattr(sys, "stdin", io.StringIO("\n\nsource-bound-v2\n1500\nguarded-v1\nsource-evidence\n"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n\nsource-bound-v2\n\n\n1500\nguarded-v1\nsource-evidence\n"))
     memory_setup.cmd_setup([])
     assert json.loads((home / "cairn.json").read_text()) == enabled
     assert all(field.get("default") == enabled[field["key"]]
                for field in provider.get_config_schema() if field["key"] in enabled)
-    monkeypatch.setattr(sys, "stdin", io.StringIO("\n" * 6))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n" * 8))
     memory_setup.cmd_setup([])
     assert json.loads((home / "cairn.json").read_text()) == enabled
     before = (home / "cairn.json").read_bytes()
-    monkeypatch.setattr(sys, "stdin", io.StringIO("\n\n\n01500\n\n\n"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n" * 5 + "01500\n\n\n"))
     memory_setup.cmd_setup([])
     assert (home / "cairn.json").read_bytes() == before
     assert not (home / "cairn").exists()

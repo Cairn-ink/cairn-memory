@@ -312,8 +312,12 @@ or submitted content, whether a key is present or absent.
 This broader local personal-data retention needs deliberate privacy consent.
 Protect the database and backups; logical deletion is not physical erasure.
 Schema19 still requires stopping every older runtime connection before upgrade;
-mixed-version coexistence is unsupported. No passive capture, installer/Hermes
-enablement, semantic reliability or competitive benchmark parity is established.
+mixed-version coexistence is unsupported. The separate
+[native Hermes provider](../integrations/hermes/cairn/README.md) can opt in using
+profile-local `capture_source_policy: indexed-staged-v1` and access-only
+`capture_evidence_access: staged-v1`; these MCP startup flags do not configure
+that profile. No passive capture, installer enablement, semantic reliability or
+competitive benchmark parity is established.
 
 ## Opt-in submitted source-qualified capture
 
@@ -383,9 +387,10 @@ and value to an installed executable's MCP startup arguments; this is not an
 reports the number only when configured, without opening storage or contacting
 a provider. Omitting it leaves the tool inventory, schemas and default capture
 behavior unchanged. It does not enable capture, inspection or recovery by
-itself; capture qualification must be selected explicitly.
+itself; capture qualification or canonical source capture must be selected explicitly.
 The separate [native Hermes provider](../integrations/hermes/cairn/README.md)
-accepts a profile string from 1 through 110000 with v2 capture, leaving a
+accepts a profile string from 1 through 110000 with v2 qualification or canonical
+capture, leaving a
 nominal margin below its SDK timeout. Its recovery setting is also an explicit
 profile opt-in; these MCP flags do not configure a Hermes profile.
 
@@ -409,7 +414,7 @@ preempted mid-instruction. Leave a suitable client transport timeout margin for
 startup, synchronous work and cleanup; the existing longer-client-timeout advice
 still applies. This option is neither a hard wall-clock return guarantee nor an
 API spending cap. The native Hermes provider forwards its separately validated
-v2-only profile string up to 110000 milliseconds; these mechanical checks do
+either-capture profile string up to 110000 milliseconds; these mechanical checks do
 not establish semantic capture quality or S1 completion.
 
 ### Optional staged source inspection

@@ -12,7 +12,15 @@ result checks are additional bounds, not whole-host prompt or total MCP-framing
 budgets. Logical deletion does not erase journals, backups or provider copies.
 Submitted roles, source preservation and scripted installed tests establish
 neither truth nor semantic quality; no closed evaluation result is revised.
-Installer/Hermes enablement, automatic capture and source search remain separate.
+The separately configured [native Hermes provider](plans/hermes-canonical-staging.md)
+now exposes this same retention and keyless exact management. Its 60,000-character
+argument limit, 65,537-byte helper read, 65,536-byte MCP input and 262,144-byte encoded
+output are distinct host boundaries, not proof every core-legal source fits.
+An oversized configuration envelope may create the profile owner directory but
+does not stage source or open its database. SDK oversized-output fixtures use a
+synthetic MCP server, not proof of oversized actual core output. Pinned-host
+scripted dispatch does not establish natural tool choice or semantic quality.
+Installer enablement, automatic capture and source search remain separate.
 
 The [source-role extraction ablation](plans/source-role-ablation.md) freezes twelve
 fresh synthetic sources, a separate evaluator rubric, two evaluation-only prompts
@@ -814,7 +822,7 @@ embedded callers can configure an opt-in monotonic `captureDeadlineMs` of 1–12
 for the whole invocation. It does not preempt synchronous SQLite or token
 accounting mid-instruction, guarantee a wall-clock return bound, or change
 native Hermes or MCP defaults. Local MCP can opt in through trusted startup
-configuration; native Hermes can opt in through a validated v2-only profile
+configuration; native Hermes can opt in through a validated profile
 string capped at 110000 milliseconds. Before admission it fails with
 `model_timeout`;
 after admission it preserves receipts and reports downstream failure. This
@@ -2182,7 +2190,12 @@ prefix staging are unchanged. Staged source is untrusted, not admitted memory or
 ordinary retrieval input. [Local MCP](standalone-mcp.md#opt-in-canonical-submitted-source-staging)
 now exposes explicit submitted capture and exact management through manual
 `--capture-source-policy indexed-staged-v1`; defaults remain unchanged. Known-event
-lookup does not provide automatic discovery, installer/Hermes enablement, semantic
+lookup does not provide automatic discovery, installer enablement, semantic
 verification, reliable recall or a better benchmark score. Existing quotas/expiry/purge fences apply; logical deletion does not erase
 SQLite free pages or backups. Synthetic tests demonstrate persistence/lifecycle,
 not those broader product goals or permission for real-conversation retention.
+
+The separately opted-in [native Hermes provider](../integrations/hermes/cairn/README.md)
+uses the same installed public engine for canonical capture and access-only exact
+inspection/discard. That mechanical host integration changes no default, source
+search or semantic release gate; it is not an installer option.
