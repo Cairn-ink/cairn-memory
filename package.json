@@ -11,6 +11,7 @@
     "test:setup": "node tools/testing/run.mjs --script packages/setup/test/setup.test.mjs",
     "test:workspace-lifecycle": "node tools/testing/run.mjs tools/testing/*.test.mjs",
     "test:live-evidence-offline": "node tools/testing/run.mjs evaluation/live/test/*.test.mjs",
+    "test:codex-a7-offline": "node tools/testing/run.mjs evaluation/codex-a7/test/*.test.mjs",
     "test": "node integrations/client/testing/run.mjs plugins/cairn-memory/test/*.test.mjs evaluation/architecture/test/*.test.mjs",
     "demo:architecture-boundaries": "node evaluation/architecture/cli.mjs",
     "demo:synthetic-lineage": "node evaluation/architecture/synthetic-lineage-cli.mjs",
