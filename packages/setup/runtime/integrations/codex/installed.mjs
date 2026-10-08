@@ -1,31 +1,34 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { resolveClient, clientProjectId } from '../client/pairing.mjs';
 import { automaticPolicy, automaticGuard } from '../client/automatic-policy.mjs';
 import { readControlState } from '../client/control-state.mjs';
 import { hostedTargetId } from '../client/transport-hosted.mjs';
 import { handleHook, readHookInput, validateHook, workerFromHandoff } from './hook.mjs';
 import { establishPauseBoundary } from './worker.mjs';
-import { qualifiedHost,qualifiedContextHost } from './parser.mjs';
+import { detectRunningHost, cachedQualification, observeHost, qualifyBinary, validHost, boundBinary,
+  scheduleQualification, finishQualification } from './qualification.mjs';
 import { readInstallation, readCredential, clientOptions, childEnvironment, promptRecallEnabled } from './installed-state.mjs';
 import { observeHostedPause, installedTransport, recallContext } from './hosted-lifecycle.mjs';
 
-export function currentHost(config, timeoutMs = 300) {
-  return new Promise(resolve => {
-    const child = spawn(config.codex, ['--version'], { cwd: config.home,
-      env: childEnvironment(config.home), stdio: ['ignore','pipe','ignore'] });
-    let output = '', settled = false;
-    const finish = result => {
-      if (settled) return; settled = true;
-      clearTimeout(timer); resolve(result);
-    };
-    const timer = setTimeout(() => { child.kill('SIGKILL'); finish(false); }, timeoutMs);
-    child.stdout.on('data', chunk => {
-      output += chunk;
-      if (output.length > 1024) { child.kill('SIGKILL'); finish(false); }
-    });
-    child.on('error', () => finish(false));
-    child.on('close', code => finish(code === 0 && qualifiedHost(output.trim().replace(/^codex-cli /u,''))));
+// No --version/schema subprocess on the hook path. Ancestor detection and
+// identity-keyed cache reads are the only host work before capture/recall.
+export async function currentHost(configPath,{detect=detectRunningHost,launch=launchQualification}={}) {
+  const host=await detect();
+  if(!host)return {status:'pending'};
+  await observeHost(configPath,host);
+  const verdict=await cachedQualification(configPath,host);
+  if(verdict.status==='pending')await scheduleQualification(configPath,host,launch);
+  return {...verdict,host};
+}
+function launchQualification(configPath,host) {
+  const child=spawn(process.execPath,[fileURLToPath(new URL('./entry.mjs',import.meta.url)),configPath,'qualify'],{
+    detached:true,env:{HOME:'/tmp',PATH:'/usr/bin:/bin',LANG:'C.UTF-8',
+      ...(process.env.TMPDIR?{TMPDIR:process.env.TMPDIR}:{})},stdio:['pipe','ignore','ignore']});
+  return new Promise((resolve,reject)=>{
+    child.once('error',reject);child.stdin.once('error',reject);
+    child.once('spawn',()=>child.stdin.end(JSON.stringify(host),()=>{child.unref();resolve();}));
   });
 }
 
@@ -45,12 +48,28 @@ function launchWorker(configPath, config, content) {
 }
 
 export async function runInstalled(configPath, event, stream, { signal, launch = launchWorker,
-  contextQualification = qualifiedContextHost } = {}) {
+  detectHost = detectRunningHost } = {}) {
   const config = await readInstallation(configPath);
-  if (!config.enabled || !await currentHost(config) || signal.aborted) return '';
-  if (event==='UserPromptSubmit' && (!contextQualification(config.hostVersion) ||
-    !await promptRecallEnabled(configPath))) return '';
-  const input = await readHookInput(stream, { deadlineMs: event === 'worker' ? 750 : 300 });
+  if (!config.enabled || signal.aborted) return '';
+  if(event==='qualify') {
+    const host=await readHookInput(stream,{deadlineMs:750});
+    if(!validHost(host))return '';
+    try {await qualifyBinary(configPath,host);} finally {await finishQualification(configPath,host);}
+    return '';
+  }
+  // Detached workers re-check the host supplied by the trusted launcher. Hook
+  // payloads cannot supply or override it; a changed binary invalidates the key.
+  let input, qualification;
+  if(event==='worker') {
+    input=await readHookInput(stream,{deadlineMs:750});
+    const host=input?.host;
+    if(!await boundBinary(host))return '';
+    qualification={...await cachedQualification(configPath,host),host};
+    delete input.host;
+  } else qualification=await currentHost(configPath,{detect:detectHost});
+  if(qualification.status!=='qualified' || signal.aborted)return '';
+  if(event==='UserPromptSubmit' && !await promptRecallEnabled(configPath))return '';
+  input??=await readHookInput(stream,{deadlineMs:300});
   const options = clientOptions(config);
   const resolved = await resolveClient(options);
   if (!resolved.enabled || resolved.root !== config.root || signal.aborted) return '';
@@ -65,7 +84,7 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
     const guard = automaticGuard(config.root, config.endpoint, policy);
     const transport = installedTransport(config, token, remote.generation);
     await workerFromHandoff(handoff, { clientOptions: options, targetId, transport, guard,
-      mode: 'hosted', overallMs: 60000 });
+      mode: 'hosted', overallMs: 60000, qualifiedCreatorVersion: qualification.version });
     return '';
   }
   const hook = validateHook(input);
@@ -74,7 +93,7 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   if (signal.aborted) return '';
   if (event === 'UserPromptSubmit') {
     const token = await readCredential(configPath, config.endpoint);
-    return recallContext(input, config, token, projectId, signal, () => promptRecallEnabled(configPath));
+    return recallContext(input, config, token, projectId, signal, async () => await promptRecallEnabled(configPath) && Boolean(await boundBinary(qualification.host)));
   }
   if (event === 'SessionStart') {
     const token = await readCredential(configPath, config.endpoint);
@@ -89,9 +108,10 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   const control = await readControlState(config.root);
   if (control.paused || signal.aborted) return '';
   const result = await handleHook(input, { clientOptions: options, targetId,
+    qualifiedCreatorVersion: qualification.version,
     launch: async content => {
       if (signal.aborted) return;
-      await launch(configPath, config, content);
+      await launch(configPath, config, JSON.stringify({...JSON.parse(content),host:qualification.host}));
     } });
   return result.output;
 }

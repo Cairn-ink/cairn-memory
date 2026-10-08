@@ -17,7 +17,7 @@ import { stateLock } from '../runtime/integrations/client/state-lock.mjs';
 import { hostedPauseStatus } from '../runtime/integrations/client/hosted-pause.mjs';
 import { readInstallation, validateInstallation, readCredential, writeCredential, clientOptions,
   promptRecallEnabled, writePromptRecall } from '../runtime/integrations/codex/installed-state.mjs';
-import { qualifiedHost, qualifiedContextHost } from '../runtime/integrations/codex/parser.mjs';
+import { observedHosts, qualifyBinary, refreshObservedHost, qualificationStatus } from '../runtime/integrations/codex/qualification.mjs';
 
 const version = JSON.parse(readFileSync(new URL('../package.json',import.meta.url))).version;
 const events = ['SessionStart','UserPromptSubmit','Stop','PreCompact'];
@@ -219,8 +219,21 @@ async function rotateBoundary(root) {
   await rotateAutomaticBoundary(root);
 }
 
-export async function installedStatus({home,hostVersion,write,t,snapshot}) {
+export async function installedStatus({home,hostVersion,write,t,snapshot,cliHost,hostVerdict}) {
   const path = join(home,'cairn','installation.json');
+  const verdicts=[{host:cliHost,verdict:hostVerdict??{status:'pending'},version:hostVersion}];
+  for(let host of await observedHosts(path)) {
+    if(host.identity===cliHost?.identity && host.kind===cliHost?.kind)continue;
+    let verdict={status:'pending'};
+    try {
+      host=await refreshObservedHost(host);
+      verdict=await qualifyBinary(path,host);
+    } catch {/* unavailable host is reported as pending, never on */}
+    if(host.identity!==cliHost?.identity || host.kind!==cliHost?.kind)verdicts.push({host,verdict,version:verdict.version,observed:true});
+  }
+  for(const item of verdicts)write(`${item.observed?'last observed ':''}${item.host?.kind??'cli'}: ${qualificationStatus(item.version,item.verdict.status)}`);
+  const formatQualified=verdicts.every(item=>item.verdict.status==='qualified');
+  const anyQualified=verdicts.some(item=>item.verdict.status==='qualified');
   try {
     const config = await readInstallation(path);
     const hooks = JSON.parse((await snapshot(join(home,'hooks.json'))).text || '{}');
@@ -229,13 +242,14 @@ export async function installedStatus({home,hostVersion,write,t,snapshot}) {
     const credential = await readCredential(path,config.endpoint).then(() => true,() => false);
     const inspectedPolicy = await inspectAutomaticPolicy(config.root,config.endpoint);
     const policy = inspectedPolicy.policy;
-    write(t('codex_hooks_status',{state:!qualifiedHost(hostVersion)?'unsupported_host':!config.enabled?'disabled':
+    write(t('codex_hooks_status',{state:!anyQualified?'unsupported_host':!config.enabled?'disabled':
       !registered?'registration_incomplete':!credential?'credential_missing':
       inspectedPolicy.state==='invalid'?'policy_invalid_or_unreadable':
-      !policy || policy.dailyCap!==config.dailyCap?'policy_missing_or_conflicting':'registered'}));
+      !policy || policy.dailyCap!==config.dailyCap?'policy_missing_or_conflicting':
+      formatQualified?'registered':'registered (qualification varies by host; see above)'}));
     write(t('codex_runtime_version',{version,host:hostVersion}));
-    write(t('codex_prompt_recall_status',{state:!qualifiedContextHost(config.hostVersion)?'off (host not A7-qualified)':
-      await promptRecallEnabled(path)?'on':'off'}));
+    write(t('codex_prompt_recall_status',{state:!await promptRecallEnabled(path)?'off':
+      !anyQualified?'off (host format not qualified)':formatQualified?'on':'per host (qualified: on; unqualified: off)'}));
     write(t('codex_hooks_trust'));
     const control = await readControlState(config.root);
     const target = hostedTargetId(config);
@@ -408,7 +422,7 @@ export async function setupInstalledCodex(context) {
     if (flags.includes('--dry-run')) write(t('codex_hooks_dry'));
     return 0;
   }
-  if (!qualifiedHost(hostVersion)) throw new SetupError('codex_host_unqualified');
+  if (context.hostVerdict?.status!=='qualified') throw new SetupError('codex_host_unqualified');
   if (!interactive) throw new SetupError('tty_required',2);
   if (existing && (!usable || !existing.enabled)) throw new SetupError('codex_repair');
   await mkdir(home,{recursive:true,mode:0o700});

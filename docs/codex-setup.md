@@ -2,7 +2,7 @@
 
 2026-10-08 核對，基準為 `d7f52b95`（已發布的 installer 0.2.0）。這份原始碼將 installer 升為 **0.3.0，尚未發布**。配套 plugin 升為未發布的 0.3.2，protocol 維持 0.3.0；配套 plugin 僅增加 Codex policy／pause gate 的離線 status 診斷；Claude capture、recall、pause／resume 維持 origin/main 的行為。既有 0.3.1 不自動取得新程式。
 
-本機是 **codex-cli 0.160.1**。CX-5 已接上 browser credential、私有 runtime、四個 user hooks、Stop／PreCompact capture，以及 SessionStart pause EOF boundary。UserPromptSubmit recall 注入已通過 [A7 pinned-host adversarial evaluation](../evaluation/codex-a7/RESULTS.md)，**在 0.160.1 預設開啟**，可用 kill switch 關閉。MCP recall 仍可使用。
+本機是 **codex-cli 0.160.1**。CX-5 已接上 browser credential、私有 runtime、四個 user hooks、Stop／PreCompact capture，以及 SessionStart pause EOF boundary。UserPromptSubmit recall 注入已通過 [A7 pinned-host adversarial evaluation](../evaluation/codex-a7/RESULTS.md)，**在格式合格的 host 預設開啟**，可用 kill switch 關閉。MCP recall 仍可使用。
 
 格式驗收只讀安裝的 binary 與本機 repo refs，使用自製 synthetic sessions，沒有讀真實對話。A7 另經 chichi 授權，以真實模型跑在隔離的 disposable CODEX_HOME／repo 與本機 fake Cairn 上；沒有遠端 Cairn 查詢、production 操作或發布。
 
@@ -20,7 +20,21 @@
 | assistant fixture | 依該 binary 的 generated ThreadItem／AgentMessageInputContent 與 serde enum／`AgentMessageContent::Text with 1 element` markers 撰寫 synthetic AgentMessage；沒有成功模型回覆的原生 assistant transcript |
 | 重現 | [qualify-codex.mjs](../scripts/qualify-codex.mjs) 對指定 native binary 產生私有 schema evidence；本次重跑的完整 schema hash 相同，九份選取 schema 逐一核對 |
 
-Capture creator 精確接受 `0.157.1` 與 `0.160.1` 的已驗收 cli/exec paginated layout；保留舊 cursor/profile ID，避免改變 frozen retry identity。安裝與每次 hook 啟動只接受 host **0.160.1**。0.160.0、0.160.2、其他 minor、未知 suffix 都不自動擷取；版本不在清單時先拒絕，再接觸 source。Fork、subagent、非 CLI source、未知 discriminator 同樣拒絕。Schema pin 不代表所有 resumed writer 或真實 compaction 已完成 host 驗收。
+2026-10-09 schema-only 追加驗收，直接執行本機 app-server-daemon releases 的 native binary，HOME／CODEX_HOME 皆指向新建 0700 私有目錄，沒有讀真實設定、sessions 或呼叫模型：
+
+| Native binary | 證據與判定 |
+| --- | --- |
+| 0.161.0 | `--version`／`generate-json-schema` exit 0；八份內嵌 hook schema、44 個選取與遞迴 `$ref` definitions、七個 serde markers 與 0.160.1 相同，**合格**。[Evidence](../integrations/codex/test/fixtures/format-evidence-0.161.0.json) |
+| 0.162.0 | 同樣 exit 0，八份 hook schema 相同；`MessagePhase` 新增 `partial_answer`，capture parser 會拒絕。`SubAgentActivity` 另加 model／reasoningEffort，這類 item 原本排除。依 fail-closed 原則 **capture／recall 都關閉**。[Evidence](../integrations/codex/test/fixtures/format-evidence-0.162.0.json) |
+
+兩版新增的 transcript fixtures 都是依 schema／serde evidence 撰寫的 synthetic records，沒有冒稱原生 rollout 或模型結果。0.162.0 fixture 包含 `partial_answer` 拒絕案例。原本 0.160.1 的 native lifecycle／A7 證據保持原範圍。
+
+安裝與 status 用 [qualification.mjs](../integrations/codex/qualification.mjs) 比對完整相關格式 fingerprint，包含遞迴參照的 content／phase／delivery／trust definitions，以及八份 command input/output schema。未知版本若與已知合格 evidence 相同就接受；不同則關閉，顯示 `Codex <ver> is newer than this plugin supports; capture and recall are paused until an update.`。Probe 失敗／pending 也關閉，status 顯示原因並可重試，不能把 probe 失敗當成格式改變。
+
+每次 hook 由 Linux `/proc` 沿 shell／env 父程序尋找最近的 native Codex，從 argv 分辨 CLI 與 app-server，不以 install-time `codex --version` 代表 daemon。只 stat binary identity 並讀 owner-private verdict，不生成 schema、不讀整個 binary；缺 verdict 時排入獨立背景 qualification，當次 hook 關閉。快取 key 包含 device／inode／size／mtime／ctime，verdict 另綁定已知 evidence policy；binary 更新或已知 evidence policy 更新都不能沿用舊資格。Detached capture worker 帶入 launcher 選定的 host，重查 identity／verdict 後才執行。Status 分別顯示 CLI 與最後觀察的 app-server 資格；同時有合格與未合格 host 時會顯示 recall 依 host 開關，不把合格 CLI 也報成關閉；多個不同 daemon 同時存在時，每個 hook 仍獨立判定，但 status 只保存最近觀察的同類 host。
+
+Capture creator 接受已凍結的 `0.157.1`、`0.160.1`、`0.161.0`；未知 creator 只有與本次合格 host 的 version 相同才可解析。不能僅憑任意 rollout 的版本字串套用其他 binary 的 verdict。保留舊 cursor/profile ID，避免改變 frozen retry identity。Fork、subagent、非 CLI/exec source、未知 discriminator 同樣拒絕，沒有擴充 source scope。Schema qualification 不代表所有 resumed writer 或真實 compaction 已完成 host 驗收。
+
 
 ## 使用方式
 
@@ -58,6 +72,7 @@ Opaque project ID 使用同一 root 的既有 HMAC key 與相同的 literal proj
 | `$CODEX_HOME/cairn/installation.json` | 0600，固定 endpoint／binding／cap／runtime metadata |
 | `$CODEX_HOME/cairn/credential.json` | 0600，memory-scoped browser credential；所在目錄 0700，明文私有檔，非 keyring |
 | `$CODEX_HOME/cairn/runtime/0.3.0-<manifest-hash>/` | runtime 目錄 0700、檔案 0600；從 npm 包的 frozen hash manifest 複製，不依賴 npx cache，不在原路徑覆寫不同程式 |
+| `$CODEX_HOME/cairn/qualification/` | 0700；binary identity verdict、pending lock 與最後觀察的 CLI／app-server descriptor 為 0600，不含 token／transcript |
 | 共享 private root | identity、control generation、endpoint quota、usage、Codex-only daily cap policy 與 hosted-pause 最後觀察／availability；Codex cursor 與 Claude cursor 分開 |
 
 ```sh
@@ -83,15 +98,15 @@ Capture 只讀 hook 授權的 source，選 canonical submitted user／assistant 
 
 Hosted `/api/memory/pause-state` 必須是有效、enforced 的 protocol 0.3.0 state；缺失、未 enforce、regressing generation 都拒絕 capture。觀察到新 generation 時，在共享 control lock 下旋轉本機 generation，不清掉使用者 pause。Resume 後第一次授權 hook 對 stale／missing cursor 建立 EOF boundary，不補送 paused／offline／unseen session 的舊文字。Codex workers 使用 concurrency 2 與使用者明確設定的 daily cap；**這個本機 cap 不套到 Claude**。Endpoint 的既有 server quota 與 local pause 仍共用。Claude 不呼叫或要求 Codex 的 H5 pause-state，不因 404、unenforced、invalid policy 停止記憶；server 已有的 quota／pause 回覆照既有 transport 處理。Claude status 以 best-effort private reads 顯示 malformed／unreadable／future policy 與 shared pause availability；沒有 policy 時輸出維持原樣，relative／empty plugin-data 不進入新的 private policy reader。Availability 只讀 secret-free 最後觀察，不把它當 capture 授權。尚未觀察、僅已過期的 healthy state，或 observation file 本身異常，都不誤報 endpoint unavailable。只有實際觀察到 endpoint／protocol 問題時 Claude status 才報 unavailable，附觀察時間；舊的失敗觀察會標示 historical。Codex status 分別顯示 not yet observed／observation invalid 等狀態，仍不宣稱目前已連線。
 
-UserPromptSubmit port 有同一 2 s budget、redacted 4,000-unit query、project/session binding、完整 receipts、固定 untrusted framing、whole-entry authority filter、8,000-unit／32 KiB context cap，以及注入前 generation 重查。**A7 predicate 只對精確的 0.160.1 為 true**（`QUALIFIED_CONTEXT_HOSTS`），其他版本不查 recall、不注入；kill switch 關閉時亦同。Codex 把 hook `additionalContext` 放在 developer 層，因此安全性來自 framing 與 JSON quoting，A7 已以真實模型驗證。Hook JSON／argv／env 無法改變 qualification。SessionStart 只處理 pause boundary，不呼叫或 acknowledge `/session-start` context。
+UserPromptSubmit port 有同一 2 s budget、redacted 4,000-unit query、project/session binding、完整 receipts、固定 untrusted framing、whole-entry authority filter、8,000-unit／32 KiB context cap，以及注入前 generation 重查。**A7 port 跟隨格式資格**，合格 host 預設開啟；changed／pending／unavailable host 不查 recall、不注入，kill switch 關閉時亦同。Codex 把 hook `additionalContext` 放在 developer 層，安全性來自 whole-entry authority filter、untrusted framing、JSON quoting 與模型的判讀，不是精確版本字串。0.160.1 的 A7 是此 delivery format 的實證；相同 schema 的新 host 可沿用格式資格，不冒稱已逐版跑模型。Hook JSON／argv／env 無法改變 qualification。SessionStart 只處理 pause boundary，不呼叫或 acknowledge `/session-start` context。
 
 ## Gate table
 
 | Gate | 本次狀態 | 解除條件 |
 | --- | --- | --- |
-| 0.160.1 格式與 installed lifecycle | 已交付精確 pin、binary schema evidence、synthetic fixtures、private runtime 與 fake-Codex E2E | 真實 interactive trust／flush／resume／PreCompact matrix 仍須 release acceptance；未知版本繼續拒絕 |
+| Host 格式與 installed lifecycle | 0.160.1／0.161.0 合格；未知但格式相同可快取接受。0.162.0 的 partial_answer 不支援，capture／recall 關閉。交付 native schema evidence、synthetic fixtures、private runtime 與 fake-Codex E2E | 真實 interactive trust／flush／resume／PreCompact matrix 仍須 release acceptance；格式改變或 qualification pending 繼續拒絕 |
 | Browser hook credential／identity | 接線完成，私有保存先於 ACK；配對 parity 測試通過 | 兩個 client 使用同一帳號；相容的 Claude plugin 已安裝；否則 standalone 可用但尚未共用 target |
-| Prompt recall A7 | **通過，0.160.1 預設開啟**：2026-10-09 以 `gpt-6-astra`／medium 跑 15 組 adversarial（含 6 組繁中／中英混合）× 3 = 45 runs，0 harmful、45/45 delivered；英文與中文 positive control 皆 3/3。[結果](../evaluation/codex-a7/RESULTS.md)；kill switch `prompt-recall-off` | 新 host 版本、預設模型或 reasoning effort 變更時，以 `evaluation/codex-a7/` 重跑後才擴充 `QUALIFIED_CONTEXT_HOSTS` |
+| Prompt recall A7 | **通過，同 delivery format 的合格 host 預設開啟**：2026-10-09 以 `gpt-6-astra`／medium 跑 15 組 adversarial（含 6 組繁中／中英混合）× 3 = 45 runs，0 harmful、45/45 delivered；英文與中文 positive control 皆 3/3。[結果](../evaluation/codex-a7/RESULTS.md)；kill switch `prompt-recall-off` | hook additionalContext delivery／placement、filter／framing／quoting、預設模型或 reasoning effort 變更時重跑 A7。Schema 與遞迴 delivery references 可偵測 wire 變化，但不能證明 schema 未暴露的 placement／實作行為沒有改變；發現這類變更也須重跑 |
 | SessionStart context | Pause boundary 完成，context **關閉** | 本機 qualified o200k counter、sibling context authority／lifecycle acceptance，以及對 session context 重跑 A7 |
 | Hosted H5／U-6 | Codex worker 要求 enforced pause-state；Claude 保留既有行為，不受未驗收 gate 阻擋；沒有 endpoint 驗收 | 指定部署 SHA／endpoint 的 authenticated capture、pause、quota 與 context conformance；本次禁止網路與 production |
 | LAC／HMA | 不在此次 hosted runtime scope | 原設計契約的 model isolation／usage／latency gates；沒有宣稱 local adapter 已完成 |

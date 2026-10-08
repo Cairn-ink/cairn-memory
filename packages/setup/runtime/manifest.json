@@ -21,13 +21,15 @@
     "integrations/codex/context.mjs": "e3bb925f6f3d5ad81414ace302bf7f6cc16d235a785a0c68e39703809f992a1a",
     "integrations/codex/cursor.mjs": "fa09adaf803254a5a2781b2e88df9df746131cb2b8ffea829bb0d527ae215eb5",
     "integrations/codex/digest.mjs": "eeb6b23e608344e42bc2ef3c862fbc3cf09af2c1034293205623f7a8abe37f4e",
-    "integrations/codex/entry.mjs": "3ae5673ae10c9058563f49d3c02ae189ad2a4a11e30efde1cfe1369d5a5385c8",
-    "integrations/codex/hook.mjs": "bd0b7c1106e79f8021c7da085efa40cad7b0bb06312484518f291ff91e0944de",
+    "integrations/codex/entry.mjs": "558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952",
+    "integrations/codex/hook.mjs": "391cb31ff5154b2f9fca71dc5598b2152413950c2852653b1e40922090974bfd",
     "integrations/codex/hosted-lifecycle.mjs": "8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496",
-    "integrations/codex/installed-state.mjs": "4f8a49fabe49bc44702eb8c3ef1a79bb4e41cabc389134c3e3f79ffbdf76aff8",
-    "integrations/codex/installed.mjs": "8a09d6578d4434630cea7e504641fe949ce7c18e3aa10faec519337c7b317539",
-    "integrations/codex/parser.mjs": "a482c4609b0b67e2dc83539543964223cd27652a78f2e6def0feeed568761898",
+    "integrations/codex/installed-state.mjs": "f0599848195c9f988ccb192b790d0de130986476381f7ef28562542725f01a02",
+    "integrations/codex/installed.mjs": "539ba955393edef9695d6b5510eb11e71e4778c363f5c415fe0a6cfd7f15ce73",
+    "integrations/codex/parser.mjs": "a413f997de47007dea607604b0fbcdecf739cbae493d5156446f55a97e64a9f9",
+    "integrations/codex/qualification.mjs": "d06f5ff494ef96a602aaa6160ce8e8d81dae189da5eebc54592e51253ed9e7ad",
+    "integrations/codex/schema-evidence.mjs": "dbae491e6e07c1f6f7abb4c7190cecdbc6cb9b09225f528190a1411c98918428",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
-    "integrations/codex/worker.mjs": "6b4058a98eba40e6d2235a3c3f45f1dd6dbaaa6dc5a1664655a60eb106a17324"
+    "integrations/codex/worker.mjs": "8ecbe8745c9cc631fe3a4efe3295f9183fb3b07027ecca7fa355fbdff12263a2"
   }
 }

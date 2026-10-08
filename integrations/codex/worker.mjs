@@ -210,7 +210,7 @@ async function prepared(binding, options, action) {
         if (nl < 0)
           return { status: size > MAX_LINE ? "unsupported_format" : "partial_tail", state: s };
         try {
-          verifyHeader(header.subarray(0, nl), sessionId);
+          verifyHeader(header.subarray(0, nl), sessionId, options);
         } catch {
           if (s) {
             s.status = "unsupported_format";

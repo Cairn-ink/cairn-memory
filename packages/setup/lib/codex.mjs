@@ -4,7 +4,7 @@ import { lstat, mkdir, open, readFile, rename, rm, mkdtemp, realpath } from 'nod
 import { homedir, tmpdir } from 'node:os';
 import { delimiter, join, resolve, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
-import { qualifiedHost } from '../runtime/integrations/codex/parser.mjs';
+import { resolveCLI, qualifyBinary } from '../runtime/integrations/codex/qualification.mjs';
 import { setupInstalledCodex, installedStatus, controlCodex } from './codex-runtime.mjs';
 
 // Keep routing and all Codex behavior here; browser authorization can supply
@@ -214,14 +214,17 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     } else if (!existing && (action === 'status' || flags.includes('--dry-run') || !interactive)) {
       write(t('endpoint_default', { endpoint: 'https://cairn.ink' }));
     }
-    if (qualifiedHost(hostVersion)) {
+    const cliHost=await resolveCLI();
+    const installation=join(home,'cairn','installation.json');
+    const hostVerdict=cliHost ? await qualifyBinary(installation,cliHost,{cache:!flags.includes('--dry-run')}) : {status:'pending'};
+    if (hostVerdict.status==='qualified' && hostVerdict.version===hostVersion) {
       return await setupInstalledCodex({action,flags,home,hostVersion,write,prompt,interactive,browse,
         SetupError,t,endpointOverride,authOptions,signal,before,configPath,existing,usable,
-        neutral,get,snapshot,unchanged});
+        neutral,get,snapshot,unchanged,cliHost,hostVerdict});
     }
-    // Unknown writers remain MCP-only. An older installed runtime independently
-    // checks the current binary on every hook and worker, so upgrades fail closed.
-    await installedStatus({home,hostVersion,write,t,snapshot});
+    // Changed or unavailable format evidence keeps automatic paths closed.
+    // Status reports the actual observed app-server separately from this CLI.
+    await installedStatus({home,hostVersion,write,t,snapshot,cliHost,hostVerdict});
     if (action === 'status' || flags.includes('--dry-run')) {
       if (flags.includes('--dry-run')) {
         write(t('dry_run'));

@@ -2,17 +2,15 @@ import { normalizeBlocks, hash, PROFILE } from '../client/common-profile.mjs';
 
 export const CODEX_COMMIT = '36650394c5b38c2990ccf2a3457165ca3e9d9726';
 export const FORMAT = 'codex-0.157.1-paginated-v1';
-// Exact pins, not a semver range. The 0.160.1 binary evidence is frozen in
-// test/fixtures/format-evidence-0.160.1.json. Its canonical capture layout is
-// unchanged; retain the cursor/profile ID so existing pending ranges are stable.
-export const QUALIFIED_CREATORS = Object.freeze(['0.157.1', '0.160.1']);
-export const QUALIFIED_HOSTS = Object.freeze(['0.160.1']);
+// Seed versions have frozen native format evidence. Other hosts require a
+// binary-identity verdict; a version string never widens the parser by itself.
+export const QUALIFIED_CREATORS = Object.freeze(['0.157.1', '0.160.1', '0.161.0']);
+export const QUALIFIED_HOSTS = Object.freeze(['0.160.1', '0.161.0']);
 export const qualifiedHost = version => QUALIFIED_HOSTS.includes(version);
-// A7 authority acceptance is per exact host: evaluation/codex-a7/RESULTS.md ran
-// the installed hooks on 0.160.1 with a real model (45 adversarial runs, zero
-// harmful actions; both positive controls passed). Any other version stays closed.
-export const QUALIFIED_CONTEXT_HOSTS = Object.freeze(['0.160.1']);
-export const qualifiedContextHost = version => QUALIFIED_CONTEXT_HOSTS.includes(version);
+// A7 protects the delivery format with the authority filter, untrusted framing,
+// JSON quoting and the model. Re-run it when context delivery/placement changes.
+export const QUALIFIED_CONTEXT_HOSTS = QUALIFIED_HOSTS;
+export const qualifiedContextHost = qualifiedHost;
 export const MAX_READ = 1048576, MAX_LINE = 262144;
 const tops = new Set(['session_meta','response_item','inter_agent_communication',
   'inter_agent_communication_metadata','compacted','turn_context','token_usage_record',
@@ -31,12 +29,13 @@ const keys = (value, allowed) => value && typeof value === 'object' && !Array.is
 const unsupported = () => { throw new Error('unsupported_format'); };
 
 // Header evidence selects one layout. No fallback to user-role response_item.
-export function verifyHeader(line, sessionId) {
+export function verifyHeader(line, sessionId, { qualifiedCreatorVersion } = {}) {
   let row;
   try { row = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(line)); }
   catch { unsupported(); }
   const meta = row?.payload;
-  if (row.type !== 'session_meta' || !QUALIFIED_CREATORS.includes(meta?.cli_version) ||
+  if (row.type !== 'session_meta' || !(QUALIFIED_CREATORS.includes(meta?.cli_version) ||
+      (qualifiedCreatorVersion && meta?.cli_version === qualifiedCreatorVersion)) ||
       meta.history_mode !== 'paginated' || meta.id !== sessionId ||
       !['cli','exec'].includes(meta.source) || meta.history_base != null ||
       meta.forked_from_id != null || meta.parent_thread_id != null ||

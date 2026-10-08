@@ -1,0 +1,30 @@
+{
+  "internally tagged enum AgentMessageContent": {
+    "offset": 244449687,
+    "excerpt": "tMcpAttributionSourceplugin_idserver_nametool_namefirst_turn_idMcpAttributionStatusattribution_errorinternally tagged enum AgentMessageContentDynamicToolCallItemcontent_itemssuccesserrorImageGenerationItemrevised_promptresultsaved_pathasyncCommandExecutionItemscript_pathprocess_idcommandparsed_cmdsourceinteraction_inputaggregated_outputexit_codeExitedReviewModeItemreview_outputSubAgentActivityItemmodelagent_thread_idagent_pathContextCompactionItemin_progresscompletedEnteredReviewModeItemtargetAsyncUserInputQuestiontitleFunctionCallOutputItemoutputCollabAgentToolCallItemreceiver_thread_idsrecei"
+  },
+  "struct variant ThreadItem::AgentMessage with 6 elements": {
+    "offset": 239975412,
+    "excerpt": "processIdcommandActionsappContextmcpAppResourceUrisenderThreadIdreceiverThreadIdsagentsStateschangesstruct variant ThreadItem::AgentMessage with 6 elementsstruct variant ThreadItem::SubAgentActivity with 6 elementsstruct variant ThreadItem::EnteredReviewMode with 2 elementsstruct variant ThreadItem::ExitedReviewMode with 2 elementsstruct variant ThreadItem::FunctionCallOutput with 4 elementsstruct variant ThreadItem::Reasoning with 3 elementsstruct variant ThreadItem::McpToolCall with 13 elementsstruct variant ThreadItem::HookPrompt with 2 elementsstruct variant ThreadItem::ContextCompaction w"
+  },
+  "struct variant ThreadItem::UserMessage with 3 elements": {
+    "offset": 239976158,
+    "excerpt": "ant ThreadItem::DynamicToolCall with 8 elementsstruct variant ThreadItem::FileChange with 3 elementsstruct variant ThreadItem::UserMessage with 3 elementsstruct variant ThreadItem::Plan with 2 elementsstruct variant ThreadItem::ImageView with 2 elementslimitIdstruct variant ImageGenerationFailure::UsageLimitExceeded with 2 elementsschemestruct variant GatewayOAuthDelivery::Cookie with 1 elementstruct variant GatewayOAuthDelivery::Header with 2 elementsbyteRangeplaceholderstruct TextElement with 2 elementsusesCodexManagedCredentialsstruct variant Account::Chatgpt with 2 elementsstruct variant C"
+  },
+  "HookStartedhook_startedHookCompletedhook_completed": {
+    "offset": 240259540,
+    "excerpt": "nse_itemRawResponseCompletedraw_response_completedItemStarteditem_startedItemCompleteditem_completedHookStartedhook_startedHookCompletedhook_completedAgentMessageContentDeltaagent_message_content_deltaPlanDeltaplan_deltaReasoningContentDeltareasoning_content_deltaReasoningRawContentDeltareasoning_raw_content_deltaCollabAgentSpawnBegincollab_agent_spawn_beginCollabAgentSpawnEndcollab_agent_spawn_endCollabAgentInteractionBegincollab_agent_interaction_beginCollabAgentInteractionEndcollab_agent_interaction_endCollabWaitingBegincollab_waiting_begincollab_waiting_endcollab_close_beginCollabCloseEndC"
+  },
+  "RolloutItemWiremessagereplacement_history": {
+    "offset": 244445224,
+    "excerpt": "contexttoken_usage_recordworld_statesecurity_risk_scoreevent_msgrealtime_iteminternally tagged enum RolloutItemWiremessagereplacement_historyreplacement_history_metadatamcp_resource_originswindow_numberfirst_window_idprevious_window_idwindow_idcompaction_response_idlatest_token_usage_recordresume_metadatatrigger_turnRetainedSourceidmessage_idassistantCodexHarnessMetadataguardian_review_idsguardian_source_order_guidanceguardian_retained_omissionsretained_sourceclient_authoredfallback_token_limit_overridedelivered_assistant_messageharness_authored_configurationcompaction_model_hashcompaction_out"
+  },
+  "struct variant AgentMessageContent::Text": {
+    "offset": 244180613,
+    "excerpt": "variant WebSearchAction::OpenPagestruct HookPromptFragmentstruct BaseInstructionsstruct RealtimeItemstruct variant AgentMessageContent::Textstruct DynamicToolCallItemstruct ImageGenerationItemstruct CommandExecutionItemstruct ExitedReviewModeItemstruct SubAgentActivityItemstruct NetworkPermissionsstruct ContextCompactionItemstruct EnteredReviewModeItemstruct AsyncUserInputQuestionstruct FunctionCallOutputItemstruct LegacyReadWriteRootsstruct LocalShellExecActionstruct variant ReasoningItemContent::ReasoningTextstruct variant ReasoningItemContent::Textstruct SearchToolCallParamsstruct CollabAge"
+  },
+  "struct variant AgentMessageContent::Text with 1 element": {
+    "offset": 244387077,
+    "excerpt": "ct variant ReviewTarget::Commit with 2 elementsstruct WarningEvent with 1 elementrealtime_session_idstruct variant AgentMessageContent::Text with 1 elementcontent_itemssuccessstruct DynamicToolCallItem with 9 elementssaved_pathstruct ImageGenerationItem with 5 elementsstruct PlanItemArg with 2 elementsstruct McpInvocation with 3 elementscode_locationstruct ReviewFinding with 5 elementsnetwork_accesswritable_rootsexclude_tmpdir_env_varexclude_slash_tmpstruct TurnDiffEvent with 1 elementstartendtext_elementsstruct variant UserInput::Mention with 2 elementsstruct variant UserInput::Text with 2 el"
+  }
+}

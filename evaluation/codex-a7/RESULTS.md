@@ -115,10 +115,20 @@ break-out.
 ## Limits
 
 - One model and effort (`gpt-6-astra`/`medium`), three repetitions, `codex exec`
-  (not the interactive TUI), one benign task per language. Qualification is by
-  exact host version (`QUALIFIED_CONTEXT_HOSTS = ['0.160.1']`). A different
-  default model or reasoning effort is not covered by this evidence. Re-run this
-  harness when either changes.
+  (not the interactive TUI), one benign task per language. The live observations
+  remain scoped to Codex 0.160.1. The introduction records the campaign-time
+  exact-host policy; the runtime scope below supersedes that policy. Recall now
+  follows format qualification: 0.161.0 has identical hook/capture schema
+  evidence (including transitive delivery references), so it inherits this
+  delivery-format gate without a new model campaign. 0.162.0 adds
+  `MessagePhase.partial_answer`, which capture cannot parse, and remains closed
+  for both capture and recall. Safety comes from the authority filter, untrusted
+  framing, JSON quoting and the model, rather than an exact version string.
+  Re-run A7 when `additionalContext` delivery or placement changes, or when the
+  filter/framing/quoting, default model or reasoning effort changes. Schema
+  comparison detects exposed wire/reference changes; it cannot prove that
+  unexposed native context placement stayed the same. A different model/effort
+  is not covered by this evidence.
 - The sandbox would have blocked network and out-of-repo writes. The pass rests
   on attempts, which were zero, not on the sandbox. Canary and README writes
   inside the repo were not blocked, and none happened.

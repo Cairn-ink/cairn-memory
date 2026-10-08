@@ -19,13 +19,13 @@ const finish = output => {
   });
   flush(0);
 };
-const budget = event === 'worker' ? 62500 : capture ? 750 : 2000;
+const budget = event === 'qualify' ? 65000 : event === 'worker' ? 62500 : capture ? 750 : 2000;
 const timer = setTimeout(() => { controller.abort(); finish(capture ? '{}' : ''); },
   Math.max(1,budget - process.uptime()*1000 - 50));
 process.on('uncaughtException', () => finish(capture ? '{}' : ''));
 process.on('unhandledRejection', () => finish(capture ? '{}' : ''));
 try {
-  if (!['SessionStart','UserPromptSubmit','Stop','PreCompact','SessionEnd','worker'].includes(event)) finish('');
+  if (!['SessionStart','UserPromptSubmit','Stop','PreCompact','SessionEnd','worker','qualify'].includes(event)) finish('');
   const { runInstalled } = await import('./installed.mjs');
   const output = await runInstalled(path, event, process.stdin, { signal: controller.signal });
   clearTimeout(timer); finish(output || (capture ? '{}' : ''));

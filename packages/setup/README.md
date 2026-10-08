@@ -1,14 +1,14 @@
 # @cairn-ink/memory
 
 One-command setup of the Cairn Memory **Claude Code plugin**, or private automatic
-capture hooks for qualified **Codex CLI 0.160.1**. Node ≥22.16 and the selected
+capture hooks for format-qualified **Codex CLI / app-server**. Node ≥22.16 and the selected
 CLI on PATH are required. No runtime dependencies. Codex prompt-recall injection
-passed the A7 pinned-host evaluation and is on for 0.160.1; turn it off with
+uses the A7-tested delivery format and is on for qualified hosts; turn it off with
 `prompt-recall-off --client codex`. Recall is also available through MCP.
 
-安裝 Claude Code 外掛，或已驗收 Codex CLI 0.160.1 的私有自動 capture hooks。
+安裝 Claude Code 外掛，或格式合格 Codex CLI／app-server 的私有自動 capture hooks。
 需要 Node ≥22.16，以及 PATH 裡的選定 CLI，沒有 runtime dependencies。
-Codex prompt recall 注入已通過 A7 驗收，在 0.160.1 預設開啟；可用 `prompt-recall-off --client codex` 關閉，也可透過 MCP recall。
+Codex prompt recall 注入已通過 A7 驗收，在格式合格的 host 預設開啟；可用 `prompt-recall-off --client codex` 關閉，也可透過 MCP recall。
 
 ## Setup / 安裝
 
@@ -106,11 +106,11 @@ node packages/setup/bin/memory.mjs disable --client codex
 node packages/setup/bin/memory.mjs uninstall --client codex
 ```
 
-On Linux/WSL with exact host 0.160.1, setup installs SessionStart,
+On Linux/WSL with a qualified host format, setup installs SessionStart,
 UserPromptSubmit, Stop and PreCompact in user `hooks.json`. It copies a hashed,
 versioned runtime under `$CODEX_HOME/cairn` (default `~/.codex/cairn`), with 0700
 directories and 0600 files, independent of the npx cache. Review/trust with
-`/hooks`; setup uses no trust bypass. Unknown hosts never capture.
+`/hooks`; setup uses no trust bypass. Unknown hosts with identical schema evidence are qualified and cached by binary identity; changed or pending formats never capture or recall. 0.161.0 matches the frozen 0.160.1 evidence. 0.162.0 adds `MessagePhase.partial_answer` and remains closed. Hooks detect the actual native CLI/app-server ancestor and never generate schemas inside the 2s budget. See [format evidence and gates](../../docs/codex-setup.md).
 
 Hooks use device browser authorization. The memory-scoped credential is stored
 as a private **0600 plaintext file, not a keyring**; it never enters Codex’s
@@ -161,14 +161,14 @@ handoff; hosted pause-state is fetched in the worker, outside the foreground
 budget. Worker failures exit 0 and emit no logs. SessionStart establishes the
 protocol 0.3.0 pause/resume EOF boundary. Prompt recall’s redaction, full receipt
 framing, authority filter, 8,000-unit bound and single 2 s budget are tested, and
-**automatic injection is on for 0.160.1 after the A7 pinned-host adversarial
-evaluation** (`evaluation/codex-a7/RESULTS.md`). `prompt-recall-off` is its kill switch.
+**automatic injection is on for format-qualified hosts using the A7-tested
+delivery format** (`evaluation/codex-a7/RESULTS.md`). `prompt-recall-off` is its kill switch.
 SessionStart context also needs a qualified local o200k counter. MCP recall is
 available. Status reports registration/credential presence and last observed
 hosted pause; it does not verify trust, server reachability or account parity.
 
 本次 0.3.0 尚未發布。Codex 自動 capture、browser credential、私有 runtime 與共享
-identity／控制已接線；prompt recall 注入已通過 A7 真實 host 驗收，0.160.1 預設開啟，
+identity／控制已接線；prompt recall 注入已通過 A7 真實 host 驗收，格式合格的 host 預設開啟，
 可用 `prompt-recall-off --client codex` 關閉。SessionStart 先建立 pause EOF boundary，
 startup context 另待本機 tokenizer。使用前在 `/hooks` 檢閱並信任 handlers。
 Hook 憑證是私有 0600 明文檔，與可選的 MCP PAT 分開；MCP 優先採用原生 OAuth。

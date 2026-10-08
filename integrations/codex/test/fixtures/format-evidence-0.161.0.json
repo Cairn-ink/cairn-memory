@@ -1,0 +1,78 @@
+{
+  "version": "0.161.0",
+  "binarySha256": "9a820c17865fa825d04db416818679a9d63bd72e50835c396f496e5684626c9c",
+  "generatedSchemaSha256": "a37013da2e9bb4af75513f4f3625dd2c6d6c017b0a4cd44ddc47c41401f032c8",
+  "versionExitCode": 0,
+  "schemaExitCode": 0,
+  "embeddedHooks": [
+    "pre-compact.command.input",
+    "pre-compact.command.output",
+    "session-start.command.input",
+    "session-start.command.output",
+    "stop.command.input",
+    "stop.command.output",
+    "user-prompt-submit.command.input",
+    "user-prompt-submit.command.output"
+  ],
+  "network": false,
+  "note": "Type/schema evidence only; transcript serialization and native context placement need separate synthetic host evidence.",
+  "qualified": true,
+  "source": "installed native binary only; no config, sessions, network or model calls",
+  "fixtureScope": "Synthetic canonical capture records derived from schemas/serde markers; NOT a native rollout or model observation.",
+  "comparison": "All selected definitions, including 44 transitive protocol definitions, and eight hook schemas match 0.160.1.",
+  "context": "Schema only: additionalContext wire unchanged. Native placement/model behavior not exercised; A7 must be rerun if delivery/placement changes.",
+  "files": [
+    {
+      "path": "binary-0.161.0/app-server-selected.json",
+      "sha256": "d3705e251879dedb2ac76957e08daad4f1fbef3791bc75801350ae75a4e41dba"
+    },
+    {
+      "path": "binary-0.161.0/format.json",
+      "sha256": "d82e34d564b038efcd8558a53206c2c344a99dea685ff2ed81369a64374d656c"
+    },
+    {
+      "path": "binary-0.161.0/pre-compact.command.input.json",
+      "sha256": "5728b5da4c63e1e07f2d53ac8b2adc18306cd3dc8b01b556fc422e75b32a8734"
+    },
+    {
+      "path": "binary-0.161.0/pre-compact.command.output.json",
+      "sha256": "98ba0dbf0848d8283cfe48a85122f4d9122baae1b457f50e239504864900247e"
+    },
+    {
+      "path": "binary-0.161.0/qualification.json",
+      "sha256": "b3c1c87c746bc50a8f38f547644fb7e96fb41edc2f5ae11a3fe4790b3ea6b18f"
+    },
+    {
+      "path": "binary-0.161.0/serde-markers.json",
+      "sha256": "6efdd83eccde72c2eeb4a5378b2a42346224fab3ef1b322bc7ef9da5a0100cbb"
+    },
+    {
+      "path": "binary-0.161.0/session-start.command.input.json",
+      "sha256": "f7299ffcc96c8ad0ab51df77743632f8374390329b14bef87c4e0d00b2caa4a2"
+    },
+    {
+      "path": "binary-0.161.0/session-start.command.output.json",
+      "sha256": "72c8cded2efc7024abfd62692b84934b1b1999cb595665f4a520dc8ebb5eb690"
+    },
+    {
+      "path": "binary-0.161.0/stop.command.input.json",
+      "sha256": "b162ebcae8c3b872aee3725128b436769557fc1fe0c83336c4e76eed62b22626"
+    },
+    {
+      "path": "binary-0.161.0/stop.command.output.json",
+      "sha256": "37679d1a933fdc3dc8cea5ff12d7d0e2dacfc036208d134aefc09247e1222d88"
+    },
+    {
+      "path": "binary-0.161.0/user-prompt-submit.command.input.json",
+      "sha256": "31d3d5e094ae9baa9478bc8e3d09f689de5a74228a404d2dffe60fc8fa89e3a0"
+    },
+    {
+      "path": "binary-0.161.0/user-prompt-submit.command.output.json",
+      "sha256": "12a741340d3a5acaf139721ad086d79d6dc0d961f752c6d82bd7a315f374e641"
+    },
+    {
+      "path": "primary-0.161.0.jsonl",
+      "sha256": "0e3dbc6659bc25fdcff772b25322af9f74d07c74df32aa9be618948f21e37a74"
+    }
+  ]
+}

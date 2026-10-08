@@ -1,14 +1,14 @@
 import { join, isAbsolute, dirname } from 'node:path';
 import { privateRead, privateWrite, checkedPath } from '../client/private-state.mjs';
 import { normalizeEndpoint } from '../client/config.mjs';
-import { qualifiedHost } from './parser.mjs';
+import { validVersion } from './qualification.mjs';
 
 export const exact = (value, names) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === names.length && Object.keys(value).every(key => names.includes(key));
 export function validateInstallation(value) {
   if (!exact(value, ['version','enabled','hostVersion','codex','node','home','root','pairingRecord','usesClaude',
     'endpoint','runtime','dailyCap']) || value.version !== 1 || typeof value.enabled !== 'boolean' ||
-    !qualifiedHost(value.hostVersion) || typeof value.usesClaude !== 'boolean' ||
+    !validVersion(value.hostVersion) || typeof value.usesClaude !== 'boolean' ||
     ![value.codex,value.node,value.home,value.root,value.runtime].every(path => typeof path === 'string' && isAbsolute(path)) ||
     !(value.pairingRecord === null || (typeof value.pairingRecord === 'string' && isAbsolute(value.pairingRecord))) ||
     !Number.isSafeInteger(value.dailyCap) || value.dailyCap < 1 || value.dailyCap > 100000 ||

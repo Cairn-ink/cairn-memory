@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, lstat, readdir, symlink, unlink, cp, chmod } from 'node:fs/promises';
+import { readFile, writeFile, appendFile, mkdir, lstat, readdir, symlink, unlink, cp, chmod } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { translator } from '../lib/messages.mjs';
@@ -21,6 +21,8 @@ import { hash } from '../../../integrations/client/common-profile.mjs';
 import { cursorPath,readCursor } from '../../../integrations/codex/cursor.mjs';
 import { hostedTargetId } from '../../../integrations/client/transport-hosted.mjs';
 import { PassThrough } from 'node:stream';
+import { binaryIdentity } from '../../../integrations/codex/qualification.mjs';
+import { fileURLToPath } from 'node:url';
 
 const mcpSecret = 'synthetic-MCP-PAT-different-from-hook-token';
 const session = '11111111-1111-4111-8111-111111111111';
@@ -37,12 +39,16 @@ async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,c
   await writeFile(join(codexHome,'config.toml'),config,{mode:0o600});
   if (hooks) await writeFile(join(codexHome,'hooks.json'),JSON.stringify(hooks),{mode:0o600});
   const statePath = join(ws.path,'state.json'),calls = join(ws.path,'calls.jsonl');
-  await writeFile(statePath,JSON.stringify({version:'0.160.1',recordEnv:true,token:mcpSecret,...state}));
+  await writeFile(statePath,JSON.stringify({version:'0.160.1',formatEvidence:fileURLToPath(new URL('../../../integrations/codex/test/fixtures/',import.meta.url)),recordEnv:true,token:mcpSecret,...state}));
   await writeFile(calls,'');
   const source = await readFile(new URL('./fake-codex.mjs',import.meta.url),'utf8');
   const command=nativeBinary ? `import{spawn}from'node:child_process';const child=spawn(${JSON.stringify(networkSandbox)},[${JSON.stringify(nativeBinary)},...process.argv.slice(2)],{stdio:'inherit'});child.on('close',code=>{process.exitCode=code;});` :
     `process.env.FAKE_STATE=${JSON.stringify(statePath)};process.env.FAKE_CALLS=${JSON.stringify(calls)};\n${source}`;
-  await writeFile(join(bin,'codex'),`#!${process.execPath}\n${command}`,{mode:0o755});
+  // Freeze native-shaped schema/serde strings in this fake executable so the
+  // production format collector (rather than a version-only seam) decides.
+  const evidence=JSON.parse(await readFile(new URL('../../../integrations/codex/test/fixtures/binary-0.160.1/format.json',import.meta.url)));
+  const embedded='\n/*\n'+Object.values(evidence.hooks).map(value=>JSON.stringify(value,null,2)).join('\n')+'\n'+evidence.serdeMarkers.join('\n')+'\n*/\n';
+  await writeFile(join(bin,'codex'),`#!${process.execPath}\n${command}${nativeBinary?'':embedded}`,{mode:0o755});
   const profileRoot = join(home,'.claude/plugins/data/cairn-memory-cairn-memory');
   let originalProjectId;const claudeState=join(ws.path,'claude-state.json');
   await writeFile(claudeState,JSON.stringify({installed:claudeInstalled,enabled:claudeEnabled,version:claudeVersion??(claudePolicy?'0.3.2':'0.1.1')}));
@@ -89,7 +95,9 @@ async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,c
   const records=()=>readFile(calls,'utf8').then(text=>text.trim().split('\n').filter(Boolean).map(JSON.parse));
   assert.ok(!(await readFile(calls,'utf8')).includes(secret));
   assert.ok(!(await readFile(calls,'utf8')).includes(mcpSecret));
-  return {...result,ws,home,codexHome,installation,installed,server,env,bin,profileRoot,originalProjectId,run,records,statePath,claudeState,screens};
+  const host={identity:await binaryIdentity(join(bin,'codex')),binaryPath:join(bin,'codex'),kind:'cli'};
+  const detectHost=async()=>host;
+  return {...result,detectHost,host,ws,home,codexHome,installation,installed,server,env,bin,profileRoot,originalProjectId,run,records,statePath,claudeState,screens};
 }
 
 test('CX-5 browser credential is saved before ACK; OAuth MCP, private stable runtime and four user hooks',async t=>{
@@ -273,7 +281,7 @@ async function memoryRuntime(t,options={}) {
     const stream=new PassThrough();stream.end(JSON.stringify(event==='worker'?handoff:{hook_event_name:event,
       session_id:session,cwd:project,transcript_path:path,...extras}));
     return runInstalled(f.installation,event,stream,{signal:AbortSignal.timeout(event==='worker'?60000:2000),
-      contextQualification:()=>true, // explicit seam; the production default is A7-qualified for 0.160.1
+      detectHost:f.detectHost, // fixture process ancestry; production format cache decides
       launch:launch??(async(_p,_c,content)=>{handoff=JSON.parse(content);})});
   };
   return {...f,path,project,projectId,requests,invoke,handoff:()=>handoff,pause:value=>{pause=value;},
@@ -314,7 +322,8 @@ test('CX-5 prompt recall injects receipt framing and shares project identity wit
 
 test('CX-5 host upgrade refuses before fetching pause state or reading capture source',async t=>{
   const f=await memoryRuntime(t);
-  const state=JSON.parse(await readFile(f.statePath,'utf8'));state.version='0.160.2';await writeFile(f.statePath,JSON.stringify(state));
+  const state=JSON.parse(await readFile(f.statePath,'utf8'));state.version='0.162.0';await writeFile(f.statePath,JSON.stringify(state));
+  await appendFile(f.host.binaryPath,'\n// binary upgraded\n');f.host.identity=await binaryIdentity(f.host.binaryPath);
   assert.equal(await f.invoke('Stop'),'');assert.equal(f.requests.length,0);assert.equal(await f.cursor(),null);
 });
 
@@ -366,11 +375,11 @@ test('CX-5 production launcher sends only closed stdin handoff; child env and di
   await writeFile(f.installation,JSON.stringify({...f.installed,runtime}),{mode:0o600});
   const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'Stop',session_id:session,cwd:f.project,transcript_path:f.path,
     last_assistant_message:secret,irrelevant:secret}));
-  assert.equal(await runInstalled(f.installation,'Stop',stream,{signal:AbortSignal.timeout(2000)}),'{}');
+  assert.equal(await runInstalled(f.installation,'Stop',stream,{signal:AbortSignal.timeout(2000),detectHost:f.detectHost}),'{}');
   let value;
   for(let i=0;i<40;i++) {try{value=JSON.parse(await readFile(record,'utf8'));break;}catch{await new Promise(r=>setTimeout(r,25));}}
   assert.ok(value);assert.ok(!JSON.stringify(value).includes(secret));assert.ok(!JSON.stringify(value).includes(inheritedSecret));
-  assert.deepEqual(Object.keys(JSON.parse(value.input)).sort(),['byteEnd','client','cwd','endIntent','generation','parser','path','sessionId'].sort());
+  assert.deepEqual(Object.keys(JSON.parse(value.input)).sort(),['byteEnd','client','cwd','endIntent','generation','host','parser','path','sessionId'].sort());
   assert.ok(!value.env.NODE_OPTIONS);assert.ok(!value.env.CLAUDE_PLUGIN_OPTION_API_TOKEN);
   assert.ok(!value.env.HTTPS_PROXY);
 });
@@ -425,10 +434,10 @@ test('CX-5 default installed prompt hook injects on the A7-qualified host; the k
   f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',
     scope:'personal',projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
     receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
-  // No qualification seam: the production default decides. Hook JSON cannot change it.
+  // Only ancestry is synthetic; production schema qualification decides. Hook JSON cannot change it.
   const prompt=()=>{const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,
     cwd:f.project,transcript_path:null,prompt:'Preferences?',contextQualification:false}));
-    return runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000)});};
+    return runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:f.detectHost});};
   assert.match(JSON.parse(await prompt()).hookSpecificOutput.additionalContext,/untrusted source-attributed recollections/);
   assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
   const switchPath=join(f.codexHome,'cairn/prompt-recall.json');
@@ -461,7 +470,7 @@ test('CX-5 switching prompt recall off during an in-flight recall injects nothin
   f.delay(async route=>{if(route.endsWith('/recall'))await writeFile(switchPath,'{"version":1,"enabled":false}',{mode:0o600});});
   const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,
     cwd:f.project,transcript_path:null,prompt:'Preferences?'}));
-  assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000)}),'');
+  assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:f.detectHost}),'');
   assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
   assert.equal(JSON.parse(await readFile(switchPath,'utf8')).enabled,false);
 });
@@ -714,4 +723,61 @@ test('CX-5 unpair never mints a lost Claude key or exits successfully with disab
   const claude={client:'claude',home:f.home,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}};
   assert.equal((await resolveClient(claude)).enabled,true);
   assert.equal(await clientProjectId(claude,'/synthetic/project'),f.originalProjectId);
+});
+
+
+for(const version of ['0.161.0','0.999.0'])test('CX-5 status qualifies identical format and enables capture/recall for '+version,async t=>{
+  const f=await memoryRuntime(t,{state:{version}});
+  assert.equal(f.installed.hostVersion,version);
+  const status=await f.run(['status','--client','codex']);
+  assert.equal(status.code,0,status.stdout);assert.ok(status.stdout.includes(`Codex ${version}: format qualified.`));
+  await writeFile(f.path,(await readFile(f.path,'utf8')).replace('0.160.1',version));
+  assert.equal(await f.invoke('Stop'),'{}');await f.invoke('worker');
+  assert.equal(f.requests.filter(row=>row.route.endsWith('/capture')).length,1);
+  assert.deepEqual(f.requests.find(row=>row.route.endsWith('/capture')).body.messages.map(row=>row.content),['Prefer diagrams.','Understood.']);
+  f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',
+    scope:'personal',projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
+    receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
+  assert.match(JSON.parse(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'})).hookSpecificOutput.additionalContext,/untrusted source-attributed recollections/);
+  assert.equal(f.requests.filter(row=>row.route.endsWith('/recall')).length,1);
+});
+
+test('CX-5 app-server format verdict controls recall independently of install-time CLI and status names the refused host',async t=>{
+  const f=await memoryRuntime(t);
+  // Install-time CLI stays 0.160.1; observed app-server has different evidence.
+  const daemon=join(f.ws.path,'daemon-codex');
+  await cp(f.host.binaryPath,daemon);await chmod(daemon,0o700);
+  const daemonHost={identity:await binaryIdentity(daemon),binaryPath:daemon,kind:'app-server'};
+  const {qualifyBinary,observeHost}=await import('../../../integrations/codex/qualification.mjs');
+  const changed=JSON.parse(await readFile(new URL('../../../integrations/codex/test/fixtures/binary-0.162.0/format.json',import.meta.url)));
+  await qualifyBinary(f.installation,daemonHost,{collect:async()=>({version:'0.162.0',evidence:changed,binarySha256:'a'.repeat(64)})});
+  await observeHost(f.installation,daemonHost);
+  const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,cwd:f.project,
+    transcript_path:null,prompt:'Preferences?',host:f.host}));
+  assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:async()=>daemonHost}),'');
+  assert.equal(f.requests.length,0);
+  const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
+  assert.match(status.stdout,/app-server: Codex 0\.162\.0 is newer than this plugin supports; capture and recall are paused until an update\./);
+  assert.match(status.stdout,/Prompt recall injection \(UserPromptSubmit\): per host \(qualified: on; unqualified: off\)/);
+});
+
+test('CX-5 pending host in installed entry respects 2s budget and does not read the transcript',async t=>{
+  const f=await fixture(t);assert.equal(f.code,0,f.stdout);
+  const entry=join(f.installed.runtime,'integrations/codex/entry.mjs');
+  const start=performance.now(),child=spawn(process.execPath,[entry,f.installation,'UserPromptSubmit'],{env:f.env,stdio:['pipe','pipe','pipe']});
+  let out='',err='';child.stdout.on('data',chunk=>out+=chunk);child.stderr.on('data',chunk=>err+=chunk);
+  // No Codex ancestor: there is no fallback to the qualified install-time CLI.
+  child.stdin.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,cwd:'/synthetic/project',transcript_path:'/not-authorized'}));
+  assert.equal(await new Promise(resolve=>child.on('close',resolve)),0);
+  assert.equal(out,'');assert.equal(err,'');assert.ok(performance.now()-start<2000);
+});
+
+
+test('CX-5 status reports app-server separately even when it shares the qualified CLI executable',async t=>{
+  const f=await fixture(t);assert.equal(f.code,0,f.stdout);
+  const {observeHost}=await import('../../../integrations/codex/qualification.mjs');
+  await observeHost(f.installation,{...f.host,kind:'app-server'});
+  const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
+  assert.match(status.stdout,/cli: Codex 0\.160\.1: format qualified/);
+  assert.match(status.stdout,/last observed app-server: Codex 0\.160\.1: format qualified/);
 });

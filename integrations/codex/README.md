@@ -1,6 +1,6 @@
 # Codex installed runtime and capture building blocks (CX-5)
 
-Installer 0.3.0 wires the hosted runtime for exact **codex-cli 0.160.1** on
+Installer 0.3.0 wires the hosted runtime for format-qualified **Codex CLI / app-server** on
 Linux/WSL. It installs four user-level command hooks, a private versioned runtime,
 browser memory-scoped credential, adopted/shared project identity and endpoint
 policy. It is unpublished. See [setup, qualification and gates](../../docs/codex-setup.md).
@@ -20,10 +20,10 @@ hosted pause, preserving generation/EOF barriers and rechecking before dispatch.
 children receive a closed environment without Node preloads, proxies or plugin
 tokens. Npx cache paths are never installed as commands.
 
-The exact creator qualification accepts 0.157.1 and 0.160.1 flat paginated CLI/exec
-JSONL. The latter is derived from the installed binary’s schemas, embedded hook
+The frozen creator qualification accepts 0.157.1, 0.160.1 and 0.161.0 flat paginated CLI/exec
+JSONL. The 0.160.1 fixture is derived from the installed binary’s schemas, embedded hook
 wire schemas, native synthetic UserMessage transcript and serde/type evidence;
-no successful model assistant response was observed. Unknown versions/layouts,
+no successful model assistant response was observed. 0.161.0 has schema-only synthetic evidence. Unqualified versions/layouts,
 fork/subagent/non-CLI metadata fail closed. Binary and fixture hashes are frozen
 in `test/fixtures/format-evidence-0.160.1.json`. Reproduce schema evidence with
 `scripts/qualify-codex.mjs <native-binary> <new-private-dir>`.
@@ -39,9 +39,9 @@ The UserPromptSubmit recall port redacts/bounds queries, hashes the host session
 identity, rechecks hosted/local generations before dispatch and injection, and
 uses one 2 s signal. `context.mjs` quotes bounded complete entries/receipts under
 a fixed trusted untrusted-data preamble and rejects execution/authority attempts.
-The installed `qualifiedContextHost` predicate is true only for exact 0.160.1,
-which passed the A7 pinned-host adversarial evaluation
-([results](../../evaluation/codex-a7/RESULTS.md)). Other hosts do not call recall
+The installed context gate follows the actual running host’s binary-identity format verdict,
+using the delivery format covered by the A7 pinned-host adversarial evaluation
+([results](../../evaluation/codex-a7/RESULTS.md)). Pending or changed formats do not call recall
 or inject. The owner-private `prompt-recall.json` kill switch beside the
 installation (`prompt-recall-off|on --client codex`) disables injection; a missing
 file means on, and an unreadable/unsafe/malformed file means off. It is read before
@@ -153,3 +153,28 @@ and supports retry without another grant. Unsafe optional policy paths are repor
 and skipped; cleanup never follows their symlinks. Claude status reports only an
 observed endpoint problem, with its timestamp, rather than treating a fresh or
 stale healthy observation as unavailable. Capture's strict H5 guard is unchanged.
+
+## Format re-qualification
+
+`qualification.mjs` compares eight embedded command schemas and the relevant
+app-server definitions, including transitive `$ref` content/phase/delivery/trust
+types and serde marker presence. Native 0.161.0 matches 0.160.1. Native 0.162.0
+adds `MessagePhase.partial_answer`, which capture cannot parse; capture and recall
+stay closed. The synthetic fixtures and immutable hashes record both outcomes.
+Unknown versions with identical evidence are accepted and cached by binary
+identity; changed evidence stays closed with an explicit status message.
+
+Hooks detect the closest native Codex ancestor through `/proc` and distinguish
+`app-server` from CLI. They only stat identity/read a private verdict; no schema
+subprocess or binary hashing blocks a hook. Pending qualification schedules one
+background probe and withholds automatic work. Setup/status also qualify outside
+the 2s hot path, in disposable HOME/CODEX_HOME with no model calls. Detached workers
+re-check the originating binary’s identity/verdict before capture. Unknown rollout
+creators require that exact qualified current host version; arbitrary version
+strings or another binary’s cached approval cannot open the parser.
+
+Recall’s safety comes from filtering, untrusted framing, quoting and the model.
+A7 must run again if additionalContext delivery/placement changes. Evidence
+comparison follows delivery references where exposed; native placement hidden
+from schemas still requires separate verification when a change is discovered.
+The prompt-recall kill switch remains unchanged.
