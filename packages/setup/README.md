@@ -122,18 +122,30 @@ MCP PAT setup; MCP defaults to the offered `codex mcp login cairn` OAuth path.
 Existing MCP credentials and unrelated settings/hooks are preserved.
 
 Claude/Codex pairing adopts the existing project key after explicit stopped-host
-consent, delivers the record to both configurations, and uses one literal-path
-HMAC identity. It requires the updated Claude bundle’s
-`automatic_memory_policy` capability. After stopped-host consent, setup refreshes
-and updates this installed Cairn plugin at its existing scopes, then rechecks
-the capability; missing/disabled/unsupported or failed updates refuse before
-adoption/authorization. Use the same Cairn account and endpoint in both clients.
-Both runtimes share local pause, endpoint quota, concurrency 2 and the required
-user-selected daily capture request cap. Uninstall removes only Codex’s private
-runtime/credential/hooks; MCP, shared identity and memory remain.
+consent and delivers only `pairing_record` to both configurations. New pairing
+requires an enabled Cairn plugin 0.3.2 with that configure capability. Missing,
+old or disabled plugins select Codex standalone with an explicit notice, without
+changing Claude keys/settings or updating its marketplace. New Codex standalone always uses
+`$CODEX_HOME/cairn-standalone`, preserving Claude's existing or future default
+root. Existing successful bindings never
+silently switch target on plugin removal/downgrade. Use the same account and
+endpoint to share memory after pairing; standalone targets are separate.
+
+Only Codex workers consume the selected daily capture cap and concurrency 2.
+Claude retains its existing capture/recall/controls and server quota; it does not
+require Codex's enforced pause-state endpoint. Its status reports invalid policies
+and unavailable/stale shared-pause observations without failing controls. No
+policy means unchanged Claude status. Uninstall removes all Cairn hook commands
+for this installation regardless of old node/runtime paths, plus its credential,
+runtime and endpoint policy. MCP, identity/key (including standalone) and memory
+remain. Failed reauthorization preserves the last successful installation.
+Browser/candidate failure on first pairing leaves Claude identity untouched.
+Partial native pairing delivery prints a pending notice; keep hosts/workers
+stopped and rerun to finish the same identity.
 
 Stop/PreCompact launch capture within 750 ms with no text or credential in the
-handoff; worker failures exit 0 and emit no logs. SessionStart establishes the
+handoff; hosted pause-state is fetched in the worker, outside the foreground
+budget. Worker failures exit 0 and emit no logs. SessionStart establishes the
 protocol 0.3.0 pause/resume EOF boundary. Prompt recall’s redaction, full receipt
 framing, authority filter, 8,000-unit bound and single 2 s budget are tested, but
 **automatic injection is disabled pending A7 pinned-host adversarial acceptance**.
@@ -146,7 +158,11 @@ identity／控制已接線；prompt recall 的接線與離線測試已交付，�
 等待 A7 真實 host authority 驗收。SessionStart 先建立 pause EOF boundary，
 startup context 另待本機 tokenizer。使用前在 `/hooks` 檢閱並信任 handlers。
 Hook 憑證是私有 0600 明文檔，與可選的 MCP PAT 分開；MCP 優先採用原生 OAuth。
-兩個 client 要使用同一帳號與 endpoint，Claude 外掛須先具備本次共享 policy 能力。
+新配對要求已安裝、啟用且相容的 Claude plugin 0.3.2；缺少或舊版時改用 standalone，
+不改 Claude key／設定、不停止 Codex 安裝。Standalone 尚未共用 target。兩個 client
+配對後要使用同一帳號與 endpoint。本機每日 cap 只限制 Codex workers；Claude
+capture、recall、pause／resume 維持既有行為，只在 status 顯示可用的 policy／gate 診斷。
+Uninstall 同時移除 Codex policy，不刪 memory、key 或 MCP。
 
 See [Codex evidence, gate table and recovery](../../docs/codex-setup.md).
 

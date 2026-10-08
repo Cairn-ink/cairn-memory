@@ -2795,3 +2795,38 @@ Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>. Alternate-index worktree
 diff and round 2/full-package diff --check exit 0. Release files remain 0.2.0.
 
 計時：開始 `date +%s` = 1790796567；結果記錄時 = 1790801587，已用 83 分鐘。約 64 分鐘時已向協調者回報未完矩陣與環境阻塞。
+
+
+## CX-5 round 2 review corrections — 2026-10-08
+
+This installed hosted slice applies the selected local daily cap/concurrency only
+to Codex workers. Claude's released start/capture/recall/pause/resume behavior is
+unchanged; no policy or unavailable H5 endpoint can stop it. Status alone reads
+policy and recent availability observations best-effort, without network or control
+authority. Server-enforced endpoint quota and local pause retain their existing
+shared behavior. This narrows the round-1 shared-client cap proposal; it does not
+claim A9 model-path or H5 production acceptance.
+
+New pairing requires the installed/enabled 0.3.2 Claude plugin and pairing_record
+configure support. Missing/old/disabled plugins use disclosed standalone Codex
+memory without changing Claude state or updating its marketplace. New standalone installs always select an explicit isolated Codex root outside
+known Claude/pair roots, preserving Claude's future default root too. Only the Codex selector accepts this opt-in binding;
+existing unmarked, non-Codex or fingerprint-mismatched keys refuse. Claude's
+resolution table and decisions are unchanged. Standalone targets are separate;
+a later pairing/migration requires the existing explicit stopped-host contract.
+
+Stop/PreCompact foreground performs no credential/hosted-pause query. Its worker
+reads enforced state before using the frozen LOCAL generation handoff and rechecks
+before dispatch. Hosted generation rotation still supersedes the frozen cursor
+and establishes EOF, so moving the request does not authorize paused history.
+Installation metadata changes only after authorization/candidate success; disabled
+binding metadata is durable and read back before native Claude delivery; pairing
+readiness completes before policy/hook publication. First browser/candidate
+failure does not alter identity. Partial native delivery prints a pending notice
+and rerun finishes the same identity with stopped-host consent. Cleanup recognizes
+all owned node/runtime-digest commands for the same installation path. Uninstall
+also removes that endpoint's Codex policy; identity/key/MCP are retained.
+
+A7 prompt injection and startup tokenizer/authority gates remain closed. Full
+legacy suites must still pass on a host that permits their loopback fixtures;
+this sandbox's EPERM is a validation limitation, never a passing release gate.

@@ -14,16 +14,30 @@
   use broad MCP PATs for workers or put hook credentials in config, argv, env or
   logs. Prefer the offered native MCP OAuth login; retain explicit MCP PAT paths.
 - Wire Stop/PreCompact incremental hosted capture with the Codex discriminator,
-  existing redaction/profile bounds, stable retries and shared enforced pause /
-  generation / EOF barriers. Bound automatic launch to 750 ms; internal errors
-  exit 0 quietly. Share endpoint quota, concurrency and explicit daily cap.
-- Adopt the existing Claude project key and deliver both pairing bindings; test
-  equal project IDs for the same path. The accompanying Claude bundle adds
-  `automatic_memory_policy` capability and shared guards. After stopped-host
-  consent, refresh/update existing Cairn scopes through native commands and
-  recheck capability; unsupported/disabled/failed updates refuse before adoption. Bump the accompanying plugin/marketplace patch to
-  0.3.2 so native plugin update can distinguish this bundle; publishing the
-  installer alone cannot update an already-installed plugin runtime.
+  existing redaction/profile bounds, stable retries and enforced pause/generation/
+  EOF barriers. The 750 ms foreground launch is local only; pause-state is read
+  in the worker. Internal errors exit 0 quietly. Endpoint server quota is shared;
+  the selected daily cap and concurrency 2 apply only to Codex workers.
+- Preserve the last successful installation when new node/runtime authorization
+  fails. Remove every installer-owned handler for this installation across old
+  node/runtime digests, prevent duplicate registration, and delete the Codex
+  endpoint policy on uninstall while retaining memory/key/MCP. First browser/
+  candidate failure leaves Claude identity unchanged; partial native pairing
+  delivery is visible and rerun completes the same identity.
+- Adopt the existing Claude key and deliver only pairing_record after explicit
+  stopped-host consent; test equal project IDs for the same literal path. Pair
+  only an installed/enabled compatible 0.3.2 plugin. Missing/old/disabled plugins
+  select disclosed Codex standalone instead; no automatic marketplace/plugin
+  update or unused automatic_memory_policy userConfig.
+- **Claude plugin/marketplace 0.3.2 changes relative to released 0.3.1:** status
+  alone adds best-effort diagnostics when a Codex policy exists (invalid or
+  unreadable/future policy, last observed unavailable/stale shared pause gate,
+  and a notice that Codex's daily cap does not limit Claude). No policy retains
+  the exact status text; relative/empty plugin-data retains legacy behavior.
+  Claude start/capture/recall/pause/resume, payloads, cursor and server-quota
+  behavior stay as on origin/main: no local Codex cap or new pause-state request.
+  Distributed shared helpers include the Codex-only binding/diagnostic paths;
+  the version reported in telemetry is 0.3.2. There is no new Claude setting.
 - Deliver a bounded UserPromptSubmit recall/context port, whole-entry authority
   filter, complete receipt framing and one 2 s budget. **Injection remains
   disabled pending A7 real pinned-host adversarial authority acceptance**, even

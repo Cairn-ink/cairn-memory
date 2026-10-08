@@ -82,7 +82,8 @@ Recall continues to inject the existing explicitly untrusted memory context;
 SessionStart retains its original telemetry-only behavior and sends no memory
 read. Codex does not currently recall per prompt; its shared hosted recall port
 accepts the same already opaque wire binding as capture if used by a qualified
-caller. No new Codex context injection or hook installation is enabled.
+caller. CX-5 installs qualified Codex hooks; context injection remains disabled
+pending the separate A7 acceptance gate.
 
 The exact old strict recall schema rejection permits one retry without the id,
 with the same query/scope/limit and cancellation. Its two-second deadline starts
@@ -590,28 +591,25 @@ provider/caller copies. Hosted schemas/defaults and paid-pilot boundaries are un
 The Codex discriminator identifies filtered user/assistant conversation text;
 it admits no tools, credentials, metadata or transcript paths. CX-5 installs
 its reader only for exact qualified host 0.160.1 and qualified CLI/exec layouts;
-unknown versions/layouts refuse before source capture. Telemetry stays disabled
-for Codex. Session-start may return owner-bound episode sources, memory receipts and
+unknown versions/layouts refuse before source capture. Telemetry stays disabled for
+Codex. Session-start may return owner-bound episode sources, memory receipts and
 accessible claimed commitment provenance, all untrusted and budgeted together.
 These fields can contain personal text; clients must not log response bodies.
-CX-5 now consumes enforced hosted pause state and establishes SessionStart EOF
-boundaries. Startup context and prompt recall injection remain disabled pending
-the Codex A7 authority gate; startup also requires a trusted local tokenizer.
-An output schema supporting additionalContext is not host instruction-following
-acceptance. MCP recall remains available.
+Codex workers consume enforced hosted pause state and establish pause-generation
+EOF boundaries; Stop/PreCompact foreground performs no remote pause query.
+Codex startup context and prompt injection remain disabled pending A7 authority
+acceptance; startup also needs a qualified local tokenizer. MCP recall is available.
 
-The Codex installer copies a hash-checked private runtime and stores the browser
-memory-scoped credential in a 0600 plaintext file under a 0700 config directory,
-not in a keyring. It verifies this save before authorization delivery ACK. The
-credential never enters Codex config.toml, argv, child environment or logs; it
-is separate from optional plaintext MCP PATs. Disable revokes launch/generation
-and removes only its handlers; uninstall also removes its credential/runtime,
-while retaining shared identity, memory and MCP. Local deletion does not revoke
-the server token. The updated Claude bundle and Codex consume one secret-free
-explicit cap/concurrency policy and hosted-pause observation under the paired
-root. Rotation preserves concurrent local user pause. Missing/unenforced or
-regressing remote state fails closed. Same account/endpoint must be selected by
-the person; the installer cannot compare another client’s hidden account owner.
+Codex browser hook credentials are private 0600 plaintext under a 0700 config
+directory, separate from MCP authorization; save/verification precedes delivery
+ACK. They never enter config.toml, argv, child environment or logs. A hashed,
+versioned runtime survives npx cache removal. Disable/uninstall removes all owned
+registrations across node/runtime upgrades; uninstall also removes its credential,
+runtime and endpoint policy, retaining memory/key/MCP. This local policy caps only
+Codex workers. Missing/incompatible Claude plugins use an explicitly disclosed
+standalone Codex target, preserving Claude keys/config. Pairing delivers only the
+shared identity record; same account/endpoint remains the person's choice. Local
+deletion does not revoke a server credential.
 
 Upgraded Claude honors the shared hosted quota gate as the explicit D1 exception.
 The selected private root retains `hosted-quota/<target digest>.json` and its

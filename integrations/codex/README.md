@@ -12,9 +12,11 @@ Only vetted context JSON or capture `{}` may reach stdout. The bounded output
 write has its own 50 ms flush deadline; worker stdout/stderr are discarded.
 
 `installed.mjs` reads owner-private installation/credential state, checks the
-current binary on every invocation, verifies pairing/policy and observes enforced
-hosted pause. A closed stdin handoff carries byte range/binding metadata and
-hosted generation, never source text, credentials or hook extras. Worker/version
+current binary on every invocation and verifies binding/policy. Stop/PreCompact
+foreground work is local only: no credential read or pause-state request. A
+closed stdin handoff carries byte range/binding and LOCAL generation metadata,
+never source text, credentials or hook extras. The worker observes enforced
+hosted pause, preserving generation/EOF barriers and rechecking before dispatch. Worker/version
 children receive a closed environment without Node preloads, proxies or plugin
 tokens. Npx cache paths are never installed as commands.
 
@@ -27,8 +29,10 @@ in `test/fixtures/format-evidence-0.160.1.json`. Reproduce schema evidence with
 `scripts/qualify-codex.mjs <native-binary> <new-private-dir>`.
 
 `hosted-lifecycle.mjs` adapts the protocol 0.3.0 transport to CX-3’s capture
-worker, retaining processing/quota/uncertain ranges and sharing quota/cap controls
-with the updated Claude bundle. `SessionStart` establishes pause EOF boundaries;
+worker, retaining processing/quota/uncertain ranges. Endpoint server quota and
+local pause remain shared; the installer daily cap/concurrency policy applies
+only to Codex workers. Claude hooks retain their released behavior; only status
+adds best-effort policy/pause availability diagnostics when a policy exists. `SessionStart` establishes pause EOF boundaries;
 no startup context is acknowledged without a qualified local o200k counter.
 
 The UserPromptSubmit recall port redacts/bounds queries, hashes the host session
