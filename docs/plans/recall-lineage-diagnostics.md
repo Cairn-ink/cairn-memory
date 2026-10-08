@@ -1,7 +1,8 @@
 # Bounded private recall lineage export
 
-Status: implementation, focused gates and primary full gates complete on both
-exact runtimes; fixed-candidate review pending. No paid activation or quality claim.
+Status: implementation, pre-review full gates and corrected-helper affected full
+gates complete on both exact runtimes. Both final-candidate reviews remain
+pending. No paid activation or quality claim.
 Worktree `recall-lineage-diagnostics`, branch `feat/recall-lineage-diagnostics`,
 fixed base `a1f2354d9ea84220f81dbe59cec1ce83cfbdfcfe` (PR #362).
 The dependent PR targets `feat/model-call-timeout`, not `main`.
@@ -205,3 +206,70 @@ These checks establish engineering behavior, not a new semantic score.
 Primary acceptance log set: `cairn-n27-primary-gates.m0UrE34g`. The final
 candidate and two independent review reports are bound in the PR delivery record;
 no self-merge, publication, deployment or paid evaluation follows from this gate.
+
+### Standards review resource correction
+
+The independent Standards review of candidate
+`a1af817d70b0bdd2f118298f6ef47ac0bc490af6` found a test-helper lifecycle defect:
+store construction used `.map(openMemoryCore)` before its cleanup `try`, so a
+later constructor rejection bypassed closure of prior handles; `forEach(close)`
+also stopped at the first throwing callback. This violated CONTRIBUTING's
+immediate workspace ownership rule. The original candidate remains preserved;
+only `testing/recall-lineage-child.mjs`, `test/mixed-recall-witness.test.mjs`
+and this plan were reopened, with no production or N28 changes.
+
+The child now opens sequentially and registers `workspace.defer` immediately
+after each successful real open, before counters or subsequent work. Competing
+manual teardown is removed. Two isolated controls exercise actual handles:
+the second real constructor rejects an explicit invalid timeout option, closing
+the first handle; a middle close callback throws only AFTER successful actual
+core closure, yet all three callbacks and workspace removal are attempted.
+The child retains exit 1 for these expected failures and exports only finite
+opened/attempted/closed/intentional-failure/cleanup flags, never exception data.
+Parent tests assert the finite constructor-rejection witness, every successful
+real close, zero owned residue and unchanged completed answers on close failure.
+The existing unavailable-DTO, success, intentional assertion and route-equality
+controls remain intact; earlier failed DTO tooling is retained above.
+
+Before changing teardown, the first scoped RED exited 1 (0/1): 1 opened store,
+0 close attempts. Splitting both controls into independently reported tests then
+exited 1 (0/2): the later-open case remained 0/1 closed, and the close-callback
+case closed only 2/3 handles. Each RED still removed its exact owned files;
+that did not make leaked live handles acceptable. The corrected scoped control
+passed 2/2 with actual exit 0. These are resource-regression checks, not a product
+timeout change, semantic result or paid-run authorization.
+
+Final two-file focused command retains flags BEFORE file paths and the original
+keyless exact-runtime environment. Node 22.16.0 passed 22/22, actual exit 0,
+zero failed/skipped; Node 24.15.0 passed 22/22, actual exit 0, zero failed/skipped.
+The child expected-failure exits remain 1; their parent assertions and canonical
+invocations exit 0 after checking finite witnesses and zero owned residue. Primary
+owns affected full LongMemEval runs on both runtimes, a new candidate commit and
+both independent review axes. Earlier full-gate evidence is historical for the
+pre-correction bytes, not acceptance of this changed helper.
+
+Correction delivery scope is three files against the preserved candidate,
+mechanically cross-checked by diff plus untracked listing against porcelain
+status. The complete branch still contains the same eight scoped delivery paths
+against the fixed base; committed-path discovery plus current status independently
+cross-checks that list. Three known read-only dependency symlinks remain excluded
+setup. Both production-module hashes are unchanged from the preserved candidate.
+The author freezes these files without committing or running further full suites.
+
+### Primary correction acceptance
+
+Primary inspected the three-file correction and reran every LongMemEval test
+using `node tools/testing/run.mjs --test-concurrency=1` followed by the complete
+mechanically enumerated `evaluation/longmemeval/test/*.test.mjs` list. Both exact
+Node 22.16.0 and 24.15.0 runs passed 313/313, zero failed/cancelled/skipped,
+actual exit 0; the enclosing verification harness also exited 0. All eight
+delivery file hashes matched before and after these runs. Logs and exact command
+arrays are retained in `cairn-n27-primary-gates.m0UrE34g/revision-results.json`.
+Only this acceptance record changed afterward. Both independent review axes
+must inspect the new committed candidate, not reuse their original decisions.
+
+The earlier 22 commands were launched serially, but their npm-appended
+`--test-concurrency=1` came after file arguments: those results establish test
+passes, not guaranteed file-level serial execution. The corrected full and
+focused runs put flags before file paths. No timing or performance claim is
+derived from either run.

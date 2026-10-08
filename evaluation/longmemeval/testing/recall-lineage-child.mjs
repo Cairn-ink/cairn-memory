@@ -5,6 +5,7 @@ import { readdirSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { openMemoryCore } from '../../../core/contract.mjs';
+import { MemoryStoreError } from '../../../core/validation.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { runMixedGeneration } from '../mixed-generation.mjs';
 import { createMixedResultJournal, inspectMixedResultJournal } from '../mixed-result-journal.mjs';
@@ -12,10 +13,21 @@ import { fakeMixedHttp, sourceRow, syntheticMixedFixture } from './mixed-fixture
 import { syntheticNativeDescriptors } from './result-journal-fixture.mjs';
 
 const [mode, parent] = process.argv.slice(2);
-assert.ok(['default', 'v1', 'v2', 'export-fault', 'ingestion-failure', 'assertion-failure'].includes(mode));
+assert.ok(['default', 'v1', 'v2', 'export-fault', 'ingestion-failure', 'assertion-failure',
+  'later-open-failure', 'deferred-close-failure'].includes(mode));
 const workspace = createTestWorkspace(null, { prefix: 'cairn-lineage-child-', parent });
 const originalRandomBytes = crypto.randomBytes;
 let output, faults = 0, nativeSkipped = 0, checkpoint = 'setup';
+let openedStores = 0, closeAttempts = 0, closedStores = 0, intentionalCloseFailures = 0, cleanupFailed = false;
+const closeStore = (core, index) => {
+  closeAttempts++;
+  assert.equal(core.close().ok, true);
+  closedStores++;
+  if (mode === 'deferred-close-failure' && index === 1) {
+    intentionalCloseFailures++;
+    throw Error('PRIVATE_N27_CLOSE_ERROR_CANARY');
+  }
+};
 try {
   const descriptors = syntheticNativeDescriptors(workspace.path);
   const rows = [sourceRow('lineage-child-0'), sourceRow('lineage-child-1')];
@@ -113,11 +125,21 @@ try {
     } else {
       checkpoint = 'salt';
       assert.equal(new Set(witnesses.map(value => value.lineage.salt)).size, 2);
-      const stores = readdirSync(fixture.root).filter(name => name.startsWith('mixed-cairn-'))
-        .map(name => openMemoryCore({ path: join(fixture.root, name, 'store.db') }));
-      try {
+      const paths = readdirSync(fixture.root).filter(name => name.startsWith('mixed-cairn-')).sort()
+        .map(name => join(fixture.root, name, 'store.db'));
+      if (mode === 'deferred-close-failure') paths.push(join(workspace.path, 'cleanup-extra.db'));
+      checkpoint = 'open';
+      const stores = [];
+      for (const [index, path] of paths.entries()) {
+        const core = openMemoryCore({ path,
+          ...(mode === 'later-open-failure' && index === 1 ? { modelCallTimeoutMs: 0 } : {}) });
+        workspace.defer(() => closeStore(core, index));
+        openedStores++;
+        stores.push(core);
+      }
+      {
         checkpoint = 'join';
-        for (const [index, arm] of arms.entries()) {
+        for (const [index, arm] of (mode === 'deferred-close-failure' ? [] : arms).entries()) {
           const lineage = arm.diagnostics.recallWitness.lineage;
           assert.equal(lineage.status, 'available');
           assert.equal(lineage.final.outcome, 'completed');
@@ -146,23 +168,30 @@ try {
             assert.equal(text.includes(canary), false);
           }
         }
-      } finally { stores.forEach(core => core.close()); }
+      }
     }
   }
   checkpoint = 'output';
-  output = { mode, faults, nativeSkipped, completedCairn: mode === 'ingestion-failure' ? 0 : arms.length,
+  output = { mode, faults, nativeSkipped,
+    expectedResourceFailure: ['later-open-failure', 'deferred-close-failure'].includes(mode),
+    completedCairn: mode === 'ingestion-failure' ? 0 : arms.length,
     failedCairn: mode === 'ingestion-failure' ? arms.length : 0, answerMatched: mode !== 'ingestion-failure',
     witnessDisposed: witnesses.map(value => value?.disposed ?? null),
     lineage: witnesses.map(value => value?.lineage ?? null), joinedRefs, joinedReceipts,
     routes: fake.calls.map(call => ({ route: call.route,
       stage: call.body.text?.format?.name ?? 'answer' })) };
   if (mode === 'assertion-failure') assert.fail('intentional_owned_child_failure');
-} catch {
+} catch (error) {
   process.exitCode = 1;
-  output = { mode, checkpoint, faults, intentionalFailure: mode === 'assertion-failure' };
+  output = { mode, checkpoint, faults, intentionalFailure: mode === 'assertion-failure',
+    expectedResourceFailure: ['later-open-failure', 'deferred-close-failure'].includes(mode),
+    constructorRejected: mode === 'later-open-failure' && checkpoint === 'open' &&
+      error instanceof MemoryStoreError && error.code === 'invalid_input' };
 } finally {
   crypto.randomBytes = originalRandomBytes;
   syncBuiltinESMExports();
-  await workspace.cleanup();
+  try { await workspace.cleanup(); }
+  catch { cleanupFailed = true; process.exitCode = 1; }
 }
-console.log(JSON.stringify({ ...output, remainingOwnedEntries: readdirSync(parent).length }));
+console.log(JSON.stringify({ ...output, openedStores, closeAttempts, closedStores,
+  intentionalCloseFailures, cleanupFailed, remainingOwnedEntries: readdirSync(parent).length }));
