@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — @cairn-ink/memory installer 0.2.0
+
+- Highlight the one-time code with blank lines and bold/color in a TTY, or
+  brackets under NO_COLOR/non-TTY output. Wait for Enter before browser launch,
+  show a short relative expiry, and repeat the code in the approval spinner.
+- Copy only the public device code through optional local clipboard tools;
+  skip SSH sessions and tolerate missing/failing tools. Add `--no-clipboard`.
+  Enter waiting shares the grant deadline and cancellation behavior.
+- Add validated `--endpoint <origin>` and print the selected endpoint's source
+  before authorization. Let readline own the visible endpoint prompt so TTY
+  redraws cannot replace it with a blank question. Preserved Claude config is
+  identified without reading back sensitive values.
+- Print one language per invocation across Claude and Codex flows: use LC_ALL,
+  LC_MESSAGES, LANG, then Intl locale; `zh*` selects Traditional Chinese, other
+  locales select English. Add `--lang zh|en` and a central message table,
+  preserving error kinds and exit codes.
+- Authorize in a browser with manually entered device codes, S256 proof, bounded
+  polling/backoff, a credential check and delivery ACK. New browser credentials
+  expire after 180 days; show the expiry on success. No code-bearing URLs.
+- Add `--manual-token`, `--reauthorize` and TTY-only `--no-browser`. Preserve
+  complete existing credentials by default. Dry run makes no network requests.
+- Cancel before ACK on configuration failure or interruption; use localized
+  denial, expiry, timeout and rate-limit messages. Reconcile lost ACKs without
+  assuming a saved credential was revoked.
+- Fall back to hidden PAT input on create 404/501. Save manual credentials as
+  unverified when the old credential route is unavailable; never downgrade
+  server/TLS/protocol errors. Support explicit HTTP(S) proxies and NO_PROXY
+  through Node APIs, with verified TLS and Node enterprise CA configuration.
+- Refresh existing marketplace caches and update installed plugins. Print the
+  actual installed plugin version separately from installer 0.2.0.
+- Use monotonic configure/ACK budgets that tolerate clock skew and lost exchange
+  responses. Allow ACK attempts up to 15 seconds within the remaining window,
+  and give explicit hook/status/token-settings recovery steps when unconfirmed.
+- Supplement project/local-only plugin installations with user scope. Bypass
+  proxies for loopback HTTP, stop token/ACK 501 retries, distinguish the active
+  token cap, show local dates and name `setup --reauthorize` in recovery messages.
+- Require the hook credential-state correction already in plugin 0.3.1.
+  Fake HTTP/TLS and CLI tests establish client behavior and secret handling;
+  hosted/native OS acceptance and npm publication remain separate.
+
 ## 0.3.1 — 2026-10-06
 
 Plugin and marketplace 0.3.1. Protocol stays 0.3.0.
@@ -39,15 +79,15 @@ Plugin and marketplace 0.3.1. Protocol stays 0.3.0.
 - Observe existing authenticated recall/capture requests without extra calls.
   SessionStart's unauthenticated telemetry never verifies a credential.
 
-## Unreleased — Claude Code one-command installer
+## @cairn-ink/memory installer 0.1.0 — Published
 
-- Prepare dependency-free `@cairn-ink/memory` (initial version proposed at 0.1.0)
+- Add dependency-free `@cairn-ink/memory`
   with `setup`, `setup --dry-run` and `status` for the repo's plugin and hooks.
 - Use a hidden PAT prompt and Claude Code stdin configuration when available,
   otherwise exact manual instructions. Legacy MCP removal needs confirmed
   plugin configuration and affirmative user consent.
-- Add fake-CLI tests and a release checklist. No publication, tag, merge or
-  release is included in this preparation.
+- Add fake-CLI tests and a release checklist. Installer releases are separate
+  from plugin releases.
 
 ## Unreleased — Windows source installer
 

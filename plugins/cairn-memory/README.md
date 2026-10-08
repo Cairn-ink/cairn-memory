@@ -9,19 +9,21 @@ names, can still be sent to the configured service.
 
 ## Install
 
-After chichi approves the npm release, with Node ≥22.16 and the Claude Code CLI:
+With Node ≥22.16 and the Claude Code CLI:
 
 ```sh
 npx @cairn-ink/memory setup
 ```
 
-**The npm helper is prepared but not published yet.** From a source checkout,
-run `node packages/setup/bin/memory.mjs setup`. It installs this plugin and its
-SessionStart, UserPromptSubmit, Stop and PreCompact hooks, opens the PAT settings
-page and accepts one hidden paste. Supported CLIs store `api_endpoint` and
-sensitive `api_token` through stdin; otherwise complete `/plugin configure
-cairn-memory@cairn-memory`. Legacy MCP removal requires confirmation after
-configuration. Use `setup --dry-run` to preview or `status` to inspect.
+Installer 0.1.0 is published. The source checkout prepares installer 0.2.0's
+browser authorization, awaiting publication by chichi; try it with
+`node packages/setup/bin/memory.mjs setup`. It installs or updates this plugin
+and its hooks, shows the actual plugin version separately from the installer,
+and saves an authorized credential through stdin. Enter the displayed code on
+`/device`; use `--no-browser` to open it yourself or `--manual-token` for hidden
+PAT paste. Complete existing credentials stay unless `--reauthorize` is used.
+Legacy MCP removal requires confirmation after configuration.
+Use `setup --dry-run` to preview without network or `status` to inspect presence.
 [Installer details](../../packages/setup/README.md)
 
 Manual fallback inside Claude Code:

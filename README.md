@@ -116,15 +116,16 @@ and forget. Its recall step reports `model_not_configured`.
 
 ## Install
 
-For **Claude Code automatic memory**, the prepared one-command installer is:
+For **Claude Code automatic memory**, run the one-command installer:
 
 ```sh
 npx @cairn-ink/memory setup
 ```
 
-**Not published yet:** this becomes available after chichi approves the npm
-release. For this checkout use `node packages/setup/bin/memory.mjs setup`, or
-the [manual plugin fallback](#install-for-claude-code-automatic-memory).
+**Installer 0.1.0 is published.** This checkout prepares browser authorization
+in installer 0.2.0, awaiting publication by chichi. Try it with
+`node packages/setup/bin/memory.mjs setup`, or use the
+[manual plugin fallback](#install-for-claude-code-automatic-memory).
 Requires Node ≥22.16 and `claude` on PATH. Other clients use MCP. This scoped
 helper installs the hosted plugin/hooks; local SQLite setup remains separate.
 
@@ -234,25 +235,30 @@ deploy a server or enable Codex lifecycle hooks. See
 
 ## Install for Claude Code (automatic memory)
 
-After the approved npm release, run from your terminal:
+Run the published installer from your terminal:
 
 ```sh
 npx @cairn-ink/memory setup
 ```
 
-While unpublished, use `node packages/setup/bin/memory.mjs setup` from this
-checkout. It checks Node ≥22.16 and Claude Code, installs SessionStart,
-UserPromptSubmit recall and Stop/PreCompact capture hooks with the plugin,
-opens the PAT settings page, and accepts one hidden paste. Supported CLIs save
-`api_endpoint`/`api_token` through stdin; older CLIs direct you to `/plugin
-configure`. Existing configuration is preserved. Legacy MCP `cairn` removal
-requires confirmation after plugin configuration. Restart Claude Code afterward.
+Installer 0.1.0 is published; this checkout's 0.2.0 awaits publication by chichi.
+Use `node packages/setup/bin/memory.mjs setup` to try browser authorization now.
+It refreshes the marketplace, installs or updates the plugin and hooks, prints
+both installer and installed plugin versions, and confirms the endpoint.
+Enter the displayed code at the bare `/device` URL and allow the request;
+setup securely saves the checked credential through stdin and acknowledges
+its delivery. New browser credentials last 180 days. Existing credentials are
+kept unless you pass `--reauthorize`; `--manual-token` retains hidden PAT paste.
+`--no-browser` works in a TTY with a browser on another device.
 
-Preview or inspect (use the local executable before publication):
+Create-route 404/501 clearly falls back to the manual prompt. An unavailable
+manual credential route saves unverified configuration. Server/TLS/protocol
+errors do not downgrade. Legacy MCP removal still requires confirmation.
+Restart Claude Code and send a message before checking hook status.
 
 ```sh
-npx @cairn-ink/memory setup --dry-run
-npx @cairn-ink/memory status
+node packages/setup/bin/memory.mjs setup --dry-run
+node packages/setup/bin/memory.mjs status
 ```
 
 [Setup options and credential handling](packages/setup/README.md) ·

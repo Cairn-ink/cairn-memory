@@ -1337,3 +1337,67 @@ are retained in the [round 2 handoff](plans/codex-client.md#cx-4-round-2-決策�
 A file-level pass from a broken worker pipe is not evidence of case-level success;
 hung or failed CI commands require a rerun in the ordinary CI environment.
 The existing round 1 results do not qualify the revised round 2 implementation.
+
+
+## Setup 0.2.0 browser authorization
+
+The setup suite uses a fake contract HTTP server and fake Claude CLI. Actual
+Node HTTP/TLS parsers exchange bytes over duplex streams and subprocess IPC;
+loopback listeners are denied with EPERM in this execution environment. TLS
+fixtures verify explicit CA trust, certificate rejection and HTTP/HTTPS proxy
+CONNECT behavior with verification enabled. This is client protocol evidence,
+not OS TCP, deployed server, real browser approval or credential-store evidence.
+Windows/WSL/macOS launch commands are selected by simulated-platform tests;
+no native desktop launch or corporate network acceptance is claimed.
+
+The installer uses Node HTTP/HTTPS/TLS, not fetch's implicit proxy behavior.
+Supported NO_PROXY rules are hosts/domain suffixes, optional ports, bracketed
+IPv6 and `*`; no CIDR/PAC/SOCKS or OS proxy discovery. Enterprise CA files use
+Node's NODE_EXTRA_CA_CERTS at process startup. There is no insecure TLS option.
+JavaScript strings cannot be zeroed in place: owned references are dropped and
+request/configuration Buffers are zeroed. Host malware/crashes and Claude's
+own storage remain outside installer guarantees.
+
+The current task explicitly chooses automatic hidden manual fallback on create
+404/501. The copied spec's older generic-404 paragraph instead asked users to
+rerun with --manual-token; the task instruction takes precedence. Other HTTP,
+TLS, redirect or protocol failures never trigger that fallback.
+
+Plugin 0.3.1 already contains the required hook credential-state correction.
+Installer status queries configuration presence without reading the token;
+installer credential checks never write hook-owned observations. Real hook
+verification still needs a restarted Claude Code session and a submitted message.
+Installer 0.2.0 remains unpublished; chichi publishes from her laptop.
+
+
+### Installer 0.2.0 review follow-up
+
+Configure and ACK use monotonic clocks. The delivery budget starts before the
+potentially issuing exchange; an ambiguous lost exchange keeps its original
+start, and retries cannot extend it. One second is reserved for server timestamp
+rounding, including grant expiry. Each ACK attempt may wait up to 15 seconds,
+capped by the remaining budget. Connections still open afresh; this change
+lengthens the timeout rather than claiming keep-alive reuse. Absolute server
+expiry values are metadata; the server's valid/ACK result is authoritative.
+Tests simulate skew in both directions, wall-clock jumps, slow ACK replies,
+replayed exchanges and exhausted budgets over the fake HTTP wire.
+
+Remaining review P3 work:
+
+- A saved credential may remain invalid after interruption or explicit revocation.
+  No automatic removal/rollback is implemented: the installer cannot read back
+  the old sensitive token, and ambiguous ACK must preserve potentially delivered
+  configuration. Recovery messages now name `setup --reauthorize`; an unconfirmed
+  delivery first asks for a fresh hook observation after a 60-second wait.
+- `--reauthorize` does not revoke the previous PAT automatically. Its value/id is
+  unavailable without forbidden sensitive config reads. The active-token-cap
+  error now directs users to `/settings/tokens` to revoke unused credentials.
+- HTTP-date `Retry-After` remains unsupported; the client accepts integer seconds
+  plus the contract's integer JSON `retry_after`. Supporting dates needs a
+  separate header parser and skew-safe reference, beyond a one-line correction.
+
+The prior round's review also noted intentional changes in endpoint path
+validation, no-install CLI exit status, dry-run MCP queries, non-TTY setup, and
+release/readme wording. This follow-up retains those reviewed behaviors: the
+explicit authorization brief still governs endpoint/TTY/network safety and
+publication is still reserved for chichi.
