@@ -74,7 +74,7 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   if (signal.aborted) return '';
   if (event === 'UserPromptSubmit') {
     const token = await readCredential(configPath, config.endpoint);
-    return recallContext(input, config, token, projectId, signal);
+    return recallContext(input, config, token, projectId, signal, () => promptRecallEnabled(configPath));
   }
   if (event === 'SessionStart') {
     const token = await readCredential(configPath, config.endpoint);

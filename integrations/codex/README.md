@@ -44,7 +44,9 @@ which passed the A7 pinned-host adversarial evaluation
 ([results](../../evaluation/codex-a7/RESULTS.md)). Other hosts do not call recall
 or inject. The owner-private `prompt-recall.json` kill switch beside the
 installation (`prompt-recall-off|on --client codex`) disables injection; a missing
-file means on, and an unreadable/unsafe/malformed file means off. Startup context
+file means on, and an unreadable/unsafe/malformed file means off. It is read before
+recall and again as the last step before context is returned, so switching off
+during an in-flight recall injects nothing. Startup context
 stays independently disabled.
 
 The lower-level `hook.mjs` seam remains usable by CX-3 synthetic callers, with

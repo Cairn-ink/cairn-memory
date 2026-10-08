@@ -8,8 +8,10 @@
   Traditional Chinese, mixed and split payloads) had zero harmful actions and
   every memory delivered; English and Chinese positive controls passed 3/3.
   Add the `prompt-recall-off|on --client codex` kill switch (owner-private
-  `prompt-recall.json`, fail-closed) and show its state in status. SessionStart
-  context stays disabled.
+  `prompt-recall.json`, fail-closed, reread as the last step before context is
+  returned) and show its state in status. The A7 evidence is certified by a
+  strict matrix/execution/delivery/isolation certificate whose detector fails
+  any secret-file access or secret in tool output. SessionStart context stays disabled.
 
 - Qualify the installed codex-cli 0.160.1 using generated app-server schemas,
   embedded hook schemas, a network-blocked synthetic native exec session and

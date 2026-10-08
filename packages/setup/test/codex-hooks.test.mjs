@@ -450,6 +450,21 @@ test('CX-5 default installed prompt hook injects on the A7-qualified host; the k
   await assert.rejects(lstat(switchPath),{code:'ENOENT'});
 });
 
+test('CX-5 switching prompt recall off during an in-flight recall injects nothing',async t=>{
+  const f=await memoryRuntime(t);
+  f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',
+    scope:'personal',projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
+    receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
+  const switchPath=join(f.codexHome,'cairn/prompt-recall.json');
+  // The switch is on when the hook starts and flips off while the recall reply is in flight.
+  f.delay(async route=>{if(route.endsWith('/recall'))await writeFile(switchPath,'{"version":1,"enabled":false}',{mode:0o600});});
+  const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,
+    cwd:f.project,transcript_path:null,prompt:'Preferences?'}));
+  assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000)}),'');
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
+  assert.equal(JSON.parse(await readFile(switchPath,'utf8')).enabled,false);
+});
+
 test('CX-5 remote generation change between recall fetch and injection withholds context',async t=>{
   const f=await memoryRuntime(t);
   f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',

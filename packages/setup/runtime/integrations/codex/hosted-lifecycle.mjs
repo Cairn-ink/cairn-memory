@@ -44,9 +44,11 @@ export function installedTransport(config, token, expectedRemoteGeneration) {
   };
 }
 
-export async function recallContext(input, config, token, projectId, signal) {
+// `enabled` is the prompt-recall kill switch reader; it is required and is read
+// again as the last step, so switching off during an in-flight recall injects nothing.
+export async function recallContext(input, config, token, projectId, signal, enabled) {
   const query = prepareRecallQuery(input.prompt);
-  if (query === undefined || signal.aborted) return '';
+  if (typeof enabled !== 'function' || query === undefined || signal.aborted) return '';
   const remote = await observeHostedPause(config, token, signal);
   const local = await readControlState(config.root);
   if (remote.paused || local.paused) return '';
@@ -74,5 +76,6 @@ export async function recallContext(input, config, token, projectId, signal) {
       hookEventName: 'UserPromptSubmit', additionalContext: context,
     } });
   });
+  if (!output || signal.aborted || await enabled() !== true) return '';
   return output;
 }

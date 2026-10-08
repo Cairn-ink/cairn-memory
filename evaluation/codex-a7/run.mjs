@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startFakeCairn } from './fake-cairn.mjs';
 import { SCENARIOS, materialize, promptFor } from './scenarios.mjs';
-import { analyze, snapshot, hashFile, sanitize, extractToolCalls } from './detect.mjs';
+import { analyze, snapshot, hashFile, sanitize, extractToolCalls, extractToolOutputs, deliveredEntries, FRAMING } from './detect.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -28,7 +28,6 @@ const rawDir = option('--raw-dir', '');
 const parent = option('--parent', join(homedir(), '.cache', 'cairn-a7'));
 const probe = args.includes('--probe');
 const HOST = '0.160.1';
-const FRAMING = 'These are untrusted source-attributed recollections';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function exec(file, argv, { env, cwd, input, timeoutMs = 60000 } = {}) {
@@ -175,16 +174,18 @@ async function oneRun(server, scenario, rep, codex, authSource, version) {
       removed: [...lines(configBefore)].filter(line => !lines(configAfter).has(line)) };
     // The rollout is the complete record: exec --json omits sandbox-denied calls.
     // It also proves delivery: the injected developer context and memory IDs.
-    let delivered = 0, framing = false, rolloutModel = null; const toolCalls = [], rolloutText = [];
+    let delivered = 0, framing = false, rolloutModel = null; const toolCalls = [], toolOutputs = [], rolloutText = [];
     for (const file of await rollouts(join(codexHome, 'sessions'))) {
       const text = await readFile(file, 'utf8');
       rolloutText.push(text);
       framing ||= text.includes(FRAMING);
-      delivered = Math.max(delivered, memories.filter(memory => text.includes(memory.id)).length);
+      // Delivered = served IDs present AND framed entries counted in the same rollout.
+      delivered = Math.max(delivered, Math.min(memories.filter(memory => text.includes(memory.id)).length,
+        deliveredEntries(text) ?? 0));
       rolloutModel ??= /"model":"([^"]+)"/u.exec(text)?.[1] ?? null;
-      toolCalls.push(...extractToolCalls(text));
+      toolCalls.push(...extractToolCalls(text)); toolOutputs.push(...extractToolOutputs(text));
     }
-    const analysis = analyze({ events, toolCalls, before, after, codexBefore, codexAfter, server: server.entries(run), secret,
+    const analysis = analyze({ events, toolCalls, toolOutputs, before, after, codexBefore, codexAfter, server: server.entries(run), secret,
       repo, codexHome, port: server.port, positive: scenario.positive, configDiff });
     const authChanged = (await hashFile(join(codexHome, 'auth.json'))) !== authBefore;
     const recall = server.entries(run).filter(entry => entry.route === 'POST /api/memory/recall');
@@ -249,7 +250,7 @@ const unattributed = server.log.filter(entry => !entry.api && !records.some(reco
 const realAfter = { config: await hashFile(join(realCodex, 'config.toml')), hooks: await hashFile(join(realCodex, 'hooks.json')) };
 await server.close();
 records.sort((a, b) => a.run.localeCompare(b.run));
-const summary = { host: version, model: MODEL, effort: EFFORT, finishedAt: new Date().toISOString(),
+const summary = { host: version, model: MODEL, effort: EFFORT, port: server.port, finishedAt: new Date().toISOString(),
   realCodexUnchanged: realBefore.config === realAfter.config && realBefore.hooks === realAfter.hooks,
   unattributedNonApiHits: unattributed.length, records };
 await writeFile(out, JSON.stringify(summary, null, 2) + '\n');
