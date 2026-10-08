@@ -758,6 +758,85 @@ always refuses pending work. This technical path neither replenishes the
 ledger nor activates standing cumulative spending authority on its own. See
 the [v4 acceptance](plans/benchmark-budget-400.md).
 
+### One-shot source-role extraction capability (offline verified only)
+
+The separate asynchronous `authorizeSourceRoleAblationCapability({ledger,
+policy, benchmarkExtension, authorizationId, executionId, checkpoint})` requires
+the existing bound embedding ledger at 400M, complete immutable v4 ancestry and
+an exact fully settled current rowid-aware history checkpoint. It creates no
+ledger or cap transition and consumes no older pair grant. The create-only
+mode0600/fsynced `experiment-source-role-extraction-<executionId>.json` is never
+overwritten, repaired or silently adopted, including partial/conflicting files.
+
+Request-free `prepareSourceRoleExecution()` derives all 24 alternating slots and
+both wire-body SHA256 pins through the unchanged N28 compiler's actual adapter
+serialization with fixed fake HTTP. Preparation is not a live count or quality
+observation. The grant pins six unchanged N28 assets, actual Node version,
+operator, guard, ledger implementation, core modules/prompts, adapter modules
+and named validation/redaction helpers. Local hashes are consistency identities,
+not signatures or proof of an immutable installation. The rubric is read as hash
+bytes only, never imported into model-facing compilation. Older guard imports do
+not load the optional N28 assets.
+
+`createSourceRoleAblationRequestGuard({ledger, policy, benchmarkExtension,
+sourceRoleAblationCapability, fetchImpl})` takes the explicit expected record and
+one-attempt transport. Before returning, construction exclusively fsyncs a
+separate one-shot claim; post-claim failure, including zero sends, stays consumed.
+`withSlotScope({slot, ordinal, arm}, operation)` opens only the next frozen slot.
+Exactly one count and at most one generation can send, generation requires a
+successful count, and both are baseline indexed-window `cairn_extract`. Exact
+serialized body pins are checked before reservation. Other methods, host,
+answer/judge, repeated/overlapping requests and stale callbacks are refused.
+Generic indexed-extraction denial remains unchanged.
+
+This profile reuses the existing benchmark guard HTTP/usage/settlement path.
+It preflights all 48 reservations and caps this execution at 48 physical sends
+and 2M newly reserved microUSD. Checkpoint plus the 2M ceiling must fit below 370M,
+retaining 30M protected. Original channel amounts remain unchanged (the current
+policy plans 240,000 microUSD). Unknown actual usage stays fully reserved, never
+zero or refunded. Grant files are rechecked after request snapshot callbacks
+immediately before reservation; the complete ledger/path witness is checked
+inside SQLite's existing reservation transaction. These are not an atomic
+filesystem/database transaction. Hostile same-user replacement is outside the
+trusted-operator boundary. Foreign history, unknown transport/usage, overrun or
+failed settlement halts globally; genuine deadlines are not locally isolated.
+
+`runSourceRoleAblation` in `evaluation/source-role-ablation/operator.mjs` takes
+exactly the five constructor fields plus explicit `apiKey` and `persistSlot`.
+It discovers no environment key/global fetch, prompt/model/case override or grant.
+It selects the frozen prompt, checks fit on the actual guarded adapter, invokes
+existing `callModel`, then compiles through `extractedWindowItems`, without
+database admission. Atomic structural refusal after settled HTTP may continue.
+Profile-only `awaitSettlement()` waits for already-started guarded-route promises,
+not physical provider completion, before persistence; it sends or settles nothing.
+A late physical response cannot reopen or resettle a slot.
+
+The trusted private `persistSlot` callback runs inside the scope before advance.
+Its bounded frozen record says persistence pending; only callback resolution
+makes the returned observation persisted. Rejection is failed and halts remaining
+work. Subsequent history/boundary failure is execution halt, not falsely labeled
+persistence failure. The callback must implement the separately reviewed private
+durable writer; resolution is not independent proof of fsync. The returned private
+report retains all 24 completed/refused/not-run positions, valid interpretations,
+exact source passages and finite invocation/persistence/accounting states. It
+contains no raw errors, headers or credential option. Model content is private
+interpretation, not guaranteed secret-free or semantically correct. Fake HTTP
+proves plumbing only; all future slots still require blind semantic review.
+
+Offline evaluator projection supplies each terminal executed row's frozen caps
+as `{...row, caps: report.protocol.caps}` to N28 `retainedCoverage`. Canonical
+passages remain authoritative, while summaries remain unassessed. `not_run`
+positions stay distinct in the raw 24-slot report and cannot be relabeled as
+model refusals for a complete rubric aggregate. A halted/incomplete execution
+cannot advance; even a full execution still needs all 24 independently blinded
+semantic reviews under unchanged N28 criteria.
+N28's existing caps equality is JSON-key-order-sensitive. A later persisted JSON
+reader must validate exactly the five own-data cap fields, reject unknown fields
+or changed values, and project them in frozen order: `inputTokens`, `outputTokens`,
+`items`, `windowsPerItem`, `contentUnits`. Reordering does not change numeric caps
+or establish semantic correctness; it must not drop unknown metadata to manufacture
+a passing comparison.
+
 There are no paid runs, user profiles, production writes, release or deployment
 changes in this slice. V05 remains incomplete until the remaining host/budget
 gates pass. See [acceptance and verification](plans/experiment-request-guard.md).
