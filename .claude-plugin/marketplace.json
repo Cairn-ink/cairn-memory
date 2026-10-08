@@ -19,11 +19,7 @@
       "repository": "https://github.com/Cairn-ink/cairn-memory",
       "license": "Apache-2.0",
       "category": "productivity",
-      "tags": [
-        "memory",
-        "mcp",
-        "provenance"
-      ]
+      "tags": ["memory", "mcp", "provenance"]
     }
   ]
 }

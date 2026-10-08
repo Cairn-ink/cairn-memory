@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, lstat, readdir, symlink, unlink } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, lstat, readdir, symlink, unlink, cp, chmod } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { hookCommand } from '../lib/codex-runtime.mjs';
+import { policyPath } from '../../../integrations/client/automatic-policy.mjs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
@@ -22,7 +25,7 @@ const mainURL = new URL('../lib/setup.mjs',import.meta.url).href;
 const transportURL = new URL('../lib/transport.mjs',import.meta.url).href;
 const wireURL = new URL('./http-wire.mjs',import.meta.url).href;
 
-async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,claudePolicy=true,claudeUpgradeable=false,auth={},state={},
+async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,claudePolicy=true,claudeInstalled=true,claudeEnabled=true,claudeConfigureFailOnce=false,auth={},state={},
   cliModule=mainURL,nativeBinary,networkSandbox}={}) {
   const ws = createTestWorkspace(t,{prefix:'cx5-install-'});
   const bin = join(ws.path,'bin');await mkdir(bin);
@@ -45,18 +48,19 @@ async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,c
     originalProjectId=await opaqueProjectId(profileRoot,'/synthetic/project',{home});
     await writeFile(join(bin,'claude'),`#!${process.execPath}\nimport{readFileSync,writeFileSync,writeSync,existsSync,appendFileSync}from'node:fs';
       const args=process.argv.slice(2),path=${JSON.stringify(join(ws.path,'claude-options.json'))};
-      const upgraded=${JSON.stringify(join(ws.path,'claude-updated'))};
       appendFileSync(${JSON.stringify(join(ws.path,'claude-calls.jsonl'))},JSON.stringify(args)+'\\n');
-      const values=readFileSync(0,'utf8');if(values)writeFileSync(path,values);
-      if(args.includes('update') && ${claudeUpgradeable})writeFileSync(upgraded,'yes');
-      if(args[1]==='list' && args.includes('--json'))writeSync(1,JSON.stringify(${claudeUpgradeable}?[{id:'cairn-memory@cairn-memory',scope:'user',enabled:true,version:'0.3.1'}]:[]));
-      else if(args.includes('--json'))writeSync(1,JSON.stringify({configured:['api_token','api_endpoint','pairing_record',...(${claudePolicy}||existsSync(upgraded)?['automatic_memory_policy']:[])],unconfigured:[]}));
+      const values=readFileSync(0,'utf8');if(values) {
+        writeFileSync(path,values);
+        const marker=path+'.configure-failed';if(${claudeConfigureFailOnce} && !existsSync(marker)){writeFileSync(marker,'yes');process.exitCode=1;}
+      }
+      if(args[1]==='list' && args.includes('--json'))writeSync(1,JSON.stringify(${claudeInstalled}?[{id:'cairn-memory@cairn-memory',scope:'user',enabled:${claudeEnabled},version:${JSON.stringify(claudePolicy?'0.3.2':'0.3.1')}}]:[]));
+      else if(args.includes('--json'))writeSync(1,JSON.stringify({configured:['api_token','api_endpoint','pairing_record'],unconfigured:[]}));
     `,{mode:0o755});
   }
   const server = await fakeAuthServer(t,auth);
   const harness = join(ws.path,'harness.mjs');
   const screens = [];
-  await writeFile(harness,`import{main}from${JSON.stringify(cliModule)};
+  await writeFile(harness,`const{main}=await import(process.env.CX5_TEST_CLI_MODULE);
     import{requestJSON}from${JSON.stringify(transportURL)};
     import{installChildWire}from${JSON.stringify(wireURL)};
     const disconnect=installChildWire();let clock=0;const answers=${JSON.stringify(answers)};
@@ -65,8 +69,8 @@ async function fixture(t,{answers=['100',''],args,config='',hooks,paired=false,c
       browse:async()=>{},authOptions:{now:()=>clock,sleep:async ms=>{clock+=ms;},
         request:(url,options)=>requestJSON(url,{...options,env:{}}),copy:async()=>false,progress:()=>()=>{}}});disconnect();`);
   const env = {HOME:home,CODEX_HOME:codexHome,PATH:bin,LANG:'en_US.UTF-8',TMPDIR:process.env.TMPDIR};
-  async function run(flags) {
-    const child = spawn(process.execPath,[harness,...flags],{cwd:ws.path,env,stdio:['ignore','pipe','pipe','ipc']});
+  async function run(flags,{executable=process.execPath,module=cliModule}={}) {
+    const child = spawn(executable,[harness,...flags],{cwd:ws.path,env:{...env,CX5_TEST_CLI_MODULE:module},stdio:['ignore','pipe','pipe','ipc']});
     wireChild(child,server.server);
     let stdout='',stderr='';child.stdout.on('data',x=>stdout+=x);child.stderr.on('data',x=>stderr+=x);
     const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});
@@ -129,7 +133,7 @@ test('CX-5 paired installer adopts Claude key, delivers record and gives both cl
   const f=await fixture(t,{paired:true,answers:['yes','100','']});assert.equal(f.code,0,f.stdout);
   assert.equal(f.installed.root,f.profileRoot);
   const options=JSON.parse(await readFile(join(f.ws.path,'claude-options.json'),'utf8'));
-  assert.equal(options.pairing_record,f.installed.pairingRecord);assert.equal(options.automatic_memory_policy,true);
+  assert.equal(options.pairing_record,f.installed.pairingRecord);assert.equal(Object.hasOwn(options,'automatic_memory_policy'),false);
   assert.ok(!Object.hasOwn(options,'api_endpoint'));assert.ok(!Object.hasOwn(options,'api_token'));
   const codex={client:'codex',home:f.home,usesClaude:true,pairingRecord:f.installed.pairingRecord,env:{HOME:f.home}};
   const claude={client:'claude',home:f.home,pairingRecord:f.installed.pairingRecord,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}};
@@ -139,21 +143,83 @@ test('CX-5 paired installer adopts Claude key, delivers record and gives both cl
   const again=await f.run(['setup','--client','codex','--no-browser']);assert.equal(again.code,0,again.stdout);
   assert.equal(f.server.polls,1);assert.deepEqual(JSON.parse(await readFile(join(f.ws.path,'claude-options.json'),'utf8')),options);
 });
-test('CX-5 old Claude plugin refuses before identity adoption or authorization',async t=>{
-  const f=await fixture(t,{paired:true,claudePolicy:false,answers:['yes']});
-  assert.equal(f.code,1);assert.match(f.stdout,/automatic_memory_policy/);assert.equal(f.server.requests.length,0);
-  assert.equal(f.installed,undefined);
-  const claude={client:'claude',home:f.home,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}};
-  assert.equal((await resolveClient(claude)).enabled,true);
+for (const options of [{claudePolicy:false},{claudeInstalled:false},{claudeEnabled:false}]) {
+  test('CX-5 missing/old/disabled Claude plugin chooses standalone without changing Claude '+JSON.stringify(options),async t=>{
+    const f=await fixture(t,{paired:true,...options});
+    assert.equal(f.code,0,f.stdout);assert.equal(f.installed.usesClaude,false);assert.equal(f.installed.pairingRecord,null);
+    assert.match(f.stdout,/standalone/);assert.equal(f.installed.root,join(f.codexHome,'cairn-standalone'));
+    const claude={client:'claude',home:f.home,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}};
+    assert.equal((await resolveClient(claude)).enabled,true);
+    assert.equal(await clientProjectId(claude,'/synthetic/project'),f.originalProjectId);
+    await assert.rejects(readFile(join(f.ws.path,'claude-options.json')),error=>error.code==='ENOENT');
+    const calls=(await readFile(join(f.ws.path,'claude-calls.jsonl'),'utf8')).trim().split('\n').map(JSON.parse);
+    assert.ok(!calls.some(args=>args.includes('update') || args.includes('enable') || args.includes('--values-stdin')));
+    assert.equal((await f.run(['setup','--client','codex','--no-browser'])).code,0);
+  });
+}
+
+async function upgradedModule(f) {
+  const packageDir=join(f.ws.path,'upgraded-package');await cp(new URL('../',import.meta.url),packageDir,{recursive:true});
+  const entry=join(packageDir,'runtime/integrations/codex/entry.mjs');
+  await writeFile(entry,(await readFile(entry,'utf8'))+'\n// synthetic upgraded digest\n');
+  const manifestFile=join(packageDir,'runtime/manifest.json');const manifest=JSON.parse(await readFile(manifestFile,'utf8'));
+  manifest.files['integrations/codex/entry.mjs']=createHash('sha256').update(await readFile(entry)).digest('hex');
+  await writeFile(manifestFile,JSON.stringify(manifest,null,2)+'\n');
+  return pathToFileURL(join(packageDir,'lib/setup.mjs')).href;
+}
+
+for (const upgrade of ['node','runtime']) {
+  test('CX-5 failed '+upgrade+' reauthorization retains old installation; uninstall removes all Cairn digests',async t=>{
+    const auth={};const f=await fixture(t,{auth});assert.equal(f.code,0,f.stdout);
+    const before=await readFile(f.installation);auth.createStatus=404;
+    let module=mainURL,executable=process.execPath;
+    if (upgrade==='node') executable=process.execPath.includes('v22.')?
+      '/home/chichieh/.nvm/versions/node/v24.15.0/bin/node':'/home/chichieh/.nvm/versions/node/v22.16.0/bin/node';
+    else module=await upgradedModule(f);
+    const failed=await f.run(['setup','--client','codex','--no-browser','--reauthorize'],{module,executable});
+    assert.equal(failed.code,1,failed.stdout);assert.deepEqual(await readFile(f.installation),before);
+    // Include stale handlers from earlier registrations, with a different runtime
+    // and node path. A current-config-only cleanup would leave these behind.
+    const hookFile=join(f.codexHome,'hooks.json');const hooks=JSON.parse(await readFile(hookFile,'utf8'));
+    for(const event of ['SessionStart','UserPromptSubmit','Stop','PreCompact']) {
+      hooks.hooks[event].push({hooks:[{type:'command',command:hookCommand({...f.installed,node:'/synthetic/old-node',
+        runtime:'/synthetic/older-runtime-digest'},f.installation,event),statusMessage:'Cairn automatic memory'}]});
+    }
+    hooks.hooks.Stop.push({hooks:[{type:'command',command:'echo unrelated'}]});await writeFile(hookFile,JSON.stringify(hooks),{mode:0o600});
+    assert.equal((await f.run(['uninstall','--client','codex'])).code,0);
+    assert.deepEqual(JSON.parse(await readFile(hookFile,'utf8')).hooks,{Stop:[{hooks:[{type:'command',command:'echo unrelated'}]}]});
+    await assert.rejects(readFile(policyPath(f.installed.root,f.installed.endpoint)),error=>error.code==='ENOENT');
+  });
+}
+
+test('CX-5 successful new digest replaces every old registration and rerun remains idempotent',async t=>{
+  const f=await fixture(t);assert.equal(f.code,0,f.stdout);
+  const hookFile=join(f.codexHome,'hooks.json');const hooks=JSON.parse(await readFile(hookFile,'utf8'));
+  for(const event of ['SessionStart','UserPromptSubmit','Stop','PreCompact']) {
+    hooks.hooks[event].push({hooks:[{type:'command',command:hookCommand({...f.installed,node:'/synthetic/old-node',
+      runtime:'/synthetic/older-runtime-digest'},f.installation,event)}]});
+  }
+  await writeFile(hookFile,JSON.stringify(hooks),{mode:0o600});
+  const module=await upgradedModule(f);
+  assert.equal((await f.run(['setup','--client','codex','--no-browser'],{module})).code,0);
+  assert.notEqual((await readInstallation(f.installation)).runtime,f.installed.runtime);
+  const actual=JSON.parse(await readFile(hookFile,'utf8'));
+  for(const event of ['SessionStart','UserPromptSubmit','Stop','PreCompact']) assert.equal(actual.hooks[event].length,1);
+  assert.equal((await f.run(['setup','--client','codex','--no-browser'],{module})).code,0);
+  assert.deepEqual(JSON.parse(await readFile(hookFile,'utf8')),actual);
 });
-test('CX-5 installed old Claude bundle refreshes only existing Cairn scopes before pairing',async t=>{
-  const f=await fixture(t,{paired:true,claudePolicy:false,claudeUpgradeable:true,answers:['yes','100','']});
-  assert.equal(f.code,0,f.stdout);assert.equal(f.installed.enabled,true);
-  const calls=(await readFile(join(f.ws.path,'claude-calls.jsonl'),'utf8')).trim().split('\n').map(JSON.parse);
-  assert.ok(calls.some(args=>args.join(' ')==='plugin marketplace update cairn-memory'));
-  assert.ok(calls.some(args=>args.join(' ')==='plugin update cairn-memory@cairn-memory --scope user'));
-  assert.ok(!calls.some(args=>args.includes('install') || args.includes('enable')));
-});
+
+for(const content of ['{',JSON.stringify({version:2,dailyCap:100,concurrency:2})]) {
+  test('CX-5 Codex pause/status remain available with a malformed or future policy '+content,async t=>{
+    const f=await fixture(t);assert.equal(f.code,0,f.stdout);
+    await writeFile(policyPath(f.installed.root,f.installed.endpoint),content,{mode:0o600});
+    const paused=await f.run(['pause','--client','codex']);assert.equal(paused.code,0,paused.stdout);
+    assert.equal((await readControlState(f.installed.root)).paused,true);
+    const status=await f.run(['status','--client','codex']);assert.equal(status.code,0);assert.match(status.stdout,/policy_invalid_or_unreadable/);
+    assert.equal((await f.run(['uninstall','--client','codex'])).code,0);
+    await assert.rejects(readFile(policyPath(f.installed.root,f.installed.endpoint)),error=>error.code==='ENOENT');
+  });
+}
 
 for(const args of [['status','--client','codex'],['setup','--client','codex','--dry-run']]) {
   test('CX-5 '+args.join(' ')+' is offline and does not authorize or install hooks',async t=>{
@@ -162,7 +228,7 @@ for(const args of [['status','--client','codex'],['setup','--client','codex','--
   });
 }
 test('CX-5 unsupported browser auth never falls back to a broad PAT for hooks',async t=>{
-  const f=await fixture(t,{auth:{createStatus:404}});assert.equal(f.code,1);assert.equal(f.installed.enabled,false);
+  const f=await fixture(t,{auth:{createStatus:404}});assert.equal(f.code,1);assert.equal(f.installed,undefined);
   assert.match(f.stdout,/memory-scoped browser/);assert.equal(f.server.polls,0);
 });
 
@@ -195,7 +261,7 @@ async function memoryRuntime(t,options={}) {
       session_id:session,cwd:project,transcript_path:path,...extras}));
     return runInstalled(f.installation,event,stream,{signal:AbortSignal.timeout(event==='worker'?60000:2000),
       contextQualification:()=>true, // exercise the port; production A7 remains closed
-      launch:launch??(async(_p,_c,content,generation)=>{handoff={...JSON.parse(content),hostedGeneration:generation};})});
+      launch:launch??(async(_p,_c,content)=>{handoff=JSON.parse(content);})});
   };
   return {...f,path,project,projectId,requests,invoke,handoff:()=>handoff,pause:value=>{pause=value;},
     capture:value=>{capture=value;},recall:value=>{recall=value;},delay:value=>{delay=value;},
@@ -242,7 +308,7 @@ test('CX-5 host upgrade refuses before fetching pause state or reading capture s
 test('CX-5 hosted pause/resume generation sets durable EOF; local pause is preserved',async t=>{
   const f=await memoryRuntime(t);
   await f.invoke('Stop');await f.invoke('worker');
-  f.pause({paused:true,generation:1,enforced:true});assert.equal(await f.invoke('Stop'),'');
+  f.pause({paused:true,generation:1,enforced:true});assert.equal(await f.invoke('Stop'),'{}');await f.invoke('worker');
   f.pause({paused:false,generation:1,enforced:true});
   await f.invoke('SessionStart');const boundary=await f.cursor();assert.equal(boundary.status,'pause_boundary');
   assert.equal(boundary.offset,(await lstat(f.path)).size);
@@ -254,10 +320,10 @@ test('CX-5 hosted pause/resume generation sets durable EOF; local pause is prese
 
 test('CX-5 missing/unenforced/regressing hosted pause state and unknown transcript fail closed',async t=>{
   const f=await memoryRuntime(t);f.pause({paused:false,generation:0,enforced:false});
-  await assert.rejects(()=>f.invoke('Stop'),/pause_unavailable/);assert.equal(await f.cursor(),null);
+  await f.invoke('Stop');await assert.rejects(()=>f.invoke('worker'),/pause_unavailable/);assert.ok((await f.cursor()).pending);
   f.pause({paused:false,generation:0,enforced:true});
   const text=await readFile(f.path,'utf8');await writeFile(f.path,text.replace('"cli_version":"0.160.1"','"cli_version":"0.160.2"'));
-  await f.invoke('Stop');assert.equal(f.handoff(),undefined);assert.equal((await f.cursor()).status,'unsupported_format');
+  await f.invoke('Stop');assert.equal((await f.cursor()).status,'unsupported_format');
   assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,0);
 });
 
@@ -291,7 +357,7 @@ test('CX-5 production launcher sends only closed stdin handoff; child env and di
   let value;
   for(let i=0;i<40;i++) {try{value=JSON.parse(await readFile(record,'utf8'));break;}catch{await new Promise(r=>setTimeout(r,25));}}
   assert.ok(value);assert.ok(!JSON.stringify(value).includes(secret));assert.ok(!JSON.stringify(value).includes(inheritedSecret));
-  assert.deepEqual(Object.keys(JSON.parse(value.input)).sort(),['byteEnd','client','cwd','endIntent','generation','hostedGeneration','parser','path','sessionId'].sort());
+  assert.deepEqual(Object.keys(JSON.parse(value.input)).sort(),['byteEnd','client','cwd','endIntent','generation','parser','path','sessionId'].sort());
   assert.ok(!value.env.NODE_OPTIONS);assert.ok(!value.env.CLAUDE_PLUGIN_OPTION_API_TOKEN);
   assert.ok(!value.env.HTTPS_PROXY);
 });
@@ -358,8 +424,8 @@ test('CX-5 remote generation change between recall fetch and injection withholds
   assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?',transcript_path:null}),'');
   assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
   f.pause({paused:false,generation:0,enforced:true});
-  await assert.rejects(f.invoke('Stop'),/pause_unavailable/);
-  assert.equal(f.handoff(),undefined);
+  await assert.rejects(f.invoke('SessionStart'),/pause_unavailable/);
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,0);
 });
 
 test('CX-5 slow recall consumes one 2 second budget and never injects late context',async t=>{
@@ -413,4 +479,52 @@ if(process.env.CX5_NATIVE_BINARY && process.env.CX5_NETWORK_SANDBOX) test('CX-5 
   if(process.env.CX5_NATIVE_EVIDENCE)await writeFile(process.env.CX5_NATIVE_EVIDENCE,JSON.stringify(result,null,2)+'\n',{mode:0o600});
   child.stdin.end();const exit=await new Promise(resolve=>child.on('close',resolve));assert.equal(exit,0);
   assert.ok(!stderr.includes(secret));
+});
+
+for (const event of ['Stop','PreCompact']) test('CX-5 '+event+' launches without waiting for slow hosted pause; worker keeps pending cursor',async t=>{
+  const f=await memoryRuntime(t);
+  f.delay(async(route,wire)=>{if(route.endsWith('/pause-state')) await new Promise((resolve,reject)=>{
+    const timer=setTimeout(resolve,1100);wire.signal.addEventListener('abort',()=>{clearTimeout(timer);reject(wire.signal.reason);},{once:true});
+  });});
+  const started=performance.now();assert.equal(await f.invoke(event),'{}');assert.ok(performance.now()-started<750);
+  assert.equal(f.requests.length,0);assert.ok(f.handoff());assert.ok((await f.cursor()).pending);
+  f.pause({paused:false,generation:0,enforced:false});
+  await assert.rejects(f.invoke('worker'),/pause_unavailable/);
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,0);assert.ok((await f.cursor()).pending);
+});
+
+
+test('CX-5 first paired browser failure never publishes an identity or changes Claude memory',async t=>{
+  const f=await fixture(t,{paired:true,answers:['yes','100'],auth:{createStatus:404}});
+  assert.equal(f.code,1);assert.equal(f.installed,undefined);
+  await assert.rejects(readFile(join(f.ws.path,'claude-options.json')),error=>error.code==='ENOENT');
+  const claude={client:'claude',home:f.home,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}};
+  assert.equal((await resolveClient(claude)).enabled,true);
+  assert.equal(await clientProjectId(claude,'/synthetic/project'),f.originalProjectId);
+  await assert.rejects(readFile(join(f.home,'.cairn-memory-clients/pairing.json')),error=>error.code==='ENOENT');
+});
+
+test('CX-5 partial native pairing delivery is visible and a rerun finishes the same identity',async t=>{
+  const f=await fixture(t,{paired:true,answers:['yes','100',''],claudeConfigureFailOnce:true});
+  assert.equal(f.code,1);assert.match(f.stdout,/pairing is pending/);assert.equal(f.installed.enabled,false);
+  const options=JSON.parse(await readFile(join(f.ws.path,'claude-options.json'),'utf8'));
+  const claude={client:'claude',home:f.home,pairingRecord:options.pairing_record,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}};
+  assert.equal((await resolveClient(claude)).enabled,false);
+  const again=await f.run(['setup','--client','codex','--no-browser']);assert.equal(again.code,0,again.stdout);
+  assert.equal((await resolveClient(claude)).enabled,true);
+  assert.equal(await clientProjectId(claude,'/synthetic/project'),f.originalProjectId);
+  assert.equal((await readInstallation(f.installation)).pairingRecord,f.installed.pairingRecord);
+});
+
+
+test('CX-5 fresh standalone Codex never claims a future Claude default root',async t=>{
+  const f=await fixture(t);assert.equal(f.code,0,f.stdout);
+  assert.equal(f.installed.root,join(f.codexHome,'cairn-standalone'));
+  const codex={client:'codex',home:f.home,root:f.installed.root,isolatedCodex:true,usesClaude:false,env:{HOME:f.home}};
+  const before=await clientProjectId(codex,'/synthetic/project');
+  const claude={client:'claude',home:f.home,env:{HOME:f.home}};
+  const resolved=await resolveClient(claude);assert.equal(resolved.enabled,true);assert.notEqual(resolved.root,f.installed.root);
+  assert.notEqual(await clientProjectId(claude,'/synthetic/project'),before);
+  assert.equal((await f.run(['setup','--client','codex','--no-browser'])).code,0);
+  assert.equal(await clientProjectId(codex,'/synthetic/project'),before);
 });

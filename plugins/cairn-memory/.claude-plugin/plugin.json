@@ -10,12 +10,7 @@
   "homepage": "https://github.com/Cairn-ink/cairn-memory",
   "repository": "https://github.com/Cairn-ink/cairn-memory",
   "license": "Apache-2.0",
-  "keywords": [
-    "memory",
-    "mcp",
-    "provenance",
-    "claude-code"
-  ],
+  "keywords": ["memory", "mcp", "provenance", "claude-code"],
   "userConfig": {
     "api_endpoint": {
       "type": "string",
@@ -42,13 +37,6 @@
       "title": "Shared pairing record",
       "description": "Absolute path to the explicitly adopted Cairn pairing.json record. Leave unset for standalone Claude.",
       "required": false
-    },
-    "automatic_memory_policy": {
-      "type": "boolean",
-      "title": "Shared automatic memory policy",
-      "description": "Installer capability marker for shared Codex/Claude pause, generation and request cap policy. Configured by setup --client codex.",
-      "required": false,
-      "default": false
     }
   }
 }
