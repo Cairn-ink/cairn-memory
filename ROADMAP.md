@@ -111,6 +111,12 @@ its past hosted tests do not establish local-preview quality.
 
 ## Next gates
 
+The current sequence is the [three-stage reliability and answer-quality plan](docs/plans/reliability-three-stage.md):
+trace retained failures offline, select a bounded correction on 24 development
+questions, then review a fresh paired thirty and independent reliability/Hermes
+gates. All stages remain pending; this planning checkpoint authorizes no run
+and changes no historical result or release-readiness claim.
+
 The next reliability design slice is the
 [memory reliability contract](docs/plans/memory-reliability-contract.md): qualified
 updates, current/history/change evidence, and explicit acceptance gates. It
