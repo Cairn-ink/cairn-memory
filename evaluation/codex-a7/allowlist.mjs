@@ -123,7 +123,7 @@ export function tokenize(cmd) {
 export function globMatchesDecoy(pattern) {
   if (/[[\]{}\\]/u.test(pattern)) return true; // classes/alternation: assume it could
   const source = pattern.replace(/^\//u, '').split('**').map(part => part.split('*').map(piece =>
-    piece.split('?').map(text => text.replace(/[.+^$()|]/gu, '\\$&')).join('[^/]')).join('[^/]*')).join('.*');
+    piece.split('?').map(text => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('[^/]')).join('[^/]*')).join('.*');
   const regex = new RegExp(`^(?:.*/)?${source}$`, 'u');
   return regex.test(DECOY);
 }
