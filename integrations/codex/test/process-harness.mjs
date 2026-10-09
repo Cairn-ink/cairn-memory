@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
+import { testServer, wireChild, childEnvironment } from "./http-harness.mjs";
 export async function receiverServer(f) {
   const server = createServer(async (req, res) => {
     let raw = "";
@@ -22,9 +23,8 @@ export async function receiverServer(f) {
       JSON.stringify({ status: existing ? "duplicate" : "complete", eventId: body.event_id }),
     );
   });
-  await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  f.ws.defer(() => new Promise((r) => server.close(r)));
-  return `http://127.0.0.1:${server.address().port}/capture`;
+  f.http = await testServer(server, f.ws);
+  return f.http.endpoint;
 }
 export async function childAttempt(
   f,
@@ -34,14 +34,15 @@ export async function childAttempt(
   const cfg = join(f.ws.path, "crash-config.json");
   await writeFile(
     cfg,
-    JSON.stringify({ binding: f.binding, crashAt, prepare, boundary, reset, endpoint, byteEnd }),
+    JSON.stringify({ binding: f.binding, crashAt, prepare, boundary, reset, endpoint, byteEnd, wire: f.http.wire }),
     { mode: 0o600 },
   );
   const child = spawn(
     process.execPath,
     [new URL("./crash-stub.mjs", import.meta.url).pathname, cfg],
-    { stdio: ["ignore", "pipe", "pipe"], env: process.env },
+    { stdio: ["ignore", "pipe", "pipe", ...(f.http.wire ? ["ipc"] : [])], env: childEnvironment() },
   );
+  if(f.http.wire)wireChild(child,f.http.server);
   let raw = "",
     stderr = "";
   child.stdout.on("data", (x) => (raw += x));

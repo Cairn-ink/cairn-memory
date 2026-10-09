@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { testServer, wireChild, childEnvironment } from './http-harness.mjs';
 import { spawn } from 'node:child_process';
 import { writeFile, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -31,11 +32,12 @@ test('A1 actual hook → worker → loopback body, output and private state excl
     bodies.push(JSON.parse(raw));res.setHeader('content-type','application/json');
     res.end(JSON.stringify({status:'complete',eventId:bodies.at(-1).event_id}));
   });
-  await new Promise(r=>server.listen(0,'127.0.0.1',r));f.ws.defer(()=>new Promise(r=>server.close(r)));
+  const http=await testServer(server,f.ws);
   const cfg=join(f.ws.path,'stub-config.json');
   await writeFile(cfg,JSON.stringify({clientOptions:{home:f.home,root:f.root,usesClaude:false,env:{}},
-    targetId:f.binding.targetId,endpoint:`http://127.0.0.1:${server.address().port}/capture`}),{mode:0o600});
-  const child=spawn(process.execPath,[new URL('./process-stub.mjs',import.meta.url).pathname,'hook',cfg],{stdio:['pipe','pipe','pipe'],env:process.env});
+    targetId:f.binding.targetId,endpoint:http.endpoint,wire:http.wire}),{mode:0o600});
+  const child=spawn(process.execPath,[new URL('./process-stub.mjs',import.meta.url).pathname,'hook',cfg],{stdio:['pipe','pipe','pipe',...(http.wire?['ipc']:[])],env:childEnvironment()});
+  if(http.wire)wireChild(child,server);
   let output='',stderr='';child.stdout.on('data',x=>output+=x);child.stderr.on('data',x=>stderr+=x);
   child.stdin.end(JSON.stringify({hook_event_name:'Stop',session_id:session,cwd:'/synthetic/CWD_CANARY',transcript_path:f.path,
     last_assistant_message:'HOOK_ASSISTANT_CANARY',expanded_input:'HOOK_CONTEXT_CANARY',token:secret}));

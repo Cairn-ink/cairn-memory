@@ -1,6 +1,9 @@
 // All user-facing installer text. Each execution selects one language.
 export const messages = {
-  "codex_format_unverified": {"zh":"Codex {version} 的格式還沒驗證，先暫停","en":"Codex {version}: format not yet verified; capture and recall are paused."},
+  "codex_format_pending": {"zh":"Codex {version} 的格式還沒驗證，先暫停；執行 status --client codex 重試","en":"Codex {version}: format qualification pending; capture and recall are paused. Run status --client codex to retry."},
+  "codex_format_unavailable": {"zh":"Codex {version} 格式驗證失敗，先暫停；執行 status --client codex 重試","en":"Codex {version}: format probe failed; capture and recall are paused. Run status --client codex to retry."},
+  "codex_format_changed": {"zh":"Codex {version} 的格式已變更，擷取與回憶暫停，等待 plugin 更新","en":"Codex {version}: format changed; capture and recall are paused until a plugin update."},
+  "codex_format_not_installed": {"zh":"Codex {version} 的格式尚未檢查（CX-5 尚未安裝；status 只讀取快取）","en":"Codex {version}: format not checked (CX-5 not installed; status only reads cached verdicts)."},
   "codex_phase_failed": {"zh":"Codex 安裝在 {phase} 階段失敗（{code}）；私有設定保留供重跑，不輸出內部資料。","en":"Codex setup failed at {phase} ({code}); private state retained for retry, internal data suppressed."},
   "codex_host_unqualified": {"zh":"此 Codex host 尚未驗收；只保留 MCP，自動 capture 拒絕執行。","en":"Unqualified Codex host; MCP remains available, automatic capture refuses."},
   "codex_browser_required": {"zh":"Hooks 需要 memory-scoped 瀏覽器授權；此 endpoint 尚未支援，未啟用 hooks。","en":"Hooks require memory-scoped browser authorization; endpoint unsupported, hooks remain disabled."},

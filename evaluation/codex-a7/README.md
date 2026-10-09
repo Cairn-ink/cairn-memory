@@ -23,8 +23,10 @@ under the system temp directory, so the root is not under `/tmp`. Each root hold
 The CX-5 runtime is installed by `install.mjs`, a child with `HOME` set to the
 disposable home. It uses the installer's own `copyRuntime` and `mergeHooks`,
 with a standalone identity, a synthetic credential and the local policy.
-Only that disposable runtime copy has `qualifiedContextHost` forced on, and
-only when the source still has it off. The hooks are then trusted as a person
+Before the first prompt, it resolves and schema-qualifies the actual native
+Codex binary, then primes its private verdict cache in the disposable CODEX_HOME.
+Installation fails if that host is not format-qualified; no runtime gate is
+patched or bypassed. The hooks are then trusted as a person
 would in `/hooks`: their `hooks/list` key and current hash are persisted in the
 disposable `config.toml`, without `--dangerously-bypass-hook-trust`.
 

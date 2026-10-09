@@ -14,6 +14,7 @@ import { clientProjectId } from "../../client/pairing.mjs";
 import { createRuntimeGuard } from "../../client/runtime-usage.mjs";
 import { withHeldLock } from "../../client/testing/lock-contention.mjs";
 import { observedHook } from "./lock-contention.mjs";
+import { childEnvironment } from "./http-harness.mjs";
 import { withFileLock } from "../../client/file-lock.mjs";
 
 test("A4 partial lines and appends preserve frozen IDs and coverage", async (t) => {
@@ -380,7 +381,7 @@ test(
         const child = spawn(
           process.execPath,
           [new URL("./process-stub.mjs", import.meta.url).pathname, "hook", configPath],
-          { stdio: ["pipe", "pipe", "pipe"], env: process.env },
+          { stdio: ["pipe", "pipe", "pipe"], env: childEnvironment() },
         );
         let output = "", errors = "";
         child.stdout.on("data", (chunk) => (output += chunk));

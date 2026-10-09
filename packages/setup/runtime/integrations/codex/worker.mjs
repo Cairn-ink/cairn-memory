@@ -106,7 +106,7 @@ async function prepared(binding, options, action) {
         return { status: "superseded", state: s };
       if (
         !options.reset &&
-        (s?.status === "invalid_reply" || (s?.status === "digest_key_reset" && !s.anchor))
+        (["invalid_reply", "unsupported_format"].includes(s?.status) || (s?.status === "digest_key_reset" && !s.anchor))
       )
         return { status: s.status, state: s };
       if (!options.reset && (control.paused || !control.valid))
@@ -207,8 +207,10 @@ async function prepared(binding, options, action) {
           return { status: "superseded", state: s };
         const header = await readBytes(file, 0, Math.min(size, MAX_LINE));
         const nl = header.indexOf(10);
-        if (nl < 0)
+        if (nl < 0) {
+          if(size > MAX_LINE) { s.status = "unsupported_format"; await save(); }
           return { status: size > MAX_LINE ? "unsupported_format" : "partial_tail", state: s };
+        }
         try {
           verifyHeader(header.subarray(0, nl), sessionId, options);
         } catch (error) {
@@ -223,15 +225,6 @@ async function prepared(binding, options, action) {
             }
             return { status: "unsupported_format", state: s };
           }
-        }
-        if (s.status === "unsupported_format") {
-          // Older runtimes persisted version-only refusals without a cause.
-          // Recheck only with trusted creator evidence, then strictly rescan the
-          // unacknowledged bytes; genuine unsupported records still fail closed.
-          const creatorVersion = JSON.parse(header.subarray(0, nl)).payload.cli_version;
-          if (creatorVersion !== options.qualifiedCreatorVersion && await options.qualifyCreator?.(creatorVersion) !== true)
-            return { status: "unsupported_format", state: s };
-          s.status = "idle";
         }
 
         if (s.file !== id || size < s.offset || (s.pending && size < s.pending.end))
@@ -329,22 +322,15 @@ export async function establishPauseBoundary(binding, options = {}) {
     async () => {
       const control = await readControlState(binding.root),
         previous = await readCursor(cp);
-      if (control.paused || !control.valid) return { status: "paused" };
       if (
-        previous?.status === "invalid_reply" ||
+        ["invalid_reply", "unsupported_format"].includes(previous?.status) ||
         (previous?.status === "digest_key_reset" && !previous.anchor)
       )
         return { status: previous.status, state: previous };
+      if (control.paused || !control.valid) return { status: "paused" };
       const opaque = hash(binding.targetId, binding.projectId, wireBinding(binding).sessionId);
       const changed = previous && previous.binding !== opaque;
       const migration = previous?.version === 1;
-      if (
-        !changed &&
-        !migration &&
-        previous &&
-        ["unsupported_format", "invalid_reply"].includes(previous.status)
-      )
-        return { status: previous.status };
       if (
         !changed &&
         !migration &&

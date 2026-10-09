@@ -22,14 +22,14 @@
     "integrations/codex/cursor.mjs": "fa09adaf803254a5a2781b2e88df9df746131cb2b8ffea829bb0d527ae215eb5",
     "integrations/codex/digest.mjs": "eeb6b23e608344e42bc2ef3c862fbc3cf09af2c1034293205623f7a8abe37f4e",
     "integrations/codex/entry.mjs": "558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952",
-    "integrations/codex/hook.mjs": "b0bb1b899599b96a23b69f0ce54b38a3ae276e0bee342e562ef9e1b74ec52a61",
+    "integrations/codex/hook.mjs": "3298bd3147825eb76d97620f2c9bc978b506ae4a6b42509862081e970610a6a7",
     "integrations/codex/hosted-lifecycle.mjs": "8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496",
     "integrations/codex/installed-state.mjs": "f0599848195c9f988ccb192b790d0de130986476381f7ef28562542725f01a02",
     "integrations/codex/installed.mjs": "bdf83111bc84f227f5c0e45e88d7c62a1e4e28112fe7d0f12ad61c3bc69c10b7",
     "integrations/codex/parser.mjs": "dd8e84433daa91a32a937e41a0cdcb390ecdb6c8beef09827f72a605f43d5dce",
-    "integrations/codex/qualification.mjs": "f482bd909cc5b61d4b1bbdbe7e6b70918b839c9aec70e45ca4b28c10d1c0e128",
+    "integrations/codex/qualification.mjs": "a1aac85bd0cb9b6086014301f86197676e4787bc4083baee43fd65b205901c3d",
     "integrations/codex/schema-evidence.mjs": "dbae491e6e07c1f6f7abb4c7190cecdbc6cb9b09225f528190a1411c98918428",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
-    "integrations/codex/worker.mjs": "2d0d78fe0d80375005d3bd10867eaa6e4a271e260e44b9d247c8a0a88d3e029f"
+    "integrations/codex/worker.mjs": "f536616639a5a3450223dcad4a584914dfbb9061134f7d7ca4dea721255fb1a2"
   }
 }

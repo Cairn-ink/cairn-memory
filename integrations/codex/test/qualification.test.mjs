@@ -71,7 +71,7 @@ test('changed schema, including a transitive delivery/context reference, is refu
   const verdict=await qualifyBinary(f.configPath,f.host,{collect:async()=>result('0.999.0',changed)});
   assert.equal(verdict.status,'changed');
   assert.equal(qualificationStatus(verdict.version,verdict.status),
-    'Codex 0.999.0 的格式還沒驗證，先暫停');
+    'Codex 0.999.0 的格式已變更，擷取與回憶暫停，等待 plugin 更新');
   const inherited=structuredClone(evidence);inherited.appServer.MessagePhase.oneOf.push({type:'string',enum:['new-phase']});
   assert.ok(!KNOWN_FORMATS.includes(fingerprint(inherited)));
   assert.deepEqual(await cachedQualification(f.configPath,f.host),verdict);
@@ -92,7 +92,7 @@ test('pending qualification returns promptly, schedules once, and never waits fo
 
 test('unsafe verdict, failed probe and changing binary fail closed; failed probe can be retried',async t=>{
   const f=await fixture(t);
-  assert.equal((await qualifyBinary(f.configPath,f.host,{collect:async()=>{throw new Error('failed');}})).status,'pending');
+  assert.equal((await qualifyBinary(f.configPath,f.host,{collect:async()=>{throw new Error('failed');}})).status,'unavailable');
   assert.equal((await qualifyBinary(f.configPath,f.host,{collect:async()=>result('0.998.0')})).status,'qualified');
   const cache=join(f.ws.path,'qualification',f.host.identity+'.json');
   await chmod(cache,0o644);assert.equal((await cachedQualification(f.configPath,f.host)).status,'pending');
@@ -143,7 +143,7 @@ test('missing schema/serde evidence is a refused format rather than an approval 
   const verdict=await qualifyBinary(f.configPath,f.host,{collect:async()=>{
     const error=new Error('embedded_schema_missing');error.version='0.999.0';throw error;
   }});
-  assert.equal(verdict.status,'changed');assert.match(qualificationStatus(verdict.version,verdict.status),/的格式還沒驗證，先暫停/);
+  assert.equal(verdict.status,'changed');assert.match(qualificationStatus(verdict.version,verdict.status),/的格式已變更.*等待 plugin 更新/);
 });
 
 test('running process binding survives an on-disk replacement and rejects a reused or gone process identity',async t=>{
@@ -200,7 +200,7 @@ test('version-only refusal leaves the cursor retryable; later creator evidence c
   assert.deepEqual(f.calls.flatMap(row=>row.messages.map(m=>m.content)),['Version retry.']);
 });
 
-test('legacy stored version-only unsupported_format recovers after qualification without reset or content loss',async t=>{
+test('old unsupported_format without a recorded cause stays latched; creator proof cannot clear it',async t=>{
   const {fixture:captureFixture,header,item}=await import('./helpers.mjs');
   const {runWorker}=await import('../worker.mjs');
   const {cursorPath,publishCursor}=await import('../cursor.mjs');
@@ -213,11 +213,11 @@ test('legacy stored version-only unsupported_format recovers after qualification
   await publishCursor(cursorPath(f.root,f.binding.targetId,f.binding.sessionId),legacy,prior);
   await (await import('node:fs/promises')).appendFile(f.path,item('After update.',1));
   await runWorker(f.binding,{...options,qualifiedCreatorVersion:'0.164.0'});
-  assert.deepEqual(f.calls.flatMap(row=>row.messages.map(m=>m.content)),['Before update.','After update.']);
-  assert.notEqual((await f.cursor()).status,'unsupported_format');
+  assert.deepEqual(f.calls.flatMap(row=>row.messages.map(m=>m.content)),['Before update.']);
+  assert.equal((await f.cursor()).status,'unsupported_format');
 });
 
-test('trusted creator recovery never admits an unknown record phase',async t=>{
+test('trusted creator qualification never admits an unknown record phase',async t=>{
   const {fixture:captureFixture,header,item}=await import('./helpers.mjs');
   const {runWorker}=await import('../worker.mjs');
   const q=await fixture(t),f=await captureFixture(t,{text:header({cli_version:'0.163.0'})+
@@ -228,4 +228,56 @@ test('trusted creator recovery never admits an unknown record phase',async t=>{
   assert.equal((await runWorker(f.binding,options)).status,'unsupported_format');
   assert.equal((await runWorker(f.binding,options)).status,'unsupported_format');
   assert.equal(f.calls.length,0);
+});
+
+for(const [name,bad] of [
+  ['unknown phase',itemForLatch => itemForLatch('Bad phase.',1,'assistant',{phase:'future_answer'})],
+  ['malformed item',itemForLatch => itemForLatch('Bad item.',1,'assistant',{content:'not an array'})],
+]) test(`genuine ${name} latch survives pause, resume, SessionStart and repeated Stop without source reads`,async t=>{
+  const {fixture:captureFixture,header,item}=await import('./helpers.mjs');
+  const {runWorker,prepareCapture,establishPauseBoundary}=await import('../worker.mjs');
+  const {setPaused}=await import('../../client/control-state.mjs');
+  const {withSourceReadObserver}=await import('../source.mjs');
+  const {appendFile,unlink}=await import('node:fs/promises');
+  const f=await captureFixture(t,{text:header()+bad(item)});
+  let proofs=0;
+  const options={guard:f.guard,transport:f.transport,qualifiedCreatorVersion:'0.157.1',
+    qualifyCreator:async()=>{proofs++;return true;}};
+  assert.equal((await runWorker(f.binding,options)).status,'unsupported_format');
+  const latched=await f.stateBytes();
+  await setPaused(f.root,true);
+  assert.equal((await prepareCapture(f.binding,options)).status,'unsupported_format');
+  await setPaused(f.root,false);
+  await appendFile(f.path,item('Later valid content.',2));
+  assert.equal((await establishPauseBoundary(f.binding)).status,'unsupported_format');
+  let sourceReads=0;
+  await withSourceReadObserver(()=>sourceReads++,async()=>{
+    for(let i=0;i<3;i++)assert.equal((await runWorker(f.binding,options)).status,'unsupported_format');
+  });
+  assert.equal(sourceReads,0);
+  // If Stop attempted to reopen or rescan, this missing source would overwrite
+  // the cursor with source_unavailable. It must return the durable latch first.
+  await unlink(f.path);
+  for(let i=0;i<3;i++)assert.equal((await prepareCapture(f.binding,options)).status,'unsupported_format');
+  assert.equal(await f.stateBytes(),latched);
+  assert.equal(proofs,0);assert.equal(f.calls.length,0);
+});
+
+test('pending and failed probes advise retry; changed format waits for a plugin update',()=>{
+  assert.match(qualificationStatus('0.157.1','pending'),/格式還沒驗證.*status --client codex 重試/);
+  assert.match(qualificationStatus('0.163.0','unavailable'),/格式驗證失敗.*status --client codex 重試/);
+  const changed=qualificationStatus('0.157.1','changed');
+  assert.match(changed,/格式已變更.*等待 plugin 更新/);
+  assert.doesNotMatch(changed,/重試|newer/);
+});
+
+test('a previously cached unavailable probe is retried instead of becoming a permanent refusal',async t=>{
+  const f=await fixture(t);
+  const verdict=await qualifyBinary(f.configPath,f.host,{collect:async()=>result('0.163.0')});
+  const path=join(f.ws.path,'qualification',f.host.identity+'.json');
+  await writeFile(path,JSON.stringify({...verdict,status:'unavailable',reason:'probe_failed'}));
+  assert.equal((await cachedQualification(f.configPath,f.host)).status,'unavailable');
+  let probes=0;
+  assert.equal((await qualifyBinary(f.configPath,f.host,{collect:async()=>{probes++;return result('0.163.0');}})).status,'qualified');
+  assert.equal(probes,1);
 });

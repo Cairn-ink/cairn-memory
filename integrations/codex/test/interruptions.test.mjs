@@ -36,14 +36,7 @@ test(
           operation === "refusal"
             ? {
                 terminated: () => true,
-                capture: async (body) =>
-                  (
-                    await fetch(endpoint, {
-                      method: "POST",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify(body),
-                    })
-                  ).json(),
+                capture: (body) => f.http.capture(body),
               }
             : f.transport;
         const run = () => runWorker(f.binding, { guard: f.guard, transport, byteEnd });

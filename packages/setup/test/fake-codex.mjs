@@ -14,6 +14,7 @@ if (args.includes('--help')) {
 }
 if (args[0] === '--version') { writeSync(1, 'codex-cli ' + (state.version ?? '0.160.0')); process.exit(0); }
 if(args[0]==='app-server' && args[1]==='generate-json-schema' && state.formatEvidence) {
+  if(state.failSchema){writeSync(2,'synthetic schema command failure');process.exit(7);}
   const selected=JSON.parse(readFileSync(join(state.formatEvidence,'binary-'+(state.version==='0.162.0'?'0.162.0':'0.160.1'),'format.json'),'utf8')).appServer;
   if(state.changedFormat)selected.ThreadHistoryMode.enum=['changed'];
   const out=args[args.indexOf('--out')+1];mkdirSync(out,{recursive:true});

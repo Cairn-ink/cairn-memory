@@ -178,8 +178,8 @@ subprocess or binary hashing blocks a hook. Pending qualification schedules one
 background probe and withholds automatic work. Setup/status also qualify outside
 the 2s hot path, in disposable HOME/CODEX_HOME with no model calls. Detached workers
 re-check the originating binary’s identity/verdict before capture. Unknown rollout
-creators require that exact qualified current host version; arbitrary version
-strings or another binary’s cached approval cannot open the parser.
+creators require trusted current-host or current-policy cached creator format
+evidence; arbitrary version strings cannot open the parser.
 
 Recall’s safety comes from filtering, untrusted framing, quoting and the model.
 A7 must run again if additionalContext delivery/placement changes. Evidence
@@ -190,10 +190,11 @@ The prompt-recall kill switch remains unchanged.
 Unseeded rollout creators can use any private cached qualified verdict under the
 current known-format policy, even after the creator binary is updated or removed.
 A version-only refusal returns retryable `creator_unqualified` without latching
-`unsupported_format`. Legacy version refusals are rechecked with trusted creator
-evidence before strictly rescanning unacknowledged bytes; actual unknown formats
-remain closed. Host verdicts continue to bind to the running binary identity.
-Unqualified status wording is neutral about version age. Status without a valid
+`unsupported_format`. Existing unsupported_format cursors lack a recorded cause, so they stay latched
+until an explicit stopped-worker reset. Genuine format latches survive pause,
+resume and SessionStart; later Stop hooks return before reopening the transcript. Host verdicts continue to bind to the running binary identity.
+Status reports pending or failed probes with a retry hint, and changed formats
+with a plugin-update requirement; wording is neutral about version age. Status without a valid
 installation only reads cache and does not generate schema or create cache state.
 The A7 installer primes the actual native verdict in its disposable home before
 the first prompt, without modifying runtime qualification gates.

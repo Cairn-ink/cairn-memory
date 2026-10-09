@@ -163,7 +163,7 @@ export async function qualifyBinary(configPath,host,{collect=collectEvidence,cac
   const binary=await boundBinary(host);
   if(!binary)return {status:'pending'};
   const cached=cache?await cachedQualification(configPath,host):{status:'pending'};
-  if(cached.status!=='pending')return cached;
+  if(['qualified','changed'].includes(cached.status))return cached;
   const temporary=await mkdtemp(join(tmpdir(),'cairn-codex-format-'));
   let verdict;
   try {
@@ -178,7 +178,7 @@ export async function qualifyBinary(configPath,host,{collect=collectEvidence,cac
     // unreadable binary is uncertainty and remains retryable via status.
     if(validVersion(error.version) && ['schema_missing','schema_ref_missing','serde_marker_missing','embedded_schema_missing','embedded_schema_conflict'].includes(error.message))
       verdict={identity:host.identity,policy,version:error.version,status:'changed',reason:error.message};
-    else return {status:'pending'};
+    else return {status:'unavailable',reason:'probe_failed',...(validVersion(error.version)?{version:error.version}:{})};
   } finally {await rm(temporary,{recursive:true,force:true});}
   if(cache) {
     try {await safeCache(configPath,{create:true});await privateWrite(verdictPath(configPath,host),JSON.stringify(verdict));}
@@ -186,9 +186,12 @@ export async function qualifyBinary(configPath,host,{collect=collectEvidence,cac
   }
   return verdict;
 }
-export function qualificationStatus(version,status,unqualifiedLine) {
-  return status==='qualified'?`Codex ${version}: format qualified.`:
-    unqualifiedLine??`Codex ${version??'unknown'} 的格式還沒驗證，先暫停`;
+export function qualificationStatus(version,status,lines={}) {
+  if(status==='qualified')return `Codex ${version}: format qualified.`;
+  const name=version??'unknown';
+  if(status==='changed')return lines.changed??`Codex ${name} 的格式已變更，擷取與回憶暫停，等待 plugin 更新`;
+  if(status==='unavailable')return lines.unavailable??`Codex ${name} 格式驗證失敗，先暫停；執行 status --client codex 重試`;
+  return lines.pending??`Codex ${name} 的格式還沒驗證，先暫停；執行 status --client codex 重試`;
 }
 
 const pendingPath = (configPath,host) => join(directory(configPath),host.identity+'.pending');

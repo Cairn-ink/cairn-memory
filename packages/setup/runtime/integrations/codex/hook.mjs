@@ -1,8 +1,13 @@
+import { channel } from 'node:diagnostics_channel';
 import { isAbsolute } from 'node:path';
 import { resolveClient, clientProjectId } from '../client/pairing.mjs';
 import { readControlState } from '../client/control-state.mjs';
 import { prepareCapture, runWorker, establishPauseBoundary } from './worker.mjs';
 import { FORMAT } from './parser.mjs';
+
+// Optional in-process observation lets tests join raced work after a deadline.
+// Hook inputs cannot subscribe or supply an observer.
+const hookWork = channel('cairn.codex.hook.work');
 
 const EVENTS = new Set(['SessionStart','UserPromptSubmit','Stop','PreCompact','SessionEnd']);
 export function validateHook(input) {
@@ -40,8 +45,10 @@ export async function handleHook(input,{clientOptions,targetId,launch,qualifiedC
   let expired=false,timer;
   const unavailable={output:['Stop','PreCompact','SessionEnd'].includes(input?.hook_event_name)?'{}':'',status:'capture_unavailable'};
   try {
-    return await Promise.race([processHook(input,{clientOptions,targetId,launch,qualifiedCreatorVersion,qualifyCreator},
-      ()=>expired || now()-start>=budget),new Promise(resolve=>{
+    const work=processHook(input,{clientOptions,targetId,launch,qualifiedCreatorVersion,qualifyCreator},
+      ()=>expired || now()-start>=budget);
+    if(hookWork.hasSubscribers)hookWork.publish({work});
+    return await Promise.race([work,new Promise(resolve=>{
       timer=setTimeout(()=>{expired=true;resolve(unavailable);},budget);
     })]);
   } finally {clearTimeout(timer);}

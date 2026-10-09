@@ -763,7 +763,7 @@ test('CX-5 app-server format verdict controls recall independently of install-ti
   assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:async()=>daemonHost}),'');
   assert.equal(f.requests.length,0);
   const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
-  assert.match(status.stdout,/app-server: Codex 0\.163\.0: format not yet verified; capture and recall are paused\./);
+  assert.match(status.stdout,/app-server: Codex 0\.163\.0: format changed; capture and recall are paused until a plugin update\./);
   assert.match(status.stdout,/Prompt recall injection \(UserPromptSubmit\): per host \(qualified: on; unqualified: off\)/);
 });
 
@@ -815,9 +815,9 @@ test('CX-5 status without installation leaves CODEX_HOME unchanged and does not 
   assert.equal(f.code,0,f.stdout);assert.equal(f.installed,undefined);
   assert.deepEqual(await readdir(f.codexHome),['config.toml']);
   assert.ok(!(await f.records()).some(row=>row.args.includes('generate-json-schema')));
-  assert.match(f.stdout,/Codex 0\.160\.1: format not yet verified; capture and recall are paused\./);
+  assert.match(f.stdout,/Codex 0\.160\.1: format not checked \(CX-5 not installed; status only reads cached verdicts\)\./);
   const zh=await f.run(['status','--client','codex','--lang','zh']);
-  assert.equal(zh.code,0,zh.stdout);assert.match(zh.stdout,/Codex 0\.160\.1 的格式還沒驗證，先暫停/);
+  assert.equal(zh.code,0,zh.stdout);assert.match(zh.stdout,/Codex 0\.160\.1 的格式尚未檢查（CX-5 尚未安裝；status 只讀取快取）/);
   assert.deepEqual(await readdir(f.codexHome),['config.toml']);
 });
 
@@ -847,4 +847,28 @@ test('A7 disposable install primes an identity-bound verdict before its first pr
     cwd:'/synthetic/project',transcript_path:null,prompt:'First prompt preference?'}));
   await runInstalled(installed.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:async()=>f.host});
   assert.equal(recalls,1);
+});
+
+test('CX-5 installed status distinguishes a retryable probe failure from changed evidence',async t=>{
+  const f=await fixture(t);assert.equal(f.code,0,f.stdout);
+  const state=JSON.parse(await readFile(f.statePath,'utf8'));
+  state.failSchema=true;
+  await writeFile(f.statePath,JSON.stringify(state));
+  await appendFile(f.host.binaryPath,'\n// replacement binary identity\n');
+  const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
+  assert.match(status.stdout,/format probe failed; capture and recall are paused\. Run status --client codex to retry\./);
+  assert.doesNotMatch(status.stdout,/format changed|until a plugin update/);
+  state.failSchema=false;
+  await writeFile(f.statePath,JSON.stringify(state));
+  const retry=await f.run(['status','--client','codex']);assert.equal(retry.code,0,retry.stdout);
+  assert.match(retry.stdout,/format qualified/);
+});
+
+test('CX-5 installed status reports pending qualification with a retry hint',async t=>{
+  const f=await fixture(t);assert.equal(f.code,0,f.stdout);
+  const {observeHost}=await import('../../../integrations/codex/qualification.mjs');
+  await observeHost(f.installation,{identity:'c'.repeat(64),binaryPath:join(f.ws.path,'missing-codex'),kind:'app-server'});
+  const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
+  assert.match(status.stdout,/app-server: Codex unknown: format qualification pending; capture and recall are paused\. Run status --client codex to retry\./);
+  assert.doesNotMatch(status.stdout,/format changed|format probe failed/);
 });

@@ -232,7 +232,13 @@ export async function installedStatus({home,hostVersion,write,t,snapshot,cliHost
     } catch {/* unavailable host is reported as pending, never on */}
     if(host.identity!==cliHost?.identity || host.kind!==cliHost?.kind)verdicts.push({host,verdict,version:verdict.version,observed:true});
   }
-  for(const item of verdicts)write(`${item.observed?'last observed ':''}${item.host?.kind??'cli'}: ${qualificationStatus(item.version,item.verdict.status,t('codex_format_unverified',{version:item.version??'unknown'}))}`);
+  for(const item of verdicts) {
+    const values={version:item.version??'unknown'};
+    write(`${item.observed?'last observed ':''}${item.host?.kind??'cli'}: ${qualificationStatus(item.version,item.verdict.status,{
+      changed:t('codex_format_changed',values),unavailable:t('codex_format_unavailable',values),
+      pending:t(installed?'codex_format_pending':'codex_format_not_installed',values),
+    })}`);
+  }
   const formatQualified=verdicts.every(item=>item.verdict.status==='qualified');
   const anyQualified=verdicts.some(item=>item.verdict.status==='qualified');
   try {
