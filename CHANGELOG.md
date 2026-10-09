@@ -1,6 +1,79 @@
 # Changelog
 
-## Unreleased — @cairn-ink/memory installer 0.2.0
+## Unreleased — @cairn-ink/memory installer 0.3.0 (CX-5)
+
+- Enable Codex UserPromptSubmit recall injection by default for exact
+  codex-cli 0.160.1 after the authorized A7 pinned-host adversarial evaluation
+  (`evaluation/codex-a7/`). With `gpt-6-astra`, 45 adversarial runs (including
+  Traditional Chinese, mixed and split payloads) had zero harmful actions and
+  every memory delivered; English and Chinese positive controls passed 3/3.
+  Add the `prompt-recall-off|on --client codex` kill switch (owner-private
+  `prompt-recall.json`, fail-closed, reread as the last step before context is
+  returned) and show its state in status. The A7 evidence is certified by a
+  strict matrix/execution/delivery/isolation certificate whose detector fails
+  any secret-file access or secret in tool output. SessionStart context stays disabled.
+
+- Qualify the installed codex-cli 0.160.1 using generated app-server schemas,
+  embedded hook schemas, a network-blocked synthetic native exec session and
+  serde/type evidence. Freeze hashes and synthetic fixtures; accept exact
+  qualified creator pins, refuse every unknown installed host/layout.
+- Install four user-level Codex hooks and a 0700/0600 versioned runtime copied
+  from a packaged hash manifest, independent of ephemeral npx caches. Preserve
+  unrelated config/hooks; add offline status/dry-run and disable/uninstall/pause/
+  resume. Use native hook trust review without bypass flags.
+- Save memory-scoped browser credentials privately before delivery ACK; never
+  use broad MCP PATs for workers or put hook credentials in config, argv, env or
+  logs. Prefer the offered native MCP OAuth login; retain explicit MCP PAT paths.
+- Wire Stop/PreCompact incremental hosted capture with the Codex discriminator,
+  existing redaction/profile bounds, stable retries and enforced pause/generation/
+  EOF barriers. The 750 ms foreground launch is local only; pause-state is read
+  in the worker. Internal errors exit 0 quietly. Endpoint server quota is shared;
+  the selected daily cap and concurrency 2 apply only to Codex workers.
+- Preserve the last successful installation when new node/runtime authorization
+  fails. Remove every installer-owned handler for this installation across old
+  node/runtime digests, prevent duplicate registration, and delete the Codex
+  endpoint policy on uninstall while retaining memory/key/MCP. Uninstall unpairs
+  pending/completed bindings, clears the native Claude pairing option and verifies
+  Claude enabled on its original key/root. Unverified recovery is nonzero and
+  retryable without browser auth; credential/state cleanup proceeds despite an
+  unsafe optional policy path. First browser/
+  candidate failure leaves Claude identity unchanged; partial native pairing
+  delivery is visible and rerun completes the same identity.
+- Adopt the existing Claude key and deliver only pairing_record after explicit
+  stopped-host consent; test equal project IDs for the same literal path. Pair
+  only an installed/enabled compatible stable plugin (`>=0.1.2 <1.0.0`) with native
+  pairing_record capability. Released 0.3.1 qualifies; current plugin metadata is
+  tested against the predicate. Missing/old/disabled plugins
+  select disclosed Codex standalone instead; no automatic marketplace/plugin
+  update or unused automatic_memory_policy userConfig.
+- **Claude plugin/marketplace 0.3.2 changes relative to released 0.3.1:** status
+  alone adds best-effort diagnostics when a Codex policy exists (invalid or
+  unreadable/future policy, actual last observed shared pause error with timestamp,
+  and a notice that Codex's daily cap does not limit Claude). No policy retains
+  the exact status text; relative/empty plugin-data retains legacy behavior.
+  Claude start/capture/recall/pause/resume, payloads, cursor and server-quota
+  behavior stay as on origin/main: no local Codex cap or new pause-state request.
+  Distributed shared helpers include the Codex-only binding/diagnostic paths;
+  the version reported in telemetry is 0.3.2. There is no new Claude setting.
+  Fresh/unobserved or stale healthy pause state
+  does not generate an endpoint alarm; only actual observed problems do.
+- Deliver a bounded UserPromptSubmit recall/context port, whole-entry authority
+  filter, complete receipt framing and one 2 s budget. **Injection remains
+  disabled pending A7 real pinned-host adversarial authority acceptance**, even
+  though 0.160.1 supports additionalContext. MCP recall stays available.
+  SessionStart establishes the pause boundary; startup context also awaits a
+  qualified local o200k counter and sibling acceptance.
+- Use a private second-node shim for portable CI upgrade tests on Node 22/24.
+  Both locales disclose identity-only consent and Codex-only cap; a newly
+  compatible plugin on a standalone rerun explains target retention and migration
+  steps instead of silently falling back.
+- Add fake-Codex/browser/worker E2E and privacy tests using in-memory HTTP/IPC,
+  without sockets or real credentials. Record actual check exits; legacy suites
+  requiring loopback listen are blocked by this sandbox’s EPERM. No network,
+  production access, model call or publication in this delivery. Installer
+  publication and real host/endpoint acceptance remain with chichi.
+
+## @cairn-ink/memory installer 0.2.0 — published
 
 - Highlight the one-time code with blank lines and bold/color in a TTY, or
   brackets under NO_COLOR/non-TTY output. Wait for Enter before browser launch,

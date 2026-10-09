@@ -1,0 +1,127 @@
+{
+  "version": "0.162.0",
+  "binarySha256": "50ed828f357c655a3c82054d346cab8434f24901f14ec19b8267571bdd008b38",
+  "generatedSchemaSha256": "71a94eab0d0b27f2aab30993097bc13d78314eb386801c105280b53f0963af44",
+  "versionExitCode": 0,
+  "schemaExitCode": 0,
+  "embeddedHooks": [
+    "pre-compact.command.input",
+    "pre-compact.command.output",
+    "session-start.command.input",
+    "session-start.command.output",
+    "stop.command.input",
+    "stop.command.output",
+    "user-prompt-submit.command.input",
+    "user-prompt-submit.command.output"
+  ],
+  "network": false,
+  "note": "Native schema evidence plus a separate no-model synthetic history readback probe; native context placement/model behavior is not exercised.",
+  "qualified": true,
+  "source": "Installed native binary schemas plus private synthetic rollout history readback; no real config/sessions or model calls",
+  "fixtureScope": "Native 0.162.0 history readback of schema/serde-shaped synthetic disk rollouts. Header/assistant/input events are seeded, not model-generated. Native resume appended thread_settings_applied. No turn/start or model calls.",
+  "comparison": "MessagePhase.partial_answer is stable text; the native thread/searchOccurrences SQL UNION ALLs partial items with the turn final item as separate indexed content. Capture uses canonical item_completed once. Seeded history readback validates serialization only, not generated partial/final text behavior. SubAgentActivity stays excluded; all eight hook schemas are unchanged.",
+  "context": "Schema only: additionalContext wire unchanged. Native placement/model behavior not exercised; A7 must be rerun if delivery/placement changes.",
+  "files": [
+    {
+      "path": "binary-0.162.0/app-server-selected.json",
+      "sha256": "de75c88ecfdcb170c05a69bbd3016169fbafd273f4bff883e88ea32c5f459a64"
+    },
+    {
+      "path": "binary-0.162.0/format.json",
+      "sha256": "7f89cc5a115c3b01d26413ab369ab13580a04aac7d5981680fe16651770b3f0c"
+    },
+    {
+      "path": "binary-0.162.0/pre-compact.command.input.json",
+      "sha256": "5728b5da4c63e1e07f2d53ac8b2adc18306cd3dc8b01b556fc422e75b32a8734"
+    },
+    {
+      "path": "binary-0.162.0/pre-compact.command.output.json",
+      "sha256": "98ba0dbf0848d8283cfe48a85122f4d9122baae1b457f50e239504864900247e"
+    },
+    {
+      "path": "binary-0.162.0/qualification.json",
+      "sha256": "2a56267d3135a2bb217be47f0d74a5415fa8fa3fd01ea7d81dbd748b5e636ddf"
+    },
+    {
+      "path": "binary-0.162.0/search-occurrences.sql",
+      "sha256": "7118056763c2ccf3f2cf3e4c454f9b1df87d0a45aab3aae1b183c2bc49f0cfbb"
+    },
+    {
+      "path": "binary-0.162.0/serde-markers.json",
+      "sha256": "e2f42e2e73c6903aaad85ee486794d8c00ff2a986f91fde9d2b38e71d080a071"
+    },
+    {
+      "path": "binary-0.162.0/session-start.command.input.json",
+      "sha256": "f7299ffcc96c8ad0ab51df77743632f8374390329b14bef87c4e0d00b2caa4a2"
+    },
+    {
+      "path": "binary-0.162.0/session-start.command.output.json",
+      "sha256": "72c8cded2efc7024abfd62692b84934b1b1999cb595665f4a520dc8ebb5eb690"
+    },
+    {
+      "path": "binary-0.162.0/stop.command.input.json",
+      "sha256": "b162ebcae8c3b872aee3725128b436769557fc1fe0c83336c4e76eed62b22626"
+    },
+    {
+      "path": "binary-0.162.0/stop.command.output.json",
+      "sha256": "37679d1a933fdc3dc8cea5ff12d7d0e2dacfc036208d134aefc09247e1222d88"
+    },
+    {
+      "path": "binary-0.162.0/user-prompt-submit.command.input.json",
+      "sha256": "31d3d5e094ae9baa9478bc8e3d09f689de5a74228a404d2dffe60fc8fa89e3a0"
+    },
+    {
+      "path": "binary-0.162.0/user-prompt-submit.command.output.json",
+      "sha256": "12a741340d3a5acaf139721ad086d79d6dc0d961f752c6d82bd7a315f374e641"
+    },
+    {
+      "path": "partial-final-0.162.0.jsonl",
+      "sha256": "0a2890dd526f24672ed8007722ad2380be2aaf254ff9863632a350f3dc41c0eb"
+    },
+    {
+      "path": "partial-interrupted-0.162.0.jsonl",
+      "sha256": "2bca4752294c06ef7663e7967bbd9c8a20934347227b93343efcd1206ad4434c"
+    },
+    {
+      "path": "partial-unknown-0.162.0.jsonl",
+      "sha256": "99247dfde39e72b03c7dccb7eafb156f268fcf4c2a2c5ce56e73d402a5b90ecc"
+    },
+    {
+      "path": "phase-0.162.0-native-read.json",
+      "sha256": "2cbddd48a21bdc51dd92c61ffc18a48f946e3ccdbd5943d858c433bffc439867"
+    },
+    {
+      "path": "primary-0.162.0.jsonl",
+      "sha256": "04bbd0b1d843de5ce2b51cbd4f23780038c6be37ad838c6d18b6da1a44e771fd"
+    }
+  ],
+  "nativePhaseProbe": {
+    "script": "scripts/probe-codex-phases.mjs",
+    "scriptSha256": "f6bccc7952876fced06e82df3d22e1c7e73e4e56d0c5d1209ab28c5218cca953",
+    "nativeExitCodes": [
+      0,
+      0
+    ],
+    "modelCalls": 0,
+    "methods": [
+      "initialize",
+      "thread/items/list",
+      "thread/resume",
+      "thread/start",
+      "thread/turns/list"
+    ],
+    "cases": [
+      "partial-final: seeded partial and final round-trip separately",
+      "interrupted: completed synthetic partial round-trips, unfinished item omitted",
+      "unknown: native skips invalid phase; plugin fails the scan closed"
+    ]
+  },
+  "partialFinalEvidence": {
+    "source": "Native 0.162.0 ELF thread/searchOccurrences SQL",
+    "path": "binary-0.162.0/search-occurrences.sql",
+    "byteOffset": 244999892,
+    "byteLength": 1415,
+    "sha256": "7118056763c2ccf3f2cf3e4c454f9b1df87d0a45aab3aae1b183c2bc49f0cfbb",
+    "interpretation": "The query UNION ALLs all partial_answer items with the turn final_agent_item_id. They are separate indexed content. This does not prove that a model final answer never repeats earlier text."
+  }
+}

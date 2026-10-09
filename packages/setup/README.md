@@ -1,21 +1,23 @@
 # @cairn-ink/memory
 
-One-command setup of the Cairn Memory **Claude Code plugin** and its automatic
-capture/recall hooks. Node ≥22.16 and `claude` on PATH are required.
-The installer has no runtime dependencies. Other clients use the MCP connector.
+One-command setup of the Cairn Memory **Claude Code plugin**, or private automatic
+capture hooks for format-qualified **Codex CLI / app-server**. Node ≥22.16 and the selected
+CLI on PATH are required. No runtime dependencies. Codex prompt-recall injection
+uses the A7-tested delivery format and is on for qualified hosts; turn it off with
+`prompt-recall-off --client codex`. Recall is also available through MCP.
 
-安裝 Cairn Memory 的 Claude Code 外掛與自動擷取、回憶 hooks。
-需要 Node ≥22.16，以及 PATH 裡的 `claude`，沒有 runtime dependencies。
-其他工具使用 MCP connector。
+安裝 Claude Code 外掛，或格式合格 Codex CLI／app-server 的私有自動 capture hooks。
+需要 Node ≥22.16，以及 PATH 裡的選定 CLI，沒有 runtime dependencies。
+Codex prompt recall 注入已通過 A7 驗收，在格式合格的 host 預設開啟；可用 `prompt-recall-off --client codex` 關閉，也可透過 MCP recall。
 
 ## Setup / 安裝
 
-**Installer 0.1.0 is published; 0.2.0 in this checkout awaits publication by chichi.**
+**Installer 0.2.0 is published; 0.3.0 in this checkout is unpublished and awaits chichi.**
 The installer version is independent of the installed plugin version (currently
-0.3.1). Setup prints both, reading the installed version from Claude Code.
+0.3.2 in this unpublished bundle). Setup prints both, reading the installed version from Claude Code.
 
-**安裝器 0.1.0 已發布，這份原始碼的 0.2.0 等待 chichi 發布。**
-安裝器與外掛是兩個版本，外掛目前為 0.3.1；setup 會分別顯示，外掛版本由
+**安裝器 0.2.0 已發布，這份原始碼的 0.3.0 尚未發布，交由 chichi 審核。**
+安裝器與外掛是兩個版本，配套外掛為未發布的 0.3.2；setup 會分別顯示，外掛版本由
 Claude Code 的安裝狀態讀取。
 
 ```sh
@@ -90,6 +92,96 @@ TTY 中以粗體青色突出代碼；`NO_COLOR` 或非 TTY 輸出改用方括號
 If only a token is configured, setup keeps it and asks you to complete the
 endpoint through `/plugin configure`, or explicitly use `--reauthorize`.
 已有 token 但缺少 endpoint 時會保留憑證，提示補齊設定或明確重新授權。
+
+## Codex automatic capture / Codex 自動記憶
+
+```sh
+# Source 0.3.0; @latest still has the published 0.2.0 behavior
+node packages/setup/bin/memory.mjs setup --client codex
+node packages/setup/bin/memory.mjs status --client codex
+node packages/setup/bin/memory.mjs setup --client codex --dry-run
+node packages/setup/bin/memory.mjs pause --client codex
+node packages/setup/bin/memory.mjs resume --client codex
+node packages/setup/bin/memory.mjs disable --client codex
+node packages/setup/bin/memory.mjs uninstall --client codex
+```
+
+On Linux/WSL with a qualified host format, setup installs SessionStart,
+UserPromptSubmit, Stop and PreCompact in user `hooks.json`. It copies a hashed,
+versioned runtime under `$CODEX_HOME/cairn` (default `~/.codex/cairn`), with 0700
+directories and 0600 files, independent of the npx cache. Review/trust with
+`/hooks`; setup uses no trust bypass. Unknown hosts with identical schema evidence are qualified and cached by binary identity; changed or pending formats never capture or recall. 0.161.0 matches the frozen 0.160.1 evidence. 0.162.0 adds `MessagePhase.partial_answer` and remains closed. Hooks detect the actual native CLI/app-server ancestor and never generate schemas inside the 2s budget. See [format evidence and gates](../../docs/codex-setup.md).
+
+Hooks use device browser authorization. The memory-scoped credential is stored
+as a private **0600 plaintext file, not a keyring**; it never enters Codex’s
+config.toml, argv, environment or logs. Registered commands clear the inherited
+environment before the first Node process; children also use a closed environment.
+Saving/verification precedes delivery
+ACK. There is no broad PAT fallback for hooks. `--manual-token` selects only
+MCP PAT setup; MCP defaults to the offered `codex mcp login cairn` OAuth path.
+Existing MCP credentials and unrelated settings/hooks are preserved.
+
+Claude/Codex pairing adopts the existing project key after explicit stopped-host
+consent and delivers only `pairing_record` to both configurations. New pairing
+requires an enabled Cairn plugin `>=0.1.2 <1.0.0` (stable semver) with that configure
+capability. Version 0.1.2 introduced the pairing contract; released 0.3.1 already qualifies.
+A test binds compatibility to the current plugin metadata. Missing,
+old or disabled plugins select Codex standalone with an explicit notice, without
+changing Claude keys/settings or updating its marketplace. New Codex standalone always uses
+`$CODEX_HOME/cairn-standalone`, preserving Claude's existing or future default
+root. Existing successful bindings never
+silently switch target on plugin removal/downgrade. Use the same account and
+endpoint to share memory after pairing; standalone targets are separate. If a compatible
+plugin appears later, rerun explains why the existing standalone target is retained: to
+adopt Claude’s target, stop hosts/workers, uninstall Codex, then setup again. Old standalone
+memories stay at their original target.
+
+Only Codex workers consume the selected daily capture cap and concurrency 2.
+Claude retains its existing capture/recall/controls and server quota; it does not
+require Codex's enforced pause-state endpoint. Its status reports invalid policies
+and actual last-observed shared-pause errors without failing controls. Fresh/unobserved and stale healthy observations do not trigger an endpoint alarm. No
+policy means unchanged Claude status. Uninstall removes all Cairn hook commands
+for this installation regardless of old node/runtime paths, plus its credential,
+runtime and endpoint policy. MCP, identity/key (including standalone) and memory
+remain. Uninstall also unpairs completed or pending pairing: clear Claude’s native pairing
+option, remove Codex’s binding/shared record under the setup lock, and verify Claude remains
+enabled on the same root/key. Recovery failure returns exit 1 with an explicit warning,
+still removes Codex credential/installation, and can be retried after restoring the Claude
+CLI without browser authorization. A private token-free recovery ownership receipt under
+`~/.cairn-memory-clients/codex-uninstall-<installation hash>.json` supports retry and
+prevents another CODEX_HOME from unpairing this installation; success removes it. Unsafe
+policy paths are reported and skipped while credential/installation cleanup continues.
+Failed reauthorization preserves the last successful installation.
+Browser/candidate failure on first pairing leaves Claude identity untouched.
+Partial native pairing delivery prints a pending notice; keep hosts/workers
+stopped and rerun to finish the same identity.
+
+Stop/PreCompact launch capture within 750 ms with no text or credential in the
+handoff; hosted pause-state is fetched in the worker, outside the foreground
+budget. Worker failures exit 0 and emit no logs. SessionStart establishes the
+protocol 0.3.0 pause/resume EOF boundary. Prompt recall’s redaction, full receipt
+framing, authority filter, 8,000-unit bound and single 2 s budget are tested, and
+**automatic injection is on for format-qualified hosts using the A7-tested
+delivery format** (`evaluation/codex-a7/RESULTS.md`). `prompt-recall-off` is its kill switch.
+SessionStart context also needs a qualified local o200k counter. MCP recall is
+available. Status reports registration/credential presence and last observed
+hosted pause; it does not verify trust, server reachability or account parity.
+
+本次 0.3.0 尚未發布。Codex 自動 capture、browser credential、私有 runtime 與共享
+identity／控制已接線；prompt recall 注入已通過 A7 真實 host 驗收，格式合格的 host 預設開啟，
+可用 `prompt-recall-off --client codex` 關閉。SessionStart 先建立 pause EOF boundary，
+startup context 另待本機 tokenizer。使用前在 `/hooks` 檢閱並信任 handlers。
+Hook 憑證是私有 0600 明文檔，與可選的 MCP PAT 分開；MCP 優先採用原生 OAuth。
+新配對要求已安裝、啟用且相容的 Claude plugin `>=0.1.2 <1.0.0`，另驗證 pairing capability；`0.3.1` 已符合。缺少或不相容時改用 standalone，
+不改 Claude key／設定、不停止 Codex 安裝。Standalone 尚未共用 target。兩個 client
+配對後要使用同一帳號與 endpoint。本機每日 cap 只限制 Codex workers；Claude
+capture、recall、pause／resume 維持既有行為，只在 status 顯示可用的 policy／gate 診斷。
+Uninstall 同時 unpair（含 pending）、清空 Claude pairing option 並驗證原 identity 已恢復 enabled；不刪
+memory、key 或 MCP。恢復失敗回傳 exit 1，仍移除 Codex credential／installation，恢復 CLI 後可重試。Unsafe policy
+清除會略過並明說，不保留 credential。新外掛出現後 standalone rerun 會解釋保留 target 的原因與卸載後重新配對的步驟；本機 cap 提示明列僅限
+Codex。
+
+See [Codex evidence, gate table and recovery](../../docs/codex-setup.md).
 
 ## Endpoint and language / Endpoint 與語言
 

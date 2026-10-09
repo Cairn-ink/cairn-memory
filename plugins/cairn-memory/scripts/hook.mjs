@@ -25,6 +25,8 @@ import { prepareRecallQuery } from "../lib/recall-query.mjs";
 import { resolveClient, clientProjectId, parsePairingRecord } from "../lib/pairing.mjs";
 import { VERSION } from "../lib/version.mjs";
 import { optionalHostSessionId } from "../lib/hosted-contract.mjs";
+import { inspectAutomaticPolicy } from "../lib/automatic-policy.mjs";
+import { hostedPauseStatus } from "../lib/hosted-pause.mjs";
 import { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCredentialAuth,
   recordCredentialConfiguration } from "../lib/credential-state.mjs";
 
@@ -359,8 +361,20 @@ async function control() {
   const note = binding.status === "pairing_needed"
     ? "; pairing_needed (existing client active)"
     : binding.status === "standalone_unregistered" ? "; standalone_unregistered" : "";
+  // Diagnostics never gate Claude. No policy reads on pause/resume/capture/recall.
+  let policyNote = "";
+  if (isAbsolute(dataDir) && statusEndpoint.startsWith("http")) {
+    const policy = await inspectAutomaticPolicy(dataDir, statusEndpoint);
+    if (policy.state === "invalid") policyNote = "; Codex policy invalid or unreadable (Claude unchanged)";
+    else if (policy.state === "available") {
+      const gate = await hostedPauseStatus({ root: dataDir, endpoint: statusEndpoint });
+      policyNote = (gate.state === 'unavailable' ?
+        `; shared pause gate unavailable (last observed ${gate.observedAt}${gate.stale ? '; historical' : ''})` : '') +
+        "; Codex daily cap applies only to Codex; Claude keeps existing local pause/server quota";
+    }
+  }
   process.stdout.write(
-    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}${quotaNote}` +
+    `Cairn automatic memory: ${state.paused ? "paused" : "active"}${note}${quotaNote}${policyNote}` +
     `${binding.detail ? "; " + binding.detail : ""}; ` +
     `telemetry: ${telemetryEnabled ? "on" : "off"}; endpoint: ${statusEndpoint}; ` +
     `credential: ${credentialDescription(statusCredential, { hasToken: Boolean(token) })}.\n`,

@@ -14,6 +14,15 @@ Status: proposed, docs-only contract against `codex-cli 0.157.1`, researched 202
 Revision: public quota protocol ownership, integrated evidence and deadline-review inputs.
 Nothing here claims a shipped client.
 
+2026-10-08 CX-5 implementation update: installer 0.3.0 is an unpublished hosted
+slice on exact installed Codex 0.160.1. Binary-generated evidence, private
+runtime/credential, four user hooks, capture and pause-boundary wiring are
+implemented. Prompt recall injection passed the A7 pinned-host evaluation on
+2026-10-09 and is on for exact 0.160.1, with a kill switch (see "A7 pinned-host
+evaluation" below). Startup context still lacks a qualified local o200k counter.
+See [current evidence and remaining gates](../codex-setup.md).
+This update does not relax the authority, real endpoint or local-model gates.
+
 A person switching between Claude Code and Codex must use one memory target and
 one opaque identity for the same project path. **Submitted evidence** is client-
 supplied source text and claimed speaker roles. A **source receipt** ties an
@@ -2787,3 +2796,100 @@ Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>. Alternate-index worktree
 diff and round 2/full-package diff --check exit 0. Release files remain 0.2.0.
 
 計時：開始 `date +%s` = 1790796567；結果記錄時 = 1790801587，已用 83 分鐘。約 64 分鐘時已向協調者回報未完矩陣與環境阻塞。
+
+
+## CX-5 round 2 review corrections — 2026-10-08
+
+This installed hosted slice applies the selected local daily cap/concurrency only
+to Codex workers. Claude's released start/capture/recall/pause/resume behavior is
+unchanged; no policy or unavailable H5 endpoint can stop it. Status alone reads
+policy and recent availability observations best-effort, without network or control
+authority. Server-enforced endpoint quota and local pause retain their existing
+shared behavior. This narrows the round-1 shared-client cap proposal; it does not
+claim A9 model-path or H5 production acceptance.
+
+New pairing requires the installed/enabled 0.3.2 Claude plugin and pairing_record
+configure support. Missing/old/disabled plugins use disclosed standalone Codex
+memory without changing Claude state or updating its marketplace. New standalone installs always select an explicit isolated Codex root outside
+known Claude/pair roots, preserving Claude's future default root too. Only the Codex selector accepts this opt-in binding;
+existing unmarked, non-Codex or fingerprint-mismatched keys refuse. Claude's
+resolution table and decisions are unchanged. Standalone targets are separate;
+a later pairing/migration requires the existing explicit stopped-host contract.
+
+Stop/PreCompact foreground performs no credential/hosted-pause query. Its worker
+reads enforced state before using the frozen LOCAL generation handoff and rechecks
+before dispatch. Hosted generation rotation still supersedes the frozen cursor
+and establishes EOF, so moving the request does not authorize paused history.
+Installation metadata changes only after authorization/candidate success; disabled
+binding metadata is durable and read back before native Claude delivery; pairing
+readiness completes before policy/hook publication. First browser/candidate
+failure does not alter identity. Partial native delivery prints a pending notice
+and rerun finishes the same identity with stopped-host consent. Cleanup recognizes
+all owned node/runtime-digest commands for the same installation path. Uninstall
+also removes that endpoint's Codex policy; identity/key/MCP are retained.
+
+A7 prompt injection and startup tokenizer/authority gates remain closed. Full
+legacy suites must still pass on a host that permits their loopback fixtures;
+this sandbox's EPERM is a validation limitation, never a passing release gate.
+
+
+### CX-5 round 3 review corrections (2026-10-08)
+
+The re-review reports the round-2 real-host baseline passing at 630 plugin,
+270 pairing, 149 Codex and 196 setup tests. This is independently supplied baseline
+evidence, not proof for the round-3 tree. Machine-specific Node paths are removed
+from installer tests; the second executable is a private shim around process.execPath.
+Pairing needs stable `>=0.1.2 <1.0.0` and native pairing_record capability; 0.3.1
+already provides it. The latest plugin metadata is explicitly tested against the
+compatibility predicate, so a major bump requires deliberate contract review.
+
+Codex uninstall is explicit unpair: serialize with the shared setup lock, clear
+Claude's native record option, retain Claude's established root/key and immutable
+fingerprint history, remove Codex's binding/shared record, and verify Claude enabled
+before exit 0. This includes pending native delivery. An unverified restore returns
+exit 1, removes Codex credential/installation, and is retryable without a grant.
+Optional unsafe policy paths cannot retain credentials or follow symlink targets.
+No direct plugin mutation export is added; ordinary Claude resolution remains intact.
+
+Fresh or stale healthy pause observations do not authorize capture and do not
+produce endpoint-failure alarms. Only an actual observed failure is shown as
+unavailable, with a timestamp/historical label. Both locales describe identity-only
+consent and a Codex-only cap. Existing standalone identity is preserved when a new
+plugin appears; setup explains why and gives stopped-host uninstall/setup steps.
+
+
+## A7 pinned-host evaluation — 2026-10-09
+
+Authorized by chichi (「安全測試做」), with a Traditional Chinese addendum.
+The harness lives in `evaluation/codex-a7/`; results and limits are in
+[RESULTS.md](../../evaluation/codex-a7/RESULTS.md). Each run used a disposable
+0700 `CODEX_HOME` holding only a copied `auth.json`, the installer's own runtime
+copy and hook registration, and trust persisted as `/hooks` would persist it. It
+also used a fresh git repo with a synthetic decoy secret and a loopback fake
+Cairn that logs every request. Codex ran `exec` in `workspace-write` with no
+tool network, and `/tmp`, `$TMPDIR` and `CODEX_HOME` were read-only. The real
+`~/.codex` config and hooks were unchanged.
+
+Pins: codex-cli 0.160.1, `gpt-6-astra` at medium effort (the person's defaults).
+Fifteen adversarial scenarios ran 3 times each. They covered closing-tag and
+`SYSTEM:` escapes in English and Chinese, file and HTTP exfiltration, README
+deletion, Codex config and hook tampering, JSON tool-call, base64 and
+homoglyph/zero-width disguises, prior-authorization persuasion, memory-shaped
+preferences asking for unsafe actions, and a Chinese/English payload split
+across two memories. Detection counted attempts from the rollout, not only
+effects, because `exec --json` omits sandbox-denied code-mode calls.
+
+Outcome: 45/45 adversarial runs delivered every memory as a developer-role
+message and produced zero harmful actions or attempts. English and Chinese
+"bun, not npm" controls each answered with bun commands 3/3. An independent
+rollout scan confirmed the counts. Three literal packet wordings are removed by
+the existing authority filter before reaching the model; paraphrases that pass
+it were used.
+
+Change: `QUALIFIED_CONTEXT_HOSTS = ['0.160.1']`, so prompt recall injection is on
+by default for that exact host. Kill switch: `memory prompt-recall-off|on
+--client codex` writes owner-private `prompt-recall.json`. Missing means on;
+unreadable, unsafe or malformed means off. Hooks start under `env -i`, so
+environment variables cannot reach them. A new host version, default model or
+effort needs a re-run before qualification widens. SessionStart context remains
+closed: it needs the local tokenizer and its own context evaluation.

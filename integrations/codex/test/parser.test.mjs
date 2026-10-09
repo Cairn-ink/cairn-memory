@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { verifyHeader,parseLine,FORMAT,CODEX_COMMIT } from '../parser.mjs';
+import { createHash } from 'node:crypto';
+import { verifyHeader,parseLine,FORMAT,CODEX_COMMIT,QUALIFIED_CREATORS } from '../parser.mjs';
 import { planBatches,preflight,normalizeBlocks } from '../../client/common-profile.mjs';
 
 const fixture=await readFile(new URL('./fixtures/primary-paginated.jsonl',import.meta.url),'utf8');
@@ -9,6 +10,33 @@ const lines=fixture.trimEnd().split('\n');
 const sessionId=JSON.parse(lines[0]).payload.id;
 const evidence=JSON.parse(await readFile(new URL('./fixtures/format-evidence.json',import.meta.url),'utf8'));
 const context={sessionId,wireSessionId:'a'.repeat(64),epoch:0,start:0,end:100};
+test('0.160.1 binary evidence is immutable and qualifies exactly the observed paginated layout',async()=>{
+  const evidence=JSON.parse(await readFile(new URL('./fixtures/format-evidence-0.160.1.json',import.meta.url)));
+  assert.equal(evidence.schemaExitCode,0);assert.equal(evidence.hooksListExitCode,0);
+  assert.match(evidence.networkIsolation,/socket creation denied/);
+  for (const file of evidence.files) {
+    const bytes=await readFile(new URL('./fixtures/'+file.path,import.meta.url));
+    assert.equal(createHash('sha256').update(bytes).digest('hex'),file.sha256,file.path);
+  }
+  const fixture=(await readFile(new URL('./fixtures/primary-0.160.1.jsonl',import.meta.url),'utf8')).trimEnd().split('\n');
+  const id=JSON.parse(fixture[0]).payload.id;
+  assert.equal(verifyHeader(Buffer.from(fixture[0]),id),FORMAT);
+  const parsed=fixture.map((line,i)=>parseLine(Buffer.from(line),{...context,sessionId:id,start:i,end:i+1}));
+  assert.deepEqual(parsed.filter(record=>record.message).map(record=>record.message.content),['Prefer diagrams.','Understood.']);
+  assert.ok(!JSON.stringify(parsed).includes('CANARY'));
+  const output=JSON.parse(await readFile(new URL('./fixtures/binary-0.160.1/user-prompt-submit.command.output.json',import.meta.url)));
+  assert.equal(output.definitions.UserPromptSubmitHookSpecificOutputWire.properties.additionalContext.type,'string');
+});
+test('unseeded creators need qualification evidence, while malformed versions fail closed',()=>{
+  assert.deepEqual(QUALIFIED_CREATORS,['0.157.1','0.160.1','0.161.0','0.162.0']);
+  for (const version of ['0.157.2','0.160.0','0.160.2','0.160.99','0.163.0','0.160.1-dev']) {
+    const row=JSON.parse(lines[0]);row.payload.cli_version=version;
+    assert.throws(()=>verifyHeader(Buffer.from(JSON.stringify(row)),sessionId),/creator_unqualified/);
+    assert.equal(verifyHeader(Buffer.from(JSON.stringify(row)),sessionId,{qualifiedCreatorVersion:version}),FORMAT);
+  }
+  const bad=JSON.parse(lines[0]);bad.payload.cli_version='unknown';
+  assert.throws(()=>verifyHeader(Buffer.from(JSON.stringify(bad)),sessionId),/unsupported_format/);
+});
 test('primary synthetic host fixture selects one canonical representation',()=>{
   assert.equal(evidence.commit,CODEX_COMMIT);
   assert.equal(verifyHeader(Buffer.from(lines[0]),sessionId),FORMAT);
@@ -17,7 +45,7 @@ test('primary synthetic host fixture selects one canonical representation',()=>{
   assert.equal(records.filter(x=>x.message).length,2);
 });
 
-for(const patch of [{cli_version:'0.157.2'},{history_mode:'legacy'},{source:'vscode'},
+for(const patch of [{history_mode:'legacy'},{source:'vscode'},
   {forked_from_id:'fork'},{history_base:{ordinal:1}},{parent_thread_id:'parent'},
   {subagent_history_start_ordinal:0},{thread_source:'subagent'}]) test(`unsupported metadata ${JSON.stringify(patch)}`,()=>{
     const row=JSON.parse(lines[0]);Object.assign(row.payload,patch);

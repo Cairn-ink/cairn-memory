@@ -1,53 +1,58 @@
-# Codex capture building blocks (CX-3)
+# Codex installed runtime and capture building blocks (CX-5)
 
-These are uninstalled, disabled-by-default building blocks. No hosted endpoint,
-host credentials, host hook registration or context injection is enabled. The
-only network adapter in this package is a test-only loopback stub. CX-4 owns the
-public protocol; LAC and CX-5 own installed transport/lifecycle integration.
+Installer 0.3.0 wires the hosted runtime for format-qualified **Codex CLI / app-server** on
+Linux/WSL. It installs four user-level command hooks, a private versioned runtime,
+browser memory-scoped credential, adopted/shared project identity and endpoint
+policy. It is unpublished. See [setup, qualification and gates](../../docs/codex-setup.md).
 
-`parser.mjs` pins openai/codex commit
-`36650394c5b38c2990ccf2a3457165ca3e9d9726` (`rust-v0.157.1`). Primary type files,
-hashes and discriminators are in [format-evidence.json](test/fixtures/format-evidence.json)
-and the [design contract](../../docs/plans/codex-client.md#cx-3-primary-format-pin).
-Only flat paginated `cli`/`exec` sessions with exact metadata version 0.157.1 are
-qualified. Legacy, fork, inherited and subagent layouts refuse. This is no general
-version-range promise. Fixtures are synthetic, authored from Rust types.
-The metadata version describes the file's creator: Codex does not emit new
-metadata on resume. Installed launchers must independently qualify the current
-host before enabling capture; a newer resumed writer is not qualified by this pin.
+`entry.mjs` owns exit-0/no-log automatic failures and process deadlines:
+750 ms for Stop/PreCompact, 2 s for context events, 62.5 s for a detached worker.
+It dynamically imports the runtime so missing/corrupt modules also fail quietly.
+Only vetted context JSON or capture `{}` may reach stdout. The bounded output
+write has its own 50 ms flush deadline; worker stdout/stderr are discarded.
 
-The installed launcher must call `resolveClient({client:'codex', usesClaude,
-home, root, pairingRecord, ...})` with installation-supplied options; `usesClaude`
-is a required explicit boolean. It must resolve again in its worker. `handleHook`
-and `workerFromHandoff` implement that seam without installing anything.
-`readHookInput` bounds JSON stdin at 64 KiB and 750 ms. Launchers must implement
-a bounded direct stdin pipe, ignore worker stdout/stderr, use no shell and pass
-only the closed handoff. Never pass tokens or expanded hook input. Recall and
-SessionStart context remain unavailable here. Callers catch automatic-hook
-errors and exit 0; explicit controls report failures.
-The installed hook process must flush the bounded result and exit 0 immediately;
-it must not wait for an identity operation still completing after its deadline.
-`handleHook` bounds binding, identity, preparation and launcher waits together
-at 750 ms (2.5 s for disabled context events), and fences late completion;
-the launcher must enforce its own process/pipe lifetime. SessionStart establishes
-a stale pause generation's EOF using only the last byte, without history parsing.
+`installed.mjs` reads owner-private installation/credential state, checks the
+current binary on every invocation and verifies binding/policy. Stop/PreCompact
+foreground work is local only: no credential read or pause-state request. A
+closed stdin handoff carries byte range/binding and LOCAL generation metadata,
+never source text, credentials or hook extras. The worker observes enforced
+hosted pause, preserving generation/EOF barriers and rechecking before dispatch. Worker/version
+children receive a closed environment without Node preloads, proxies or plugin
+tokens. Npx cache paths are never installed as commands.
 
-The hook input's conversation identity is `session_id`, alongside `cwd`,
-`hook_event_name` and nullable `transcript_path`. There is no `conversation_id`
-alias or model-derived fallback. `UserPromptSubmit` currently returns
-`context_unavailable`; it makes no recall request and injects no context.
-SessionStart retains only its original capture pause-boundary work.
+The frozen creator qualification accepts 0.157.1, 0.160.1, 0.161.0 and 0.162.0 flat paginated CLI/exec
+JSONL. The 0.160.1 fixture is derived from the installed binary’s schemas, embedded hook
+wire schemas, native synthetic UserMessage transcript and serde/type evidence;
+no successful model assistant response was observed. 0.161.0 has schema-only synthetic evidence. Unqualified versions/layouts,
+fork/subagent/non-CLI metadata fail closed. Binary and fixture hashes are frozen
+in `test/fixtures/format-evidence-0.160.1.json`. Reproduce schema evidence with
+`scripts/qualify-codex.mjs <native-binary> <new-private-dir>`.
 
-If a qualified caller uses the shared `createHostedTransport().recall` port,
-protocol 0.3.0 accepts optional `binding.sessionId`, in the same wire
-representation as capture: SHA-256 of the JSON tuple
-`["wire-session-v1","codex",hostSessionId]`. Supply that existing opaque binding,
-not a new id. The transport sends only ids in the 1–200 character ASCII allowlist
-(`A–Z`, `a–z`, `0–9`, `.`, `_`, `:`, `-`), explicitly rejecting line terminators.
-Unavailable or invalid ids are omitted. The server stores only an owner-scoped SHA-256 of the
-wire id. The id is never logged or sent as telemetry. A precise legacy recall
-schema rejection gets one retry without it, with the original deadline and quota
-reservation. This adds no per-prompt Codex recall, host registration or credentials.
+`hosted-lifecycle.mjs` adapts the protocol 0.3.0 transport to CX-3’s capture
+worker, retaining processing/quota/uncertain ranges. Endpoint server quota and
+local pause remain shared; the installer daily cap/concurrency policy applies
+only to Codex workers. Claude hooks retain their released behavior; only status
+adds best-effort policy/pause availability diagnostics when a policy exists. `SessionStart` establishes pause EOF boundaries;
+no startup context is acknowledged without a qualified local o200k counter.
+
+The UserPromptSubmit recall port redacts/bounds queries, hashes the host session
+identity, rechecks hosted/local generations before dispatch and injection, and
+uses one 2 s signal. `context.mjs` quotes bounded complete entries/receipts under
+a fixed trusted untrusted-data preamble and rejects execution/authority attempts.
+The installed context gate follows the actual running host’s binary-identity format verdict,
+using the delivery format covered by the A7 pinned-host adversarial evaluation
+([results](../../evaluation/codex-a7/RESULTS.md)). Pending or changed formats do not call recall
+or inject. The owner-private `prompt-recall.json` kill switch beside the
+installation (`prompt-recall-off|on --client codex`) disables injection; a missing
+file means on, and an unreadable/unsafe/malformed file means off. It is read before
+recall and again as the last step before context is returned, so switching off
+during an in-flight recall injects nothing. Startup context
+stays independently disabled.
+
+The lower-level `hook.mjs` seam remains usable by CX-3 synthetic callers, with
+no implicit network transport, credential read or registration. The installed
+launcher supplies those responsibilities explicitly. The hook conversation ID is
+`session_id`; no model-derived alias or old-session discovery/drain is allowed.
 
 `prepareCapture(binding)` durably freezes a content-free pending manifest before
 launch. `runWorker(binding,{transport,guard,mode})` revalidates the supplied source
@@ -75,9 +80,9 @@ back to its old cwd or skip the resumed project's first turn.
 
 The injected transport must provide idempotent admission by event ID, return an
 exact `{status:'complete'|'duplicate'|'empty'|'processing', eventId}` descriptor,
-honor AbortSignal and expose synchronous `terminated()`. The test-only refusal
+honor AbortSignal and expose synchronous `terminated()`. The internal refusal
 descriptor is `{status:'refused', code:'quota_reached', resetAt?: epochMs}`; this is
-not a claim about CX-4's future public wire schema. Unknown replies stop automatic
+adapted from the public quota reply; it is not a new wire schema. Unknown replies stop automatic
 retry. Lost replies replay stable IDs; uncertainty is never acknowledgement.
 The `invalid_reply` latch survives project changes and SessionStart; the
 documented explicit stopped reset/repair remains required.
@@ -131,3 +136,65 @@ only daily-cap refusal becomes automatically eligible on the next UTC day.
 An unconfigured refusal guard does not mark that intent latched. Installed
 clients supply named policy declarations to the shared guard; disagreement
 refuses with `policy_conflict` until installer repair aligns them.
+
+
+Round 3 installer corrections: the node-upgrade test uses the running Node and a
+private second-node shim, with no machine-specific executable paths. Pairing
+accepts stable `>=0.1.2 <1.0.0` plus the native `pairing_record` capability, including
+0.3.1 and future patches; current plugin metadata is covered by a compatibility
+regression test. Standalone reruns disclose target retention and uninstall/setup
+steps instead of silently implying a new pairing.
+
+`uninstall --client codex` now unpairs completed and pending bindings under the
+shared setup lock. It clears Claude's native pairing option, retains Claude's
+root/key/fingerprint history and local pause, and checks enabled resolution before
+reporting success. Recovery failure returns exit 1, cleans Codex credential/state,
+and supports retry without another grant. Unsafe optional policy paths are reported
+and skipped; cleanup never follows their symlinks. Claude status reports only an
+observed endpoint problem, with its timestamp, rather than treating a fresh or
+stale healthy observation as unavailable. Capture's strict H5 guard is unchanged.
+
+## Format re-qualification
+
+`qualification.mjs` compares eight embedded command schemas and the relevant
+app-server definitions, including transitive `$ref` content/phase/delivery/trust
+types and serde marker presence. Native 0.161.0 matches 0.160.1. Native 0.162.0
+adds `MessagePhase.partial_answer`, supported as stable independent text. Offline
+binary thread/searchOccurrences SQL UNION ALLs partial items and the turn final
+item as separate indexed content; seeded history readback validates serialization
+only, not whether model text repeats. capture sends each once from item_completed, excluding starts/deltas and
+mirrors. An interrupted turn can retain completed partials, but never unfinished
+text. Unknown phases fail closed. Both capture and recall are format qualified;
+the eight hook schemas are unchanged. The seeded assistant records are not model
+outputs or a new A7 campaign. Frozen fixtures, native readback and hashes record
+the evidence; `scripts/probe-codex-phases.mjs` reproduces seeded readback without
+turn/start. The SQL excerpt is pinned to its native ELF byte offset and hash.
+Unknown versions with identical evidence are accepted and cached by binary
+identity; changed evidence stays closed with an explicit status message.
+
+Hooks detect the closest native Codex ancestor through `/proc` and distinguish
+`app-server` from CLI. They only stat identity/read a private verdict; no schema
+subprocess or binary hashing blocks a hook. Pending qualification schedules one
+background probe and withholds automatic work. Setup/status also qualify outside
+the 2s hot path, in disposable HOME/CODEX_HOME with no model calls. Detached workers
+re-check the originating binary’s identity/verdict before capture. Unknown rollout
+creators require trusted current-host or current-policy cached creator format
+evidence; arbitrary version strings cannot open the parser.
+
+Recall’s safety comes from filtering, untrusted framing, quoting and the model.
+A7 must run again if additionalContext delivery/placement changes. Evidence
+comparison follows delivery references where exposed; native placement hidden
+from schemas still requires separate verification when a change is discovered.
+The prompt-recall kill switch remains unchanged.
+
+Unseeded rollout creators can use any private cached qualified verdict under the
+current known-format policy, even after the creator binary is updated or removed.
+A version-only refusal returns retryable `creator_unqualified` without latching
+`unsupported_format`. Existing unsupported_format cursors lack a recorded cause, so they stay latched
+until an explicit stopped-worker reset. Genuine format latches survive pause,
+resume and SessionStart; later Stop hooks return before reopening the transcript. Host verdicts continue to bind to the running binary identity.
+Status reports pending or failed probes with a retry hint, and changed formats
+with a plugin-update requirement; wording is neutral about version age. Status without a valid
+installation only reads cache and does not generate schema or create cache state.
+The A7 installer primes the actual native verdict in its disposable home before
+the first prompt, without modifying runtime qualification gates.

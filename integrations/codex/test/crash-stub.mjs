@@ -4,7 +4,9 @@ import { writeSync } from "node:fs";
 import { runWorker, prepareCapture, establishPauseBoundary, resetCapture } from "../worker.mjs";
 import { withWriteObserver } from "../../client/private-state.mjs";
 import { createRuntimeGuard } from "../../client/runtime-usage.mjs";
+import { installChildWire, requestJSON } from "./http-harness.mjs";
 const config = JSON.parse(await readFile(process.argv[2], "utf8"));
+const disconnect = config.wire ? installChildWire() : undefined;
 const guard = createRuntimeGuard({
   root: config.binding.root,
   targetId: config.binding.targetId,
@@ -18,6 +20,7 @@ const transport = {
   capture: async (body) => {
     active = true;
     try {
+      if(config.wire)return (await requestJSON(new URL(config.endpoint),{body})).value;
       const response = await fetch(config.endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -52,3 +55,5 @@ await withWriteObserver(
           : runWorker(config.binding, { transport, guard, byteEnd: config.byteEnd }),
 );
 writeSync(1, JSON.stringify({ total: writes }) + "\n");
+
+disconnect?.();

@@ -82,7 +82,10 @@ Recall continues to inject the existing explicitly untrusted memory context;
 SessionStart retains its original telemetry-only behavior and sends no memory
 read. Codex does not currently recall per prompt; its shared hosted recall port
 accepts the same already opaque wire binding as capture if used by a qualified
-caller. No new Codex context injection or hook installation is enabled.
+caller. CX-5 installs qualified Codex hooks. Prompt-recall injection passed the
+A7 pinned-host evaluation for codex-cli 0.160.1 and is on by default there,
+with the same redacted query, untrusted framing and receipts. `memory
+prompt-recall-off --client codex` turns it off without stopping capture.
 
 The exact old strict recall schema rejection permits one retry without the id,
 with the same query/scope/limit and cancellation. Its two-second deadline starts
@@ -588,12 +591,35 @@ provider/caller copies. Hosted schemas/defaults and paid-pilot boundaries are un
 ### Hosted 0.2.0 client boundary
 
 The Codex discriminator identifies filtered user/assistant conversation text;
-it admits no tools, credentials, metadata or transcript paths. Its reader remains
-disabled pending installed-host/target acceptance. Telemetry stays disabled for
+it admits no tools, credentials, metadata or transcript paths. CX-5 installs
+its reader only for exact qualified host 0.160.1 and qualified CLI/exec layouts;
+unknown versions/layouts refuse before source capture. Telemetry stays disabled for
 Codex. Session-start may return owner-bound episode sources, memory receipts and
 accessible claimed commitment provenance, all untrusted and budgeted together.
 These fields can contain personal text; clients must not log response bodies.
-Publishing and parsing do not wire session-start or hosted pause into hooks.
+Codex workers consume enforced hosted pause state and establish pause-generation
+EOF boundaries; Stop/PreCompact foreground performs no remote pause query.
+Codex prompt injection is on for the A7-qualified 0.160.1 host, with an owner-private
+kill switch. Startup context remains disabled pending a qualified local tokenizer
+and sibling context acceptance. MCP recall is available.
+
+Codex browser hook credentials are private 0600 plaintext under a 0700 config
+directory, separate from MCP authorization; save/verification precedes delivery
+ACK. They never enter config.toml, argv, child environment or logs. A hashed,
+versioned runtime survives npx cache removal. Disable/uninstall removes all owned
+registrations across node/runtime upgrades; uninstall also removes its credential,
+runtime and endpoint policy, retaining memory/key/MCP. Codex uninstall also unpairs
+pending/completed bindings and verifies Claude is enabled at its original root/key;
+no new identity is minted. A private token-free uninstall ownership receipt survives
+failed restoration and is removed after success; another config home cannot use
+its absence to detach that binding. Failed recovery is explicitly nonzero while Codex
+credential/state cleanup continues; unsafe policy paths are reported and never
+followed. Claude status alarms only on observed endpoint problems, not absent or
+stale healthy Codex observations. This local policy caps only
+Codex workers. Missing/incompatible Claude plugins use an explicitly disclosed
+standalone Codex target, preserving Claude keys/config. Pairing delivers only the
+shared identity record; same account/endpoint remains the person's choice. Local
+deletion does not revoke a server credential.
 
 Upgraded Claude honors the shared hosted quota gate as the explicit D1 exception.
 The selected private root retains `hosted-quota/<target digest>.json` and its

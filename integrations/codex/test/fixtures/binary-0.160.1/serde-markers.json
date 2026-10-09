@@ -1,0 +1,30 @@
+{
+  "internally tagged enum AgentMessageContent": {
+    "offset": 239888587,
+    "excerpt": "inconnector_idlink_iduriambiguous_accountplugin_idserver_nametool_namefirst_turn_idattribution_errorinternally tagged enum AgentMessageContentDynamicToolCallItemcontent_itemssuccessImageGenerationItemrevised_promptresultsaved_pathasyncCommandExecutionItemscript_pathprocess_idcommandparsed_cmdsourceinteraction_inputstdoutstderraggregated_outputexit_codeExitedReviewModeItemreview_outputSubAgentActivityItemagent_thread_idagent_pathContextCompactionItemin_progresscompletedEnteredReviewModeItemtargetAsyncUserInputQuestiontitleoptionsFunctionCallOutputItemoutputCollabAgentToolCallItemreceiver_thread"
+  },
+  "struct variant ThreadItem::AgentMessage with 6 elements": {
+    "offset": 235809872,
+    "excerpt": "t ThreadItem::FunctionCallOutput with 4 elementsstruct variant ThreadItem::Reasoning with 3 elementsstruct variant ThreadItem::AgentMessage with 6 elementsstruct variant ThreadItem::EnteredReviewMode with 2 elementsstruct variant ThreadItem::McpToolCall with 13 elementsstruct variant ThreadItem::DynamicToolCall with 8 elementsstruct variant ThreadItem::HookPrompt with 2 elementsstruct variant ThreadItem::UserMessage with 3 elementsstruct variant ThreadItem::ContextCompaction with 1 elementstruct variant ThreadItem::Plan with 2 elementsstruct variant ThreadItem::FileChange with 3 elementsstruct"
+  },
+  "struct variant ThreadItem::UserMessage with 3 elements": {
+    "offset": 235810153,
+    "excerpt": "ant ThreadItem::DynamicToolCall with 8 elementsstruct variant ThreadItem::HookPrompt with 2 elementsstruct variant ThreadItem::UserMessage with 3 elementsstruct variant ThreadItem::ContextCompaction with 1 elementstruct variant ThreadItem::Plan with 2 elementsstruct variant ThreadItem::FileChange with 3 elementsstruct variant ThreadItem::ExitedReviewMode with 2 elementsstruct variant ThreadItem::CommandExecution with 12 elementsstruct variant ThreadItem::ImageView with 2 elementsstruct variant ThreadItem::CollabAgentToolCall with 9 elementsnamespaceManifestsnetworkProxyLaunchcapabilityDiscover"
+  },
+  "HookStartedhook_startedHookCompletedhook_completed": {
+    "offset": 235612242,
+    "excerpt": "nse_itemRawResponseCompletedraw_response_completedItemStarteditem_startedItemCompleteditem_completedHookStartedhook_startedHookCompletedhook_completedAgentMessageContentDeltaagent_message_content_deltaPlanDeltaplan_deltaReasoningContentDeltareasoning_content_deltaReasoningRawContentDeltareasoning_raw_content_deltaCollabAgentSpawnBegincollab_agent_spawn_beginCollabAgentSpawnEndcollab_agent_spawn_endCollabAgentInteractionBegincollab_agent_interaction_beginCollabAgentInteractionEndcollab_agent_interaction_endCollabWaitingBegincollab_waiting_begincollab_waiting_endcollab_close_beginCollabCloseEndC"
+  },
+  "RolloutItemWiremessagereplacement_history": {
+    "offset": 239884791,
+    "excerpt": "contexttoken_usage_recordworld_statesecurity_risk_scoreevent_msgrealtime_iteminternally tagged enum RolloutItemWiremessagereplacement_historyreplacement_history_metadatamcp_resource_originswindow_numberfirst_window_idprevious_window_idwindow_idcompaction_response_idlatest_token_usage_recordresume_metadatatrigger_turnCodexHarnessMetadataguardian_source_order_guidanceretained_sourceclient_authoredfallback_token_limit_overridedelivered_assistant_messageharness_authored_configurationcompaction_model_hashcompaction_outputinherited_user_messagemcp_attributionsender_user_messagesreceiver_message_idst"
+  },
+  "struct variant AgentMessageContent::Text": {
+    "offset": 239615077,
+    "excerpt": "on::Searchstruct variant WebSearchAction::FindInPagestruct HookPromptFragmentstruct BaseInstructionsstruct variant AgentMessageContent::Textstruct DynamicToolCallItemstruct ImageGenerationItemstruct PlanItemArgstruct CommandExecutionItemstruct ExitedReviewModeItemstruct SubAgentActivityItemstruct NetworkPermissionsstruct ContextCompactionItemstruct EnteredReviewModeItemstruct AsyncUserInputQuestionstruct FunctionCallOutputItemstruct LegacyReadWriteRootsstruct LocalShellExecActionstruct variant ReasoningItemContent::ReasoningTextstruct variant ReasoningItemContent::Textstruct SearchToolCallPara"
+  },
+  "struct variant AgentMessageContent::Text with 1 element": {
+    "offset": 239815459,
+    "excerpt": "ct variant ReviewTarget::Commit with 2 elementsstruct WarningEvent with 1 elementrealtime_session_idstruct variant AgentMessageContent::Text with 1 elementcontent_itemssuccessstruct DynamicToolCallItem with 9 elementssaved_pathstruct ImageGenerationItem with 5 elementsstruct PlanItemArg with 2 elementsstruct McpInvocation with 3 elementscode_locationstruct ReviewFinding with 5 elementsnetwork_accesswritable_rootsexclude_tmpdir_env_varexclude_slash_tmpstruct TurnDiffEvent with 1 elementstartendtext_elementsstruct variant UserInput::LocalAudio with 1 elementstruct variant UserInput::Skill with 2"
+  }
+}

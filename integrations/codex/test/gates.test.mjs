@@ -13,7 +13,8 @@ import { cursorPath, validateCursor, publishCursor } from "../cursor.mjs";
 import { clientProjectId } from "../../client/pairing.mjs";
 import { createRuntimeGuard } from "../../client/runtime-usage.mjs";
 import { withHeldLock } from "../../client/testing/lock-contention.mjs";
-import { observedHook } from "./lock-contention.mjs";
+import { observedHook, virtualHook } from "./lock-contention.mjs";
+import { childEnvironment } from "./http-harness.mjs";
 import { withFileLock } from "../../client/file-lock.mjs";
 
 test("A4 partial lines and appends preserve frozen IDs and coverage", async (t) => {
@@ -163,10 +164,12 @@ test(
         throw new Error("spawn failed");
       },
     };
-    const result = await handleHook(input, config);
+    // Virtual clock: an expired budget would leave the raced hook holding the
+    // cursor lock, and the runWorker below would see state_busy.
+    const result = await virtualHook(t, input, config);
     assert.equal(result.output, "{}");
     assert.equal(result.status, "capture_unavailable");
-    const badBinding = await handleHook(input, {
+    const badBinding = await virtualHook(t, input, {
       ...config,
       clientOptions: { home: f.home, root: f.root, env: {} },
     });
@@ -380,7 +383,7 @@ test(
         const child = spawn(
           process.execPath,
           [new URL("./process-stub.mjs", import.meta.url).pathname, "hook", configPath],
-          { stdio: ["pipe", "pipe", "pipe"], env: process.env },
+          { stdio: ["pipe", "pipe", "pipe"], env: childEnvironment() },
         );
         let output = "", errors = "";
         child.stdout.on("data", (chunk) => (output += chunk));

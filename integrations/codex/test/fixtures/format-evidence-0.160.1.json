@@ -1,0 +1,78 @@
+{
+  "version": "0.160.1",
+  "source": "installed codex-cli binary only; no network or remote refs",
+  "binarySha256": "f34a4d2301892ae96c90097786bfe5dc269f187b6f69faf42a7b357b8c081e35",
+  "generatedSchemaSha256": "8683f6fd9fbb994fa2bfb704ab5b02c9890238fa507a4c0ff33ff45884cd0a2e",
+  "schemaCommand": [
+    "codex",
+    "app-server",
+    "generate-json-schema",
+    "--out",
+    "<private-dir>"
+  ],
+  "schemaExitCode": 0,
+  "hooksListExitCode": 0,
+  "offlineExecExitCode": 130,
+  "networkIsolation": "seccomp: AF_INET/AF_INET6 socket creation denied; only AF_UNIX allowed",
+  "observed": "exec session_meta, flat paginated ordinal JSONL and UserMessage item_completed emitted by this binary; no successful model call",
+  "assistantEvidence": "synthetic canonical AgentMessage/Text fixture authored from installed generated ThreadItem/AgentMessageInputContent and embedded serde enum/struct-variant markers, including AgentMessageContent::Text with 1 element; no successful native assistant response observed",
+  "scope": "exact 0.160.1 host and creator; no semver range; 0.157.1 creator retained for qualified resumed writers",
+  "context": "embedded UserPromptSubmit output explicitly accepts additionalContext; live developer-context/model acceptance not exercised",
+  "syntheticOnly": true,
+  "files": [
+    {
+      "path": "binary-0.160.1/session-start.command.input.json",
+      "sha256": "f7299ffcc96c8ad0ab51df77743632f8374390329b14bef87c4e0d00b2caa4a2"
+    },
+    {
+      "path": "binary-0.160.1/session-start.command.output.json",
+      "sha256": "72c8cded2efc7024abfd62692b84934b1b1999cb595665f4a520dc8ebb5eb690"
+    },
+    {
+      "path": "binary-0.160.1/user-prompt-submit.command.input.json",
+      "sha256": "31d3d5e094ae9baa9478bc8e3d09f689de5a74228a404d2dffe60fc8fa89e3a0"
+    },
+    {
+      "path": "binary-0.160.1/user-prompt-submit.command.output.json",
+      "sha256": "12a741340d3a5acaf139721ad086d79d6dc0d961f752c6d82bd7a315f374e641"
+    },
+    {
+      "path": "binary-0.160.1/stop.command.input.json",
+      "sha256": "b162ebcae8c3b872aee3725128b436769557fc1fe0c83336c4e76eed62b22626"
+    },
+    {
+      "path": "binary-0.160.1/stop.command.output.json",
+      "sha256": "37679d1a933fdc3dc8cea5ff12d7d0e2dacfc036208d134aefc09247e1222d88"
+    },
+    {
+      "path": "binary-0.160.1/pre-compact.command.input.json",
+      "sha256": "5728b5da4c63e1e07f2d53ac8b2adc18306cd3dc8b01b556fc422e75b32a8734"
+    },
+    {
+      "path": "binary-0.160.1/pre-compact.command.output.json",
+      "sha256": "98ba0dbf0848d8283cfe48a85122f4d9122baae1b457f50e239504864900247e"
+    },
+    {
+      "path": "binary-0.160.1/app-server-selected.json",
+      "sha256": "d3705e251879dedb2ac76957e08daad4f1fbef3791bc75801350ae75a4e41dba"
+    },
+    {
+      "path": "binary-0.160.1/serde-markers.json",
+      "sha256": "0a65c0bb8c5619dba6a67762471b5126c7ee7de47a7411a02e85f257816b7ae7"
+    },
+    {
+      "path": "primary-0.160.1.jsonl",
+      "sha256": "dd663d009dac6960de29519b415560f2a528cc153474a7a84a5a406d6b63e981"
+    }
+  ],
+  "installedLifecycle": {
+    "installerExitCode": 0,
+    "nativeHooksListExitCode": 0,
+    "registeredUserHooks": 4,
+    "trustStatus": "untrusted",
+    "trustBypass": false,
+    "contextSpillDisabled": true,
+    "networkIsolation": "seccomp, same as format probe",
+    "note": "Real binary parses the actual installer-generated hooks; native hook execution/authority and real hosted endpoint are separate gates."
+  }
+}

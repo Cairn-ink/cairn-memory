@@ -190,7 +190,7 @@ export async function main(argv, {
     if (options.lang) t = translator(options.lang);
     const endpointOverride = options.endpoint;
     const dispatch = await dispatchClient(options.argv, { write, prompt, interactive, browse: launchBrowser,
-      nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride });
+      nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride, authOptions, signal });
     if (dispatch.handled) return dispatch.code;
     argv = dispatch.argv;
     const [action, ...flags] = argv;

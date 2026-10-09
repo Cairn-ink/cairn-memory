@@ -75,7 +75,7 @@ test('Codex setup saves native HTTP header privately and preserves unrelated con
   assert.deepEqual(result.files, ['config.toml']);
   assert.equal(result.prompts[1].options.secret, true);
   assert.match(result.stdout, /plaintext; no keyring/);
-  assert.match(result.stdout, /not yet wired/);
+  assert.match(result.stdout, /Codex format not yet verified/);
   assert.ok(result.calls.every(call => call.args[0] !== 'plugin'));
 });
 

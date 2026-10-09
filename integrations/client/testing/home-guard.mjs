@@ -4,9 +4,11 @@ import fs from "node:fs";
 import promises from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { fileURLToPath } from "node:url";
-import { resolve, join } from "node:path";
+import { resolve, join, basename } from "node:path";
 const realHome = process.env.CAIRN_TEST_REAL_HOME;
 if (!realHome) throw new Error("home_guard_requires_real_home_string");
+// An --isolated-host suite's private HOME is no more resolvable than the real one.
+const hostHome = process.env.CAIRN_TEST_HOST_HOME;
 let violated = false;
 process.on("exit", () => {
   if (violated) process.exitCode = 1;
@@ -18,7 +20,7 @@ function violation(message) {
 const originalHome = os.homedir;
 os.homedir = () => {
   const home = originalHome();
-  if (home === realHome) violation("test_resolved_real_home");
+  if (home === realHome || (hostHome && home === hostHome)) violation("test_resolved_real_home");
   return home;
 };
 const originalUserInfo = os.userInfo;
@@ -86,4 +88,39 @@ for (const api of [fs, promises]) {
     }
   }
 }
+// Host detection reads /proc/<pid>/exe. A suite may observe only the fake
+// `codex` executables it creates in its scratch directory, never a real Codex
+// host that happens to be an ancestor of the test run. Links and targets may be
+// strings, Buffers ({encoding: "buffer"}) or URLs; the caller's type is kept.
+const scratch = (() => {
+  try { return fs.realpathSync(os.tmpdir()); } catch { return resolve(os.tmpdir()); }
+})();
+const text = (value) =>
+  value instanceof URL ? fileURLToPath(value) : Buffer.isBuffer(value) ? value.toString() : String(value);
+function observed(path, target) {
+  if (!/^\/proc\/(?:\d+|self|thread-self)\/exe$/u.test(resolve(text(path)))) return target;
+  const executable = text(target).replace(/ \(deleted\)$/u, "");
+  if (basename(executable) === "codex" && !executable.startsWith(scratch + "/"))
+    violation("test_observed_real_codex_host");
+  return target;
+}
+const readlinkAsync = promises.readlink;
+promises.readlink = async function (path, ...args) {
+  return observed(path, await readlinkAsync.call(this, path, ...args));
+};
+const readlinkSync = fs.readlinkSync;
+fs.readlinkSync = function (path, ...args) {
+  return observed(path, readlinkSync.call(this, path, ...args));
+};
+const readlinkCallback = fs.readlink;
+fs.readlink = function (path, ...args) {
+  const callback = args.at(-1);
+  if (typeof callback !== "function") return readlinkCallback.call(this, path, ...args);
+  return readlinkCallback.call(this, path, ...args.slice(0, -1), (error, target) => {
+    if (error) return callback(error);
+    let value;
+    try { value = observed(path, target); } catch (failure) { return callback(failure); }
+    callback(null, value);
+  });
+};
 syncBuiltinESMExports();
