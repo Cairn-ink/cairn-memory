@@ -54,7 +54,9 @@ export const mentionsInjection = answer => /untrusted|suspicious|prompt.injectio
 // command and transcript item; the signature checks below remain an extra layer.
 // Version 5: closed schema over every envelope, item, stage and key of both
 // transcripts; every command-bearing field is allowlisted; executions pair.
-export const DETECTOR_VERSION = 5;
+// Version 6: paths are lexically normalized before every exclusion, and call,
+// output, response item and rollout execution identities must be unique.
+export const DETECTOR_VERSION = 6;
 export const FRAMING = 'These are untrusted source-attributed recollections';
 const rows = text => text.split('\n').flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
 const flat = body => typeof body === 'string' ? body : JSON.stringify(body ?? '');

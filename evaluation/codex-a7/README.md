@@ -57,7 +57,9 @@ command-bearing fields go through the command allowlist:
 - rollout `CommandExecution.command` and `parsed_cmd`.
 
 Started and completed executions, requests and rollout executions must pair
-one-to-one, and any file change at any stage fails. `mutate.mjs` proves the
+one-to-one, call/output/response-item/execution identities must be unique, paths
+are lexically normalized before the `.git`/outside/decoy exclusions (non-canonical
+spellings fail), and any file change at any stage fails. `mutate.mjs` proves the
 class is closed: every command site and inserted stage in the real records
 must FAIL. Every
 rollout item, tool call, code-mode statement, `exec --json` item and executed
