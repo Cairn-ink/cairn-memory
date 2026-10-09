@@ -157,7 +157,7 @@ for (const row of rows)
     if (row.f.event === "truncate") await writeFile(f.path, header());
     if (row.f.event === "mutate") await writeFile(f.path, header() + item("Prefer verbose notes."));
     if (row.f.event === "unsupported")
-      await writeFile(f.path, header({ cli_version: "0.999.0" }) + addition);
+      await writeFile(f.path, header({ history_mode: "legacy" }) + addition);
     if (row.f.event === "missing") await unlink(f.path);
     if (row.f.event === "refused-binding") {
       f.fail("refusal");

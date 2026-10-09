@@ -8,10 +8,16 @@ import { fixture, session } from './helpers.mjs';
 const fixtures = new URL('./fixtures/', import.meta.url);
 const native = JSON.parse(await readFile(new URL('phase-0.162.0-native-read.json', fixtures)));
 const context = { sessionId: session, wireSessionId: 'a'.repeat(64), epoch: 0, start: 0, end: 1 };
+const sql=await readFile(new URL('binary-0.162.0/search-occurrences.sql',fixtures),'utf8');
+test('binary searchOccurrences SQL indexes partial items separately from the turn final item',()=>{
+  const [partials,final]=sql.split('UNION ALL');
+  assert.match(partials,/json_extract\(items.item_json, '\$\.phase'\) = 'partial_answer'/);
+  assert.match(final,/items.item_id = turns.final_agent_item_id/);
+});
 const contents = f => [...f.receiver.values()].flatMap(body => body.messages.map(row => row.content));
 const run = f => runWorker(f.binding, { guard: f.guard, transport: f.transport, now: () => 100000 });
 
-test('native history retains stable completed partial and final as separate items, even across interruption', () => {
+test('seeded history readback validates serialization, not generated partial/final text behavior', () => {
   assert.deepEqual(native.exits.map(row => row.code), [0, 0]);
   assert.ok(!native.methods.includes('turn/start'));
   for (const [name, status, expected] of [

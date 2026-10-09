@@ -19,7 +19,7 @@
   "qualified": true,
   "source": "Installed native binary schemas plus private synthetic rollout history readback; no real config/sessions or model calls",
   "fixtureScope": "Native 0.162.0 history readback of schema/serde-shaped synthetic disk rollouts. Header/assistant/input events are seeded, not model-generated. Native resume appended thread_settings_applied. No turn/start or model calls.",
-  "comparison": "MessagePhase.partial_answer is stable independent text: native retains completed partial and final items in order. Capture uses item_completed once, excludes mirrors/starts/deltas, and refuses unknown phases. SubAgentActivity model/reasoningEffort remain excluded. All eight hook schemas are unchanged.",
+  "comparison": "MessagePhase.partial_answer is stable text; the native thread/searchOccurrences SQL UNION ALLs partial items with the turn final item as separate indexed content. Capture uses canonical item_completed once. Seeded history readback validates serialization only, not generated partial/final text behavior. SubAgentActivity stays excluded; all eight hook schemas are unchanged.",
   "context": "Schema only: additionalContext wire unchanged. Native placement/model behavior not exercised; A7 must be rerun if delivery/placement changes.",
   "files": [
     {
@@ -41,6 +41,10 @@
     {
       "path": "binary-0.162.0/qualification.json",
       "sha256": "2a56267d3135a2bb217be47f0d74a5415fa8fa3fd01ea7d81dbd748b5e636ddf"
+    },
+    {
+      "path": "binary-0.162.0/search-occurrences.sql",
+      "sha256": "7118056763c2ccf3f2cf3e4c454f9b1df87d0a45aab3aae1b183c2bc49f0cfbb"
     },
     {
       "path": "binary-0.162.0/serde-markers.json",
@@ -107,9 +111,17 @@
       "thread/turns/list"
     ],
     "cases": [
-      "partial-final: retains completed partial and final independently",
-      "interrupted: retains completed partial, omits unfinished item",
-      "unknown: native skips invalid phase; plugin fails whole scan closed"
+      "partial-final: seeded partial and final round-trip separately",
+      "interrupted: completed synthetic partial round-trips, unfinished item omitted",
+      "unknown: native skips invalid phase; plugin fails the scan closed"
     ]
+  },
+  "partialFinalEvidence": {
+    "source": "Native 0.162.0 ELF thread/searchOccurrences SQL",
+    "path": "binary-0.162.0/search-occurrences.sql",
+    "byteOffset": 244999892,
+    "byteLength": 1415,
+    "sha256": "7118056763c2ccf3f2cf3e4c454f9b1df87d0a45aab3aae1b183c2bc49f0cfbb",
+    "interpretation": "The query UNION ALLs all partial_answer items with the turn final_agent_item_id. They are separate indexed content. This does not prove that a model final answer never repeats earlier text."
   }
 }

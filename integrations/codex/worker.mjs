@@ -201,7 +201,7 @@ async function prepared(binding, options, action) {
         }
         if (s.version === 1) return await boundary("digest_migrated", true);
         if (s.binding !== opaque) return await boundary("binding_changed", true);
-        if (["unsupported_format", "invalid_reply"].includes(s.status))
+        if (s.status === "invalid_reply")
           return { status: s.status, state: s };
         if (options.byteEnd !== undefined && end < s.offset)
           return { status: "superseded", state: s };
@@ -211,12 +211,27 @@ async function prepared(binding, options, action) {
           return { status: size > MAX_LINE ? "unsupported_format" : "partial_tail", state: s };
         try {
           verifyHeader(header.subarray(0, nl), sessionId, options);
-        } catch {
-          if (s) {
-            s.status = "unsupported_format";
-            await save();
+        } catch (error) {
+          if (error.message === "creator_unqualified") {
+            if (await options.qualifyCreator?.(error.version) !== true)
+              return { status: "creator_unqualified", state: s };
+            verifyHeader(header.subarray(0, nl), sessionId, { qualifiedCreatorVersion: error.version });
+          } else {
+            if (s) {
+              s.status = "unsupported_format";
+              await save();
+            }
+            return { status: "unsupported_format", state: s };
           }
-          return { status: "unsupported_format", state: s };
+        }
+        if (s.status === "unsupported_format") {
+          // Older runtimes persisted version-only refusals without a cause.
+          // Recheck only with trusted creator evidence, then strictly rescan the
+          // unacknowledged bytes; genuine unsupported records still fail closed.
+          const creatorVersion = JSON.parse(header.subarray(0, nl)).payload.cli_version;
+          if (creatorVersion !== options.qualifiedCreatorVersion && await options.qualifyCreator?.(creatorVersion) !== true)
+            return { status: "unsupported_format", state: s };
+          s.status = "idle";
         }
 
         if (s.file !== id || size < s.offset || (s.pending && size < s.pending.end))

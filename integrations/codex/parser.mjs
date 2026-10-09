@@ -5,12 +5,6 @@ export const FORMAT = 'codex-0.157.1-paginated-v1';
 // Seed versions have frozen native format evidence. Other hosts require a
 // binary-identity verdict; a version string never widens the parser by itself.
 export const QUALIFIED_CREATORS = Object.freeze(['0.157.1', '0.160.1', '0.161.0', '0.162.0']);
-export const QUALIFIED_HOSTS = Object.freeze(['0.160.1', '0.161.0', '0.162.0']);
-export const qualifiedHost = version => QUALIFIED_HOSTS.includes(version);
-// A7 protects the delivery format with the authority filter, untrusted framing,
-// JSON quoting and the model. Re-run it when context delivery/placement changes.
-export const QUALIFIED_CONTEXT_HOSTS = QUALIFIED_HOSTS;
-export const qualifiedContextHost = qualifiedHost;
 export const MAX_READ = 1048576, MAX_LINE = 262144;
 const tops = new Set(['session_meta','response_item','inter_agent_communication',
   'inter_agent_communication_metadata','compacted','turn_context','token_usage_record',
@@ -34,13 +28,16 @@ export function verifyHeader(line, sessionId, { qualifiedCreatorVersion } = {}) 
   try { row = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(line)); }
   catch { unsupported(); }
   const meta = row?.payload;
-  if (row.type !== 'session_meta' || !(QUALIFIED_CREATORS.includes(meta?.cli_version) ||
-      (qualifiedCreatorVersion && meta?.cli_version === qualifiedCreatorVersion)) ||
+  if (row.type !== 'session_meta' || typeof meta?.cli_version !== 'string' ||
+      !/^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?$/u.test(meta.cli_version) || meta.cli_version.length > 100 ||
       meta.history_mode !== 'paginated' || meta.id !== sessionId ||
       !['cli','exec'].includes(meta.source) || meta.history_base != null ||
       meta.forked_from_id != null || meta.parent_thread_id != null ||
       meta.subagent_history_start_ordinal != null ||
       (meta.thread_source != null && meta.thread_source !== 'user')) unsupported();
+  if (!QUALIFIED_CREATORS.includes(meta.cli_version) && meta.cli_version !== qualifiedCreatorVersion) {
+    const error = new Error('creator_unqualified'); error.version = meta.cli_version; throw error;
+  }
   return FORMAT;
 }
 
@@ -54,8 +51,8 @@ export function parseLine(bytes, { sessionId, wireSessionId, epoch, start, end }
   if (row.type !== 'event_msg') return excluded('non_conversation');
   const p = row.payload;
   if (!events.has(p.type)) unsupported();
-  // Phase classifies a message, not its streaming completion. Native 0.162.0
-  // retains completed partials alongside finals, even on interrupted turns.
+  // Phase classifies a message, not its streaming completion. The 0.162.0
+  // searchOccurrences SQL unions partial items with the turn final item.
   // Capture only item_completed; mirrors, starts and deltas remain excluded.
   if (p.type === 'item_started' && p.item?.type === 'AgentMessage' &&
       p.item.phase != null && !['commentary','partial_answer','final_answer'].includes(p.item.phase)) unsupported();

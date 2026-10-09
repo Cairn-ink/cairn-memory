@@ -1,6 +1,6 @@
 // Qualification is format-based. Hooks only stat the running binary and read a
 // private verdict; schema generation belongs to setup/status/background work.
-import { readFile, readlink, stat, realpath, mkdtemp, rm, open, unlink, lstat, mkdir } from 'node:fs/promises';
+import { readFile, readlink, stat, realpath, mkdtemp, rm, open, unlink, lstat, mkdir, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { basename, dirname, join, delimiter, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -16,7 +16,7 @@ function sort(value) {
 }
 export const fingerprint = evidence => sha(canonical(evidence));
 // Frozen from the native 0.160.1/0.161.0 evidence, including transitive $refs.
-// 0.162.0 adds stable partial_answer messages; native history readback and
+// 0.162.0 adds stable partial_answer messages; binary searchOccurrences SQL and
 // canonical item_completed capture are frozen separately from the A7 evidence.
 export const KNOWN_FORMATS = Object.freeze(['a64741d8899f84513232c3145595ed279325abfdf190b7705b94dcb81b14ab1a',
   '66fc10979c1594fdb2ba648983d36f10f2c4c1b33c01afe853ba92925b707b87']);
@@ -124,6 +124,25 @@ export async function cachedQualification(configPath,host) {
     return value;
   } catch {return {status:'pending'};}
 }
+// Creator evidence survives host updates and binary removal. Only current-policy
+// qualified verdicts count; current host qualification remains identity-bound.
+// This is read-only, runs only for unseeded creators, and never generates schemas.
+export async function hasQualifiedCreator(configPath,version,{signal}={}) {
+  if(!validVersion(version) || signal?.aborted)return false;
+  try {
+    await safeCache(configPath);
+    for(const name of await readdir(directory(configPath))) {
+      if(signal?.aborted)return false;
+      if(!/^[a-f0-9]{64}\.json$/u.test(name))continue;
+      try {
+        const value=JSON.parse(await privateRead(join(directory(configPath),name)));
+        if(value?.identity===name.slice(0,-5) && value.policy===policy &&
+          value.status==='qualified' && value.version===version && KNOWN_FORMATS.includes(value.fingerprint))return true;
+      } catch {/* unsafe/corrupt verdicts never grant creator qualification */}
+    }
+  } catch {/* missing/unsafe cache is retryable uncertainty */}
+  return false;
+}
 export async function observeHost(configPath,host) {
   if(!validHost(host))return;
   await safeCache(configPath,{create:true});
@@ -167,10 +186,9 @@ export async function qualifyBinary(configPath,host,{collect=collectEvidence,cac
   }
   return verdict;
 }
-export function qualificationStatus(version,status) {
+export function qualificationStatus(version,status,unqualifiedLine) {
   return status==='qualified'?`Codex ${version}: format qualified.`:
-    status==='changed'?`Codex ${version} is newer than this plugin supports; capture and recall are paused until an update.`:
-    `Codex ${version??'unknown'}: format qualification pending or unavailable; capture and recall are paused. Run status --client codex to retry.`;
+    unqualifiedLine??`Codex ${version??'unknown'} 的格式還沒驗證，先暫停`;
 }
 
 const pendingPath = (configPath,host) => join(directory(configPath),host.identity+'.pending');

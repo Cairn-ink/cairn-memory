@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { binaryIdentity, cachedQualification, qualifyBinary, detectRunningHost, fingerprint,
-  KNOWN_FORMATS, qualificationStatus, observeHost, observedHosts, scheduleQualification, finishQualification } from '../qualification.mjs';
+  KNOWN_FORMATS, qualificationStatus, observeHost, observedHosts, scheduleQualification, finishQualification, hasQualifiedCreator } from '../qualification.mjs';
 import { currentHost } from '../installed.mjs';
 import { verifyHeader, parseLine, FORMAT } from '../parser.mjs';
 
@@ -54,10 +54,10 @@ test('unknown identical format is accepted and cached by binary identity, never 
   assert.deepEqual(await cachedQualification(f.configPath,f.host),verdict);
   assert.equal((await qualifyBinary(f.configPath,f.host,{collect})).status,'qualified');assert.equal(calls,1);
   const header={type:'session_meta',payload:{cli_version:'0.999.0',history_mode:'paginated',id:'s',source:'cli'}};
-  assert.throws(()=>verifyHeader(Buffer.from(JSON.stringify(header)),'s'),/unsupported_format/);
+  assert.throws(()=>verifyHeader(Buffer.from(JSON.stringify(header)),'s'),/creator_unqualified/);
   assert.equal(verifyHeader(Buffer.from(JSON.stringify(header)),'s',{qualifiedCreatorVersion:verdict.version}),FORMAT);
   header.payload.cli_version='0.999.1';
-  assert.throws(()=>verifyHeader(Buffer.from(JSON.stringify(header)),'s',{qualifiedCreatorVersion:verdict.version}),/unsupported_format/);
+  assert.throws(()=>verifyHeader(Buffer.from(JSON.stringify(header)),'s',{qualifiedCreatorVersion:verdict.version}),/creator_unqualified/);
   // Same version but a replacement file must lose the cached approval.
   await writeFile(f.host.binaryPath,'replacement');
   const updated={...f.host,identity:await binaryIdentity(f.host.binaryPath)};
@@ -71,7 +71,7 @@ test('changed schema, including a transitive delivery/context reference, is refu
   const verdict=await qualifyBinary(f.configPath,f.host,{collect:async()=>result('0.999.0',changed)});
   assert.equal(verdict.status,'changed');
   assert.equal(qualificationStatus(verdict.version,verdict.status),
-    'Codex 0.999.0 is newer than this plugin supports; capture and recall are paused until an update.');
+    'Codex 0.999.0 的格式還沒驗證，先暫停');
   const inherited=structuredClone(evidence);inherited.appServer.MessagePhase.oneOf.push({type:'string',enum:['new-phase']});
   assert.ok(!KNOWN_FORMATS.includes(fingerprint(inherited)));
   assert.deepEqual(await cachedQualification(f.configPath,f.host),verdict);
@@ -143,7 +143,7 @@ test('missing schema/serde evidence is a refused format rather than an approval 
   const verdict=await qualifyBinary(f.configPath,f.host,{collect:async()=>{
     const error=new Error('embedded_schema_missing');error.version='0.999.0';throw error;
   }});
-  assert.equal(verdict.status,'changed');assert.match(qualificationStatus(verdict.version,verdict.status),/capture and recall are paused until an update/);
+  assert.equal(verdict.status,'changed');assert.match(qualificationStatus(verdict.version,verdict.status),/的格式還沒驗證，先暫停/);
 });
 
 test('running process binding survives an on-disk replacement and rejects a reused or gone process identity',async t=>{
@@ -166,4 +166,66 @@ test('unsafe cache ancestor cannot write or read a verdict through a symlink',as
   assert.equal((await qualifyBinary(path,f.host,{collect:async()=>result('0.999.0')})).status,'pending');
   assert.equal((await cachedQualification(path,f.host)).status,'pending');
   const {readdir}=await import('node:fs/promises');assert.deepEqual(await readdir(outside),[]);
+});
+
+test('creator proof accepts any qualified cached binary but rejects stale policy, changed format and unsafe state',async t=>{
+  const f=await fixture(t),version='0.163.0';
+  assert.equal(await hasQualifiedCreator(f.configPath,version),false);
+  const verdict=await qualifyBinary(f.configPath,f.host,{collect:async()=>result(version)});
+  assert.equal(await hasQualifiedCreator(f.configPath,version),true);
+  // A creator's binary can disappear after update; its observed format evidence
+  // still qualifies history written by that version.
+  await (await import('node:fs/promises')).unlink(f.host.binaryPath);
+  assert.equal(await hasQualifiedCreator(f.configPath,version),true);
+  const path=join(f.ws.path,'qualification',f.host.identity+'.json');
+  for(const patch of [{policy:'stale'},{status:'changed'},{fingerprint:'f'.repeat(64)},{identity:'b'.repeat(64)}]) {
+    await writeFile(path,JSON.stringify({...verdict,...patch}));
+    assert.equal(await hasQualifiedCreator(f.configPath,version),false);
+  }
+  await writeFile(path,JSON.stringify(verdict));await chmod(path,0o644);
+  assert.equal(await hasQualifiedCreator(f.configPath,version),false);await chmod(path,0o600);
+  assert.equal(await hasQualifiedCreator(f.configPath,version,{signal:AbortSignal.abort()}),false);
+});
+
+test('version-only refusal leaves the cursor retryable; later creator evidence captures the unchanged history',async t=>{
+  const {fixture:captureFixture,header,item}=await import('./helpers.mjs');
+  const {runWorker}=await import('../worker.mjs');
+  const q=await fixture(t),f=await captureFixture(t,{text:header({cli_version:'0.163.0'})+item('Version retry.')});
+  const options={guard:f.guard,transport:f.transport,qualifiedCreatorVersion:'0.164.0',
+    qualifyCreator:version=>hasQualifiedCreator(q.configPath,version)};
+  assert.equal((await runWorker(f.binding,options)).status,'creator_unqualified');
+  assert.equal(await f.cursor(),null);assert.equal(f.calls.length,0);
+  await qualifyBinary(q.configPath,q.host,{collect:async()=>result('0.163.0')});
+  await runWorker(f.binding,options);await runWorker(f.binding,options);
+  assert.deepEqual(f.calls.flatMap(row=>row.messages.map(m=>m.content)),['Version retry.']);
+});
+
+test('legacy stored version-only unsupported_format recovers after qualification without reset or content loss',async t=>{
+  const {fixture:captureFixture,header,item}=await import('./helpers.mjs');
+  const {runWorker}=await import('../worker.mjs');
+  const {cursorPath,publishCursor}=await import('../cursor.mjs');
+  const q=await fixture(t),f=await captureFixture(t,{text:header({cli_version:'0.163.0'})+item('Before update.')});
+  await qualifyBinary(q.configPath,q.host,{collect:async()=>result('0.163.0')});
+  const options={guard:f.guard,transport:f.transport,qualifiedCreatorVersion:'0.163.0',
+    qualifyCreator:version=>hasQualifiedCreator(q.configPath,version)};
+  await runWorker(f.binding,options);
+  const prior=await f.cursor(),legacy={...prior,status:'unsupported_format'};
+  await publishCursor(cursorPath(f.root,f.binding.targetId,f.binding.sessionId),legacy,prior);
+  await (await import('node:fs/promises')).appendFile(f.path,item('After update.',1));
+  await runWorker(f.binding,{...options,qualifiedCreatorVersion:'0.164.0'});
+  assert.deepEqual(f.calls.flatMap(row=>row.messages.map(m=>m.content)),['Before update.','After update.']);
+  assert.notEqual((await f.cursor()).status,'unsupported_format');
+});
+
+test('trusted creator recovery never admits an unknown record phase',async t=>{
+  const {fixture:captureFixture,header,item}=await import('./helpers.mjs');
+  const {runWorker}=await import('../worker.mjs');
+  const q=await fixture(t),f=await captureFixture(t,{text:header({cli_version:'0.163.0'})+
+    item('Unknown phase.',1,'assistant',{phase:'future_answer'})});
+  await qualifyBinary(q.configPath,q.host,{collect:async()=>result('0.163.0')});
+  const options={guard:f.guard,transport:f.transport,qualifiedCreatorVersion:'0.164.0',
+    qualifyCreator:version=>hasQualifiedCreator(q.configPath,version)};
+  assert.equal((await runWorker(f.binding,options)).status,'unsupported_format');
+  assert.equal((await runWorker(f.binding,options)).status,'unsupported_format');
+  assert.equal(f.calls.length,0);
 });

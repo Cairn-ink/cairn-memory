@@ -160,13 +160,15 @@ stale healthy observation as unavailable. Capture's strict H5 guard is unchanged
 app-server definitions, including transitive `$ref` content/phase/delivery/trust
 types and serde marker presence. Native 0.161.0 matches 0.160.1. Native 0.162.0
 adds `MessagePhase.partial_answer`, supported as stable independent text. Offline
-native synthetic-history readback retains completed partial and final items in
-order; capture sends each once from item_completed, excluding starts/deltas and
+binary thread/searchOccurrences SQL UNION ALLs partial items and the turn final
+item as separate indexed content; seeded history readback validates serialization
+only, not whether model text repeats. capture sends each once from item_completed, excluding starts/deltas and
 mirrors. An interrupted turn can retain completed partials, but never unfinished
 text. Unknown phases fail closed. Both capture and recall are format qualified;
 the eight hook schemas are unchanged. The seeded assistant records are not model
 outputs or a new A7 campaign. Frozen fixtures, native readback and hashes record
-the evidence; `scripts/probe-codex-phases.mjs` reproduces it without turn/start.
+the evidence; `scripts/probe-codex-phases.mjs` reproduces seeded readback without
+turn/start. The SQL excerpt is pinned to its native ELF byte offset and hash.
 Unknown versions with identical evidence are accepted and cached by binary
 identity; changed evidence stays closed with an explicit status message.
 
@@ -184,3 +186,14 @@ A7 must run again if additionalContext delivery/placement changes. Evidence
 comparison follows delivery references where exposed; native placement hidden
 from schemas still requires separate verification when a change is discovered.
 The prompt-recall kill switch remains unchanged.
+
+Unseeded rollout creators can use any private cached qualified verdict under the
+current known-format policy, even after the creator binary is updated or removed.
+A version-only refusal returns retryable `creator_unqualified` without latching
+`unsupported_format`. Legacy version refusals are rechecked with trusted creator
+evidence before strictly rescanning unacknowledged bytes; actual unknown formats
+remain closed. Host verdicts continue to bind to the running binary identity.
+Unqualified status wording is neutral about version age. Status without a valid
+installation only reads cache and does not generate schema or create cache state.
+The A7 installer primes the actual native verdict in its disposable home before
+the first prompt, without modifying runtime qualification gates.

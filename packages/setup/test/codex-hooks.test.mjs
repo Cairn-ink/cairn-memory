@@ -345,7 +345,8 @@ test('CX-5 missing/unenforced/regressing hosted pause state and unknown transcri
   await f.invoke('Stop');await assert.rejects(()=>f.invoke('worker'),/pause_unavailable/);assert.ok((await f.cursor()).pending);
   f.pause({paused:false,generation:0,enforced:true});
   const text=await readFile(f.path,'utf8');await writeFile(f.path,text.replace('"cli_version":"0.160.1"','"cli_version":"0.160.2"'));
-  await f.invoke('Stop');assert.equal((await f.cursor()).status,'unsupported_format');
+  const cursor=await f.cursor();await f.invoke('Stop');assert.deepEqual(await f.cursor(),cursor);
+  // Missing creator qualification is retryable and preserves the frozen range.
   assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,0);
 });
 
@@ -762,7 +763,7 @@ test('CX-5 app-server format verdict controls recall independently of install-ti
   assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:async()=>daemonHost}),'');
   assert.equal(f.requests.length,0);
   const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
-  assert.match(status.stdout,/app-server: Codex 0\.163\.0 is newer than this plugin supports; capture and recall are paused until an update\./);
+  assert.match(status.stdout,/app-server: Codex 0\.163\.0: format not yet verified; capture and recall are paused\./);
   assert.match(status.stdout,/Prompt recall injection \(UserPromptSubmit\): per host \(qualified: on; unqualified: off\)/);
 });
 
@@ -785,4 +786,65 @@ test('CX-5 status reports app-server separately even when it shares the qualifie
   const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
   assert.match(status.stdout,/cli: Codex 0\.160\.1: format qualified/);
   assert.match(status.stdout,/last observed app-server: Codex 0\.160\.1: format qualified/);
+});
+
+test('CX-5 creator 0.163.0 keeps capturing across daemon 0.164.0, switch back, and CLI 0.160.1',async t=>{
+  const f=await memoryRuntime(t,{state:{version:'0.163.0'}});
+  const {qualifyBinary}=await import('../../../integrations/codex/qualification.mjs');
+  const {item}=await import('../../../integrations/codex/test/helpers.mjs');
+  await writeFile(f.path,(await readFile(f.path,'utf8')).replace('0.160.1','0.163.0'));
+  f.host.kind='app-server';
+  await f.invoke('Stop');await f.invoke('worker');
+  for(const [version,kind,text] of [['0.164.0','app-server','Updated daemon.'],['0.163.0','app-server','Switched back.'],['0.160.1','cli','CLI resumed.']]) {
+    const state=JSON.parse(await readFile(f.statePath,'utf8'));state.version=version;
+    await writeFile(f.statePath,JSON.stringify(state));await appendFile(f.host.binaryPath,'\n// next host '+version+'\n');
+    f.host.identity=await binaryIdentity(f.host.binaryPath);f.host.kind=kind;
+    assert.equal((await qualifyBinary(f.installation,f.host)).status,'qualified');
+    await appendFile(f.path,item(text,version));
+    assert.equal(await f.invoke('Stop'),'{}');await f.invoke('worker');
+    assert.notEqual((await f.cursor()).status,'unsupported_format');
+  }
+  const captures=f.requests.filter(row=>row.route.endsWith('/capture'));
+  assert.equal(captures.length,4);
+  assert.deepEqual(captures.flatMap(row=>row.body.messages.map(m=>m.content)),
+    ['Prefer diagrams.','Understood.','Updated daemon.','Switched back.','CLI resumed.']);
+});
+
+test('CX-5 status without installation leaves CODEX_HOME unchanged and does not generate schemas',async t=>{
+  const f=await fixture(t,{args:['status','--client','codex']});
+  assert.equal(f.code,0,f.stdout);assert.equal(f.installed,undefined);
+  assert.deepEqual(await readdir(f.codexHome),['config.toml']);
+  assert.ok(!(await f.records()).some(row=>row.args.includes('generate-json-schema')));
+  assert.match(f.stdout,/Codex 0\.160\.1: format not yet verified; capture and recall are paused\./);
+  const zh=await f.run(['status','--client','codex','--lang','zh']);
+  assert.equal(zh.code,0,zh.stdout);assert.match(zh.stdout,/Codex 0\.160\.1 的格式還沒驗證，先暫停/);
+  assert.deepEqual(await readdir(f.codexHome),['config.toml']);
+});
+
+test('A7 disposable install primes an identity-bound verdict before its first prompt without patching runtime',async t=>{
+  const f=await fixture(t);
+  const codexHome=join(f.home,'a7-codex');await mkdir(codexHome,{mode:0o700});
+  const script=fileURLToPath(new URL('../../../evaluation/codex-a7/install.mjs',import.meta.url));
+  const child=spawn(process.execPath,[script,JSON.stringify({codexHome,endpoint:'https://synthetic.invalid',token:secret,
+    codex:f.host.binaryPath,hostVersion:'0.160.1'})],{cwd:f.ws.path,env:{...f.env,CODEX_HOME:codexHome},stdio:['ignore','pipe','pipe']});
+  let stdout='',stderr='';child.stdout.on('data',c=>stdout+=c);child.stderr.on('data',c=>stderr+=c);
+  assert.equal(await new Promise(r=>child.on('close',r)),0,stderr);
+  const installation=join(codexHome,'cairn/installation.json');
+  const config=await readInstallation(installation);
+  const installed={installation,runtime:config.runtime};
+  if(stdout.trim())assert.equal(JSON.parse(stdout).forced,false);
+  const {cachedQualification}=await import('../../../integrations/codex/qualification.mjs');
+  assert.equal((await cachedQualification(installed.installation,f.host)).status,'qualified');
+  for(const path of ['parser.mjs','qualification.mjs'])assert.deepEqual(
+    await readFile(join(installed.runtime,'integrations/codex',path)),
+    await readFile(new URL('../../../integrations/codex/'+path,import.meta.url)));
+  const original=globalThis.fetch;let recalls=0;t.after(()=>{globalThis.fetch=original;});
+  globalThis.fetch=async(url)=>{
+    if(new URL(url).pathname.endsWith('/recall')){recalls++;return Response.json({memories:[]});}
+    return Response.json({paused:false,generation:0,enforced:true});
+  };
+  const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,
+    cwd:'/synthetic/project',transcript_path:null,prompt:'First prompt preference?'}));
+  await runInstalled(installed.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:async()=>f.host});
+  assert.equal(recalls,1);
 });

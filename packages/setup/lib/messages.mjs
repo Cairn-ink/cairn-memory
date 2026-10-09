@@ -1,5 +1,6 @@
 // All user-facing installer text. Each execution selects one language.
 export const messages = {
+  "codex_format_unverified": {"zh":"Codex {version} 的格式還沒驗證，先暫停","en":"Codex {version}: format not yet verified; capture and recall are paused."},
   "codex_phase_failed": {"zh":"Codex 安裝在 {phase} 階段失敗（{code}）；私有設定保留供重跑，不輸出內部資料。","en":"Codex setup failed at {phase} ({code}); private state retained for retry, internal data suppressed."},
   "codex_host_unqualified": {"zh":"此 Codex host 尚未驗收；只保留 MCP，自動 capture 拒絕執行。","en":"Unqualified Codex host; MCP remains available, automatic capture refuses."},
   "codex_browser_required": {"zh":"Hooks 需要 memory-scoped 瀏覽器授權；此 endpoint 尚未支援，未啟用 hooks。","en":"Hooks require memory-scoped browser authorization; endpoint unsupported, hooks remain disabled."},
@@ -81,7 +82,7 @@ export const messages = {
   "interactive_retry": {"zh": "請在互動終端機重跑", "en": "Retry in an interactive terminal:"},
   "codex_env_fallback": {"zh": "或用 Codex 的 bearer-token-env-var，從你管理的安全環境載入 PAT", "en": "Or load a PAT from your managed secure environment:"},
   "codex_env_explanation": {"zh": "這個命令只設定環境變數名稱，不會保存 PAT；每次啟動 Codex 都需載入該環境", "en": "This stores the variable name only; load it whenever Codex starts."},
-  "codex_automatic": {"zh": "此 Codex 版本未驗收，自動擷取與自動回憶停用", "en": "Unqualified Codex version: automatic capture and recall disabled."},
+  "codex_automatic": {"zh": "Codex 格式還沒驗證，自動擷取與自動回憶先暫停", "en": "Codex format not yet verified; automatic capture and recall are paused."},
   "codex_explicit_only": {"zh": "MCP 可供明確 remember／recall；完整自動記憶仍需 CX-5 與新版 transcript 驗證", "en": "Use explicit MCP remember/recall; automatic memory needs CX-5 and current transcript qualification."},
   "codex_windows": {"zh": "此安裝器尚未驗證 Windows 憑證檔權限", "en": "Windows credential-file permissions are not qualified."},
   "codex_tmpdir": {"zh": "暫存目錄位於 Codex 專案設定下；請將 TMPDIR 設為中立目錄", "en": "TMPDIR has ancestor project config; choose a neutral temporary directory."},

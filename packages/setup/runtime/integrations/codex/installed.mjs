@@ -8,7 +8,7 @@ import { hostedTargetId } from '../client/transport-hosted.mjs';
 import { handleHook, readHookInput, validateHook, workerFromHandoff } from './hook.mjs';
 import { establishPauseBoundary } from './worker.mjs';
 import { detectRunningHost, cachedQualification, observeHost, qualifyBinary, validHost, boundBinary,
-  scheduleQualification, finishQualification } from './qualification.mjs';
+  scheduleQualification, finishQualification, hasQualifiedCreator } from './qualification.mjs';
 import { readInstallation, readCredential, clientOptions, childEnvironment, promptRecallEnabled } from './installed-state.mjs';
 import { observeHostedPause, installedTransport, recallContext } from './hosted-lifecycle.mjs';
 
@@ -70,6 +70,7 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   if(qualification.status!=='qualified' || signal.aborted)return '';
   if(event==='UserPromptSubmit' && !await promptRecallEnabled(configPath))return '';
   input??=await readHookInput(stream,{deadlineMs:300});
+  const qualifyCreator = version => hasQualifiedCreator(configPath,version,{signal});
   const options = clientOptions(config);
   const resolved = await resolveClient(options);
   if (!resolved.enabled || resolved.root !== config.root || signal.aborted) return '';
@@ -84,7 +85,7 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
     const guard = automaticGuard(config.root, config.endpoint, policy);
     const transport = installedTransport(config, token, remote.generation);
     await workerFromHandoff(handoff, { clientOptions: options, targetId, transport, guard,
-      mode: 'hosted', overallMs: 60000, qualifiedCreatorVersion: qualification.version });
+      mode: 'hosted', overallMs: 60000, qualifiedCreatorVersion: qualification.version, qualifyCreator });
     return '';
   }
   const hook = validateHook(input);
@@ -108,7 +109,7 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   const control = await readControlState(config.root);
   if (control.paused || signal.aborted) return '';
   const result = await handleHook(input, { clientOptions: options, targetId,
-    qualifiedCreatorVersion: qualification.version,
+    qualifiedCreatorVersion: qualification.version, qualifyCreator,
     launch: async content => {
       if (signal.aborted) return;
       await launch(configPath, config, JSON.stringify({...JSON.parse(content),host:qualification.host}));

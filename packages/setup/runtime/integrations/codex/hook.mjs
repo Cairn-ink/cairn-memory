@@ -34,20 +34,20 @@ export async function readHookInput(stream,{limit=65536,deadlineMs=750}={}) {
 /** The installed launcher owns fixed config and a closed direct-pipe launch callback.
  * No transport is enabled here. Context and model calls remain unavailable.
  */
-export async function handleHook(input,{clientOptions,targetId,launch,qualifiedCreatorVersion,now=Date.now}={}) {
+export async function handleHook(input,{clientOptions,targetId,launch,qualifiedCreatorVersion,qualifyCreator,now=Date.now}={}) {
   const start=now();
   const budget=['SessionStart','UserPromptSubmit'].includes(input?.hook_event_name)?2500:750;
   let expired=false,timer;
   const unavailable={output:['Stop','PreCompact','SessionEnd'].includes(input?.hook_event_name)?'{}':'',status:'capture_unavailable'};
   try {
-    return await Promise.race([processHook(input,{clientOptions,targetId,launch,qualifiedCreatorVersion},
+    return await Promise.race([processHook(input,{clientOptions,targetId,launch,qualifiedCreatorVersion,qualifyCreator},
       ()=>expired || now()-start>=budget),new Promise(resolve=>{
       timer=setTimeout(()=>{expired=true;resolve(unavailable);},budget);
     })]);
   } finally {clearTimeout(timer);}
 }
 
-async function processHook(input,{clientOptions,targetId,launch,qualifiedCreatorVersion},expired) {
+async function processHook(input,{clientOptions,targetId,launch,qualifiedCreatorVersion,qualifyCreator},expired) {
   let event=input?.hook_event_name;
   const output=()=> ['Stop','PreCompact','SessionEnd'].includes(event)?'{}':'';
   try {
@@ -65,7 +65,7 @@ async function processHook(input,{clientOptions,targetId,launch,qualifiedCreator
     if (expired()) return {output:output(),status:'capture_unavailable'};
     const binding={root:resolved.root,targetId,projectId,sessionId:hook.sessionId,path:hook.path};
     if (event==='SessionStart') return {output:'',status:(await establishPauseBoundary(binding)).status};
-    const prepared=await prepareCapture(binding,{qualifiedCreatorVersion});
+    const prepared=await prepareCapture(binding,{qualifiedCreatorVersion,qualifyCreator});
     if (prepared.status!=='pending' || expired()) return {output:output(),status:prepared.status};
     // serialize a closed, content-free handoff; never copy hook extras into it
     const handoff={client:'codex',parser:FORMAT,sessionId:hook.sessionId,path:hook.path,cwd:hook.cwd,

@@ -4,7 +4,8 @@ import { lstat, mkdir, open, readFile, rename, rm, mkdtemp, realpath } from 'nod
 import { homedir, tmpdir } from 'node:os';
 import { delimiter, join, resolve, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
-import { resolveCLI, qualifyBinary } from '../runtime/integrations/codex/qualification.mjs';
+import { resolveCLI, qualifyBinary, cachedQualification } from '../runtime/integrations/codex/qualification.mjs';
+import { readInstallation } from '../runtime/integrations/codex/installed-state.mjs';
 import { setupInstalledCodex, installedStatus, controlCodex } from './codex-runtime.mjs';
 
 // Keep routing and all Codex behavior here; browser authorization can supply
@@ -216,7 +217,9 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     }
     const cliHost=await resolveCLI();
     const installation=join(home,'cairn','installation.json');
-    const hostVerdict=cliHost ? await qualifyBinary(installation,cliHost,{cache:!flags.includes('--dry-run')}) : {status:'pending'};
+    const installed=await readInstallation(installation).then(()=>true,()=>false);
+    const hostVerdict=cliHost ? action==='status' && !installed ? await cachedQualification(installation,cliHost) :
+      await qualifyBinary(installation,cliHost,{cache:!flags.includes('--dry-run')}) : {status:'pending'};
     if (hostVerdict.status==='qualified' && hostVerdict.version===hostVersion) {
       return await setupInstalledCodex({action,flags,home,hostVersion,write,prompt,interactive,browse,
         SetupError,t,endpointOverride,authOptions,signal,before,configPath,existing,usable,

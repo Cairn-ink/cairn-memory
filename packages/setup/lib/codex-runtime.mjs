@@ -17,7 +17,7 @@ import { stateLock } from '../runtime/integrations/client/state-lock.mjs';
 import { hostedPauseStatus } from '../runtime/integrations/client/hosted-pause.mjs';
 import { readInstallation, validateInstallation, readCredential, writeCredential, clientOptions,
   promptRecallEnabled, writePromptRecall } from '../runtime/integrations/codex/installed-state.mjs';
-import { observedHosts, qualifyBinary, refreshObservedHost, qualificationStatus } from '../runtime/integrations/codex/qualification.mjs';
+import { observedHosts, qualifyBinary, refreshObservedHost, qualificationStatus, cachedQualification } from '../runtime/integrations/codex/qualification.mjs';
 
 const version = JSON.parse(readFileSync(new URL('../package.json',import.meta.url))).version;
 const events = ['SessionStart','UserPromptSubmit','Stop','PreCompact'];
@@ -221,17 +221,18 @@ async function rotateBoundary(root) {
 
 export async function installedStatus({home,hostVersion,write,t,snapshot,cliHost,hostVerdict}) {
   const path = join(home,'cairn','installation.json');
+  const installed=await readInstallation(path).then(()=>true,()=>false);
   const verdicts=[{host:cliHost,verdict:hostVerdict??{status:'pending'},version:hostVersion}];
   for(let host of await observedHosts(path)) {
     if(host.identity===cliHost?.identity && host.kind===cliHost?.kind)continue;
     let verdict={status:'pending'};
     try {
       host=await refreshObservedHost(host);
-      verdict=await qualifyBinary(path,host);
+      verdict=installed?await qualifyBinary(path,host):await cachedQualification(path,host);
     } catch {/* unavailable host is reported as pending, never on */}
     if(host.identity!==cliHost?.identity || host.kind!==cliHost?.kind)verdicts.push({host,verdict,version:verdict.version,observed:true});
   }
-  for(const item of verdicts)write(`${item.observed?'last observed ':''}${item.host?.kind??'cli'}: ${qualificationStatus(item.version,item.verdict.status)}`);
+  for(const item of verdicts)write(`${item.observed?'last observed ':''}${item.host?.kind??'cli'}: ${qualificationStatus(item.version,item.verdict.status,t('codex_format_unverified',{version:item.version??'unknown'}))}`);
   const formatQualified=verdicts.every(item=>item.verdict.status==='qualified');
   const anyQualified=verdicts.some(item=>item.verdict.status==='qualified');
   try {
