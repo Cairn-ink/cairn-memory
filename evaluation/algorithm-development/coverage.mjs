@@ -46,14 +46,15 @@ function navigation(call, selected) {
   }));
 }
 
-function armStages(arm, capture, details, captured, plan, namespace) {
+function armStages(arm, capture, details, captured, plan, namespace, effective = false) {
   const result = { 'capture-retained': capture };
   const calls = (arm?.modelCalls ?? []).filter(call => call.method === 'select');
   for (const [name, selected] of [['candidate-reachable', false], ['selected', true]]) {
-    const references = calls.flatMap(call => navigation(call, selected));
+    const actual = effective ? arm?.effectiveSelections ?? [] : calls;
+    const references = actual.flatMap(call => navigation(call, selected));
     const entries = captured.entries.filter(entry => references.some(ref => ref.namespaceIndex === 0 &&
       ref.memoryId === entry.memoryId && ref.revision === entry.revision));
-    result[name] = stage(entries, captured.valid && calls.length > 0 && calls.every(call => call.output && !call.failure), calls.length > 0);
+    result[name] = stage(entries, captured.valid && actual.length > 0 && actual.every(call => call.output && !call.failure), actual.length > 0);
   }
   let verified = null;
   try { if (arm?.recalled) verified = entriesFromEvidence(arm.recalled, details, plan, namespace); } catch { /* unknown binding earns no credit */ }
@@ -86,7 +87,7 @@ function statusFor(anchor, source, observed) {
   return present ? 'present' : observed.complete ? 'absent' : observed.started ? 'unknown' : 'not-run';
 }
 
-export function scoreDevelopmentCoverage({ observations, modelInputs, evaluatorRubric }) {
+function scoreCoverage({ observations, modelInputs, evaluatorRubric }, effective = false) {
   validateEvaluatorRubric(evaluatorRubric, modelInputs);
   if (!Array.isArray(observations) || observations.length > 24) throw new TypeError('invalid coverage observations');
   const anchorCount = Object.values(evaluatorRubric.cases).reduce((total, rule) => total + rule.anchors.length, 0);
@@ -106,7 +107,7 @@ export function scoreDevelopmentCoverage({ observations, modelInputs, evaluatorR
     try { captured = capturedEntries(details, plan, namespace); } catch { /* unavailable source binding */ }
     const captureStarted = Boolean(observation?.capture?.inputs?.length || observation?.capture?.outcomes?.length || details.length || observation?.capture?.status === 'completed');
     const capture = stage(captured.entries, captured.valid && observation?.capture?.status === 'completed', captureStarted);
-    const armResults = Object.fromEntries(ARMS.map(arm => [arm, armStages(observation?.arms?.[arm], capture, details, captured, plan, namespace)]));
+    const armResults = Object.fromEntries(ARMS.map(arm => [arm, armStages(observation?.arms?.[arm], capture, details, captured, plan, namespace, effective)]));
     const anchors = evaluatorRubric.cases[source.id].anchors.map((anchor, index) => {
       const statuses = Object.fromEntries(ARMS.map(arm => [arm, Object.fromEntries(STAGES.map(name => {
         const status = statusFor(anchor, source, armResults[arm][name]); aggregates[arm][name][status]++;
@@ -116,8 +117,30 @@ export function scoreDevelopmentCoverage({ observations, modelInputs, evaluatorR
     });
     cases.push({ id: source.id, family: source.family, anchorDenominator: anchors.length, anchors });
   }
-  return { schemaVersion: 'algorithm-development-coverage-v1', metric: 'literal-normalized-origin-bound-anchor-presence',
+  return { schemaVersion: effective ? 'source-diverse-requested-answer-coverage-v1' : 'algorithm-development-coverage-v1', metric: 'literal-normalized-origin-bound-anchor-presence',
     normalization: 'NFKC;redactSecrets;Unicode-whitespace-to-ASCII-space;trim;no-truncation',
     targetedStage: 'packed', anchorDenominator: REQUIRED_ANCHOR_DENOMINATOR, aggregates, cases,
     gain: aggregates.full.packed.present - aggregates.baseline.packed.present };
+}
+
+export const scoreDevelopmentCoverage = options => scoreCoverage(options);
+
+/** Evaluator only: effective selection is mandatory; never fall back to raw refs. */
+export function scoreRequestedAnswerCoverage({ report, modelInputs, evaluatorRubric }) {
+  if (report?.schemaVersion !== 'source-diverse-requested-answer-comparison-v1' || report.treatment !== 'source-diverse-v1'
+    || report.armPolicies?.baseline !== 'ordinary-v1' || report.armPolicies?.full !== 'source-diverse-v1'
+    || !Array.isArray(report.observations)) throw new TypeError('wrong requested-answer report identity');
+  for (const row of report.observations) for (const name of ARMS) {
+    const arm = row.arms?.[name], calls = arm?.modelCalls?.filter(call => call.method === 'select') ?? [];
+    if (!Array.isArray(arm?.effectiveSelections) || !Array.isArray(arm.coreInputs)
+      || arm.effectiveSelections.length !== arm.coreInputs.length || calls.length > arm.effectiveSelections.length
+      || arm.effectiveSelections.some((trace, index) => !isDeepStrictEqual(trace.input, arm.coreInputs[index].input)
+        || trace.policy !== (name === 'baseline' ? 'ordinary-v1' : 'source-diverse-v1')
+        || !Array.isArray(trace.publicReads) || trace.publicReads.length > 48
+        || trace.output == null && trace.failure == null)
+      || arm.status === 'completed' && arm.effectiveSelections.some(trace => !trace.output || trace.failure)) {
+      throw new TypeError('missing or mismatched effective selection trace');
+    }
+  }
+  return scoreCoverage({ observations: report.observations, modelInputs, evaluatorRubric }, true);
 }

@@ -66,3 +66,43 @@ two nonauthor reviewers; retain its mapping separately. Unblind their independen
 JSON results with `unblindDevelopmentJudgments`, then use
 `aggregateDevelopmentJudgments`. Missing/disagreed verdicts remain unresolved;
 safety disagreement blocks advancement. No automated grader calls are included.
+
+## Prospective requested-answer comparison
+
+The closed optional runner `treatment: 'source-diverse-v1'` selects the existing
+bounded source-diverse wrapper; omission remains `full-label-v1` with the original
+report shape. The new report is `source-diverse-requested-answer-comparison-v1`
+and explicitly maps transport arm `full` to `source-diverse-v1`, not full labels.
+It retains unchanged raw model calls and adds each arm's `effectiveSelections`:
+actual core request/returned refs, failure, bounded public-get observations and
+pure assembly diagnostics. Diagnostics use observed reads only, never extra reads.
+These private artifacts contain source material and have the same caller-owned
+retention/privacy obligations as the existing report. Source novelty is not QA.
+
+`loadRequestedAnswerFreeze()` loads separately versioned `qa-rubric-v2.json` and
+compiles requested propositions onto the unchanged original 42 anchors,
+multi-source requirements and safety definitions. Optional background and three
+prospective calibration examples per question stay outside correctness criteria;
+they are not historical model answers, an exact matcher or a semantic parser.
+The judging protocol requires concise/explained correctness invariance while
+checking all factual claims actually made against actual packed evidence.
+
+`prepareRequestedAnswerComparison` / `launchRequestedAnswerComparison` reuse
+`launch.mjs`'s original read-only checkpoint and one-shot durable envelope with
+a distinct manifest version. It binds policy, rubric/examples/protocol, runtime,
+Node/model, control/runtime hashes and unchanged transport limits. Old manifests
+cannot launch the new path; failed key lookup still consumes the start marker.
+Neither path discovers a key or resumes. Reviewed clean code, current settled
+affordability and a separately frozen manifest remain necessary; tests do not
+authorize spending.
+
+Evaluator-only `scoreRequestedAnswerCoverage({ report, modelInputs,
+evaluatorRubric })` requires actual effective traces and never substitutes raw
+refs. `buildBlindRequestedAnswerPacket({ report, freeze })` creates two-judge
+input, and `aggregateRequestedAnswerJudgments` reuses agreement-only counts with
+the new paired/packed/safety gate and explicit caller resource acceptance. The
+caller must audit recorded calls/tokens/latency/reserved and known cost before
+setting `resourcesWithinLimits`; this flag is not a new budget authority or an
+automatic resource measurement. All 24/48 slots remain in denominators. The
+same authored sources are previously seen development, not a fresh holdout;
+this delivery contains no new paid answers, score or product promotion.

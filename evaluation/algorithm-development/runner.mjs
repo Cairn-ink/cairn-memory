@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
 import { openMemoryCore } from '../../core/contract.mjs';
 import { createFullLabelSelectionModel } from '../architecture/full-label-model.mjs';
+import { createSourceDiverseSelectionModel, assembleSourceDiverseSelection } from '../architecture/source-diverse-selection-model.mjs';
 import { prepareMixedSourceCase } from '../longmemeval/mixed-source.mjs';
 import { verifiedEvidence } from '../longmemeval/mixed-evidence.mjs';
 import { packMixedAnswer } from '../longmemeval/mixed-answer.mjs';
@@ -74,7 +75,9 @@ const emptyArm = (name, failure = 'not_run') => ({ name, status: 'unresolved', f
 
 /** Caller owns retained databases and formal observations. No rubric/gold import. */
 export async function runAlgorithmDevelopmentComparison({ cases, transport, outputDirectory,
-  onCase = () => {} } = {}) {
+  onCase = () => {}, treatment = 'full-label-v1' } = {}) {
+  if (!['full-label-v1', 'source-diverse-v1'].includes(treatment)) fail('invalid_algorithm_treatment');
+  const prospective = treatment === 'source-diverse-v1';
   if (!Array.isArray(cases) || cases.length !== 24 || !frozen(cases)
     || new Set(cases.map(row => row.id)).size !== 24 || cases.some(row => !/^D(?:0[1-9]|1[0-9]|2[0-4])$/u.test(row.id))
     || typeof onCase !== 'function'
@@ -86,6 +89,7 @@ export async function runAlgorithmDevelopmentComparison({ cases, transport, outp
       source: structuredClone(source), capture: { status: 'unresolved', failure: null,
         inputs: [], modelCalls: [], outcomes: [], receipts: [], stateSha256: null, databaseBytes: null },
       arms: Object.fromEntries(order.map(name => [name, emptyArm(name)])), navigation: null, records: [] };
+    if (prospective) for (const arm of Object.values(observation.arms)) arm.effectiveSelections = [];
     if (fatal) {
       observation.capture.failure = fatal;
       for (const arm of Object.values(observation.arms)) arm.failure = fatal;
@@ -125,12 +129,38 @@ export async function runAlgorithmDevelopmentComparison({ cases, transport, outp
             arm.stateBefore = logicalState(path);
             if (arm.stateBefore !== observation.capture.stateSha256) fail('captured_state_changed');
             const baseModel = tracedModel(transport.model, arm.modelCalls);
-            const selection = name === 'full' ? createFullLabelSelectionModel(baseModel,
-              { readSet: [namespace], getMemory: input => core.get(input) }) : baseModel;
+            let activeTrace = null;
+            const getMemory = input => {
+              const response = core.get(input);
+              if (activeTrace) activeTrace.publicReads.push({ input: structuredClone(input), response: structuredClone(response) });
+              return response;
+            };
+            const selection = name !== 'full' ? baseModel : prospective
+              ? createSourceDiverseSelectionModel(baseModel, { readSet: [namespace], getMemory })
+              : createFullLabelSelectionModel(baseModel, { readSet: [namespace], getMemory });
             core = openMemoryCore({ path, sourceCandidatePolicy: 'bounded-keyset-v1',
-              model: { ...selection, select(request) {
+              model: { ...selection, async select(request) {
                 arm.coreInputs.push({ system: request.system, input: structuredClone(request.input), maxOutputTokens: request.maxOutputTokens });
-                return selection.select(request);
+                if (!prospective) return selection.select(request);
+                const observed = { policy: name === 'full' ? treatment : 'ordinary-v1',
+                  system: request.system, input: structuredClone(request.input), maxOutputTokens: request.maxOutputTokens,
+                  output: null, failure: null, publicReads: [], diagnostics: null };
+                arm.effectiveSelections.push(observed); activeTrace = observed;
+                try {
+                  const output = await selection.select(request);
+                  if (name === 'full') {
+                    const raw = arm.modelCalls.filter(row => row.method === 'select').at(-1).output;
+                    const first = observed.publicReads.slice(0, observed.publicReads.length / 2);
+                    const compiled = assembleSourceDiverseSelection(request.input, raw, { readSet: [namespace],
+                      inspections: first.map(read => ({ ref: { namespaceIndex: 0, memoryId: read.input.memoryId,
+                        revision: read.response.value.memory.revision }, response: read.response })) });
+                    if (observed.publicReads.length % 2 || !isDeepStrictEqual(compiled.output, output)) fail('algorithm_trace_failure');
+                    observed.diagnostics = structuredClone(compiled.diagnostics);
+                  }
+                  observed.output = structuredClone(output);
+                  return output;
+                } catch (error) { observed.failure = reason(error); throw error; }
+                finally { activeTrace = null; }
               } } });
             arm.recalled = unwrap(await core.recall({ readSet: [namespace], query: plan.mem0Input.query,
               limit: 6, contextMode: 'source-evidence' }));
@@ -176,7 +206,8 @@ export async function runAlgorithmDevelopmentComparison({ cases, transport, outp
       'limitMicroUsd', 'requestCap', 'reservedMicroUsd', 'requestCount', 'state', 'historySha256'].map(key => [key, state[key]])); }
     catch (error) { fatal = reason(error); }
   }
-  return freezeObservation({ schemaVersion: 'algorithm-development-comparison-v1', model: DEFAULT_MODEL,
+  return freezeObservation({ schemaVersion: prospective ? 'source-diverse-requested-answer-comparison-v1' : 'algorithm-development-comparison-v1', model: DEFAULT_MODEL,
+    ...(prospective ? { treatment, armPolicies: { baseline: 'ordinary-v1', full: treatment } } : {}),
     profile: { captureSourcePolicy: 'indexed-evidence-v1', sourceCandidatePolicy: 'bounded-keyset-v1',
       contextMode: 'source-evidence', selectionMode: 'default-select', limit: 6, coreLogicalCallMs: 30_000 },
     denominator: 24, attemptsPerArm: 24, fatal, observations, records: transport.records(),

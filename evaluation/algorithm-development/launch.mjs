@@ -7,7 +7,9 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectEmbeddingExperimentBudgetSnapshot } from '../experiment-budget/index.mjs';
 import { loadDevelopmentFreeze } from './corpus.mjs';
-import { createAlgorithmDevelopmentTransport } from './transport.mjs';
+import { loadRequestedAnswerFreeze } from './requested-answer.mjs';
+import { createAlgorithmDevelopmentTransport, algorithmLimits } from './transport.mjs';
+import { DEFAULT_MODEL } from '../../adapters/openai/profiles.mjs';
 import { runAlgorithmDevelopmentComparison } from './runner.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -23,28 +25,46 @@ function checkpointOf(state) {
 }
 
 /** Read-only preflight. Returned values are observations, not a spending grant. */
-export async function prepareAlgorithmDevelopment({ configuration }) {
+async function prepare({ configuration }, prospective) {
   if (configuration.limitMicroUsd !== 400_000_000) fail('campaign_limit_mismatch');
   if (git(['status', '--porcelain', '--untracked-files=normal'])) fail('runtime_not_clean');
-  const corpus = await loadDevelopmentFreeze();
+  const corpus = prospective ? await loadRequestedAnswerFreeze() : await loadDevelopmentFreeze();
   const state = inspectEmbeddingExperimentBudgetSnapshot(configuration);
   if (state.state !== 'open' || state.attempts.some(row => row.outcome === null)) fail('campaign_unsettled');
   if (state.reservedMicroUsd + 10_000_000 + 30_000_000 > configuration.limitMicroUsd
     || state.requestCount + 1968 > configuration.requestCap) fail('campaign_unaffordable');
-  return Object.freeze({ version: 'algorithm-development-launch-v1', runtimeCommit: git(['rev-parse', 'HEAD']),
+  const boundFiles = ['runner.mjs', 'transport.mjs', 'launch.mjs', 'requested-answer.mjs', 'coverage.mjs',
+    'test/requested-answer.test.mjs', 'test/requested-answer-runner.test.mjs'];
+  const artifactHashes = prospective ? Object.fromEntries(boundFiles.map(path => [path,
+    hash(readFileSync(new URL(path, import.meta.url)))])) : null;
+  if (prospective) for (const path of ['evaluation/architecture/source-diverse-selection-model.mjs',
+    'evaluation/architecture/test/source-diverse-selection-model.test.mjs', 'docs/plans/source-diverse-qa24.md']) {
+    artifactHashes[path] = hash(readFileSync(join(root, path)));
+  }
+  return Object.freeze({ version: prospective ? 'source-diverse-requested-answer-launch-v1' : 'algorithm-development-launch-v1',
+    ...(prospective ? { treatment: 'source-diverse-v1', armPolicies: { baseline: 'ordinary-v1', full: 'source-diverse-v1' },
+      rubricVersion: corpus.version, model: DEFAULT_MODEL, limits: algorithmLimits, artifactHashes,
+      campaign: { schemaVersion: state.schemaVersion, runId: state.runId, limitMicroUsd: state.limitMicroUsd,
+        requestCap: state.requestCap, configurationSha256: hash(JSON.stringify(configuration)) } } : {}), runtimeCommit: git(['rev-parse', 'HEAD']),
     nodeVersion: process.versions.node, nodeSha256: hash(readFileSync(process.execPath)),
     corpusHashes: corpus.hashes, checkpoint: checkpointOf(state),
     requestMaximum: 1968, reservationMaximumMicroUsd: 10_000_000, protectedMicroUsd: 30_000_000 });
 }
+export const prepareAlgorithmDevelopment = options => prepare(options, false);
+export const prepareRequestedAnswerComparison = options => prepare(options, true);
 
 /** The caller must supply a reviewed prospective manifest and a fresh owned directory. */
-export async function launchAlgorithmDevelopment({ configuration, manifest, outputDirectory, keyProvider,
-  fetchImpl = globalThis.fetch }) {
+async function launch({ configuration, manifest, outputDirectory, keyProvider,
+  fetchImpl = globalThis.fetch }, prospective) {
   if (typeof keyProvider !== 'function' || typeof fetchImpl !== 'function') fail('invalid_launch');
+  const version = prospective ? 'source-diverse-requested-answer-launch-v1' : 'algorithm-development-launch-v1';
+  if (manifest?.version !== version || prospective && (manifest.treatment !== 'source-diverse-v1'
+    || manifest.rubricVersion !== 'algorithm-development-requested-answer-v2')
+    || !prospective && Object.hasOwn(manifest, 'treatment')) fail('manifest_mismatch');
   // Detach operator data before awaiting credential lookup or caller callbacks.
   configuration = structuredClone(configuration);
   manifest = structuredClone(manifest);
-  const observed = await prepareAlgorithmDevelopment({ configuration });
+  const observed = await prepare({ configuration }, prospective);
   if (JSON.stringify(observed) !== JSON.stringify(manifest)) fail('manifest_mismatch');
   const directory = resolve(outputDirectory), identity = lstatSync(directory);
   if (!identity.isDirectory() || identity.isSymbolicLink() || realpathSync(directory) !== directory
@@ -77,6 +97,7 @@ export async function launchAlgorithmDevelopment({ configuration, manifest, outp
     // Only the model-facing half leaves preflight; no evaluator gold reaches the runner.
     const { modelInputs } = await loadDevelopmentFreeze();
     report = await runAlgorithmDevelopmentComparison({ cases: modelInputs, transport,
+      ...(prospective ? { treatment: 'source-diverse-v1' } : {}),
       outputDirectory: directory, onCase: row => persist(`case-${row.id}.json`, row) });
     persist('report.json', report);
     return report;
@@ -87,3 +108,5 @@ export async function launchAlgorithmDevelopment({ configuration, manifest, outp
       closedAt: new Date().toISOString() }); }
   }
 }
+export const launchAlgorithmDevelopment = options => launch(options, false);
+export const launchRequestedAnswerComparison = options => launch(options, true);

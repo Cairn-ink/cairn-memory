@@ -53,6 +53,19 @@ speaker-role projection, old score or paid-run authorization changes. A prospect
 requested-answer/context rubric and new paired baseline are required before any
 future paid comparison; reused development cases are not holdout evidence.
 
+The [prospective requested-answer comparison](plans/source-diverse-qa24.md) adds
+an explicit source-diverse treatment to the existing runner, not a new default
+or a retry/rescore of the closed full-label experiment. Its separately versioned
+rubric requires asked propositions and necessary qualifications; non-scoring
+background/examples do not demand unasked rationale. Original 42 source anchors,
+multi-source sets and safety definitions stay unchanged, with packed support
+judged separately from source-history QA. Effective selection is traced separately
+from raw selector output. Real-core/fake-HTTP controls establish mechanical source
+restoration and retain a later rank-loss negative, not real-model QA gain. No
+new paid answers or scores are produced by this delivery; a later run requires
+reviewed clean code, a new manifest/current budget checkpoint and independent
+blind judgments on a fresh paired baseline using previously seen development data.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
