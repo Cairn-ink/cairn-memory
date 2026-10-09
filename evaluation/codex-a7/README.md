@@ -48,6 +48,15 @@ server receives nothing.
 
 ## Detection (`detect.mjs`)
 
+**Exact approved literals (detector v7).** A command is accepted only if every
+representation of it is byte-identical to a reviewed literal in
+`approved-commands.json`. The representations are the request `cmd`, the
+`exec --json` started and completed lines, the rollout argv and `parsed_cmd`.
+`approve.mjs` rebuilds that file from raw evidence. It runs each literal
+under strace in a synthetic copy of the campaign workspace (`workspace.mjs`)
+and records which files it opens. The shape parser described next is now only a
+diagnostic that adds failures.
+
 **Closed schema and allowlist (detector v5).** `allowlist.mjs` fails closed.
 Both transcripts are checked against a schema enumerated from the 51 runs.
 Every envelope, item type, lifecycle stage and key must be listed. All five

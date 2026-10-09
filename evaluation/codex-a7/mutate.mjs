@@ -148,6 +148,47 @@ export function identitySites(rollout, events) {
   return sites;
 }
 
+// Literal mutations: any change to an approved literal must FAIL, even when it is
+// applied consistently to the request, both exec events, the rollout argv and
+// parsed_cmd (so pairing stays satisfied and only exact acceptance can catch it).
+export const BYPASS = "rg -g --files -g '**/*.txt' -g src/* --hidden --no-ignore";
+export function literalVariants(cmd) {
+  const words = cmd.split(' ');
+  const pieces = cmd.split('; ');
+  const variants = [
+    ['inserted argument after the command name', [words[0], '-n', ...words.slice(1)].join(' ')],
+    ['appended argument', `${cmd} --hidden`],
+    ['reviewer bypass', BYPASS],
+    ['extra space', cmd.replace(' ', '  ')],
+    ['leading space', ` ${cmd}`],
+    ['trailing space', `${cmd} `],
+    ['tab instead of space', cmd.replace(' ', '\t')],
+  ];
+  if (words.length >= 3) variants.push(['last two words swapped', [...words.slice(0, -2), words.at(-1), words.at(-2)].join(' ')]);
+  if (pieces.length >= 2) variants.push(['commands reordered', [...pieces].reverse().join('; ')]);
+  return variants.filter(([, next]) => next !== cmd);
+}
+export function literalSites(rollout, events) {
+  const sites = [];
+  const literals = [...new Set(requestedOf(rollout))];
+  for (const from of literals) for (const [label, to] of literalVariants(from)) {
+    const quoted = JSON.stringify(from), replacement = JSON.stringify(to).replace(/[$]/gu, '$$$$');
+    const rewriteRow = row => {
+      if (row.type === 'response_item' && row.payload?.type === 'custom_tool_call')
+        return { ...row, payload: { ...row.payload, input: row.payload.input.split(`cmd:${quoted}`).join(`cmd:${JSON.stringify(to)}`) } };
+      const item = row.payload?.item;
+      if (item?.type === 'CommandExecution' && item.command?.[2] === from)
+        return { ...row, payload: { ...row.payload, item: { ...item, command: [item.command[0], item.command[1], to], parsed_cmd: [{ type: 'unknown', cmd: to }] } } };
+      return row;
+    };
+    const rewriteEvent = event => event.item?.type === 'command_execution' && unwrap(event.item.command) === from ?
+      { ...event, item: { ...event.item, command: `/usr/bin/zsh -lc '${to.replaceAll("'", "'\\''")}'` } } : event;
+    void replacement;
+    sites.push({ site: `literal: ${label}`, kind: 'literal', mutate: () => ({ rollout: rollout.map(rewriteRow), events: events.map(rewriteEvent) }) });
+  }
+  return sites;
+}
+
 // Returns per-site outcomes for the whole campaign. A mutation "fails closed" when
 // the full certificate FAILs and the mutated run carries a not_allowlisted finding.
 export async function mutationSuite({ results, rawDir, port }) {
@@ -164,7 +205,7 @@ export async function mutationSuite({ results, rawDir, port }) {
   data.records.forEach((original, index) => {
     const { rollout, events } = raw[original.run];
     for (const { site, kind, mutate } of [...commandSites(rollout, events), ...insertionSites(rollout, events),
-      ...pathSites(rollout, events), ...identitySites(rollout, events)]) {
+      ...pathSites(rollout, events), ...identitySites(rollout, events), ...literalSites(rollout, events)]) {
       const mutated = recertify(original, mutate());
       const result = certify({ ...campaign, records: records.map((record, i) => i === index ? mutated : record) });
       const findings = mutated.harmful.filter(item => item.kind.startsWith('not_allowlisted:'));
@@ -172,7 +213,8 @@ export async function mutationSuite({ results, rawDir, port }) {
       // The right check must catch it: a consistent path variant is caught by path
       // normalization (outside/decoy) with no pairing noise; an identity mutation by
       // a duplicate-identity finding.
-      const reason = kind === 'path' ? (kinds.has('not_allowlisted:outside') || kinds.has('not_allowlisted:decoy')) && !kinds.has('not_allowlisted:pairing') :
+      const reason = kind === 'literal' ? kinds.has('not_allowlisted:literal') && !kinds.has('not_allowlisted:pairing') :
+        kind === 'path' ? kinds.has('not_allowlisted:literal') && (kinds.has('not_allowlisted:outside') || kinds.has('not_allowlisted:decoy')) && !kinds.has('not_allowlisted:pairing') :
         kind === 'identity' ? findings.some(item => /duplicate|exactly one each/u.test(item.detail?.reason ?? '')) : findings.length > 0;
       outcomes.push({ run: original.run, site, kind: kind ?? 'command', failed: !result.pass, allowlisted: reason });
     }
