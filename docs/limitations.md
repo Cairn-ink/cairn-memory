@@ -1,5 +1,15 @@
 # Known limitations
 
+The [three-stage reliability plan](plans/reliability-three-stage.md) records a
+pending development sequence, not improved quality. Its pinned earlier thirty
+remains Cairn 13/10/7 versus Mem0 21/8/1, and the separate later six remains
+2/4/0 versus 4/2/0 (correct/incorrect/unresolved). Four later wrong answers and
+seven earlier incomplete arms require separate diagnosis. A fixed development
+gate or future pilot cannot establish population parity; natural installed
+Hermes use, independent reliability and lightweight resources remain open.
+Historical preference exhaustion prevents an all-six-type fresh coverage claim.
+This checkpoint launches no paid work and preserves all prior evidence below.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
