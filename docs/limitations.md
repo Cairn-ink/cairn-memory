@@ -53,6 +53,17 @@ speaker-role projection, old score or paid-run authorization changes. A prospect
 requested-answer/context rubric and new paired baseline are required before any
 future paid comparison; reused development cases are not holdout evidence.
 
+The explicit evaluation [recorded-role evidence projection](plans/source-role-evidence.md)
+preserves validated `user`/`assistant` receipt roles and exact excerpts as JSON
+quoted by the existing answer packer. It does not authenticate the speaker,
+identify a claim's subject, establish adoption or grant execution permission.
+Synthetic real-core tests establish role preservation, shared provenance checks
+and counted whole-unit packing; they do not establish better answers or safety.
+The legacy projection and callers remain unchanged. Added metadata consumes the
+existing token budget and can cause a whole evidence unit to be omitted. No
+closed answer score or unresolved safety judgment is changed, and the separate
+source-linked rank intervention is not included.
+
 The [prospective requested-answer comparison](plans/source-diverse-qa24.md) adds
 an explicit source-diverse treatment to the existing runner, not a new default
 or a retry/rescore of the closed full-label experiment. Its separately versioned
