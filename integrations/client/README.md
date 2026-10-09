@@ -150,10 +150,15 @@ records contain neither boot nor PID namespace. Unsupported lock ownership refus
 before creating any coordination directory, preserving fresh standalone use. Windows pairing is
 unsupported; standalone is unaffected. Real macOS host verification remains with CX-7/A6.
 
-Only `npm test`, `test:pairing` and `test:pairing:golden` add the home guard through an
-environment-only shim before invoking the unchanged `tools/testing/run.mjs`. The shim preserves
-HOME, USERPROFILE, npm cache and arguments. The guard does not rewrite child environments; a caught
-violation still forces that process to fail. Other suite commands and unwrapped demos retain their
+Only `npm test`, `test:pairing`, `test:pairing:golden`, `test:client` and `test:codex` add the
+home guard through an environment-only shim before invoking the unchanged `tools/testing/run.mjs`.
+The shim preserves HOME, USERPROFILE, npm cache and arguments. The one exception is `test:codex`,
+which passes `--isolated-host`. That suite gets a private 0700 HOME whose `.codex` is CODEX_HOME,
+and inherited `CODEX_*` variables are dropped. The guard rejects resolving that home just as it
+rejects the real one. It also fails any process that observes, through `/proc/<pid>/exe`, a
+`codex` executable outside its TMPDIR. A run started inside a Codex session therefore cannot see
+that host. The guard does not rewrite child environments; a caught violation still forces that
+process to fail. Other suite commands and unwrapped demos retain their
 base behavior and retention. Run with synthetic HOME and worktree TMPDIR/cache, as with the other
 tests.
 

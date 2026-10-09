@@ -3,6 +3,14 @@ export { withHeldLock as withHeldDispatch } from "../../client/testing/lock-cont
 import assert from "node:assert/strict";
 import { channel } from "node:diagnostics_channel";
 import { handleHook } from "../hook.mjs";
+import { withLockClock } from "../../client/testing/lock-contention.mjs";
+
+// The hook's wall-clock budget is product behavior, pinned by the A5/A9
+// deadline tests. Tests of what a completed hook does run the real hook on the
+// virtual lock clock: a cold first hook on a slow or busy host must not turn
+// an asserted launch into a budget-expired capture_unavailable.
+export const virtualHook = (t, input, options) =>
+  withLockClock(t, () => handleHook(input, options));
 
 // Observe the real hook through its named channel, without rewriting source or
 // depending on the shape of processHook's arguments. Join work left by the race.

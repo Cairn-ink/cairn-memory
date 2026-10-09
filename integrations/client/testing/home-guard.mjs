@@ -4,9 +4,11 @@ import fs from "node:fs";
 import promises from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { fileURLToPath } from "node:url";
-import { resolve, join } from "node:path";
+import { resolve, join, basename } from "node:path";
 const realHome = process.env.CAIRN_TEST_REAL_HOME;
 if (!realHome) throw new Error("home_guard_requires_real_home_string");
+// An --isolated-host suite's private HOME is no more resolvable than the real one.
+const hostHome = process.env.CAIRN_TEST_HOST_HOME;
 let violated = false;
 process.on("exit", () => {
   if (violated) process.exitCode = 1;
@@ -18,7 +20,7 @@ function violation(message) {
 const originalHome = os.homedir;
 os.homedir = () => {
   const home = originalHome();
-  if (home === realHome) violation("test_resolved_real_home");
+  if (home === realHome || (hostHome && home === hostHome)) violation("test_resolved_real_home");
   return home;
 };
 const originalUserInfo = os.userInfo;
@@ -86,4 +88,25 @@ for (const api of [fs, promises]) {
     }
   }
 }
+// Host detection reads /proc/<pid>/exe. A suite may observe only the fake
+// `codex` executables it creates in its scratch directory, never a real Codex
+// host that happens to be an ancestor of the test run.
+const scratch = (() => {
+  try { return fs.realpathSync(os.tmpdir()); } catch { return resolve(os.tmpdir()); }
+})();
+function observed(path, target) {
+  if (typeof target !== "string" || !/^\/proc\/\d+\/exe$/u.test(String(path))) return target;
+  const executable = target.replace(/ \(deleted\)$/u, "");
+  if (basename(executable) === "codex" && !executable.startsWith(scratch + "/"))
+    violation("test_observed_real_codex_host");
+  return target;
+}
+const readlinkAsync = promises.readlink;
+promises.readlink = async function (path, ...args) {
+  return observed(path, await readlinkAsync.call(this, path, ...args));
+};
+const readlinkSync = fs.readlinkSync;
+fs.readlinkSync = function (path, ...args) {
+  return observed(path, readlinkSync.call(this, path, ...args));
+};
 syncBuiltinESMExports();

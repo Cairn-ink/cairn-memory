@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { appendFile, readFile, writeFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { fixture, header, item, session } from "./helpers.mjs";
-import { handleHook, workerFromHandoff } from "../hook.mjs";
+import { workerFromHandoff } from "../hook.mjs";
 import { clientProjectId } from "../../client/pairing.mjs";
 import { runWorker, resetCapture, establishPauseBoundary } from "../worker.mjs";
 import { createRuntimeGuard } from "../../client/runtime-usage.mjs";
 import { HistoryOracle } from "./history-oracle.mjs";
+import { virtualHook } from "./lock-contention.mjs";
 
 test("review sequence: delayed A hook worker preserves B's first and second turns", async (t) => {
   const f = await fixture(t, { text: header() + item("Sent under A") });
@@ -28,23 +29,24 @@ test("review sequence: delayed A hook worker preserves B's first and second turn
   });
   const worker = (handoff) =>
     workerFromHandoff(handoff, { ...options, guard: f.guard, transport: f.transport });
-  assert.equal((await handleHook(event("Stop", "/synthetic/A"), options)).status, "launched");
+  const hook = (input) => virtualHook(t, input, options);
+  assert.equal((await hook(event("Stop", "/synthetic/A"))).status, "launched");
   await worker(handoffs.shift());
   await appendFile(f.path, item("Old pending A", 1));
-  await handleHook(event("Stop", "/synthetic/A"), options);
+  await hook(event("Stop", "/synthetic/A"));
   const old = handoffs.shift();
   assert.equal(
-    (await handleHook(event("SessionStart", "/synthetic/B"), options)).status,
+    (await hook(event("SessionStart", "/synthetic/B"))).status,
     "binding_changed",
   );
   await appendFile(f.path, item("B first", 2));
   const before = await f.stateBytes();
   assert.equal((await worker(old)).status, "superseded");
   assert.equal(await f.stateBytes(), before);
-  await handleHook(event("Stop", "/synthetic/B"), options);
+  await hook(event("Stop", "/synthetic/B"));
   await worker(handoffs.shift());
   await appendFile(f.path, item("B second", 3));
-  await handleHook(event("Stop", "/synthetic/B"), options);
+  await hook(event("Stop", "/synthetic/B"));
   await worker(handoffs.shift());
   const a = await clientProjectId(clientOptions, "/synthetic/A");
   const b = await clientProjectId(clientOptions, "/synthetic/B");

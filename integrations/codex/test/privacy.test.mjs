@@ -34,8 +34,11 @@ test('A1 actual hook → worker → loopback body, output and private state excl
   });
   const http=await testServer(server,f.ws);
   const cfg=join(f.ws.path,'stub-config.json');
+  // The real hook process runs on the virtual lock clock: a cold first hook on a
+  // slow or busy host must not expire its budget and skip the asserted delivery.
   await writeFile(cfg,JSON.stringify({clientOptions:{home:f.home,root:f.root,usesClaude:false,env:{}},
-    targetId:f.binding.targetId,endpoint:http.endpoint,wire:http.wire}),{mode:0o600});
+    targetId:f.binding.targetId,endpoint:http.endpoint,wire:http.wire,
+    virtualLockClock:true,lockClockResult:join(f.ws.path,'hook-clock.json')}),{mode:0o600});
   const child=spawn(process.execPath,[new URL('./process-stub.mjs',import.meta.url).pathname,'hook',cfg],{stdio:['pipe','pipe','pipe',...(http.wire?['ipc']:[])],env:childEnvironment()});
   if(http.wire)wireChild(child,server);
   let output='',stderr='';child.stdout.on('data',x=>output+=x);child.stderr.on('data',x=>stderr+=x);
