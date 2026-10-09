@@ -33,6 +33,16 @@ This small authored corpus does not establish LongMemEval/Mem0, long-history
 or installed-host performance; future versions remain previously seen
 development data, and no new paid comparison or default change is enabled.
 
+The evaluation-only [bounded evidence-set assembler](plans/bounded-evidence-sets.md)
+is not a default or demonstrated QA gain. Primary's source-bound replay of all
+48 original arm slots found only D11 full-label packed-anchor restoration
+(1/2 to 2/2) and D10 ordinary-label redundant-card exposure (still 2/3);
+ordinary-label D11 stayed at 1/2 because its missing bridge never reached
+ranking. Literal shared identifiers are navigation cues, not proven entity
+identity. This narrow policy is held from a paid rerun pending candidate
+selection/source-diversity work. The original scores and result bytes remain
+untouched.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
