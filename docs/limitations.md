@@ -1,5 +1,15 @@
 # Known limitations
 
+The [three-stage reliability plan](plans/reliability-three-stage.md) records a
+pending development sequence, not improved quality. Its pinned earlier thirty
+remains Cairn 13/10/7 versus Mem0 21/8/1, and the separate later six remains
+2/4/0 versus 4/2/0 (correct/incorrect/unresolved). Four later wrong answers and
+seven earlier incomplete arms require separate diagnosis. A fixed development
+gate or future pilot cannot establish population parity; natural installed
+Hermes use, independent reliability and lightweight resources remain open.
+Historical preference exhaustion prevents an all-six-type fresh coverage claim.
+This checkpoint launches no paid work and preserves all prior evidence below.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
@@ -1401,3 +1411,14 @@ validation, no-install CLI exit status, dry-run MCP queries, non-TTY setup, and
 release/readme wording. This follow-up retains those reviewed behaviors: the
 explicit authorization brief still governs endpoint/TTY/network safety and
 publication is still reserved for chichi.
+
+## Algorithm development comparison preparation (2026-10-10)
+
+The [three-stage plan](plans/reliability-three-stage.md) now has a fixed synthetic
+24-case paired ordinary/full-label selection runner, separate source/rubric
+assets and agreement-only independent judgment aggregation. Offline real-core
+controls establish capture-once, cold-state identity and different selection
+exposure; they do not establish an answer-quality gain. The small conversations
+are not a long-history or official LongMemEval score. Both development arms use
+default selection, not the historical benchmark's complete-map scan shortcut.
+Paid execution and semantic acceptance remain pending at this checkpoint.
