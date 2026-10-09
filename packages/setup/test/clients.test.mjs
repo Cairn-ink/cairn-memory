@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, unlink, readdir, chmod } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, chmod } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +27,7 @@ async function fixture(t, { claude = true, codex = true, qualified = true, auth 
   await writeFile(codexState, JSON.stringify({ version: '0.160.1',
     formatEvidence: fileURLToPath(new URL('../../../integrations/codex/test/fixtures/', import.meta.url)) }));
   async function addClaude() {
-    await writeFile(join(bin, 'claude'), `#!${process.execPath}\nprocess.env.FAKE_STATE=${JSON.stringify(claudeState)};process.env.FAKE_CALLS=${JSON.stringify(claudeCalls)};process.env.FAKE_NATIVE_STORE='true';\n` +
+    await writeFile(join(bin, 'claude'), `#!${process.execPath}\nprocess.env.FAKE_STATE=${JSON.stringify(claudeState)};process.env.FAKE_CALLS=${JSON.stringify(claudeCalls)};\n` +
       await readFile(new URL('./fake-claude.mjs', import.meta.url), 'utf8'), { mode: 0o755 });
   }
   async function addCodex() {
@@ -71,7 +71,7 @@ async function fixture(t, { claude = true, codex = true, qualified = true, auth 
     const code = await new Promise((resolve, reject) => { child.on('error', reject); child.on('close', resolve); });
     clearTimeout(timer);
     for (const text of [stdout, stderr, await readFile(claudeCalls, 'utf8'), await readFile(codexCalls, 'utf8')]) assert.ok(!text.includes(secret));
-    const nativeStores = new Set([join(home, '.claude/.credentials.json'), join(codexHome, 'cairn/credential.json'), join(codexHome, 'config.toml')]);
+    const nativeStores = new Set([ join(codexHome, 'cairn/credential.json'), join(codexHome, 'config.toml')]);
     const audit = async directory => {
       for (const entry of await readdir(directory, { withFileTypes: true })) {
         const path = join(directory, entry.name);
@@ -146,7 +146,7 @@ for (const options of [{}, { claude: true, codex: false }, { claude: false, code
   assert.equal(dry.prompts.length, 0); assert.equal(f.server.requests.length, 0);
   await assert.rejects(readFile(f.installation), { code: 'ENOENT' });
 });
-for (const first of ['claude', 'codex']) test(`rerun adds other tool after ${first}, preserving key without new authorization`, async t => {
+for (const first of ['claude', 'codex']) test(`rerun adds other tool after ${first}, preserving key with ${first === 'claude' ? 'one new approval' : 'no new approval'}`, async t => {
   const f = await fixture(t, { claude: first === 'claude', codex: first === 'codex' });
   const initial = await f.run(); assert.equal(initial.code, 0, initial.stdout);
   let originalKey;
@@ -159,7 +159,7 @@ for (const first of ['claude', 'codex']) test(`rerun adds other tool after ${fir
   await (first === 'claude' ? f.addCodex() : f.addClaude());
   const result = await f.run(); assert.equal(result.code, 0, result.stdout);
   const installed = await assertPaired(f); assert.deepEqual(await readFile(join(installed.root, 'project-key')), originalKey);
-  assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
+  assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, first === 'claude' ? 2 : 1);
 });
 test('unqualified Codex is skipped while Claude completes', async t => {
   const f = await fixture(t, { qualified: false }); const result = await f.run();
@@ -189,9 +189,9 @@ test('rerun can reuse the pre-0.4 Codex hook credential without an installer cac
 });
 
 test('a stored credential API failure stops adding the other tool without a new grant', async t => {
-  const auth = {}, f = await fixture(t, { auth, codex: false });
+  const auth = {}, f = await fixture(t, { auth, claude: false });
   const initial = await f.run(); assert.equal(initial.code, 0, initial.stdout);
-  await f.addCodex();
+  await f.addClaude();
   auth.credentialStatus = 503;
   const result = await f.run(); assert.equal(result.code, 1, result.stdout);
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
@@ -264,6 +264,7 @@ for (const key of ['codex_managed', 'codex_tmpdir', 'codex_state_error', 'comman
     assert.equal(result.code, 0, result.stdout);
     assert.match(result.stdout, lang === 'en' ? /Codex skipped:/ : /略過 Codex：/);
     assert.match(result.stdout, /setup --client codex/);
+    if (lang === 'zh') assert.match(result.stdout, /略過 Codex：[^\n]+。修正此問題後/);
     assert.equal((await f.claudeState()).configured, true);
     await assert.rejects(readFile(f.installation), { code: 'ENOENT' });
   });
@@ -273,6 +274,8 @@ test('Windows has a specific localized Codex skip while Claude continues', async
   const result = await f.run({ choices: { windows: true } });
   assert.equal(result.code, 0, result.stdout);
   assert.match(result.stdout, /Codex skipped: Windows credential-file permissions/);
+  assert.match(result.stdout, /setup --client codex for the manual MCP fallback/);
+  assert.doesNotMatch(result.stdout, /Resolve this issue/);
   assert.equal((await f.claudeState()).configured, true);
 });
 test('Codex-only rerun keeps native credential bytes and starts no new grant', async t => {
@@ -293,12 +296,16 @@ test('Codex-only rerun keeps native credential bytes and starts no new grant', a
 test('both existing credentials are retained without native token writes on rerun', async t => {
   const f = await fixture(t); assert.equal((await f.run()).code, 0);
   const before = (await f.calls()).claude.length;
-  const nativePath = join(f.home, '.claude/.credentials.json'), codexPath = join(f.codexHome, 'cairn/credential.json');
-  const native = await readFile(nativePath), codex = await readFile(codexPath);
+  const codexPath = join(f.codexHome, 'cairn/credential.json');
+  const claude = await f.claudeState(), codex = await readFile(codexPath);
   const result = await f.run(); assert.equal(result.code, 0, result.stdout);
   assert.equal(result.stdout.split('Keeping existing credential').length - 1, 2);
   assert.equal((await f.calls()).claude.slice(before).filter(c => c.keys.includes('api_token')).length, 0);
-  assert.deepEqual(await readFile(nativePath), native); assert.deepEqual(await readFile(codexPath), codex);
+  const after = await f.claudeState();
+  for (const key of ['endpoint', 'configured', 'tokenReceived', 'pairingRecord']) {
+    assert.equal(after[key], claude[key], `Claude ${key} must be kept`);
+  }
+  assert.deepEqual(await readFile(codexPath), codex);
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
 });
 test('explicit Codex retains usesClaude:true refusal for compatible keyless Claude', async t => {
@@ -308,30 +315,11 @@ test('explicit Codex retains usesClaude:true refusal for compatible keyless Clau
   assert.equal(result.code, 1, result.stdout);
   await assert.rejects(readFile(f.installation), { code: 'ENOENT' });
 });
-test('missing native Claude secret refuses addition without replacing existing credentials', async t => {
-  const f = await fixture(t, { codex: false }); assert.equal((await f.run()).code, 0);
-  await unlink(join(f.home, '.claude/.credentials.json')); await f.addCodex();
-  const before = (await f.calls()).claude.length;
-  const result = await f.run(); assert.equal(result.code, 2, result.stdout);
-  assert.match(result.stdout, /--reauthorize/);
-  assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
-  assert.equal((await f.calls()).claude.slice(before).filter(c => c.keys.includes('api_token')).length, 0);
-});
 test('explicit --reauthorize across both tools issues exactly one replacement grant', async t => {
   const f = await fixture(t); assert.equal((await f.run()).code, 0);
   const result = await f.run({ args: ['setup', '--reauthorize', '--endpoint', f.server.endpoint] });
   assert.equal(result.code, 0, result.stdout); await assertPaired(f);
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 2);
-});
-
-test('Claude native-store reuse requires verified memory scopes; broad PAT cannot mint a grant', async t => {
-  const auth = {}, f = await fixture(t, { auth, codex: false });
-  assert.equal((await f.run()).code, 0);
-  auth.legacy = true; await f.addCodex();
-  const result = await f.run(); assert.equal(result.code, 2, result.stdout);
-  assert.match(result.stdout, /--reauthorize/);
-  assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
-  await assert.rejects(readFile(f.installation), { code: 'ENOENT' });
 });
 
 for (const failure of ['native command', 'native JSON', 'unsafe config', 'project TMPDIR', 'MCP endpoint conflict']) test(`actual Codex inspection failure (${failure}) still installs Claude`, async t => {
@@ -381,4 +369,61 @@ test('declining kept Codex allows a new Claude endpoint without replacing Codex'
   const result = await f.run({ args: ['setup', '--endpoint', f.server.endpoint], choices: { codex: 'no' } });
   assert.equal(result.code, 0, result.stdout); assert.equal((await f.claudeState()).configured, true);
   assert.deepEqual(await readFile(path), before);
+});
+
+for (const omitEndpoint of [false, true]) test(`round 3: Claude first needs one approved new grant for Codex (endpoint omitted: ${omitEndpoint})`, async t => {
+  const f = await fixture(t, { codex: false }); assert.equal((await f.run()).code, 0);
+  const old = await f.claudeState(); await f.setClaudeState({ ...old, omitEndpoint });
+  const before = (await f.calls()).claude.length;
+  await f.addCodex();
+  const result = await f.run(); assert.equal(result.code, 0, result.stdout);
+  assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 2);
+  assert.equal(result.stdout.split('browser opened').length - 1, 1);
+  assert.equal((await f.calls()).claude.slice(before).filter(c => c.keys.includes('api_token')).length, 0);
+  assert.equal((await f.claudeState()).endpoint, old.endpoint);
+  assert.match(result.stdout, /Claude first.*one new browser approval/);
+  await assertPaired(f);
+});
+test('round 3: missing Claude endpoint metadata alone never blocks Codex-first reuse', async t => {
+  const f = await fixture(t, { claude: false }); assert.equal((await f.run()).code, 0);
+  await f.addClaude(); await f.setClaudeState({ omitEndpoint: true });
+  const result = await f.run(); assert.equal(result.code, 0, result.stdout); await assertPaired(f);
+  assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
+});
+test('round 3: already configured tools rerun without Claude endpoint metadata or a new grant', async t => {
+  const f = await fixture(t); assert.equal((await f.run()).code, 0);
+  await f.setClaudeState({ ...await f.claudeState(), omitEndpoint: true });
+  const result = await f.run(); assert.equal(result.code, 0, result.stdout); await assertPaired(f);
+  assert.match(result.stdout, /Keeping existing credential/);
+  assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
+});
+for (const lang of ['en', 'zh']) test(`round 3: --reauthorize reports replacement, never kept (${lang})`, async t => {
+  const f = await fixture(t); assert.equal((await f.run()).code, 0);
+  const result = await f.run({ args: ['setup', '--reauthorize', '--endpoint', f.server.endpoint, '--lang', lang] });
+  assert.equal(result.code, 0, result.stdout); await assertPaired(f);
+  assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 2);
+  assert.match(result.stdout, lang === 'en' ? /Replacement credential delivered/ : /已交付換發憑證/);
+  assert.doesNotMatch(result.stdout, /Keeping existing credential|credentials and endpoints were kept|保留既有憑證|已保留憑證與 endpoint/);
+});
+test('round 3: reauthorization defaults to the known Codex endpoint before delivering Claude', async t => {
+  const f = await fixture(t, { claude: false }); assert.equal((await f.run()).code, 0);
+  await f.addClaude();
+  const result = await f.run({ args: ['setup', '--reauthorize'] }); assert.equal(result.code, 0, result.stdout);
+  assert.equal(result.prompts.some(p => /Confirm Cairn endpoint/.test(p.prompt)), false);
+  assert.match(result.stdout, /Replacement credential delivered/);
+  assert.doesNotMatch(result.stdout, /credentials and endpoints were kept|Keeping existing credential/);
+  await assertPaired(f);
+});
+for (const scoped of [false, true]) test(`round 3: dry-run endpoint override previews kept Codex, scoped ${scoped}`, async t => {
+  const f = await fixture(t, { claude: false }); assert.equal((await f.run()).code, 0);
+  const config = await readFile(join(f.codexHome, 'config.toml'));
+  const credential = await readFile(join(f.codexHome, 'cairn/credential.json'));
+  for (const endpoint of [f.server.endpoint, 'https://preview.example']) {
+    const result = await f.run({ args: ['setup', '--dry-run', '--endpoint', endpoint, ...(scoped ? ['--client', 'codex'] : [])], interactive: false });
+    assert.equal(result.code, 0, result.stdout); assert.equal(result.prompts.length, 0);
+    assert.match(result.stdout, /Dry run:/);
+    assert.deepEqual(await readFile(join(f.codexHome, 'config.toml')), config);
+    assert.deepEqual(await readFile(join(f.codexHome, 'cairn/credential.json')), credential);
+  }
+  assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
 });

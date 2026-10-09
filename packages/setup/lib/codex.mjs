@@ -124,7 +124,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     fallback(write, t); automaticStatus(write, t); return 0;
   }
   const home = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
-  if (action === 'setup' && endpointOverride && !flags.includes('--reauthorize')) {
+  if (action === 'setup' && !flags.includes('--dry-run') && endpointOverride && !flags.includes('--reauthorize')) {
     const path = join(home, 'cairn/installation.json');
     const previous = await readInstallation(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
     if (previous && await readCredential(path, previous.endpoint).then(() => true, () => false)) {
@@ -219,7 +219,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
       write(t('codex_enabled', { state: existing.enabled ? t('enabled') : t('disabled') }));
       write(t('codex_credential', { state: credential ? t('configured') : t('unverified') }));
     }
-    if (endpointOverride && usable && endpointOverride !== new URL(transport.url).origin) {
+    if (!flags.includes('--dry-run') && endpointOverride && usable && endpointOverride !== new URL(transport.url).origin) {
       throw new SetupError('codex_endpoint_conflict', 2);
     }
     if (endpointOverride || usable) {

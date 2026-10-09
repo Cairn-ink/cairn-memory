@@ -1,6 +1,5 @@
 import { scryptSync } from 'node:crypto';
-import { appendFileSync, readFileSync, writeFileSync, writeSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { appendFileSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 
 // Write directly to the child descriptors so the recorder does not depend on
 // asynchronous console flushing at process exit.
@@ -50,7 +49,7 @@ else if (command === 'plugin list --json') {
   const configured = state.configured ? ['api_endpoint', 'api_token'] : (state.partial ?? []);
   if (state.pairingRecord) configured.push('pairing_record');
   console.log(JSON.stringify({ configured,
-    unconfigured: ['api_endpoint', 'api_token', 'pairing_record'].filter(key => !configured.includes(key)), inputs: { api_endpoint: state.endpoint, api_token: state.token } }));
+    unconfigured: ['api_endpoint', 'api_token', 'pairing_record'].filter(key => !configured.includes(key)), inputs: { ...(!state.omitEndpoint ? { api_endpoint: state.endpoint } : {}), api_token: state.token } }));
 } else if (command === 'plugin configure cairn-memory@cairn-memory --values-stdin') {
   if (state.interruptConfigure) {
     process.kill(process.ppid, 'SIGINT');
@@ -60,14 +59,6 @@ else if (command === 'plugin list --json') {
   if (values.api_endpoint !== undefined) state.endpoint = values.api_endpoint;
   if (values.pairing_record !== undefined) state.pairingRecord = values.pairing_record;
   if (values.api_token !== undefined) state.configured = !state.incompleteSave;
-  if (values.api_token !== undefined && process.env.FAKE_NATIVE_STORE === 'true') {
-    // Model the tool's own secret store, never an installer credential cache.
-    const directory = join(process.env.HOME, '.claude');
-    mkdirSync(directory, { recursive: true, mode: 0o700 });
-    writeFileSync(join(directory, '.credentials.json'), JSON.stringify({
-      pluginSecrets: { 'cairn-memory@cairn-memory': { api_token: values.api_token } },
-    }), { mode: 0o600 });
-  }
   // A noisy or broken child must never cause the installer to reveal the PAT.
   console.log(values.api_token); console.error(values.api_token);
 } else if (command === 'mcp get cairn') {

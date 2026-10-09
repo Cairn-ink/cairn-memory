@@ -5,11 +5,14 @@
 - Detect Claude Code and Codex in an unscoped setup, disclose each tool's behavior,
   and ask once per tool. Install every agreed, qualified tool with one browser
   authorization and the existing shared project-key/pairing transaction.
-- Reuse the original tool’s checked, memory-scoped browser credential when adding
-  the other tool, with sharing in memory and no extra credential cache. Keep
-  existing credentials/endpoints unless --reauthorize is explicit; refuse
-  conflicting endpoints without overwriting either tool.
-  Keep existing keys, including a Codex standalone key when adding Claude.
+- Never read Claude Code's credential store or import its saved token. First-time
+  dual setup shares one browser approval in memory. Codex-first can reuse its
+  installer-owned credential when adding Claude; Claude-first requires one new
+  browser approval when adding Codex, with Claude's existing credential kept.
+- Treat Claude endpoint values as optional CLI metadata; missing values alone
+  never refuse setup. Keep existing credentials/endpoints unless --reauthorize
+  is explicit, report replacements accurately, and retain endpoint override
+  previews in dry-run. Preserve existing keys, including the Codex standalone key.
   No automatic identity migration when two independent keys already exist.
 - Report both clients with unscoped status. Keep explicit per-client setup,
   status and control flags. Non-TTY unscoped setup never consents or installs;

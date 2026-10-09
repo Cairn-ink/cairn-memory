@@ -338,7 +338,10 @@ export async function main(argv, {
         if (authorization.unsupported) {
           write(t('browser_unsupported'));
           manualToken = true;
-        } else write(t('connected_expiry', { date: new Date(authorization.expiresAt).toLocaleDateString(t.locale) }));
+        } else {
+          write(t('connected_expiry', { date: new Date(authorization.expiresAt).toLocaleDateString(t.locale) }));
+          if (flags.includes('--reauthorize')) write(t('credential_replaced'));
+        }
       }
       if (manualToken) {
         let token;

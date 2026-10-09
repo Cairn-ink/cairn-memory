@@ -1,48 +1,67 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, writeFile, chmod, symlink } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
-import { readClaudeCredential, sharedAuthorization } from '../lib/authorization.mjs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { translator } from '../lib/messages.mjs';
-import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 
-const token = 'synthetic-native-plugin-secret';
-const bytes = JSON.stringify({ pluginSecrets: { 'cairn-memory@cairn-memory': { api_token: token } } });
-test('native Claude Linux store is read-only and refuses symlinks or unsafe modes', async t => {
-  const ws = createTestWorkspace(t, { prefix: 'native-credential-' });
-  const directory = join(ws.path, 'claude'); await mkdir(directory, { mode: 0o700 });
-  const path = join(directory, '.credentials.json'); await writeFile(path, bytes, { mode: 0o600 });
-  const options = { platform: 'linux', env: { CLAUDE_CONFIG_DIR: directory } };
-  assert.deepEqual(await readClaudeCredential('https://example.com', options), { endpoint: 'https://example.com', token });
-  await chmod(path, 0o640);
-  await assert.rejects(readClaudeCredential('https://example.com', options), { key: 'authorization_credential_unavailable', code: 2 });
-  const other = join(ws.path, 'symlinked'); await mkdir(other); await symlink(path, join(other, '.credentials.json'));
-  await assert.rejects(readClaudeCredential('https://example.com', { ...options, env: { CLAUDE_CONFIG_DIR: other } }), { key: 'authorization_credential_unavailable' });
-});
-for (const custom of [false, true]) test(`native macOS keychain read uses only account/service argv (custom: ${custom})`, async () => {
-  const directory = '/synthetic/claude';
-  let args;
-  const result = await readClaudeCredential('https://example.com', { platform: 'darwin',
-    env: { USER: 'fixture-user', ...(custom ? { CLAUDE_CONFIG_DIR: directory } : {}) },
-    keychain: async value => { args = value; return bytes; } });
-  assert.equal(result.token, token);
-  const suffix = custom ? '-' + createHash('sha256').update(directory).digest('hex').slice(0, 8) : '';
-  assert.deepEqual(args, ['find-generic-password', '-a', 'fixture-user', '-w', '-s', 'Claude Code-credentials' + suffix]);
-  assert.ok(!JSON.stringify(args).includes(token));
-});
-test('native-store failure suppresses secret-bearing errors and requires explicit reauthorization', async () => {
-  await assert.rejects(readClaudeCredential('https://example.com', { platform: 'darwin', env: { USER: 'fixture' },
-    keychain: async () => { throw new Error(token); } }), error => {
-    assert.equal(error.key, 'authorization_credential_unavailable'); assert.ok(!error.message.includes(token)); return true;
-  });
+const { sharedAuthorization } = await import(process.env.CAIRN_SETUP_TEST_MODULE ?
+  new URL('./authorization.mjs', process.env.CAIRN_SETUP_TEST_MODULE) : new URL('../lib/authorization.mjs', import.meta.url));
+
+// Split search needles so this whole-package grep does not match itself.
+const forbidden = ['.creden' + 'tials.json', 'find-generic' + '-password',
+  'plugin' + 'Secrets', 'SECURE' + 'STORAGE', 'readClaude' + 'Credential'];
+test('round 3: whole-package grep forbids Claude host secret-store references', async () => {
+  const directory = process.env.CAIRN_SETUP_TEST_PACKAGE || fileURLToPath(new URL('../', import.meta.url));
+  const matches = [];
+  const scan = async path => {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const file = join(path, entry.name);
+      if (entry.isDirectory()) await scan(file);
+      else if (entry.isFile()) {
+        const text = await readFile(file, 'utf8');
+        if (forbidden.some(needle => text.includes(needle))) matches.push(file);
+      }
+    }
+  };
+  await scan(directory);
+  assert.deepEqual(matches, [], 'installer package must never reference a Claude host secret store');
 });
 for (const lang of ['zh', 'en']) test(`shared endpoint refusal is localized (${lang}) and cannot start authorization`, async () => {
-  const authorization = await sharedAuthorization({ stored: { endpoint: 'https://old.example', token },
+  const authorization = await sharedAuthorization({ stored: { endpoint: 'https://old.example', token: 'synthetic-token' },
     authOptions: { request: () => { throw new Error('must not request'); } } });
   await assert.rejects(authorization.authorize('https://new.example', {}), error => {
     assert.equal(error.key, 'authorization_endpoint_conflict'); assert.equal(error.code, 2);
     const text = translator(lang)(error.key); assert.match(text, /--reauthorize/);
     assert.match(text, lang === 'zh' ? /既有 endpoint/ : /endpoints conflict/); return true;
+  });
+});
+test('round 3: documentation states approval direction and prohibits importing Claude secrets', async () => {
+  const packageRoot = process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(process.env.CAIRN_SETUP_TEST_PACKAGE + '/') : new URL('../', import.meta.url);
+  const root = new URL('../../', packageRoot);
+  for (const [url, pattern] of [
+    [new URL('README.md', root), /Claude first[^\n]*one new browser approval/],
+    [new URL('plugins/cairn-memory/README.md', root), /Claude first[^\n]*one new browser approval/],
+    [new URL('docs/codex-setup.md', root), /Claude 先裝[^\n]*一次新的瀏覽器核准/],
+    [new URL('README.md', packageRoot), /Claude first[^\n]*one new browser approval/],
+    [new URL('CHANGELOG.md', root), /Never read Claude Code's credential store/],
+  ]) assert.match(await readFile(url, 'utf8'), pattern, url.pathname);
+});
+for (const lang of ['en', 'zh']) test(`round 3: endpoint conflict after delivery never claims credentials were kept (${lang})`, async () => {
+  const authorization = await sharedAuthorization({ endpoint: 'https://first.example' });
+  await authorization.authorize('https://first.example', {
+    authorization: { authorize: async (endpoint, options) => {
+      await options.save({ api_endpoint: endpoint, api_token: 'synthetic-token' });
+      return { expiresAt: '2027-04-01T00:00:00.000Z' };
+    } }, save: async () => {},
+  });
+  await assert.rejects(authorization.authorize('https://second.example', {}), error => {
+    assert.equal(error.key, 'authorization_delivered_endpoint_conflict');
+    assert.equal(error.code, 2);
+    const text = translator(lang)(error.key);
+    assert.match(text, /--reauthorize/);
+    assert.match(text, lang === 'en' ? /already delivered/ : /已交付憑證/);
+    assert.doesNotMatch(text, /credentials and endpoints were kept|已保留憑證與 endpoint/);
+    return true;
   });
 });

@@ -19,12 +19,20 @@ Installer 0.3.0 was published on 2026-10-10; this checkout prepares 0.4.0,
 awaiting chichi's release approval. Try `node packages/setup/bin/memory.mjs setup`.
 Without `--client`, 0.4.0 detects Claude Code and Codex, discloses each tool's
 behavior and asks once per tool. Both agreed tools share one browser grant and
-project key through the existing pairing transaction. Use `--client claude` to
+project key through the existing pairing transaction. Codex first, Claude added
+later: reuse the installer-owned Codex credential with no new approval.
+Claude first, Codex added later: one new browser approval, explicitly agreed to;
+Claude's existing credential stays. Setup never reads or imports Claude Code's
+native secrets and creates no extra credential cache. Endpoint metadata is
+optional; missing values are treated as unknown and never refuse setup alone.
+Use `--client claude` to
 restrict setup to this plugin. Setup prints the plugin and installer versions
 separately and saves credentials through stdin. Enter the displayed code on
 `/device`; use `--no-browser` to open it yourself or `--client claude --manual-token`
 for hidden PAT paste. Existing credentials and endpoints stay unless
-`--reauthorize` is specified. Legacy MCP removal requires confirmation after
+`--reauthorize` is specified; that run reports replacement. A kept credential plus
+`--endpoint` requires `--reauthorize`, while `setup --dry-run --endpoint X` remains
+a read-only preview. Legacy MCP removal requires confirmation after
 configuration. `setup --dry-run` previews locally; unscoped `status` reports both
 tools. Non-TTY unscoped setup never auto-consents or installs.
 [Installer details](../../packages/setup/README.md)

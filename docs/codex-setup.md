@@ -58,11 +58,17 @@ MCP 是獨立授權：預設保留或新增裸 HTTP entry，提供 `codex mcp lo
 
 0.4.0 省略 `--client` 時會偵測兩個 CLI，逐一揭露並詢問。Claude 預設 `[Y/n]`，Codex `[y/N]`。兩者都同意時，Codex 的同一個問題也確認先退出兩個 host 與背景 capture workers，採用共用 identity；沒有另一個 pairing 步驟。格式未合格的 Codex 會說明並略過，Claude 可繼續，正常 exit 0。只有一個工具則詢問並設定該工具；兩者都找不到時說明需先安裝 CLI。
 
-雙工具共用一次 memory-scoped browser authorization；credential 經各工具原有保存與驗證流程交付，使用現有 `initializePairing`／`completePairing` transaction，不重鑄既有 project key。先裝 Claude 或先裝 Codex，重跑都能加入另一個工具；Codex standalone 的原 key／root 可成為共享 identity。有兩個獨立 key 時拒絕，不自動搬移或 backfill。新配對仍要求啟用且版本 `>=0.1.2 <1.0.0` 的穩定 Claude plugin，並驗證 configure 支援 `pairing_record`。停用外掛保留停用，須先到 `/plugin` 啟用。
+首次同時設定雙工具，共用一次 memory-scoped browser authorization；credential 經各工具原有保存與驗證流程交付，使用現有 `initializePairing`／`completePairing` transaction，不重鑄既有 project key。先裝 Claude 或先裝 Codex，重跑都能加入另一個工具；Codex standalone 的原 key／root 可成為共享 identity。有兩個獨立 key 時拒絕，不自動搬移或 backfill。新配對仍要求啟用且版本 `>=0.1.2 <1.0.0` 的穩定 Claude plugin，並驗證 configure 支援 `pairing_record`。停用外掛保留停用，須先到 `/plugin` 啟用。
 
-預設流程不新增 credential cache；同一次 run 的共享只留在記憶體。重跑原工具會保留自己的 endpoint／credential，不另開 device grant。加入另一個工具時，先用 Claude 的 `configure --json` 取得非敏感 endpoint，必要時只讀原工具的 native credential store（Linux 為 `.claude/.credentials.json` 的 `pluginSecrets`，macOS 為 Claude Code 的 Keychain item），或 Codex 原有的 private hook credential，再查 credential API 確認 memory scopes 與到期日後交付。讀取失敗、broad PAT、未驗證或已拒絕的憑證都不會偷偷換發，會提示 `--reauthorize`。兩者 endpoint 不同會拒絕配對並保留原設定；先對齊 Codex MCP endpoint，再使用 `--endpoint <origin> --reauthorize` 明確換發。對保留憑證指定 `--endpoint` 會 exit 2，要求同時加上 `--reauthorize`。此旗標在雙工具 run 只換發一次。MCP OAuth／PAT 仍獨立。
+預設流程不新增 credential cache，也不讀取或匯入 Claude Code 的 native secret。同一次 run 的共享 token 只留在記憶體，使用既有 pairing transaction 保留 project key。
 
-Codex inspection 失敗會印出本地化原因與 `setup --client codex` 修復指引，Claude 繼續設定。Windows 會明說 native credential 權限尚未驗收。只有 Codex 且格式未合格時，保留 MCP-only fallback，明確同意後才保存 MCP PAT；自動 hooks 維持關閉。
+- 首次同時選擇兩個工具：一次瀏覽器核准，token 交給兩個工具各自保存。
+- Codex 先裝、之後加 Claude：讀取安裝器保存的 `~/.codex/cairn/credential.json`（自訂 `CODEX_HOME` 時使用該目錄），查 credential API 確認 memory scopes 與到期日後重用，不另核准。
+- Claude 先裝、之後加 Codex：需要你同意一次新的瀏覽器核准，保留 Claude 原憑證；不匯入它的 saved token。這項差異會在工具同意問題前說明。
+
+Claude 的 `configure --json` 若有回傳非敏感 endpoint 就使用，沒有回傳則視為未知，不因此 exit 2。請確認兩個工具使用同一帳號與 endpoint。已知 endpoint 不同會拒絕配對，保留原設定；先對齊 Codex MCP endpoint，再以 `--endpoint <origin> --reauthorize` 明確換發。保留憑證時指定 `--endpoint` 會 exit 2，要求加上 `--reauthorize`；`setup --dry-run --endpoint X` 則保持唯讀預演、exit 0。重新授權會顯示換發訊息，沒有 override 時沿用已知 Codex endpoint，雙工具 run 只走一次新的 browser approval。無法驗證的 Codex 既有憑證不會偷偷換發。MCP OAuth／PAT 仍獨立。
+
+Codex inspection 失敗會印出本地化原因與 `setup --client codex` 修復指引，Claude 繼續設定。Windows 會明說 credential 檔案權限尚未驗收，並指向 `setup --client codex` 的 MCP 手動 fallback。只有 Codex 且格式未合格時，保留 MCP-only fallback，明確同意後才保存 MCP PAT；自動 hooks 維持關閉。
 
 非 TTY 的預設 `setup` 不會詢問、安裝或授權，有偵測到工具時 exit 2；`status` 與 `setup --dry-run` 可使用。`--client claude|codex` 維持單工具規則，`disable`／`uninstall`／`pause`／`resume` 維持 per-client flags。預設 `status` 回報兩者，包含缺少 CLI 的訊息。Explicit Codex-only setup 保留原有 pairing／standalone 行為；不會替 Claude 更新 marketplace。
 

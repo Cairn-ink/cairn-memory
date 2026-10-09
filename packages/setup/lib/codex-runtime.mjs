@@ -485,6 +485,7 @@ export async function setupInstalledCodex(context) {
         noBrowser:flags.includes('--no-browser'),noClipboard:flags.includes('--no-clipboard')});
       if (result.unsupported) throw new SetupError('codex_browser_required');
       write(t('connected_expiry',{date:new Date(result.expiresAt).toLocaleDateString(t.locale)}));
+      if (flags.includes('--reauthorize')) write(t('credential_replaced'));
     } else write(t('credential_kept'));
     let mcpText = before.text;
     phase = 'mcp_validation';

@@ -35,12 +35,15 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
 - [ ] Resolve any failed or environment-limited checks before release.
 - [ ] Verify all setup cases in private temporary homes: both tools, Claude-only,
   Codex-only, neither, declining either/both, non-TTY, rerun adding the other in
-  both directions, and unqualified Codex. One browser grant and equal project IDs
-  must be asserted. Keep frozen runtime/A7 inputs and plugin version unchanged.
+  both directions, and unqualified Codex. Assert one browser grant for initial
+  dual setup and equal project IDs. Codex-first reuse needs no new approval;
+  Claude-first adds exactly one approved grant when adding Codex. Keep frozen runtime/A7 inputs and plugin version unchanged.
   Non-TTY unscoped setup never consents or installs; status/dry-run remain usable.
   Verify kept credentials/endpoints, endpoint overrides requiring --reauthorize,
-  conflicting endpoints, each localized Codex inspection failure, native-store
-  reuse without an extra cache, and unqualified Codex-only MCP fallback.
+  conflicting endpoints, each localized Codex inspection failure, Codex credential
+  reuse without an extra cache, Claude-first new approval without opening its
+  host secret store, and Codex-only MCP fallback. Check optional Claude endpoint
+  metadata, dry-run overrides and accurate reauthorization messages.
 - [ ] Use a fresh private TMPDIR (`mktemp -d`, mode 0700), then remove it.
   Do not read/write real `~/.claude`, `~/.codex` or credentials.
 - [ ] Build and inspect the archive from `packages/setup`. Run `npm pack --dry-run`

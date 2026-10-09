@@ -1,5 +1,5 @@
 import { availableClient, setupCodex } from './codex.mjs';
-import { sharedAuthorization, readClaudeCredential, readCodexCredential } from './authorization.mjs';
+import { sharedAuthorization, readCodexCredential } from './authorization.mjs';
 
 const setupFlags = ['--dry-run', '--no-browser', '--manual-token', '--reauthorize', '--no-clipboard'];
 const affirmative = answer => /^(?:y|yes)$/iu.test(answer.trim());
@@ -31,7 +31,7 @@ export async function setupDetected(argv, context) {
     write(t('client_heading', { client }));
     if (client === 'codex') {
       if (process.platform === 'win32') {
-        write(t('codex_inspection_skipped', { reason: t('codex_windows') }));
+        write(t('codex_windows_skipped'));
         continue;
       }
       try {
@@ -40,12 +40,13 @@ export async function setupDetected(argv, context) {
           // An override is checked against kept credentials after consent, so
           // declining Codex does not prevent setting up a new Claude client.
           ...(codexCredential?.token && !flags.includes('--reauthorize') ? {endpointOverride:undefined} : {}) });
-        if (codexVerdict.reason === 'codex_windows') throw new SetupError('codex_windows');
+        if (codexVerdict.reason === 'codex_windows') { write(t('codex_windows_skipped')); continue; }
       } catch (error) {
         if (error.key === 'endpoint_reauthorize') throw error;
         // Native errors and output may contain secrets. Only localized known
         // SetupError reasons are safe to show; Claude remains independent.
-        write(t('codex_inspection_skipped', { reason: error instanceof SetupError ? t(error.key, error.params) : t('codex_failed') }));
+        const reason = error instanceof SetupError ? t(error.key, error.params) : t('codex_failed');
+        write(t('codex_inspection_skipped', { reason: t.locale === 'zh-TW' ? reason.replace(/[。\s]+$/u, '') + '。' : reason }));
         continue;
       }
       if (!codexVerdict.qualified) {
@@ -78,25 +79,23 @@ export async function setupDetected(argv, context) {
     throw new SetupError('endpoint_reauthorize', 2);
   }
   if (shared && !fallback) {
-    let stored, existingEndpoint;
+    const metadata = await context.inspectClaude();
+    const claudeReady = metadata && ['api_endpoint', 'api_token'].every(key => metadata.configured.includes(key));
+    // Endpoint values are optional CLI metadata; presence alone is sufficient
+    // to keep Claude's existing configuration without opening its secret store.
+    const claudeEndpoint = context.validEndpoint(metadata?.inputs?.api_endpoint) ? metadata.inputs.api_endpoint : undefined;
+    const codexEndpoint = codexCredential?.endpoint ?? codexVerdict.endpoint;
     if (!reauthorize) {
-      const metadata = await context.inspectClaude();
-      const claudeReady = metadata && ['api_endpoint', 'api_token'].every(key => metadata.configured.includes(key));
       if (claudeReady && endpointOverride) throw new SetupError('endpoint_reauthorize', 2);
       if (metadata?.configured.includes('api_token') && !claudeReady) throw new SetupError('credential_endpoint_unset', 2);
-      const claudeEndpoint = metadata?.configured.includes('api_endpoint') ? metadata.inputs?.api_endpoint : undefined;
-      if (claudeReady && !context.validEndpoint(claudeEndpoint)) throw new SetupError('authorization_credential_unavailable', 2);
-      const codexEndpoint = codexCredential?.endpoint ?? codexVerdict.endpoint;
-      existingEndpoint = claudeEndpoint ?? codexEndpoint;
       if (claudeEndpoint && codexEndpoint && claudeEndpoint !== codexEndpoint) {
         throw new SetupError('authorization_endpoint_conflict', 2);
       }
-      // Read the Claude secret only when delivery to a new Codex needs it.
-      // If both tools already have credentials, leave both untouched.
-      if (claudeReady && !codexCredential?.token) stored = await readClaudeCredential(claudeEndpoint, { env: context.env });
-      else if (!claudeReady && codexCredential?.token) stored = codexCredential;
-      else if (codexCredential?.token) stored = codexCredential;
     }
+    // Only Codex's installer-owned credential can be reused across runs.
+    // Claude-first requires the newly consenting Codex to approve a new grant.
+    const stored = !reauthorize && codexCredential?.token ? codexCredential : undefined;
+    const existingEndpoint = endpointOverride ?? (reauthorize ? codexEndpoint ?? claudeEndpoint : claudeEndpoint ?? codexEndpoint);
     if (flags.includes('--manual-token')) throw new SetupError('authorization_manual_unsupported', 2);
     const authorization = await sharedAuthorization({ stored, endpoint: existingEndpoint, authOptions, signal: context.signal });
     authOptions = { ...authOptions, authorization };

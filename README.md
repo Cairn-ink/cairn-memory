@@ -255,18 +255,26 @@ Both use one memory-scoped browser grant and the existing pairing transaction;
 no separate pairing step is shown. Enter the displayed code at the bare `/device`
 URL and allow the request. New browser credentials last 180 days.
 
-Use `setup --client claude` or `setup --client codex` to restrict a run. Re-running
-unscoped setup adds the other tool, retaining the existing key and reusing a valid
-stored browser credential after credential validation. Sharing stays in memory;
-credentials remain in each tool's own store, with no extra installer cache.
-Existing credentials and endpoints stay unless `--reauthorize` is specified.
-An endpoint override with a kept credential exits 2 and requires `--reauthorize`.
-Conflicting endpoints refuse pairing; align Codex's MCP configuration and
-explicitly authorize the chosen endpoint. `--reauthorize` obtains one replacement
-grant for the shared run. Single-client `--manual-token` retains PAT semantics;
-shared automatic hooks require browser authorization, and broad PATs never
-supply hook credentials. If Codex is the only tool and its format is unqualified,
-setup retains its MCP-only fallback after explicit consent.
+Use `setup --client claude` or `setup --client codex` to restrict a run.
+Choose both tools initially: one browser approval shares the token in memory.
+Codex first, Claude added later: validate and reuse the installer-owned Codex
+credential (`~/.codex/cairn/credential.json`), with no new approval.
+Claude first, Codex added later: one new browser approval, agreed to in setup;
+Claude's existing credential stays. Setup never reads or imports Claude Code's
+native secrets, and creates no extra credential cache. All paths retain the
+existing project key through the same pairing transaction.
+
+Claude's endpoint value from `configure --json` is optional: use it when returned,
+otherwise treat it as unknown and confirm that both tools use the same account
+and endpoint. Missing metadata alone never refuses setup. Known conflicting
+endpoints refuse pairing; align Codex MCP configuration and explicitly authorize
+the chosen endpoint with `--reauthorize`. A kept credential plus `--endpoint`
+requires that flag (exit 2); `setup --dry-run --endpoint X` remains a read-only
+preview with exit 0. Reauthorization reports the replacement and defaults to the
+known Codex endpoint when no override is supplied. Single-client `--manual-token`
+retains PAT semantics; shared automatic hooks require browser authorization.
+If Codex alone has an unqualified format, setup retains its MCP-only fallback
+after explicit consent.
 
 Unscoped `status` reports both tools, including missing CLIs. Unscoped non-TTY
 `setup` does not consent, authorize or install (exit 2 if a tool is detected);

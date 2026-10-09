@@ -34,20 +34,29 @@ Codex 格式未合格會略過，Claude 可繼續。`status` 預設回報兩者�
 
 Unscoped non-TTY setup never auto-consents or installs (exit 2 when a tool is
 detected). Status/dry-run are prompt-free and remain available. Explicit per-client
-flows keep their existing TTY/fallback rules. Sharing is in memory only; credentials
-remain in each tool's own store with no additional installer cache. Reruns keep
-existing credentials and endpoints. Adding the other tool reads the original
-Claude native store (Linux pluginSecrets file or macOS Keychain) or Codex hook
-credential, verifies memory scopes/expiry, and reuses it without another grant.
-Unreadable or unsuitable credentials require explicit `--reauthorize`; they are
-never silently replaced. Conflicting endpoints refuse pairing. Align Codex MCP
-configuration, then use `--endpoint <origin> --reauthorize`. An endpoint override
-with a kept credential exits 2 and requires `--reauthorize`.
+flows keep their existing TTY/fallback rules. Setup never reads or imports Claude
+Code's native secrets, and creates no additional credential cache.
+
+Choose both tools initially: one browser approval, sharing the token in memory.
+Codex first, Claude added later: validate and reuse the installer-owned Codex
+credential in `$CODEX_HOME/cairn/credential.json`, with no new approval.
+Claude first, Codex added later: one new browser approval, explicitly agreed to;
+Claude's existing credential stays. All three flows retain the shared project key.
+
+Claude endpoint values from `configure --json` are optional. Use a returned value,
+otherwise treat it as unknown; absent metadata alone never refuses setup.
+Confirm the same account and endpoint in both tools. Known conflicts refuse
+pairing. Align Codex MCP configuration, then explicitly use `--reauthorize`.
+`--endpoint` with a kept credential requires that flag (exit 2), while
+`setup --dry-run --endpoint X` still previews locally with exit 0.
+Reauthorization reports a replacement, and defaults to the known Codex endpoint.
 
 非 TTY 的預設 setup 不會代為同意或安裝；有偵測到工具時 exit 2。
-共享只留在記憶體，不新增憑證 cache；重跑保留各工具原有 endpoint／credential。
-加入另一個工具時只讀原工具保存的憑證，驗證 scopes 與到期日後交付。
-不相容的 endpoint 會拒絕配對；換發必須明確使用 `--reauthorize`。
+首次一起設定只核准一次，token 只在本次 run 的記憶體共用。
+Codex 先裝、之後加 Claude，重用安裝器保存的 Codex 憑證，不另核准。
+Claude 先裝、之後加 Codex，要同意一次新的瀏覽器核准；Claude 原憑證保留。
+安裝器不讀取或匯入 Claude native secret，不新增憑證 cache。
+CLI 沒回傳 Claude endpoint 時視為未知，不因此拒絕設定。
 Codex 檢查失敗會說明原因並提示 `setup --client codex`，Claude 可繼續。
 只有未合格 Codex 時，明確同意後仍可走 MCP-only fallback，自動 hooks 不啟用。
 
