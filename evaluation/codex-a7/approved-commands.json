@@ -10,8 +10,10 @@
     ".git/"
   ],
   "outputPolicy": {
-    "gitObjects": "exact",
-    "proposed": "stable-plus-variable"
+    "gitObjects": "stable-plus-variable",
+    "approvedBy": "coordinator",
+    "approvedOn": "2026-10-09",
+    "rationale": "Git object entries are file names listed by rg --files, never read. Every non-object line must be identical; the 5 stable objects (the reviewed README.md, package.json, src/index.js and src/index.test.js blobs and the src tree, verified with git hash-object) must all be present; exactly 3 additional distinct object-format names are allowed: the decoy blob (per-run random content), the root tree and the timestamped commit, which are deterministic consequences of the per-run decoy and commit time."
   },
   "simulation": {
     "tool": "strace -f open/openat/openat2",

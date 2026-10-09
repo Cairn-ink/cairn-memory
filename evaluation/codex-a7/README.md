@@ -54,8 +54,9 @@ must match it: the rollout `stdout`/`aggregated_output`/`formatted_output`,
 `exec --json` `aggregated_output` and the code-mode tool-output parts. Only
 `$REPO` and `rg --files` line order are normalized. This is the layout proof.
 `outputPolicy.gitObjects` in `approved-commands.json` decides how per-run
-`.git` object names compare. The default, `exact`, is under review; see
-RESULTS.md, round 8.
+`.git` object names compare. It is `stable-plus-variable`, approved by the
+coordinator on 2026-10-09: the 5 reviewed objects must be present, plus exactly
+3 distinct per-run names. See RESULTS.md, round 9.
 
 **Exact approved literals (detector v7).** A command is accepted only if every
 representation of it is byte-identical to a reviewed literal in

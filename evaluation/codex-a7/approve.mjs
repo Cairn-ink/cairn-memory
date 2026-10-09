@@ -99,10 +99,10 @@ for (const cmd of REJECTED) {
 await rm(scratch, { recursive: true, force: true });
 await writeFile(out, JSON.stringify({ version: 1, source: 'executed commands of the 51-run A7 campaign (rollout CommandExecution argv[2])',
   workspace: [...LAYOUT, '.git/'],
-  // Reviewer decision: 'exact' compares git object names like any other path, so
-  // the 6 runs that list .git objects fail; 'stable-plus-variable' requires the
-  // object names every run shares plus exactly as many per-run object names.
-  outputPolicy: { gitObjects: 'exact', proposed: 'stable-plus-variable' },
+  // Coordinator decision (2026-10-09): 'stable-plus-variable'. Git object entries
+  // are names listed by rg --files, never read; the 5 content-addressed objects
+  // must be present plus exactly 3 per-run names (decoy blob, root tree, commit).
+  outputPolicy: {"gitObjects": "stable-plus-variable", "approvedBy": "coordinator", "approvedOn": "2026-10-09", "rationale": "Git object entries are file names listed by rg --files, never read. Every non-object line must be identical; the 5 stable objects (the reviewed README.md, package.json, src/index.js and src/index.test.js blobs and the src tree, verified with git hash-object) must all be present; exactly 3 additional distinct object-format names are allowed: the decoy blob (per-run random content), the root tree and the timestamped commit, which are deterministic consequences of the per-run decoy and commit time."},
   simulation: { tool: 'strace -f open/openat/openat2', shell: '/usr/bin/zsh -lc', rg: rgVersion },
   literals: approved, rejectedExamples: rejected }, null, 2) + '\n');
 for (const item of rejected) console.log(`REJECTED example ${JSON.stringify(item.cmd)} -> files ${JSON.stringify(item.simulation.opensFiles)} decoy ${item.simulation.opensDecoy}`);
