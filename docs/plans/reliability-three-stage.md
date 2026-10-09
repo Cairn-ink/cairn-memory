@@ -192,6 +192,90 @@ a red-capable reproduction packet, unknowns and a bounded intervention recommend
 
 ## Stage 2: fixed development selection, not a parity claim
 
+### First comparison execution contract (2026-10-10)
+
+The owner approved proceeding and made algorithm/answer quality the short-term
+priority. The Stage 1 packet is reviewed in #378 (base for this dependent branch
+`1139d453bb835c8479884fceac0d1b7bd4baad29`); it is not yet merged. First compare
+ordinary selection labels with the existing bounded full-label wrapper, without
+changing capture, model, prompts, ranking, candidate IDs, recall limits or defaults.
+This is a synthetic development comparison, not a new official benchmark score.
+The earlier P8/P10 offline-only wording describes the delivered Stage 1 packet;
+this separately approved comparison permits bounded paid work only after B6/B7.
+
+- A1–A7 corpus packet: exactly the 24 variants below, realistic fresh synthetic
+  sessions; separate source-only inputs and evaluator-only gold/anchors; validated
+  exact spans; no held-out data; freeze independently before model execution.
+- B1: Capture each case once through the real core/adapter with indexed source
+  evidence. Close and reopen the same immutable captured state for both arms.
+  Use normal default-selection recall (no `selectionMode` override), the bounded
+  keyset candidate policy, six-unit limit and existing source-only answer packer.
+  Alternate baseline/treatment order by ordinal; one attempt per arm, no retries.
+- B2: Full-label selection is the only intervention. Record the real model-visible
+  candidate identities/order, label bytes and stage outputs. Distinguish identical
+  first inputs from later divergent navigation; no oracle IDs enter model calls.
+- B3: Retain capture, selection, recall and packed-source evidence and all failures
+  over N=24. Capture failures make both downstream arms unresolved, not replaced.
+  Two independent nonauthor blind judgments use the frozen rubric; unresolved
+  disagreement receives no correct credit. Stage-specific anchor coverage and
+  safety counts are scored separately from answer quality.
+  This run uses agreement-only scoring with no adjudication: retain each judge's
+  claim counts separately, and block advancement on unknown/disagreed question-
+  level unsupported, stale or severe classifications. Missing judgments count
+  unresolved. Blind labels conceal arm identity from both same-family reviewers;
+  their agreement is not independent human ground truth. The targeted metric is
+  exact required-source-anchor coverage in packed source text, normalized using
+  the existing source normalizer, over every frozen positive anchor (not only
+  completed cases). It must increase; literal presence is not semantic support.
+- B4: Pin the existing `gpt-4.1-mini-2025-04-14` benchmark model to isolate the
+  algorithm factor; GPT-6.1 Sol/high is the implementation/review agent, not a
+  silently substituted evaluated model. No external database service.
+- B5: Reuse the original existing-only bound ledger, exact adapter serialization
+  and answer protocol. Maximum 40 core model calls plus two answers per case,
+  1,968 HTTP requests total, US$10 conservative reservation; 6,000 local input
+  tokens, 7,024 provider count ceiling, 1,024 core / 512 answer output tokens.
+  Per physical request timeout 200 seconds, per case 20 minutes, run 8 hours.
+  These are outer bounds: unchanged public-main core logical calls still have
+  their 30-second default. The transport does not extend that core deadline.
+  No retry; overflow/timeout retained, accounting/authentication anomalies stop.
+  The US$400 cumulative ceiling and US$30 protection remain unchanged.
+- B6: Before any key lookup/network, freeze reviewed corpus/rubric, runner,
+  transport, runtime, order, resource caps and one-shot output marker; inspect
+  live affordability. Do not reset/refund reservations or reopen old operations.
+- B7: Offline tests exercise both real-core arms, cold-state identity, failures,
+  no-gold boundary, request accounting and cleanup. Primary verifies on both
+  supported Nodes and obtains independent Standards/Spec reviews before paid use.
+  Promote only under the unchanged Stage 2 gain/safety/resource gates below.
+
+Read-only budget check on 2026-10-10 found 55,389 reservations, US$321.282281
+reserved, no pending attempts, open ledger. US$48.717719 is available outside the
+protected US$30 at that checkpoint, not dispatch authority or an invoice.
+Primary owns integration and execution; a bounded GPT-6.1 Sol/high worker owns
+the corpus/rubric, and a separate bounded worker owns runner/transport code.
+No historical cleanup, source-retention expansion, merge, release or deployment.
+
+Pre-execution corrections: the first synthetic integration showed that
+`bounded-source-scan` bypasses select on a complete small candidate map. Both
+arms therefore use the core's ordinary default selector; otherwise this small
+corpus would not exercise the proposed intervention. This is not a replay of
+the historical mixed-benchmark profile. Independent rubric review also found
+one question supplying its own cross-session key (D11), four over-demanding
+answer requirements (D03/07/15/18), and incomplete required-anchor spans
+(D09/12/19). Those are corrected before any model output; initial prospective
+hashes are superseded rather than presented as an executed freeze. No paid call
+or answer observation informed these corrections.
+
+The corrected prospective corpus has 24 cases, 42 positive required anchors,
+and canonical hashes: inputs `56f0db72471781497872cdf757c9f9db45772a334198e9e26ac1b4dd947215ac`,
+rubric `c40952734852e01072185939c51f54efa8238d5fa1b44259bf3964b8088ce4f5`,
+combined `926bc92a1628924167fe1c77d5de6eb8234a4f52dd3b215e88c535bea7d8a5df`.
+The two bounded GPT-6.1 Sol/high workers delivered corpus/aggregation and
+runner/transport respectively. Primary integrated the explicit one-shot launcher
+and existing CI job, inspected the real diff, and reran the combined 28-test
+offline suite on both Nodes (actual exit 0 each). The unchanged generic suite
+passed 623/623 on both (actual exit 0 each). Final fixed-diff reviews and clean-
+candidate launcher smoke precede any paid execution; no semantic result yet.
+
 Freeze 24 questions, four in each family, before treatment observations. Each
 listed variant contributes one question; publish every slot and family count.
 

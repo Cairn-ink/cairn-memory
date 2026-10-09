@@ -1411,3 +1411,14 @@ validation, no-install CLI exit status, dry-run MCP queries, non-TTY setup, and
 release/readme wording. This follow-up retains those reviewed behaviors: the
 explicit authorization brief still governs endpoint/TTY/network safety and
 publication is still reserved for chichi.
+
+## Algorithm development comparison preparation (2026-10-10)
+
+The [three-stage plan](plans/reliability-three-stage.md) now has a fixed synthetic
+24-case paired ordinary/full-label selection runner, separate source/rubric
+assets and agreement-only independent judgment aggregation. Offline real-core
+controls establish capture-once, cold-state identity and different selection
+exposure; they do not establish an answer-quality gain. The small conversations
+are not a long-history or official LongMemEval score. Both development arms use
+default selection, not the historical benchmark's complete-map scan shortcut.
+Paid execution and semantic acceptance remain pending at this checkpoint.
