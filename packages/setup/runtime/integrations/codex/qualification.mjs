@@ -16,8 +16,10 @@ function sort(value) {
 }
 export const fingerprint = evidence => sha(canonical(evidence));
 // Frozen from the native 0.160.1/0.161.0 evidence, including transitive $refs.
-// 0.162.0 adds MessagePhase.partial_answer and is deliberately NOT accepted.
-export const KNOWN_FORMATS = Object.freeze(['a64741d8899f84513232c3145595ed279325abfdf190b7705b94dcb81b14ab1a']);
+// 0.162.0 adds stable partial_answer messages; native history readback and
+// canonical item_completed capture are frozen separately from the A7 evidence.
+export const KNOWN_FORMATS = Object.freeze(['a64741d8899f84513232c3145595ed279325abfdf190b7705b94dcb81b14ab1a',
+  '66fc10979c1594fdb2ba648983d36f10f2c4c1b33c01afe853ba92925b707b87']);
 const policy = sha(canonical(KNOWN_FORMATS));
 export const validVersion = value => typeof value==='string' && /^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?$/u.test(value) && value.length<=100;
 export async function binaryIdentity(binaryPath) {

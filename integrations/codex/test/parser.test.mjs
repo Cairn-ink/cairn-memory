@@ -28,8 +28,8 @@ test('0.160.1 binary evidence is immutable and qualifies exactly the observed pa
   assert.equal(output.definitions.UserPromptSubmitHookSpecificOutputWire.properties.additionalContext.type,'string');
 });
 test('exact creator and installed-host pins refuse unknown patches and new minors',()=>{
-  assert.deepEqual(QUALIFIED_CREATORS,['0.157.1','0.160.1','0.161.0']);assert.equal(qualifiedHost('0.160.1'),true);
-  for (const version of ['0.160.0','0.160.2','0.160.99','0.162.0','0.160.1-dev','unknown']) {
+  assert.deepEqual(QUALIFIED_CREATORS,['0.157.1','0.160.1','0.161.0','0.162.0']);assert.equal(qualifiedHost('0.160.1'),true);
+  for (const version of ['0.160.0','0.160.2','0.160.99','0.163.0','0.160.1-dev','unknown']) {
     assert.equal(qualifiedHost(version),false);
     const row=JSON.parse(lines[0]);row.payload.cli_version=version;
     assert.throws(()=>verifyHeader(Buffer.from(JSON.stringify(row)),sessionId),/unsupported_format/);

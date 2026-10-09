@@ -15,11 +15,11 @@
     "user-prompt-submit.command.output"
   ],
   "network": false,
-  "note": "Type/schema evidence only; transcript serialization and native context placement need separate synthetic host evidence.",
-  "qualified": false,
-  "source": "installed native binary only; no config, sessions, network or model calls",
-  "fixtureScope": "Synthetic canonical capture records derived from schemas/serde markers; NOT a native rollout or model observation.",
-  "comparison": "MessagePhase adds partial_answer (capture rejects it); ThreadItem.SubAgentActivity adds model/reasoningEffort (excluded from capture); all eight hook schemas are identical. Fail closed for capture AND recall.",
+  "note": "Native schema evidence plus a separate no-model synthetic history readback probe; native context placement/model behavior is not exercised.",
+  "qualified": true,
+  "source": "Installed native binary schemas plus private synthetic rollout history readback; no real config/sessions or model calls",
+  "fixtureScope": "Native 0.162.0 history readback of schema/serde-shaped synthetic disk rollouts. Header/assistant/input events are seeded, not model-generated. Native resume appended thread_settings_applied. No turn/start or model calls.",
+  "comparison": "MessagePhase.partial_answer is stable independent text: native retains completed partial and final items in order. Capture uses item_completed once, excludes mirrors/starts/deltas, and refuses unknown phases. SubAgentActivity model/reasoningEffort remain excluded. All eight hook schemas are unchanged.",
   "context": "Schema only: additionalContext wire unchanged. Native placement/model behavior not exercised; A7 must be rerun if delivery/placement changes.",
   "files": [
     {
@@ -71,8 +71,45 @@
       "sha256": "12a741340d3a5acaf139721ad086d79d6dc0d961f752c6d82bd7a315f374e641"
     },
     {
+      "path": "partial-final-0.162.0.jsonl",
+      "sha256": "0a2890dd526f24672ed8007722ad2380be2aaf254ff9863632a350f3dc41c0eb"
+    },
+    {
+      "path": "partial-interrupted-0.162.0.jsonl",
+      "sha256": "2bca4752294c06ef7663e7967bbd9c8a20934347227b93343efcd1206ad4434c"
+    },
+    {
+      "path": "partial-unknown-0.162.0.jsonl",
+      "sha256": "99247dfde39e72b03c7dccb7eafb156f268fcf4c2a2c5ce56e73d402a5b90ecc"
+    },
+    {
+      "path": "phase-0.162.0-native-read.json",
+      "sha256": "2cbddd48a21bdc51dd92c61ffc18a48f946e3ccdbd5943d858c433bffc439867"
+    },
+    {
       "path": "primary-0.162.0.jsonl",
       "sha256": "04bbd0b1d843de5ce2b51cbd4f23780038c6be37ad838c6d18b6da1a44e771fd"
     }
-  ]
+  ],
+  "nativePhaseProbe": {
+    "script": "scripts/probe-codex-phases.mjs",
+    "scriptSha256": "f6bccc7952876fced06e82df3d22e1c7e73e4e56d0c5d1209ab28c5218cca953",
+    "nativeExitCodes": [
+      0,
+      0
+    ],
+    "modelCalls": 0,
+    "methods": [
+      "initialize",
+      "thread/items/list",
+      "thread/resume",
+      "thread/start",
+      "thread/turns/list"
+    ],
+    "cases": [
+      "partial-final: retains completed partial and final independently",
+      "interrupted: retains completed partial, omits unfinished item",
+      "unknown: native skips invalid phase; plugin fails whole scan closed"
+    ]
+  }
 }

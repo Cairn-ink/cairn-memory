@@ -4,8 +4,8 @@ export const CODEX_COMMIT = '36650394c5b38c2990ccf2a3457165ca3e9d9726';
 export const FORMAT = 'codex-0.157.1-paginated-v1';
 // Seed versions have frozen native format evidence. Other hosts require a
 // binary-identity verdict; a version string never widens the parser by itself.
-export const QUALIFIED_CREATORS = Object.freeze(['0.157.1', '0.160.1', '0.161.0']);
-export const QUALIFIED_HOSTS = Object.freeze(['0.160.1', '0.161.0']);
+export const QUALIFIED_CREATORS = Object.freeze(['0.157.1', '0.160.1', '0.161.0', '0.162.0']);
+export const QUALIFIED_HOSTS = Object.freeze(['0.160.1', '0.161.0', '0.162.0']);
 export const qualifiedHost = version => QUALIFIED_HOSTS.includes(version);
 // A7 protects the delivery format with the authority filter, untrusted framing,
 // JSON quoting and the model. Re-run it when context delivery/placement changes.
@@ -54,6 +54,11 @@ export function parseLine(bytes, { sessionId, wireSessionId, epoch, start, end }
   if (row.type !== 'event_msg') return excluded('non_conversation');
   const p = row.payload;
   if (!events.has(p.type)) unsupported();
+  // Phase classifies a message, not its streaming completion. Native 0.162.0
+  // retains completed partials alongside finals, even on interrupted turns.
+  // Capture only item_completed; mirrors, starts and deltas remain excluded.
+  if (p.type === 'item_started' && p.item?.type === 'AgentMessage' &&
+      p.item.phase != null && !['commentary','partial_answer','final_answer'].includes(p.item.phase)) unsupported();
   if (p.type !== 'item_completed') return excluded('non_conversation');
   if (!keys(p, ['type','thread_id','turn_id','item','started_at_ms','completed_at_ms']) ||
       p.thread_id !== sessionId || typeof p.turn_id !== 'string' || !items.has(p.item?.type)) unsupported();
@@ -63,7 +68,7 @@ export function parseLine(bytes, { sessionId, wireSessionId, epoch, start, end }
   if (!keys(item, user ? ['type','id','client_id','content'] :
       ['type','id','content','phase','memory_citation','delivery','questions']) ||
       typeof item.id !== 'string' || !Array.isArray(item.content)) unsupported();
-  if (!user && item.phase != null && !['commentary','final_answer'].includes(item.phase)) unsupported();
+  if (!user && item.phase != null && !['commentary','partial_answer','final_answer'].includes(item.phase)) unsupported();
   const texts = [];
   for (const part of item.content) {
     if (part?.type === (user ? 'text' : 'Text')) {

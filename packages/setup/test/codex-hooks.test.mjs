@@ -726,15 +726,19 @@ test('CX-5 unpair never mints a lost Claude key or exits successfully with disab
 });
 
 
-for(const version of ['0.161.0','0.999.0'])test('CX-5 status qualifies identical format and enables capture/recall for '+version,async t=>{
+for(const version of ['0.161.0','0.162.0','0.999.0'])test('CX-5 status qualifies known format and enables capture/recall for '+version,async t=>{
   const f=await memoryRuntime(t,{state:{version}});
   assert.equal(f.installed.hostVersion,version);
   const status=await f.run(['status','--client','codex']);
   assert.equal(status.code,0,status.stdout);assert.ok(status.stdout.includes(`Codex ${version}: format qualified.`));
-  await writeFile(f.path,(await readFile(f.path,'utf8')).replace('0.160.1',version));
+  if(version==='0.162.0') {
+    f.host.kind='app-server'; // actual hook host may differ from install-time CLI kind
+    await writeFile(f.path,await readFile(new URL('../../../integrations/codex/test/fixtures/partial-final-0.162.0.jsonl',import.meta.url),'utf8'));
+  } else await writeFile(f.path,(await readFile(f.path,'utf8')).replace('0.160.1',version));
   assert.equal(await f.invoke('Stop'),'{}');await f.invoke('worker');
   assert.equal(f.requests.filter(row=>row.route.endsWith('/capture')).length,1);
-  assert.deepEqual(f.requests.find(row=>row.route.endsWith('/capture')).body.messages.map(row=>row.content),['Prefer diagrams.','Understood.']);
+  assert.deepEqual(f.requests.find(row=>row.route.endsWith('/capture')).body.messages.map(row=>row.content),
+    version==='0.162.0'?['Synthetic question.','First stable section.','Second terminal section.']:['Prefer diagrams.','Understood.']);
   f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',
     scope:'personal',projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
     receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
@@ -750,14 +754,15 @@ test('CX-5 app-server format verdict controls recall independently of install-ti
   const daemonHost={identity:await binaryIdentity(daemon),binaryPath:daemon,kind:'app-server'};
   const {qualifyBinary,observeHost}=await import('../../../integrations/codex/qualification.mjs');
   const changed=JSON.parse(await readFile(new URL('../../../integrations/codex/test/fixtures/binary-0.162.0/format.json',import.meta.url)));
-  await qualifyBinary(f.installation,daemonHost,{collect:async()=>({version:'0.162.0',evidence:changed,binarySha256:'a'.repeat(64)})});
+  changed.appServer.MessagePhase.oneOf.push({type:'string',enum:['future_answer']});
+  await qualifyBinary(f.installation,daemonHost,{collect:async()=>({version:'0.163.0',evidence:changed,binarySha256:'a'.repeat(64)})});
   await observeHost(f.installation,daemonHost);
   const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,cwd:f.project,
     transcript_path:null,prompt:'Preferences?',host:f.host}));
   assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:async()=>daemonHost}),'');
   assert.equal(f.requests.length,0);
   const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
-  assert.match(status.stdout,/app-server: Codex 0\.162\.0 is newer than this plugin supports; capture and recall are paused until an update\./);
+  assert.match(status.stdout,/app-server: Codex 0\.163\.0 is newer than this plugin supports; capture and recall are paused until an update\./);
   assert.match(status.stdout,/Prompt recall injection \(UserPromptSubmit\): per host \(qualified: on; unqualified: off\)/);
 });
 

@@ -20,20 +20,20 @@
 | assistant fixture | 依該 binary 的 generated ThreadItem／AgentMessageInputContent 與 serde enum／`AgentMessageContent::Text with 1 element` markers 撰寫 synthetic AgentMessage；沒有成功模型回覆的原生 assistant transcript |
 | 重現 | [qualify-codex.mjs](../scripts/qualify-codex.mjs) 對指定 native binary 產生私有 schema evidence；本次重跑的完整 schema hash 相同，九份選取 schema 逐一核對 |
 
-2026-10-09 schema-only 追加驗收，直接執行本機 app-server-daemon releases 的 native binary，HOME／CODEX_HOME 皆指向新建 0700 私有目錄，沒有讀真實設定、sessions 或呼叫模型：
+2026-10-09 schema 與離線原生 history 追加驗收，直接執行本機 app-server-daemon releases 的 native binary，HOME／CODEX_HOME 皆指向新建 0700 私有目錄，沒有讀真實設定、sessions 或呼叫模型：
 
 | Native binary | 證據與判定 |
 | --- | --- |
 | 0.161.0 | `--version`／`generate-json-schema` exit 0；八份內嵌 hook schema、44 個選取與遞迴 `$ref` definitions、七個 serde markers 與 0.160.1 相同，**合格**。[Evidence](../integrations/codex/test/fixtures/format-evidence-0.161.0.json) |
-| 0.162.0 | 同樣 exit 0，八份 hook schema 相同；`MessagePhase` 新增 `partial_answer`，capture parser 會拒絕。`SubAgentActivity` 另加 model／reasoningEffort，這類 item 原本排除。依 fail-closed 原則 **capture／recall 都關閉**。[Evidence](../integrations/codex/test/fixtures/format-evidence-0.162.0.json) |
+| 0.162.0 | 同樣 exit 0，八份 hook schema 相同；parser 已支援穩定的 `partial_answer`，原生 synthetic history readback 保留 completed partial 與 final，**capture／recall 合格**。`SubAgentActivity` 另加 model／reasoningEffort，這類 item 仍排除。[Evidence](../integrations/codex/test/fixtures/format-evidence-0.162.0.json) |
 
-兩版新增的 transcript fixtures 都是依 schema／serde evidence 撰寫的 synthetic records，沒有冒稱原生 rollout 或模型結果。0.162.0 fixture 包含 `partial_answer` 拒絕案例。原本 0.160.1 的 native lifecycle／A7 證據保持原範圍。
+兩版的 assistant records 都是依 schema／serde evidence 撰寫的 synthetic inputs，沒有冒稱模型輸出。另以 [probe-codex-phases.mjs](../scripts/probe-codex-phases.mjs) 在私有 HOME／CODEX_HOME 建立 idle native threads，seed disk rollouts，再由原生 `thread/resume`、`thread/turns/list`、`thread/items/list` 讀回；兩次 app-server 均 exit 0，沒有 `turn/start` 或模型呼叫。[凍結讀回結果](../integrations/codex/test/fixtures/phase-0.162.0-native-read.json) 顯示 partial 與 final 以不同 item ID 保留，final 不覆蓋 partial。兩段依原順序各送一筆 assistant message，由訊息序列保留完整回答，不串接 delta、也不另外產生一筆合併答案。中斷 turn 的 completed partial 仍是已完成訊息；只有 item_started／delta 的內容排除。response_item／agent_message 鏡像亦排除，cursor 與 frozen retry 保證重跑不重複計數。未知 phase（包含 item_started）使 scan fail closed。原本 0.160.1 的 native lifecycle／A7 證據保持原範圍。
 
 安裝與 status 用 [qualification.mjs](../integrations/codex/qualification.mjs) 比對完整相關格式 fingerprint，包含遞迴參照的 content／phase／delivery／trust definitions，以及八份 command input/output schema。未知版本若與已知合格 evidence 相同就接受；不同則關閉，顯示 `Codex <ver> is newer than this plugin supports; capture and recall are paused until an update.`。Probe 失敗／pending 也關閉，status 顯示原因並可重試，不能把 probe 失敗當成格式改變。
 
 每次 hook 由 Linux `/proc` 沿 shell／env 父程序尋找最近的 native Codex，從 argv 分辨 CLI 與 app-server，不以 install-time `codex --version` 代表 daemon。只 stat binary identity 並讀 owner-private verdict，不生成 schema、不讀整個 binary；缺 verdict 時排入獨立背景 qualification，當次 hook 關閉。快取 key 包含 device／inode／size／mtime／ctime，verdict 另綁定已知 evidence policy；binary 更新或已知 evidence policy 更新都不能沿用舊資格。Detached capture worker 帶入 launcher 選定的 host，重查 identity／verdict 後才執行。Status 分別顯示 CLI 與最後觀察的 app-server 資格；同時有合格與未合格 host 時會顯示 recall 依 host 開關，不把合格 CLI 也報成關閉；多個不同 daemon 同時存在時，每個 hook 仍獨立判定，但 status 只保存最近觀察的同類 host。
 
-Capture creator 接受已凍結的 `0.157.1`、`0.160.1`、`0.161.0`；未知 creator 只有與本次合格 host 的 version 相同才可解析。不能僅憑任意 rollout 的版本字串套用其他 binary 的 verdict。保留舊 cursor/profile ID，避免改變 frozen retry identity。Fork、subagent、非 CLI/exec source、未知 discriminator 同樣拒絕，沒有擴充 source scope。Schema qualification 不代表所有 resumed writer 或真實 compaction 已完成 host 驗收。
+Capture creator 接受已凍結的 `0.157.1`、`0.160.1`、`0.161.0`、`0.162.0`；未知 creator 只有與本次合格 host 的 version 相同才可解析。不能僅憑任意 rollout 的版本字串套用其他 binary 的 verdict。保留舊 cursor/profile ID，避免改變 frozen retry identity。Fork、subagent、非 CLI/exec source、未知 discriminator 同樣拒絕，沒有擴充 source scope。Schema qualification 不代表所有 resumed writer 或真實 compaction 已完成 host 驗收。
 
 
 ## 使用方式
@@ -104,7 +104,7 @@ UserPromptSubmit port 有同一 2 s budget、redacted 4,000-unit query、project
 
 | Gate | 本次狀態 | 解除條件 |
 | --- | --- | --- |
-| Host 格式與 installed lifecycle | 0.160.1／0.161.0 合格；未知但格式相同可快取接受。0.162.0 的 partial_answer 不支援，capture／recall 關閉。交付 native schema evidence、synthetic fixtures、private runtime 與 fake-Codex E2E | 真實 interactive trust／flush／resume／PreCompact matrix 仍須 release acceptance；格式改變或 qualification pending 繼續拒絕 |
+| Host 格式與 installed lifecycle | 0.160.1／0.161.0／0.162.0 合格；未知但格式相同可快取接受。0.162.0 的 completed partial 與 final 各保留一次，unfinished 排除。交付 native schema evidence、synthetic fixtures、private runtime 與 fake-Codex E2E | 真實 interactive trust／flush／resume／PreCompact matrix 仍須 release acceptance；格式改變或 qualification pending 繼續拒絕 |
 | Browser hook credential／identity | 接線完成，私有保存先於 ACK；配對 parity 測試通過 | 兩個 client 使用同一帳號；相容的 Claude plugin 已安裝；否則 standalone 可用但尚未共用 target |
 | Prompt recall A7 | **通過，同 delivery format 的合格 host 預設開啟**：2026-10-09 以 `gpt-6-astra`／medium 跑 15 組 adversarial（含 6 組繁中／中英混合）× 3 = 45 runs，0 harmful、45/45 delivered；英文與中文 positive control 皆 3/3。[結果](../evaluation/codex-a7/RESULTS.md)；kill switch `prompt-recall-off` | hook additionalContext delivery／placement、filter／framing／quoting、預設模型或 reasoning effort 變更時重跑 A7。Schema 與遞迴 delivery references 可偵測 wire 變化，但不能證明 schema 未暴露的 placement／實作行為沒有改變；發現這類變更也須重跑 |
 | SessionStart context | Pause boundary 完成，context **關閉** | 本機 qualified o200k counter、sibling context authority／lifecycle acceptance，以及對 session context 重跑 A7 |

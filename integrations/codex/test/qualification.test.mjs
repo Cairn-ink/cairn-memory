@@ -24,6 +24,11 @@ for(const version of ['0.161.0','0.162.0'])test(`native ${version} frozen schema
   const manifest=JSON.parse(await readFile(new URL(`format-evidence-${version}.json`,fixtureURL)));
   assert.equal(manifest.versionExitCode,0);assert.equal(manifest.schemaExitCode,0);assert.equal(manifest.network,false);
   for(const file of manifest.files)assert.equal(createHash('sha256').update(await readFile(new URL(file.path,fixtureURL))).digest('hex'),file.sha256,file.path);
+  if(manifest.nativePhaseProbe) {
+    assert.equal(createHash('sha256').update(await readFile(new URL('../../../scripts/probe-codex-phases.mjs',import.meta.url))).digest('hex'),manifest.nativePhaseProbe.scriptSha256);
+    assert.deepEqual(manifest.nativePhaseProbe.nativeExitCodes,[0,0]);
+    assert.equal(manifest.nativePhaseProbe.modelCalls,0);
+  }
   const format=JSON.parse(await readFile(new URL(`binary-${version}/format.json`,fixtureURL)));
   assert.equal(KNOWN_FORMATS.includes(fingerprint(format)),manifest.qualified);
   assert.deepEqual(format.hooks,evidence.hooks);

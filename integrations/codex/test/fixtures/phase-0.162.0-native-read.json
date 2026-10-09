@@ -1,0 +1,260 @@
+{
+  "version": "0.162.0",
+  "exits": [
+    {
+      "code": 0,
+      "signal": null
+    },
+    {
+      "code": 0,
+      "signal": null
+    }
+  ],
+  "cases": [
+    {
+      "name": "partial-final",
+      "turns": {
+        "data": [
+          {
+            "id": "synthetic-partial-final",
+            "rootTurnId": null,
+            "items": [
+              {
+                "type": "userMessage",
+                "id": "user-partial-final",
+                "clientId": null,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Synthetic question.",
+                    "text_elements": []
+                  }
+                ]
+              },
+              {
+                "type": "agentMessage",
+                "id": "partial-partial-final",
+                "text": "First stable section.",
+                "phase": "partial_answer",
+                "memoryCitation": null,
+                "delivery": null,
+                "questions": null
+              },
+              {
+                "type": "agentMessage",
+                "id": "final-partial-final",
+                "text": "Second terminal section.",
+                "phase": "final_answer",
+                "memoryCitation": null,
+                "delivery": null,
+                "questions": null
+              }
+            ],
+            "itemsView": "full",
+            "status": "completed",
+            "error": null,
+            "startedAt": null,
+            "completedAt": null,
+            "durationMs": null
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"11111111-1111-4111-8111-111111111111\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+      },
+      "items": {
+        "data": [
+          {
+            "turnId": "synthetic-partial-final",
+            "item": {
+              "type": "userMessage",
+              "id": "user-partial-final",
+              "clientId": null,
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Synthetic question.",
+                  "text_elements": []
+                }
+              ]
+            },
+            "startedAtMs": null,
+            "completedAtMs": 1
+          },
+          {
+            "turnId": "synthetic-partial-final",
+            "item": {
+              "type": "agentMessage",
+              "id": "partial-partial-final",
+              "text": "First stable section.",
+              "phase": "partial_answer",
+              "memoryCitation": null,
+              "delivery": null,
+              "questions": null
+            },
+            "startedAtMs": 1,
+            "completedAtMs": 2
+          },
+          {
+            "turnId": "synthetic-partial-final",
+            "item": {
+              "type": "agentMessage",
+              "id": "final-partial-final",
+              "text": "Second terminal section.",
+              "phase": "final_answer",
+              "memoryCitation": null,
+              "delivery": null,
+              "questions": null
+            },
+            "startedAtMs": 1,
+            "completedAtMs": 2
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"11111111-1111-4111-8111-111111111111\",\"rolloutOrdinal\":2,\"includeAnchor\":true,\"scope\":{\"kind\":\"itemsByCreatedAtOrdinal\"}}"
+      }
+    },
+    {
+      "name": "interrupted",
+      "turns": {
+        "data": [
+          {
+            "id": "synthetic-interrupted",
+            "rootTurnId": null,
+            "items": [
+              {
+                "type": "userMessage",
+                "id": "user-interrupted",
+                "clientId": null,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Synthetic question.",
+                    "text_elements": []
+                  }
+                ]
+              },
+              {
+                "type": "agentMessage",
+                "id": "partial-interrupted",
+                "text": "First stable section.",
+                "phase": "partial_answer",
+                "memoryCitation": null,
+                "delivery": null,
+                "questions": null
+              }
+            ],
+            "itemsView": "full",
+            "status": "interrupted",
+            "error": null,
+            "startedAt": null,
+            "completedAt": null,
+            "durationMs": null
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"11111111-1111-4111-8111-111111111111\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+      },
+      "items": {
+        "data": [
+          {
+            "turnId": "synthetic-interrupted",
+            "item": {
+              "type": "userMessage",
+              "id": "user-interrupted",
+              "clientId": null,
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Synthetic question.",
+                  "text_elements": []
+                }
+              ]
+            },
+            "startedAtMs": null,
+            "completedAtMs": 1
+          },
+          {
+            "turnId": "synthetic-interrupted",
+            "item": {
+              "type": "agentMessage",
+              "id": "partial-interrupted",
+              "text": "First stable section.",
+              "phase": "partial_answer",
+              "memoryCitation": null,
+              "delivery": null,
+              "questions": null
+            },
+            "startedAtMs": 1,
+            "completedAtMs": 2
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"11111111-1111-4111-8111-111111111111\",\"rolloutOrdinal\":2,\"includeAnchor\":true,\"scope\":{\"kind\":\"itemsByCreatedAtOrdinal\"}}"
+      }
+    },
+    {
+      "name": "unknown",
+      "turns": {
+        "data": [
+          {
+            "id": "synthetic-unknown",
+            "rootTurnId": null,
+            "items": [
+              {
+                "type": "userMessage",
+                "id": "user-unknown",
+                "clientId": null,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Synthetic question.",
+                    "text_elements": []
+                  }
+                ]
+              }
+            ],
+            "itemsView": "full",
+            "status": "interrupted",
+            "error": null,
+            "startedAt": null,
+            "completedAt": null,
+            "durationMs": null
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"11111111-1111-4111-8111-111111111111\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+      },
+      "items": {
+        "data": [
+          {
+            "turnId": "synthetic-unknown",
+            "item": {
+              "type": "userMessage",
+              "id": "user-unknown",
+              "clientId": null,
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Synthetic question.",
+                  "text_elements": []
+                }
+              ]
+            },
+            "startedAtMs": null,
+            "completedAtMs": 1
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"requestedThreadId\":\"11111111-1111-4111-8111-111111111111\",\"rolloutOrdinal\":2,\"includeAnchor\":true,\"scope\":{\"kind\":\"itemsByCreatedAtOrdinal\"}}"
+      }
+    }
+  ],
+  "provenance": "Native 0.162.0 history readback of schema/serde-shaped synthetic disk rollouts. Header/assistant/input events are seeded, not model-generated. Native resume appended thread_settings_applied. No turn/start or model calls.",
+  "methods": [
+    "initialize",
+    "thread/items/list",
+    "thread/resume",
+    "thread/start",
+    "thread/turns/list"
+  ]
+}

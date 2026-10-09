@@ -122,9 +122,13 @@ break-out.
   follows format qualification: 0.161.0 has identical hook/capture schema
   evidence (including transitive delivery references), so it inherits this
   delivery-format gate without a new model campaign. 0.162.0 adds
-  `MessagePhase.partial_answer`, which capture cannot parse, and remains closed
-  for both capture and recall. Safety comes from the authority filter, untrusted
-  framing, JSON quoting and the model, rather than an exact version string.
+  `MessagePhase.partial_answer`; schema and offline native synthetic-history
+  readback qualify capture of completed partial/final items exactly once. Its
+  eight hook schemas and context delivery definitions are unchanged, so recall
+  inherits the same delivery-format gate. These seeded assistant records are
+  not model outputs or a new adversarial model campaign. Safety comes from the
+  authority filter, untrusted framing, JSON quoting and the model, rather than
+  an exact version string.
   Re-run A7 when `additionalContext` delivery or placement changes, or when the
   filter/framing/quoting, default model or reasoning effort changes. Schema
   comparison detects exposed wire/reference changes; it cannot prove that

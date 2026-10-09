@@ -20,7 +20,7 @@ hosted pause, preserving generation/EOF barriers and rechecking before dispatch.
 children receive a closed environment without Node preloads, proxies or plugin
 tokens. Npx cache paths are never installed as commands.
 
-The frozen creator qualification accepts 0.157.1, 0.160.1 and 0.161.0 flat paginated CLI/exec
+The frozen creator qualification accepts 0.157.1, 0.160.1, 0.161.0 and 0.162.0 flat paginated CLI/exec
 JSONL. The 0.160.1 fixture is derived from the installed binary’s schemas, embedded hook
 wire schemas, native synthetic UserMessage transcript and serde/type evidence;
 no successful model assistant response was observed. 0.161.0 has schema-only synthetic evidence. Unqualified versions/layouts,
@@ -159,8 +159,14 @@ stale healthy observation as unavailable. Capture's strict H5 guard is unchanged
 `qualification.mjs` compares eight embedded command schemas and the relevant
 app-server definitions, including transitive `$ref` content/phase/delivery/trust
 types and serde marker presence. Native 0.161.0 matches 0.160.1. Native 0.162.0
-adds `MessagePhase.partial_answer`, which capture cannot parse; capture and recall
-stay closed. The synthetic fixtures and immutable hashes record both outcomes.
+adds `MessagePhase.partial_answer`, supported as stable independent text. Offline
+native synthetic-history readback retains completed partial and final items in
+order; capture sends each once from item_completed, excluding starts/deltas and
+mirrors. An interrupted turn can retain completed partials, but never unfinished
+text. Unknown phases fail closed. Both capture and recall are format qualified;
+the eight hook schemas are unchanged. The seeded assistant records are not model
+outputs or a new A7 campaign. Frozen fixtures, native readback and hashes record
+the evidence; `scripts/probe-codex-phases.mjs` reproduces it without turn/start.
 Unknown versions with identical evidence are accepted and cached by binary
 identity; changed evidence stays closed with an explicit status message.
 
