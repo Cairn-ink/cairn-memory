@@ -257,11 +257,16 @@ URL and allow the request. New browser credentials last 180 days.
 
 Use `setup --client claude` or `setup --client codex` to restrict a run. Re-running
 unscoped setup adds the other tool, retaining the existing key and reusing a valid
-stored browser credential after credential validation. An installer-owned copy is
-kept in `~/.cairn-memory-clients/setup-credential.json` (0700 directory, 0600
-plaintext file), separate from MCP PAT/OAuth credentials. `--reauthorize` replaces
-the shared browser grant once. `--manual-token` keeps the existing PAT semantics;
-broad PATs never authorize Codex automatic hooks.
+stored browser credential after credential validation. Sharing stays in memory;
+credentials remain in each tool's own store, with no extra installer cache.
+Existing credentials and endpoints stay unless `--reauthorize` is specified.
+An endpoint override with a kept credential exits 2 and requires `--reauthorize`.
+Conflicting endpoints refuse pairing; align Codex's MCP configuration and
+explicitly authorize the chosen endpoint. `--reauthorize` obtains one replacement
+grant for the shared run. Single-client `--manual-token` retains PAT semantics;
+shared automatic hooks require browser authorization, and broad PATs never
+supply hook credentials. If Codex is the only tool and its format is unqualified,
+setup retains its MCP-only fallback after explicit consent.
 
 Unscoped `status` reports both tools, including missing CLIs. Unscoped non-TTY
 `setup` does not consent, authorize or install (exit 2 if a tool is detected);

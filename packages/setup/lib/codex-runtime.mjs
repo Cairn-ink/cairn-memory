@@ -199,6 +199,9 @@ async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome,
       await chmod(root,0o700);
     } catch (error) {if(error.code!=='ENOENT')throw error;}
     const options = { home, root,claudeProfileRoot:profileRoot, standardClaudeOrigin:true,
+      // Only the combined, explicitly consented setup may bootstrap keyless
+      // Claude. Explicit Codex retains the established Claude-key requirement.
+      ...(pairingConsent === 'shared' ? {} : {usesClaude:true}),
       hostsStopped:true,consent:{claude:true,codex:true},adopt:detected.keys.length>0 };
     progress('identity_initialize');
     const pending = await initializePairing(options);
@@ -442,9 +445,13 @@ export async function setupInstalledCodex(context) {
   const path = join(directory,'installation.json');
   let previous;
   try {previous=await readInstallation(path);} catch (error) {if(error.code!=='ENOENT')throw error;}
+  const currentCredential = previous ? await readCredential(path,previous.endpoint).catch(error=>{
+    if (error.code !== 'ENOENT' && !flags.includes('--reauthorize')) throw new SetupError('authorization_credential_unavailable',2);
+  }) : undefined;
+  if (currentCredential && endpointOverride && !flags.includes('--reauthorize')) throw new SetupError('endpoint_reauthorize',2);
   const endpoint = await selectEndpoint({endpointOverride,existingEndpoint:previous?.endpoint??authOptions.authorization?.endpoint??
     (existing?existing.transport.url.slice(0,-8):undefined),prompt,write,t});
-  if (previous && previous.endpoint!==endpoint) throw new SetupError('codex_endpoint_conflict',2);
+  if (previous && previous.endpoint!==endpoint && !flags.includes('--reauthorize')) throw new SetupError('codex_endpoint_conflict',2);
   const lockPath = join(home,'.cairn-setup.lock');
   const lock = await open(lockPath,'wx',0o600);
   let phase = 'hooks_validation';
@@ -464,9 +471,8 @@ export async function setupInstalledCodex(context) {
       dailyCap = Number(answer);
       if (!/^\d+$/u.test(answer) || !Number.isSafeInteger(dailyCap) || dailyCap<1 || dailyCap>100000) throw new Error('invalid_cap');
     }
-    const currentCredential = await readCredential(path,endpoint).then(value=>value,()=>undefined);
     phase = 'authorization';
-    if (!currentCredential || flags.includes('--reauthorize') || authOptions.authorization) {
+    if (!currentCredential || flags.includes('--reauthorize')) {
       const save = async values => {
         let token = values.api_token;values.api_token=undefined;
         try {
@@ -479,7 +485,7 @@ export async function setupInstalledCodex(context) {
         noBrowser:flags.includes('--no-browser'),noClipboard:flags.includes('--no-clipboard')});
       if (result.unsupported) throw new SetupError('codex_browser_required');
       write(t('connected_expiry',{date:new Date(result.expiresAt).toLocaleDateString(t.locale)}));
-    }
+    } else write(t('credential_kept'));
     let mcpText = before.text;
     phase = 'mcp_validation';
     let mcpToken;

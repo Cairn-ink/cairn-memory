@@ -30,6 +30,7 @@ export async function fakeAuthServer(t, options = {}) {
     }, code === 'rate_limited' ? { 'Retry-After': String(extra.retry_after) } : {});
     if (req.url.includes('?') || req.headers.cookie) violations.push('query or cookie on CLI request');
     if (route === 'device-authorizations') {
+      delivery = undefined; // A second, explicitly requested grant is independent.
       if (options.createStatus) {
         if (options.createHTML) { res.writeHead(options.createStatus, { 'Content-Type': 'text/html' }).end('<html>old server</html>'); return; }
         error('cli_auth_not_supported', options.createStatus); return;

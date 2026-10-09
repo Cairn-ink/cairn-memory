@@ -38,12 +38,18 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   both directions, and unqualified Codex. One browser grant and equal project IDs
   must be asserted. Keep frozen runtime/A7 inputs and plugin version unchanged.
   Non-TTY unscoped setup never consents or installs; status/dry-run remain usable.
-- [ ] Use a private 0700 TMPDIR under `/tmp/claude-1000/`, then remove it.
+  Verify kept credentials/endpoints, endpoint overrides requiring --reauthorize,
+  conflicting endpoints, each localized Codex inspection failure, native-store
+  reuse without an extra cache, and unqualified Codex-only MCP fallback.
+- [ ] Use a fresh private TMPDIR (`mktemp -d`, mode 0700), then remove it.
   Do not read/write real `~/.claude`, `~/.codex` or credentials.
 - [ ] Build and inspect the archive from `packages/setup`. Run `npm pack --dry-run`
   with the runtime-manifest prepack check. Derive the expected list from package
   `files` plus npm's automatic metadata files; independently cross-check against
-  `npm pack --json` and `tar -tzf`, diff the lists and print the count. Expect
+  `npm pack --json` and `tar -tzf`, diff the lists and print the count. Prepack
+  lifecycle text can precede npm JSON: capture stdout/stderr separately, then
+  parse the trailing JSON array and validate its shape; do not JSON.parse the
+  entire stdout blindly. Keep prepack enabled. Expect
   `package.json`, `LICENSE`, `README.md`, `bin/`, `lib/` (including client/auth
   coordination), and the frozen `runtime/`; exclude tests and build-runtime.mjs.
 

@@ -5,7 +5,7 @@ import { homedir, tmpdir } from 'node:os';
 import { delimiter, join, resolve, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { resolveCLI, qualifyBinary, cachedQualification } from '../runtime/integrations/codex/qualification.mjs';
-import { readInstallation } from '../runtime/integrations/codex/installed-state.mjs';
+import { readInstallation, readCredential } from '../runtime/integrations/codex/installed-state.mjs';
 import { setupInstalledCodex, installedStatus, controlCodex } from './codex-runtime.mjs';
 
 // Keep routing and all Codex behavior here; browser authorization can supply
@@ -119,18 +119,30 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
   SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent }) {
   const fail = message => new SetupError(message);
   if (process.platform === 'win32') {
-    if (inspectOnly) return { qualified: false };
+    if (inspectOnly) return { qualified: false, reason: 'codex_windows' };
     write(t('codex_windows'));
     fallback(write, t); automaticStatus(write, t); return 0;
   }
   const home = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
+  if (action === 'setup' && endpointOverride && !flags.includes('--reauthorize')) {
+    const path = join(home, 'cairn/installation.json');
+    const previous = await readInstallation(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
+    if (previous && await readCredential(path, previous.endpoint).then(() => true, () => false)) {
+      throw new SetupError('endpoint_reauthorize', 2);
+    }
+  }
   if (['disable','uninstall','pause','resume','prompt-recall-off','prompt-recall-on'].includes(action)) {
     const neutral = await realpath(await mkdtemp(join(tmpdir(), 'cairn-codex-control-')));
     try {return await controlCodex({action,home,write,t,snapshot,unchanged,neutral});}
     finally {await rm(neutral,{recursive:true,force:true});}
   }
   const configPath = join(home, 'config.toml');
-  const before = await snapshot(configPath);
+  let before;
+  try { before = await snapshot(configPath); }
+  catch (error) {
+    if (error.message === 'unsafe_config') throw new SetupError('codex_config_unsafe');
+    throw new SetupError('codex_state_error');
+  }
   // Inspect only a copy of the user's file. No trusted-project layer or OAuth
   // discovery participates in the decision to create a full entry or add a header.
   const neutral = await realpath(await mkdtemp(join(tmpdir(), 'cairn-codex-inspect-')));

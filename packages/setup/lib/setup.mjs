@@ -164,7 +164,7 @@ export async function main(argv, {
   interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY),
   browse = openBrowser, nodeVersion = process.versions.node, authOptions = {},
   env = process.env, locale = Intl.DateTimeFormat().resolvedOptions().locale,
-  coordinated = false, pairingConsent,
+  coordinated = false, pairingConsent, inspectCodex,
 } = {}) {
   let t = translator(detectLanguage(env, locale));
   const launchBrowser = (write, url, signal) => browse(write, url, signal, t);
@@ -194,7 +194,8 @@ export async function main(argv, {
     const selection = parseClient(options.argv, SetupError);
     if (!coordinated && !selection.client && ['setup', 'status'].includes(selection.argv[0])) {
       return await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
-        authOptions, env, locale, t, endpointOverride, signal, supportedNode, SetupError, validEndpoint,
+        authOptions, env, locale, t, endpointOverride, signal, supportedNode, SetupError, validEndpoint, inspectCodex,
+        inspectClaude: async () => (await installed(run)).length ? configuration(run) : undefined,
         runClient: (args, overrides) => main(args, { write, prompt, interactive, browse, nodeVersion,
           authOptions, env, locale, coordinated: true, ...overrides }) });
     }
@@ -317,14 +318,19 @@ export async function main(argv, {
     }
     const config = await configuration(run);
     let ready = ['api_endpoint', 'api_token'].every(key => config.configured.includes(key));
-    if (ready && !flags.includes('--reauthorize') && !authOptions.authorization) {
+    const configuredEndpoint = validEndpoint(config.inputs?.api_endpoint) ? config.inputs.api_endpoint : undefined;
+    if (!flags.includes('--reauthorize') && configuredEndpoint && endpointOverride && endpointOverride !== configuredEndpoint) {
+      throw new SetupError('endpoint_reauthorize', 2);
+    }
+    if (ready && !flags.includes('--reauthorize')) {
       if (endpointOverride) throw new SetupError('endpoint_reauthorize', 2);
       write(t('endpoint_config_private'));
       write(t('credential_kept'));
     } else if (!ready && config.configured.includes('api_token') && !flags.includes('--reauthorize')) {
       throw new SetupError('credential_endpoint_unset');
     } else {
-      const endpoint = await selectEndpoint({ endpointOverride, existingEndpoint: authOptions.authorization?.endpoint, prompt, write, t });
+      const endpoint = await selectEndpoint({ endpointOverride, existingEndpoint:
+        (!flags.includes('--reauthorize') ? configuredEndpoint : undefined) ?? authOptions.authorization?.endpoint, prompt, write, t });
       let manualToken = flags.includes('--manual-token');
       if (!manualToken) {
         const authorization = await browserAuthorize(endpoint, { ...authOptions, write, browse: launchBrowser, t,

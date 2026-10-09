@@ -34,16 +34,22 @@ Codex 格式未合格會略過，Claude 可繼續。`status` 預設回報兩者�
 
 Unscoped non-TTY setup never auto-consents or installs (exit 2 when a tool is
 detected). Status/dry-run are prompt-free and remain available. Explicit per-client
-flows keep their existing TTY/fallback rules. Browser credentials from this flow
-are retained in `~/.cairn-memory-clients/setup-credential.json` (0700 parent, 0600
-plaintext). Reruns validate the memory scopes/expiry with the credential API and
-reuse a valid grant, including when adding the other tool. Broad PATs are never
-imported into this cache or Codex hooks. A legacy Claude-only native secret that
-has no portable installer copy is preserved by explicit `--client claude`; it
-cannot be extracted from configure metadata to authorize another client.
+flows keep their existing TTY/fallback rules. Sharing is in memory only; credentials
+remain in each tool's own store with no additional installer cache. Reruns keep
+existing credentials and endpoints. Adding the other tool reads the original
+Claude native store (Linux pluginSecrets file or macOS Keychain) or Codex hook
+credential, verifies memory scopes/expiry, and reuses it without another grant.
+Unreadable or unsuitable credentials require explicit `--reauthorize`; they are
+never silently replaced. Conflicting endpoints refuse pairing. Align Codex MCP
+configuration, then use `--endpoint <origin> --reauthorize`. An endpoint override
+with a kept credential exits 2 and requires `--reauthorize`.
 
 非 TTY 的預設 setup 不會代為同意或安裝；有偵測到工具時 exit 2。
-瀏覽器憑證會另存於上述私有明文檔，重跑先驗證 scopes 與到期日，再交給同意的工具。
+共享只留在記憶體，不新增憑證 cache；重跑保留各工具原有 endpoint／credential。
+加入另一個工具時只讀原工具保存的憑證，驗證 scopes 與到期日後交付。
+不相容的 endpoint 會拒絕配對；換發必須明確使用 `--reauthorize`。
+Codex 檢查失敗會說明原因並提示 `setup --client codex`，Claude 可繼續。
+只有未合格 Codex 時，明確同意後仍可走 MCP-only fallback，自動 hooks 不啟用。
 
 ```sh
 # Published installer / 已發布的安裝器
@@ -77,7 +83,7 @@ browser grant). The browser never receives the token.
 
 ```sh
 node packages/setup/bin/memory.mjs setup --no-browser
-node packages/setup/bin/memory.mjs setup --manual-token
+node packages/setup/bin/memory.mjs setup --client claude --manual-token
 node packages/setup/bin/memory.mjs setup --reauthorize
 node packages/setup/bin/memory.mjs setup --dry-run
 node packages/setup/bin/memory.mjs status
@@ -87,7 +93,8 @@ node packages/setup/bin/memory.mjs status
   another device. Still requires a TTY.
 - `--no-clipboard`: skip optional copying of the one-time device code. No effect
   on manual PAT/Codex pairing, which never copies a token.
-- `--manual-token`: use the hidden PAT prompt, checking it before saving.
+- `--manual-token`: use the single-client hidden PAT prompt, checking it before saving.
+  Shared automatic hooks require browser authorization; use `--client` for PAT setup.
 - `--reauthorize`: replace an existing credential. Without it, complete endpoint
   and token configuration is preserved. New authorization always confirms the
   endpoint and writes both values together.

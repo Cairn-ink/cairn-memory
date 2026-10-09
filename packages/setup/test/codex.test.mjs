@@ -80,8 +80,11 @@ test('Codex setup saves native HTTP header privately and preserves unrelated con
 });
 
 test('auto-detect Codex when Claude is absent', async t => {
-  const result = await fixture(t, { args: ['setup', '--no-browser'] });
-  assert.equal(result.code, 0); assert.match(result.stdout, /Skipping Codex/); assert.equal(result.config, null);
+  const result = await fixture(t, { args: ['setup', '--no-browser'], answers: ['yes', '', secret] });
+  assert.equal(result.code, 0, result.stdout);
+  assert.match(result.stdout, /Only explicit MCP memory tools/);
+  assert.ok(result.config.includes('Authorization = "Bearer ' + secret + '"'));
+  assert.equal(result.mode, 0o600);
 });
 
 test('status reports Codex even when Claude fails; explicit Codex restricts the run', async t => {

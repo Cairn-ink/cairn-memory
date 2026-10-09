@@ -15,7 +15,7 @@ changes, `ROADMAP.md`.
 For the dependency-free setup helper in `packages/setup`, run `npm run test:setup`
 on Node 22.16 and 24.15. It uses a fake `claude` on PATH and synthetic tokens,
 without real client configuration or hosted/model calls. Build with
-`npm pack --ignore-scripts` from the package directory and cross-check the file
+`npm pack` (including the runtime-manifest prepack check) from the package directory and cross-check the file
 list against the archive listing. See [the release checklist](docs/npx-setup-release.md);
 the installer has its own version and release requires chichi's approval.
 

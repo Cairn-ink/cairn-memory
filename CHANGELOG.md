@@ -5,13 +5,17 @@
 - Detect Claude Code and Codex in an unscoped setup, disclose each tool's behavior,
   and ask once per tool. Install every agreed, qualified tool with one browser
   authorization and the existing shared project-key/pairing transaction.
-- Reuse a checked, memory-scoped browser credential when adding the other tool.
+- Reuse the original tool’s checked, memory-scoped browser credential when adding
+  the other tool, with sharing in memory and no extra credential cache. Keep
+  existing credentials/endpoints unless --reauthorize is explicit; refuse
+  conflicting endpoints without overwriting either tool.
   Keep existing keys, including a Codex standalone key when adding Claude.
   No automatic identity migration when two independent keys already exist.
 - Report both clients with unscoped status. Keep explicit per-client setup,
   status and control flags. Non-TTY unscoped setup never consents or installs;
   status and dry-run remain available without prompts.
-- Skip unqualified Codex cleanly while allowing Claude setup. Keep the frozen
+- Isolate Codex inspection errors so Claude can continue. Retain MCP fallback
+  when unqualified Codex is the only tool. Keep the frozen
   Codex runtime, hook delivery, recall framing and A7 certificate inputs intact.
 - Installer version becomes 0.4.0; plugin remains 0.3.2.
 
