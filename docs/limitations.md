@@ -64,6 +64,16 @@ existing token budget and can cause a whole evidence unit to be omitted. No
 closed answer score or unresolved safety judgment is changed, and the separate
 source-linked rank intervention is not included.
 
+The explicit [combined evidence comparison](plans/evidence-bundle-qa24.md)
+places source-diverse selection and bounded source-linked ranking against an
+ordinary baseline with the same recorded-role evidence in both arms. Its new
+identities and synthetic controls preserve raw/effective traces and the unchanged
+requested-answer v2 criteria; they produce no new paid answer or semantic score.
+The selector's four novelty additions can omit a needed source before ranking,
+and the linked rank wrapper cannot recover evidence absent from its candidates.
+Literal links and recorded roles establish neither semantic identity nor safety.
+Existing failed development gates and unknown judgments remain unchanged.
+
 The [prospective requested-answer comparison](plans/source-diverse-qa24.md) adds
 an explicit source-diverse treatment to the existing runner, not a new default
 or a retry/rescore of the closed full-label experiment. Its separately versioned

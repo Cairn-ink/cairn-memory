@@ -4,6 +4,9 @@ Status: accepted development direction; first Stage 2 candidate completed and
 rejected. The new requested-answer/source-diverse comparison has closed with
 net +3 correct answers, but its safety-unknown gate blocks advancement;
 remaining quality/installed-host gates are pending.
+The next bounded candidate is the prospectively specified
+[role-preserving source-diverse/linked comparison](evidence-bundle-qa24.md).
+It has no new semantic result yet.
 Owner: primary DRI. This is the single current plan for the three-stage sequence
 agreed with the owner on 2026-10-09. Executed checkpoints link separate frozen
 result reports; prospective steps do not establish a score or release.
@@ -362,6 +365,21 @@ fix; existing rank assembly remains a separate future comparison candidate and
 old profiles stay frozen. This report
 authorizes no new live trial or profile promotion; the next experiment needs a
 prospective scoped freeze, independent review and current shared-ledger preflight.
+
+Post-two-candidate review decision: retain both closed results and their
+rejections, rather than extend either operation. The primary reviewed the
+observed loss boundaries and both supported-runtime red-capable controls.
+Selection diversity addresses a different boundary from ranking's loss of an
+already selected bridge; preserving recorded roles addresses a representation
+loss common to both arms. The next contract therefore explicitly tests one
+combined source-diverse/linked retrieval candidate against ordinary retrieval,
+with the same role-aware representation on both sides. It cannot isolate the
+ranking-only effect or use the earlier 20/23 counts as its comparator. A fresh
+paired baseline, unchanged requested-answer rubric and unchanged advancement
+thresholds are required. This is a recorded revise decision after the first
+two candidates, not an unbounded sweep or a relaxation of their failed gates.
+Previously seen development data and further selection bias remain limitations;
+passing this checkpoint still requires a separately frozen broader comparison.
 
 Freeze 24 questions, four in each family, before treatment observations. Each
 listed variant contributes one question; publish every slot and family count.

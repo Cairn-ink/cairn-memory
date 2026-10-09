@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectEmbeddingExperimentBudgetSnapshot } from '../experiment-budget/index.mjs';
 import { loadDevelopmentFreeze } from './corpus.mjs';
-import { loadRequestedAnswerFreeze } from './requested-answer.mjs';
+import { loadRequestedAnswerFreeze, loadEvidenceBundleFreeze } from './requested-answer.mjs';
 import { createAlgorithmDevelopmentTransport, algorithmLimits } from './transport.mjs';
 import { DEFAULT_MODEL } from '../../adapters/openai/profiles.mjs';
 import { runAlgorithmDevelopmentComparison } from './runner.mjs';
@@ -26,9 +26,11 @@ function checkpointOf(state) {
 
 /** Read-only preflight. Returned values are observations, not a spending grant. */
 async function prepare({ configuration }, prospective) {
+  const bundle = prospective === 'source-diverse-linked-v1';
   if (configuration.limitMicroUsd !== 400_000_000) fail('campaign_limit_mismatch');
   if (git(['status', '--porcelain', '--untracked-files=normal'])) fail('runtime_not_clean');
-  const corpus = prospective ? await loadRequestedAnswerFreeze() : await loadDevelopmentFreeze();
+  const corpus = bundle ? await loadEvidenceBundleFreeze()
+    : prospective ? await loadRequestedAnswerFreeze() : await loadDevelopmentFreeze();
   const state = inspectEmbeddingExperimentBudgetSnapshot(configuration);
   if (state.state !== 'open' || state.attempts.some(row => row.outcome === null)) fail('campaign_unsettled');
   if (state.reservedMicroUsd + 10_000_000 + 30_000_000 > configuration.limitMicroUsd
@@ -41,9 +43,20 @@ async function prepare({ configuration }, prospective) {
     'evaluation/architecture/test/source-diverse-selection-model.test.mjs', 'docs/plans/source-diverse-qa24.md']) {
     artifactHashes[path] = hash(readFileSync(join(root, path)));
   }
-  return Object.freeze({ version: prospective ? 'source-diverse-requested-answer-launch-v1' : 'algorithm-development-launch-v1',
-    ...(prospective ? { treatment: 'source-diverse-v1', armPolicies: { baseline: 'ordinary-v1', full: 'source-diverse-v1' },
-      rubricVersion: corpus.version, model: DEFAULT_MODEL, limits: algorithmLimits, artifactHashes,
+  if (bundle) for (const path of ['evaluation/architecture/source-linked-evidence-model.mjs',
+    'evaluation/architecture/test/source-linked-evidence-model.test.mjs',
+    'evaluation/longmemeval/mixed-evidence.mjs', 'evaluation/longmemeval/mixed-answer.mjs',
+    'evaluation/longmemeval/test/source-role-evidence.test.mjs', 'docs/plans/evidence-bundle-qa24.md',
+    'evaluation/algorithm-development/test/evidence-bundle.test.mjs',
+    'evaluation/algorithm-development/test/evidence-bundle-runner.test.mjs']) {
+    artifactHashes[path] = hash(readFileSync(join(root, path)));
+  }
+  const treatment = bundle ? 'source-diverse-linked-v1' : 'source-diverse-v1';
+  return Object.freeze({ version: bundle ? 'source-diverse-linked-requested-answer-launch-v1'
+    : prospective ? 'source-diverse-requested-answer-launch-v1' : 'algorithm-development-launch-v1',
+    ...(bundle ? { evidenceFormat: 'source-role-evidence-v1', originalCorpusHashes: corpus.originalHashes } : {}),
+    ...(prospective ? { treatment, armPolicies: { baseline: 'ordinary-v1', full: treatment },
+      rubricVersion: bundle ? corpus.rubricVersion : corpus.version, model: DEFAULT_MODEL, limits: algorithmLimits, artifactHashes,
       campaign: { schemaVersion: state.schemaVersion, runId: state.runId, limitMicroUsd: state.limitMicroUsd,
         requestCap: state.requestCap, configurationSha256: hash(JSON.stringify(configuration)) } } : {}), runtimeCommit: git(['rev-parse', 'HEAD']),
     nodeVersion: process.versions.node, nodeSha256: hash(readFileSync(process.execPath)),
@@ -52,14 +65,18 @@ async function prepare({ configuration }, prospective) {
 }
 export const prepareAlgorithmDevelopment = options => prepare(options, false);
 export const prepareRequestedAnswerComparison = options => prepare(options, true);
+export const prepareEvidenceBundleComparison = options => prepare(options, 'source-diverse-linked-v1');
 
 /** The caller must supply a reviewed prospective manifest and a fresh owned directory. */
 async function launch({ configuration, manifest, outputDirectory, keyProvider,
   fetchImpl = globalThis.fetch }, prospective) {
+  const bundle = prospective === 'source-diverse-linked-v1';
   if (typeof keyProvider !== 'function' || typeof fetchImpl !== 'function') fail('invalid_launch');
-  const version = prospective ? 'source-diverse-requested-answer-launch-v1' : 'algorithm-development-launch-v1';
-  if (manifest?.version !== version || prospective && (manifest.treatment !== 'source-diverse-v1'
+  const version = bundle ? 'source-diverse-linked-requested-answer-launch-v1'
+    : prospective ? 'source-diverse-requested-answer-launch-v1' : 'algorithm-development-launch-v1';
+  if (manifest?.version !== version || prospective && (manifest.treatment !== (bundle ? 'source-diverse-linked-v1' : 'source-diverse-v1')
     || manifest.rubricVersion !== 'algorithm-development-requested-answer-v2')
+    || bundle && manifest.evidenceFormat !== 'source-role-evidence-v1'
     || !prospective && Object.hasOwn(manifest, 'treatment')) fail('manifest_mismatch');
   // Detach operator data before awaiting credential lookup or caller callbacks.
   configuration = structuredClone(configuration);
@@ -97,7 +114,7 @@ async function launch({ configuration, manifest, outputDirectory, keyProvider,
     // Only the model-facing half leaves preflight; no evaluator gold reaches the runner.
     const { modelInputs } = await loadDevelopmentFreeze();
     report = await runAlgorithmDevelopmentComparison({ cases: modelInputs, transport,
-      ...(prospective ? { treatment: 'source-diverse-v1' } : {}),
+      ...(prospective ? { treatment: bundle ? 'source-diverse-linked-v1' : 'source-diverse-v1' } : {}),
       outputDirectory: directory, onCase: row => persist(`case-${row.id}.json`, row) });
     persist('report.json', report);
     return report;
@@ -110,3 +127,4 @@ async function launch({ configuration, manifest, outputDirectory, keyProvider,
 }
 export const launchAlgorithmDevelopment = options => launch(options, false);
 export const launchRequestedAnswerComparison = options => launch(options, true);
+export const launchEvidenceBundleComparison = options => launch(options, 'source-diverse-linked-v1');

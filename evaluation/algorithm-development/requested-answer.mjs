@@ -17,6 +17,8 @@ export const REQUESTED_ANSWER_PROTOCOL = freeze({ ...JUDGING_PROTOCOL,
     'A generic unknown answer is not sufficient when the requested known information is available; preserve reported conflicts and partial confirmations.',
   ], dataStatus: 'previously-seen-authored-development-not-holdout',
 });
+export const EVIDENCE_BUNDLE_PROTOCOL = freeze({ ...REQUESTED_ANSWER_PROTOCOL,
+  version: 'source-diverse-linked-requested-answer-blind-judging-v1' });
 const fields = ['variant', 'acceptableQualifications', 'anchors', 'requiredMultiSourceSets', 'unsupportedClaims', 'staleUseCriteria', 'severeErrors'];
 function exact(value, names) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
@@ -82,6 +84,68 @@ export function aggregateRequestedAnswerJudgments({ report, judgmentsA, judgment
   if (coverage?.schemaVersion !== 'source-diverse-requested-answer-coverage-v1' || typeof resourcesWithinLimits !== 'boolean') throw new TypeError('missing requested-answer gate evidence');
   const result = aggregateDevelopmentJudgments({ observations: report.observations, judgmentsA, judgmentsB });
   return freeze({ ...result, schemaVersion: 'source-diverse-requested-answer-judgments-v1',
+    armPolicies: report.armPolicies, coverageGain: coverage.gain, resourcesWithinLimits,
+    advances: report.fatal === null && result.paired.netCorrect >= 3 && coverage.gain > 0
+      && !result.safety.blocksAdvancement && resourcesWithinLimits });
+}
+
+/** New identity; preserve the original requested-answer rubric and hash record. */
+export async function loadEvidenceBundleFreeze(options) {
+  const original = await loadRequestedAnswerFreeze(options);
+  const originalFields = Object.fromEntries(Object.entries(original.hashes).filter(([name]) => name !== 'freeze'));
+  const hashes = { ...originalFields, judgingProtocol: hashCanonicalValue(EVIDENCE_BUNDLE_PROTOCOL) };
+  hashes.freeze = hashCanonicalValue({ version: 'source-diverse-linked-requested-answer-freeze-v1',
+    ...hashes, originalHashes: original.hashes });
+  return freeze({ ...original, version: 'source-diverse-linked-requested-answer-freeze-v1',
+    rubricVersion: original.version, protocol: EVIDENCE_BUNDLE_PROTOCOL,
+    originalHashes: original.hashes, hashes });
+}
+
+function requireBundleReport(report) {
+  if (report?.schemaVersion !== 'source-diverse-linked-requested-answer-comparison-v1'
+    || report.treatment !== 'source-diverse-linked-v1' || report.armPolicies?.full !== 'source-diverse-linked-v1'
+    || report.armPolicies?.baseline !== 'ordinary-v1' || report.evidenceFormat !== 'source-role-evidence-v1') {
+    throw new TypeError('wrong evidence-bundle report');
+  }
+}
+
+export function buildBlindEvidenceBundlePacket({ report, freeze: frozen }) {
+  requireBundleReport(report);
+  if (frozen?.version !== 'source-diverse-linked-requested-answer-freeze-v1'
+    || frozen.rubricVersion !== REQUESTED_ANSWER_VERSION
+    || hashCanonicalValue(frozen.protocol) !== hashCanonicalValue(EVIDENCE_BUNDLE_PROTOCOL)) {
+    throw new TypeError('wrong evidence-bundle freeze');
+  }
+  const old = frozen.originalHashes, hashes = frozen.hashes;
+  if (!old || !hashes || old.judgingProtocol !== hashCanonicalValue(REQUESTED_ANSWER_PROTOCOL)
+    || hashes.judgingProtocol !== hashCanonicalValue(EVIDENCE_BUNDLE_PROTOCOL)
+    || ['modelInputs', 'originalRubric', 'qaRubric', 'compiledRubric'].some(field => old[field] !== hashes[field])
+    || hashes.modelInputs !== hashCanonicalValue(frozen.modelInputs)
+    || hashes.qaRubric !== hashCanonicalValue(frozen.qaRubric)
+    || hashes.compiledRubric !== hashCanonicalValue(frozen.evaluatorRubric)) throw new TypeError('mismatched evidence-bundle freeze hashes');
+  const withoutFreeze = values => Object.fromEntries(Object.entries(values).filter(([name]) => name !== 'freeze'));
+  if (old.freeze !== hashCanonicalValue({ version: REQUESTED_ANSWER_VERSION, ...withoutFreeze(old) })
+    || hashes.freeze !== hashCanonicalValue({ version: frozen.version, ...withoutFreeze(hashes), originalHashes: old })) {
+    throw new TypeError('mismatched evidence-bundle freeze identity');
+  }
+  const result = buildBlindDevelopmentPacket({ observations: report.observations, ...frozen });
+  result.packet.protocol = EVIDENCE_BUNDLE_PROTOCOL;
+  result.packet.rubricIdentity = { version: frozen.rubricVersion, hashes: frozen.originalHashes };
+  result.packet.comparisonIdentity = { version: frozen.version, hashes: frozen.hashes };
+  for (const item of result.packet.items) {
+    const original = result.mapping.find(row => row.label === item.label);
+    const calibration = frozen.qaRubric.cases[original.id];
+    item.nonScoringCalibration = { optionalBackground: calibration.optionalBackground, examples: calibration.examples };
+  }
+  return freeze(result);
+}
+
+export function aggregateEvidenceBundleJudgments({ report, judgmentsA, judgmentsB, coverage, resourcesWithinLimits }) {
+  requireBundleReport(report);
+  if (coverage?.schemaVersion !== 'source-diverse-linked-requested-answer-coverage-v1'
+    || typeof resourcesWithinLimits !== 'boolean') throw new TypeError('missing evidence-bundle gate evidence');
+  const result = aggregateDevelopmentJudgments({ observations: report.observations, judgmentsA, judgmentsB });
+  return freeze({ ...result, schemaVersion: 'source-diverse-linked-requested-answer-judgments-v1',
     armPolicies: report.armPolicies, coverageGain: coverage.gain, resourcesWithinLimits,
     advances: report.fatal === null && result.paired.netCorrect >= 3 && coverage.gain > 0
       && !result.safety.blocksAdvancement && resourcesWithinLimits });
