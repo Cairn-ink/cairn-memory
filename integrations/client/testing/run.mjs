@@ -19,15 +19,16 @@ const env = {
   NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${JSON.stringify(guard)}`,
 };
 let host;
-if (isolated) {
-  host = await mkdtemp(join(tmpdir(), "cairn-test-host-"));
-  await mkdir(join(host, ".codex"), { mode: 0o700 });
-  for (const name of Object.keys(env)) if (name.startsWith("CODEX_")) delete env[name];
-  // The guard still rejects resolving this home, exactly as it does the real one.
-  Object.assign(env, { HOME: host, CODEX_HOME: join(host, ".codex"), CAIRN_TEST_HOST_HOME: host });
-}
 const handlers = new Map();
 try {
+  if (isolated) {
+    // Assigned before anything else can fail, so cleanup always sees it.
+    host = await mkdtemp(join(tmpdir(), "cairn-test-host-"));
+    await mkdir(join(host, ".codex"), { mode: 0o700 });
+    for (const name of Object.keys(env)) if (name.startsWith("CODEX_")) delete env[name];
+    // The guard still rejects resolving this home, exactly as it does the real one.
+    Object.assign(env, { HOME: host, CODEX_HOME: join(host, ".codex"), CAIRN_TEST_HOST_HOME: host });
+  }
   const child = spawn(process.execPath, [runner, ...args], { stdio: "inherit", env });
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     const handler = () => child.kill(signal);

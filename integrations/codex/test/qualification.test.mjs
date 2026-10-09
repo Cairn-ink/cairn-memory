@@ -149,12 +149,22 @@ test('missing schema/serde evidence is a refused format rather than an approval 
 test('running process binding survives an on-disk replacement and rejects a reused or gone process identity',async t=>{
   const f=await fixture(t);
   const {boundBinary}=await import('../qualification.mjs');
-  const identity=await binaryIdentity('/proc/self/exe');
-  const host={identity,binaryPath:f.host.binaryPath,processPath:`/proc/${process.pid}/exe`,kind:'cli'};
-  await writeFile(f.host.binaryPath,'replacement with a different identity');
-  assert.equal(await boundBinary(host),host.processPath);
-  assert.equal(await boundBinary({...host,identity:f.host.identity}),undefined);
-  assert.equal(await boundBinary({...host,processPath:'/proc/99999999/exe'}),undefined);
+  const {spawn}=await import('node:child_process');
+  // The running host is an owner-only copy, never the runner's own node: CI tool
+  // caches may install that group/world-writable, which binaryIdentity refuses.
+  const running=join(f.ws.path,'running');await mkdir(running,{mode:0o700});
+  const binary=join(running,'codex');await copyFile(process.execPath,binary);await chmod(binary,0o700);
+  const child=spawn(binary,['-e','process.stdin.resume()'],{stdio:['pipe','ignore','ignore'],env:{PATH:process.env.PATH}});
+  const exited=new Promise(resolve=>child.once('close',resolve));
+  await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});
+  try {
+    const processPath=`/proc/${child.pid}/exe`;
+    const host={identity:await binaryIdentity(processPath),binaryPath:f.host.binaryPath,processPath,kind:'cli'};
+    await writeFile(f.host.binaryPath,'replacement with a different identity');
+    assert.equal(await boundBinary(host),host.processPath);
+    assert.equal(await boundBinary({...host,identity:f.host.identity}),undefined);
+    assert.equal(await boundBinary({...host,processPath:'/proc/99999999/exe'}),undefined);
+  } finally {child.stdin.end();await exited;}
 });
 
 

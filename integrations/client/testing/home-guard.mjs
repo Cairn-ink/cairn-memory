@@ -90,13 +90,16 @@ for (const api of [fs, promises]) {
 }
 // Host detection reads /proc/<pid>/exe. A suite may observe only the fake
 // `codex` executables it creates in its scratch directory, never a real Codex
-// host that happens to be an ancestor of the test run.
+// host that happens to be an ancestor of the test run. Links and targets may be
+// strings, Buffers ({encoding: "buffer"}) or URLs; the caller's type is kept.
 const scratch = (() => {
   try { return fs.realpathSync(os.tmpdir()); } catch { return resolve(os.tmpdir()); }
 })();
+const text = (value) =>
+  value instanceof URL ? fileURLToPath(value) : Buffer.isBuffer(value) ? value.toString() : String(value);
 function observed(path, target) {
-  if (typeof target !== "string" || !/^\/proc\/\d+\/exe$/u.test(String(path))) return target;
-  const executable = target.replace(/ \(deleted\)$/u, "");
+  if (!/^\/proc\/(?:\d+|self|thread-self)\/exe$/u.test(resolve(text(path)))) return target;
+  const executable = text(target).replace(/ \(deleted\)$/u, "");
   if (basename(executable) === "codex" && !executable.startsWith(scratch + "/"))
     violation("test_observed_real_codex_host");
   return target;
@@ -108,5 +111,16 @@ promises.readlink = async function (path, ...args) {
 const readlinkSync = fs.readlinkSync;
 fs.readlinkSync = function (path, ...args) {
   return observed(path, readlinkSync.call(this, path, ...args));
+};
+const readlinkCallback = fs.readlink;
+fs.readlink = function (path, ...args) {
+  const callback = args.at(-1);
+  if (typeof callback !== "function") return readlinkCallback.call(this, path, ...args);
+  return readlinkCallback.call(this, path, ...args.slice(0, -1), (error, target) => {
+    if (error) return callback(error);
+    let value;
+    try { value = observed(path, target); } catch (failure) { return callback(failure); }
+    callback(null, value);
+  });
 };
 syncBuiltinESMExports();
