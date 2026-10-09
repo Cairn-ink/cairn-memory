@@ -4,7 +4,7 @@
 import { INGESTION_CLIENT } from './ingestion.mjs';
 import { canonical, fail, safeInteger } from './mixed-validation.mjs';
 
-export function verifiedEvidence(recall, get, plan, namespace) {
+function verifiedSources(recall, get, plan, namespace, project) {
   if (!recall || !Array.isArray(recall.memories) || recall.memories.length > 6
     || recall.memories.length !== Object.keys(recall.memories).length) fail('invalid_recall_provenance');
   const sourceByEvent = new Map(plan.cairnPlan.batches.flatMap(batch => batch.sourceMap.map(source =>
@@ -39,7 +39,7 @@ export function verifiedEvidence(recall, get, plan, namespace) {
     }
     const authoritative = new Map(detail.receipts.map(receipt => [receipt.id, receipt]));
     if (authoritative.size !== item.receiptCount) fail('invalid_recall_provenance');
-    const excerpts = [];
+    const sources = [];
     for (const receipt of item.receipts) {
       const original = authoritative.get(receipt?.id);
       const mapped = sourceByEvent.get(original?.eventId);
@@ -52,7 +52,7 @@ export function verifiedEvidence(recall, get, plan, namespace) {
         || receipt.excerpt !== original.excerpt || matches.length === 0
         || matches.length > 64) fail('invalid_recall_provenance');
       usedReceiptIds.add(receipt.id);
-      excerpts.push(original.excerpt);
+      sources.push({ recordedRole: original.role, text: original.excerpt });
       provenance.push({ memoryId: memory.id, receiptId: receipt.id,
         coordinates: matches.map(window => {
           const located = originWindow.get(`${mapped.batch.batchIndex}:${window.index}:${origin.renderedTurnId}`);
@@ -65,8 +65,25 @@ export function verifiedEvidence(recall, get, plan, namespace) {
             originalEndUtf16: located.originalEndUtf16 };
         }) });
     }
-    if (excerpts.length !== authoritative.size) fail('invalid_recall_provenance');
-    units.push({ text: excerpts.join('\n') });
+    if (sources.length !== authoritative.size) fail('invalid_recall_provenance');
+    units.push({ text: project(sources) });
   }
   return { units, provenance };
+}
+
+export function verifiedEvidence(recall, get, plan, namespace) {
+  return verifiedSources(recall, get, plan, namespace,
+    sources => sources.map(source => source.text).join('\n'));
+}
+
+// Explicit evaluation projection only. Recorded roles describe submitted source
+// receipts, not authenticated identity, claim subjects or execution permission.
+// The unchanged answer packer quotes this JSON as evidence, never as messages.
+export function verifiedRoleEvidence(recall, get, plan, namespace) {
+  return verifiedSources(recall, get, plan, namespace, sources => {
+    if (sources.some(source => !['user', 'assistant'].includes(source.recordedRole))) {
+      fail('invalid_recall_provenance');
+    }
+    return JSON.stringify({ format: 'source-role-evidence-v1', sources });
+  });
 }
