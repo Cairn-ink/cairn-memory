@@ -141,6 +141,7 @@ export function createAlgorithmDevelopmentTransport({ configuration, checkpoint,
         if (response.ok) stop('algorithm_usage_anomaly');
         row.outcome = 'failed'; fail('provider_failure');
       }
+      if (body === null || typeof body !== 'object' || Array.isArray(body)) stop('algorithm_usage_anomaly');
       if (containsCredential(body, apiKey)) { row.responseBody = '[REDACTED]'; stop('algorithm_credential_echo'); }
       if (counting && response.ok) {
         if (body.object !== 'response.input_tokens' || !Number.isSafeInteger(body.input_tokens) || body.input_tokens < 0)

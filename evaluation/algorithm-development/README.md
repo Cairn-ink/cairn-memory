@@ -55,3 +55,14 @@ the exclusive start marker and explicit key-provider callback. Reusing an output
 directory is rejected, including after key lookup fails. It writes private
 pre/post request records, each case, the report and closure record with fsync.
 No command auto-discovers a credential or resumes a closed operation.
+
+Post-run scoring is evaluator-only. `scoreDevelopmentCoverage` consumes the
+observations and separately frozen rubric, verifies source identity through the
+existing provenance verifier, and counts all 42 positive anchors at each stage.
+Absent, unknown and not-run anchors remain in the denominator. Literal coverage
+is not semantic support. `buildBlindDevelopmentPacket` sends only opaque labels,
+questions, original source truth, rubric, actual packed evidence and answers to
+two nonauthor reviewers; retain its mapping separately. Unblind their independent
+JSON results with `unblindDevelopmentJudgments`, then use
+`aggregateDevelopmentJudgments`. Missing/disagreed verdicts remain unresolved;
+safety disagreement blocks advancement. No automated grader calls are included.

@@ -30,7 +30,7 @@ function sourceDate(value, endOfDay = false) {
   const iso = date.toISOString(), day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getUTCDay()];
   return `${iso.slice(0, 10).replaceAll('-', '/')} (${day}) ${iso.slice(11, 16)}`;
 }
-function prepare(row) {
+export function prepareAlgorithmDevelopmentCase(row) {
   const caseId = `lme-case-${hash(row.id)}`;
   const namespace = { ownerId: 'algorithm-development-synthetic', scope: 'project', projectId: caseId };
   const history = { question_id: caseId, sessions: row.sessions.map((session, index) => ({
@@ -95,7 +95,7 @@ export async function runAlgorithmDevelopmentComparison({ cases, transport, outp
     let core, path, namespace, plan;
     try {
       transport.assertHealthy(); transport.beginCase({ id: source.id, ordinal });
-      ({ namespace, plan } = prepare(source));
+      ({ namespace, plan } = prepareAlgorithmDevelopmentCase(source));
       const folder = join(outputDirectory, `${String(ordinal).padStart(2, '0')}-${source.id}`);
       mkdirSync(folder); path = join(folder, 'memory.sqlite');
       core = openMemoryCore({ path, model: tracedModel(transport.model, observation.capture.modelCalls),

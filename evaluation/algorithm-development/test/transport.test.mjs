@@ -124,6 +124,33 @@ test('provider usage/auth anomalies latch fatal independently of core error laun
   }
 });
 
+test('HTTP 200 nonobject JSON at count, generation or answer halts later cases and retains unknown reservations', async t => {
+  for (const endpoint of ['count', 'generation', 'answer']) for (const value of [null, [], 'invalid', 1, false]) {
+    let sent = 0;
+    const f = fixture(t, { fetchImpl: async url => {
+      sent++;
+      if (endpoint === 'generation' && url.endsWith('/input_tokens'))
+        return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
+      return Response.json(value);
+    } });
+    if (endpoint === 'answer') {
+      f.transport.beginArm('baseline');
+      await assert.rejects(f.transport.answer({ question: { text: 'What was recorded?', date: '2026-10-03' },
+        units: [{ text: 'Actual receipt.' }] }), code('algorithm_usage_anomaly'));
+    } else await assert.rejects(f.transport.model.extract(request()));
+    const expectedRequests = endpoint === 'generation' ? 2 : 1;
+    assert.equal(sent, expectedRequests);
+    assert.throws(() => f.transport.assertHealthy(), code('algorithm_usage_anomaly'));
+    assert.throws(() => f.transport.beginCase({ id: 'D02', ordinal: 2 }), code('algorithm_usage_anomaly'));
+    await assert.rejects(f.transport.model.extract(request()), code('algorithm_usage_anomaly'));
+    assert.equal(sent, expectedRequests, 'no later case or method may dispatch after the fatal anomaly');
+    const state = inspectEmbeddingExperimentBudgetSnapshot(f.configuration);
+    assert.equal(state.requestCount, expectedRequests); assert.equal(state.reservedMicroUsd, expectedRequests * 5000);
+    assert.equal(state.attempts.at(-1).outcome, 'unknown'); assert.equal(state.attempts.at(-1).actualMicroUsd, null);
+    assert.equal(f.transport.records().at(-1).failure, 'algorithm_usage_anomaly');
+  }
+});
+
 test('valid over-bound usage is priced and persisted before fatal, with ledger overrun retained', async t => {
   const f = fixture(t, { fetchImpl: async url => Response.json(url.endsWith('/input_tokens')
     ? { object: 'response.input_tokens', input_tokens: 100 }

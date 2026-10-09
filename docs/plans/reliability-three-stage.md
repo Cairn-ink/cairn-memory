@@ -276,6 +276,25 @@ offline suite on both Nodes (actual exit 0 each). The unchanged generic suite
 passed 623/623 on both (actual exit 0 each). Final fixed-diff reviews and clean-
 candidate launcher smoke precede any paid execution; no semantic result yet.
 
+Independent review of `3dacb337` found one Spec gap (the executable anchor metric
+was not yet integrated) and one Standards breach (a successful JSON `null`
+response did not latch the required usage-anomaly stop). The first correction
+round adds the origin-bound 42-anchor scorer with missing-stage accounting and
+the parsed-root rejection tests; it does not alter the corpus, models or prompts.
+The primary's `judging.mjs` integration creates shuffled opaque labels for both
+nonauthor reviewers and keeps the mapping private. Correctness uses full source
+truth and the rubric; unsupported-claim counts require actual packed-source
+support, while stale-use checks also consult the full chronology. No adjudication.
+Each judge's original file, disagreements and claim totals remain separate.
+Primary will combine agreement-based net gain ≥3, packed-anchor gain >0, all
+safety gates and the declared resource bounds into an explicit advance/reject
+decision; a passed gate does not itself enable a product default.
+Clean-candidate one-shot launcher smoke on both Nodes passed with actual exit 0:
+24 cases/48 arms with fake HTTP only, 220 synthetic requests, retained settlement,
+rejection of reused successful/failed output directories, and no owned test
+residue. The revised final candidate is subject to affected checks and both
+review axes again before the first paid call.
+
 Freeze 24 questions, four in each family, before treatment observations. Each
 listed variant contributes one question; publish every slot and family count.
 
