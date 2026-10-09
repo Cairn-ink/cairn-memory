@@ -1,8 +1,9 @@
 # Known limitations
 
 The [three-stage reliability plan](plans/reliability-three-stage.md) records an
-ongoing development sequence with the first Stage 2 candidate rejected, not
-improved quality. Its pinned earlier thirty
+ongoing development sequence: the latest combined candidate gained four correct
+development answers but failed the unchanged safety-unknown gate, not accepted
+product quality. Its pinned earlier thirty
 remains Cairn 13/10/7 versus Mem0 21/8/1, and the separate later six remains
 2/4/0 versus 4/2/0 (correct/incorrect/unresolved). Four later wrong answers and
 seven earlier incomplete arms require separate diagnosis. A fixed development
@@ -64,15 +65,25 @@ existing token budget and can cause a whole evidence unit to be omitted. No
 closed answer score or unresolved safety judgment is changed, and the separate
 source-linked rank intervention is not included.
 
-The explicit [combined evidence comparison](plans/evidence-bundle-qa24.md)
-places source-diverse selection and bounded source-linked ranking against an
-ordinary baseline with the same recorded-role evidence in both arms. Its new
-identities and synthetic controls preserve raw/effective traces and the unchanged
-requested-answer v2 criteria; they produce no new paid answer or semantic score.
-The selector's four novelty additions can omit a needed source before ranking,
-and the linked rank wrapper cannot recover evidence absent from its candidates.
-Literal links and recorded roles establish neither semantic identity nor safety.
-Existing failed development gates and unknown judgments remain unchanged.
+The [closed combined evidence comparison](plans/evidence-bundle-qa24-results.md)
+executed all 24 answers per arm on previously seen authored development data.
+Ordinary baseline was 18/5/1 versus source-diverse/linked 22/2/0
+(correct/incorrect/unresolved); baseline D22's unresolved judgment is not an
+execution failure. Both arms shared recorded-role evidence and the unchanged
+requested-answer v2 criteria. Selected anchors rose 30→42/42 and packed
+presence 29→37/42, within resource ceilings, but `advances: false`: baseline
+D22's unsupported-claim disagreement remains unknown. Known unsupported
+questions are one each, stale zero, severe baseline one/treatment zero; no
+observed stale increase explains the conservative false safety flags. Actual
+linked ranking added only one ref, so gains cannot be attributed to ranking
+alone. D10/D16 retain a selected-to-rank loss boundary; D19 omits a required
+answer qualification despite byte-identical answer input in both arms, an
+output-stage variation rather than a treatment-specific retrieval regression.
+No accepted fix or broader/default/installed-host/Mem0
+claim follows. The selector's four novelty additions can omit needed sources,
+ranking cannot recover unseen candidates, and literal links/recorded roles
+establish neither semantic identity nor safety. Prior scores and disagreements
+remain sealed; further work requires a new reviewed freeze and budget preflight.
 
 The [prospective requested-answer comparison](plans/source-diverse-qa24.md) adds
 an explicit source-diverse treatment to the existing runner, not a new default

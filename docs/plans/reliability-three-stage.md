@@ -1,12 +1,12 @@
 # Reliability and answer quality development plan
 
 Status: accepted development direction; first Stage 2 candidate completed and
-rejected. The new requested-answer/source-diverse comparison has closed with
-net +3 correct answers, but its safety-unknown gate blocks advancement;
-remaining quality/installed-host gates are pending.
-The next bounded candidate is the prospectively specified
-[role-preserving source-diverse/linked comparison](evidence-bundle-qa24.md).
-It has no new semantic result yet.
+rejected. The requested-answer/source-diverse comparison closed at net +3
+correct but failed its safety-unknown gate. The separately frozen
+[role-preserving combined comparison](evidence-bundle-qa24-results.md) now
+records 18 versus 22 correct (+4) and 29 versus 37 packed anchors, but also
+fails the unchanged safety-unknown gate. Decision: revise, not advance;
+Stage 3 and quality/installed-host acceptance remain blocked.
 Owner: primary DRI. This is the single current plan for the three-stage sequence
 agreed with the owner on 2026-10-09. Executed checkpoints link separate frozen
 result reports; prospective steps do not establish a score or release.
@@ -380,6 +380,30 @@ thresholds are required. This is a recorded revise decision after the first
 two candidates, not an unbounded sweep or a relaxation of their failed gates.
 Previously seen development data and further selection bias remain limitations;
 passing this checkpoint still requires a separately frozen broader comparison.
+
+Combined-candidate result checkpoint: the
+[closed source-diverse/linked report](evidence-bundle-qa24-results.md) retains
+all 24 captures and 48 successfully executed answers at reviewed runtime
+`e729262e90636669755fadca050a4911cf093faf` (#387, unmerged at execution).
+Ordinary baseline is 18/5/1 and treatment 22/2/0
+(correct/incorrect/unresolved), with 5 wins, 1 loss, 17 both correct and
+1 neither correct. Baseline D22 is unresolved judge disagreement, not an
+execution failure. Both arms share recorded-role evidence; only this new paired
+baseline supports the combined candidate's +4 development count, not a
+ranking-only attribution or comparison with the earlier 20/23 result.
+All 42 anchors were retained/reachable; effective selection was 30→42 and
+recalled/packed presence 29→37. Actual linked ranking added one ref (D04),
+displaced none, and omitted no packed units. Known unsupported questions were
+one each, with baseline D22 unsupported unknown; stale counts were zero and
+known severe errors baseline one/treatment zero. Resources passed at 392 HTTP
+attempts and US$1.96 conservative reservations, not an invoice. The unchanged
+gate still returns `advances: false` because safety is unknown. No adjudication,
+rescore or threshold relaxation occurred. Revise before broader holdout:
+diagnose D10/D16 selected, rank-visible evidence loss with the minimal red
+controls, while retaining D19's required-qualification omission under identical
+serialized answer input as output-stage variation, not a retrieval regression.
+No accepted fix, new paid operation, default promotion or
+Stage 3 acceptance follows; all prior closed results remain unchanged.
 
 Freeze 24 questions, four in each family, before treatment observations. Each
 listed variant contributes one question; publish every slot and family count.
