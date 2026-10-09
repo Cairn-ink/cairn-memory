@@ -1,4 +1,5 @@
 import './device-ui.test.mjs';
+import './clients.test.mjs';
 import { PassThrough, Writable } from 'node:stream';
 import { detectLanguage, messages, translator } from '../lib/messages.mjs';
 import { selectEndpoint } from '../lib/options.mjs';
@@ -106,7 +107,7 @@ async function fixture(t, state = {}, options = {}) {
     });
     disconnect();`);
   const result = await new Promise((resolve, reject) => {
-    const proc = spawn(process.execPath, [options.realBin ? bin : harness, ...(options.args ?? ['setup', '--no-browser'])], {
+    const proc = spawn(process.execPath, [options.realBin ? bin : harness, ...(options.args ?? ['setup', '--no-browser']), ...((options.args ?? []).includes('--client') ? [] : ['--client', 'claude'])], {
       cwd: workspace.path, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       env: { LANG: 'en_US.UTF-8', PATH: fakeBin, HOME: workspace.path, FAKE_CALLS: callsPath, FAKE_STATE: statePath, ...(options.clipboard ? {WAYLAND_DISPLAY:'fixture',XDG_RUNTIME_DIR:workspace.path} : {}), ...options.env },
     });
@@ -156,7 +157,7 @@ test('browser happy path uses S256, safe stdin, credential check then ACK and re
   assert.deepEqual(r.browses, [`${r.server.endpoint}/device`]);
   assert.deepEqual(r.server.requests.map(r => r.route), ['device-authorizations', 'token', 'token', 'credential', 'ack']);
   assert.equal(r.server.grant.state, 'delivered');
-  assert.match(r.stdout, /plugin 0\.3\.1/); assert.match(r.stdout, /Installer @cairn-ink\/memory 0\.3\.0/);
+  assert.match(r.stdout, /plugin 0\.3\.1/); assert.match(r.stdout, /Installer @cairn-ink\/memory 0\.4\.0/);
   assert.match(r.stdout, /Cairn Memory is connected.*expires/);
   const second = await localWireRequest(r.server.server, requestJSON, new URL('/api/cli-auth/v1/token', r.server.endpoint), { body: r.server.lastProof, env: {} });
   assert.equal(second.status, 400); assert.equal(second.value.error, 'invalid_grant');

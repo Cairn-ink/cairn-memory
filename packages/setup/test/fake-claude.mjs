@@ -12,7 +12,7 @@ export function tokenDigest(token) { return scryptSync(token, 'cairn-fake-claude
 const args = process.argv.slice(2);
 const input = readFileSync(0, 'utf8');
 const values = input ? JSON.parse(input) : {};
-appendFileSync(process.env.FAKE_CALLS, `${JSON.stringify({ args, env: process.env, keys: Object.keys(values), endpoint: values.api_endpoint, tokenDigest: values.api_token ? tokenDigest(values.api_token) : undefined })}\n`);
+appendFileSync(process.env.FAKE_CALLS, `${JSON.stringify({ args, env: process.env, keys: Object.keys(values), endpoint: values.api_endpoint, pairingRecord: values.pairing_record, tokenDigest: values.api_token ? tokenDigest(values.api_token) : undefined })}\n`);
 const state = JSON.parse(readFileSync(process.env.FAKE_STATE, 'utf8'));
 const scopeIndex = args.indexOf('--scope');
 const command = (scopeIndex < 0 ? args : args.filter((_, index) => index !== scopeIndex && index !== scopeIndex + 1)).join(' ');
@@ -47,8 +47,9 @@ else if (command === 'plugin list --json') {
   }))));
 } else if (command === 'plugin configure cairn-memory@cairn-memory --json') {
   const configured = state.configured ? ['api_endpoint', 'api_token'] : (state.partial ?? []);
+  if (state.pairingRecord) configured.push('pairing_record');
   console.log(JSON.stringify({ configured,
-    unconfigured: ['api_endpoint', 'api_token'].filter(key => !configured.includes(key)), inputs: { api_token: state.token } }));
+    unconfigured: ['api_endpoint', 'api_token', 'pairing_record'].filter(key => !configured.includes(key)), inputs: { api_token: state.token } }));
 } else if (command === 'plugin configure cairn-memory@cairn-memory --values-stdin') {
   if (state.interruptConfigure) {
     process.kill(process.ppid, 'SIGINT');
@@ -56,7 +57,8 @@ else if (command === 'plugin list --json') {
   }
   if (values.api_token !== undefined) state.tokenReceived = true;
   if (values.api_endpoint !== undefined) state.endpoint = values.api_endpoint;
-  state.configured = !state.incompleteSave;
+  if (values.pairing_record !== undefined) state.pairingRecord = values.pairing_record;
+  if (values.api_token !== undefined) state.configured = !state.incompleteSave;
   // A noisy or broken child must never cause the installer to reveal the PAT.
   console.log(values.api_token); console.error(values.api_token);
 } else if (command === 'mcp get cairn') {

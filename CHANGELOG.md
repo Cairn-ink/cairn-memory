@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased — @cairn-ink/memory installer 0.3.0 (CX-5)
+## Unreleased — installer 0.4.0: one run sets up both tools
+
+- Detect Claude Code and Codex in an unscoped setup, disclose each tool's behavior,
+  and ask once per tool. Install every agreed, qualified tool with one browser
+  authorization and the existing shared project-key/pairing transaction.
+- Reuse a checked, memory-scoped browser credential when adding the other tool.
+  Keep existing keys, including a Codex standalone key when adding Claude.
+  No automatic identity migration when two independent keys already exist.
+- Report both clients with unscoped status. Keep explicit per-client setup,
+  status and control flags. Non-TTY unscoped setup never consents or installs;
+  status and dry-run remain available without prompts.
+- Skip unqualified Codex cleanly while allowing Claude setup. Keep the frozen
+  Codex runtime, hook delivery, recall framing and A7 certificate inputs intact.
+- Installer version becomes 0.4.0; plugin remains 0.3.2.
+
+## @cairn-ink/memory installer 0.3.0 (CX-5) — published 2026-10-10
 
 - Enable Codex UserPromptSubmit recall injection by default for exact
   codex-cli 0.160.1 after the authorized A7 pinned-host adversarial evaluation

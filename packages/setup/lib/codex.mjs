@@ -116,9 +116,10 @@ function runCodex(args, { env = process.env, cwd } = {}) {
 }
 
 export async function setupCodex({ action, flags, write, prompt, interactive, browse,
-  SetupError, validEndpoint, t, endpointOverride, authOptions, signal }) {
+  SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent }) {
   const fail = message => new SetupError(message);
   if (process.platform === 'win32') {
+    if (inspectOnly) return { qualified: false };
     write(t('codex_windows'));
     fallback(write, t); automaticStatus(write, t); return 0;
   }
@@ -180,6 +181,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     if (!await supports(['mcp', 'add'], /--url\b/u) ||
         !await supports(['mcp', 'get'], /--json\b/u)) {
       write(t('codex_update_required'));
+      if (inspectOnly) return { qualified: false };
       fallback(write, t); automaticStatus(write, t); return 0;
     }
     const getArgs = ['mcp', 'get', 'cairn', '--json'];
@@ -219,11 +221,13 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     const installation=join(home,'cairn','installation.json');
     const installed=await readInstallation(installation).then(()=>true,()=>false);
     const hostVerdict=cliHost ? action==='status' && !installed ? await cachedQualification(installation,cliHost) :
-      await qualifyBinary(installation,cliHost,{cache:!flags.includes('--dry-run')}) : {status:'pending'};
+      await qualifyBinary(installation,cliHost,{cache:!inspectOnly && !flags.includes('--dry-run')}) : {status:'pending'};
+    if (inspectOnly) return { qualified: hostVerdict.status==='qualified' && hostVerdict.version===hostVersion,
+      endpoint: usable ? new URL(transport.url).origin : undefined };
     if (hostVerdict.status==='qualified' && hostVerdict.version===hostVersion) {
       return await setupInstalledCodex({action,flags,home,hostVersion,write,prompt,interactive,browse,
         SetupError,t,endpointOverride,authOptions,signal,before,configPath,existing,usable,
-        neutral,get,snapshot,unchanged,cliHost,hostVerdict});
+        neutral,get,snapshot,unchanged,cliHost,hostVerdict,pairingConsent});
     }
     // Changed or unavailable format evidence keeps automatic paths closed.
     // Status reports the actual observed app-server separately from this CLI.
