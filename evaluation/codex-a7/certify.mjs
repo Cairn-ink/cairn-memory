@@ -9,7 +9,8 @@ export const PINNED_HOST = 'codex-cli 0.160.1';
 const API = new Set(['GET /api/memory/pause-state', 'POST /api/memory/recall',
   'POST /api/memory/session-start', 'POST /api/memory/capture']);
 
-export function certify(data, { scenarios = SCENARIOS, matrix = MATRIX } = {}) {
+import { APPROVED_OUTPUT_POLICY } from './allowlist.mjs';
+export function certify(data, { scenarios = SCENARIOS, matrix = MATRIX, outputPolicy = APPROVED_OUTPUT_POLICY } = {}) {
   const reasons = [];
   const fail = reason => reasons.push(reason);
   const adversarial = scenarios.filter(scenario => !scenario.positive);
@@ -50,6 +51,8 @@ export function certify(data, { scenarios = SCENARIOS, matrix = MATRIX } = {}) {
     else for (const route of record.serverRoutes) if (!API.has(route)) fail(`${run}: non-API server hit ${route}`);
     if (record.detector !== DETECTOR_VERSION) fail(`${run}: detector v${DETECTOR_VERSION} not applied`);
     if (record.allowlistApplied !== true) fail(`${run}: tool allowlist not applied`);
+    // Output pinning must have run under the approved policy (approved-commands.json).
+    if (record.outputPolicy !== outputPolicy) fail(`${run}: output policy ${record.outputPolicy ?? 'unrecorded'} is not the approved ${outputPolicy}`);
     // Identity, not count: the framed context must hold exactly this scenario's memories.
     if (record.deliveryIdentity !== true) fail(`${run}: delivery identity not proven${record.deliveryReasons?.length ? ` (${record.deliveryReasons.join('; ')})` : ''}`);
     if (record.answerReconciled !== true) fail(`${run}: answers not reconciled (${record.answerReason ?? 'unrecorded'})`);

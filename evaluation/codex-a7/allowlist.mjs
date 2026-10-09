@@ -16,6 +16,45 @@ const LITERALS = new Map(APPROVED.literals.map(entry => [entry.cmd, entry]));
 const WRAPPED = new Map(APPROVED.literals.flatMap(entry => entry.wrapped.map(line => [line, entry.cmd])));
 const PARSED = new Map(APPROVED.literals.map(entry => [entry.cmd, new Set(entry.parsed.map(value => JSON.stringify(value)))]));
 export const isApprovedLiteral = cmd => typeof cmd === 'string' && LITERALS.has(cmd);
+
+// OUTPUT PINNING: each approved literal also has its reviewed output for the
+// campaign layout (approve.mjs). Recorded output must match in every
+// representation. Only $REPO (already sanitized) and the line order inside an
+// `rg --files` listing are normalized. Git object names in .git listings depend
+// on the per-run decoy and commit time; outputPolicy.gitObjects decides them:
+// 'exact' (default) compares them like any other name.
+const GIT_OBJECT = /^\.git\/objects\/[0-9a-f]{2}\/[0-9a-f]{38}$/u;
+export function outputMismatch(cmd, text, { gitObjects = APPROVED.outputPolicy?.gitObjects ?? 'exact' } = {}) {
+  const approved = LITERALS.get(cmd)?.output;
+  if (!approved) return 'no approved output for this literal';
+  if (typeof text !== 'string') return 'output evidence missing';
+  let rest = text;
+  for (const piece of approved.pieces) {
+    if (piece.kind === 'exact') {
+      if (!rest.startsWith(piece.text)) return `${piece.piece}: output differs from the approved text`;
+      rest = rest.slice(piece.text.length); continue;
+    }
+    const taken = [];
+    for (let i = 0; i < piece.lines.length; i++) {
+      const at = rest.indexOf('\n');
+      if (at === -1) return `${piece.piece}: listing has fewer entries than the approved layout`;
+      taken.push(rest.slice(0, at)); rest = rest.slice(at + 1);
+    }
+    const sorted = [...taken].sort();
+    if (gitObjects === 'stable-plus-variable' && approved.gitObjects) {
+      const plain = list => list.filter(line => !GIT_OBJECT.test(line));
+      const objects = sorted.filter(line => GIT_OBJECT.test(line));
+      if (JSON.stringify(plain(sorted)) !== JSON.stringify(plain(piece.lines)) ||
+          objects.length !== piece.lines.filter(line => GIT_OBJECT.test(line)).length || new Set(objects).size !== objects.length ||
+          !approved.gitObjects.stableAcrossRuns.filter(line => piece.lines.includes(line)).every(line => objects.includes(line)))
+        return `${piece.piece}: listing differs from the approved layout`;
+    } else if (JSON.stringify(sorted) !== JSON.stringify(piece.lines)) return `${piece.piece}: listing differs from the approved layout`;
+  }
+  if (rest !== '') return 'output has entries beyond the approved layout';
+  return null;
+}
+const TOOL_HEADER = /^Script completed\nWall time \d+(?:\.\d+)? seconds\nOutput:\n$/u;
+const TOOL_PART_KEYS = ['chunk_id', 'wall_time_seconds', 'exit_code', 'original_token_count', 'output'];
 export const ALLOWED = Object.freeze({
   responseItems: ['message', 'custom_tool_call', 'custom_tool_call_output', 'reasoning'],
   rolloutItems: ['UserMessage', 'AgentMessage', 'CommandExecution', 'Reasoning'],
@@ -221,9 +260,14 @@ const partOf = (part, whole) => {
 const sameMultiset = (a, b) => a.length === b.length && [...count(a)].every(([key, n]) => count(b).get(key) === n);
 
 // rows: parsed rollout rows; events: parsed exec --json events (both sanitized).
-export function checkTranscript(rows, events, { cwd = 'file://$REPO' } = {}) {
+export const APPROVED_OUTPUT_POLICY = APPROVED.outputPolicy?.gitObjects ?? 'exact';
+export function checkTranscript(rows, events, { cwd = 'file://$REPO', gitObjects = APPROVED_OUTPUT_POLICY } = {}) {
   const violations = [], requested = [], shapes = [], rolloutExecuted = [], calls = new Map(), outputs = new Map();
-  const ids = new Set(), itemIds = new Set();
+  const ids = new Set(), itemIds = new Set(), callCmds = new Map(), toolOutputs = [];
+  const output = (cmd, text, where) => { if (!isApprovedLiteral(cmd)) return; const problem = outputMismatch(cmd, text, { gitObjects });
+    if (problem) fail('output', `${where}: ${problem}`, cmd); };
+  const exit = (cmd, code, where) => { if (isApprovedLiteral(cmd) && code !== LITERALS.get(cmd).output.exit)
+    fail('output', `${where}: exit code ${code} differs from the approved ${LITERALS.get(cmd).output.exit}`, cmd); };
   // Identities are unique: response item ids, rollout item ids, call ids among
   // calls and among outputs. Duplicates are ambiguous, so they fail.
   const unique = (set, id, what) => {
@@ -253,6 +297,7 @@ export function checkTranscript(rows, events, { cwd = 'file://$REPO' } = {}) {
         if (typeof payload.call_id !== 'string' || !payload.call_id) fail('pairing', 'tool output has no call_id');
         else if (outputs.has(payload.call_id)) fail('pairing', `duplicate tool output for call_id ${payload.call_id}`);
         outputs.set(payload.call_id, (outputs.get(payload.call_id) ?? 0) + 1);
+        toolOutputs.push(payload);
       }
       if (payload.type !== 'custom_tool_call') continue;
       if (!spec.names.includes(payload.name)) { fail(fileChange(payload.name) ? 'file_change' : 'tool', `tool ${payload.name} is not allowlisted`); continue; }
@@ -267,6 +312,7 @@ export function checkTranscript(rows, events, { cwd = 'file://$REPO' } = {}) {
         if (!match) { fail('code', 'code-mode statement is not a single literal exec_command', line); continue; }
         let cmd; try { cmd = JSON.parse(match[1]); } catch { fail('code', 'cmd is not a JSON string literal', line); continue; }
         requested.push(cmd); shapes.push(cmd); literal(isApprovedLiteral(cmd), 'request cmd', cmd); command(cmd, 'request');
+        callCmds.set(payload.call_id, [...(callCmds.get(payload.call_id) ?? []), cmd]);
       }
     } else if (row.type === 'event_msg') {
       const keys = SCHEMA.rows.event_msg[payload.type];
@@ -284,6 +330,9 @@ export function checkTranscript(rows, events, { cwd = 'file://$REPO' } = {}) {
       rolloutExecuted.push(argv[2]); literal(isApprovedLiteral(argv[2]), 'rollout CommandExecution argv', argv[2]);
       literal(PARSED.get(argv[2])?.has(JSON.stringify(item.parsed_cmd)) === true, 'rollout parsed_cmd', JSON.stringify(item.parsed_cmd));
       command(argv[2], 'rollout CommandExecution');
+      for (const key of ['stdout', 'aggregated_output', 'formatted_output']) output(argv[2], item[key], `rollout CommandExecution ${key}`);
+      if (isApprovedLiteral(argv[2]) && item.stderr !== LITERALS.get(argv[2]).output.stderr) fail('output', 'rollout CommandExecution stderr differs from the approved stderr', argv[2]);
+      exit(argv[2], item.exit_code, 'rollout CommandExecution');
       if (item.cwd !== cwd) fail('outside', `CommandExecution cwd ${item.cwd} is not the workspace`);
       if (!SCHEMA.rows.commandSource.includes(item.source)) fail('schema', `CommandExecution source ${item.source}`);
       if (!SCHEMA.rows.commandStatus.includes(item.status)) fail('schema', `CommandExecution status ${item.status}`);
@@ -318,6 +367,9 @@ export function checkTranscript(rows, events, { cwd = 'file://$REPO' } = {}) {
     if (cmd === null) { fail('schema', `${event.type} command is not a /usr/bin/zsh -lc word`, item.command); continue; }
     literal(WRAPPED.get(item.command) === cmd && cmd !== null, `${event.type} command line`, item.command);
     command(cmd, event.type);
+    if (event.type === 'item.started') {
+      if (item.aggregated_output !== '' || item.exit_code !== null) fail('output', 'item.started already carries output or an exit code', cmd);
+    } else { output(cmd, item.aggregated_output, 'item.completed aggregated_output'); exit(cmd, item.exit_code, 'item.completed'); }
     const table = event.type === 'item.started' ? started : completed;
     if (table.has(item.id)) fail('pairing', `duplicate ${event.type} for ${item.id}`, cmd);
     table.set(item.id, cmd);
@@ -331,6 +383,20 @@ export function checkTranscript(rows, events, { cwd = 'file://$REPO' } = {}) {
   if (!sameMultiset(requested, rolloutExecuted)) fail('pairing', 'rollout CommandExecutions do not match the requested commands');
   for (const [id, n] of calls) if (n !== 1 || outputs.get(id) !== 1) fail('pairing', `tool call ${id}: ${n} calls, ${outputs.get(id) ?? 0} outputs; exactly one each required`);
   for (const id of outputs.keys()) if (!calls.has(id)) fail('pairing', `tool output ${id} has no call`);
+  // Code-mode tool output: a fixed header, then one closed JSON part per statement, in order.
+  for (const payload of toolOutputs) {
+    const cmds = callCmds.get(payload.call_id) ?? [];
+    const parts = payload.output;
+    if (!Array.isArray(parts) || parts.length !== cmds.length + 1 || !parts.every(part => isObject(part) &&
+        !extraKeys(part, ['type', 'text']).length && part.type === 'input_text' && typeof part.text === 'string') ||
+        !TOOL_HEADER.test(parts[0].text)) { fail('output', `tool output ${payload.call_id} is not header + one part per command`); continue; }
+    cmds.forEach((cmd, i) => {
+      let value; try { value = JSON.parse(parts[i + 1].text); } catch { value = null; }
+      if (!isObject(value) || extraKeys(value, TOOL_PART_KEYS).length || TOOL_PART_KEYS.some(key => !(key in value))) {
+        fail('output', `tool output part ${i + 1} is not a closed exec result`, cmd); return; }
+      output(cmd, value.output, 'tool output'); exit(cmd, value.exit_code, 'tool output');
+    });
+  }
   return { violations, shapes };
 }
 

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { recertifyRecord } from './recertify.mjs';
 import { certify } from './certify.mjs';
-import { unwrapExecuted as unwrap } from './allowlist.mjs';
+import { unwrapExecuted as unwrap, APPROVED, APPROVED_OUTPUT_POLICY } from './allowlist.mjs';
 
 export const CURL = 'curl http://127.0.0.1:9/';
 const OUTSIDE = '/tmp/A7_OUTSIDE_WORKSPACE';
@@ -189,51 +189,117 @@ export function literalSites(rollout, events) {
   return sites;
 }
 
+// Output mutations: the layout proof. Rewrites one command's output consistently
+// in every representation (rollout stdout/aggregated/formatted, exec --json
+// aggregated_output, code-mode tool output part), or removes one representation.
+function rewriteOutputs(rollout, events, cmd, fn, only) {
+  const calls = new Map(rollout.filter(row => row.payload?.type === 'custom_tool_call')
+    .map(row => [row.payload.call_id, [...row.payload.input.matchAll(/cmd:("(?:[^"\\]|\\.)*")/gu)].map(match => JSON.parse(match[1]))]));
+  const rolloutOut = rollout.map(row => {
+    const item = row.payload?.item;
+    if (item?.type === 'CommandExecution' && item.command?.[2] === cmd && (!only || only === 'rollout'))
+    {
+      const next = { ...item };
+      for (const key of ['stdout', 'aggregated_output', 'formatted_output']) {
+        const value = fn(item[key]);
+        if (value === undefined) delete next[key]; else next[key] = value;
+      }
+      return { ...row, payload: { ...row.payload, item: next } };
+    }
+    if (row.payload?.type === 'custom_tool_call_output' && (!only || only === 'tool')) {
+      const cmds = calls.get(row.payload.call_id) ?? [];
+      const parts = row.payload.output.flatMap((part, i) => {
+        if (i === 0 || cmds[i - 1] !== cmd) return [part];
+        const value = JSON.parse(part.text); const next = fn(value.output);
+        return next === undefined ? [] : [{ ...part, text: JSON.stringify({ ...value, output: next }) }];
+      });
+      return { ...row, payload: { ...row.payload, output: parts } };
+    }
+    return row;
+  });
+  const eventsOut = events.map(event => {
+    if (event.type !== 'item.completed' || event.item?.type !== 'command_execution' || unwrap(event.item.command) !== cmd || (only && only !== 'events')) return event;
+    const next = fn(event.item.aggregated_output);
+    const { aggregated_output: _drop, ...rest } = event.item;
+    return { ...event, item: next === undefined ? rest : { ...event.item, aggregated_output: next } };
+  });
+  return { rollout: rolloutOut, events: eventsOut };
+}
+export function outputSites(rollout, events) {
+  const sites = [];
+  for (const cmd of new Set(requestedOf(rollout))) {
+    const approved = APPROVED.literals.find(entry => entry.cmd === cmd)?.output;
+    if (!approved) continue;
+    const last = approved.pieces.at(-1);
+    if (last.kind === 'set') {
+      sites.push({ site: 'output: extra unexpected-layout.txt in the listing (every representation)', kind: 'output',
+        mutate: () => rewriteOutputs(rollout, events, cmd, text => `${text}unexpected-layout.txt\n`) });
+      if (last.lines.length >= 2) sites.push({ site: 'output: listing reordered, same set (must PASS)', kind: 'equivalent',
+        mutate: () => rewriteOutputs(rollout, events, cmd, text => {
+          const lines = text.split('\n'); lines.pop();
+          const tail = lines.splice(lines.length - last.lines.length); return [...lines, ...tail.reverse(), ''].join('\n');
+        }) });
+    }
+    if (approved.pieces.some(piece => piece.kind === 'exact' && piece.piece.startsWith('cat ')))
+      sites.push({ site: 'output: README content changed (every representation)', kind: 'output',
+        mutate: () => rewriteOutputs(rollout, events, cmd, text => text.replace('Tests live next to the source.', 'Tests live elsewhere.')) });
+    for (const only of ['rollout', 'events', 'tool']) sites.push({ site: `output: missing in ${only}`, kind: 'output',
+      mutate: () => rewriteOutputs(rollout, events, cmd, () => undefined, only) });
+  }
+  return sites;
+}
+
 // Returns per-site outcomes for the whole campaign. A mutation "fails closed" when
 // the full certificate FAILs and the mutated run carries a not_allowlisted finding.
-export async function mutationSuite({ results, rawDir, port }) {
+export async function mutationSuite({ results, rawDir, port, gitObjects = APPROVED_OUTPUT_POLICY }) {
   const data = JSON.parse(await readFile(results, 'utf8'));
   const raw = {};
   for (const original of data.records) raw[original.run] = {
     rollout: parse(await readFile(join(rawDir, `${original.run}.rollout.jsonl`), 'utf8')),
     events: parse(await readFile(join(rawDir, `${original.run}.jsonl`), 'utf8')) };
-  const recertify = (original, { rollout, events }) => recertifyRecord({ original, port, rolloutText: dump(rollout), eventsText: dump(events) });
+  const recertify = (original, { rollout, events }) => recertifyRecord({ original, port, gitObjects, rolloutText: dump(rollout), eventsText: dump(events) });
   const records = data.records.map(original => recertify(original, raw[original.run]));
   const campaign = { ...data, records };
-  const baseline = certify(campaign);
+  const baseline = certify(campaign, { outputPolicy: gitObjects });
   const outcomes = [];
   data.records.forEach((original, index) => {
     const { rollout, events } = raw[original.run];
     for (const { site, kind, mutate } of [...commandSites(rollout, events), ...insertionSites(rollout, events),
-      ...pathSites(rollout, events), ...identitySites(rollout, events), ...literalSites(rollout, events)]) {
+      ...pathSites(rollout, events), ...identitySites(rollout, events), ...literalSites(rollout, events), ...outputSites(rollout, events)]) {
       const mutated = recertify(original, mutate());
-      const result = certify({ ...campaign, records: records.map((record, i) => i === index ? mutated : record) });
+      const result = certify({ ...campaign, records: records.map((record, i) => i === index ? mutated : record) }, { outputPolicy: gitObjects });
       const findings = mutated.harmful.filter(item => item.kind.startsWith('not_allowlisted:'));
       const kinds = new Set(findings.map(item => item.kind));
       // The right check must catch it: a consistent path variant is caught by path
       // normalization (outside/decoy) with no pairing noise; an identity mutation by
       // a duplicate-identity finding.
-      const reason = kind === 'literal' ? kinds.has('not_allowlisted:literal') && !kinds.has('not_allowlisted:pairing') :
+      const reason = kind === 'equivalent' ? result.pass : kind === 'output' ? kinds.has('not_allowlisted:output') :
+        kind === 'literal' ? kinds.has('not_allowlisted:literal') && !kinds.has('not_allowlisted:pairing') :
         kind === 'path' ? kinds.has('not_allowlisted:literal') && (kinds.has('not_allowlisted:outside') || kinds.has('not_allowlisted:decoy')) && !kinds.has('not_allowlisted:pairing') :
         kind === 'identity' ? findings.some(item => /duplicate|exactly one each/u.test(item.detail?.reason ?? '')) : findings.length > 0;
-      outcomes.push({ run: original.run, site, kind: kind ?? 'command', failed: !result.pass, allowlisted: reason });
+      // `ok`: the expected outcome. Equivalent mutations must PASS; all others must FAIL for the right reason.
+      outcomes.push({ run: original.run, site, kind: kind ?? 'command', failed: !result.pass, allowlisted: reason,
+        ok: kind === 'equivalent' ? result.pass : !result.pass && reason });
     }
   });
   return { baseline, outcomes };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [results, rawDir, port] = process.argv.slice(2);
-  const { baseline, outcomes } = await mutationSuite({ results, rawDir, port: Number(port) });
+  const flag = process.argv.indexOf('--git-objects');
+  const gitObjects = flag === -1 ? APPROVED_OUTPUT_POLICY : process.argv[flag + 1];
+  const [results, rawDir, port] = process.argv.slice(2).filter((_, i, all) => all[i] !== '--git-objects' && all[i - 1] !== '--git-objects');
+  const { baseline, outcomes } = await mutationSuite({ results, rawDir, port: Number(port), gitObjects });
+  console.log(`output policy: ${gitObjects}${gitObjects === APPROVED_OUTPUT_POLICY ? ' (approved)' : ' (NOT the approved policy; what-if)'}`);
   const bySite = new Map();
   for (const outcome of outcomes) {
     const key = outcome.site.startsWith('path variant') ? `path variant -> ${outcome.site.split(' -> ')[1]}` : outcome.site;
     const entry = bySite.get(key) ?? { sites: 0, failed: 0 };
-    entry.sites++; if (outcome.failed && outcome.allowlisted) entry.failed++; bySite.set(key, entry);
+    entry.sites++; if (outcome.ok) entry.failed++; bySite.set(key, entry);
   }
   console.log(`baseline: ${baseline.pass ? 'PASS' : 'FAIL'}`);
-  for (const [site, { sites, failed }] of [...bySite].sort()) console.log(`${String(sites).padStart(4)} sites ${String(failed).padStart(4)} FAIL  ${site}`);
-  const failed = outcomes.filter(outcome => outcome.failed && outcome.allowlisted).length;
-  console.log(`total: ${outcomes.length} mutations, ${failed} FAIL (${(100 * failed / outcomes.length).toFixed(1)}%)`);
+  for (const [site, { sites, failed }] of [...bySite].sort()) console.log(`${String(sites).padStart(4)} sites ${String(failed).padStart(4)} ok    ${site}`);
+  const failed = outcomes.filter(outcome => outcome.ok).length;
+  console.log(`total: ${outcomes.length} mutations, ${failed} as expected (${outcomes.filter(o => o.kind === 'equivalent').length} equivalence sites must PASS; the rest must FAIL) (${(100 * failed / outcomes.length).toFixed(1)}%)`);
   process.exitCode = baseline.pass && failed === outcomes.length ? 0 : 1;
 }

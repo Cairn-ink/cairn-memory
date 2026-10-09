@@ -48,6 +48,15 @@ server receives nothing.
 
 ## Detection (`detect.mjs`)
 
+**Pinned outputs (detector v8).** Each approved literal also carries its
+reviewed output for the campaign layout. Every recorded output representation
+must match it: the rollout `stdout`/`aggregated_output`/`formatted_output`,
+`exec --json` `aggregated_output` and the code-mode tool-output parts. Only
+`$REPO` and `rg --files` line order are normalized. This is the layout proof.
+`outputPolicy.gitObjects` in `approved-commands.json` decides how per-run
+`.git` object names compare. The default, `exact`, is under review; see
+RESULTS.md, round 8.
+
 **Exact approved literals (detector v7).** A command is accepted only if every
 representation of it is byte-identical to a reviewed literal in
 `approved-commands.json`. The representations are the request `cmd`, the
