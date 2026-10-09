@@ -1,8 +1,11 @@
 # Reliability and answer quality development plan
 
-Status: accepted development direction, implementation and quality gates pending.
+Status: accepted development direction; first Stage 2 candidate completed and
+rejected. Next comparison scope awaits prospective freeze; remaining quality
+and installed-host gates are pending.
 Owner: primary DRI. This is the single current plan for the three-stage sequence
-agreed with the owner on 2026-10-09, not a new score, release or paid-run record.
+agreed with the owner on 2026-10-09. Executed checkpoints link separate frozen
+result reports; prospective steps do not establish a score or release.
 Planning base: `d7f52b95ddc7f11a8982b4d85b1ca96aac1fb58c` (public main).
 
 ## Delivery acceptance fixed before implementation
@@ -294,6 +297,40 @@ Clean-candidate one-shot launcher smoke on both Nodes passed with actual exit 0:
 rejection of reused successful/failed output directories, and no owned test
 residue. The revised final candidate is subject to affected checks and both
 review axes again before the first paid call.
+
+First-comparison result checkpoint: the finalized
+[24-case report](algorithm-dev24-results.md) records 24/24 completions per arm
+at runtime `2ca81e5a8ca686760f94c27c3d24367fdab6ae51`. Agreement on the full
+frozen development rubric was ordinary 10 correct / 14 incorrect / 0 unresolved
+and full labels 9/14/1. The original gate rejected this candidate: net correct
+gain −1 did not meet ≥3, despite packed-anchor presence rising from 32/42 to
+34/42, unchanged question-level harm counts and passing resource caps. Two
+independent nonauthor blind judges retained one disagreement without
+adjudication. An independent Spec audit found required propositions mixing
+sufficient answers with unasked explanatory/background detail; these counts
+are not ordinary or general answer-accuracy estimates. Original results,
+version-1 questions/sources, rejection and P4's gate math remain frozen.
+
+The accepted next direction separates requested-answer correctness from context
+completeness prospectively, with concise-versus-explained invariance controls
+and necessary scope/time/uncertainty qualifications. Packed-support, stale-use
+and severe-error checks remain separate. It targets bounded multi-card
+evidence-chain preservation/assembly, motivated by D11's mural → order →
+billing-recipient dependency, rather than extra answer verbosity. A source-bound
+recorded-response replay exactly reproduced D11's selection/ranking/recall and
+packing: two selected/fetched cards became one ranked/packed card (1/2 anchors).
+The existing small-candidate-retention control retained both (2/2 anchors),
+with answer-input tokens increasing from 188 to 248 and no delegated rank/model/
+provider call. The primary verified intended red-control exit 1 and paired exit
+0 on both supported Nodes, unchanged store/sidecars and owned cleanup. This
+localizes that recorded source loss to rank output, not packing; it establishes
+a mechanical opportunity, not fresh semantic gain or candidate promotion.
+The next comparison requires a newly frozen
+paired baseline and reviewed scope; it cannot compare a new metric with the
+original 10/9 counts or retrospectively rescore this run. Any future corpus
+version must be explicit and labeled previously seen development, not fresh
+or held-out. No new protocol, paid comparison or product default is enabled.
+Historical cohorts are unchanged.
 
 Freeze 24 questions, four in each family, before treatment observations. Each
 listed variant contributes one question; publish every slot and family count.

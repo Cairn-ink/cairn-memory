@@ -1,7 +1,8 @@
 # Known limitations
 
-The [three-stage reliability plan](plans/reliability-three-stage.md) records a
-pending development sequence, not improved quality. Its pinned earlier thirty
+The [three-stage reliability plan](plans/reliability-three-stage.md) records an
+ongoing development sequence with the first Stage 2 candidate rejected, not
+improved quality. Its pinned earlier thirty
 remains Cairn 13/10/7 versus Mem0 21/8/1, and the separate later six remains
 2/4/0 versus 4/2/0 (correct/incorrect/unresolved). Four later wrong answers and
 seven earlier incomplete arms require separate diagnosis. A fixed development
@@ -9,6 +10,28 @@ gate or future pilot cannot establish population parity; natural installed
 Hermes use, independent reliability and lightweight resources remain open.
 Historical preference exhaustion prevents an all-six-type fresh coverage claim.
 This checkpoint launches no paid work and preserves all prior evidence below.
+
+The first paid [24-case synthetic algorithm comparison](plans/algorithm-dev24-results.md)
+completed both arms 24/24. Agreement on its full frozen development rubric
+was ordinary labels 10/14/0 and full labels 9/14/1
+(correct/incorrect/unresolved). The original advancement gate rejected full
+labels at net −1, despite packed-anchor presence rising from 32/42 to 34/42.
+Both arms had one unsupported-answer question, zero stale-use/severe errors
+and no safety unknowns; resource caps passed. An independent Spec audit found
+required propositions mixing sufficient direct answers with unasked
+explanatory/background detail, so these counts are not ordinary or general
+answer-accuracy estimates. The original results, version-1 sources and
+rejection stay frozen. The accepted next direction prospectively separates
+answer correctness from context completeness and targets bounded multi-card
+evidence-chain assembly. A source-bound D11 replay localized its recorded loss
+to rank output (two selected/fetched cards became one packed card); retaining
+both raised literal coverage from 1/2 to 2/2 at 188 versus 248 answer-input
+tokens. This replay used no provider call and establishes a mechanical
+opportunity, not semantic gain, a QA fix or promotion. A new metric needs a
+newly frozen paired baseline, not comparison with these 10/9 counts.
+This small authored corpus does not establish LongMemEval/Mem0, long-history
+or installed-host performance; future versions remain previously seen
+development data, and no new paid comparison or default change is enabled.
 
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
