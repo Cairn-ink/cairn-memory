@@ -405,6 +405,15 @@ serialized answer input as output-stage variation, not a retrieval regression.
 No accepted fix, new paid operation, default promotion or
 Stage 3 acceptance follows; all prior closed results remain unchanged.
 
+The next bounded offline candidate is
+[seed-gated small source-set preservation](seed-gated-source-preservation.md):
+one unchanged rank call, nonempty raw seeds first, then omitted rank-visible
+siblings only when the complete supplied pool is single-namespace and fits
+`min(limit, 6)`; otherwise the existing linked fallback. It deliberately risks
+irrelevant/old evidence and cannot recover upstream omissions or fix D19's
+generation variation. Its offline restoration controls do not establish QA or
+safety gains, authorize paid work, or relax any failed development gate.
+
 Freeze 24 questions, four in each family, before treatment observations. Each
 listed variant contributes one question; publish every slot and family count.
 

@@ -85,6 +85,18 @@ ranking cannot recover unseen candidates, and literal links/recorded roles
 establish neither semantic identity nor safety. Prior scores and disagreements
 remain sealed; further work requires a new reviewed freeze and budget preflight.
 
+The opt-in offline [seed-gated small source-set candidate](plans/seed-gated-source-preservation.md)
+preserves a complete supplied rank-visible pool of at most `min(limit, 6)` cards
+in one namespace only after a validated nonempty rank seed; larger/mixed pools
+use the existing linked fallback. It does not bypass rank or recover sources
+omitted before the rank seam. A false-positive seed admits unrelated, conflicting,
+instruction-bearing or dated active siblings; provenance/roles/freshness do not
+establish semantic relevance, applicability or safety. Extra units consume the
+unchanged packing budget and can be omitted whole. Counterfactual closed-trace
+restoration and synthetic tests are not new answers/scores or paid-run/default
+authority, and this rank intervention does not fix identical-input generation
+variation. A separately reviewed paired QA experiment is required.
+
 The [prospective requested-answer comparison](plans/source-diverse-qa24.md) adds
 an explicit source-diverse treatment to the existing runner, not a new default
 or a retry/rescore of the closed full-label experiment. Its separately versioned

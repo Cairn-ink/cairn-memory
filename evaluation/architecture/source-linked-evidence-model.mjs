@@ -161,10 +161,33 @@ export function assembleSourceLinkedEvidence(input, rankOutput) {
   return assemble(clean, outputSnapshot(rankOutput, clean));
 }
 
-/** Evaluation only: one unchanged rank call, then bounded source-set assembly.
- * The shared core retains allowed-reference validation and final freshness.
+function assembleSeedGated(input, ranked) {
+  const candidates = input.candidates, seeds = new Set(ranked.refs.map(key));
+  let reason = null;
+  if (!ranked.refs.length) reason = 'empty_rank';
+  else if (new Set(candidates.map(candidate => candidate.namespaceIndex)).size !== 1) reason = 'mixed_namespaces';
+  else if (candidates.length > 6) reason = 'preservation_cap_exceeded';
+  else if (candidates.length > input.limit) reason = 'pool_exceeds_limit';
+  const linked = reason && reason !== 'empty_rank' ? assemble(input, ranked) : null;
+  const output = linked ? linked.output : { refs: reason === 'empty_rank' ? []
+    : [...ranked.refs, ...candidates.map(refOf).filter(ref => !seeds.has(key(ref)))] };
+  return freeze({ output, diagnostics: {
+    strategy: 'seed-gated-small-source-set-v1', applied: reason === null,
+    reason: reason ?? 'eligible_small_pool', semanticCoverage: 'unassessed', relevance: 'unassessed',
+    addedRefs: output.refs.filter(ref => !seeds.has(key(ref))),
+    linkedFallback: linked?.diagnostics ?? null } });
+}
+
+/** Preserve only the complete supplied rank-visible small pool after a nonempty
+ * validated seed. This is not closure over upstream selected or stored sources,
+ * a relevance assessment, or an assertion that siblings support the query.
  */
-export function createSourceLinkedEvidenceModel(model) {
+export function assembleSeedGatedSourceSet(input, rankOutput) {
+  const clean = inputSnapshot(input);
+  return assembleSeedGated(clean, outputSnapshot(rankOutput, clean));
+}
+
+function createEvidenceSetModel(model, compiler) {
   if (!model || typeof model !== 'object') fail('model_not_configured');
   const descriptors = fields(model);
   if (typeof descriptors.rank?.value !== 'function') fail('model_not_configured');
@@ -191,10 +214,22 @@ export function createSourceLinkedEvidenceModel(model) {
     if (encoded.length > 40000 || countTokens(counter, encoded) > 1024) fail('invalid_model_output');
     checkAbort(signal);
     if (JSON.stringify(outputSnapshot(raw, clean)) !== encoded) fail('invalid_model_output');
-    const output = assemble(clean, ranked).output, compiled = JSON.stringify(output);
+    const output = compiler(clean, ranked).output, compiled = JSON.stringify(output);
     if (compiled.length > 40000 || countTokens(counter, compiled) > 1024) fail('invalid_model_output');
     checkAbort(signal);
     if (JSON.stringify(outputSnapshot(raw, clean)) !== encoded) fail('invalid_model_output');
     return output;
   } });
+}
+
+/** Evaluation only: one unchanged rank call, then bounded source-set assembly.
+ * The shared core retains allowed-reference validation and final freshness.
+ */
+export function createSourceLinkedEvidenceModel(model) {
+  return createEvidenceSetModel(model, assemble);
+}
+
+/** Opt-in offline candidate; no extra calls, larger budgets or trusted roles. */
+export function createSeedGatedSourceSetModel(model) {
+  return createEvidenceSetModel(model, assembleSeedGated);
 }
