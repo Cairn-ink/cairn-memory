@@ -43,6 +43,16 @@ identity. This narrow policy is held from a paid rerun pending candidate
 selection/source-diversity work. The original scores and result bytes remain
 untouched.
 
+The evaluation-only [source-diverse selector](plans/source-diverse-selection.md)
+preserves the original selector call and adds bounded exact-source-set deduplication
+and visible-page novelty expansion. Its cold synthetic control restores a packed
+complementary source, but an unchanged downstream rank-loss control still drops
+that source. Source diversity is not relevance, truth or a demonstrated QA gain;
+it can expose unrelated sources and increase downstream context. No core/default,
+speaker-role projection, old score or paid-run authorization changes. A prospective
+requested-answer/context rubric and new paired baseline are required before any
+future paid comparison; reused development cases are not holdout evidence.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
