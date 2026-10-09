@@ -66,6 +66,39 @@ new paid answers or scores are produced by this delivery; a later run requires
 reviewed clean code, a new manifest/current budget checkpoint and independent
 blind judgments on a fresh paired baseline using previously seen development data.
 
+The later [closed source-diverse requested-answer run](plans/source-diverse-qa24-results.md)
+completed all 24 captures / 48 answers at reviewed runtime #383. Effective source
+selection improved from 31/42 to 42/42 anchors and actual packed presence from
+30/42 to 37/42, while five treatment anchors still failed to survive final recall.
+All anchors were retained/candidate-reachable for this small seen-data set; source
+novelty/presence is not relevance or correctness. The unchanged resource ceilings
+passed (392 HTTP attempts; US$1.96 conservative reservation delta, not an invoice).
+Independent blind judges agree on all 48 requested-answer verdicts: ordinary
+20/4/0 versus source-diverse 23/1/0, with three paired wins and zero losses.
+The unchanged gate still blocks advancement: D04 treatment's unsupported-claim
+judgments disagree and remain unknown. Known unsupported questions are two per
+arm, stale/severe zero; false conservative safety flags do not mean observed
+increased stale counts. No adjudication, historical rescoring or gate relaxation
+occurred. This one seen-data trial's requested-answer count gain is not accepted
+product improvement, an old-rubric comparison, default promotion, long-history,
+LongMemEval/Mem0 parity or installed-host performance.
+
+D04 retains the assistant source role through core receipts and rank input,
+but the evaluation projects text-only evidence before answering; both answers
+misattribute the adviser. That observed role loss does not establish causation
+or show that a rendering fix would resolve the treatment's separate “not a
+technician” unsupported-claim unknown. D10/D12 treatment selects the needed
+bridges, then loses them at ranking while its requested answers remain correct
+with known unsupported claims. The offline replay of existing source-linked rank
+assembly restores those two bridges (ordinary packed anchors 30→30/42;
+source-diverse 37→39/42), without new answers or scores. A separate red/control
+probe confirms that core receipt role flips produce identical packed requests.
+The next candidate is a small opt-in, versioned rendering fix, whose QA/safety
+effect remains unproven; rank assembly is a separate future comparison candidate
+and old profiles stay frozen. A later live experiment requires a new
+prospective freeze, independent review and current shared-ledger preflight;
+this result does not authorize spending or promotion.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025

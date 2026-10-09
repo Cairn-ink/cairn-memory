@@ -1,8 +1,9 @@
 # Reliability and answer quality development plan
 
 Status: accepted development direction; first Stage 2 candidate completed and
-rejected. Next comparison scope awaits prospective freeze; remaining quality
-and installed-host gates are pending.
+rejected. The new requested-answer/source-diverse comparison has closed with
+net +3 correct answers, but its safety-unknown gate blocks advancement;
+remaining quality/installed-host gates are pending.
 Owner: primary DRI. This is the single current plan for the three-stage sequence
 agreed with the owner on 2026-10-09. Executed checkpoints link separate frozen
 result reports; prospective steps do not establish a score or release.
@@ -331,6 +332,36 @@ original 10/9 counts or retrospectively rescore this run. Any future corpus
 version must be explicit and labeled previously seen development, not fresh
 or held-out. No new protocol, paid comparison or product default is enabled.
 Historical cohorts are unchanged.
+
+Source-diverse requested-answer checkpoint: the separately frozen
+[new paired development report](source-diverse-qa24-results.md) completed all
+24 captures and 48 answers at reviewed runtime #383. Effective selection carried
+42/42 anchors versus ordinary 31/42; final packed presence was 37/42 versus 30/42.
+All source anchors were retained and candidate-reachable in both arms; five
+treatment anchors still disappeared at final recall. Resource ceilings passed
+with 392 HTTP attempts and US$1.96 conservative reservation delta, not an invoice.
+Two independent blind judges agree on all 48 correctness verdicts: ordinary
+20/4/0 versus source-diverse 23/1/0 (correct/incorrect/unresolved), with three
+wins, zero losses, 20 both correct and one neither correct. The unchanged ≥3
+net-correct gate passes, but `advances: false`: D04 treatment has an unresolved
+unsupported-claim disagreement. Known unsupported question counts are two each,
+stale/severe counts zero; conservative safety flags remain unproven rather than
+indicating an observed stale increase. No adjudication or gate change is made.
+This is previously seen development data under a new rubric and new baseline,
+not a comparison with the old 10/9 scores or a default promotion. Stage 3 remains
+blocked. Primary's offline deterministic replay of the existing source-linked
+rank compiler restores D10/D12 bridges: ordinary packed presence stays 30/42,
+source-diverse changes 37→39/42 without new answers or scoring. D10/D12 lose
+selected bridges at ranking; D04 retains roles through rank
+receipts but projects text-only answer evidence and misattributes the adviser.
+The separate source-role red/control probe confirms that role flips survive
+core receipts but leave packed requests identical. This is not causal proof of
+an answer improvement or resolution of D04's unsupported-claim unknown. The
+next implementation candidate is a small opt-in, versioned evidence-rendering
+fix; existing rank assembly remains a separate future comparison candidate and
+old profiles stay frozen. This report
+authorizes no new live trial or profile promotion; the next experiment needs a
+prospective scoped freeze, independent review and current shared-ledger preflight.
 
 Freeze 24 questions, four in each family, before treatment observations. Each
 listed variant contributes one question; publish every slot and family count.
