@@ -1,5 +1,25 @@
 # Known limitations
 
+The [2026-10-10 Codex Cloud plan](plans/codex-cloud-algorithm-plan.md) records
+completed pinned #389 setup and an Only-me environment publication, with six
+commands passing on each of Node 22.16.0 and 24.15.0. The new M1 smoke failed:
+on each runtime, `npm test` exited 1 (21 files pass, 6 fail) and lifecycle exited 1
+(1 file pass, 1 fail); these are file-level counts, not assertion totals. Owned
+scratch was empty. A direct Node 22 synthetic `node:test` probe and the repository
+runner both omitted expected named assertion results, so a wrapper-only
+explanation is insufficient; root cause remains unassigned. Cloud M1 stays FAILED
+and Cloud M2 BLOCKED. The separate fixed-#389 local readiness passed all 12 commands
+with 669/25/30 assertion totals per runtime and clean owned scratch; the analogous
+local fixture reported the expected two assertions. That contrast identifies no
+single environmental cause. No algorithm workers had been dispatched as of the
+plan's dated evidence record. The initial default-main/Node 24.19.0 run failed
+one of 635 tests under inherited umask `0077`, and its reproduction exited 1. Later setup
+tests normalized umask to `0022` only in test children, so they do not establish
+default-`0077` compatibility. Setup, smoke and diagnostic logs remain retained
+remotely; backend inference metadata, quota and concurrency are unexposed.
+Setup success establishes no retrieval/QA gain,
+semantic score, installed-host acceptance or paid-evaluation authorization.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
