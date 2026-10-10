@@ -266,5 +266,43 @@ test('B9 clean owned fixture binds wrappers/projection/protocol/Node and preserv
     await assert.rejects(module.launchEvidenceBundleComparison(options), /Synthetic key failure/);
     assert.equal(JSON.parse(readFileSync(join(outputDirectory, 'closed.json'))).completed, false);
     await assert.rejects(module.launchEvidenceBundleComparison(options), { code: 'EEXIST' }); assert.equal(keys, 1);
-  } finally { await workspace.cleanup(); assert.equal(existsSync(workspace.path), false); }
+  } finally {
+    try {
+      await workspace.cleanup();
+    } catch (error) {
+      // Temporary Phase 1 observation: never log raw messages, stacks or paths.
+      try {
+        const own = (value, key) => value != null && (typeof value === 'object' || typeof value === 'function')
+          ? Object.getOwnPropertyDescriptor(value, key)?.value : undefined;
+        const nested = own(error, 'errors');
+        const errors = Array.isArray(nested) ? nested : [];
+        const metadata = value => {
+          const code = own(value, 'code'), errno = own(value, 'errno'), syscall = own(value, 'syscall');
+          const path = own(value, 'path');
+          const areas = [['runtime/.git/objects', 'fixture-git-objects'], ['runtime/.git', 'fixture-git'],
+            ['runtime/adapters/openai/node_modules', 'fixture-dependencies'], ['ledger', 'synthetic-ledger'],
+            ['output', 'synthetic-output'], ['runtime', 'fixture-other']];
+          const area = typeof path === 'string' ? areas.find(([directory]) => {
+            const prefix = `${workspace.path}/${directory}`;
+            return path === prefix || path.startsWith(`${prefix}/`);
+          })?.[1] : undefined;
+          return {
+            name: value instanceof AggregateError ? 'AggregateError' : value instanceof Error ? 'Error' : 'non-error',
+            classification: own(value, 'message') === 'test_workspace_identity_changed' ? 'workspace-identity-changed' : 'other',
+            code: typeof code === 'string' && /^(E[A-Z0-9]{1,24}|ERR_[A-Z0-9_]{1,48})$/.test(code) ? code : null,
+            errno: Number.isInteger(errno) && Math.abs(errno) <= 4096 ? errno : null,
+            syscall: ['lstat', 'realpath', 'rmdir', 'unlink', 'scandir', 'open', 'stat'].includes(syscall) ? syscall : null,
+            path: typeof path !== 'string' ? 'unavailable' : path === workspace.path ? 'workspace-root'
+              : path.startsWith(`${workspace.path}/`) ? area ?? 'other-owned' : 'outside-workspace',
+          };
+        };
+        console.error('[B9-cleanup-diagnostic]', JSON.stringify({
+          name: error instanceof AggregateError ? 'AggregateError' : error instanceof Error ? 'Error' : 'non-error',
+          nestedCount: errors.length, truncated: errors.length > 4, errors: errors.slice(0, 4).map(metadata),
+        }));
+      } catch { /* Observation must not replace the original cleanup failure. */ }
+      throw error;
+    }
+    assert.equal(existsSync(workspace.path), false);
+  }
 });
