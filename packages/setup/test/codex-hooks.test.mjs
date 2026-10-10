@@ -105,7 +105,7 @@ test('CX-5 browser credential is saved before ACK; OAuth MCP, private stable run
   const f=await fixture(t,{config:'# preserved\nmodel = "synthetic"\n',hooks:unrelated});
   assert.equal(f.code,0,f.stdout);assert.equal(f.server.grant.state,'delivered');
   assert.equal(f.installed.enabled,true);
-  assert.match(f.installed.runtime,/custom-codex\/cairn\/runtime\/0\.3\.0-/);
+  assert.match(f.installed.runtime,/custom-codex\/cairn\/runtime\/0\.4\.0-/);
   const config=await readFile(join(f.codexHome,'config.toml'),'utf8');
   assert.match(config,/^# preserved/);assert.match(config,/\[mcp_servers.cairn\]/);assert.ok(!config.includes(secret));
   assert.ok(!config.includes('Authorization'));assert.match(f.stdout,/codex mcp login cairn/);

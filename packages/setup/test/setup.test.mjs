@@ -1,4 +1,6 @@
 import './device-ui.test.mjs';
+import './clients.test.mjs';
+import './authorization.test.mjs';
 import { PassThrough, Writable } from 'node:stream';
 import { detectLanguage, messages, translator } from '../lib/messages.mjs';
 import { selectEndpoint } from '../lib/options.mjs';
@@ -39,6 +41,7 @@ async function fixture(t, state = {}, options = {}) {
   if (!options.noClaude) writeFileSync(join(fakeBin, 'claude'),
     `#!${process.execPath}\n${readFileSync(new URL('./fake-claude.mjs', import.meta.url), 'utf8')}`, { mode: 0o755 });
   const promptsPath = join(workspace.path, 'prompts.jsonl'); writeFileSync(promptsPath, '');
+  const consentsPath = join(workspace.path, 'consents.jsonl'); writeFileSync(consentsPath, '');
   const sleepsPath = join(workspace.path, 'sleeps.jsonl'); writeFileSync(sleepsPath, '');
   const browsesPath = join(workspace.path, 'browses.jsonl'); writeFileSync(browsesPath, '');
   const budgetsPath = join(workspace.path, 'budgets.jsonl'); writeFileSync(budgetsPath, '');
@@ -89,6 +92,10 @@ async function fixture(t, state = {}, options = {}) {
         }
       },
       prompt: async (question, options) => {
+        if (/^Connect Claude|^連接 Claude/u.test(question)) {
+          appendFileSync(${JSON.stringify(consentsPath)}, JSON.stringify({question, options}) + '\\n');
+          return '';
+        }
         appendFileSync(${JSON.stringify(promptsPath)}, JSON.stringify({question, options}) + '\\n');
         if (/Press Enter|按 Enter/u.test(question)) {
           if (readFileSync(${JSON.stringify(browsesPath)}, 'utf8')) throw new Error('browser opened before Enter');
@@ -129,7 +136,7 @@ async function fixture(t, state = {}, options = {}) {
   }
   assert.ok(!(result.stdout + result.stderr).includes('synthetic-child-output-must-stay-hidden'));
   assert.deepEqual(server.violations, []);
-  return { ...result, calls, prompts, sleeps, browses, budgets, clipboard, server, state: JSON.parse(readFileSync(statePath, 'utf8')) };
+  return { ...result, calls, prompts, consents: lines(consentsPath), sleeps, browses, budgets, clipboard, server, state: JSON.parse(readFileSync(statePath, 'utf8')) };
 }
 
 test('Node minimum, endpoint origins, browser launch commands and hostname sanitation', () => {
@@ -147,6 +154,7 @@ test('Node minimum, endpoint origins, browser launch commands and hostname sanit
 test('browser happy path uses S256, safe stdin, credential check then ACK and reports both versions', async t => {
   const r = await fixture(t, {}, { args: ['setup'], server: { sequence: ['authorization_pending'] } });
   assert.equal(r.code, 0, r.stdout);
+  assert.equal(r.consents.length, 1); // This old browser case remains unscoped.
   assert.equal(r.state.configured, true);
   assert.equal(saved(r).tokenDigest, scryptSync(secret, 'cairn-fake-claude', 16).toString('hex'));
   assert.deepEqual(saved(r).keys, ['api_endpoint', 'api_token']);
@@ -156,7 +164,7 @@ test('browser happy path uses S256, safe stdin, credential check then ACK and re
   assert.deepEqual(r.browses, [`${r.server.endpoint}/device`]);
   assert.deepEqual(r.server.requests.map(r => r.route), ['device-authorizations', 'token', 'token', 'credential', 'ack']);
   assert.equal(r.server.grant.state, 'delivered');
-  assert.match(r.stdout, /plugin 0\.3\.1/); assert.match(r.stdout, /Installer @cairn-ink\/memory 0\.3\.0/);
+  assert.match(r.stdout, /plugin 0\.3\.1/); assert.match(r.stdout, /Installer @cairn-ink\/memory 0\.4\.0/);
   assert.match(r.stdout, /Cairn Memory is connected.*expires/);
   const second = await localWireRequest(r.server.server, requestJSON, new URL('/api/cli-auth/v1/token', r.server.endpoint), { body: r.server.lastProof, env: {} });
   assert.equal(second.status, 400); assert.equal(second.value.error, 'invalid_grant');
@@ -344,7 +352,10 @@ for (const fail of ['--version', 'plugin marketplace add Cairn-ink/cairn-memory'
 }
 
 test('missing CLI, unsupported Node, invalid endpoint/PAT and malformed CLI JSON are safe failures', async t => {
-  const missing = await fixture(t, {}, { noClaude: true }); assert.equal(missing.code, 1); assert.match(missing.stdout, /not found on PATH/);
+  const missing = await fixture(t, {}, { noClaude: true });
+  assert.equal(missing.code, 0); assert.match(missing.stdout, /Neither Claude Code nor Codex/);
+  const explicitMissing = await fixture(t, {}, { noClaude: true, args: ['setup', '--client', 'claude'] });
+  assert.equal(explicitMissing.code, 1); assert.match(explicitMissing.stdout, /not found on PATH/);
   const old = await fixture(t, {}, { nodeVersion: '22.15.0' }); assert.equal(old.code, 1); assert.deepEqual(old.calls, []);
   const endpoint = await fixture(t, {}, { endpoint: 'http://example.com' }); assert.equal(endpoint.code, 1); assert.deepEqual(endpoint.server.requests, []);
   const token = await fixture(t, {}, { args: ['setup', '--manual-token', '--no-browser'], invalidToken: true }); assert.equal(token.code, 1); assert.equal(saved(token), undefined);
@@ -680,7 +691,7 @@ test('endpoint source is explicit for default, prompt and preserved Claude confi
   const fromPrompt = await fixture(t);
   assert.match(fromPrompt.stdout, /Cairn endpoint: .*\(from prompt\)/);
   const kept = await fixture(t, { configured: true });
-  assert.match(kept.stdout, /Cairn endpoint: kept from existing config.*value not read back.*no authorization request/);
+  assert.match(kept.stdout, /Cairn endpoint: kept from existing config.*native configuration unchanged.*no new browser authorization/);
   assert.deepEqual(kept.server.requests, []);
 });
 

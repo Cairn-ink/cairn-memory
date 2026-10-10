@@ -1,7 +1,8 @@
 import { parseOptions, selectEndpoint, validEndpoint } from './options.mjs';
 export { validEndpoint } from './options.mjs';
 import { detectLanguage, translator } from './messages.mjs';
-import { dispatchClient } from './codex.mjs';
+import { dispatchClient, parseClient } from './codex.mjs';
+import { setupDetected } from './clients.mjs';
 import { spawn } from 'node:child_process';
 import { writeSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -163,6 +164,7 @@ export async function main(argv, {
   interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY),
   browse = openBrowser, nodeVersion = process.versions.node, authOptions = {},
   env = process.env, locale = Intl.DateTimeFormat().resolvedOptions().locale,
+  coordinated = false, pairingConsent, inspectCodex,
 } = {}) {
   let t = translator(detectLanguage(env, locale));
   const launchBrowser = (write, url, signal) => browse(write, url, signal, t);
@@ -189,8 +191,16 @@ export async function main(argv, {
     const options = parseOptions(argv);
     if (options.lang) t = translator(options.lang);
     const endpointOverride = options.endpoint;
+    const selection = parseClient(options.argv, SetupError);
+    if (!coordinated && !selection.client && ['setup', 'status'].includes(selection.argv[0])) {
+      return await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
+        authOptions, env, locale, t, endpointOverride, signal, supportedNode, SetupError, validEndpoint, inspectCodex,
+        inspectClaude: async () => (await installed(run)).length ? configuration(run) : undefined,
+        runClient: (args, overrides) => main(args, { write, prompt, interactive, browse, nodeVersion,
+          authOptions, env, locale, coordinated: true, ...overrides }) });
+    }
     const dispatch = await dispatchClient(options.argv, { write, prompt, interactive, browse: launchBrowser,
-      nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride, authOptions, signal });
+      nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride, authOptions, signal, pairingConsent });
     if (dispatch.handled) return dispatch.code;
     argv = dispatch.argv;
     const [action, ...flags] = argv;
@@ -308,14 +318,19 @@ export async function main(argv, {
     }
     const config = await configuration(run);
     let ready = ['api_endpoint', 'api_token'].every(key => config.configured.includes(key));
+    const configuredEndpoint = validEndpoint(config.inputs?.api_endpoint) ? config.inputs.api_endpoint : undefined;
+    if (!flags.includes('--reauthorize') && configuredEndpoint && endpointOverride && endpointOverride !== configuredEndpoint) {
+      throw new SetupError('endpoint_reauthorize', 2);
+    }
     if (ready && !flags.includes('--reauthorize')) {
       if (endpointOverride) throw new SetupError('endpoint_reauthorize', 2);
       write(t('endpoint_config_private'));
       write(t('credential_kept'));
-    } else if (config.configured.includes('api_token') && !flags.includes('--reauthorize')) {
+    } else if (!ready && config.configured.includes('api_token') && !flags.includes('--reauthorize')) {
       throw new SetupError('credential_endpoint_unset');
     } else {
-      const endpoint = await selectEndpoint({ endpointOverride, prompt, write, t });
+      const endpoint = await selectEndpoint({ endpointOverride, existingEndpoint:
+        (!flags.includes('--reauthorize') ? configuredEndpoint : undefined) ?? authOptions.authorization?.endpoint, prompt, write, t });
       let manualToken = flags.includes('--manual-token');
       if (!manualToken) {
         const authorization = await browserAuthorize(endpoint, { ...authOptions, write, browse: launchBrowser, t,
@@ -323,7 +338,10 @@ export async function main(argv, {
         if (authorization.unsupported) {
           write(t('browser_unsupported'));
           manualToken = true;
-        } else write(t('connected_expiry', { date: new Date(authorization.expiresAt).toLocaleDateString(t.locale) }));
+        } else {
+          write(t('connected_expiry', { date: new Date(authorization.expiresAt).toLocaleDateString(t.locale) }));
+          if (flags.includes('--reauthorize')) write(t('credential_replaced'));
+        }
       }
       if (manualToken) {
         let token;

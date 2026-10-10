@@ -149,8 +149,9 @@ async function compatibleClaude(neutral) {
   } catch { return false; }
 }
 
-async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome, progress=()=>{} }) {
-  if (previous) {
+async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome, pairingConsent, progress=()=>{} }) {
+  const addingClaude = pairingConsent === 'shared' && previous && !previous.usesClaude;
+  if (previous && !addingClaude) {
     const resolved = await resolveClient(clientOptions(previous));
     if (!resolved.enabled) {
       if (!previous.usesClaude || resolved.status!=='pairing_needed') throw new Error('identity_unavailable');
@@ -165,11 +166,13 @@ async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome,
     }
   }
   const home = await realpath(homedir());
-  const detected = await detectClients({ home,setup:true,standardClaudeOrigin:true });
-  const compatible = await compatibleClaude(neutral);
-  if (previous && (!compatible || detected.locations.pairing!==previous.pairingRecord || detected.record?.root!==previous.root))
+  const detected = await detectClients({ home,setup:true,standardClaudeOrigin:true,
+    ...(addingClaude ? {root:previous.root} : {}) });
+  const compatible = pairingConsent !== 'standalone' && await compatibleClaude(neutral);
+  if (previous && !addingClaude && (!compatible || detected.locations.pairing!==previous.pairingRecord || detected.record?.root!==previous.root))
     throw new Error('identity_unavailable');
   if (!compatible) {
+    if (pairingConsent === 'shared') throw new Error('claude_pairing_unavailable');
     write(t('codex_standalone'));
     // Standalone always has its own root, including when Claude has no key yet.
     // Installing Codex must not claim Claude's future default identity directory.
@@ -182,11 +185,11 @@ async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome,
     };
   }
   write(t('codex_sharing'));
-  if (!/^(?:y|yes)$/iu.test((await prompt(t('codex_stopped_prompt'))).trim())) throw new Error('sharing_required');
+  if (pairingConsent !== 'shared' && !/^(?:y|yes)$/iu.test((await prompt(t('codex_stopped_prompt'))).trim())) throw new Error('sharing_required');
   if (detected.keys.length > 1 && !detected.record) throw new Error('identity_conflict');
   const profileRoot = detected.install.clients.claude?.profileRoot ??
     process.env.CLAUDE_PLUGIN_DATA ?? detected.locations.knownClaudeRoot;
-  const root = detected.record?.root ?? detected.keys[0] ?? detected.locations.defaultRoot;
+  const root = detected.record?.root ?? (addingClaude ? previous.root : detected.keys[0]) ?? detected.locations.defaultRoot;
   return async () => {
     // The host may have created its data directory as 0755. Explicit stopped
     // adoption makes only the owned identity root private, without changing keys.
@@ -195,7 +198,10 @@ async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome,
       if (!info.isDirectory() || info.isSymbolicLink() || info.uid!==process.getuid()) throw new Error('unsafe_identity_root');
       await chmod(root,0o700);
     } catch (error) {if(error.code!=='ENOENT')throw error;}
-    const options = { home, root,claudeProfileRoot:profileRoot, standardClaudeOrigin:true,usesClaude:true,
+    const options = { home, root,claudeProfileRoot:profileRoot, standardClaudeOrigin:true,
+      // Only the combined, explicitly consented setup may bootstrap keyless
+      // Claude. Explicit Codex retains the established Claude-key requirement.
+      ...(pairingConsent === 'shared' ? {} : {usesClaude:true}),
       hostsStopped:true,consent:{claude:true,codex:true},adopt:detected.keys.length>0 };
     progress('identity_initialize');
     const pending = await initializePairing(options);
@@ -439,9 +445,13 @@ export async function setupInstalledCodex(context) {
   const path = join(directory,'installation.json');
   let previous;
   try {previous=await readInstallation(path);} catch (error) {if(error.code!=='ENOENT')throw error;}
-  const endpoint = await selectEndpoint({endpointOverride,existingEndpoint:previous?.endpoint??
+  const currentCredential = previous ? await readCredential(path,previous.endpoint).catch(error=>{
+    if (error.code !== 'ENOENT' && !flags.includes('--reauthorize')) throw new SetupError('authorization_credential_unavailable',2);
+  }) : undefined;
+  if (currentCredential && endpointOverride && !flags.includes('--reauthorize')) throw new SetupError('endpoint_reauthorize',2);
+  const endpoint = await selectEndpoint({endpointOverride,existingEndpoint:previous?.endpoint??authOptions.authorization?.endpoint??
     (existing?existing.transport.url.slice(0,-8):undefined),prompt,write,t});
-  if (previous && previous.endpoint!==endpoint) throw new SetupError('codex_endpoint_conflict',2);
+  if (previous && previous.endpoint!==endpoint && !flags.includes('--reauthorize')) throw new SetupError('codex_endpoint_conflict',2);
   const lockPath = join(home,'.cairn-setup.lock');
   const lock = await open(lockPath,'wx',0o600);
   let phase = 'hooks_validation';
@@ -454,14 +464,13 @@ export async function setupInstalledCodex(context) {
     phase = 'runtime_copy';
     const runtime = await copyRuntime(directory);
     phase = 'identity';
-    const applyIdentity = await prepareIdentity({previous,prompt,write,t,neutral,codexHome:home,progress:value=>{phase=value;}});
+    const applyIdentity = await prepareIdentity({previous,prompt,write,t,neutral,codexHome:home,pairingConsent:context.pairingConsent,progress:value=>{phase=value;}});
     let dailyCap = previous?.dailyCap;
     if (dailyCap===undefined) {
       const answer = (await prompt(t('codex_cap_prompt'))).trim();
       dailyCap = Number(answer);
       if (!/^\d+$/u.test(answer) || !Number.isSafeInteger(dailyCap) || dailyCap<1 || dailyCap>100000) throw new Error('invalid_cap');
     }
-    const currentCredential = await readCredential(path,endpoint).then(value=>value,()=>undefined);
     phase = 'authorization';
     if (!currentCredential || flags.includes('--reauthorize')) {
       const save = async values => {
@@ -476,7 +485,8 @@ export async function setupInstalledCodex(context) {
         noBrowser:flags.includes('--no-browser'),noClipboard:flags.includes('--no-clipboard')});
       if (result.unsupported) throw new SetupError('codex_browser_required');
       write(t('connected_expiry',{date:new Date(result.expiresAt).toLocaleDateString(t.locale)}));
-    }
+      if (flags.includes('--reauthorize')) write(t('credential_replaced'));
+    } else write(t('credential_kept'));
     let mcpText = before.text;
     phase = 'mcp_validation';
     let mcpToken;

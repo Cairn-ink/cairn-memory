@@ -5,7 +5,7 @@ import { homedir, tmpdir } from 'node:os';
 import { delimiter, join, resolve, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { resolveCLI, qualifyBinary, cachedQualification } from '../runtime/integrations/codex/qualification.mjs';
-import { readInstallation } from '../runtime/integrations/codex/installed-state.mjs';
+import { readInstallation, readCredential } from '../runtime/integrations/codex/installed-state.mjs';
 import { setupInstalledCodex, installedStatus, controlCodex } from './codex-runtime.mjs';
 
 // Keep routing and all Codex behavior here; browser authorization can supply
@@ -116,20 +116,33 @@ function runCodex(args, { env = process.env, cwd } = {}) {
 }
 
 export async function setupCodex({ action, flags, write, prompt, interactive, browse,
-  SetupError, validEndpoint, t, endpointOverride, authOptions, signal }) {
+  SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent }) {
   const fail = message => new SetupError(message);
   if (process.platform === 'win32') {
+    if (inspectOnly) return { qualified: false, reason: 'codex_windows' };
     write(t('codex_windows'));
     fallback(write, t); automaticStatus(write, t); return 0;
   }
   const home = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
+  if (action === 'setup' && !flags.includes('--dry-run') && endpointOverride && !flags.includes('--reauthorize')) {
+    const path = join(home, 'cairn/installation.json');
+    const previous = await readInstallation(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
+    if (previous && await readCredential(path, previous.endpoint).then(() => true, () => false)) {
+      throw new SetupError('endpoint_reauthorize', 2);
+    }
+  }
   if (['disable','uninstall','pause','resume','prompt-recall-off','prompt-recall-on'].includes(action)) {
     const neutral = await realpath(await mkdtemp(join(tmpdir(), 'cairn-codex-control-')));
     try {return await controlCodex({action,home,write,t,snapshot,unchanged,neutral});}
     finally {await rm(neutral,{recursive:true,force:true});}
   }
   const configPath = join(home, 'config.toml');
-  const before = await snapshot(configPath);
+  let before;
+  try { before = await snapshot(configPath); }
+  catch (error) {
+    if (error.message === 'unsafe_config') throw new SetupError('codex_config_unsafe');
+    throw new SetupError('codex_state_error');
+  }
   // Inspect only a copy of the user's file. No trusted-project layer or OAuth
   // discovery participates in the decision to create a full entry or add a header.
   const neutral = await realpath(await mkdtemp(join(tmpdir(), 'cairn-codex-inspect-')));
@@ -180,6 +193,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     if (!await supports(['mcp', 'add'], /--url\b/u) ||
         !await supports(['mcp', 'get'], /--json\b/u)) {
       write(t('codex_update_required'));
+      if (inspectOnly) return { qualified: false };
       fallback(write, t); automaticStatus(write, t); return 0;
     }
     const getArgs = ['mcp', 'get', 'cairn', '--json'];
@@ -205,7 +219,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
       write(t('codex_enabled', { state: existing.enabled ? t('enabled') : t('disabled') }));
       write(t('codex_credential', { state: credential ? t('configured') : t('unverified') }));
     }
-    if (endpointOverride && usable && endpointOverride !== new URL(transport.url).origin) {
+    if (!flags.includes('--dry-run') && endpointOverride && usable && endpointOverride !== new URL(transport.url).origin) {
       throw new SetupError('codex_endpoint_conflict', 2);
     }
     if (endpointOverride || usable) {
@@ -219,11 +233,13 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     const installation=join(home,'cairn','installation.json');
     const installed=await readInstallation(installation).then(()=>true,()=>false);
     const hostVerdict=cliHost ? action==='status' && !installed ? await cachedQualification(installation,cliHost) :
-      await qualifyBinary(installation,cliHost,{cache:!flags.includes('--dry-run')}) : {status:'pending'};
+      await qualifyBinary(installation,cliHost,{cache:!inspectOnly && !flags.includes('--dry-run')}) : {status:'pending'};
+    if (inspectOnly) return { qualified: hostVerdict.status==='qualified' && hostVerdict.version===hostVersion,
+      endpoint: usable ? new URL(transport.url).origin : undefined };
     if (hostVerdict.status==='qualified' && hostVerdict.version===hostVersion) {
       return await setupInstalledCodex({action,flags,home,hostVersion,write,prompt,interactive,browse,
         SetupError,t,endpointOverride,authOptions,signal,before,configPath,existing,usable,
-        neutral,get,snapshot,unchanged,cliHost,hostVerdict});
+        neutral,get,snapshot,unchanged,cliHost,hostVerdict,pairingConsent});
     }
     // Changed or unavailable format evidence keeps automatic paths closed.
     // Status reports the actual observed app-server separately from this CLI.

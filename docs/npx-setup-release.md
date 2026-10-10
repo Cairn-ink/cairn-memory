@@ -10,9 +10,9 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
 - [ ] Review delivered patches and recorded checks; approve the release before
   merging or publishing. Confirm npm scope access and `@cairn-ink/memory`.
   Unscoped `cairn-memory` is owned by someone else.
-- [ ] Confirm installer version **0.2.0** (0.1.0 is already published) in
+- [ ] Confirm installer version **0.4.0** (0.3.0 was published on 2026-10-10) in
   `packages/setup/package.json`. Future releases explicitly bump this version.
-  It is independent of plugin versions. Plugin 0.3.1 includes the required
+  It is independent of plugin versions. Plugin 0.3.2 includes the required
   hook credential-state fix. If plugin changes ship too, bump plugin,
   marketplace and runtime versions together per `CONTRIBUTING.md`.
 - [ ] Move the installer entry in root `CHANGELOG.md` from Unreleased to the
@@ -24,6 +24,8 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   ```sh
   npm run test:setup
   npm test
+  npm run test:pairing
+  npm run test:codex
   npm run validate
   npm run validate --prefix tools/plugin-validation
   node tools/testing/run.mjs --script packaging/prepare-cache.mjs
@@ -31,13 +33,33 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   ```
 
 - [ ] Resolve any failed or environment-limited checks before release.
-- [ ] Build and inspect the archive from `packages/setup`. Cross-check npm's
-  file list against `tar -tzf`, and print the count. Expect eight files: `package.json`, `LICENSE`, `README.md`, `bin/memory.mjs`,
-  `lib/setup.mjs`, `lib/auth.mjs`, `lib/errors.mjs`, `lib/transport.mjs`.
+- [ ] Verify all setup cases in private temporary homes: both tools, Claude-only,
+  Codex-only, neither, declining either/both, non-TTY, rerun adding the other in
+  both directions, and unqualified Codex. Assert one browser grant for initial
+  dual setup and equal project IDs. Codex-first reuse needs no new approval;
+  Claude-first adds exactly one approved grant when adding Codex. Keep frozen runtime/A7 inputs and plugin version unchanged.
+  Non-TTY unscoped setup never consents or installs; status/dry-run remain usable.
+  Verify kept credentials/endpoints, endpoint overrides requiring --reauthorize,
+  conflicting endpoints, each localized Codex inspection failure, Codex credential
+  reuse without an extra cache, Claude-first new approval without opening its
+  host secret store, and Codex-only MCP fallback. Check optional Claude endpoint
+  metadata, dry-run overrides and accurate reauthorization messages.
+- [ ] Use a fresh private TMPDIR (`mktemp -d`, mode 0700), then remove it.
+  Do not read/write real `~/.claude`, `~/.codex` or credentials.
+- [ ] Build and inspect the archive from `packages/setup`. Run `npm pack --dry-run`
+  with the runtime-manifest prepack check. Derive the expected list from package
+  `files` plus npm's automatic metadata files; independently cross-check against
+  `npm pack --json` and `tar -tzf`, diff the lists and print the count. Prepack
+  lifecycle text can precede npm JSON: capture stdout/stderr separately, then
+  parse the trailing JSON array and validate its shape; do not JSON.parse the
+  entire stdout blindly. Keep prepack enabled. Expect
+  `package.json`, `LICENSE`, `README.md`, `bin/`, `lib/` (including client/auth
+  coordination), and the frozen `runtime/`; exclude tests and build-runtime.mjs.
 
   ```sh
   cd packages/setup
-  npm pack --ignore-scripts --json --pack-destination /tmp
+  npm pack --dry-run --json
+  npm pack --json --pack-destination /tmp
   ```
 
 - [ ] In a disposable Claude Code profile, verify packed `setup --dry-run`,
@@ -56,7 +78,7 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   npm publish --access public
   ```
 
-- [ ] After successful 0.2.0 publication, remove its awaiting-publication caveats
+- [ ] After successful 0.4.0 publication, remove its awaiting-publication caveats
   from root, plugin and package READMEs. Verify registry name/version and smoke-test
   `npx @cairn-ink/memory setup --dry-run` in a clean temporary profile. This does
   not publish the local SQLite preview under `packaging/`.

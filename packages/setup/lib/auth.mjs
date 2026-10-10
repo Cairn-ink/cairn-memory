@@ -55,10 +55,12 @@ export async function credentialCheck(endpoint, token, { signal, request = reque
 // Clocks, sleep and transport are injected only by tests, never by CLI flags or
 // environment. Deadlines cannot be extended by a delayed HTTP response.
 export async function browserAuthorize(endpoint, {
-  write, browse, prompt, noBrowser, noClipboard, save, signal, progress = spinner, t = translator(detectLanguage()),
+  authorization, write, browse, prompt, noBrowser, noClipboard, save, signal, progress = spinner, t = translator(detectLanguage()),
   copy = copyCode, tty = Boolean(process.stdout.isTTY), env = process.env,
   request = requestJSON, now = () => performance.now(), sleep = delay, jitter = Math.random,
 } = {}) {
+  if (authorization) return authorization.authorize(endpoint, { write, browse, prompt, noBrowser, noClipboard,
+    save, signal, progress, t, copy, tty, env, request, now, sleep, jitter });
   let verifier = randomBytes(32).toString('base64url');
   let proof, token, receipt, grant, configured = false, ackStarted = false;
   let recoveryStart;

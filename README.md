@@ -116,18 +116,22 @@ and forget. Its recall step reports `model_not_configured`.
 
 ## Install
 
-For **Claude Code automatic memory**, run the one-command installer:
+For **Claude Code and Codex automatic memory**, run the one-command installer:
 
 ```sh
 npx @cairn-ink/memory setup
 ```
 
-**Installer 0.1.0 is published.** This checkout prepares browser authorization
-in installer 0.2.0, awaiting publication by chichi. Try it with
+**Installer 0.3.0 was published on 2026-10-10.** This checkout prepares
+0.4.0, awaiting chichi's release approval. Try it with
 `node packages/setup/bin/memory.mjs setup`, or use the
 [manual plugin fallback](#install-for-claude-code-automatic-memory).
-Requires Node ≥22.16 and `claude` on PATH. Other clients use MCP. This scoped
-helper installs the hosted plugin/hooks; local SQLite setup remains separate.
+Requires Node ≥22.16 and at least one CLI on PATH. Version 0.4.0 detects both
+Claude Code and Codex, discloses each tool's behavior, then asks once per tool.
+It connects the agreed tools in one run with one browser authorization and one
+shared project key. Codex must pass the existing format qualification; an
+unqualified Codex is skipped while Claude can continue. This scoped helper
+installs the hosted plugin/hooks; local SQLite setup remains separate.
 
 Choose the mode that fits your workflow:
 
@@ -241,15 +245,43 @@ Run the published installer from your terminal:
 npx @cairn-ink/memory setup
 ```
 
-Installer 0.1.0 is published; this checkout's 0.2.0 awaits publication by chichi.
-Use `node packages/setup/bin/memory.mjs setup` to try browser authorization now.
-It refreshes the marketplace, installs or updates the plugin and hooks, prints
-both installer and installed plugin versions, and confirms the endpoint.
-Enter the displayed code at the bare `/device` URL and allow the request;
-setup securely saves the checked credential through stdin and acknowledges
-its delivery. New browser credentials last 180 days. Existing credentials are
-kept unless you pass `--reauthorize`; `--manual-token` retains hidden PAT paste.
-`--no-browser` works in a TTY with a browser on another device.
+Installer 0.3.0 is published; this checkout's 0.4.0 awaits release approval.
+Without `--client`, 0.4.0 detects both tools and asks once per detected,
+qualified tool. Claude defaults to yes; Codex requires an explicit yes. When
+both are agreed, Codex's question also confirms that both hosts and background
+capture workers are stopped so they can share the existing identity.
+Setup refreshes the Claude marketplace/plugin and installs qualified Codex hooks.
+Both use one memory-scoped browser grant and the existing pairing transaction;
+no separate pairing step is shown. Enter the displayed code at the bare `/device`
+URL and allow the request. New browser credentials last 180 days.
+
+Use `setup --client claude` or `setup --client codex` to restrict a run.
+Choose both tools initially: one browser approval shares the token in memory.
+Codex first, Claude added later: validate and reuse the installer-owned Codex
+credential (`~/.codex/cairn/credential.json`), with no new approval.
+Claude first, Codex added later: one new browser approval, agreed to in setup;
+Claude's existing credential stays. Setup never reads or imports Claude Code's
+native secrets, and creates no extra credential cache. All paths retain the
+existing project key through the same pairing transaction.
+
+Claude's endpoint value from `configure --json` is optional: use it when returned,
+otherwise treat it as unknown and confirm that both tools use the same account
+and endpoint. Missing metadata alone never refuses setup. Known conflicting
+endpoints refuse pairing; align Codex MCP configuration and explicitly authorize
+the chosen endpoint with `--reauthorize`. A kept credential plus `--endpoint`
+requires that flag (exit 2); `setup --dry-run --endpoint X` remains a read-only
+preview with exit 0. Reauthorization reports the replacement and defaults to the
+known Codex endpoint when no override is supplied. Single-client `--manual-token`
+retains PAT semantics; shared automatic hooks require browser authorization.
+If Codex alone has an unqualified format, setup retains its MCP-only fallback
+after explicit consent.
+
+Unscoped `status` reports both tools, including missing CLIs. Unscoped non-TTY
+`setup` does not consent, authorize or install (exit 2 if a tool is detected);
+use a TTY. `status` and `setup --dry-run` work without a TTY. Explicit single-client
+flows retain their existing rules. `--no-browser` still requires a TTY and allows
+approval on another device. Control commands keep their per-client flags.
+Restart Claude Code and review/trust Codex's hooks after installation.
 
 Create-route 404/501 clearly falls back to the manual prompt. An unavailable
 manual credential route saves unverified configuration. Server/TLS/protocol

@@ -80,13 +80,16 @@ test('Codex setup saves native HTTP header privately and preserves unrelated con
 });
 
 test('auto-detect Codex when Claude is absent', async t => {
-  const result = await fixture(t, { args: ['setup', '--no-browser'] });
-  assert.equal(result.code, 0); assert.match(result.stdout, /Cairn MCP and PAT saved/);
+  const result = await fixture(t, { args: ['setup', '--no-browser'], answers: ['yes', '', secret] });
+  assert.equal(result.code, 0, result.stdout);
+  assert.match(result.stdout, /Only explicit MCP memory tools/);
+  assert.ok(result.config.includes('Authorization = "Bearer ' + secret + '"'));
+  assert.equal(result.mode, 0o600);
 });
 
-test('both clients retain Claude default; explicit Codex overrides it', async t => {
+test('status reports Codex even when Claude fails; explicit Codex restricts the run', async t => {
   const defaultResult = await fixture(t, { claude: true, args: ['status'] });
-  assert.equal(defaultResult.code, 8); assert.deepEqual(defaultResult.calls, []);
+  assert.equal(defaultResult.code, 8); assert.ok(defaultResult.calls.length); assert.match(defaultResult.stdout, /Client: codex/);
   const explicit = await fixture(t, { claude: true }); assert.equal(explicit.code, 0);
 });
 
