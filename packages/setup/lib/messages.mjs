@@ -1,5 +1,6 @@
 // All user-facing installer text. Approved 0.5.0 copy with verified safety adjustments.
 import { DEFAULT_ENDPOINT } from './constants.mjs';
+import { shellArgument } from './output.mjs';
 export const messages = {
   "cap_pending": {
     "zh": "  新上限 {cap} 將於下次每日重置套用；Claude Code 不受影響。",
@@ -1089,13 +1090,13 @@ export const messages = {
       "codex mcp logout cairn\n" +
       "codex mcp remove cairn\n" +
       "  接著執行：\n" +
-      "npx @cairn-ink/memory setup --endpoint {endpoint} --reauthorize",
+      "npx @cairn-ink/memory setup --endpoint {endpointArg} --reauthorize",
     "en": "  Nothing was changed.\n" +
       "  Sign out and remove the Cairn tools in Codex:\n" +
       "codex mcp logout cairn\n" +
       "codex mcp remove cairn\n" +
       "  Then run:\n" +
-      "npx @cairn-ink/memory setup --endpoint {endpoint} --reauthorize"
+      "npx @cairn-ink/memory setup --endpoint {endpointArg} --reauthorize"
   },
   "conflict_retry": {
     "zh": "  在終端機直接執行，安裝程式會問你要用哪一個：\n" +
@@ -1560,7 +1561,10 @@ export function detectLanguage(env = process.env, locale = Intl.DateTimeFormat()
 
 export function message(lang, key, params = {}) {
   const template = messages[key]?.[lang] ?? messages.setup_failed?.[lang] ?? key;
-  return template.replace(/\{(\w+)\}/gu, (_, name) => String(params[name] ?? (name === 'defaultEndpoint' ? DEFAULT_ENDPOINT : '')));
+  return template.replace(/\{(\w+)\}/gu, (_, name) => {
+    if (name === 'endpointArg') return shellArgument(params.endpoint ?? DEFAULT_ENDPOINT);
+    return String(params[name] ?? (name === 'defaultEndpoint' ? DEFAULT_ENDPOINT : ''));
+  });
 }
 
 export function translator(lang) {

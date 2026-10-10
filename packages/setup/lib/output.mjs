@@ -1,6 +1,9 @@
 // Same display-width rule as the approved proposal's src/check.mjs.
 export const columns = text => [...text.replace(/\x1b\[[0-9;]*m/gu, '')].reduce((n, c) =>
   n + (/[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/u.test(c) ? 2 : 1), 0);
+// Double quotes allow backslash continuations inside long arguments. Escape
+// shell expansion as well as quotes; JSON string escaping alone is insufficient.
+export const shellArgument = value => '"' + String(value).replace(/[\\"$`]/gu, '\\$&') + '"';
 export function wrapLine(line) {
   const lines = [];
   const command = /^\s*(?:npx|codex|claude|node|TMPDIR=)(?:\s|$)/u.test(line);
@@ -11,7 +14,10 @@ export function wrapLine(line) {
       if (c === ' ' && end > 1) space = end;
       width += columns(c); end += c.length;
     }
-    const cut = space > end / 2 ? space : end;
+    let cut = space > end / 2 ? space : end;
+    // Never divide an escaped character from its backslash before inserting
+    // the continuation, including inside a double-quoted argument.
+    if (command && (line.slice(0, cut).match(/\\+$/u)?.[0].length ?? 0) % 2) cut--;
     const atSpace = line[cut] === ' ';
     lines.push(line.slice(0, cut) + (command ? (atSpace ? ' \\' : '\\') : ''));
     line = command && !atSpace ? line.slice(cut) : '  ' + line.slice(cut).trimStart();

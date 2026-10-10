@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
+import { access, readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fixture, assertPaired } from './clients.test.mjs';
@@ -10,6 +10,14 @@ import { terminalWriter, columns } from '../lib/output.mjs';
 import { readInstallation } from '../runtime/integrations/codex/installed-state.mjs';
 import { privateWrite } from '../runtime/integrations/client/private-state.mjs';
 import { opaqueProjectId } from '../runtime/integrations/client/pairing.mjs';
+
+const commandShells = ['/bin/bash'];
+try {
+  await access('/usr/bin/zsh');
+  commandShells.push('/usr/bin/zsh');
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
 
 async function childResult(command, args, options = {}) {
   const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -35,7 +43,10 @@ async function conflict(f, { auth = false } = {}) {
 }
 
 for (const lang of ['zh', 'en']) {
-  for (const endpoint of ['https://cairn.ink', 'https://' + 'a'.repeat(180) + '.example']) {
+  const endpoints = ['https://cairn.ink', 'https://' + 'a'.repeat(180) + '.example',
+    'http://[::1]:3030', "https://x'$(printf)`printf`.example",
+    ...Array.from({ length: 8 }, (_, n) => 'https://' + 'a'.repeat(62 + n) + '$(printf)' + 'b'.repeat(180) + '.example')];
+  for (const endpoint of endpoints) {
     test(`endpoint recovery commands remain shell-copyable (${lang}, ${endpoint.length})`, async () => {
       const lines = [];
       terminalWriter(line => lines.push(line))(translator(lang)('endpoint_remove_retry', { endpoint }));
@@ -43,10 +54,12 @@ for (const lang of ['zh', 'en']) {
       const start = lines.findIndex(line => line.startsWith('npx '));
       assert.ok(start >= 0);
       const command = lines.slice(start).join('\n');
-      const result = await childResult('/bin/bash', ['-c', 'npx() { printf "%s\\n" "$@"; };\n' + command]);
-      assert.equal(result.code, 0, result.stderr);
-      assert.deepEqual(result.stdout.trim().split('\n'),
-        ['@cairn-ink/memory', 'setup', '--endpoint', endpoint, '--reauthorize']);
+      for (const shell of commandShells) {
+        const result = await childResult(shell, ['-fc', 'npx() { printf "%s\\n" "$@"; };\n' + command]);
+        assert.equal(result.code, 0, result.stderr);
+        assert.deepEqual(result.stdout.trim().split('\n'),
+          ['@cairn-ink/memory', 'setup', '--endpoint', endpoint, '--reauthorize']);
+      }
     });
   }
   for (const action of ['uninstall', 'disable', 'prompt-recall-off', 'prompt-recall-on']) {
