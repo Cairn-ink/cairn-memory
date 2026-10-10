@@ -97,6 +97,30 @@ restoration and synthetic tests are not new answers/scores or paid-run/default
 authority, and this rank intervention does not fix identical-input generation
 variation. A separately reviewed paired QA experiment is required.
 
+The local evaluation-only [complementary source candidate](plans/cloud-retrieval-v1-candidate.md)
+and independently frozen [source-only challenge](plans/cloud-retrieval-v1-challenge.md)
+preserve ranked seeds and append bounded lexical neighbors within seeded
+namespaces. Primary's first unfiltered combined run at
+`4e31cc79b9b65d207f0e0762eb99fa916ab2c72b` passes 36/36 tests on Node 22.16.0
+and 24.15.0 (exit 0, zero failures/skips/cancellations), including five synthetic
+source-delivery cases and prefix/namespace/freshness guards. This establishes
+source/submitted-role preservation into the unchanged answer request, not QA
+accuracy, semantic applicability, injection resistance, competitive parity or
+lightweight installed Hermes performance. The scripted shelf contains 18
+rank-visible cards: 12 eligible project cards plus 6 personal cards. Selection
+by a visible shelf label is not semantic MOC discovery across the 72 stored
+turns. Lexical collisions, paraphrase misses, upstream omissions and added token
+cost remain; receipts and roles establish provenance, not truth or authority.
+The experiment duplicates private seam guards locally for later consolidation,
+not a second engine. Its tests are explicit local gates outside existing CI's
+automatic directory set. Primary's combined generic gates also passed on both
+runtimes at that unchanged tested code SHA; a later docs-only delivery head has
+a different SHA. Final nonauthor reviews, CI and PR delivery remain pending and
+primary-owned. No core/default,
+CI/provider/budget change or evaluated-model API spend follows. The planned PR
+depends on #389 without merging its parent. Cloud M1 remains FAIL; no Cloud A/B
+ran, and local source-preservation evidence does not waive that failure.
+
 The [prospective requested-answer comparison](plans/source-diverse-qa24.md) adds
 an explicit source-diverse treatment to the existing runner, not a new default
 or a retry/rescore of the closed full-label experiment. Its separately versioned
@@ -1555,3 +1579,61 @@ exposure; they do not establish an answer-quality gain. The small conversations
 are not a long-history or official LongMemEval score. Both development arms use
 default selection, not the historical benchmark's complete-map scan shortcut.
 Paid execution and semantic acceptance remain pending at this checkpoint.
+
+### Cloud candidate CI history and diagnostic limits (2026-10-11)
+
+[PR 392](https://github.com/Cairn-ink/cairn-memory/pull/392), initial head
+`793a6f6a5acbc9d5b36c8ad6a2c787f74fb4e62d`, retained a failure in
+[run 38066848640, Node 22.16.0 job 114256120584](https://github.com/Cairn-ink/cairn-memory/actions/runs/38066848640/job/114256120584).
+The LongMemEval step passed 210/210; the following algorithm-development step
+passed 72/73 and exited 1 at B9 fixture cleanup with
+`AggregateError: test_workspace_cleanup_failed`. The log exposed no nested
+cause. The paired Node 24 job was cancelled. Independent full-suite local runs
+at that exact head passed 73/73 on Node 22.16.0 and 24.15.0: this was
+non-reproduction, not a fix.
+
+Temporary diagnostic head `c1c0ded8a961a3f509dd9243fb5be9c70b26d17d`
+received independent Standards and Spec reviews. It retained cleanup and error
+behavior while adding at most four sanitized nested-error metadata entries.
+The primary's 14 offline verification commands all exited 0: on each runtime,
+candidate controls/challenges passed 36/36, the root suite 669/669, workspace
+lifecycle 25/25 and algorithm-development 73/73; root/plugin validation and
+version checks also passed, with no unexpected owned scratch residue.
+
+One diagnostic CI attempt, run 38069130973 at that diagnostic head, completed
+both [Node 22.16.0 job 114262776238](https://github.com/Cairn-ink/cairn-memory/actions/runs/38069130973/job/114262776238)
+and [Node 24.21.0 job 114262776354](https://github.com/Cairn-ink/cairn-memory/actions/runs/38069130973/job/114262776354)
+successfully, including their 73/73 algorithm-development steps and explicit B9
+passes. Neither log contained a diagnostic tag or nested-error record. The
+floating CI Node 24 runtime differed from local pinned Node 24.15.0. B9 was not
+reproduced, so the diagnostic added no cause evidence and supports no root-cause
+or fix claim. The overall workflow concluded failure; successful jobs do not
+establish whole-workflow success. B9 stress and CI retry attempts stop here.
+The temporary instrumentation is removed and the entire evidence-bundle test
+is restored byte-for-byte to the initial head and fixed parent
+`52640f2278291d42e79597e542e2f039ccf6b29f`. The original failure remains retained
+above.
+
+Separately, at the same diagnostic head,
+[setup run 38069128551, Node 24.15.0 job 114262769221](https://github.com/Cairn-ink/cairn-memory/actions/runs/38069128551/job/114262769221)
+reported 162 passing assertions but exited 1 because post-test asynchronous
+activity raised `Error: aborted` as an `unhandledRejection`. Its Node 22.16.0
+peer was cancelled. This is distinct from B9; read-only setup diagnosis remains
+separate. A full `npm run test:setup` rerun through `--script` at the
+unchanged diagnostic head on Node 24.15.0 passed 162/162, exited 0 and left no
+late-abort warning or owned scratch residue. This is non-reproduction; this
+disposition contains no setup fix.
+
+The diagnostic head also retained a separate
+[core Node 22.16.0 failure in job 114262776356](https://github.com/Cairn-ink/cairn-memory/actions/runs/38069130973/job/114262776356):
+1135/1136 passed, exit 1. The D2/D4 late-extraction test in
+`core/test/capture-invocation-deadline.test.mjs` expected `applied` but received
+`failed` at line 142; its Node 24 peer was cancelled. No cause has been
+established, and this disposition contains no core fix. Across the diagnostic
+head's 27 checks, 23 succeeded, two failed and two were cancelled.
+
+PR 392 remains a draft pending clean gates at its latest head. The seven-file
+cloud candidate scope, frozen public synthetic fixture, algorithm defaults and
+budgets are otherwise unchanged. This history establishes neither completed
+delivery nor semantic or answer-quality gain; paid execution and semantic
+acceptance remain pending.
