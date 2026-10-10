@@ -31,4 +31,5 @@ Codex 用 exec 自動執行的工作不會記下。
 接下來：
   1. 重新開啟 Claude Code，送出一則訊息。
   2. 重新開啟 Codex，輸入 /hooks，允許 Cairn 的 4 個項目。
-  3. 確認狀態：npx @cairn-ink/memory status
+  3. 確認狀態：
+npx @cairn-ink/memory status

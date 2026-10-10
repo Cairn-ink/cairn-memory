@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { browserAuthorize, collectToken } from './auth.mjs';
 import { DEFAULT_CODEX_DAILY_CAP, PRIVACY_URL } from './constants.mjs';
 import { chooseIdentity, assertIdentityUnchanged, backupIdentity, restoreIdentity, reportBackups } from './identity-choice.mjs';
-import { confirmStopped } from './clients.mjs';
+import { confirmStopped } from './hosts.mjs';
 import { selectEndpoint } from './options.mjs';
 import { privateRead, privateWrite, privateDirectory, checkedPath } from '../runtime/integrations/client/private-state.mjs';
 import { resolveClient, detectClients, initializePairing, completePairing } from '../runtime/integrations/client/pairing.mjs';
@@ -152,7 +152,8 @@ async function compatibleClaude(neutral) {
   } catch { return false; }
 }
 
-async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome, pairingConsent, identityPlan, hostsStopped, progress=()=>{} }) {
+async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome, pairingConsent, identityPlan,
+  hostsStopped, claudeDeclined, progress=()=>{} }) {
   const addingClaude = pairingConsent === 'shared' && previous && !previous.usesClaude;
   if (previous && !addingClaude) {
     const resolved = await resolveClient(clientOptions(previous));
@@ -176,7 +177,7 @@ async function prepareIdentity({ previous, prompt, write, t, neutral, codexHome,
     throw new Error('identity_unavailable');
   if (!compatible) {
     if (pairingConsent === 'shared') throw new Error('claude_pairing_unavailable');
-    write(t('codex_standalone'));
+    write(t(claudeDeclined ? 'codex_claude_declined' : 'codex_standalone'));
     // Standalone always has its own root, including when Claude has no key yet.
     // Installing Codex must not claim Claude's future default identity directory.
     const options = {client:'codex',home,usesClaude:false,initialize:true,env:{HOME:home},
@@ -245,8 +246,14 @@ export async function installedStatus({home,hostVersion,write,t,snapshot,cliHost
   write(`Codex ${hostVersion}`);
   for(const item of verdicts) {
     const values={version:item.version??t('unknown')};
-    if (item.verdict.status!=='qualified') write(t(`codex_format_${item.verdict.status==='changed'?'changed':item.verdict.status==='unavailable'?'unavailable':'pending'}`,values));
-    if(verbose && item.verdict.status==='qualified')write(t('host_format_status',{kind:item.host.kind,observed:item.observed?t('last_observed_prefix'):'',...values}));
+    if (item.verdict.status !== 'qualified') {
+      const format = ['changed', 'unavailable'].includes(item.verdict.status) ? item.verdict.status : 'pending';
+      write(t('codex_format_' + format, values));
+    }
+    if (verbose && item.verdict.status === 'qualified') {
+      write(t('host_format_status', { kind: t('host_' + item.host.kind),
+        observed: item.observed ? t('last_observed_prefix') : '', ...values }));
+    }
   }
   const formatQualified=verdicts.every(item=>item.verdict.status==='qualified');
   const anyQualified=verdicts.some(item=>item.verdict.status==='qualified');
@@ -279,9 +286,13 @@ export async function installedStatus({home,hostVersion,write,t,snapshot,cliHost
     const effectiveCap=usage ? matured?usage.pendingPolicy.cap:usage.cap : config.dailyCap;
     write(t('codex_hooks_policy',{pause:t(control.paused?'paused':'active'),cap:effectiveCap,
       used,shared:config.usesClaude?t('shared_status'):''}));
-    write(t(effectiveCap!==config.dailyCap?(used>=effectiveCap?'cap_pending_reached':'cap_pending'):used>=effectiveCap?'cap_reached':'cap_status_hint',{cap:config.dailyCap}));
+    const capState = effectiveCap !== config.dailyCap ? (used >= effectiveCap ? 'cap_pending_reached' : 'cap_pending') :
+      used >= effectiveCap ? 'cap_reached' : 'cap_status_hint';
+    write(t(capState, { cap: config.dailyCap }));
     if(quota!=='open')write(t('quota_limited'));
-    write(t('codex_prompt_recall_status',{state:t(await promptRecallEnabled(path)&&anyQualified?(formatQualified?'on':'recall_per_host'):'off')}));
+    const recallOn = await promptRecallEnabled(path) && anyQualified;
+    write(t('codex_prompt_recall_status', { state: t(recallOn ? (formatQualified ? 'on' : 'recall_per_host') : 'off') }));
+    if (recallOn) write(t('prompt_recall_off_hint'));
     if(config.captureExec===true)write(t('codex_exec_enabled'));
     write(t('codex_hooks_trust'));
     const hostedBytes = await privateRead(join(config.root,'hosted-pause',target+'.json'),{missing:true});
@@ -386,7 +397,8 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged,neutr
     }
     throw error;
   }
-  if (action==='pause') {await setPaused(config.root,true);write(t('pause_done'));if(config.usesClaude)write(t('pause_shared'));write(t('pause_no_backfill'));return 0;}
+  if (action==='pause') {await setPaused(config.root,
+    true);write(t('pause_done'));if(config.usesClaude)write(t('pause_shared'));write(t('pause_no_backfill'));return 0;}
   if (action==='prompt-recall-off' || action==='prompt-recall-on') {
     const enabled = action==='prompt-recall-on';
     await writePromptRecall(path,enabled);
@@ -398,13 +410,14 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged,neutr
     if (policy) await automaticGuard(config.root,config.endpoint,policy).resume();
     const quota = await resumeHostedQuota({root:config.root,targetId:hostedTargetId(config)});
     if (quota.status==='unavailable') throw new Error('quota_unavailable');
-    await setPaused(config.root,false);write(t('resume_done',{clients:config.usesClaude?'Claude Code '+(t.locale==='zh-TW'?'和':'and')+' Codex':'Codex'}));
+    await setPaused(config.root, false);
+    write(t('resume_done', { clients: config.usesClaude ? t('shared_clients') : 'Codex' }));
     if(['quota_reached','busy','repaired'].includes(quota.status))write(t('resume_'+quota.status));return 0;
   }
   const lockPath = join(home,'.cairn-setup.lock');
   let lock;
   try {lock = await open(lockPath,'wx',0o600);}
-  catch(error){if(error.code==='EEXIST')throw new SetupError('codex_lock',2);throw error;}
+  catch(error){if(error.code==='EEXIST')throw new SetupError('codex_lock',2,{path:lockPath});throw error;}
   try {
     if(action==='config') {
       if(dailyCap===undefined && captureExec===undefined)throw new SetupError('config_option_required',2);
@@ -462,7 +475,8 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged,neutr
       await rm(directory,{recursive:true});
       if (!restored) {write(t('codex_unpair_failed'));return 1;}
     }
-    write(t(action==='uninstall'?'uninstalled_control':'disabled_control',{url:new URL('/settings/tokens',config.endpoint).href.replace(/^https?:\/\//u,'')}));return 0;
+    write(t(action==='uninstall'?'uninstalled_control':'disabled_control',{url:new URL('/settings/tokens',
+      config.endpoint).href.replace(/^https?:\/\//u,'')}));return 0;
   } finally {await lock.close();await unlink(lockPath);}
 }
 
@@ -503,7 +517,7 @@ export async function setupInstalledCodex(context) {
   const lockPath = join(home,'.cairn-setup.lock');
   let lock;
   try {lock = await open(lockPath,'wx',0o600);}
-  catch(error){if(error.code==='EEXIST')throw new SetupError('codex_lock',2);throw error;}
+  catch(error){if(error.code==='EEXIST')throw new SetupError('codex_lock',2,{path:lockPath});throw error;}
   let phase = 'hooks_validation';
   let pairingPending = false;
   try {
@@ -515,7 +529,9 @@ export async function setupInstalledCodex(context) {
     if(context.expectedCodex && !unchanged(context.expectedCodex,await snapshot(configPath)))throw new SetupError('codex_concurrent',2);
     const runtime = await copyRuntime(directory);progress.runtime=true;
     phase = 'identity';
-    const applyIdentity = await prepareIdentity({previous,prompt,write,t,neutral,codexHome:home,pairingConsent:context.pairingConsent,identityPlan,hostsStopped:context.hostsStopped,progress:value=>{phase=value;}});
+    const applyIdentity = await prepareIdentity({ previous, prompt, write, t, neutral, codexHome: home,
+      pairingConsent: context.pairingConsent, claudeDeclined: context.claudeDeclined, identityPlan,
+      hostsStopped: context.hostsStopped, progress: value => { phase = value; } });
     const dailyCap = context.dailyCap ?? previous?.dailyCap ?? DEFAULT_CODEX_DAILY_CAP;
     phase = 'authorization';
     if (!currentCredential || flags.includes('--reauthorize')) {
@@ -529,8 +545,11 @@ export async function setupInstalledCodex(context) {
       const result = await browserAuthorize(endpoint,{...authOptions,write,t,prompt,browse,save,signal,
         noBrowser:flags.includes('--no-browser'),noClipboard:flags.includes('--no-clipboard')});
       if (result.unsupported) throw new SetupError('codex_browser_required',1,{url:endpoint+'/api/mcp'});
-      if(!result.reported)write(t(flags.includes('--reauthorize')?'login_replaced':'connected_expiry',{date:new Date(result.expiresAt).toLocaleDateString(t.locale)}));
-      if(flags.includes('--reauthorize')&&!result.reported)write(t('credential_replaced',{url:new URL('/settings/tokens',endpoint).href.replace(/^https?:\/\//u,'')}));
+      const replaced = Boolean(currentCredential) && flags.includes('--reauthorize');
+      if (!result.reported) write(t(replaced ? 'login_replaced' : 'connected_expiry',
+        { date: new Date(result.expiresAt).toLocaleDateString(t.locale) }));
+      if (replaced && !result.reported) write(t('credential_replaced',
+        { url: new URL('/settings/tokens', endpoint).href.replace(/^https?:\/\//u, '') }));
       write(t('codex_hook_plaintext'));
     } else if(!context.coordinated)write(t('credential_kept'));
     let mcpText = before.text;
@@ -540,11 +559,14 @@ export async function setupInstalledCodex(context) {
       mcpText += (mcpText?(mcpText.endsWith('\n')?'\n':'\n\n'):'')+
         `[mcp_servers.cairn]\nurl = ${JSON.stringify(endpoint+'/api/mcp')}\n`;
     }
-    const hasMCPAuth = Object.keys(existing?.transport.http_headers??{}).length || existing?.transport.http_headers?.Authorization || existing?.transport.bearer_token_env_var ||
+    const hasMCPAuth = Object.keys(existing?.transport.http_headers ?? {}).length ||
+      existing?.transport.http_headers?.Authorization || existing?.transport.bearer_token_env_var ||
       existing?.transport.http_headers_helper || Object.keys(existing?.transport.env_http_headers??{}).length;
     if(existing && existing.transport.url!==endpoint+'/api/mcp') {
       if(!context.endpointChoice || hasMCPAuth || hostVersion!=='0.160.1' ||
-          /(?:bearer_token_env_var|http_headers|env_http_headers|oauth|headers_helper)\s*(?:=|\])/u.test(before.text))throw new SetupError('codex_endpoint_conflict',2);
+          /(?:bearer_token_env_var|http_headers|env_http_headers|oauth|headers_helper)\s*(?:=|\])/u.test(before.text)) {
+        throw new SetupError('codex_endpoint_conflict', 2);
+      }
       // Only an unambiguous plain native table is rewritten; native CLI validates it.
       const pattern=/^(\[mcp_servers\.cairn\]\r?\n)([\s\S]*?)(?=^\[|$(?![\s\S]))/mu;
       let matched=false;

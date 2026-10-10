@@ -1,6 +1,33 @@
 # Changelog
 
-## Unreleased — installer 0.4.0: one run sets up both tools
+## Unreleased — @cairn-ink/memory installer 0.5.0
+
+- Use the approved Chinese and English installer copy. Ask only about new
+  connections, update connected tools, and confirm stopped hosts once. Explain
+  the memory ID on first use and link to cairn.ink/memory/privacy.
+- Use cairn.ink by default without an endpoint question. Resolve conflicting
+  servers and memory IDs interactively; non-interactive runs change nothing.
+  Explicit `--endpoint URL --reauthorize` selects that server while preserving
+  the verified OAuth URL-binding and authentication-field checks.
+- Rename the unselected identity key to a backup only after sign-in and MCP
+  validation succeed. Preserve both keys and never silently switch identities.
+- Default Codex to 200 automatic captures per day and keep stored caps on rerun.
+  Set the cap with `setup --codex-daily-cap N` or `config --codex-daily-cap N`.
+- Skip capture and prompt recall for automated `codex exec` sessions by default.
+  Verify the session-bound transcript source and native exec ancestry for resumed
+  interactive threads. Opt in with `config --codex-capture-exec on`; show this
+  setting in status only when enabled.
+- Restore the prompt-recall kill switch in help, READMEs and enabled status:
+  `npx @cairn-ink/memory prompt-recall-off --client codex`.
+- Report Claude-only controls truthfully, keep printed commands copyable, localize
+  Chinese status/verbose output, and use the actual CODEX_HOME in lock recovery.
+  Check saved sign-ins with actionable rejection errors while accepting legacy
+  servers without scope metadata.
+- Never read Claude Code's credential store or import its saved token. Existing
+  locking, stopped-host consent and identity safety checks remain in place.
+  Installer is 0.5.0; plugin remains 0.3.2. Publication is a separate step.
+
+## Installer 0.4.0 — superseded before publication: one run sets up both tools
 
 - Detect Claude Code and Codex in an unscoped setup, disclose each tool's behavior,
   and ask once per tool. Install every agreed, qualified tool with one browser

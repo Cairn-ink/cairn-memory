@@ -54,7 +54,7 @@ export async function credentialCheck(endpoint, token, { signal, request = reque
     throw failure(response);
   }
   const value = response.value;
-  if (!value || value.valid !== true || !identifier(value.token_id) || !scopesValid(value.scopes) ||
+  if (!value || value.valid !== true || !identifier(value.token_id) || !scopesValid(value.scopes ?? null) ||
       !(value.expires_at === null || date(value.expires_at))) throw new AuthError('protocol');
   return value;
 }
@@ -168,7 +168,9 @@ export async function browserAuthorize(endpoint, {
         stop = progress(write, 0, true, t, grant.user_code, { tty });
         const checked = await credentialCheck(endpoint, token, { signal, request,
           timeout: Math.min(15000, remaining()) });
-        if (!checked || checked.token_id !== value.token_id || checked.expires_at !== value.expires_at || checked.scopes === null) throw new AuthError('protocol');
+        if (!checked || checked.token_id !== value.token_id || checked.expires_at !== value.expires_at || checked.scopes == null) {
+          throw new AuthError('protocol');
+        }
         try {
           if (!remaining()) throw new AuthError('configure');
           await save({ api_endpoint: endpoint, api_token: token }, remaining());

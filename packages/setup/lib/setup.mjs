@@ -3,7 +3,7 @@ export { validEndpoint } from './options.mjs';
 import { detectLanguage, translator } from './messages.mjs';
 import { dispatchClient, parseClient } from './codex.mjs';
 import { terminalWriter, technical, wrapLine } from './output.mjs';
-import { PRIVACY_URL } from './constants.mjs';
+import { DEFAULT_ENDPOINT, PRIVACY_URL } from './constants.mjs';
 import { setupDetected } from './clients.mjs';
 import { spawn } from 'node:child_process';
 import { writeSync, readFileSync } from 'node:fs';
@@ -16,8 +16,19 @@ import { browserAuthorize, credentialCheck, collectToken } from './auth.mjs';
 
 const plugin = 'cairn-memory@cairn-memory';
 const repository = 'Cairn-ink/cairn-memory';
-const tokenURL = 'https://cairn.ink/settings/tokens';
-const endpointDefault = 'https://cairn.ink';
+const tokenURL = new URL('/settings/tokens', DEFAULT_ENDPOINT).href;
+
+const recoveryByKind = {
+  network: 'recovery_network', server: 'recovery_server', rate_limited: 'recovery_server',
+  active_token_limit: 'recovery_tokens', ack_unknown: 'recovery_ack',
+  configure: 'recovery_reauthorize', credential: 'recovery_reauthorize', failed_revoked: 'recovery_reauthorize',
+  access_denied: 'retry_setup', timeout: 'retry_setup', expired_token: 'retry_setup',
+};
+const recoveryByKey = {
+  authorization_credential_unavailable: 'recovery_reauthorize', credential_endpoint_unset: 'recovery_reauthorize',
+  codex_lock: 'lock_retry', authorization_endpoint_conflict: 'conflict_retry', identity_conflict: 'conflict_retry',
+  tty_required: 'retry_setup',
+};
 
 const installerVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
@@ -166,7 +177,7 @@ export async function main(argv, {
   interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY),
   browse = openBrowser, nodeVersion = process.versions.node, authOptions = {},
   env = process.env, locale = Intl.DateTimeFormat().resolvedOptions().locale,
-  coordinated = false, pairingConsent, inspectCodex, identityPlan, endpointChoice,
+  coordinated = false, pairingConsent, claudeDeclined, inspectCodex, identityPlan, endpointChoice,
   forceReauthorize = false, expectedCodex, hostsStopped, progress = {},
 } = {}) {
   const rawWrite = write;
@@ -207,19 +218,21 @@ export async function main(argv, {
     if (forceReauthorize && !options.argv.includes('--reauthorize')) options.argv.push('--reauthorize');
     const selection = parseClient(options.argv, SetupError);
     if (options.captureExec !== undefined && selection.client === 'claude') throw new SetupError('invalid_exec_setting', 2);
-    if (options.dailyCap !== undefined && selection.client === 'claude') throw new SetupError('invalid_cap', 2);
+    if (options.dailyCap !== undefined && selection.client === 'claude') throw new SetupError('cap_option_scope', 2);
     if (!coordinated && ['setup', 'status'].includes(selection.argv[0]))
       write(t(selection.argv[0] === 'status' ? 'status_header' : 'installer_version', { version: installerVersion }));
     if (!coordinated && !selection.client && ['setup', 'status'].includes(selection.argv[0])) {
       return await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
-        authOptions, env, locale, t, endpointOverride, dailyCap:options.dailyCap, captureExec:options.captureExec, verbose, progress, signal, supportedNode, SetupError, validEndpoint, inspectCodex,
+        authOptions, env, locale, t, endpointOverride, dailyCap:options.dailyCap, captureExec:options.captureExec, verbose, progress,
+        signal, supportedNode, SetupError, validEndpoint, inspectCodex,
         inspectClaude: async () => (await installed(run)).length ? configuration(run) : undefined,
         runClient: (args, overrides) => main(args, { write, prompt, interactive, browse, nodeVersion,
           authOptions, env, locale, progress, coordinated: true, ...overrides }) });
     }
     const dispatch = await dispatchClient(options.argv, { write, prompt, interactive, browse: launchBrowser,
-      nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride, dailyCap:options.dailyCap, captureExec:options.captureExec, verbose, authOptions, signal, pairingConsent,
-      identityPlan, endpointChoice, expectedCodex, hostsStopped, coordinated, progress });
+      nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride, dailyCap:options.dailyCap,
+      captureExec:options.captureExec, verbose, authOptions, signal, pairingConsent,
+      identityPlan, endpointChoice, expectedCodex, hostsStopped, coordinated, claudeDeclined, progress });
     if (dispatch.handled) return dispatch.code;
     argv = dispatch.argv;
     const [action, ...flags] = argv;
@@ -259,7 +272,8 @@ export async function main(argv, {
       for (const entry of entries) {
         if (entry.errors?.length) throw new SetupError('plugin_load_error');
         write(entry.enabled === true ? t('plugin_status', { version: entry.version, state: t('enabled') }) : t('disabled'));
-        if (verbose) write(t('option_status',{key:'scope',state:['user','project','local','managed'].includes(entry.scope)?entry.scope:t('unknown')}));
+        if (verbose) write(t('option_status', { key: t('scope_label'),
+          state: ['user', 'project', 'local', 'managed'].includes(entry.scope) ? t('scope_' + entry.scope) : t('unknown') }));
       }
       if (entries.length && canConfigure) {
         const config = await configuration(run);
@@ -273,7 +287,7 @@ export async function main(argv, {
 
     if (flags.includes('--dry-run')) {
       write(t('dry_run'));
-      write(t(endpointOverride ? 'endpoint_flag' : 'endpoint_default', { endpoint: endpointOverride ?? endpointDefault }));
+      write(t(endpointOverride ? 'endpoint_flag' : 'endpoint_default', { endpoint: endpointOverride ?? DEFAULT_ENDPOINT }));
       write(t('dry_checks'));
       write(t('dry_marketplace', { repository }));
       write(t('dry_plugin', { plugin }));
@@ -362,8 +376,11 @@ export async function main(argv, {
           write(t('browser_unsupported'));
           manualToken = true;
         } else {
-          if (!authorization.reported) write(t(flags.includes('--reauthorize') ? 'login_replaced' : 'connected_expiry', { date: new Date(authorization.expiresAt).toLocaleDateString(t.locale) }));
-          if (flags.includes('--reauthorize') && !authorization.reported) write(t('credential_replaced',{url:new URL('/settings/tokens',endpoint).href.replace(/^https?:\/\//u,'')}));
+          const replaced = flags.includes('--reauthorize') &&
+            (config.configured.includes('api_token') || authOptions.authorization?.replacesExisting);
+          if (!authorization.reported) write(t(replaced ? 'login_replaced' : 'connected_expiry',
+            { date: new Date(authorization.expiresAt).toLocaleDateString(t.locale) }));
+          if (replaced && !authorization.reported) write(t('credential_replaced',{url:new URL('/settings/tokens',endpoint).href.replace(/^https?:\/\//u,'')}));
         }
       }
       if (manualToken) {
@@ -400,14 +417,17 @@ export async function main(argv, {
     // Unexpected exceptions may embed secret-bearing child data: do not log them.
     if (error.language) t = translator(error.language);
     if (signal.aborted) error = new AuthError('interrupted');
-    write(error instanceof SetupError ? t(error.key, {...error.params, client:error.params.client === 'claude'?'Claude Code':error.params.client === 'codex'?'Codex':error.params.client}) : t('setup_failed'));
+    write(error instanceof SetupError ? t(error.key, {...error.params,
+      client:error.params.client === 'claude'?'Claude Code':error.params.client === 'codex'?'Codex':error.params.client}) : t('setup_failed'));
     if (!error.presented) {
       const changes = ['runtime','credential','config','install','hooks'].filter(key=>progress[key]).map(key=>t('progress_'+key));
-      if (changes.length) write(t('progress_codex',{changes:changes.join(t.locale==='zh-TW'?'、':', ')}));
+      if (changes.length) write(t('progress_codex', { changes: changes.join(t('list_joiner')) }));
       if (progress.claudeConfigured) write(t(progress.codexSelected?'progress_claude_configured':'progress_claude_only'));
       else if (progress.claudePluginInstalled) write(t('progress_claude_plugin'));
       else if (!changes.length) write(t('nothing_changed'));
-      write(t(error.kind==='network'?'recovery_network':error.kind==='server'||error.kind==='rate_limited'?'recovery_server':error.kind==='active_token_limit'?'recovery_tokens':error.kind==='ack_unknown'?'recovery_ack':['configure','credential','failed_revoked'].includes(error.kind)||['authorization_credential_unavailable','credential_endpoint_unset'].includes(error.key)?'recovery_reauthorize':error.kind==='access_denied'||error.kind==='timeout'||error.kind==='expired_token'?'retry_setup':error.key==='codex_lock'?'lock_retry':['authorization_endpoint_conflict','identity_conflict'].includes(error.key)?'conflict_retry':error.key==='tty_required'?'retry_setup':'error_details',{url:new URL('/settings/tokens',authOptions.authorization?.endpoint??progress.endpoint??'https://cairn.ink').href}));
+      const recovery = recoveryByKind[error.kind] ?? recoveryByKey[error.key] ?? 'error_details';
+      write(t(recovery, { ...error.params,
+        url: new URL('/settings/tokens', authOptions.authorization?.endpoint ?? progress.endpoint ?? DEFAULT_ENDPOINT).href }));
       if (verbose && error.params?.phase) write(t('phase_details',error.params));
       if (verbose && error.key==='command_failed') write(t('command_details',error.params));
     }

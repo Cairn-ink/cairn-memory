@@ -1,4 +1,5 @@
-// Copy follows the approved 0.5.0 transcripts, with D6 and verified safety adjustments.
+// All user-facing installer text. Approved 0.5.0 copy with verified safety adjustments.
+import { DEFAULT_ENDPOINT } from './constants.mjs';
 export const messages = {
   "cap_pending": {
     "zh": "  新上限 {cap} 將於下次每日重置套用；Claude Code 不受影響。",
@@ -25,12 +26,12 @@ export const messages = {
     "en": "on for verified hosts only"
   },
   "clients_missing": {
-    "zh": "找不到 Claude Code 或 Codex。\n  沒有改動任何設定。\n  先安裝一個工具：https://code.claude.com/docs/en/setup",
-    "en": "Neither Claude Code nor Codex was found.\n  Nothing was changed.\n  Install a tool first: https://code.claude.com/docs/en/setup"
-  },
-  "client_heading": {
-    "zh": "{client}",
-    "en": "{client}"
+    "zh": "找不到 Claude Code 或 Codex。\n" +
+      "  沒有改動任何設定。\n" +
+      "  先安裝一個工具：https://code.claude.com/docs/en/setup",
+    "en": "Neither Claude Code nor Codex was found.\n" +
+      "  Nothing was changed.\n" +
+      "  Install a tool first: https://code.claude.com/docs/en/setup"
   },
   "client_missing": {
     "zh": "{client}：沒有安裝（找不到指令）",
@@ -41,8 +42,10 @@ export const messages = {
     "en": "OK. No tools were connected and nothing was changed."
   },
   "codex_setup_skipped": {
-    "zh": "這個 Codex 版本還不支援自動記憶，這次只裝 Claude Code。\n  Codex 更新後再執行一次 setup。",
-    "en": "This Codex version does not support automatic memory. Only Claude Code is set up.\n  Update Codex, then run setup again."
+    "zh": "這個 Codex 版本還不支援自動記憶，這次只裝 Claude Code。\n" +
+      "  Codex 更新後再執行一次 setup。",
+    "en": "This Codex version does not support automatic memory. Only Claude Code is set up.\n" +
+      "  Update Codex, then run setup again."
   },
   "authorization_shared": {
     "zh": "已交付本次瀏覽器授權，token 僅在此 run 的記憶體共用。",
@@ -57,8 +60,14 @@ export const messages = {
     "en": "  The old sign-in is not revoked. Revoke it at {url}."
   },
   "codex_inspection_skipped": {
-    "zh": "略過 Codex：{reason}\n  Claude Code 照常安裝，Codex 沒有改動。\n  修好後執行：npx @cairn-ink/memory setup --client codex",
-    "en": "Skipping Codex: {reason}\n  Claude Code can continue. Codex is unchanged.\n  After fixing it, run: npx @cairn-ink/memory setup --client codex"
+    "zh": "略過 Codex：{reason}\n" +
+      "  Claude Code 照常安裝，Codex 沒有改動。\n" +
+      "  修好後執行：\n" +
+      "npx @cairn-ink/memory setup --client codex",
+    "en": "Skipping Codex: {reason}\n" +
+      "  Claude Code can continue. Codex is unchanged.\n" +
+      "  After fixing it, run:\n" +
+      "npx @cairn-ink/memory setup --client codex"
   },
   "codex_config_unsafe": {
     "zh": "Codex 設定檔權限不安全，或它是連結，所以沒有動它。",
@@ -77,8 +86,13 @@ export const messages = {
     "en": "Cannot confirm that the saved Codex sign-in is still usable."
   },
   "codex_windows_skipped": {
-    "zh": "Windows 上的 Codex 還不支援自動記憶，這次只裝 Claude Code。\n  要手動使用：npx @cairn-ink/memory setup --client codex",
-    "en": "Automatic memory is not supported for Codex on Windows yet.\n  Only Claude Code is set up.\n  For manual tools: npx @cairn-ink/memory setup --client codex"
+    "zh": "Windows 上的 Codex 還不支援自動記憶，這次只裝 Claude Code。\n" +
+      "  要手動使用：\n" +
+      "npx @cairn-ink/memory setup --client codex",
+    "en": "Automatic memory is not supported for Codex on Windows yet.\n" +
+      "  Only Claude Code is set up.\n" +
+      "  For manual tools:\n" +
+      "npx @cairn-ink/memory setup --client codex"
   },
   "authorization_manual_unsupported": {
     "zh": "--manual-token 只能用在單一工具。",
@@ -105,32 +119,41 @@ export const messages = {
     "en": "? Connect Codex and share Claude Code's memory? (y/N) "
   },
   "codex_format_pending": {
-    "zh": "自動記憶暫停中：這個 Codex 版本（{version}）還沒驗證完。\n  重新檢查：npx @cairn-ink/memory status --client codex",
-    "en": "Automatic memory is paused: Codex {version} has not been verified yet.\n  Recheck: npx @cairn-ink/memory status --client codex"
+    "zh": "自動記憶暫停中：這個 Codex 版本（{version}）還沒驗證完。\n" +
+      "  重新檢查：\n" +
+      "npx @cairn-ink/memory status --client codex",
+    "en": "Automatic memory is paused: Codex {version} has not been verified yet.\n" +
+      "  Recheck:\n" +
+      "npx @cairn-ink/memory status --client codex"
   },
   "codex_format_unavailable": {
-    "zh": "自動記憶暫停中：無法驗證這個 Codex 版本（{version}）。\n  重新檢查：npx @cairn-ink/memory status --client codex",
-    "en": "Automatic memory is paused: Codex {version} could not be verified.\n  Recheck: npx @cairn-ink/memory status --client codex"
+    "zh": "自動記憶暫停中：無法驗證這個 Codex 版本（{version}）。\n" +
+      "  重新檢查：\n" +
+      "npx @cairn-ink/memory status --client codex",
+    "en": "Automatic memory is paused: Codex {version} could not be verified.\n" +
+      "  Recheck:\n" +
+      "npx @cairn-ink/memory status --client codex"
   },
   "codex_format_changed": {
     "zh": "Codex {version} 改了對話格式，自動記憶先暫停，等 Cairn 更新後會恢復。",
-    "en": "Codex {version} changed its transcript format. Automatic memory is paused\nuntil Cairn is updated."
-  },
-  "codex_format_not_installed": {
-    "zh": "Codex {version} 的格式尚未檢查（CX-5 尚未安裝；status 只讀取快取）",
-    "en": "Codex {version}: format not checked (CX-5 not installed; status only reads cached verdicts)."
+    "en": "Codex {version} changed its transcript format. Automatic memory is paused\n" +
+      "until Cairn is updated."
   },
   "codex_phase_failed": {
     "zh": "Codex 沒有安裝完成。",
     "en": "Codex setup did not finish."
   },
   "codex_host_unqualified": {
-    "zh": "這個 Codex 版本還不支援自動記憶。\n  更新 Codex 後再執行一次 setup。",
-    "en": "This Codex version does not support automatic memory yet.\n  Update Codex, then run setup again."
+    "zh": "這個 Codex 版本還不支援自動記憶。\n" +
+      "  更新 Codex 後再執行一次 setup。",
+    "en": "This Codex version does not support automatic memory yet.\n" +
+      "  Update Codex, then run setup again."
   },
   "codex_browser_required": {
-    "zh": "這個 Cairn 伺服器還不支援瀏覽器登入，Codex 自動記憶需要它。\n  請先更新伺服器的登入功能，再執行一次 setup。",
-    "en": "This Cairn server does not support the browser sign-in Codex memory needs.\n  Update the server to support browser sign-in, then run setup again."
+    "zh": "這個 Cairn 伺服器還不支援瀏覽器登入，Codex 自動記憶需要它。\n" +
+      "  請先更新伺服器的登入功能，再執行一次 setup。",
+    "en": "This Cairn server does not support the browser sign-in Codex memory needs.\n" +
+      "  Update the server to support browser sign-in, then run setup again."
   },
   "codex_hooks_status": {
     "zh": "  {state}",
@@ -149,8 +172,10 @@ export const messages = {
     "en": "  Make sure the 4 Cairn entries are allowed in Codex /hooks (not checked here)."
   },
   "codex_hooks_policy": {
-    "zh": "  · 記憶：{pause}{shared}\n  · 今日 {used} / {cap}",
-    "en": "  · Memory: {pause}{shared}\n  · Today {used} / {cap}"
+    "zh": "  · 記憶：{pause}{shared}\n" +
+      "  · 今日 {used} / {cap}",
+    "en": "  · Memory: {pause}{shared}\n" +
+      "  · Today {used} / {cap}"
   },
   "codex_hooks_dry": {
     "zh": "預演：安裝私有版本 runtime 與 user hooks.json；browser credential 存於 cairn/credential.json（0600）；MCP 預設 OAuth。",
@@ -165,12 +190,22 @@ export const messages = {
     "en": "  Codex keeps this sign-in in a file only you can read. It is not encrypted."
   },
   "codex_standalone_kept": {
-    "zh": "Codex 目前用自己的記憶，這次不改，避免舊記憶對不上。\n  要共用：關閉兩個工具，執行 uninstall --client codex，再執行 setup。",
-    "en": "Codex keeps its own memory so existing project memories remain addressable.\n  To share: close both tools, run uninstall --client codex, then setup."
+    "zh": "Codex 目前用自己的記憶，這次不改，避免舊記憶對不上。\n" +
+      "  要共用：關閉兩個工具，執行 uninstall --client codex，再執行 setup。",
+    "en": "Codex keeps its own memory so existing project memories remain addressable.\n" +
+      "  To share: close both tools, run uninstall --client codex, then setup."
   },
   "codex_unpair_failed": {
-    "zh": "✗ Codex 已移除，但無法確認 Claude Code 已恢復成單獨使用。\n  Codex 的登入和設定已刪除；Claude Code 的記憶身分沒有改動。\n  保持兩個工具關閉，確認 claude 指令能執行後，再跑一次：\n  npx @cairn-ink/memory uninstall --client codex",
-    "en": "✗ Codex was removed, but Claude Code's standalone setup couldn't be confirmed.\n  Codex's sign-in and settings were deleted. Claude Code's memory ID is kept.\n  Keep both tools closed, make sure the claude command runs, then run again:\n  npx @cairn-ink/memory uninstall --client codex"
+    "zh": "✗ Codex 已移除，但無法確認 Claude Code 已恢復成單獨使用。\n" +
+      "  Codex 的登入和設定已刪除；Claude Code 的記憶身分沒有改動。\n" +
+      "  保持兩個工具關閉，確認 claude 指令能執行後，再跑一次：\n" +
+      " \n" +
+      "npx @cairn-ink/memory uninstall --client codex",
+    "en": "✗ Codex was removed, but Claude Code's standalone setup couldn't be confirmed.\n" +
+      "  Codex's sign-in and settings were deleted. Claude Code's memory ID is kept.\n" +
+      "  Keep both tools closed, make sure the claude command runs, then run again:\n" +
+      " \n" +
+      "npx @cairn-ink/memory uninstall --client codex"
   },
   "codex_policy_cleanup_unsafe": {
     "zh": "有一個 Cairn 設定檔權限不安全，沒有刪它；其他都已移除。",
@@ -189,23 +224,15 @@ export const messages = {
     "en": "The Claude Code plugin cannot be checked. Codex keeps its shared memory."
   },
   "codex_shared_pause_availability": {
-    "zh": "Shared pause gate 最後觀察：{state}；Codex 要求 enforced state，Claude 保留既有行為。",
+    "zh": "共用暫停開關最後觀察：{state}；Codex 需要伺服器強制執行，Claude 保留既有行為。",
     "en": "Shared pause gate last observation: {state}; Codex requires enforced state, Claude keeps existing behavior."
-  },
-  "codex_stopped_prompt": {
-    "zh": "? 都關好了嗎？ (y/N) ",
-    "en": "? Are both closed? (y/N) "
-  },
-  "codex_control_done": {
-    "zh": "Codex 自動記憶：{state}",
-    "en": "Codex automatic memory: {state}"
   },
   "codex_prompt_recall_status": {
     "zh": "  · 提問時找回記憶：{state}",
     "en": "  · Find memories when you ask: {state}"
   },
   "codex_startup_gate": {
-    "zh": "SessionStart 建立 pause EOF boundary；startup context 停用，待本機 tokenizer 與 sibling context 驗收。",
+    "zh": "SessionStart 建立暫停時的檔案結尾界線；啟動時的記憶注入尚未通過本機斷詞器與相關內容驗收，保持關閉。",
     "en": "SessionStart establishes the pause EOF boundary; startup context stays disabled pending a local tokenizer and sibling context acceptance."
   },
   "input_cancelled": {
@@ -217,16 +244,60 @@ export const messages = {
     "en": "Run these commands inside Claude Code:"
   },
   "configuration_incomplete": {
-    "zh": "Claude Code 的設定沒有存完整。\n  在 Claude Code 輸入 /plugin configure cairn-memory@cairn-memory 補上。",
-    "en": "Claude Code settings were not fully saved.\n  Type /plugin configure cairn-memory@cairn-memory in Claude Code to complete them."
+    "zh": "Claude Code 的設定沒有存完整。\n" +
+      "  在 Claude Code 輸入 /plugin configure cairn-memory@cairn-memory 補上。",
+    "en": "Claude Code settings were not fully saved.\n" +
+      "  Type /plugin configure cairn-memory@cairn-memory in Claude Code to complete them."
   },
   "help": {
-    "zh": "用法：npx @cairn-ink/memory <指令> [選項]\n\n常用指令：setup、status、pause、resume、uninstall、config\n  --client claude|codex  只操作其中一個工具\n  --endpoint URL        指定 Cairn 網址（預設 https://cairn.ink）\n  --codex-daily-cap N    Codex 每日自動記憶上限（1–100000）\n  --codex-capture-exec on|off  Codex 自動工作的記憶（預設 off）\n  --verbose             顯示技術細節\n  --lang zh|en          選擇語言\n  --dry-run             只檢查，不改動\n  --no-browser          自行開啟瀏覽器\n  --no-clipboard        不複製一次性代碼\n  --manual-token        手動貼上存取碼\n  --reauthorize         重新登入\n\n修改上限：npx @cairn-ink/memory config --codex-daily-cap 200",
-    "en": "Usage: npx @cairn-ink/memory <command> [options]\n\nCommands: setup, status, pause, resume, uninstall, config\n  --client claude|codex  Act on one tool only\n  --endpoint URL        Cairn URL (default https://cairn.ink)\n  --codex-daily-cap N    Codex daily automatic memory limit (1-100000)\n  --codex-capture-exec on|off  Memory for Codex automation (default off)\n  --verbose             Show technical details\n  --lang zh|en          Choose language\n  --dry-run             Inspect without changing anything\n  --no-browser          Open the browser yourself\n  --no-clipboard        Do not copy the one-time code\n  --manual-token        Paste an access token manually\n  --reauthorize         Sign in again\n\nChange limit: npx @cairn-ink/memory config --codex-daily-cap 200"
+    "zh": "用法：\n" +
+      "npx @cairn-ink/memory <指令> [選項]\n" +
+      "\n" +
+      "常用指令：setup、status、pause、resume、uninstall、config\n" +
+      "  --client claude|codex  只操作其中一個工具\n" +
+      "  --endpoint URL        指定 Cairn 網址（預設 {defaultEndpoint}）\n" +
+      "  --codex-daily-cap N    Codex 每日自動記憶上限（1–100000）\n" +
+      "  --codex-capture-exec on|off  Codex 自動工作的記憶（預設 off）\n" +
+      "  --verbose             顯示技術細節\n" +
+      "  --lang zh|en          選擇語言\n" +
+      "  --dry-run             只檢查，不改動\n" +
+      "  --no-browser          自行開啟瀏覽器\n" +
+      "  --no-clipboard        不複製一次性代碼\n" +
+      "  --manual-token        手動貼上存取碼\n" +
+      "  --reauthorize         重新登入\n" +
+      "\n" +
+      "修改上限：\n" +
+      "npx @cairn-ink/memory config --codex-daily-cap 200\n" +
+      "\n" +
+      "  要關閉提問回想：\n" +
+      "npx @cairn-ink/memory prompt-recall-off --client codex",
+    "en": "Usage:\n" +
+      "npx @cairn-ink/memory <command> [options]\n" +
+      "\n" +
+      "Commands: setup, status, pause, resume, uninstall, config\n" +
+      "  --client claude|codex  Act on one tool only\n" +
+      "  --endpoint URL        Cairn URL (default {defaultEndpoint})\n" +
+      "  --codex-daily-cap N    Codex daily automatic memory limit (1-100000)\n" +
+      "  --codex-capture-exec on|off  Memory for Codex automation (default off)\n" +
+      "  --verbose             Show technical details\n" +
+      "  --lang zh|en          Choose language\n" +
+      "  --dry-run             Inspect without changing anything\n" +
+      "  --no-browser          Open the browser yourself\n" +
+      "  --no-clipboard        Do not copy the one-time code\n" +
+      "  --manual-token        Paste an access token manually\n" +
+      "  --reauthorize         Sign in again\n" +
+      "\n" +
+      "Change limit:\n" +
+      "npx @cairn-ink/memory config --codex-daily-cap 200\n" +
+      "\n" +
+      "  To turn prompt recall off:\n" +
+      "npx @cairn-ink/memory prompt-recall-off --client codex"
   },
   "unknown_command": {
-    "zh": "不認得這個指令或選項。用法：npx @cairn-ink/memory --help",
-    "en": "Unknown command or option. Use: npx @cairn-ink/memory --help"
+    "zh": "不認得這個指令或選項。用法：\n" +
+      "npx @cairn-ink/memory --help",
+    "en": "Unknown command or option. Use:\n" +
+      "npx @cairn-ink/memory --help"
   },
   "node_required": {
     "zh": "需要 Node.js 22.16 以上。更新 Node.js 後再執行一次。",
@@ -253,8 +324,12 @@ export const messages = {
     "en": "absent"
   },
   "plugin_absent": {
-    "zh": "  ✗ 外掛沒有安裝\n  安裝：npx @cairn-ink/memory setup",
-    "en": "  ✗ Plugin is not installed\n  Install: npx @cairn-ink/memory setup"
+    "zh": "  ✗ 外掛沒有安裝\n" +
+      "  安裝：\n" +
+      "npx @cairn-ink/memory setup",
+    "en": "  ✗ Plugin is not installed\n" +
+      "  Install:\n" +
+      "npx @cairn-ink/memory setup"
   },
   "enabled": {
     "zh": "已啟用",
@@ -265,8 +340,10 @@ export const messages = {
     "en": "disabled"
   },
   "plugin_load_error": {
-    "zh": "外掛載入失敗。\n  在 Claude Code 輸入 /plugin 查看原因。",
-    "en": "The plugin failed to load.\n  Check /plugin in Claude Code for the cause."
+    "zh": "外掛載入失敗。\n" +
+      "  在 Claude Code 輸入 /plugin 查看原因。",
+    "en": "The plugin failed to load.\n" +
+      "  Check /plugin in Claude Code for the cause."
   },
   "configured": {
     "zh": "已設定",
@@ -281,16 +358,20 @@ export const messages = {
     "en": "Cannot read plugin settings (Claude Code may be too old)."
   },
   "legacy_present": {
-    "zh": "還有舊版 Cairn MCP 設定，可能出現重複工具。\n  移除：claude mcp remove cairn",
-    "en": "Old Cairn MCP settings may create duplicate tools.\n  Remove: claude mcp remove cairn"
-  },
-  "legacy_absent": {
-    "zh": "不存在",
-    "en": "absent"
+    "zh": "還有舊版 Cairn MCP 設定，可能出現重複工具。\n" +
+      "  移除：\n" +
+      "claude mcp remove cairn",
+    "en": "Old Cairn MCP settings may create duplicate tools.\n" +
+      "  Remove:\n" +
+      "claude mcp remove cairn"
   },
   "status_unverified": {
-    "zh": "這裡只讀本機設定，沒有實際連線測試。\n詳細資料：npx @cairn-ink/memory status --verbose",
-    "en": "Only local settings were read; no connection was tested.\nDetails: npx @cairn-ink/memory status --verbose"
+    "zh": "這裡只讀本機設定，沒有實際連線測試。\n" +
+      "詳細資料：\n" +
+      "npx @cairn-ink/memory status --verbose",
+    "en": "Only local settings were read; no connection was tested.\n" +
+      "Details:\n" +
+      "npx @cairn-ink/memory status --verbose"
   },
   "dry_run": {
     "zh": "預演：只檢查，不修改",
@@ -329,32 +410,44 @@ export const messages = {
     "en": "This Claude Code version cannot install plugins automatically."
   },
   "claude_capabilities_required": {
-    "zh": "Claude Code 版本太舊，無法安全地儲存登入。\n  更新 Claude Code 後再執行一次。",
-    "en": "Claude Code is too old to save a sign-in safely.\n  Update Claude Code, then run setup again."
+    "zh": "Claude Code 版本太舊，無法安全地儲存登入。\n" +
+      "  更新 Claude Code 後再執行一次。",
+    "en": "Claude Code is too old to save a sign-in safely.\n" +
+      "  Update Claude Code, then run setup again."
   },
   "marketplace_update_required": {
-    "zh": "Claude Code 版本太舊，無法安全更新外掛來源。\n  更新 Claude Code 後再執行一次。",
-    "en": "Claude Code is too old to update the plugin source safely.\n  Update Claude Code, then run setup again."
+    "zh": "Claude Code 版本太舊，無法安全更新外掛來源。\n" +
+      "  更新 Claude Code 後再執行一次。",
+    "en": "Claude Code is too old to update the plugin source safely.\n" +
+      "  Update Claude Code, then run setup again."
   },
   "plugin_update_required": {
-    "zh": "Claude Code 版本太舊，無法安全更新外掛。\n  更新 Claude Code 後再執行一次。",
-    "en": "Claude Code is too old to update the plugin safely.\n  Update Claude Code, then run setup again."
+    "zh": "Claude Code 版本太舊，無法安全更新外掛。\n" +
+      "  更新 Claude Code 後再執行一次。",
+    "en": "Claude Code is too old to update the plugin safely.\n" +
+      "  Update Claude Code, then run setup again."
   },
   "marketplace_ready": {
     "zh": "Marketplace 已就緒",
     "en": "Marketplace ready."
   },
   "plugin_unconfirmed": {
-    "zh": "外掛已安裝，但無法確認它有載入。\n  在 Claude Code 輸入 /plugin 查看，再執行一次 setup。",
-    "en": "The plugin was installed, but setup cannot confirm it loaded.\n  Check /plugin in Claude Code, then run setup again."
+    "zh": "外掛已安裝，但無法確認它有載入。\n" +
+      "  在 Claude Code 輸入 /plugin 查看，再執行一次 setup。",
+    "en": "The plugin was installed, but setup cannot confirm it loaded.\n" +
+      "  Check /plugin in Claude Code, then run setup again."
   },
   "plugin_version_unconfirmed": {
-    "zh": "外掛已安裝，但無法確認它有載入。\n  在 Claude Code 輸入 /plugin 查看，再執行一次 setup。",
-    "en": "The plugin was installed, but setup cannot confirm it loaded.\n  Check /plugin in Claude Code, then run setup again."
+    "zh": "外掛已安裝，但無法確認它有載入。\n" +
+      "  在 Claude Code 輸入 /plugin 查看，再執行一次 setup。",
+    "en": "The plugin was installed, but setup cannot confirm it loaded.\n" +
+      "  Check /plugin in Claude Code, then run setup again."
   },
   "plugin_disabled": {
-    "zh": "外掛已安裝但被停用。\n  在 Claude Code 輸入 /plugin 啟用 Cairn.ink Memory，再執行一次 setup。",
-    "en": "The plugin is installed but disabled.\n  Enable Cairn.ink Memory in Claude Code /plugin, then run setup again."
+    "zh": "外掛已安裝但被停用。\n" +
+      "  在 Claude Code 輸入 /plugin 啟用 Cairn.ink Memory，再執行一次 setup。",
+    "en": "The plugin is installed but disabled.\n" +
+      "  Enable Cairn.ink Memory in Claude Code /plugin, then run setup again."
   },
   "credential_kept": {
     "zh": "✓ 沿用原本的登入",
@@ -365,8 +458,8 @@ export const messages = {
     "en": "Claude Code Cairn settings are missing the server address."
   },
   "endpoint_invalid": {
-    "zh": "這不是有效的 Cairn 網址，請用 https://，例如 https://cairn.ink。",
-    "en": "This is not a valid Cairn URL. Use HTTPS, for example https://cairn.ink."
+    "zh": "這不是有效的 Cairn 網址，請用 https://，例如 {defaultEndpoint}。",
+    "en": "This is not a valid Cairn URL. Use HTTPS, for example {defaultEndpoint}."
   },
   "browser_unsupported": {
     "zh": "這個 Cairn 伺服器不支援瀏覽器登入，改用存取碼。",
@@ -389,16 +482,22 @@ export const messages = {
     "en": "✓ Old Cairn MCP settings removed"
   },
   "legacy_kept": {
-    "zh": "保留舊版設定；之後要移除：claude mcp remove cairn",
-    "en": "Old settings kept. To remove them later: claude mcp remove cairn"
+    "zh": "保留舊版設定；之後要移除：\n" +
+      "claude mcp remove cairn",
+    "en": "Old settings kept. To remove them later:\n" +
+      "claude mcp remove cairn"
   },
   "legacy_pending": {
     "zh": "注意：還有舊版的 Cairn MCP 設定，可能出現重複的工具。",
     "en": "Old Cairn MCP settings are still present and may create duplicate tools."
   },
   "claude_restart": {
-    "zh": "接下來：\n  1. 重新開啟 Claude Code，送出一則訊息。\n  2. 確認狀態：在 Claude Code 輸入 /cairn-memory:status",
-    "en": "Next:\n  1. Reopen Claude Code and send a message.\n  2. Check status: type /cairn-memory:status in Claude Code"
+    "zh": "接下來：\n" +
+      "  1. 重新開啟 Claude Code，送出一則訊息。\n" +
+      "  2. 確認狀態：在 Claude Code 輸入 /cairn-memory:status",
+    "en": "Next:\n" +
+      "  1. Reopen Claude Code and send a message.\n" +
+      "  2. Check status: type /cairn-memory:status in Claude Code"
   },
   "setup_failed": {
     "zh": "安裝沒有完成。",
@@ -408,13 +507,11 @@ export const messages = {
     "zh": "--client 只能是 claude 或 codex。",
     "en": "--client must be claude or codex."
   },
-  "client_help": {
-    "zh": "",
-    "en": ""
-  },
   "codex_unknown": {
-    "zh": "不認得這個指令或選項。用法：npx @cairn-ink/memory --help",
-    "en": "Unknown command or option. Use: npx @cairn-ink/memory --help"
+    "zh": "不認得這個指令或選項。用法：\n" +
+      "npx @cairn-ink/memory --help",
+    "en": "Unknown command or option. Use:\n" +
+      "npx @cairn-ink/memory --help"
   },
   "codex_failed": {
     "zh": "Codex 沒有安裝完成。",
@@ -489,8 +586,10 @@ export const messages = {
     "en": "PAT, remote service and hooks are not tested."
   },
   "codex_repair": {
-    "zh": "Codex 裡已有 Cairn 設定，但目前停用或無法連線。\n  在 Codex 輸入 /mcp 修好或啟用後，再執行一次 setup。",
-    "en": "Cairn settings exist in Codex but are disabled or unusable.\n  Fix or enable them in Codex /mcp, then run setup again."
+    "zh": "Codex 裡已有 Cairn 設定，但目前停用或無法連線。\n" +
+      "  在 Codex 輸入 /mcp 修好或啟用後，再執行一次 setup。",
+    "en": "Cairn settings exist in Codex but are disabled or unusable.\n" +
+      "  Fix or enable them in Codex /mcp, then run setup again."
   },
   "codex_credential_kept": {
     "zh": "✓ 沿用原本的登入",
@@ -513,8 +612,10 @@ export const messages = {
     "en": "Not set up yet. No access token was collected."
   },
   "codex_directory": {
-    "zh": "Codex 目錄權限不安全。\n  檢查：ls -ld ~/.codex（應只有你能寫入、不是連結）",
-    "en": "The Codex directory has unsafe permissions.\n  Check: ls -ld ~/.codex (only you should be able to write; no link)"
+    "zh": "Codex 目錄權限不安全。\n" +
+      "  檢查：ls -ld ~/.codex（應只有你能寫入、不是連結）",
+    "en": "The Codex directory has unsafe permissions.\n" +
+      "  Check: ls -ld ~/.codex (only you should be able to write; no link)"
   },
   "codex_candidate": {
     "zh": "Codex 不接受新的設定，原本的設定保持不變。",
@@ -537,8 +638,10 @@ export const messages = {
     "en": "Codex settings changed while you answered. Setup stopped before writing."
   },
   "codex_saved_unverified": {
-    "zh": "設定已寫入，但讀回確認失敗。\n  在 Codex 輸入 /mcp 檢查 cairn。",
-    "en": "Settings were written, but could not be confirmed.\n  Check cairn in Codex /mcp."
+    "zh": "設定已寫入，但讀回確認失敗。\n" +
+      "  在 Codex 輸入 /mcp 檢查 cairn。",
+    "en": "Settings were written, but could not be confirmed.\n" +
+      "  Check cairn in Codex /mcp."
   },
   "codex_saved": {
     "zh": "✓ 已把 Cairn 工具加入 Codex",
@@ -641,8 +744,8 @@ export const messages = {
     "en": "Create an access token here, then paste it: {url}"
   },
   "configure_options": {
-    "zh": "在 Configure options 填入伺服器位址（預設 https://cairn.ink）和存取碼。",
-    "en": "In Configure options, enter the server URL (default https://cairn.ink) and token."
+    "zh": "在 Configure options 填入伺服器位址（預設 {defaultEndpoint}）和存取碼。",
+    "en": "In Configure options, enter the server URL (default {defaultEndpoint}) and token."
   },
   "configure_menu": {
     "zh": "也可開啟 /plugin → Installed → Cairn.ink Memory → Configure options。",
@@ -672,29 +775,41 @@ export const messages = {
     "zh": "{key}：{state}",
     "en": "{key}: {state}"
   },
-  "legacy_status": {
-    "zh": "舊 MCP cairn：{state}",
-    "en": "Legacy MCP cairn: {state}"
-  },
   "plugin_version": {
     "zh": "✓ Claude Code 外掛 {version} 已安裝",
     "en": "✓ Claude Code plugin {version} installed"
   },
   "dry_marketplace": {
-    "zh": "2. marketplace 不存在時：claude plugin marketplace add {repository}\n   已存在時：claude plugin marketplace update cairn-memory",
-    "en": "2. If absent: claude plugin marketplace add {repository}\n   If present: claude plugin marketplace update cairn-memory"
+    "zh": "2. marketplace 不存在時：\n" +
+      "claude plugin marketplace add {repository}\n" +
+      "   已存在時：\n" +
+      "claude plugin marketplace update cairn-memory",
+    "en": "2. If absent:\n" +
+      "claude plugin marketplace add {repository}\n" +
+      "   If present:\n" +
+      "claude plugin marketplace update cairn-memory"
   },
   "dry_plugin": {
-    "zh": "3. claude plugin install {plugin}（user scope）；已安裝時執行 plugin update",
-    "en": "3. claude plugin install {plugin} (user scope); plugin update if already installed"
+    "zh": "3. 安裝使用者範圍的外掛，已安裝時更新：\n" +
+      "claude plugin install {plugin} --scope user\n" +
+      "claude plugin update {plugin} --scope user",
+    "en": "3. Install the user plugin; update it if already installed:\n" +
+      "claude plugin install {plugin} --scope user\n" +
+      "claude plugin update {plugin} --scope user"
   },
   "dry_configure": {
-    "zh": "5. claude plugin configure {plugin} --values-stdin（JSON 經 stdin；不印出 token）",
-    "en": "5. claude plugin configure {plugin} --values-stdin (JSON through stdin; token never printed)"
+    "zh": "5. 以標準輸入交付 JSON 設定，不印出存取碼：\n" +
+      "claude plugin configure {plugin} --values-stdin",
+    "en": "5. Deliver JSON settings through stdin; do not print the access token:\n" +
+      "claude plugin configure {plugin} --values-stdin"
   },
   "dry_remove": {
-    "zh": "6. claude mcp get cairn；存在時先詢問，再執行 claude mcp remove cairn",
-    "en": "6. claude mcp get cairn; if present, ask before: claude mcp remove cairn"
+    "zh": "6. 檢查舊版設定，存在時先詢問再移除：\n" +
+      "claude mcp get cairn\n" +
+      "claude mcp remove cairn",
+    "en": "6. Inspect legacy settings; ask before removing them if present:\n" +
+      "claude mcp get cairn\n" +
+      "claude mcp remove cairn"
   },
   "connected_expiry": {
     "zh": "✓ 已登入 Cairn，有效到 {date}",
@@ -705,8 +820,10 @@ export const messages = {
     "en": "✓ Connected to Cairn, access token valid until {date}"
   },
   "manual_unverified": {
-    "zh": "設定已儲存，但這個伺服器無法驗證存取碼。\n  在 Claude Code 輸入 /cairn-memory:status 確認。",
-    "en": "Settings were saved, but this server cannot verify the access token.\n  Type /cairn-memory:status in Claude Code to check."
+    "zh": "設定已儲存，但這個伺服器無法驗證存取碼。\n" +
+      "  在 Claude Code 輸入 /cairn-memory:status 確認。",
+    "en": "Settings were saved, but this server cannot verify the access token.\n" +
+      "  Type /cairn-memory:status in Claude Code to check."
   },
   "legacy_prompt": {
     "zh": "? 找到舊版 Cairn MCP 設定，可能出現重複的工具。要移除嗎？ (y/N) ",
@@ -761,16 +878,24 @@ export const messages = {
     "en": "When using --endpoint with a saved sign-in, also pass --reauthorize."
   },
   "codex_endpoint_conflict": {
-    "zh": "Codex 的 Cairn 工具連到另一台伺服器。\n  先執行 codex mcp logout cairn，再執行 codex mcp remove cairn。",
-    "en": "The Cairn tools in Codex use a different server.\n  Run codex mcp logout cairn, then codex mcp remove cairn."
+    "zh": "Codex 的 Cairn 工具連到另一台伺服器，這次沒有改動。\n" +
+      "先登出並移除，再重新連接：\n" +
+      "codex mcp logout cairn\n" +
+      "codex mcp remove cairn\n" +
+      "npx @cairn-ink/memory setup --client codex --reauthorize",
+    "en": "The Cairn tools in Codex use a different server. Nothing was changed.\n" +
+      "Sign out and remove them, then connect again:\n" +
+      "codex mcp logout cairn\n" +
+      "codex mcp remove cairn\n" +
+      "npx @cairn-ink/memory setup --client codex --reauthorize"
   },
   "codex_retry_command": {
     "zh": "npx @cairn-ink/memory setup --client codex",
     "en": "npx @cairn-ink/memory setup --client codex"
   },
   "codex_env_command": {
-    "zh": "codex mcp add cairn --url https://cairn.ink/api/mcp --bearer-token-env-var CAIRN_MCP_TOKEN",
-    "en": "codex mcp add cairn --url https://cairn.ink/api/mcp --bearer-token-env-var CAIRN_MCP_TOKEN"
+    "zh": "codex mcp add cairn --url {defaultEndpoint}/api/mcp --bearer-token-env-var CAIRN_MCP_TOKEN",
+    "en": "codex mcp add cairn --url {defaultEndpoint}/api/mcp --bearer-token-env-var CAIRN_MCP_TOKEN"
   },
   "codex_user_status": {
     "zh": "使用者層級 MCP cairn：{state}",
@@ -817,12 +942,24 @@ export const messages = {
     "en": "Found Codex on this computer (Claude Code not found)."
   },
   "privacy_both": {
-    "zh": "連接後，你和 AI 的對話會先在本機盡量遮掉密碼、金鑰等敏感資訊，再存到你的 Cairn。\n每次提問時，也會送出一段遮過、有長度上限的提問，用來找回相關記憶。\nClaude Code 外掛預設會送出使用統計，不含任何對話內容。\n使用統計可以關閉，記憶也隨時可以暫停。完整說明：{privacy}",
-    "en": "Once connected, your conversations with the AI are saved to your Cairn.\nPasswords and keys are masked on this computer first (best effort).\nEach prompt also sends a masked, length-limited copy to find related memories.\nThe Claude Code plugin sends usage stats by default, never conversation text.\nTurn off stats or pause memory at any time. Details: {privacy}"
+    "zh": "連接後，你和 AI 的對話會先在本機盡量遮掉密碼、金鑰等敏感資訊，再存到你的 Cairn。\n" +
+      "每次提問時，也會送出一段遮過、有長度上限的提問，用來找回相關記憶。\n" +
+      "Claude Code 外掛預設會送出使用統計，不含任何對話內容。\n" +
+      "使用統計可以關閉，記憶也隨時可以暫停。完整說明：{privacy}",
+    "en": "Once connected, your conversations with the AI are saved to your Cairn.\n" +
+      "Passwords and keys are masked on this computer first (best effort).\n" +
+      "Each prompt also sends a masked, length-limited copy to find related memories.\n" +
+      "The Claude Code plugin sends usage stats by default, never conversation text.\n" +
+      "Turn off stats or pause memory at any time. Details: {privacy}"
   },
   "privacy_codex": {
-    "zh": "連接後，你和 AI 的對話會先在本機盡量遮掉密碼、金鑰等敏感資訊，再存到你的 Cairn。\n每次提問時，也會送出一段遮過、有長度上限的提問，用來找回相關記憶。\n記憶隨時可以暫停。完整說明：{privacy}",
-    "en": "Once connected, your conversations with the AI are saved to your Cairn.\nPasswords and keys are masked on this computer first (best effort).\nEach prompt also sends a masked, length-limited copy to find related memories.\nYou can pause memory at any time. Details: {privacy}"
+    "zh": "連接後，你和 AI 的對話會先在本機盡量遮掉密碼、金鑰等敏感資訊，再存到你的 Cairn。\n" +
+      "每次提問時，也會送出一段遮過、有長度上限的提問，用來找回相關記憶。\n" +
+      "記憶隨時可以暫停。完整說明：{privacy}",
+    "en": "Once connected, your conversations with the AI are saved to your Cairn.\n" +
+      "Passwords and keys are masked on this computer first (best effort).\n" +
+      "Each prompt also sends a masked, length-limited copy to find related memories.\n" +
+      "You can pause memory at any time. Details: {privacy}"
   },
   "claude_connected": {
     "zh": "✓ Claude Code 已連接（外掛會順便更新）",
@@ -833,8 +970,10 @@ export const messages = {
     "en": "✓ Codex is connected"
   },
   "stop_hint": {
-    "zh": "兩個工具要共用同一份記憶，安裝時都必須關閉。\n請完全結束 Claude Code 和 Codex，並等背景工作結束。",
-    "en": "To share one memory, both tools must be closed while setup runs.\nQuit Claude Code and Codex completely, and wait for background work to finish."
+    "zh": "兩個工具要共用同一份記憶，安裝時都必須關閉。\n" +
+      "請完全結束 Claude Code 和 Codex，並等背景工作結束。",
+    "en": "To share one memory, both tools must be closed while setup runs.\n" +
+      "Quit Claude Code and Codex completely, and wait for background work to finish."
   },
   "ask_hosts_stopped": {
     "zh": "? 都關好了嗎？ (y/N) ",
@@ -845,8 +984,10 @@ export const messages = {
     "en": "This run signs in again and replaces the selected tools' current sign-in."
   },
   "codex_own_login": {
-    "zh": "Codex 需要自己的登入，安裝程式不會讀取 Claude Code 的登入資訊。\n  請用和 Claude Code 同一個 Cairn 帳號。",
-    "en": "Codex needs its own sign-in. Setup never reads Claude Code's sign-in.\n  Use the same Cairn account as Claude Code."
+    "zh": "Codex 需要自己的登入，安裝程式不會讀取 Claude Code 的登入資訊。\n" +
+      "  請用和 Claude Code 同一個 Cairn 帳號。",
+    "en": "Codex needs its own sign-in. Setup never reads Claude Code's sign-in.\n" +
+      "  Use the same Cairn account as Claude Code."
   },
   "login_heading": {
     "zh": "在瀏覽器登入 Cairn（{host}）",
@@ -873,28 +1014,50 @@ export const messages = {
     "en": "✓ Both tools share one memory"
   },
   "next_both": {
-    "zh": "接下來：\n  1. 重新開啟 Claude Code，送出一則訊息。\n  2. 重新開啟 Codex，輸入 /hooks，允許 Cairn 的 4 個項目。\n  3. 確認狀態：npx @cairn-ink/memory status",
-    "en": "Next:\n  1. Reopen Claude Code and send a message.\n  2. Reopen Codex, type /hooks and allow the 4 Cairn entries.\n  3. Check status: npx @cairn-ink/memory status"
+    "zh": "接下來：\n" +
+      "  1. 重新開啟 Claude Code，送出一則訊息。\n" +
+      "  2. 重新開啟 Codex，輸入 /hooks，允許 Cairn 的 4 個項目。\n" +
+      "  3. 確認狀態：\n" +
+      "npx @cairn-ink/memory status",
+    "en": "Next:\n" +
+      "  1. Reopen Claude Code and send a message.\n" +
+      "  2. Reopen Codex, type /hooks and allow the 4 Cairn entries.\n" +
+      "  3. Check status:\n" +
+      "npx @cairn-ink/memory status"
   },
   "next_codex": {
-    "zh": "接下來：重新開啟 Codex，輸入 /hooks，允許 Cairn 的 4 個項目。\n  確認狀態：npx @cairn-ink/memory status",
-    "en": "Next: reopen Codex, type /hooks and allow the 4 Cairn entries.\n  Check status: npx @cairn-ink/memory status"
+    "zh": "接下來：重新開啟 Codex，輸入 /hooks，允許 Cairn 的 4 個項目。\n" +
+      "  確認狀態：\n" +
+      "npx @cairn-ink/memory status",
+    "en": "Next: reopen Codex, type /hooks and allow the 4 Cairn entries.\n" +
+      "  Check status:\n" +
+      "npx @cairn-ink/memory status"
   },
   "next_reopen": {
     "zh": "接下來：重新開啟 Claude Code 和 Codex。",
     "en": "Next: reopen Claude Code and Codex."
   },
   "optional_mcp": {
-    "zh": "  選用：想在 Codex 裡直接搜尋記憶，執行 codex mcp login cairn",
-    "en": "  Optional: to search memories inside Codex, run codex mcp login cairn"
+    "zh": "  選用：想在 Codex 裡直接搜尋記憶，執行\n" +
+      "codex mcp login cairn",
+    "en": "  Optional: to search memories inside Codex, run\n" +
+      "codex mcp login cairn"
   },
   "login_open_other_device": {
     "zh": "  在任何裝置開啟 {url}，輸入上面的代碼。",
     "en": "  Open {url} on any device and enter the code above."
   },
   "endpoint_choices": {
-    "zh": "Claude Code 連 {claude}、Codex 連 {codex}，還不能共用記憶。\n  1. {codex}  {reuse}\n  2. {claude}  Codex 要在瀏覽器重新登入\n換過去的工具，之後的記憶存到新的 Cairn；已經存的記憶留在原處。",
-    "en": "Claude Code uses {claude} and Codex uses {codex}.\nThey can't share memory yet.\n  1. {codex}  {reuse}\n  2. {claude}  Codex must sign in again in the browser\nThe tool that switches saves new memories to the new server.\nMemories it already saved stay where they are."
+    "zh": "Claude Code 連 {claude}、Codex 連 {codex}，還不能共用記憶。\n" +
+      "  1. {codex}  {reuse}\n" +
+      "  2. {claude}  Codex 要在瀏覽器重新登入\n" +
+      "換過去的工具，之後的記憶存到新的 Cairn；已經存的記憶留在原處。",
+    "en": "Claude Code uses {claude} and Codex uses {codex}.\n" +
+      "They can't share memory yet.\n" +
+      "  1. {codex}  {reuse}\n" +
+      "  2. {claude}  Codex must sign in again in the browser\n" +
+      "The tool that switches saves new memories to the new server.\n" +
+      "Memories it already saved stay where they are."
   },
   "endpoint_reuse_option": {
     "zh": "Claude Code 改用 Codex 的登入，不必再登入",
@@ -921,16 +1084,37 @@ export const messages = {
     "en": "This Codex version's sign-in binding is unverified; setup cannot switch it."
   },
   "endpoint_remove_retry": {
-    "zh": "  沒有改動任何設定。\n  先執行 codex mcp logout cairn，再執行 codex mcp remove cairn。\n  接著執行：npx @cairn-ink/memory setup --endpoint {endpoint} --reauthorize",
-    "en": "  Nothing was changed.\n  Run codex mcp logout cairn, then codex mcp remove cairn.\n  Then run: npx @cairn-ink/memory setup --endpoint {endpoint} --reauthorize"
+    "zh": "  沒有改動任何設定。\n" +
+      "  先登出並移除 Codex 的 Cairn 工具：\n" +
+      "codex mcp logout cairn\n" +
+      "codex mcp remove cairn\n" +
+      "  接著執行：\n" +
+      "npx @cairn-ink/memory setup --endpoint {endpoint} --reauthorize",
+    "en": "  Nothing was changed.\n" +
+      "  Sign out and remove the Cairn tools in Codex:\n" +
+      "codex mcp logout cairn\n" +
+      "codex mcp remove cairn\n" +
+      "  Then run:\n" +
+      "npx @cairn-ink/memory setup --endpoint {endpoint} --reauthorize"
   },
   "conflict_retry": {
-    "zh": "  在終端機直接執行，安裝程式會問你要用哪一個：\n  npx @cairn-ink/memory setup",
-    "en": "  Run setup in a terminal and it will ask which one to use:\n  npx @cairn-ink/memory setup"
+    "zh": "  在終端機直接執行，安裝程式會問你要用哪一個：\n" +
+      " \n" +
+      "npx @cairn-ink/memory setup",
+    "en": "  Run setup in a terminal and it will ask which one to use:\n" +
+      " \n" +
+      "npx @cairn-ink/memory setup"
   },
   "identity_choices": {
-    "zh": "這台電腦有兩份 Cairn 記憶身分。記憶身分決定一則記憶屬於哪個專案。\n{choices}\n兩個工具只能用一份。沒選的那份會改名留作備份，不會刪除。\n切換後，舊身分的專案記憶不會再自動對應；本機備份會保留原本的身分。",
-    "en": "This computer has two Cairn memory IDs. A memory ID links memories to projects.\n{choices}\nBoth tools must use the same one. The other is renamed as a backup, not deleted.\nOld project memories will no longer match automatically.\nThe local backup keeps the original memory ID."
+    "zh": "這台電腦有兩份 Cairn 記憶身分。記憶身分決定一則記憶屬於哪個專案。\n" +
+      "{choices}\n" +
+      "兩個工具只能用一份。沒選的那份會改名留作備份，不會刪除。\n" +
+      "切換後，舊身分的專案記憶不會再自動對應；本機備份會保留原本的身分。",
+    "en": "This computer has two Cairn memory IDs. A memory ID links memories to projects.\n" +
+      "{choices}\n" +
+      "Both tools must use the same one. The other is renamed as a backup, not deleted.\n" +
+      "Old project memories will no longer match automatically.\n" +
+      "The local backup keeps the original memory ID."
   },
   "identity_claude": {
     "zh": "Claude Code 正在用的",
@@ -985,12 +1169,16 @@ export const messages = {
     "en": "  Nothing was changed."
   },
   "retry_setup": {
-    "zh": "  請直接在終端機執行：npx @cairn-ink/memory setup",
-    "en": "  Run directly in a terminal: npx @cairn-ink/memory setup"
+    "zh": "  要重新連接，請執行：\n" +
+      "npx @cairn-ink/memory setup",
+    "en": "  To try again, run:\n" +
+      "npx @cairn-ink/memory setup"
   },
   "error_details": {
-    "zh": "  詳細原因：npx @cairn-ink/memory setup --verbose",
-    "en": "  Details: npx @cairn-ink/memory setup --verbose"
+    "zh": "  詳細原因：\n" +
+      "npx @cairn-ink/memory setup --verbose",
+    "en": "  Details:\n" +
+      "npx @cairn-ink/memory setup --verbose"
   },
   "phase_details": {
     "zh": "  階段：{phase}；錯誤碼：{code}",
@@ -1029,8 +1217,10 @@ export const messages = {
     "en": "memory hooks written"
   },
   "lock_retry": {
-    "zh": "  等它結束再試；確定沒有在跑時，刪除 ~/.codex/.cairn-setup.lock。",
-    "en": "  Wait for it to finish. If none is running, remove ~/.codex/.cairn-setup.lock."
+    "zh": "  等它結束再試；確定沒有在跑時，刪除這個鎖檔：\n" +
+      "{path}",
+    "en": "  Wait for it to finish. If none is running, remove this lock file:\n" +
+      "{path}"
   },
   "invalid_cap": {
     "zh": "--codex-daily-cap 必須是 1–100000 的整數。",
@@ -1101,20 +1291,30 @@ export const messages = {
     "en": "✗ Daily limit settings do not match. Run setup again"
   },
   "not_installed": {
-    "zh": "自動記憶尚未安裝\n  安裝：npx @cairn-ink/memory setup",
-    "en": "Automatic memory is not installed\n  Install: npx @cairn-ink/memory setup"
+    "zh": "自動記憶尚未安裝\n" +
+      "  安裝：\n" +
+      "npx @cairn-ink/memory setup",
+    "en": "Automatic memory is not installed\n" +
+      "  Install:\n" +
+      "npx @cairn-ink/memory setup"
   },
   "status_unsafe": {
-    "zh": "✗ 無法安全讀取自動記憶設定\n  檢查檔案權限後，再執行 status --verbose",
-    "en": "✗ Automatic memory settings cannot be read safely\n  Check file permissions, then run status --verbose"
+    "zh": "✗ 無法安全讀取自動記憶設定\n" +
+      "  檢查檔案權限後，再執行 status --verbose",
+    "en": "✗ Automatic memory settings cannot be read safely\n" +
+      "  Check file permissions, then run status --verbose"
   },
   "signin_saved": {
     "zh": "  ✓ 已存好登入資訊",
     "en": "  ✓ Sign-in saved"
   },
   "signin_missing": {
-    "zh": "  ✗ 還沒登入 Cairn\n  登入：npx @cairn-ink/memory setup",
-    "en": "  ✗ Not signed in to Cairn yet\n  Sign in: npx @cairn-ink/memory setup"
+    "zh": "  ✗ 還沒登入 Cairn\n" +
+      "  登入：\n" +
+      "npx @cairn-ink/memory setup",
+    "en": "  ✗ Not signed in to Cairn yet\n" +
+      "  Sign in:\n" +
+      "npx @cairn-ink/memory setup"
   },
   "claude_status_tip": {
     "zh": "  最近一次是否連線成功，請在 Claude Code 輸入 /cairn-memory:status",
@@ -1133,8 +1333,12 @@ export const messages = {
     "en": "  Claude Code and Codex share this switch, so both are paused."
   },
   "pause_no_backfill": {
-    "zh": "  暫停期間的對話不會記下，恢復後也不會補記。\n  要恢復：npx @cairn-ink/memory resume",
-    "en": "  Conversations during the pause are not saved later either.\n  To resume: npx @cairn-ink/memory resume"
+    "zh": "  暫停期間的對話不會記下，恢復後也不會補記。\n" +
+      "  要恢復：\n" +
+      "npx @cairn-ink/memory resume",
+    "en": "  Conversations during the pause are not saved later either.\n" +
+      "  To resume:\n" +
+      "npx @cairn-ink/memory resume"
   },
   "resume_done": {
     "zh": "✓ 已恢復自動記憶（{clients}）",
@@ -1157,8 +1361,18 @@ export const messages = {
     "en": "✓ Codex automatic memory disabled"
   },
   "uninstalled_control": {
-    "zh": "✓ 已從 Codex 移除 Cairn 自動記憶\n  Claude Code 不受影響，記憶也都還在。\n  已存的記憶仍在你的 Cairn。這台電腦的登入不會自動撤銷，\n  可到 {url} 撤銷。\n  Codex 裡的 Cairn 工具（/mcp）保留；要一併移除：codex mcp remove cairn",
-    "en": "✓ Cairn automatic memory removed from Codex\n  Claude Code is not affected, and its memories are kept.\n  Saved memories stay in your Cairn. This computer's sign-in is not revoked;\n  revoke it at {url}.\n  The Cairn tools in Codex (/mcp) stay. To remove them: codex mcp remove cairn"
+    "zh": "✓ 已從 Codex 移除 Cairn 自動記憶\n" +
+      "  Claude Code 不受影響，記憶也都還在。\n" +
+      "  已存的記憶仍在你的 Cairn。這台電腦的登入不會自動撤銷，\n" +
+      "  可到 {url} 撤銷。\n" +
+      "  Codex 裡的 Cairn 工具（/mcp）保留；要一併移除：\n" +
+      "codex mcp remove cairn",
+    "en": "✓ Cairn automatic memory removed from Codex\n" +
+      "  Claude Code is not affected, and its memories are kept.\n" +
+      "  Saved memories stay in your Cairn. This computer's sign-in is not revoked;\n" +
+      "  revoke it at {url}.\n" +
+      "  The Cairn tools in Codex (/mcp) stay. To remove them:\n" +
+      "codex mcp remove cairn"
   },
   "claude_control": {
     "zh": "Claude Code 的控制要在 Claude Code 裡操作：輸入 /cairn-memory:{action}",
@@ -1169,8 +1383,12 @@ export const messages = {
     "en": "Pause Claude Code from inside it: type /cairn-memory:pause"
   },
   "claude_pairing_unavailable": {
-    "zh": "Claude Code 外掛太舊或設定失敗，無法共用。\n  更新：claude plugin update cairn-memory@cairn-memory",
-    "en": "The Claude Code plugin is too old or could not be configured for sharing.\n  Update: claude plugin update cairn-memory@cairn-memory"
+    "zh": "Claude Code 外掛太舊或設定失敗，無法共用。\n" +
+      "  更新：\n" +
+      "claude plugin update cairn-memory@cairn-memory",
+    "en": "The Claude Code plugin is too old or could not be configured for sharing.\n" +
+      "  Update:\n" +
+      "claude plugin update cairn-memory@cairn-memory"
   },
   "sharing_required": {
     "zh": "你沒有確認兩個工具已關閉，所以沒有共用記憶。",
@@ -1179,10 +1397,6 @@ export const messages = {
   "command_details": {
     "zh": "  指令：{client} {args}；結束碼：{code}",
     "en": "  Command: {client} {args}; exit code: {code}"
-  },
-  "codex_format_qualified": {
-    "zh": "Codex {version}：對話格式已驗證",
-    "en": "Codex {version}: format qualified."
   },
   "identity_reappeared": {
     "zh": "  又找到另一份記憶身分。請保持兩個工具關閉，再執行 setup 檢查。",
@@ -1209,32 +1423,44 @@ export const messages = {
     "en": "unavailable"
   },
   "recovery_reauthorize": {
-    "zh": "  重新登入：npx @cairn-ink/memory setup --reauthorize",
-    "en": "  Sign in again: npx @cairn-ink/memory setup --reauthorize"
+    "zh": "  重新登入：\n" +
+      "npx @cairn-ink/memory setup --reauthorize",
+    "en": "  Sign in again:\n" +
+      "npx @cairn-ink/memory setup --reauthorize"
   },
   "recovery_network": {
-    "zh": "  確認網路或公司 proxy 後，再執行：npx @cairn-ink/memory setup",
-    "en": "  Check your network or proxy, then run: npx @cairn-ink/memory setup"
+    "zh": "  確認網路或公司 proxy 後，再執行：\n" +
+      "npx @cairn-ink/memory setup",
+    "en": "  Check your network or proxy, then run:\n" +
+      "npx @cairn-ink/memory setup"
   },
   "recovery_server": {
-    "zh": "  過幾分鐘再執行：npx @cairn-ink/memory setup",
-    "en": "  Try again in a few minutes: npx @cairn-ink/memory setup"
+    "zh": "  過幾分鐘再執行：\n" +
+      "npx @cairn-ink/memory setup",
+    "en": "  Try again in a few minutes:\n" +
+      "npx @cairn-ink/memory setup"
   },
   "recovery_tokens": {
     "zh": "  到 {url} 撤銷不用的登入，再執行 setup。",
     "en": "  Revoke unused sign-ins at {url}, then run setup again."
   },
   "recovery_ack": {
-    "zh": "  過一分鐘後重新開啟工具，再檢查狀態。\n  若登入被拒，到 {url} 撤銷，再執行 setup --reauthorize。",
-    "en": "  Wait 60 seconds, reopen your tool and check its status.\n  If rejected, revoke at {url} and run setup --reauthorize."
+    "zh": "  過一分鐘後重新開啟工具，再檢查狀態。\n" +
+      "  若登入被拒，到 {url} 撤銷，再執行 setup --reauthorize。",
+    "en": "  Wait 60 seconds, reopen your tool and check its status.\n" +
+      "  If rejected, revoke at {url} and run setup --reauthorize."
   },
   "progress_claude_only": {
     "zh": "  Claude Code 的登入已儲存。",
     "en": "  Claude Code's sign-in was saved."
   },
   "exec_runtime_update_required": {
-    "zh": "先更新 Codex 的記憶設定，才能修改自動工作的記憶。\n  npx @cairn-ink/memory setup --client codex --codex-capture-exec {setting}",
-    "en": "Update Codex memory setup before changing automation memory.\n  npx @cairn-ink/memory setup --client codex --codex-capture-exec {setting}"
+    "zh": "先更新 Codex 的記憶設定，才能修改自動工作的記憶。\n" +
+      " \n" +
+      "npx @cairn-ink/memory setup --client codex --codex-capture-exec {setting}",
+    "en": "Update Codex memory setup before changing automation memory.\n" +
+      " \n" +
+      "npx @cairn-ink/memory setup --client codex --codex-capture-exec {setting}"
   },
   "invalid_exec_setting": {
     "zh": "--codex-capture-exec 只接受 on 或 off，適用於 setup 和 config。",
@@ -1251,7 +1477,81 @@ export const messages = {
   "codex_exec_enabled": {
     "zh": "Codex 的 exec 自動工作也會納入記憶與提問回想。",
     "en": "Codex exec automation is included in memory and prompt recall."
-  }
+  },
+  "list_joiner": {
+    "zh": "、",
+    "en": ", "
+  },
+  "shared_clients": {
+    "zh": "Claude Code 和 Codex",
+    "en": "Claude Code and Codex"
+  },
+  "host_cli": {
+    "zh": "命令列",
+    "en": "cli"
+  },
+  "host_app-server": {
+    "zh": "應用程式伺服器",
+    "en": "app-server"
+  },
+  "scope_label": {
+    "zh": "適用範圍",
+    "en": "scope"
+  },
+  "scope_user": {
+    "zh": "使用者",
+    "en": "user"
+  },
+  "scope_project": {
+    "zh": "專案",
+    "en": "project"
+  },
+  "scope_local": {
+    "zh": "本機",
+    "en": "local"
+  },
+  "scope_managed": {
+    "zh": "組織管理",
+    "en": "managed"
+  },
+  "cap_option_scope": {
+    "zh": "--codex-daily-cap 只適用於 Codex 的 setup 或 config。",
+    "en": "--codex-daily-cap is only available for Codex setup or config."
+  },
+  "prompt_recall_off_hint": {
+    "zh": "  要關閉提問回想：\n" +
+      "npx @cairn-ink/memory prompt-recall-off --client codex",
+    "en": "  To turn prompt recall off:\n" +
+      "npx @cairn-ink/memory prompt-recall-off --client codex"
+  },
+  "codex_claude_declined": {
+    "zh": "你選擇不連接 Claude Code，Codex 會用自己的記憶。\n" +
+      "要共用：關閉兩個工具，依序執行：\n" +
+      "npx @cairn-ink/memory uninstall --client codex\n" +
+      "npx @cairn-ink/memory setup",
+    "en": "You chose not to connect Claude Code. Codex uses its own memory.\n" +
+      "To share later, close both tools, then run:\n" +
+      "npx @cairn-ink/memory uninstall --client codex\n" +
+      "npx @cairn-ink/memory setup"
+  },
+  "claude_uninstall": {
+    "zh": "這次沒有移除 Claude Code 外掛。請在終端機執行：\n" +
+      "claude plugin uninstall cairn-memory@cairn-memory",
+    "en": "The Claude Code plugin was not removed. Run in a terminal:\n" +
+      "claude plugin uninstall cairn-memory@cairn-memory"
+  },
+  "claude_disable": {
+    "zh": "這次沒有停用 Claude Code 外掛。請在終端機執行：\n" +
+      "claude plugin disable cairn-memory@cairn-memory",
+    "en": "The Claude Code plugin was not disabled. Run in a terminal:\n" +
+      "claude plugin disable cairn-memory@cairn-memory"
+  },
+  "claude_control_unavailable": {
+    "zh": "Claude Code 外掛尚不支援這個設定，這次沒有改動。\n" +
+      "要暫停記憶，請在 Claude Code 輸入 /cairn-memory:pause。",
+    "en": "The Claude Code plugin does not support this setting yet. Nothing changed.\n" +
+      "To pause memory, type /cairn-memory:pause inside Claude Code."
+  },
 };
 export function detectLanguage(env = process.env, locale = Intl.DateTimeFormat().resolvedOptions().locale) {
   const selected = env.LC_ALL || env.LC_MESSAGES || env.LANG || locale;
@@ -1260,7 +1560,7 @@ export function detectLanguage(env = process.env, locale = Intl.DateTimeFormat()
 
 export function message(lang, key, params = {}) {
   const template = messages[key]?.[lang] ?? messages.setup_failed?.[lang] ?? key;
-  return template.replace(/\{(\w+)\}/gu, (_, name) => String(params[name] ?? ''));
+  return template.replace(/\{(\w+)\}/gu, (_, name) => String(params[name] ?? (name === 'defaultEndpoint' ? DEFAULT_ENDPOINT : '')));
 }
 
 export function translator(lang) {

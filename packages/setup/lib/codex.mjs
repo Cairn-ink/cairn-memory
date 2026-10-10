@@ -44,13 +44,15 @@ export async function dispatchClient(argv, context) {
     if(action==='config' && !installed && selection.client!=='claude'){context.write(context.t('not_installed'));return {handled:true,code:2};}
     if (selection.client==='claude' || !installed) {
       if (flags.length || context.dailyCap !== undefined || context.captureExec !== undefined) throw new context.SetupError('codex_unknown',2);
-      context.write(context.t(action==='pause'?'claude_pause':'claude_control',{action}));
-      return {handled:true,code:0};
+      const supported = ['pause', 'resume'].includes(action);
+      const key = action === 'uninstall' ? 'claude_uninstall' : action === 'disable' ? 'claude_disable' :
+        supported ? (action === 'pause' ? 'claude_pause' : 'claude_control') : 'claude_control_unavailable';
+      context.write(context.t(key, { action }));
+      return { handled: true, code: 2 };
     }
     selection.client='codex';
   }
   if (action === undefined || ['--help', '-h'].includes(action)) {
-
     return { handled: false, argv: selection.argv };
   }
   if (selection.client !== 'codex' && (selection.client || availableClient('claude') || !availableClient('codex'))) {
@@ -130,7 +132,8 @@ function runCodex(args, { env = process.env, cwd } = {}) {
 }
 
 export async function setupCodex({ action, flags, write, prompt, interactive, browse,
-  SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent, dailyCap, captureExec, verbose, identityPlan, endpointChoice,
+  SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent, claudeDeclined, dailyCap,
+    captureExec, verbose, identityPlan, endpointChoice,
   expectedCodex, hostsStopped, coordinated, progress = {} }) {
   const fail = message => new SetupError(message);
   if (process.platform === 'win32') {
@@ -263,7 +266,8 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     if (hostVerdict.status==='qualified' && hostVerdict.version===hostVersion) {
       return await setupInstalledCodex({action,flags,home,hostVersion,write,prompt,interactive,browse,
         SetupError,t,endpointOverride,authOptions,signal,before,configPath,existing,usable,
-        neutral,get,snapshot,unchanged,cliHost,hostVerdict,pairingConsent,dailyCap,captureExec,verbose,identityPlan,endpointChoice,expectedCodex,hostsStopped,coordinated,progress});
+        neutral,get,snapshot,unchanged,cliHost,hostVerdict,pairingConsent,claudeDeclined,dailyCap,captureExec,verbose,identityPlan,
+        endpointChoice,expectedCodex,hostsStopped,coordinated,progress});
     }
     // Changed or unavailable format evidence keeps automatic paths closed.
     // Status reports the actual observed app-server separately from this CLI.

@@ -48,7 +48,7 @@ export function parseOptions(argv) {
       } else remaining.push(flag);
     }
     if (endpoint && remaining[0] !== 'setup') throw new SetupError('endpoint_option_invalid', 2);
-    if (dailyCap !== undefined && !['setup', 'config'].includes(remaining[0])) throw new SetupError('invalid_cap', 2);
+    if (dailyCap !== undefined && !['setup', 'config'].includes(remaining[0])) throw new SetupError('cap_option_scope', 2);
     if (captureExec !== undefined && !['setup', 'config'].includes(remaining[0])) throw new SetupError('invalid_exec_setting', 2);
     return { argv: remaining, lang, endpoint, dailyCap, captureExec, verbose };
   } catch (error) { error.language = lang; throw error; }

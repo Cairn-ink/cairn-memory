@@ -21,4 +21,5 @@ Claude Code 外掛預設會送出使用統計，不含任何對話內容。
 browser opened
 你在瀏覽器選了「拒絕」，所以沒有連接。
   Claude Code 外掛已安裝，但還沒連上 Cairn；Codex 沒有任何改動。
-  請直接在終端機執行：npx @cairn-ink/memory setup
+  要重新連接，請執行：
+npx @cairn-ink/memory setup

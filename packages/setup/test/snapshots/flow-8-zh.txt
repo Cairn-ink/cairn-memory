@@ -12,7 +12,10 @@ Codex 0.160.1
   · 今日 0 / 200
   達到每日上限後，Codex 當天不再自動記憶；Claude Code 不受影響。
   · 提問時找回記憶：開啟
+  要關閉提問回想：
+npx @cairn-ink/memory prompt-recall-off --client codex
   請確認已在 Codex 的 /hooks 允許 Cairn 的 4 個項目（這裡無法檢查）。
 
 這裡只讀本機設定，沒有實際連線測試。
-詳細資料：npx @cairn-ink/memory status --verbose
+詳細資料：
+npx @cairn-ink/memory status --verbose

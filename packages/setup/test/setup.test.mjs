@@ -1,3 +1,4 @@
+import './review-fixes.test.mjs';
 import './approved-flows.test.mjs';
 import './device-ui.test.mjs';
 import './clients.test.mjs';
@@ -66,7 +67,8 @@ async function fixture(t, state = {}, options = {}) {
     const wallNow = Date.now.bind(Date);
     Date.now = () => wallNow() + ${options.clientSkew ?? 0} + wallJump;
     const latency = ${JSON.stringify(options.latency ?? {})};
-    const answers = [${JSON.stringify(options.endpoint ?? server.endpoint)}, ${options.invalidToken ? "secret + '\\n'" : 'secret'}, ${JSON.stringify(options.mcpAnswer ?? '')}];
+    const answers = [${JSON.stringify(options.endpoint ?? server.endpoint)}, ${options.invalidToken ? "secret + '\\n'" : 'secret'},
+      ${JSON.stringify(options.mcpAnswer ?? '')}];
     process.exitCode = await main(process.argv.slice(2), {
       interactive: ${options.interactive ?? true}, nodeVersion: ${JSON.stringify(options.nodeVersion ?? process.versions.node)},
       ...( ${options.locale !== undefined} ? { locale: ${JSON.stringify(options.locale ?? 'en-US')} } : {} ),
@@ -102,7 +104,8 @@ async function fixture(t, state = {}, options = {}) {
           if (readFileSync(${JSON.stringify(browsesPath)}, 'utf8')) throw new Error('browser opened before Enter');
           writeSync(1, question + '\\n');
           clock += ${options.enterDelay ?? 0};
-          ${options.interruptEnter ? "const interrupted = new Promise(resolve => options.signal.addEventListener('abort', resolve, {once:true})); process.kill(process.pid, 'SIGINT'); await interrupted;" : ''}
+          ${options.interruptEnter ? ["const interrupted = new Promise(resolve => options.signal.addEventListener('abort', resolve, {once:true}));",
+            "process.kill(process.pid, 'SIGINT'); await interrupted;"].join(' ') : ''}
           return '';
         }
         return options?.secret ? ${options.invalidToken ? "(tokenAttempts++ === 0 ? secret + '\\n' : secret)" : 'secret'} :
@@ -114,9 +117,12 @@ async function fixture(t, state = {}, options = {}) {
     });
     disconnect();`);
   const result = await new Promise((resolve, reject) => {
-    const proc = spawn(process.execPath, [options.realBin ? bin : harness, ...(options.args ?? ['setup', '--no-browser']), ...((options.args??['setup'])[0]==='setup' && (!state.configured || options.forceEndpoint) && !(options.args??[]).includes('--endpoint') ? ['--endpoint',server.endpoint] : [])], {
+    const proc = spawn(process.execPath, [options.realBin ? bin : harness, ...(options.args ?? ['setup', '--no-browser']),
+      ...((options.args??['setup'])[0]==='setup' && (!state.configured || options.forceEndpoint) &&
+        !(options.args??[]).includes('--endpoint') ? ['--endpoint',server.endpoint] : [])], {
       cwd: workspace.path, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      env: { LANG: 'en_US.UTF-8', PATH: fakeBin, HOME: workspace.path, FAKE_CALLS: callsPath, FAKE_STATE: statePath, ...(options.clipboard ? {WAYLAND_DISPLAY:'fixture',XDG_RUNTIME_DIR:workspace.path} : {}), ...options.env },
+      env: { LANG: 'en_US.UTF-8', PATH: fakeBin, HOME: workspace.path, FAKE_CALLS: callsPath, FAKE_STATE: statePath,
+        ...(options.clipboard ? {WAYLAND_DISPLAY:'fixture',XDG_RUNTIME_DIR:workspace.path} : {}), ...options.env },
     });
     wireChild(proc, server.server);
     let stdout = '', stderr = '';
@@ -126,9 +132,11 @@ async function fixture(t, state = {}, options = {}) {
     proc.on('close', code => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
   });
   const lines = path => readFileSync(path, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
-  const calls = lines(callsPath), prompts = lines(promptsPath), sleeps = lines(sleepsPath), browses = lines(browsesPath), budgets = lines(budgetsPath), clipboard = lines(clipboardPath);
+  const calls = lines(callsPath), prompts = lines(promptsPath), sleeps = lines(sleepsPath), browses = lines(browsesPath),
+    budgets = lines(budgetsPath), clipboard = lines(clipboardPath);
   const secrets = [secret, server.grant?.device_code, server.lastProof?.code_verifier, server.delivery?.delivery_receipt].filter(Boolean);
-  const allFiles = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? allFiles(join(dir, entry.name)) : [join(dir, entry.name)]);
+  const allFiles = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? allFiles(join(dir,
+    entry.name)) : [join(dir, entry.name)]);
   for (const value of secrets) {
     assert.ok(!(result.stdout + result.stderr).includes(value), 'secret must not appear in installer output');
     assert.ok(!JSON.stringify(calls).includes(value), 'no secret in child argv, env or recorded stdin metadata');
@@ -137,14 +145,17 @@ async function fixture(t, state = {}, options = {}) {
   }
   assert.ok(!(result.stdout + result.stderr).includes('synthetic-child-output-must-stay-hidden'));
   assert.deepEqual(server.violations, []);
-  return { ...result, calls, prompts, consents: lines(consentsPath), sleeps, browses, budgets, clipboard, server, state: JSON.parse(readFileSync(statePath, 'utf8')) };
+  return { ...result, calls, prompts, consents: lines(consentsPath), sleeps, browses, budgets, clipboard, server,
+    state: JSON.parse(readFileSync(statePath, 'utf8')) };
 }
 
 test('Node minimum, endpoint origins, browser launch commands and hostname sanitation', () => {
   for (const version of ['20.19.0', '22.15.9', '21.9.0']) assert.equal(supportedNode(version), false);
   for (const version of ['22.16.0', '22.99.0', '24.15.0']) assert.equal(supportedNode(version), true);
-  for (const endpoint of ['https://cairn.ink', 'http://localhost:3000', 'http://127.0.0.1:8080', 'http://[::1]:3000']) assert.equal(validEndpoint(endpoint), true);
-  for (const endpoint of ['http://example.com', 'https://user:pass@example.com', 'https://cairn.ink?token=x', 'https://cairn.ink#x', 'https://cairn.ink\n', 'https://cairn.ink/path', 'bad']) assert.equal(validEndpoint(endpoint), false);
+  for (const endpoint of ['https://cairn.ink', 'http://localhost:3000', 'http://127.0.0.1:8080',
+    'http://[::1]:3000']) assert.equal(validEndpoint(endpoint), true);
+  for (const endpoint of ['http://example.com', 'https://user:pass@example.com', 'https://cairn.ink?token=x', 'https://cairn.ink#x',
+    'https://cairn.ink\n', 'https://cairn.ink/path', 'bad']) assert.equal(validEndpoint(endpoint), false);
   assert.deepEqual(browserCommand('https://cairn.ink/device', 'win32', false), ['rundll32.exe', ['url.dll,FileProtocolHandler', 'https://cairn.ink/device']]);
   assert.equal(browserCommand('https://cairn.ink/device', 'linux', true)[0], 'rundll32.exe');
   assert.equal(browserCommand('https://cairn.ink/device', 'linux', false)[0], 'xdg-open');
@@ -167,7 +178,8 @@ test('browser happy path uses S256, safe stdin, credential check then ACK and re
   assert.equal(r.server.grant.state, 'delivered');
   assert.match(r.stdout, /plugin (?:updated to )?0\.3\.1/); assert.match(r.stdout, /Cairn.ink Memory setup 0\.5\.0/);
   assert.match(r.stdout, /Signed in to Cairn, valid until/);
-  const second = await localWireRequest(r.server.server, requestJSON, new URL('/api/cli-auth/v1/token', r.server.endpoint), { body: r.server.lastProof, env: {} });
+  const second = await localWireRequest(r.server.server, requestJSON, new URL('/api/cli-auth/v1/token', r.server.endpoint),
+    { body: r.server.lastProof, env: {} });
   assert.equal(second.status, 400); assert.equal(second.value.error, 'invalid_grant');
   assert.ok(!JSON.stringify(second.value).includes(secret), 'a second poll after delivery gets no token');
 });
@@ -285,7 +297,8 @@ test('an existing token without an endpoint is kept unless --reauthorize is expl
   assert.deepEqual(r.prompts, []); assert.deepEqual(r.server.requests, []); assert.equal(saved(r), undefined);
 });
 
-for (const state of [{ configured: true, endpoint: 'https://old.example' }, { partial: ['api_endpoint'], endpoint: 'https://old.example' }, { partial: ['api_token'] }]) {
+for (const state of [{ configured: true, endpoint: 'https://old.example' }, { partial: ['api_endpoint'], endpoint: 'https://old.example' },
+  { partial: ['api_token'] }]) {
   test(`new authorization confirms endpoint and saves both values ${JSON.stringify(state)}`, async t => {
     const r = await fixture(t, state, { args: ['setup', '--no-browser', '--reauthorize'], forceEndpoint:true });
     assert.equal(r.code, 0, r.stdout); assert.equal(r.prompts.length, 0);
@@ -345,7 +358,8 @@ for (const answer of ['y', 'N', '']) {
   });
 }
 
-for (const fail of ['--version', 'plugin marketplace add Cairn-ink/cairn-memory', 'plugin install cairn-memory@cairn-memory', 'mcp get cairn', 'mcp remove cairn']) {
+for (const fail of ['--version', 'plugin marketplace add Cairn-ink/cairn-memory', 'plugin install cairn-memory@cairn-memory',
+  'mcp get cairn', 'mcp remove cairn']) {
   test(`preserves non-zero child exit without child output: ${fail}`, async t => {
     const r = await fixture(t, { fail, mcp: true }, { mcpAnswer: 'y' });
     assert.equal(r.code, 7); assert.match(r.stdout, /A Claude Code command failed/);
@@ -358,9 +372,12 @@ test('missing CLI, unsupported Node, invalid endpoint/PAT and malformed CLI JSON
   const explicitMissing = await fixture(t, {}, { noClaude: true, args: ['setup', '--client', 'claude'] });
   assert.equal(explicitMissing.code, 1); assert.match(explicitMissing.stdout, /not found on PATH/);
   const old = await fixture(t, {}, { nodeVersion: '22.15.0' }); assert.equal(old.code, 1); assert.deepEqual(old.calls, []);
-  const endpoint = await fixture(t, {}, { args: ['setup', '--endpoint', 'http://example.com'] }); assert.equal(endpoint.code, 2); assert.deepEqual(endpoint.server.requests, []);
-  const token = await fixture(t, {}, { args: ['setup', '--manual-token', '--no-browser'], invalidToken: true }); assert.equal(token.code, 0, token.stdout); assert.equal(token.prompts.length,2); assert.ok(saved(token));
-  const json = await fixture(t, { badJSON: true }, { args: ['status'] }); assert.equal(json.code, 1); assert.match(json.stdout, /Cannot read the Claude Code state/);
+  const endpoint = await fixture(t, {}, { args: ['setup', '--endpoint', 'http://example.com'] }); assert.equal(endpoint.code, 2);
+    assert.deepEqual(endpoint.server.requests, []);
+  const token = await fixture(t, {}, { args: ['setup', '--manual-token', '--no-browser'], invalidToken: true }); assert.equal(token.code, 0,
+    token.stdout); assert.equal(token.prompts.length,2); assert.ok(saved(token));
+  const json = await fixture(t, { badJSON: true }, { args: ['status'] }); assert.equal(json.code, 1); assert.match(json.stdout,
+    /Cannot read the Claude Code state/);
 });
 
 test('unknown flags are not echoed, even if a token is accidentally passed', async t => {

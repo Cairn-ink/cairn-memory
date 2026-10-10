@@ -51,6 +51,15 @@ press Enter to open it, or use `--no-browser` to open it on another device.
 沿用安裝器保存的登入；先裝 Claude、後加 Codex，需要用同一帳號登入一次。
 Claude 原有登入會保留。安裝器不讀取 Claude 原生秘密檔案。
 
+
+To stop prompt recall while keeping automatic capture, run
+`npx @cairn-ink/memory prompt-recall-off --client codex`.
+Use `prompt-recall-on --client codex` to enable it again. This does not change MCP.
+
+要關閉提問回想、保留自動保存，請執行
+`npx @cairn-ink/memory prompt-recall-off --client codex`。
+用 `prompt-recall-on --client codex` 重新開啟；MCP 不受影響。
+
 ## Privacy / 隱私
 
 Conversations are saved after best-effort local masking. Each prompt sends a
@@ -71,6 +80,7 @@ npx @cairn-ink/memory setup --reauthorize
 npx @cairn-ink/memory setup --no-browser --no-clipboard
 npx @cairn-ink/memory setup --dry-run
 npx @cairn-ink/memory status
+npx @cairn-ink/memory prompt-recall-off --client codex
 npx @cairn-ink/memory pause
 npx @cairn-ink/memory resume
 npx @cairn-ink/memory config --codex-daily-cap 300

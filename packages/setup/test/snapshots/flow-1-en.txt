@@ -29,5 +29,7 @@ Automated codex exec runs are not saved.
 Next:
   1. Reopen Claude Code and send a message.
   2. Reopen Codex, type /hooks and allow the 4 Cairn entries.
-  3. Check status: npx @cairn-ink/memory status
-  Optional: to search memories inside Codex, run codex mcp login cairn
+  3. Check status:
+npx @cairn-ink/memory status
+  Optional: to search memories inside Codex, run
+codex mcp login cairn

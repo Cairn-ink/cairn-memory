@@ -277,6 +277,10 @@ If the header is missing or cannot be verified, they skip capture and injection.
 Interactive sessions with verified CLI headers continue normally. Older frozen
 runtimes must first be updated with setup; config prints the exact command.
 
+To stop prompt recall while keeping automatic capture, run
+`npx @cairn-ink/memory prompt-recall-off --client codex`.
+Use `prompt-recall-on --client codex` to enable it again. This does not change MCP.
+
 Codex defaults to 200 automatic captures per day; reruns keep an existing cap.
 Change it with `setup --codex-daily-cap N` or `config --codex-daily-cap N`.
 Status shows today's count and cap. Unscoped `pause` and `resume` select installed
@@ -284,6 +288,7 @@ Codex, and pause both tools when paired. Uninstall preserves keys and memories.
 
 ```sh
 npx @cairn-ink/memory status
+npx @cairn-ink/memory prompt-recall-off --client codex
 npx @cairn-ink/memory pause
 npx @cairn-ink/memory config --codex-daily-cap 300
 node packages/setup/bin/memory.mjs setup --dry-run

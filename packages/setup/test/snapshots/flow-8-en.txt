@@ -12,7 +12,10 @@ Codex 0.160.1
   · Today 0 / 200
   At the daily limit, Codex stops saving for the day. Claude Code is unaffected.
   · Find memories when you ask: on
+  To turn prompt recall off:
+npx @cairn-ink/memory prompt-recall-off --client codex
   Make sure the 4 Cairn entries are allowed in Codex /hooks (not checked here).
 
 Only local settings were read; no connection was tested.
-Details: npx @cairn-ink/memory status --verbose
+Details:
+npx @cairn-ink/memory status --verbose

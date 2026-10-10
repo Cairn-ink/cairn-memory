@@ -22,4 +22,5 @@ Code expires in 10 minutes.
 browser opened
 You clicked Deny in the browser, so nothing was connected.
   The Claude Code plugin is installed but not connected yet. Codex is unchanged.
-  Run directly in a terminal: npx @cairn-ink/memory setup
+  To try again, run:
+npx @cairn-ink/memory setup

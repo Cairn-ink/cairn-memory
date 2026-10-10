@@ -31,7 +31,8 @@ function screen(result) {
 function checkScreen(result,lang) {
   for(const line of displayScreen(result).split('\n'))assert.ok(columns(line)<=80,`${columns(line)} columns: ${line}`);
   if(lang==='en')assert.doesNotMatch(displayScreen(result),/\p{Script=Han}|[「」，。：；（）]/u);
-  if(lang==='zh')assert.doesNotMatch(displayScreen(result),/\b(?:registered|active|open|unknown|last observed|cli:|format qualified|not_installed_or_unsafe)\b/u);
+  if(lang==='zh')assert.doesNotMatch(displayScreen(result),
+    /\b(?:registered|active|open|unknown|last observed|cli:|format qualified|not_installed_or_unsafe)\b/u);
 }
 async function snapshot(t,id,lang,result) {
   assert.equal(result.code,0,result.stdout);checkScreen(result,lang);
@@ -67,7 +68,8 @@ for(const lang of ['zh','en']) {
     assert.equal(text,await readFile(url,'utf8'));
     await snapshot(t,8,lang,await f.run({args:['status','--lang',lang],interactive:false}));
     await snapshot(t,9,lang,await f.run({args:['pause','--lang',lang]}));
-    const installed=await readInstallation(f.installation),claude=resolveClaudeBinding(await probeClaudeFacts({client:'claude',home:f.home,pairingRecord:installed.pairingRecord,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}}));
+    const installed=await readInstallation(f.installation),claude=resolveClaudeBinding(await probeClaudeFacts({client:'claude',home:f.home,
+      pairingRecord:installed.pairingRecord,env:{HOME:f.home,CLAUDE_PLUGIN_DATA:f.profileRoot}}));
     assert.equal(claude.root,installed.root);assert.equal((await readControlState(claude.root)).paused,true);
     assert.equal((await f.run({args:['resume','--lang',lang]})).code,0);
     await snapshot(t,10,lang,await f.run({args:['uninstall','--client','codex','--lang',lang]}));
@@ -78,7 +80,8 @@ test('fresh default endpoint has no prompt; cap flags reject invalid values befo
   let calls=0;
   assert.equal(await selectEndpoint({prompt:()=>{calls++;},write:()=>{},t:translator('en')}),'https://cairn.ink');
   assert.equal(calls,0);
-  for(const value of ['abc','0','100001','-1','1.5','',undefined])assert.throws(()=>parseOptions(['setup','--codex-daily-cap',value]),{key:'invalid_cap',code:2});
+  for(const value of ['abc','0','100001','-1','1.5','',undefined])assert.throws(()=>parseOptions(['setup','--codex-daily-cap',value]),
+    {key:'invalid_cap',code:2});
 });
 for(const cap of [1,347,100000])test(`D6 setup flag ${cap}, stored cap on rerun, config and status`,async t=>{
   const f=await fixture(t,{claude:false});
@@ -110,7 +113,8 @@ test('non-interactive conflicts change no settings and print exact rerun command
   const config=await readFile(join(f.codexHome,'config.toml')),credential=await readFile(join(f.codexHome,'cairn/credential.json'));
   const result=await f.run({interactive:false});assert.equal(result.code,2);assert.equal(result.prompts.length,0);
   assert.match(result.stdout,/npx @cairn-ink\/memory setup/);
-  assert.deepEqual(await readFile(join(f.codexHome,'config.toml')),config);assert.deepEqual(await readFile(join(f.codexHome,'cairn/credential.json')),credential);
+  assert.deepEqual(await readFile(join(f.codexHome,'config.toml')),config);assert.deepEqual(await readFile(join(f.codexHome,
+    'cairn/credential.json')),credential);
   const keys=await twoKeys(t);const no=await keys.run({interactive:false});assert.equal(no.code,2,no.stdout);
   assert.equal((await backupFiles(keys.other)).length,0);assert.equal((await keys.claudeState()).installed,undefined);
 });
@@ -142,13 +146,15 @@ test('lock error is actionable and retains existing settings',async t=>{
 });
 for(const client of ['claude','codex'])test(`pause/resume without --client with only ${client}`,async t=>{
   const f=await fixture(t,{claude:client==='claude',codex:client==='codex'});assert.equal((await f.run()).code,0);
-  for(const action of ['pause','resume']) {const result=await f.run({args:[action]});assert.equal(result.code,0,result.stdout);assert.doesNotMatch(result.stdout,/Unknown command/);}
+  for(const action of ['pause','resume']) {const result=await f.run({args:[action]});assert.equal(result.code,client==='claude'?2:0,
+    result.stdout);assert.doesNotMatch(result.stdout,/Unknown command/);}
 });
 test('proposal column script covers catalog and long dynamic values; English has no CJK',()=>{
   let lines=0;
   for(const [id,translations]of Object.entries(messages))for(const [lang,text]of Object.entries(translations)) {
     if(lang==='en')assert.doesNotMatch(text,/\p{Script=Han}/u,id);
-    for(const line of text.split('\n'))for(const wrapped of wrapLine(line.replaceAll('{host}','a'.repeat(130)))){lines++;assert.ok(columns(wrapped)<=80,`${id}: ${wrapped}`);}
+    for(const line of text.split('\n'))for(const wrapped of wrapLine(line.replaceAll('{host}','a'.repeat(130)))){lines++;
+      assert.ok(columns(wrapped)<=80,`${id}: ${wrapped}`);}
   }
   assert.ok(lines>400);
 });
@@ -177,7 +183,8 @@ test('an identity changed during consent is refused before sign-in or native wri
 for(const reason of ['auth-fields','unverified-version'])test(`endpoint migration refuses ${reason} before authorization`,async t=>{
   const f=await fixture(t);assert.equal((await f.run()).code,0);
   await f.setClaudeState({...await f.claudeState(),endpoint:'https://new.example'});
-  if(reason==='auth-fields')await writeFile(join(f.codexHome,'config.toml'),`[mcp_servers.cairn]\nurl = ${JSON.stringify(f.server.endpoint+'/api/mcp')}\nbearer_token_env_var = "OWN_TOKEN"\n`,{mode:0o600});
+  if(reason==='auth-fields')await writeFile(join(f.codexHome,'config.toml'),
+    `[mcp_servers.cairn]\nurl = ${JSON.stringify(f.server.endpoint+'/api/mcp')}\nbearer_token_env_var = "OWN_TOKEN"\n`,{mode:0o600});
   else await f.setCodexState({version:'0.161.0'});
   const before=await readFile(join(f.codexHome,'config.toml')),grants=f.server.requests.length;
   const result=await f.run({choices:{endpointChoice:'2'}});assert.equal(result.code,2,result.stdout);
@@ -218,7 +225,8 @@ test('status shows actual daily usage and the reached-cap explanation in Chinese
   await privateWrite(path,JSON.stringify({...state,used:12}));
   const status=await f.run({args:['status','--lang','zh']});assert.equal(status.code,0);assert.match(status.stdout,/今日 12 \/ 200/);checkScreen(status,'zh');
   await privateWrite(path,JSON.stringify({...state,used:200}));
-  const reached=await f.run({args:['status','--lang','zh']});assert.match(reached.stdout,/今日 200 \/ 200/);assert.match(reached.stdout,/明天|隔天/u);checkScreen(reached,'zh');
+  const reached=await f.run({args:['status','--lang','zh']});assert.match(reached.stdout,/今日 200 \/ 200/);assert.match(reached.stdout,
+    /明天|隔天/u);checkScreen(reached,'zh');
 });
 
 test('wrapped shell commands remain executable and preserve long arguments',async()=>{
@@ -241,10 +249,12 @@ test('cap changes stage the next daily limit without resetting existing usage',a
   const path=join(installed.root,'usage',targetId+'.json');await privateWrite(path,JSON.stringify({...state,used:12}));
   const result=await f.run({args:['config','--codex-daily-cap','300']});assert.equal(result.code,0,result.stdout);
   let usage=JSON.parse(await privateRead(path));assert.equal(usage.used,12);assert.equal(usage.cap,200);assert.equal(usage.pendingPolicy.cap,300);
-  const status=await f.run({args:['status','--lang','zh']});assert.match(status.stdout,/今日 12 \/ 200/);assert.match(status.stdout,/新上限 300.*下次每日重置/u);checkScreen(status,'zh');
+  const status=await f.run({args:['status','--lang','zh']});assert.match(status.stdout,/今日 12 \/ 200/);assert.match(status.stdout,
+    /新上限 300.*下次每日重置/u);checkScreen(status,'zh');
   assert.equal((await f.run({args:['setup','--codex-daily-cap','100']})).code,0);
   usage=JSON.parse(await privateRead(path));assert.equal(usage.used,12);assert.equal(usage.cap,200);assert.equal(usage.pendingPolicy.cap,100);
-  const next=await createRuntimeGuard({root:installed.root,targetId,client:'shared',mode:'hosted',dailyCap:100,concurrency:2,now:()=>Date.now()+86400000}).status();
+  const next=await createRuntimeGuard({root:installed.root,targetId,client:'shared',mode:'hosted',dailyCap:100,concurrency:2,
+    now:()=>Date.now()+86400000}).status();
   assert.equal(next.state.used,0);assert.equal(next.state.cap,100);assert.equal(next.state.pendingPolicy,null);
 });
 
@@ -271,7 +281,8 @@ for(const lang of ['zh','en'])test(`exec opt-in config, setup preservation, disc
 });
 
 test('exec option validates on/off, command and client; setup can opt in without a new question',async t=>{
-  for(const value of ['yes','1','true','ON','',undefined])assert.throws(()=>parseOptions(['config','--codex-capture-exec',value]),{key:'invalid_exec_setting',code:2});
+  for(const value of ['yes','1','true','ON','',undefined])assert.throws(()=>parseOptions(['config','--codex-capture-exec',value]),
+    {key:'invalid_exec_setting',code:2});
   assert.throws(()=>parseOptions(['config','--codex-capture-exec','off','--codex-capture-exec','on']),{key:'invalid_exec_setting',code:2});
   assert.throws(()=>parseOptions(['status','--codex-capture-exec','on']),{key:'invalid_exec_setting',code:2});
   const f=await fixture(t);
