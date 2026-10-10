@@ -11,8 +11,10 @@ account allowance and monetary cost are unavailable; no paid API calls occurred.
 Local exact-base readiness was accepted by primary. Cloud M1 remains FAIL;
 this local experiment does not pass or waive it. This candidate is opt-in,
 evaluation-only navigation, with no production/default change or QA claim.
-Independent Packet B acceptance, combined primary gates and nonauthor review
-remain primary-owned. These public author controls are development evidence,
+At the Packet A freeze, independent Packet B acceptance and combined gates
+were pending; those gates and nonauthor review remain primary-owned. The
+append-only integration status below supersedes that historical pending status.
+These public author controls are development evidence,
 not an independent acceptance set or blind holdout.
 
 ## Chosen policy
@@ -76,13 +78,14 @@ characters. Cancellation is checked before and after each callback stage.
 Repeated descriptor-safe snapshots reject raw-output mutation during either
 token count. Compiler refs retain exact namespace/memory/revision identity.
 
-The only importer in this branch is the new author control test. Its integration
-path is `openMemoryCore` -> existing bounded-keyset source candidate policy ->
+At the Packet A freeze, the only importer in this branch was the new author
+control test. Its integration path is `openMemoryCore` -> existing bounded-keyset source candidate policy ->
 existing `recallMemories` selection/fetch/packing -> wrapped rank -> authoritative
 core final read -> `verifiedRoleEvidence` -> unchanged `packMixedAnswer`.
 The factory introduces no store or fetch port. No browser/user flow, production
 caller, transport, capture path, default, dependency, budget or CI changes.
-Primary owns the later independent integration and caller checks.
+That caller inventory describes the A freeze; the later integrated challenge
+also imports the candidate. Primary owns independent integration and caller checks.
 
 ## Cost and observed source coverage
 
@@ -228,9 +231,94 @@ unrelated supplied siblings. A lexical-collision control explicitly retains an
 unrelated source and leaves coverage unassessed. Source receipts establish
 provenance, not semantic truth or authenticated authorization.
 
-Recommendation: freeze this one bounded offline candidate for primary's
-independent Packet B challenge and reviews. Any severe new safety case or unknown
+Recommendation at the A freeze: retain this one bounded offline candidate for
+primary's independent Packet B challenge and reviews. Any severe new safety case or unknown
 resource result blocks advancement. Later measured comparison needs its own
 frozen protocol, same-batch comparator, original advancement gates, independent
 judging and primary-controlled budget preflight. No QA score, paid-run permission,
 Hermes installed-host readiness or production promotion follows these controls.
+
+## Append-only integration status, 2026-10-11
+
+Packet A froze at `076974f95fe09681dc81fc0e33535dd349fb52b4`.
+B froze its independent [fixture/rubric](cloud-retrieval-v1-challenge.md) at
+`258a8b859bf4326c5f9d948b65cf6c89b9e3f24b` and completed harness at
+`a532a9a85df8202eb8f221f07d46ff7fd9948c49` without inspecting A.
+Primary integrated both unchanged at
+`4e31cc79b9b65d207f0e0762eb99fa916ab2c72b`. No candidate code, B fixture or
+challenge correction occurred between their freezes and the first combined run.
+After that freeze, this author read B and primary's reports only for this
+documentation follow-up; the algorithm remains frozen. The public challenge
+is independent authoring evidence, not a blind holdout.
+That is the tested code SHA; the later documentation-only delivery head will
+have a different SHA. Primary
+owns association of its final review/CI evidence with that delivery head.
+
+Primary's first unfiltered combined command was:
+
+```sh
+node tools/testing/run.mjs evaluation/experiments/cloud-retrieval-v1/candidate.control.test.mjs evaluation/experiments/cloud-retrieval-v1/challenge.test.mjs
+```
+
+Both Node 22.16.0 and 24.15.0 exited 0: 36 tests (12 A + 24 B), 36 pass,
+0 fail/skip/cancel. Times were 36.246 / 36.173 seconds and GNU-time maximum
+RSS 125,800 / 136,768 KiB. Each owned parent was empty and removed. The five
+targeted source-delivery cases and seed-prefix/namespace/currentness guards
+passed through actual cold core recall, authoritative source verification and
+the unchanged role-evidence answer packer. This establishes exact source and
+submitted-role preservation for those synthetic cases, not semantic answering,
+injection resistance, a QA score, semantic current-choice judgment or parity.
+
+The B precondition is 18 rank-visible cards: 12 eligible seeded project cards
+plus 6 personal cards, within existing selection and token limits. Fifty-four
+earlier archive turns remain stored. Scripted selection chooses the visible
+`Review shelf:` label; it does not test semantic MOC discovery or routing across
+all 72 stored turns. Synthetic trusted admission is not extraction quality.
+The existing core rejects correction/forget during rank, and ordinary rank's
+missing-complement negative controls remain in B's historical execution record.
+
+Primary verified both full runtime driver exits 0 at the unchanged tested code
+SHA above: all 22 commands (11 per runtime) exited 0. Existing main (669),
+lifecycle (25), architecture (30), and LongMemEval (210) suites passed with
+0 fail/skip/cancel on each runtime, separately from the 36 combined tests.
+Both validators and all three literal npm demo commands also exited 0.
+Exact arguments, counts, timings and GNU-time resource records are under
+`/tmp/cairn-complementary-integration.1qYIl3/22.16.0-run-FLhlIz/records.json`
+and `/tmp/cairn-complementary-integration.1qYIl3/24.15.0-run-7CLaNA/records.json`;
+the primary independently matched 22 records against 22 log files.
+
+| Primary combined gate | Node 22 seconds | Node 24 seconds |
+| --- | ---: | ---: |
+| Combined 36 tests | 36.246 | 36.173 |
+| `npm test`, 669 tests | 279.047 | 281.513 |
+| `npm run validate` | 0.113 | 0.117 |
+| Workspace lifecycle, 25 tests | 17.239 | 17.291 |
+| Targeted architecture, 30 tests | 2.580 | 3.386 |
+| Plugin validation | 0.500 | 0.533 |
+| LongMemEval, 210 tests | 11.634 | 10.644 |
+| Ingestion demo | 0.416 | 0.340 |
+| Comparison demo | 0.359 | 0.405 |
+| Public demo | 0.600 | 0.593 |
+
+Each runtime's `node --version` check also exited 0 (0.006 seconds). Total
+command time was 348.740 / 351.001 seconds; maximum gate RSS was
+312,728 / 418,996 KiB, both in the existing LongMemEval suite, not aggregate
+whole-tree peak or an installed-host resource-fit measurement.
+Primary independently verified zero unexpected residue and absence of every
+non-demo parent. Direct ingestion/comparison demos intentionally retained four
+closed synthetic databases, 2,244,608 bytes total; filesystem `find` matched
+their recorded paths. The public demo cleaned its parent. This retention is
+distinct from B's earlier `--script` demo runs, whose owned runner removed
+invocation scratch. The integrated Git worktree was clean.
+
+Final nonauthor Standards/Spec reviews, CI and PR delivery remain pending and
+primary-owned; this documentation follow-up does not close them.
+
+These new experiment suites are explicit local gates; existing CI does not
+automatically include `evaluation/experiments/cloud-retrieval-v1/`. No core,
+default, provider, transport, budget or CI change and no evaluated-model API
+spend occurred. Copied private validation remains experimental duplication to
+consolidate before any production promotion, not a second engine. Delivery is
+planned as a dependent change on #389 without merging the parent. Cloud M1
+remains FAIL; no Cloud A/B ran. See the linked
+[limitations note](../limitations.md) for the retained interpretation boundaries.

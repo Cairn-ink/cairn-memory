@@ -97,6 +97,30 @@ restoration and synthetic tests are not new answers/scores or paid-run/default
 authority, and this rank intervention does not fix identical-input generation
 variation. A separately reviewed paired QA experiment is required.
 
+The local evaluation-only [complementary source candidate](plans/cloud-retrieval-v1-candidate.md)
+and independently frozen [source-only challenge](plans/cloud-retrieval-v1-challenge.md)
+preserve ranked seeds and append bounded lexical neighbors within seeded
+namespaces. Primary's first unfiltered combined run at
+`4e31cc79b9b65d207f0e0762eb99fa916ab2c72b` passes 36/36 tests on Node 22.16.0
+and 24.15.0 (exit 0, zero failures/skips/cancellations), including five synthetic
+source-delivery cases and prefix/namespace/freshness guards. This establishes
+source/submitted-role preservation into the unchanged answer request, not QA
+accuracy, semantic applicability, injection resistance, competitive parity or
+lightweight installed Hermes performance. The scripted shelf contains 18
+rank-visible cards: 12 eligible project cards plus 6 personal cards. Selection
+by a visible shelf label is not semantic MOC discovery across the 72 stored
+turns. Lexical collisions, paraphrase misses, upstream omissions and added token
+cost remain; receipts and roles establish provenance, not truth or authority.
+The experiment duplicates private seam guards locally for later consolidation,
+not a second engine. Its tests are explicit local gates outside existing CI's
+automatic directory set. Primary's combined generic gates also passed on both
+runtimes at that unchanged tested code SHA; a later docs-only delivery head has
+a different SHA. Final nonauthor reviews, CI and PR delivery remain pending and
+primary-owned. No core/default,
+CI/provider/budget change or evaluated-model API spend follows. The planned PR
+depends on #389 without merging its parent. Cloud M1 remains FAIL; no Cloud A/B
+ran, and local source-preservation evidence does not waive that failure.
+
 The [prospective requested-answer comparison](plans/source-diverse-qa24.md) adds
 an explicit source-diverse treatment to the existing runner, not a new default
 or a retry/rescore of the closed full-label experiment. Its separately versioned
