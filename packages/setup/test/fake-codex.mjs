@@ -6,7 +6,7 @@ const state = JSON.parse(readFileSync(process.env.FAKE_STATE, 'utf8'));
 const home = process.env.CODEX_HOME || join(process.env.HOME, '.codex');
 appendFileSync(process.env.FAKE_CALLS, JSON.stringify({ args, home, cwd: process.cwd(),
   ...(state.recordEnv ? {env:process.env} : {}) }) + '\n');
-if (state.fail === args.join(' ') || (state.failValidation && home.includes('.cairn-validate-'))) {
+if (state.fail === args.join(' ') || (state.failValidation && (home.includes('.cairn-validate-') || home.includes('cx5-candidate')))) {
   writeSync(2, state.token); process.exit(7);
 }
 if (args.includes('--help')) {

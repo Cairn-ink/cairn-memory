@@ -29,10 +29,12 @@ if (qualification.status !== 'qualified' || qualification.version !== hostVersio
 const resolved = await resolveClient({ client: 'codex', home, usesClaude: false, initialize: true,
   env: { HOME: home }, root: join(codexHome, 'cairn-standalone'), isolatedCodex: true });
 if (!resolved.enabled) throw new Error('identity_unavailable');
+// A7 uses exec; this opt-in is confined to the disposable installation.
 const config = validateInstallation({ version: 1, enabled: true, hostVersion, codex, node: process.execPath,
-  home, root: resolved.root, usesClaude: false, pairingRecord: null, endpoint, runtime, dailyCap: 100 });
+  home, root: resolved.root, usesClaude: false, pairingRecord: null, endpoint, runtime, dailyCap: 100, captureExec: true });
 await writeCredential(path, endpoint, token);
 await privateWrite(policyPath(config.root, endpoint), JSON.stringify({ version: 1, dailyCap: 100, concurrency: 2 }));
 await privateWrite(path, JSON.stringify(config));
 await writeFile(join(codexHome, 'hooks.json'), mergeHooks('', path, config, undefined, true), { mode: 0o600 });
-process.stdout.write(JSON.stringify({ installation: path, runtime, root: config.root, forced: false, qualification: { status: qualification.status, version: qualification.version, fingerprint: qualification.fingerprint } }) + '\n');
+process.stdout.write(JSON.stringify({ installation: path, runtime, root: config.root, forced: false,
+  qualification: { status: qualification.status, version: qualification.version, fingerprint: qualification.fingerprint } }) + '\n');

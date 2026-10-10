@@ -115,8 +115,10 @@ test('actual hook ancestor distinguishes app-server from CLI through shell/env, 
   const link=async path=>tree[/\/(\d+)\/exe$/u.exec(path)[1]].exe;
   const identity=async path=>createHash('sha256').update(path).digest('hex');
   assert.deepEqual(await detectRunningHost({pid:91,read,link,identity}),{
-    binaryPath:'/releases/0.161.0/bin/codex',processPath:'/proc/90/exe',kind:'app-server',pid:90,identity:await identity('/proc/90/exe')});
+    binaryPath:'/releases/0.161.0/bin/codex',processPath:'/proc/90/exe',kind:'app-server',pid:90,identity:await identity('/proc/90/exe'),execSession:true});
   assert.equal((await detectRunningHost({pid:80,read,link,identity})).kind,'cli');
+  tree[80].args=['codex'];
+  assert.equal((await detectRunningHost({pid:91,read,link,identity})).execSession,undefined);
   assert.equal(await detectRunningHost({pid:91,read:async()=>{throw new Error('inaccessible');},link,identity}),undefined);
 });
 

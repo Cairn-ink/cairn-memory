@@ -587,6 +587,33 @@ mechanisms, not a change enabled by this documentation. Neither forgetting nor
 redaction guarantees physical erasure of journals, free pages, backups or prior
 provider/caller copies. Hosted schemas/defaults and paid-pilot boundaries are unchanged.
 
+### Automated Codex exec sessions
+
+Installer 0.5.0 skips automated `codex exec` sessions by default, for both
+conversation capture and prompt recall. No recall request or context injection
+is made for a skipped session. The installed launcher and detached worker use
+the authorized transcript's first `session_meta.payload.source` record, verified
+against the hook session ID and qualified format; hook extras cannot override it.
+Native Codex process ancestry also supplies a trusted exec marker, including the
+`e` alias and exec parents of app-server children. This prevents `exec resume`
+of an originally interactive thread from evading the default: Codex's
+[resume writer](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/rollout/src/recorder.rs#L938)
+appends without replacing its original source header. Only the boolean marker
+is retained in the trusted worker handoff; command arguments are never persisted.
+Missing, partial, unsafe or unsupported headers fail closed. This also means an
+interactive prompt with no verifiable transcript header receives no recall.
+No transcript enumeration or native credential read is added.
+
+`npx @cairn-ink/memory config --codex-capture-exec on` explicitly enables both
+capture and prompt recall for exec sessions, with the same masking, length,
+pause and quota controls as interactive sessions. Use `off` to disable it.
+Legacy installs with no stored setting inherit the off default; setup reruns
+preserve the setting. Status mentions exec only when opted in. Changing the
+setting revokes queued worker generations and keeps the existing daily cap and
+usage. Older frozen runtimes must be updated through stopped-host setup before an exec
+setting is changed; config refuses without changing configuration and prints the
+exact setup command. This changes installed hooks only; explicit MCP tool calls
+remain explicit.
 
 ### Hosted 0.2.0 client boundary
 

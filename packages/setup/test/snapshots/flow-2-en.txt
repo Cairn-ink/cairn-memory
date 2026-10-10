@@ -1,0 +1,22 @@
+Cairn.ink Memory setup 0.5.0
+Found Claude Code on this computer (Codex not found).
+
+Once connected, your conversations with the AI are saved to your Cairn.
+Passwords and keys are masked on this computer first (best effort).
+Each prompt also sends a masked, length-limited copy to find related memories.
+The Claude Code plugin sends usage stats by default, never conversation text.
+Turn off stats or pause memory at any time. Details: cairn.ink/memory/privacy
+
+? Connect Claude Code? (Y/n)
+✓ Claude Code plugin 0.3.1 installed
+
+Sign in to Cairn in your browser (cairn.ink)
+  One-time code: [ ABCD-EFGH ]
+  Press Enter to open cairn.ink/device
+Code expires in 10 minutes.
+browser opened
+✓ Signed in to Cairn, valid until <date>
+
+Next:
+  1. Reopen Claude Code and send a message.
+  2. Check status: type /cairn-memory:status in Claude Code

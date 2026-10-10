@@ -1,0 +1,21 @@
+Cairn.ink Memory 0.5.0
+
+Claude Code
+  ✓ 外掛 0.3.1 已安裝並已啟用
+  ✓ 已存好登入資訊
+  最近一次是否連線成功，請在 Claude Code 輸入 /cairn-memory:status
+
+Codex 0.160.1
+  ✓ 自動記憶已安裝，連到 cairn.ink
+  ✓ 已存好登入資訊
+  · 記憶：進行中，和 Claude Code 共用
+  · 今日 0 / 200
+  達到每日上限後，Codex 當天不再自動記憶；Claude Code 不受影響。
+  · 提問時找回記憶：開啟
+  要關閉提問回想：
+npx @cairn-ink/memory prompt-recall-off --client codex
+  請確認已在 Codex 的 /hooks 允許 Cairn 的 4 個項目（這裡無法檢查）。
+
+這裡只讀本機設定，沒有實際連線測試。
+詳細資料：
+npx @cairn-ink/memory status --verbose

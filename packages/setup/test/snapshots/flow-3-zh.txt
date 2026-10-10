@@ -1,0 +1,35 @@
+Cairn.ink Memory 安裝程式 0.5.0
+在這台電腦找到 Claude Code 和 Codex。
+
+✓ Claude Code 已連接（外掛會順便更新）
+
+連接後，你和 AI 的對話會先在本機盡量遮掉密碼、金鑰等敏感資訊，再存到你的 Cairn。
+每次提問時，也會送出一段遮過、有長度上限的提問，用來找回相關記憶。
+記憶隨時可以暫停。完整說明：cairn.ink/memory/privacy
+
+? 連接 Codex，和 Claude Code 共用記憶？ (y/N)
+
+兩個工具要共用同一份記憶，安裝時都必須關閉。
+請完全結束 Claude Code 和 Codex，並等背景工作結束。
+? 都關好了嗎？ (y/N)
+Codex 需要自己的登入，安裝程式不會讀取 Claude Code 的登入資訊。
+  請用和 Claude Code 同一個 Cairn 帳號。
+✓ Claude Code 外掛 0.3.1 已是最新版
+✓ 沿用原本的登入
+
+在瀏覽器登入 Cairn（cairn.ink）
+  一次性代碼：[ ABCD-EFGH ]
+  按 Enter 開啟 cairn.ink/device
+代碼將於 10 分鐘後到期。
+browser opened
+✓ 已登入 Cairn，有效到 <date>
+  Codex 的登入資訊存在只有你能讀的檔案裡，沒有加密。
+✓ Codex 自動記憶已安裝
+Codex 用 exec 自動執行的工作不會記下。
+
+✓ 兩個工具共用同一份記憶
+接下來：
+  1. 重新開啟 Claude Code，送出一則訊息。
+  2. 重新開啟 Codex，輸入 /hooks，允許 Cairn 的 4 個項目。
+  3. 確認狀態：
+npx @cairn-ink/memory status

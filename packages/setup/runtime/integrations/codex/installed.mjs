@@ -11,6 +11,7 @@ import { detectRunningHost, cachedQualification, observeHost, qualifyBinary, val
   scheduleQualification, finishQualification, hasQualifiedCreator } from './qualification.mjs';
 import { readInstallation, readCredential, clientOptions, childEnvironment, promptRecallEnabled } from './installed-state.mjs';
 import { observeHostedPause, installedTransport, recallContext } from './hosted-lifecycle.mjs';
+import { sessionSource } from './session-source.mjs';
 
 // No --version/schema subprocess on the hook path. Ancestor detection and
 // identity-keyed cache reads are the only host work before capture/recall.
@@ -71,6 +72,15 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   if(event==='UserPromptSubmit' && !await promptRecallEnabled(configPath))return '';
   input??=await readHookInput(stream,{deadlineMs:300});
   const qualifyCreator = version => hasQualifiedCreator(configPath,version,{signal});
+  const source = await sessionSource(event === 'worker' ? input?.path : input?.transcript_path,
+    event === 'worker' ? input?.sessionId : input?.session_id,
+    { qualifiedCreatorVersion: qualification.version, qualifyCreator });
+  // Apply the same gate in the launcher and detached worker; old installations
+  // without captureExec inherit the safe default. Never trust hook extras.
+  // Resume appends to the old rollout without replacing its source header.
+  // The trusted native ancestor's exec marker also denies exec resume of cli.
+  if (!source || ((source === 'exec' || qualification.host.execSession === true) &&
+      config.captureExec !== true) || signal.aborted) return '';
   const options = clientOptions(config);
   const resolved = await resolveClient(options);
   if (!resolved.enabled || resolved.root !== config.root || signal.aborted) return '';

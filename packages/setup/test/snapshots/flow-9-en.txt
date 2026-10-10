@@ -1,0 +1,5 @@
+✓ Paused: conversations are not saved and memories are not looked up.
+  Claude Code and Codex share this switch, so both are paused.
+  Conversations during the pause are not saved later either.
+  To resume:
+npx @cairn-ink/memory resume

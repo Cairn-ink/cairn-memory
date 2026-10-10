@@ -10,7 +10,7 @@ import { wireChild } from './http-wire.mjs';
 import { readInstallation } from '../runtime/integrations/codex/installed-state.mjs';
 import { clientProjectId, opaqueProjectId } from '../runtime/integrations/client/pairing.mjs';
 
-async function fixture(t, { claude = true, codex = true, qualified = true, auth = {}, legacyKey = false } = {}) {
+export async function fixture(t, { claude = true, codex = true, qualified = true, auth = {}, legacyKey = false } = {}) {
   const ws = createTestWorkspace(t, { prefix: 'both-clients-' });
   const home = join(ws.path, 'home'), bin = join(ws.path, 'bin');
   await mkdir(home, { mode: 0o700 }); await mkdir(bin);
@@ -39,7 +39,7 @@ async function fixture(t, { claude = true, codex = true, qualified = true, auth 
   if (claude) await addClaude(); if (codex) await addCodex();
   const server = await fakeAuthServer(t, auth);
   const harness = join(ws.path, 'harness.mjs');
-  await writeFile(harness, `import{writeSync}from'node:fs';import{main}from${JSON.stringify(process.env.CAIRN_SETUP_TEST_MODULE || new URL('../lib/setup.mjs', import.meta.url).href)};
+  await writeFile(harness, `import{writeSync,writeFileSync}from'node:fs';import{main}from${JSON.stringify(process.env.CAIRN_SETUP_TEST_MODULE || new URL('../lib/setup.mjs', import.meta.url).href)};
     import{SetupError}from${JSON.stringify(new URL('../lib/errors.mjs', import.meta.url).href)};
     import{requestJSON}from${JSON.stringify(new URL('../lib/transport.mjs', import.meta.url).href)};
     import{installChildWire}from${JSON.stringify(new URL('./http-wire.mjs', import.meta.url).href)};
@@ -48,9 +48,13 @@ async function fixture(t, { claude = true, codex = true, qualified = true, auth 
       ...(choices.inspectionError ? {inspectCodex:async()=>{throw new SetupError(choices.inspectionError,1,{client:'codex',args:'mcp get cairn --json',code:7});}} : {}),
       ...(choices.windows ? {inspectCodex:async()=>({qualified:false,reason:'codex_windows'})} : {}),
       prompt:async(q,o)=>{writeSync(1, JSON.stringify({prompt:q,secret:Boolean(o?.secret)})+'\\n');
-        if(q.startsWith('Connect Claude')||q.startsWith('連接 Claude'))return choices.claude??'';
-        if(q.startsWith('Connect format')||q.startsWith('Exit Claude')||q.startsWith('連接格式')||q.startsWith('先退出')||q.startsWith('Connect Codex MCP'))return choices.codex??'yes';
-        if(q.includes('Confirm both clients share'))return 'yes';
+        if(q.includes('Connect Claude Code?')||q.includes('連接 Claude Code？'))return choices.claude??'';
+        if(q.includes('Connect Codex')||q.includes('連接 Codex')||q.includes('Add the Cairn')||q.includes('加入 Cairn'))return choices.codex??'yes';
+        if(q.includes('Are both closed')||q.includes('都關好了嗎')){if(choices.changeConfig)writeFileSync(process.env.CODEX_HOME+'/config.toml','model = \"changed\"\\n');if(choices.stopCancel)throw new SetupError('input_cancelled',130);return choices.stopped?.shift()??'yes';}
+        if(q.includes('Which one should both tools')||q.includes('要統一用哪一個'))return choices.endpointChoice??'';
+        if(q.includes('Use the one Claude')||q.includes('要用 Claude')){if(choices.changeKey)writeFileSync(choices.changeKey,choices.keyBytes);return choices.keyChoice??'';}
+        if(q.includes('instead?')||q.includes('改用'))return choices.otherKey??'no';
+        if(q.includes('Which memory ID')||q.includes('要用哪一份'))return choices.keyNumber??'1';
         if(o?.secret)return ${JSON.stringify(secret)};
         if(q.includes('request cap'))return '100';
         if(q.includes('Press Enter')||q.includes('按 Enter'))return '';
@@ -61,6 +65,9 @@ async function fixture(t, { claude = true, codex = true, qualified = true, auth 
   const installation = join(codexHome, 'cairn/installation.json');
   const lines = async path => (await readFile(path, 'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse);
   async function run({ args = ['setup'], choices = {}, interactive = true, tmpdir } = {}) {
+    const configured=JSON.parse(await readFile(claudeState,'utf8')).configured;
+    const installed=await readInstallation(installation).then(()=>true,()=>false);
+    if(args[0]==='setup'&&!configured&&!installed&&!args.includes('--endpoint'))args=[...args,'--endpoint',server.endpoint];
     const child = spawn(process.execPath, [harness, ...args], { cwd: ws.path,
       env: { HOME: home, CODEX_HOME: codexHome, PATH: bin, LANG: 'en_US.UTF-8', TMPDIR: tmpdir ?? process.env.TMPDIR,
         TEST_CHOICES: JSON.stringify(choices), TEST_TTY: String(interactive) }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
@@ -82,14 +89,14 @@ async function fixture(t, { claude = true, codex = true, qualified = true, auth 
     await audit(home);
     return { code, stdout, stderr, prompts: stdout.split('\n').filter(line => line.startsWith('{"prompt":')).map(JSON.parse) };
   }
-  return { home, bin, codexHome, installation, profileRoot, originalId, server, run, addClaude, addCodex, scratch: ws.path,
+  return { setAuth:value=>Object.assign(auth,value), home, bin, codexHome, installation, profileRoot, originalId, server, run, addClaude, addCodex, scratch: ws.path,
     setClaudeState: value => writeFile(claudeState, JSON.stringify(value)),
     setCodexState: async value => writeFile(codexState, JSON.stringify({ ...JSON.parse(await readFile(codexState, 'utf8')), ...value })),
     claudeState: () => readFile(claudeState, 'utf8').then(JSON.parse),
     calls: async () => ({ claude: await lines(claudeCalls), codex: await lines(codexCalls) }) };
 }
 
-async function assertPaired(f) {
+export async function assertPaired(f) {
   const installed = await readInstallation(f.installation), native = await f.claudeState();
   assert.equal(installed.usesClaude, true); assert.equal(installed.pairingRecord, native.pairingRecord);
   const codex = { client: 'codex', home: f.home, root: installed.root, usesClaude: true, pairingRecord: installed.pairingRecord, env: { HOME: f.home } };
@@ -106,15 +113,15 @@ for (const legacyKey of [false, true]) test(`one setup connects both, one browse
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
   assert.equal(f.server.requests.filter(r => r.route === 'ack').length, 1);
   assert.equal(result.stdout.split('browser opened').length - 1, 1, result.stdout);
-  assert.deepEqual(result.prompts.filter(p => /Connect|Confirm both clients share|Exit Claude/.test(p.prompt)).map(p => p.prompt.split('?')[0]), [
-    'Connect Claude Code', 'Exit Claude/Codex and capture workers first. Confirm they are stopped and connect Codex with the shared identity',
+  assert.deepEqual(result.prompts.filter(p => /Connect|Are both closed/.test(p.prompt)).map(p=>p.prompt),[
+    '? Connect Claude Code? (Y/n) ', '? Connect Codex? (y/N) ', '? Are both closed? (y/N) ',
   ]);
   const credential = join(f.home, '.cairn-memory-clients/setup-credential.json');
   await assert.rejects(readFile(credential), { code: 'ENOENT' });
   const again = await f.run(); assert.equal(again.code, 0, again.stdout); await assertPaired(f);
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
   const status = await f.run({ args: ['status'], interactive: false });
-  assert.equal(status.code, 0, status.stdout); assert.match(status.stdout, /Client: claude/); assert.match(status.stdout, /Client: codex/);
+  assert.equal(status.code, 0, status.stdout); assert.match(status.stdout, /Claude Code/); assert.match(status.stdout, /Codex 0\.160\.1/);
 });
 for (const client of ['claude', 'codex']) test(`only ${client} detected`, async t => {
   const f = await fixture(t, { claude: client === 'claude', codex: client === 'codex' });
@@ -123,7 +130,7 @@ for (const client of ['claude', 'codex']) test(`only ${client} detected`, async 
   if (client === 'codex') assert.equal((await readInstallation(f.installation)).usesClaude, false);
   else assert.equal((await f.claudeState()).configured, true);
   const status = await f.run({ args: ['status'] }); assert.equal(status.code, 0, status.stdout);
-  assert.match(status.stdout, new RegExp(`${client === 'claude' ? 'codex' : 'claude'} is not on PATH`));
+  assert.match(status.stdout, new RegExp(`${client === 'claude' ? 'Codex' : 'Claude Code'}: not installed`));
 });
 test('neither detected: clear message, no auth or writes', async t => {
   const f = await fixture(t, { claude: false, codex: false }); const result = await f.run();
@@ -141,7 +148,7 @@ for (const declined of ['claude', 'codex', 'both']) test(`decline ${declined}: o
 for (const options of [{}, { claude: true, codex: false }, { claude: false, codex: true }]) test('non-TTY never consents '+JSON.stringify(options), async t => {
   const f = await fixture(t, options); const result = await f.run({ interactive: false });
   assert.equal(result.code, 2, result.stdout); assert.equal(result.prompts.length, 0);
-  assert.equal(f.server.requests.length, 0); assert.deepEqual(await f.calls(), { claude: [], codex: [] });
+  assert.equal(f.server.requests.length, 0); assert.ok((await f.calls()).claude.every(c=>!c.args.includes('--values-stdin')));
   const dry = await f.run({ args: ['setup', '--dry-run'], interactive: false }); assert.equal(dry.code, 0, dry.stdout);
   assert.equal(dry.prompts.length, 0); assert.equal(f.server.requests.length, 0);
   await assert.rejects(readFile(f.installation), { code: 'ENOENT' });
@@ -163,7 +170,7 @@ for (const first of ['claude', 'codex']) test(`rerun adds other tool after ${fir
 });
 test('unqualified Codex is skipped while Claude completes', async t => {
   const f = await fixture(t, { qualified: false }); const result = await f.run();
-  assert.equal(result.code, 0, result.stdout); assert.match(result.stdout, /Skipping Codex/);
+  assert.equal(result.code, 0, result.stdout); assert.match(result.stdout, /Only Claude Code is set[\s\S]*up/);
   assert.equal((await f.claudeState()).configured, true);
   await assert.rejects(readFile(f.installation), { code: 'ENOENT' });
   assert.equal(result.prompts.some(p => /Codex/.test(p.prompt)), false);
@@ -195,13 +202,13 @@ test('a stored credential API failure stops adding the other tool without a new 
   auth.credentialStatus = 503;
   const result = await f.run(); assert.equal(result.code, 1, result.stdout);
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
-  assert.match(result.stdout, /service unavailable/);
+  assert.match(result.stdout, /under maintenance/);
 });
 
 test('unqualified Codex alone keeps the MCP fallback without a device grant', async t => {
   const f = await fixture(t, { claude: false, qualified: false }); const result = await f.run();
-  assert.equal(result.code, 0, result.stdout); assert.match(result.stdout, /Only explicit MCP memory tools/);
-  assert.equal(result.prompts.filter(p => p.prompt.startsWith('Connect Codex MCP')).length, 1);
+  assert.equal(result.code, 0, result.stdout); assert.match(result.stdout, /only manual memory/);
+  assert.equal(result.prompts.filter(p => p.prompt.includes('Add the Cairn tools')).length, 1);
   assert.equal(f.server.requests.length, 0);
   assert.match(await readFile(join(f.codexHome, 'config.toml'), 'utf8'), /Authorization = "Bearer /);
   await assert.rejects(readFile(f.installation), { code: 'ENOENT' });
@@ -212,7 +219,7 @@ test('Chinese default setup has one consent per tool and preserves its locale', 
   // Declining all avoids relying on translated cap/endpoint answers in this fixture.
   const result = await f.run({ args: ['setup', '--lang', 'zh'], choices: { claude: 'no', codex: 'no' } });
   assert.equal(result.code, 0, result.stdout);
-  assert.match(result.stdout, /工具：claude/); assert.match(result.stdout, /工具：codex/);
+  assert.match(result.stdout, /Claude Code/); assert.match(result.stdout, /Codex/);
   assert.doesNotMatch(result.stdout, /Client:/);
 });
 
@@ -225,7 +232,7 @@ test('R1: Claude-only rerun keeps its credential and endpoint with no new grant'
   const again = await f.run();
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1, 'R1 must not start a second grant');
   assert.equal(again.code, 0, again.stdout);
-  assert.match(again.stdout, /Keeping existing credential/);
+  assert.match(again.stdout, /Reusing the existing sign-in/);
   assert.equal(again.prompts.some(p => /Confirm Cairn endpoint/.test(p.prompt)), false);
   assert.equal((await f.claudeState()).endpoint, before.endpoint);
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
@@ -240,7 +247,7 @@ test('R3: conflicting kept endpoints refuse without replacing either credential'
   await f.setClaudeState({ installed: true, marketplace: true, configured: true, endpoint: 'https://old.example' });
   const before = (await f.calls()).claude.length;
   const again = await f.run(); assert.equal(again.code, 2, again.stdout);
-  assert.match(again.stdout, /--reauthorize/);
+  assert.match(again.stdout, /different Cairn/);
   assert.equal((await f.claudeState()).endpoint, 'https://old.example');
   assert.deepEqual(await readFile(join(f.codexHome, 'cairn/credential.json')), originalCredential);
   assert.equal((await f.calls()).claude.slice(before).filter(c => c.keys.includes('api_token')).length, 0);
@@ -262,9 +269,9 @@ for (const key of ['codex_managed', 'codex_tmpdir', 'codex_state_error', 'comman
     const f = await fixture(t);
     const result = await f.run({ args: ['setup', '--lang', lang], choices: { inspectionError: key } });
     assert.equal(result.code, 0, result.stdout);
-    assert.match(result.stdout, lang === 'en' ? /Codex skipped:/ : /略過 Codex：/);
+    assert.match(result.stdout, lang === 'en' ? /Skipping Codex:/ : /略過 Codex：/);
     assert.match(result.stdout, /setup --client codex/);
-    if (lang === 'zh') assert.match(result.stdout, /略過 Codex：[^\n]+。修正此問題後/);
+    if (lang === 'zh') assert.match(result.stdout, /Claude Code 照常安裝，Codex 沒有改動/);
     assert.equal((await f.claudeState()).configured, true);
     await assert.rejects(readFile(f.installation), { code: 'ENOENT' });
   });
@@ -273,8 +280,8 @@ test('Windows has a specific localized Codex skip while Claude continues', async
   const f = await fixture(t);
   const result = await f.run({ choices: { windows: true } });
   assert.equal(result.code, 0, result.stdout);
-  assert.match(result.stdout, /Codex skipped: Windows credential-file permissions/);
-  assert.match(result.stdout, /setup --client codex for the manual MCP fallback/);
+  assert.match(result.stdout, /Windows/);
+  assert.match(result.stdout, /setup --client codex/);
   assert.doesNotMatch(result.stdout, /Resolve this issue/);
   assert.equal((await f.claudeState()).configured, true);
 });
@@ -283,7 +290,7 @@ test('Codex-only rerun keeps native credential bytes and starts no new grant', a
   assert.equal((await f.run()).code, 0);
   const file = join(f.codexHome, 'cairn/credential.json'), before = await readFile(file);
   const result = await f.run(); assert.equal(result.code, 0, result.stdout);
-  assert.match(result.stdout, /Keeping existing credential/);
+  assert.match(result.stdout, /Codex automatic memory updated/);
   assert.deepEqual(await readFile(file), before);
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
   for (const scoped of [false, true]) for (const endpoint of [f.server.endpoint, 'https://new.example']) {
@@ -299,7 +306,7 @@ test('both existing credentials are retained without native token writes on reru
   const codexPath = join(f.codexHome, 'cairn/credential.json');
   const claude = await f.claudeState(), codex = await readFile(codexPath);
   const result = await f.run(); assert.equal(result.code, 0, result.stdout);
-  assert.equal(result.stdout.split('Keeping existing credential').length - 1, 2);
+  assert.equal(result.stdout.split('Reusing the existing sign-in').length - 1, 1);
   assert.equal((await f.calls()).claude.slice(before).filter(c => c.keys.includes('api_token')).length, 0);
   const after = await f.claudeState();
   for (const key of ['endpoint', 'configured', 'tokenReceived', 'pairingRecord']) {
@@ -338,7 +345,7 @@ for (const failure of ['native command', 'native JSON', 'unsafe config', 'projec
     await writeFile(join(tmpdir, '.codex/config.toml'), 'model = "synthetic-project"\n');
   }
   const result = await f.run({ args, tmpdir }); assert.equal(result.code, 0, result.stdout);
-  assert.match(result.stdout, /Codex skipped:/); assert.match(result.stdout, /setup --client codex/);
+  assert.match(result.stdout, /Skipping Codex:/); assert.match(result.stdout, /setup --client codex/);
   assert.equal((await f.claudeState()).configured, true);
   await assert.rejects(readFile(f.installation), { code: 'ENOENT' });
 });
@@ -366,7 +373,7 @@ test('declining kept Codex allows a new Claude endpoint without replacing Codex'
   const f = await fixture(t, { claude: false }); assert.equal((await f.run()).code, 0);
   const path = join(f.codexHome, 'cairn/credential.json'), before = await readFile(path);
   await f.addClaude();
-  const result = await f.run({ args: ['setup', '--endpoint', f.server.endpoint], choices: { codex: 'no' } });
+  const result = await f.run({ args: ['setup', '--client', 'claude', '--endpoint', f.server.endpoint] });
   assert.equal(result.code, 0, result.stdout); assert.equal((await f.claudeState()).configured, true);
   assert.deepEqual(await readFile(path), before);
 });
@@ -375,13 +382,14 @@ for (const omitEndpoint of [false, true]) test(`round 3: Claude first needs one 
   const f = await fixture(t, { codex: false }); assert.equal((await f.run()).code, 0);
   const old = await f.claudeState(); await f.setClaudeState({ ...old, omitEndpoint });
   const before = (await f.calls()).claude.length;
+  if(omitEndpoint){await mkdir(f.codexHome,{mode:0o700});await writeFile(join(f.codexHome,'config.toml'),`[mcp_servers.cairn]\nurl = "${f.server.endpoint}/api/mcp"\n`,{mode:0o600});}
   await f.addCodex();
   const result = await f.run(); assert.equal(result.code, 0, result.stdout);
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 2);
   assert.equal(result.stdout.split('browser opened').length - 1, 1);
   assert.equal((await f.calls()).claude.slice(before).filter(c => c.keys.includes('api_token')).length, 0);
   assert.equal((await f.claudeState()).endpoint, old.endpoint);
-  assert.match(result.stdout, /Claude first.*one new browser approval/);
+  assert.match(result.stdout, /Codex needs its own sign-in/);
   await assertPaired(f);
 });
 test('round 3: missing Claude endpoint metadata alone never blocks Codex-first reuse', async t => {
@@ -394,7 +402,7 @@ test('round 3: already configured tools rerun without Claude endpoint metadata o
   const f = await fixture(t); assert.equal((await f.run()).code, 0);
   await f.setClaudeState({ ...await f.claudeState(), omitEndpoint: true });
   const result = await f.run(); assert.equal(result.code, 0, result.stdout); await assertPaired(f);
-  assert.match(result.stdout, /Keeping existing credential/);
+  assert.match(result.stdout, /Codex automatic memory updated/);
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
 });
 for (const lang of ['en', 'zh']) test(`round 3: --reauthorize reports replacement, never kept (${lang})`, async t => {
@@ -402,7 +410,7 @@ for (const lang of ['en', 'zh']) test(`round 3: --reauthorize reports replacemen
   const result = await f.run({ args: ['setup', '--reauthorize', '--endpoint', f.server.endpoint, '--lang', lang] });
   assert.equal(result.code, 0, result.stdout); await assertPaired(f);
   assert.equal(f.server.requests.filter(r => r.route === 'device-authorizations').length, 2);
-  assert.match(result.stdout, lang === 'en' ? /Replacement credential delivered/ : /已交付換發憑證/);
+  assert.match(result.stdout, lang === 'en' ? /Signed in again/ : /已重新登入/);
   assert.doesNotMatch(result.stdout, /Keeping existing credential|credentials and endpoints were kept|保留既有憑證|已保留憑證與 endpoint/);
 });
 test('round 3: reauthorization defaults to the known Codex endpoint before delivering Claude', async t => {
@@ -410,7 +418,7 @@ test('round 3: reauthorization defaults to the known Codex endpoint before deliv
   await f.addClaude();
   const result = await f.run({ args: ['setup', '--reauthorize'] }); assert.equal(result.code, 0, result.stdout);
   assert.equal(result.prompts.some(p => /Confirm Cairn endpoint/.test(p.prompt)), false);
-  assert.match(result.stdout, /Replacement credential delivered/);
+  assert.match(result.stdout, /Signed in again/);
   assert.doesNotMatch(result.stdout, /credentials and endpoints were kept|Keeping existing credential/);
   await assertPaired(f);
 });

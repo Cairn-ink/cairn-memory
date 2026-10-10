@@ -59,13 +59,13 @@ test('missing/failing clipboard tools fall through, and cancellation stops remai
   assert.deepEqual(calls,['xclip']);
 });
 
-test('TTY spinner renders the code and remaining time; plain output has no terminal escapes', () => {
+test('TTY spinner renders remaining time without repeating the code; plain output has no terminal escapes', () => {
   for (const lang of ['zh','en']) {
     const t=translator(lang),plain=[],terminal=[];
     spinner(line=>plain.push(line),583,false,t,code,{tty:false})();
     const stop=spinner(()=>{},()=>583,false,t,code,{tty:true,render:value=>terminal.push(value)});
     stop();
-    assert.match(plain[0], /UGSU-LF4L.*9:43/); assert.doesNotMatch(plain[0], /\x1b/);
-    assert.match(terminal[0], /⠋.*UGSU-LF4L.*9:43/); assert.equal(terminal.at(-1),'\r\x1b[K');
+    assert.doesNotMatch(plain[0], /UGSU-LF4L/); assert.match(plain[0], /9:43/); assert.doesNotMatch(plain[0], /\x1b/);
+    assert.match(terminal[0], /⠋.*9:43/); assert.equal(terminal.at(-1),'\r\x1b[K');
   }
 });

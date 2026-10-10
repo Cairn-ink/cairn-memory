@@ -1,0 +1,6 @@
+✓ Cairn automatic memory removed from Codex
+  Claude Code is not affected, and its memories are kept.
+  Saved memories stay in your Cairn. This computer's sign-in is not revoked;
+  revoke it at cairn.ink/settings/tokens.
+  The Cairn tools in Codex (/mcp) stay. To remove them:
+codex mcp remove cairn

@@ -1,0 +1,5 @@
+✓ 已暫停：不再自動記下對話，也不會自動找回記憶。
+  Claude Code 和 Codex 共用這個開關，兩邊都暫停了。
+  暫停期間的對話不會記下，恢復後也不會補記。
+  要恢復：
+npx @cairn-ink/memory resume

@@ -24,11 +24,12 @@
     "integrations/codex/entry.mjs": "558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952",
     "integrations/codex/hook.mjs": "3298bd3147825eb76d97620f2c9bc978b506ae4a6b42509862081e970610a6a7",
     "integrations/codex/hosted-lifecycle.mjs": "8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496",
-    "integrations/codex/installed-state.mjs": "f0599848195c9f988ccb192b790d0de130986476381f7ef28562542725f01a02",
-    "integrations/codex/installed.mjs": "bdf83111bc84f227f5c0e45e88d7c62a1e4e28112fe7d0f12ad61c3bc69c10b7",
+    "integrations/codex/installed-state.mjs": "7ebceb25f266b9aa635d1fd8a588504da33cbfc4c01144ce5b4b9c10f2864932",
+    "integrations/codex/installed.mjs": "03f78b90e9ec85cb02c7233e0b6e9803c8d554430e0eccb6a4fe810e0ed6ab37",
     "integrations/codex/parser.mjs": "dd8e84433daa91a32a937e41a0cdcb390ecdb6c8beef09827f72a605f43d5dce",
-    "integrations/codex/qualification.mjs": "a1aac85bd0cb9b6086014301f86197676e4787bc4083baee43fd65b205901c3d",
+    "integrations/codex/qualification.mjs": "6d0285eb44207e6c13e534dd15220b95a6f47d1a75024d70c05782001eea3f74",
     "integrations/codex/schema-evidence.mjs": "dbae491e6e07c1f6f7abb4c7190cecdbc6cb9b09225f528190a1411c98918428",
+    "integrations/codex/session-source.mjs": "eefaefaccc279ad295e0e6bf5d9ede31b3354c4bebe31e89b40a2eda7b804079",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
     "integrations/codex/worker.mjs": "f536616639a5a3450223dcad4a584914dfbb9061134f7d7ca4dea721255fb1a2"
   }

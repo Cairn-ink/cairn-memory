@@ -1,3 +1,5 @@
+import { collectToken } from './auth.mjs';
+import { DEFAULT_ENDPOINT } from './constants.mjs';
 import { selectEndpoint } from './options.mjs';
 import { constants, accessSync } from 'node:fs';
 import { lstat, mkdir, open, readFile, rename, rm, mkdtemp, realpath } from 'node:fs/promises';
@@ -35,14 +37,28 @@ export function availableClient(name) {
 export async function dispatchClient(argv, context) {
   const selection = parseClient(argv, context.SetupError);
   const [action, ...flags] = selection.argv;
+  const controls = ['disable','uninstall','pause','resume','prompt-recall-off','prompt-recall-on','config'];
+  if (controls.includes(action) && selection.client !== 'codex') {
+    const home=resolve(process.env.CODEX_HOME || join(homedir(),'.codex'));
+    const installed=await readInstallation(join(home,'cairn/installation.json')).then(()=>true,error=>{if(error.code==='ENOENT')return false;throw error;});
+    if(action==='config' && !installed && selection.client!=='claude'){context.write(context.t('not_installed'));return {handled:true,code:2};}
+    if (selection.client==='claude' || !installed) {
+      if (flags.length || context.dailyCap !== undefined || context.captureExec !== undefined) throw new context.SetupError('codex_unknown',2);
+      const supported = ['pause', 'resume'].includes(action);
+      const key = action === 'uninstall' ? 'claude_uninstall' : action === 'disable' ? 'claude_disable' :
+        supported ? (action === 'pause' ? 'claude_pause' : 'claude_control') : 'claude_control_unavailable';
+      context.write(context.t(key, { action }));
+      return { handled: true, code: 2 };
+    }
+    selection.client='codex';
+  }
   if (action === undefined || ['--help', '-h'].includes(action)) {
-    if (selection.client === 'codex' || availableClient('codex')) context.write(context.t('client_help'));
     return { handled: false, argv: selection.argv };
   }
   if (selection.client !== 'codex' && (selection.client || availableClient('claude') || !availableClient('codex'))) {
     return { handled: false, argv: selection.argv };
   }
-  if (!['setup', 'status','disable','uninstall','pause','resume','prompt-recall-off','prompt-recall-on'].includes(action) || flags.some(flag =>
+  if (!['setup', 'status','disable','uninstall','pause','resume','prompt-recall-off','prompt-recall-on','config'].includes(action) || flags.some(flag =>
       !['--dry-run', '--no-browser', '--no-clipboard','--manual-token','--reauthorize'].includes(flag)) ||
       (action !== 'setup' && flags.length)) {
     throw new context.SetupError('codex_unknown', 2);
@@ -116,7 +132,9 @@ function runCodex(args, { env = process.env, cwd } = {}) {
 }
 
 export async function setupCodex({ action, flags, write, prompt, interactive, browse,
-  SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent }) {
+  SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent, claudeDeclined, dailyCap,
+    captureExec, verbose, identityPlan, endpointChoice,
+  expectedCodex, hostsStopped, coordinated, progress = {} }) {
   const fail = message => new SetupError(message);
   if (process.platform === 'win32') {
     if (inspectOnly) return { qualified: false, reason: 'codex_windows' };
@@ -131,9 +149,9 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
       throw new SetupError('endpoint_reauthorize', 2);
     }
   }
-  if (['disable','uninstall','pause','resume','prompt-recall-off','prompt-recall-on'].includes(action)) {
+  if (['disable','uninstall','pause','resume','prompt-recall-off','prompt-recall-on','config'].includes(action)) {
     const neutral = await realpath(await mkdtemp(join(tmpdir(), 'cairn-codex-control-')));
-    try {return await controlCodex({action,home,write,t,snapshot,unchanged,neutral});}
+    try {return await controlCodex({action,home,write,t,snapshot,unchanged,neutral,SetupError,dailyCap,captureExec,progress});}
     finally {await rm(neutral,{recursive:true,force:true});}
   }
   const configPath = join(home, 'config.toml');
@@ -143,6 +161,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     if (error.message === 'unsafe_config') throw new SetupError('codex_config_unsafe');
     throw new SetupError('codex_state_error');
   }
+  if (expectedCodex && !unchanged(expectedCodex,before)) throw new SetupError('codex_concurrent',2);
   // Inspect only a copy of the user's file. No trusted-project layer or OAuth
   // discovery participates in the decision to create a full entry or add a header.
   const neutral = await realpath(await mkdtemp(join(tmpdir(), 'cairn-codex-inspect-')));
@@ -219,7 +238,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
       write(t('codex_enabled', { state: existing.enabled ? t('enabled') : t('disabled') }));
       write(t('codex_credential', { state: credential ? t('configured') : t('unverified') }));
     }
-    if (!flags.includes('--dry-run') && endpointOverride && usable && endpointOverride !== new URL(transport.url).origin) {
+    if (!flags.includes('--dry-run') && endpointOverride && usable && endpointOverride !== new URL(transport.url).origin && !endpointChoice) {
       throw new SetupError('codex_endpoint_conflict', 2);
     }
     if (endpointOverride || usable) {
@@ -227,23 +246,32 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
         endpoint: endpointOverride ?? new URL(transport.url).origin,
       }));
     } else if (!existing && (action === 'status' || flags.includes('--dry-run') || !interactive)) {
-      write(t('endpoint_default', { endpoint: 'https://cairn.ink' }));
+      write(t('endpoint_default', { endpoint: DEFAULT_ENDPOINT }));
     }
     const cliHost=await resolveCLI();
     const installation=join(home,'cairn','installation.json');
     const installed=await readInstallation(installation).then(()=>true,()=>false);
     const hostVerdict=cliHost ? action==='status' && !installed ? await cachedQualification(installation,cliHost) :
       await qualifyBinary(installation,cliHost,{cache:!inspectOnly && !flags.includes('--dry-run')}) : {status:'pending'};
-    if (inspectOnly) return { qualified: hostVerdict.status==='qualified' && hostVerdict.version===hostVersion,
-      endpoint: usable ? new URL(transport.url).origin : undefined };
+    if (inspectOnly) {
+      const installedConfig=await readInstallation(installation).catch(error=>{if(error.code!=='ENOENT')throw error;});
+      const hasAuth=Boolean(transport?.bearer_token_env_var || transport?.http_headers_helper ||
+        Object.keys(transport?.http_headers??{}).length || Object.keys(transport?.env_http_headers??{}).length ||
+        /(?:bearer_token_env_var|http_headers|env_http_headers|oauth|headers_helper)\s*(?:=|\])/u.test(before.text));
+      return {qualified:hostVerdict.status==='qualified' && hostVerdict.version===hostVersion,
+        endpoint:usable?new URL(transport.url).origin:undefined,installed:installedConfig,before,hostVersion,
+        hasAuth,canSwitch:hostVersion==='0.160.1' && !hasAuth,
+        verify:async()=>{if(!unchanged(before,await snapshot(configPath)))throw new SetupError('codex_concurrent',2);}};
+    }
     if (hostVerdict.status==='qualified' && hostVerdict.version===hostVersion) {
       return await setupInstalledCodex({action,flags,home,hostVersion,write,prompt,interactive,browse,
         SetupError,t,endpointOverride,authOptions,signal,before,configPath,existing,usable,
-        neutral,get,snapshot,unchanged,cliHost,hostVerdict,pairingConsent});
+        neutral,get,snapshot,unchanged,cliHost,hostVerdict,pairingConsent,claudeDeclined,dailyCap,captureExec,verbose,identityPlan,
+        endpointChoice,expectedCodex,hostsStopped,coordinated,progress});
     }
     // Changed or unavailable format evidence keeps automatic paths closed.
     // Status reports the actual observed app-server separately from this CLI.
-    await installedStatus({home,hostVersion,write,t,snapshot,cliHost,hostVerdict});
+    await installedStatus({home,hostVersion,write,t,snapshot,cliHost,hostVerdict,verbose});
     if (action === 'status' || flags.includes('--dry-run')) {
       if (flags.includes('--dry-run')) {
         write(t('dry_run'));
@@ -268,7 +296,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
       write(t('codex_oauth'));
       write(t('codex_neutral'));
       write(t('codex_login_command'));
-      if (!interactive || (await prompt(t('codex_oauth_prompt'))).trim().toLowerCase() !== 'pat') {
+      if (!interactive || !flags.includes('--manual-token')) {
         write(t('codex_login_kept'));
         automaticStatus(write, t); return 0;
       }
@@ -311,12 +339,11 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
       write(t('codex_plaintext'));
       write(t('create_pat', { url: new URL('/settings/tokens', endpoint).href }));
       if (!flags.includes('--no-browser')) await browse(write, new URL('/settings/tokens', endpoint).href);
-      const token = await prompt(t('token_prompt'), { secret: true });
-      if (!token || token.length > 8192 || /[\s\x00-\x1f\x7f]/u.test(token)) throw fail('token_invalid');
+      const token = await collectToken({prompt,write,t});
       await validate(token);
       try { lock = await open(lockPath, 'wx', 0o600); }
       catch (error) {
-        if (error.code === 'EEXIST') throw fail('codex_lock');
+        if (error.code === 'EEXIST') throw new SetupError('codex_lock',2,{path:lockPath});
         throw error;
       }
       if (!unchanged(before, await snapshot(configPath))) throw fail('codex_concurrent');

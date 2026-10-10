@@ -18,7 +18,7 @@ const scopeIndex = args.indexOf('--scope');
 const command = (scopeIndex < 0 ? args : args.filter((_, index) => index !== scopeIndex && index !== scopeIndex + 1)).join(' ');
 const entry = scope => ({ scope, version: state.version || '0.3.0' });
 const entries = state.entries ?? (state.installed ? [entry('user')] : []);
-if (state.fail === command) {
+if (state.fail === command || (state.failPairing && values.pairing_record)) {
   console.error(values.api_token || state.token || 'synthetic-child-error');
   process.exit(state.failCode || 7);
 }

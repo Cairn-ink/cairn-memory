@@ -1,0 +1,21 @@
+Cairn.ink Memory 0.5.0
+
+Claude Code
+  ✓ Plugin 0.3.1 installed and enabled
+  ✓ Sign-in saved
+  To see whether the last connection worked, type /cairn-memory:status in it.
+
+Codex 0.160.1
+  ✓ Automatic memory installed, using cairn.ink
+  ✓ Sign-in saved
+  · Memory: active, shared with Claude Code
+  · Today 0 / 200
+  At the daily limit, Codex stops saving for the day. Claude Code is unaffected.
+  · Find memories when you ask: on
+  To turn prompt recall off:
+npx @cairn-ink/memory prompt-recall-off --client codex
+  Make sure the 4 Cairn entries are allowed in Codex /hooks (not checked here).
+
+Only local settings were read; no connection was tested.
+Details:
+npx @cairn-ink/memory status --verbose

@@ -1,0 +1,42 @@
+Cairn.ink Memory 安裝程式 0.5.0
+在這台電腦找到 Claude Code 和 Codex。
+
+連接後，你和 AI 的對話會先在本機盡量遮掉密碼、金鑰等敏感資訊，再存到你的 Cairn。
+每次提問時，也會送出一段遮過、有長度上限的提問，用來找回相關記憶。
+Claude Code 外掛預設會送出使用統計，不含任何對話內容。
+使用統計可以關閉，記憶也隨時可以暫停。完整說明：cairn.ink/memory/privacy
+
+? 連接 Claude Code？ (Y/n)
+? 連接 Codex？ (y/N)
+
+兩個工具要共用同一份記憶，安裝時都必須關閉。
+請完全結束 Claude Code 和 Codex，並等背景工作結束。
+? 都關好了嗎？ (y/N)
+
+這台電腦有兩份 Cairn 記憶身分。記憶身分決定一則記憶屬於哪個專案。
+  1. Claude Code 正在用的  <date> 建立
+  2. ~/.cairn-memory  <date> 建立
+兩個工具只能用一份。沒選的那份會改名留作備份，不會刪除。
+切換後，舊身分的專案記憶不會再自動對應；本機備份會保留原本的身分。
+? 要用 Claude Code 正在用的那份嗎？ (Y/n)
+✓ Claude Code 外掛 0.3.1 已安裝
+
+在瀏覽器登入 Cairn（cairn.ink）
+  一次性代碼：[ ABCD-EFGH ]
+  按 Enter 開啟 cairn.ink/device
+代碼將於 10 分鐘後到期。
+browser opened
+✓ 已登入 Cairn，有效到 <date>
+  Codex 的登入資訊存在只有你能讀的檔案裡，沒有加密。
+✓ Codex 自動記憶已安裝
+Codex 用 exec 自動執行的工作不會記下。
+  另一份已改名備份：~/.cairn-memory/project-key.backup-<stamp>
+
+✓ 兩個工具共用同一份記憶
+接下來：
+  1. 重新開啟 Claude Code，送出一則訊息。
+  2. 重新開啟 Codex，輸入 /hooks，允許 Cairn 的 4 個項目。
+  3. 確認狀態：
+npx @cairn-ink/memory status
+  選用：想在 Codex 裡直接搜尋記憶，執行
+codex mcp login cairn

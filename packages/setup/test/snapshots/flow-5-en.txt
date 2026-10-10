@@ -1,0 +1,24 @@
+Cairn.ink Memory setup 0.5.0
+Found Claude Code and Codex on this computer.
+
+✓ Claude Code is connected (its plugin will be updated)
+✓ Codex is connected
+
+Claude Code uses staging.cairn.ink and Codex uses cairn.ink.
+They can't share memory yet.
+  1. cairn.ink  Claude Code reuses Codex's sign-in; no new sign-in
+  2. staging.cairn.ink  Codex must sign in again in the browser
+The tool that switches saves new memories to the new server.
+Memories it already saved stay where they are.
+? Which one should both tools use? (1/2)
+
+To share one memory, both tools must be closed while setup runs.
+Quit Claude Code and Codex completely, and wait for background work to finish.
+? Are both closed? (y/N)
+✓ Claude Code plugin 0.3.1 is up to date
+✓ Reusing Codex's sign-in (valid until <date>)
+✓ Codex automatic memory updated
+Automated codex exec runs are not saved.
+
+✓ Both tools share one memory
+Next: reopen Claude Code and Codex.

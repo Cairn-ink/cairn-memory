@@ -10,7 +10,7 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
 - [ ] Review delivered patches and recorded checks; approve the release before
   merging or publishing. Confirm npm scope access and `@cairn-ink/memory`.
   Unscoped `cairn-memory` is owned by someone else.
-- [ ] Confirm installer version **0.4.0** (0.3.0 was published on 2026-10-10) in
+- [ ] Confirm installer version **0.5.0** (0.3.0 was published on 2026-10-10) in
   `packages/setup/package.json`. Future releases explicitly bump this version.
   It is independent of plugin versions. Plugin 0.3.2 includes the required
   hook credential-state fix. If plugin changes ship too, bump plugin,
@@ -37,13 +37,18 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   Codex-only, neither, declining either/both, non-TTY, rerun adding the other in
   both directions, and unqualified Codex. Assert one browser grant for initial
   dual setup and equal project IDs. Codex-first reuse needs no new approval;
-  Claude-first adds exactly one approved grant when adding Codex. Keep frozen runtime/A7 inputs and plugin version unchanged.
+  Claude-first adds exactly one approved grant when adding Codex. Verify the
+  default exec skip in the runtime; keep A7 inputs and plugin version unchanged.
   Non-TTY unscoped setup never consents or installs; status/dry-run remain usable.
   Verify kept credentials/endpoints, endpoint overrides requiring --reauthorize,
   conflicting endpoints, each localized Codex inspection failure, Codex credential
   reuse without an extra cache, Claude-first new approval without opening its
   host secret store, and Codex-only MCP fallback. Check optional Claude endpoint
   metadata, dry-run overrides and accurate reauthorization messages.
+- [ ] Verify default 200/stored daily caps, both config flags, exec capture/recall
+  default skips and opt-in capture, prompt-recall-off documentation/status,
+  copyable recovery commands and Claude-only control failures. Exercise numbered
+  memory-ID choices, explicit third-endpoint reauthorization and backup rollback.
 - [ ] Use a fresh private TMPDIR (`mktemp -d`, mode 0700), then remove it.
   Do not read/write real `~/.claude`, `~/.codex` or credentials.
 - [ ] Build and inspect the archive from `packages/setup`. Run `npm pack --dry-run`
@@ -78,7 +83,7 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
   npm publish --access public
   ```
 
-- [ ] After successful 0.4.0 publication, remove its awaiting-publication caveats
+- [ ] After successful 0.5.0 publication, remove its awaiting-publication caveats
   from root, plugin and package READMEs. Verify registry name/version and smoke-test
   `npx @cairn-ink/memory setup --dry-run` in a clean temporary profile. This does
   not publish the local SQLite preview under `packaging/`.

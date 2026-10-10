@@ -1,363 +1,147 @@
 # @cairn-ink/memory
 
-One-command setup of the Cairn Memory **Claude Code plugin** and private automatic
-capture hooks for format-qualified **Codex CLI / app-server**. Node ≥22.16 and the selected
-CLI on PATH are required. No runtime dependencies. Codex prompt-recall injection
-uses the A7-tested delivery format and is on for qualified hosts; turn it off with
-`prompt-recall-off --client codex`. Recall is also available through MCP.
-
-一次設定 Claude Code 外掛與格式合格 Codex CLI／app-server 的私有自動 capture hooks。
-需要 Node ≥22.16，以及 PATH 裡的選定 CLI，沒有 runtime dependencies。
-Codex prompt recall 注入已通過 A7 驗收，在格式合格的 host 預設開啟；可用 `prompt-recall-off --client codex` 關閉，也可透過 MCP recall。
+Set up Cairn automatic memory for Claude Code and qualified Codex hosts.
+Requires Node ≥22.16 and the selected CLI on PATH; no runtime dependencies.
+This checkout prepares **installer 0.5.0**. The Claude plugin stays **0.3.2**.
+The release must be published before `npx` can use these new flows.
 
 ## Setup / 安裝
 
-**Installer 0.3.0 was published on 2026-10-10; this checkout's 0.4.0 awaits chichi.**
-Plugin remains 0.3.2. Setup prints the installer and installed plugin versions.
-
-**安裝器 0.3.0 已於 2026-10-10 發布，這份原始碼的 0.4.0 等待 chichi 核准。**
-外掛維持 0.3.2，setup 會顯示實際安裝的外掛版本。
-
-Version 0.4.0 detects both CLIs when `--client` is omitted. It shows each tool's
-disclosure, asks once per qualified tool (Claude: `[Y/n]`; Codex: `[y/N]`), and
-connects every agreed tool. With both agreed, the Codex question confirms stopped
-hosts/workers and a shared identity. One browser grant supplies both clients;
-the existing pairing transaction retains the project key without a separate
-pairing prompt. Unqualified Codex is skipped cleanly while Claude can continue.
-`--client claude|codex` restricts setup/status to one tool. Unscoped status reports
-both, including absent CLIs; control commands retain per-client flags.
-
-省略 `--client` 時，0.4.0 偵測兩個工具，逐一揭露並詢問。Claude 預設同意，Codex
-必須明確同意；兩者都同意時，同一個 Codex 問題也確認 hosts／workers 已停止，
-可共用 identity。只走一次瀏覽器授權，使用既有 pairing transaction 保留 key。
-Codex 格式未合格會略過，Claude 可繼續。`status` 預設回報兩者。
-
-Unscoped non-TTY setup never auto-consents or installs (exit 2 when a tool is
-detected). Status/dry-run are prompt-free and remain available. Explicit per-client
-flows keep their existing TTY/fallback rules. Setup never reads or imports Claude
-Code's native secrets, and creates no additional credential cache.
-
-Choose both tools initially: one browser approval, sharing the token in memory.
-Codex first, Claude added later: validate and reuse the installer-owned Codex
-credential in `$CODEX_HOME/cairn/credential.json`, with no new approval.
-Claude first, Codex added later: one new browser approval, explicitly agreed to;
-Claude's existing credential stays. All three flows retain the shared project key.
-
-Claude endpoint values from `configure --json` are optional. Use a returned value,
-otherwise treat it as unknown; absent metadata alone never refuses setup.
-Confirm the same account and endpoint in both tools. Known conflicts refuse
-pairing. Align Codex MCP configuration, then explicitly use `--reauthorize`.
-`--endpoint` with a kept credential requires that flag (exit 2), while
-`setup --dry-run --endpoint X` still previews locally with exit 0.
-Reauthorization reports a replacement, and defaults to the known Codex endpoint.
-
-非 TTY 的預設 setup 不會代為同意或安裝；有偵測到工具時 exit 2。
-首次一起設定只核准一次，token 只在本次 run 的記憶體共用。
-Codex 先裝、之後加 Claude，重用安裝器保存的 Codex 憑證，不另核准。
-Claude 先裝、之後加 Codex，要同意一次新的瀏覽器核准；Claude 原憑證保留。
-安裝器不讀取或匯入 Claude native secret，不新增憑證 cache。
-CLI 沒回傳 Claude endpoint 時視為未知，不因此拒絕設定。
-Codex 檢查失敗會說明原因並提示 `setup --client codex`，Claude 可繼續。
-只有未合格 Codex 時，明確同意後仍可走 MCP-only fallback，自動 hooks 不啟用。
-
 ```sh
-# Published installer / 已發布的安裝器
 npx @cairn-ink/memory setup
-# Browser authorization in this checkout / 這份原始碼的瀏覽器授權
+# Use this checkout before publication / 發布前執行這份原始碼
 node packages/setup/bin/memory.mjs setup
 ```
 
-Setup checks CLI capabilities, refreshes an existing marketplace (or adds it),
-then updates installed plugins at their explicit user/project/local scopes. Project/local-only installs are
-updated and supplemented with a user-scope install. A disabled
-plugin remains disabled; enable it in `/plugin` before pairing.
+Setup finds both tools, asks about new connections, and updates tools already
+connected. Claude defaults to yes; Codex requires yes. When sharing memory,
+close both tools and wait for background work to finish, then confirm once.
+The default server is cairn.ink, shown on the browser sign-in line. There is no
+endpoint or daily-cap question. `--endpoint https://your-server` remains supported.
 
-安裝器先檢查 CLI 功能，更新既有 marketplace，再更新已安裝的外掛；第一次使用
-則加入 marketplace 並以 user scope 安裝。停用中的外掛會提示到 `/plugin` 啟用。
+安裝器會找出兩個工具，只詢問尚未連接的工具；已連接的工具直接更新。
+Claude 預設同意，Codex 需要明確同意。共用記憶前，請完全關閉兩個工具、
+等背景工作結束，再回答「都關好了嗎？」。預設連到 cairn.ink，登入時會顯示；
+不用回答伺服器或每日上限的問題。需要自架伺服器時可用 `--endpoint`。
 
-In a TTY, confirm the endpoint, compare the displayed code, and enter it on the
-bare `/device` page. Setup highlights the one-time code on its own line and
-waits for Enter before opening the browser, keeping terminal focus until you
-have read it. A short relative deadline replaces the absolute timestamp; the
-waiting spinner repeats the code. The code lasts at most ten minutes. Setup polls, checks the received credential, sends endpoint and token
-together through `claude plugin configure --values-stdin`, and acknowledges
-successful delivery. It prints the credential's expiry date (180 days for a new
-browser grant). The browser never receives the token.
+A memory ID connects the same project across tools. Setup retains existing IDs
+and never silently switches them. Conflicting servers offer two choices. Codex
+MCP URL changes are allowed only for verified URL-bound OAuth storage (0.160.1)
+and configurations without explicit authentication fields; otherwise sign out
+and remove its MCP entry before retrying. Two independent IDs require a choice.
+The other key is renamed to a unique backup only after sign-in and validation
+succeed, under the existing setup lock. It is never deleted. This preserves the
+local key; old projects may no longer automatically match it. Setup does not
+promise that all old account memories remain recallable with the selected ID.
+Non-interactive conflict handling writes nothing and prints the rerun command.
 
-在互動終端機確認 endpoint 後，開啟 `/device`，輸入終端機顯示的代碼，登入並
-允許授權。代碼會獨立醒目顯示，按 Enter 後才開瀏覽器，避免切換視窗前沒看到代碼。
-期限以相對時間顯示，等待授權時也會重複顯示代碼。代碼最多有效 10 分鐘。setup 取得憑證並驗證後，把 endpoint 與 token
-一起經 stdin 交給 Claude Code 保存，再確認交付，最後顯示到期日。
-瀏覽器授權的新憑證有效 180 天，瀏覽器不會拿到 token。
+「記憶身分」讓兩個工具認得同一個專案。既有身分會保留，不會默默切換。
+兩邊連到不同伺服器時可選其中一邊；無法確認 Codex 憑證會依網址隔離時，
+會請你先登出並移除 MCP 設定。兩份獨立身分需要選擇，另一把 key 只在登入
+與驗證成功後才於鎖內改名備份，永不刪除。備份保留本機 key，但舊專案可能
+不再自動對上原來的記憶。非互動終端機遇到衝突不會改設定，會顯示重跑指令。
 
-```sh
-node packages/setup/bin/memory.mjs setup --no-browser
-node packages/setup/bin/memory.mjs setup --client claude --manual-token
-node packages/setup/bin/memory.mjs setup --reauthorize
-node packages/setup/bin/memory.mjs setup --dry-run
-node packages/setup/bin/memory.mjs status
-```
+One browser grant connects both tools. Adding Claude after Codex validates and
+reuses the installer-owned credential. Adding Codex after Claude needs a browser
+grant using the same account; Claude's sign-in is kept. Setup never reads Claude
+native secret files. Enter the displayed one-time code on the device page;
+press Enter to open it, or use `--no-browser` to open it on another device.
 
-- `--no-browser`: display the URL/code and open the page yourself, including on
-  another device. Still requires a TTY.
-- `--no-clipboard`: skip optional copying of the one-time device code. No effect
-  on manual PAT/Codex pairing, which never copies a token.
-- `--manual-token`: use the single-client hidden PAT prompt, checking it before saving.
-  Shared automatic hooks require browser authorization; use `--client` for PAT setup.
-- `--reauthorize`: replace an existing credential. Without it, complete endpoint
-  and token configuration is preserved. New authorization always confirms the
-  endpoint and writes both values together.
-- `--dry-run`: only capability and local state queries. No API, browser, grant,
-  prompt or mutation; skips the potentially networked `mcp get` command.
+兩個工具第一次一起設定只需登入一次。先裝 Codex、後加 Claude，會驗證並
+沿用安裝器保存的登入；先裝 Claude、後加 Codex，需要用同一帳號登入一次。
+Claude 原有登入會保留。安裝器不讀取 Claude 原生秘密檔案。
 
-`--no-browser` 仍需互動式 TTY，可在手機或其他電腦開頁面。`--manual-token` 保留
-隱藏 PAT 輸入。既有完整設定預設保留，要換發時加上 `--reauthorize`。
-`--dry-run` 不連網、不建立代碼、不寫設定。
+To stop prompt recall while keeping automatic capture, run
+`npx @cairn-ink/memory prompt-recall-off --client codex`.
+Use `prompt-recall-on --client codex` to enable it again. This does not change MCP.
 
-The code uses bold cyan in a TTY; `NO_COLOR` (including an empty value) disables
-that styling. Non-TTY output and no-color mode use brackets and extra spacing.
-Setup optionally copies **only the public one-time code** using a fixed local
-clipboard tool: `pbcopy` on macOS, `clip.exe` on Windows/WSL, `wl-copy` when a
-Wayland display/runtime is present, or `xclip`/`xsel` with an X display. Missing,
-failing or timed-out tools never fail authorization. SSH sessions skip automatic
-clipboard copying, even with a forwarded display. Clipboard subprocesses receive
-the code via stdin, use no shell, and never echo their output. Native clipboard
-integration is tested with fake tools; no system clipboard or real token is used.
+要關閉提問回想、保留自動保存，請執行
+`npx @cairn-ink/memory prompt-recall-off --client codex`。
+用 `prompt-recall-on --client codex` 重新開啟；MCP 不受影響。
 
-TTY 中以粗體青色突出代碼；`NO_COLOR` 或非 TTY 輸出改用方括號與空格。
-有本機剪貼簿工具時，會自動複製一次性代碼並說明；缺少工具仍可繼續。
-可用 `--no-clipboard` 略過，SSH 連線也會自動略過。PAT、token 與驗證資料不會複製。
-`--no-browser` 只印出網址，略過 Enter 提示；仍需互動式 TTY。
-等待 Enter 時，原本的授權期限照常計時，逾時或 Ctrl-C 會嘗試取消授權。
+## Privacy / 隱私
 
-If only a token is configured, setup keeps it and asks you to complete the
-endpoint through `/plugin configure`, or explicitly use `--reauthorize`.
-已有 token 但缺少 endpoint 時會保留憑證，提示補齊設定或明確重新授權。
+Conversations are saved after best-effort local masking. Each prompt sends a
+masked, length-limited copy for recall. Claude plugin usage stats are on by
+default and can be turned off. Codex's sign-in is an unencrypted file readable
+only by its owner. Details and controls: [privacy](https://cairn.ink/memory/privacy).
 
-## Codex automatic capture / Codex 自動記憶
+對話會先在本機盡力遮蔽敏感內容，再保存。每次提問也會傳送遮蔽、限制長度的
+副本來找相關記憶。Claude 外掛預設傳送使用統計，可以關閉；Codex 登入存於
+未加密、僅使用者可讀的檔案。詳情與控制方式見上方隱私頁。
+
+## Commands / 指令
 
 ```sh
-# Source 0.4.0; @latest has the published 0.3.0 single-client behavior
-node packages/setup/bin/memory.mjs setup --client codex
-node packages/setup/bin/memory.mjs status --client codex
-node packages/setup/bin/memory.mjs setup --client codex --dry-run
-node packages/setup/bin/memory.mjs pause --client codex
-node packages/setup/bin/memory.mjs resume --client codex
-node packages/setup/bin/memory.mjs disable --client codex
-node packages/setup/bin/memory.mjs uninstall --client codex
+npx @cairn-ink/memory setup --client claude
+npx @cairn-ink/memory setup --client codex
+npx @cairn-ink/memory setup --reauthorize
+npx @cairn-ink/memory setup --no-browser --no-clipboard
+npx @cairn-ink/memory setup --dry-run
+npx @cairn-ink/memory status
+npx @cairn-ink/memory prompt-recall-off --client codex
+npx @cairn-ink/memory pause
+npx @cairn-ink/memory resume
+npx @cairn-ink/memory config --codex-daily-cap 300
+npx @cairn-ink/memory uninstall --client codex
 ```
 
-On Linux/WSL with a qualified host format, setup installs SessionStart,
-UserPromptSubmit, Stop and PreCompact in user `hooks.json`. It copies a hashed,
-versioned runtime under `$CODEX_HOME/cairn` (default `~/.codex/cairn`), with 0700
-directories and 0600 files, independent of the npx cache. Review/trust with
-`/hooks`; setup uses no trust bypass. Unknown hosts with identical schema evidence are qualified and cached by binary identity; changed or pending formats never capture or recall. 0.161.0 matches the frozen 0.160.1 evidence. 0.162.0 adds `MessagePhase.partial_answer` and remains closed. Hooks detect the actual native CLI/app-server ancestor and never generate schemas inside the 2s budget. See [format evidence and gates](../../docs/codex-setup.md).
+Automated `codex exec` runs are not saved or given prompt-recall context by
+default. Opt in with `npx @cairn-ink/memory config --codex-capture-exec on`
+(or add `--codex-capture-exec on` during setup); `off` restores the default.
+The setting enables both capture and recall for exec. Setup preserves it and
+`status` shows it only when on. The signal is the verified, session-bound
+`session_meta.payload.source` in the transcript header, plus a native exec
+ancestor for `exec resume` of a thread originally created interactively. Missing, partial or
+unverifiable headers skip capture and recall. Interactive CLI sessions continue
+normally once their header is available. Older frozen runtimes need a setup
+update first; config prints the exact setup command before changing anything.
 
-Hooks use device browser authorization. The memory-scoped credential is stored
-as a private **0600 plaintext file, not a keyring**; it never enters Codex’s
-config.toml, argv, environment or logs. Registered commands clear the inherited
-environment before the first Node process; children also use a closed environment.
-Saving/verification precedes delivery
-ACK. There is no broad PAT fallback for hooks. `--manual-token` selects only
-MCP PAT setup; MCP defaults to the offered `codex mcp login cairn` OAuth path.
-Existing MCP credentials and unrelated settings/hooks are preserved.
+Codex 用 exec 自動執行的工作預設不會記下，也不會注入提問回想。
+若需要，可用 `npx @cairn-ink/memory config --codex-capture-exec on` 開啟，
+或安裝時加上同名選項；改成 `off` 就能關閉。這個設定同時開啟保存與回想。
+重跑安裝會保留設定；只有開啟時，`status` 才會顯示。
+來源以 transcript 首筆經驗證、符合本次 session ID 的
+`session_meta.payload.source` 判斷；也檢查原生程序的 exec 指令，
+避免自動續跑互動對話時漏判。無法確認 transcript 時，略過保存與回想。
 
-Claude/Codex pairing adopts the existing project key after explicit stopped-host
-consent and delivers only `pairing_record` to both configurations. New pairing
-requires an enabled Cairn plugin `>=0.1.2 <1.0.0` (stable semver) with that configure
-capability. Version 0.1.2 introduced the pairing contract; released 0.3.1 already qualifies.
-A test binds compatibility to the current plugin metadata. Missing,
-old or disabled plugins select Codex standalone with an explicit notice, without
-changing Claude keys/settings or updating its marketplace. New Codex standalone always uses
-`$CODEX_HOME/cairn-standalone`, preserving Claude's existing or future default
-root. Existing successful bindings never
-silently switch target on plugin removal/downgrade. Use the same account and
-endpoint to share memory after pairing; standalone targets are separate. An unscoped rerun with both tools agreed adds Claude to the existing Codex standalone
-key/root after stopped-host consent. If two independent keys already exist, setup
-refuses the conflict. Explicit Codex-only reruns retain their existing binding and
-target-retention guidance.
+Codex defaults to 200 automatic captures per day. Existing installs keep their
+stored cap. Use `setup --codex-daily-cap N` or `config --codex-daily-cap N` to change
+it (integer 1–100000). With an existing daily counter, cap changes apply at the next daily reset.
+Status shows today's effective cap and any pending change; reaching the cap pauses
+Codex automatic capture until the next day. Claude's quota remains independent.
+`pause` and `resume` select installed Codex automatically; a paired installation
+shares the pause with Claude. A Claude-only installation prints its plugin command.
+Pausing does not backfill conversations. `disable --client codex` removes hooks
+and retains settings. Uninstall preserves memories, keys and MCP settings.
 
-Only Codex workers consume the selected daily capture cap and concurrency 2.
-Claude retains its existing capture/recall/controls and server quota; it does not
-require Codex's enforced pause-state endpoint. Its status reports invalid policies
-and actual last-observed shared-pause errors without failing controls. Fresh/unobserved and stale healthy observations do not trigger an endpoint alarm. No
-policy means unchanged Claude status. Uninstall removes all Cairn hook commands
-for this installation regardless of old node/runtime paths, plus its credential,
-runtime and endpoint policy. MCP, identity/key (including standalone) and memory
-remain. Uninstall also unpairs completed or pending pairing: clear Claude’s native pairing
-option, remove Codex’s binding/shared record under the setup lock, and verify Claude remains
-enabled on the same root/key. Recovery failure returns exit 1 with an explicit warning,
-still removes Codex credential/installation, and can be retried after restoring the Claude
-CLI without browser authorization. A private token-free recovery ownership receipt under
-`~/.cairn-memory-clients/codex-uninstall-<installation hash>.json` supports retry and
-prevents another CODEX_HOME from unpairing this installation; success removes it. Unsafe
-policy paths are reported and skipped while credential/installation cleanup continues.
-Failed reauthorization preserves the last successful installation.
-Browser/candidate failure on first pairing leaves Claude identity untouched.
-Partial native pairing delivery prints a pending notice; keep hosts/workers
-stopped and rerun to finish the same identity.
+Codex 預設每天自動保存 200 次，既有安裝保留原上限。可用上方 `config` 指令，
+或安裝時加 `--codex-daily-cap N` 修改。已有當日計數時，新上限在下次每日重置套用，不會重設已用次數。
+`status` 顯示「今日 12 / 200」這類計數與待套用的變更；
+用完後停止自動保存，隔天重新計數。Claude 的額度獨立計算。
+省略 `--client` 的暫停、恢復指令會使用已安裝的 Codex；共用身分時也暫停 Claude。
+只有 Claude 時會顯示外掛指令。暫停期間的對話不會事後補存。
 
-Stop/PreCompact launch capture within 750 ms with no text or credential in the
-handoff; hosted pause-state is fetched in the worker, outside the foreground
-budget. Worker failures exit 0 and emit no logs. SessionStart establishes the
-protocol 0.3.0 pause/resume EOF boundary. Prompt recall’s redaction, full receipt
-framing, authority filter, 8,000-unit bound and single 2 s budget are tested, and
-**automatic injection is on for format-qualified hosts using the A7-tested
-delivery format** (`evaluation/codex-a7/RESULTS.md`). `prompt-recall-off` is its kill switch.
-SessionStart context also needs a qualified local o200k counter. MCP recall is
-available. Status reports registration/credential presence and last observed
-hosted pause; it does not verify trust, server reachability or account parity.
+`--verbose` shows technical diagnostics without tokens. `status` reads local
+state; it does not verify remote service or hooks. Review the four Cairn hooks
+in Codex `/hooks` after setup. Unqualified formats do not enable automatic memory;
+Codex-only setup can offer manual MCP tools. `--manual-token` is a single-client
+MCP/Claude fallback; shared automatic hooks require browser authorization.
+Legacy Claude MCP removal asks explicitly before writes.
 
-0.3.0 已發布，這次 0.4.0 尚未發布。Codex 自動 capture、browser credential、私有 runtime 與共享
-identity／控制已接線；prompt recall 注入已通過 A7 真實 host 驗收，格式合格的 host 預設開啟，
-可用 `prompt-recall-off --client codex` 關閉。SessionStart 先建立 pause EOF boundary，
-startup context 另待本機 tokenizer。使用前在 `/hooks` 檢閱並信任 handlers。
-Hook 憑證是私有 0600 明文檔，與可選的 MCP PAT 分開；MCP 優先採用原生 OAuth。
-新配對要求已安裝、啟用且相容的 Claude plugin `>=0.1.2 <1.0.0`，另驗證 pairing capability；`0.3.1` 已符合。缺少或不相容時改用 standalone，
-不改 Claude key／設定、不停止 Codex 安裝。Standalone 尚未共用 target。兩個 client
-配對後要使用同一帳號與 endpoint。本機每日 cap 只限制 Codex workers；Claude
-capture、recall、pause／resume 維持既有行為，只在 status 顯示可用的 policy／gate 診斷。
-Uninstall 同時 unpair（含 pending）、清空 Claude pairing option 並驗證原 identity 已恢復 enabled；不刪
-memory、key 或 MCP。恢復失敗回傳 exit 1，仍移除 Codex credential／installation，恢復 CLI 後可重試。Unsafe policy
-清除會略過並明說，不保留 credential。新外掛出現後 standalone rerun 會解釋保留 target 的原因與卸載後重新配對的步驟；本機 cap 提示明列僅限
-Codex。
+`--verbose` 顯示技術診斷，不會印出 token。`status` 只讀本機狀態，不驗證遠端或
+hooks。安裝後請在 Codex `/hooks` 檢查並允許四項 Cairn 設定。
 
-See [Codex evidence, gate table and recovery](../../docs/codex-setup.md).
+[Format qualification and runtime safeguards](../../docs/codex-setup.md) ·
+[0.5.0 investigation and safe copy decisions](../../docs/setup-v05-investigation.md)
 
-## Endpoint and language / Endpoint 與語言
+## Verification
 
 ```sh
-node packages/setup/bin/memory.mjs setup --reauthorize --endpoint https://auth.example.com --lang zh
-node packages/setup/bin/memory.mjs status --lang en
+TMPDIR=/absolute/dedicated/test-tmp npm run test:setup
+node packages/setup/build-runtime.mjs --check
+npm pack --dry-run --prefix packages/setup
 ```
 
-`--endpoint <origin>` selects the authorization server before any API request. It
-uses the same validation as the prompt: HTTPS, or HTTP on localhost/loopback,
-without credentials, a path, query or fragment. It skips the endpoint prompt;
-without the flag, new Claude authorization always asks and Enter selects
-`https://cairn.ink`. Setup prints the selected origin and its source before
-opening a browser or contacting the authorization service. Production with the
-auth gate disabled still returns 404 and falls back to manual PAT input; use an
-explicit endpoint to test a server with the gate enabled.
-
-`--endpoint` 指定授權伺服器，驗證規則與互動提示相同。加上旗標後不再詢問 endpoint；
-未指定時，Claude 的新授權一定會詢問，直接按 Enter 才選用 `https://cairn.ink`。
-連線前會印出 origin 與來源，讓你確認目標。正式站未開啟授權功能時仍會回 404，
-改用 PAT；測試其他伺服器時請明確指定 endpoint。
-
-Complete Claude credentials are preserved unless `--reauthorize` is supplied.
-The CLI exposes only configured/unset metadata, so the preserved-config line
-honestly reports that the existing endpoint value is not read back and no auth
-connection is made. `--endpoint` with a preserved credential requires
-`--reauthorize`; it never attaches the old token to a new origin. New Claude
-authorization does not infer an endpoint from presence metadata. Codex displays
-its validated existing origin and refuses a conflicting `--endpoint`, preserving
-its existing entry for explicit editing/removal in Codex.
-
-既有 Claude 憑證預設保留。CLI 只提供設定有無，安裝器不讀回敏感設定，因此會明說
-endpoint 沿用既有設定、值未讀回、本次不進行授權連線。要用 `--endpoint` 換發憑證，
-請同時加 `--reauthorize`。Codex 可顯示既有設定中通過驗證的 origin；旗標與既有
-origin 衝突時會停止，提示先在 Codex 明確修改或移除該設定。
-
-Each invocation prints **one language**, including help, prompts, progress and
-errors. Selection uses the first non-empty `LC_ALL`, then `LC_MESSAGES`, then
-`LANG`, falling back to `Intl.DateTimeFormat().resolvedOptions().locale`.
-A `zh*` locale selects Traditional Chinese (including `zh_CN`); all others,
-including `C`, select English. `--lang zh|en` overrides that selection for either
-client. Locale selection changes presentation only; error kinds and exit codes
-stay the same. All installer messages live in `lib/messages.mjs`.
-
-每次執行只顯示一種語言。依序讀取非空的 `LC_ALL`、`LC_MESSAGES`、`LANG`，
-都未設定時使用 Intl 的系統 locale。`zh*` 一律顯示繁體中文，其餘顯示英文；
-可用 `--lang zh` 或 `--lang en` 覆寫，Claude 與 Codex 都適用。錯誤種類與 exit code 不變。
-
-The old endpoint prompt was written outside readline, then `question('')`
-redrew an empty line in a TTY. Non-secret prompts now belong to readline, so
-redraws retain the question; hidden PAT prompts still suppress every echo.
-
-舊版先在 readline 外印出 endpoint 提示，再以空字串呼叫 `question`，TTY 重畫時
-會清掉提示。現在一般提示由 readline 顯示與重畫，PAT 仍維持隱藏輸入。
-
-## Compatibility and failures / 相容性與錯誤
-
-Claude Code must support plugin installation/listing and secure
-`configure --values-stdin` (available from 2.1.285; actual help is checked).
-Non-TTY setup exits 2 without displaying a code. Unsafe/older CLIs stop before
-creating a grant and show manual plugin instructions.
-
-Create-route HTTP 404/501 clearly falls back to the hidden manual PAT prompt.
-If the manual credential-check route also returns 404/501, configuration is
-saved as **configured, not verified**. 5xx, TLS, proxy authentication, redirects,
-and malformed responses never trigger manual downgrade. Polling retries
-transient timeouts/5xx with bounded backoff and honors slow-down/rate limits.
-
-伺服器 create route 回 404／501 時，會說明原因並改用隱藏 PAT 輸入；人工憑證
-檢查也回 404／501 時，只顯示「已設定，尚未驗證」。5xx、TLS、proxy 認證、
-redirect 與協定錯誤不降級。等待授權時會依伺服器 interval、限流與 backoff 重試。
-
-Ctrl-C attempts cancellation and exits 130. Failed configuration attempts
-cancellation before ACK. A lost ACK is retried with identical proof/receipt;
-each attempt allows up to 15 seconds within the remaining monotonic window.
-The window starts before the potentially issuing exchange, reserves one second
-for server timestamp rounding, and is capped by the grant's remaining lifetime.
-Server expiry timestamps are validated as metadata, never compared with the
-client's wall clock. The server's credential check and ACK enforce expiry.
-If delivery remains ambiguous, setup retains the saved configuration and reports
-that delivery is unconfirmed. Wait 60 seconds, restart Claude Code, send a
-message and run `/cairn-memory:status`. If rejected, inspect/revoke this credential
-at the selected Cairn endpoint's `/settings/tokens`, then run
-`npx @cairn-ink/memory setup --reauthorize`. Unreachable/unknown status does not
-prove revocation; restore connectivity before deciding to replace the credential.
-JavaScript strings cannot be zeroed in place: owned secret
-references are dropped, and request/configuration buffers are zeroed.
-
-Token/proof/receipt never enter arguments, environment, URLs, logs or
-installer-owned files. Child stdout/stderr are never echoed. The token passes
-only through memory, HTTPS bodies/headers and Claude Code stdin. Claude Code
-owns sensitive `api_token` storage; security depends on it and the host.
-
-Legacy MCP removal requires affirmative confirmation after complete plugin
-configuration. Restart Claude Code and send a message before checking
-`/cairn-memory:status`. Installer `status` reads only configured/unset metadata;
-it does not read back a token or write the hook-owned credential-state. The
-hook status fix is present in plugin 0.3.1 (release dependency).
-
-## Proxy and CA / Proxy 與企業 CA
-
-The installer implements `HTTP_PROXY` for HTTP destinations and `HTTPS_PROXY`
-for HTTPS destinations using Node's HTTP, HTTPS and TLS APIs. Both HTTP and HTTPS proxy URLs work;
-HTTPS destinations use CONNECT plus verified TLS. Optional Basic proxy
-credentials stay on the proxy request, separate from destination credentials.
-Lowercase aliases are accepted; uppercase takes precedence.
-Loopback HTTP endpoints always connect directly, even without `NO_PROXY`.
-
-`NO_PROXY` accepts comma-separated hosts, domain suffixes (with or without a
-leading dot), optional ports, bracketed IPv6 hosts and `*`. CIDR, PAC, SOCKS and
-OS proxy discovery are unsupported. Use Node's `NODE_EXTRA_CA_CERTS` before
-starting the installer for a PEM enterprise CA file. TLS verification remains
-enabled; there is no insecure option.
-
-企業 CA 使用 Node 的 `NODE_EXTRA_CA_CERTS`，在啟動安裝器前指定 PEM 憑證檔。
-TLS 驗證會保持開啟。Proxy 的支援範圍與 `NO_PROXY` 格式如上，不含 CIDR、PAC、
-SOCKS 或系統 proxy 自動偵測。
-
-Browser launch supports macOS `open`, Windows/WSL `rundll32.exe`, and Linux
-`xdg-open`. On SSH/headless machines use `--no-browser`; failed browser launch
-prints a manual link and continues polling. OS launch selection is covered by
-simulated platform tests, not native Windows/macOS execution.
-
-## Maintainer checks / 維護檢查
-
-```sh
-npm run test:setup
-npm run validate
-```
-
-Tests use a contract fake HTTP server and fake `claude`, with synthetic secrets.
-The test host needs OpenSSL for disposable certificate fixtures; the shipped
-installer does not invoke it.
-Node HTTP/TLS wire parsers run over duplex streams and subprocess IPC because
-the restricted test environment cannot bind loopback TCP. No hosted service,
-real browser approval or user credential is involved. See
-[release checklist](../../docs/npx-setup-release.md) and
-[verification limits](../../docs/limitations.md#setup-020-browser-authorization).
+Tests use synthetic CLIs, authorization and credentials. No personal memories
+or native credentials are read. Run suites serially in a dedicated TMPDIR.
