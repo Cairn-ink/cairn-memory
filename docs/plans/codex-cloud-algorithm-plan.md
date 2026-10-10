@@ -474,4 +474,10 @@ Primary directly inspects the combined diff and reruns key gates. Separate
 nonauthor Standards and Spec reviewers use the same fixed candidate in independent
 read-only contexts; neither sees the other's findings before submission. Stop
 and report blockers rather than improvise permissions, models or accounting.
-No release, production operation, automatic promotion or merge follows this plan.
+Delivery requires primary's affected checks on the final committed candidate,
+passing independent nonauthor Standards and Spec reviews, and all required CI
+passing for the latest remote PR head, which must equal the reviewed candidate.
+Any content, base or head change invalidates affected prior gates and requires
+both reviews again. A push alone is not delivery; a real blocker leaves the PR
+draft. No release, production operation, automatic promotion or merge follows
+this plan.
