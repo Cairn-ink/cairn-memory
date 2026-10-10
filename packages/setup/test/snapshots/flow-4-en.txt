@@ -19,6 +19,7 @@ browser opened
   The old sign-in is not revoked. Revoke it at cairn.ink/settings/tokens.
   Codex keeps this sign-in in a file only you can read. It is not encrypted.
 ✓ Codex automatic memory updated
+Automated codex exec runs are not saved.
 
 ✓ Both tools share one memory
 Next: reopen Claude Code and Codex.

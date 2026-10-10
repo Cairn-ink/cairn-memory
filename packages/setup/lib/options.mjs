@@ -12,7 +12,7 @@ export function validEndpoint(value) {
 }
 
 export function parseOptions(argv) {
-  let lang, endpoint, dailyCap;
+  let lang, endpoint, dailyCap, captureExec;
   let verbose = false;
   const remaining = [];
   // Resolve the language first so even invalid endpoint/options use the override.
@@ -34,6 +34,11 @@ export function parseOptions(argv) {
       } else if (flag === '--verbose') {
         if (verbose) throw new SetupError('unknown_command', 2);
         verbose = true;
+      } else if (flag === '--codex-capture-exec') {
+        const value = argv[++index];
+        if (captureExec !== undefined || !['on', 'off'].includes(value))
+          throw new SetupError('invalid_exec_setting', 2);
+        captureExec = value === 'on';
       } else if (flag === '--codex-daily-cap') {
         const value = argv[++index];
         if (dailyCap !== undefined || !/^[0-9]+$/u.test(value ?? '') ||
@@ -44,7 +49,8 @@ export function parseOptions(argv) {
     }
     if (endpoint && remaining[0] !== 'setup') throw new SetupError('endpoint_option_invalid', 2);
     if (dailyCap !== undefined && !['setup', 'config'].includes(remaining[0])) throw new SetupError('invalid_cap', 2);
-    return { argv: remaining, lang, endpoint, dailyCap, verbose };
+    if (captureExec !== undefined && !['setup', 'config'].includes(remaining[0])) throw new SetupError('invalid_exec_setting', 2);
+    return { argv: remaining, lang, endpoint, dailyCap, captureExec, verbose };
   } catch (error) { error.language = lang; throw error; }
 }
 

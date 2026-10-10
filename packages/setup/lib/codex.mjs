@@ -43,7 +43,7 @@ export async function dispatchClient(argv, context) {
     const installed=await readInstallation(join(home,'cairn/installation.json')).then(()=>true,error=>{if(error.code==='ENOENT')return false;throw error;});
     if(action==='config' && !installed && selection.client!=='claude'){context.write(context.t('not_installed'));return {handled:true,code:2};}
     if (selection.client==='claude' || !installed) {
-      if (flags.length || context.dailyCap !== undefined) throw new context.SetupError('codex_unknown',2);
+      if (flags.length || context.dailyCap !== undefined || context.captureExec !== undefined) throw new context.SetupError('codex_unknown',2);
       context.write(context.t(action==='pause'?'claude_pause':'claude_control',{action}));
       return {handled:true,code:0};
     }
@@ -130,7 +130,7 @@ function runCodex(args, { env = process.env, cwd } = {}) {
 }
 
 export async function setupCodex({ action, flags, write, prompt, interactive, browse,
-  SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent, dailyCap, verbose, identityPlan, endpointChoice,
+  SetupError, validEndpoint, t, endpointOverride, authOptions, signal, inspectOnly = false, pairingConsent, dailyCap, captureExec, verbose, identityPlan, endpointChoice,
   expectedCodex, hostsStopped, coordinated, progress = {} }) {
   const fail = message => new SetupError(message);
   if (process.platform === 'win32') {
@@ -148,7 +148,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
   }
   if (['disable','uninstall','pause','resume','prompt-recall-off','prompt-recall-on','config'].includes(action)) {
     const neutral = await realpath(await mkdtemp(join(tmpdir(), 'cairn-codex-control-')));
-    try {return await controlCodex({action,home,write,t,snapshot,unchanged,neutral,SetupError,dailyCap,progress});}
+    try {return await controlCodex({action,home,write,t,snapshot,unchanged,neutral,SetupError,dailyCap,captureExec,progress});}
     finally {await rm(neutral,{recursive:true,force:true});}
   }
   const configPath = join(home, 'config.toml');
@@ -263,7 +263,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
     if (hostVerdict.status==='qualified' && hostVerdict.version===hostVersion) {
       return await setupInstalledCodex({action,flags,home,hostVersion,write,prompt,interactive,browse,
         SetupError,t,endpointOverride,authOptions,signal,before,configPath,existing,usable,
-        neutral,get,snapshot,unchanged,cliHost,hostVerdict,pairingConsent,dailyCap,verbose,identityPlan,endpointChoice,expectedCodex,hostsStopped,coordinated,progress});
+        neutral,get,snapshot,unchanged,cliHost,hostVerdict,pairingConsent,dailyCap,captureExec,verbose,identityPlan,endpointChoice,expectedCodex,hostsStopped,coordinated,progress});
     }
     // Changed or unavailable format evidence keeps automatic paths closed.
     // Status reports the actual observed app-server separately from this CLI.

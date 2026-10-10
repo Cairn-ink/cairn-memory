@@ -282,6 +282,7 @@ export async function installedStatus({home,hostVersion,write,t,snapshot,cliHost
     write(t(effectiveCap!==config.dailyCap?(used>=effectiveCap?'cap_pending_reached':'cap_pending'):used>=effectiveCap?'cap_reached':'cap_status_hint',{cap:config.dailyCap}));
     if(quota!=='open')write(t('quota_limited'));
     write(t('codex_prompt_recall_status',{state:t(await promptRecallEnabled(path)&&anyQualified?(formatQualified?'on':'recall_per_host'):'off')}));
+    if(config.captureExec===true)write(t('codex_exec_enabled'));
     write(t('codex_hooks_trust'));
     const hostedBytes = await privateRead(join(config.root,'hosted-pause',target+'.json'),{missing:true});
     const hosted = hostedBytes===undefined ? null : JSON.parse(hostedBytes);
@@ -350,7 +351,7 @@ async function restoreClaude(config, neutral) {
 const unpairReceipt = (userHome, installation) => join(userHome,'.cairn-memory-clients',
   'codex-uninstall-'+createHash('sha256').update(installation).digest('hex')+'.json');
 
-export async function controlCodex({action,home,write,t,snapshot,unchanged,neutral,SetupError,dailyCap,progress={}}) {
+export async function controlCodex({action,home,write,t,snapshot,unchanged,neutral,SetupError,dailyCap,captureExec,progress={}}) {
   const directory = join(home,'cairn');
   const path = join(directory,'installation.json');
   let config;
@@ -406,17 +407,26 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged,neutr
   catch(error){if(error.code==='EEXIST')throw new SetupError('codex_lock',2);throw error;}
   try {
     if(action==='config') {
-      if(dailyCap===undefined)throw new SetupError('invalid_cap',2);
+      if(dailyCap===undefined && captureExec===undefined)throw new SetupError('config_option_required',2);
+      const nextCap=dailyCap ?? config.dailyCap;
+      if(captureExec!==undefined) {
+        // Older frozen launchers reject the new field and cannot implement the
+        // default. Updating native hook commands belongs to stopped-host setup.
+        const expected=await readFile(new URL('../runtime/manifest.json',import.meta.url),'utf8');
+        if(await privateRead(join(config.runtime,'manifest.json'),{missing:true})!==expected)
+          throw new SetupError('exec_runtime_update_required',2,{setting:captureExec?'on':'off'});
+      }
       const current=await readInstallation(path);
       if(JSON.stringify(current)!==JSON.stringify(config))throw new SetupError('codex_concurrent',2);
       // Deny captures during policy/config publication; usage and pause stay intact.
       await privateWrite(path,JSON.stringify({...config,enabled:false}));progress.install=true;
       await rotateBoundary(config.root);
-      await privateWrite(policyPath(config.root,config.endpoint),JSON.stringify({version:1,dailyCap,concurrency:2}));
-      if(dailyCap!==config.dailyCap && !(await automaticGuard(config.root,config.endpoint,{dailyCap,concurrency:2}).status()).ok)
+      await privateWrite(policyPath(config.root,config.endpoint),JSON.stringify({version:1,dailyCap:nextCap,concurrency:2}));
+      if(nextCap!==config.dailyCap && !(await automaticGuard(config.root,config.endpoint,{dailyCap:nextCap,concurrency:2}).status()).ok)
         throw new SetupError('cap_policy_conflict',2);
-      await privateWrite(path,JSON.stringify({...config,dailyCap}));
-      write(t('cap_configured',{cap:dailyCap}));return 0;
+      await privateWrite(path,JSON.stringify({...config,dailyCap:nextCap,...(captureExec===undefined?{}:{captureExec})}));
+      if(dailyCap!==undefined)write(t('cap_configured',{cap:dailyCap}));
+      if(captureExec!==undefined)write(t(captureExec?'codex_exec_enabled':'codex_exec_skipped'));return 0;
     }
     // Revoke launch and every frozen generation before detaching handlers.
     await privateWrite(path,JSON.stringify({...config,enabled:false}));
@@ -563,7 +573,8 @@ export async function setupInstalledCodex(context) {
     pairingPending = Boolean(identity.complete);
     const config = {version:1,enabled:false,hostVersion,codex:binary('codex'),node:process.execPath,
       home:await realpath(homedir()),root:identity.root,usesClaude:identity.usesClaude,
-      pairingRecord:identity.pairingRecord,endpoint,runtime,dailyCap};
+      pairingRecord:identity.pairingRecord,endpoint,runtime,dailyCap,
+      captureExec:context.captureExec ?? previous?.captureExec ?? false};
     const hooksText = mergeHooks(hooksBefore.text,path,config,previous,true);
     phase = 'registration';
     if (!unchanged(before,await snapshot(configPath)) || !unchanged(hooksBefore,await snapshot(hooksPath))) throw new Error('concurrent_change');
@@ -590,7 +601,8 @@ export async function setupInstalledCodex(context) {
     phase = 'activation';
     if (!unchanged({text:hooksText,stat:(await snapshot(hooksPath)).stat},await snapshot(hooksPath))) throw new Error('hooks_changed');
     await privateWrite(path,JSON.stringify({...config,enabled:true}));
-    write(t(previous?'codex_hooks_updated':'codex_hooks_ready'));reportBackups(identityPlan,write,t);
+    write(t(previous?'codex_hooks_updated':'codex_hooks_ready'));
+    write(t(config.captureExec?'codex_exec_enabled':'codex_exec_skipped'));reportBackups(identityPlan,write,t);
     if(!context.coordinated){write(t('next_codex'));write(t('optional_mcp'));}
     if(context.verbose)write(t('codex_startup_gate'));return 0;
   } catch(error) {

@@ -16,6 +16,7 @@ Claude Code 連 staging.cairn.ink、Codex 連 cairn.ink，還不能共用記憶�
 ✓ Claude Code 外掛 0.3.1 已是最新版
 ✓ 沿用 Codex 的登入（有效到 <date>）
 ✓ Codex 自動記憶已更新
+Codex 用 exec 自動執行的工作不會記下。
 
 ✓ 兩個工具共用同一份記憶
 接下來：重新開啟 Claude Code 和 Codex。

@@ -128,7 +128,9 @@ Requires Node ≥22.16 and at least one CLI on PATH. Setup asks about new tools,
 updates connected tools, and uses one browser sign-in when connecting both.
 The default server is cairn.ink. Conflicting servers or memory IDs present a
 choice; non-interactive conflicts change nothing. Codex must pass format
-qualification before automatic memory is enabled.
+qualification before automatic memory is enabled. Automated `codex exec` runs
+skip capture and prompt recall by default; opt in with
+`npx @cairn-ink/memory config --codex-capture-exec on`.
 
 Choose the mode that fits your workflow:
 
@@ -264,6 +266,16 @@ no longer automatically match the old ID. Non-interactive conflicts write nothin
 Setup never reads Claude native secret files. Adding Claude after Codex validates
 and reuses the installer credential; adding Codex after Claude needs one browser
 sign-in using the same account. Claude's existing sign-in is kept.
+
+Automated `codex exec` runs skip both automatic capture and prompt recall by
+default. Opt in with `npx @cairn-ink/memory config --codex-capture-exec on`;
+use `off` to restore the default. This setting enables both capture and recall
+for exec. `status` shows it only when enabled; rerunning setup preserves it.
+The hooks read the transcript's session-bound `session_meta.payload.source`,
+and also detect a native exec ancestor for `exec resume` of an older CLI thread.
+If the header is missing or cannot be verified, they skip capture and injection.
+Interactive sessions with verified CLI headers continue normally. Older frozen
+runtimes must first be updated with setup; config prints the exact command.
 
 Codex defaults to 200 automatic captures per day; reruns keep an existing cap.
 Change it with `setup --codex-daily-cap N` or `config --codex-daily-cap N`.

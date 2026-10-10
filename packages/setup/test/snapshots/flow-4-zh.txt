@@ -19,6 +19,7 @@ browser opened
   舊的登入不會自動撤銷；不再使用的話，到 cairn.ink/settings/tokens 撤銷。
   Codex 的登入資訊存在只有你能讀的檔案裡，沒有加密。
 ✓ Codex 自動記憶已更新
+Codex 用 exec 自動執行的工作不會記下。
 
 ✓ 兩個工具共用同一份記憶
 接下來：重新開啟 Claude Code 和 Codex。

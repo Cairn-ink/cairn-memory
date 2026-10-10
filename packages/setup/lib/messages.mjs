@@ -1,8 +1,17 @@
 // Copy follows the approved 0.5.0 transcripts, with D6 and verified safety adjustments.
 export const messages = {
-  "cap_pending":{"zh":"  新上限 {cap} 將於下次每日重置套用；Claude Code 不受影響。","en":"  New limit {cap} takes effect at the next daily reset; Claude is unaffected."},
-  "cap_pending_reached":{"zh":"  今天上限已達；新上限 {cap} 將於下次每日重置套用。","en":"  Today's limit is reached; new limit {cap} applies at the next daily reset."},
-  "cap_policy_conflict":{"zh":"每日上限與既有設定衝突，Codex 自動記憶已停用。","en":"The daily limit conflicts with existing settings. Codex memory was disabled."},
+  "cap_pending": {
+    "zh": "  新上限 {cap} 將於下次每日重置套用；Claude Code 不受影響。",
+    "en": "  New limit {cap} takes effect at the next daily reset; Claude is unaffected."
+  },
+  "cap_pending_reached": {
+    "zh": "  今天上限已達；新上限 {cap} 將於下次每日重置套用。",
+    "en": "  Today's limit is reached; new limit {cap} applies at the next daily reset."
+  },
+  "cap_policy_conflict": {
+    "zh": "每日上限與既有設定衝突，Codex 自動記憶已停用。",
+    "en": "The daily limit conflicts with existing settings. Codex memory was disabled."
+  },
   "host_format_status": {
     "zh": "{observed}{kind}：Codex {version}：格式已驗證",
     "en": "{observed}{kind}: Codex {version}: format qualified"
@@ -212,8 +221,8 @@ export const messages = {
     "en": "Claude Code settings were not fully saved.\n  Type /plugin configure cairn-memory@cairn-memory in Claude Code to complete them."
   },
   "help": {
-    "zh": "用法：npx @cairn-ink/memory <指令> [選項]\n\n常用指令：setup、status、pause、resume、uninstall、config\n  --client claude|codex  只操作其中一個工具\n  --endpoint URL        指定 Cairn 網址（預設 https://cairn.ink）\n  --codex-daily-cap N    Codex 每日自動記憶上限（1–100000）\n  --verbose             顯示技術細節\n  --lang zh|en          選擇語言\n  --dry-run             只檢查，不改動\n  --no-browser          自行開啟瀏覽器\n  --no-clipboard        不複製一次性代碼\n  --manual-token        手動貼上存取碼\n  --reauthorize         重新登入\n\n修改上限：npx @cairn-ink/memory config --codex-daily-cap 200",
-    "en": "Usage: npx @cairn-ink/memory <command> [options]\n\nCommands: setup, status, pause, resume, uninstall, config\n  --client claude|codex  Act on one tool only\n  --endpoint URL        Cairn URL (default https://cairn.ink)\n  --codex-daily-cap N    Codex daily automatic memory limit (1-100000)\n  --verbose             Show technical details\n  --lang zh|en          Choose language\n  --dry-run             Inspect without changing anything\n  --no-browser          Open the browser yourself\n  --no-clipboard        Do not copy the one-time code\n  --manual-token        Paste an access token manually\n  --reauthorize         Sign in again\n\nChange limit: npx @cairn-ink/memory config --codex-daily-cap 200"
+    "zh": "用法：npx @cairn-ink/memory <指令> [選項]\n\n常用指令：setup、status、pause、resume、uninstall、config\n  --client claude|codex  只操作其中一個工具\n  --endpoint URL        指定 Cairn 網址（預設 https://cairn.ink）\n  --codex-daily-cap N    Codex 每日自動記憶上限（1–100000）\n  --codex-capture-exec on|off  Codex 自動工作的記憶（預設 off）\n  --verbose             顯示技術細節\n  --lang zh|en          選擇語言\n  --dry-run             只檢查，不改動\n  --no-browser          自行開啟瀏覽器\n  --no-clipboard        不複製一次性代碼\n  --manual-token        手動貼上存取碼\n  --reauthorize         重新登入\n\n修改上限：npx @cairn-ink/memory config --codex-daily-cap 200",
+    "en": "Usage: npx @cairn-ink/memory <command> [options]\n\nCommands: setup, status, pause, resume, uninstall, config\n  --client claude|codex  Act on one tool only\n  --endpoint URL        Cairn URL (default https://cairn.ink)\n  --codex-daily-cap N    Codex daily automatic memory limit (1-100000)\n  --codex-capture-exec on|off  Memory for Codex automation (default off)\n  --verbose             Show technical details\n  --lang zh|en          Choose language\n  --dry-run             Inspect without changing anything\n  --no-browser          Open the browser yourself\n  --no-clipboard        Do not copy the one-time code\n  --manual-token        Paste an access token manually\n  --reauthorize         Sign in again\n\nChange limit: npx @cairn-ink/memory config --codex-daily-cap 200"
   },
   "unknown_command": {
     "zh": "不認得這個指令或選項。用法：npx @cairn-ink/memory --help",
@@ -1222,6 +1231,26 @@ export const messages = {
   "progress_claude_only": {
     "zh": "  Claude Code 的登入已儲存。",
     "en": "  Claude Code's sign-in was saved."
+  },
+  "exec_runtime_update_required": {
+    "zh": "先更新 Codex 的記憶設定，才能修改自動工作的記憶。\n  npx @cairn-ink/memory setup --client codex --codex-capture-exec {setting}",
+    "en": "Update Codex memory setup before changing automation memory.\n  npx @cairn-ink/memory setup --client codex --codex-capture-exec {setting}"
+  },
+  "invalid_exec_setting": {
+    "zh": "--codex-capture-exec 只接受 on 或 off，適用於 setup 和 config。",
+    "en": "--codex-capture-exec accepts on or off, for setup and config only."
+  },
+  "config_option_required": {
+    "zh": "請指定 --codex-daily-cap N 或 --codex-capture-exec on|off。",
+    "en": "Specify --codex-daily-cap N or --codex-capture-exec on|off."
+  },
+  "codex_exec_skipped": {
+    "zh": "Codex 用 exec 自動執行的工作不會記下。",
+    "en": "Automated codex exec runs are not saved."
+  },
+  "codex_exec_enabled": {
+    "zh": "Codex 的 exec 自動工作也會納入記憶與提問回想。",
+    "en": "Codex exec automation is included in memory and prompt recall."
   }
 };
 export function detectLanguage(env = process.env, locale = Intl.DateTimeFormat().resolvedOptions().locale) {

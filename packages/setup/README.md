@@ -77,6 +77,25 @@ npx @cairn-ink/memory config --codex-daily-cap 300
 npx @cairn-ink/memory uninstall --client codex
 ```
 
+Automated `codex exec` runs are not saved or given prompt-recall context by
+default. Opt in with `npx @cairn-ink/memory config --codex-capture-exec on`
+(or add `--codex-capture-exec on` during setup); `off` restores the default.
+The setting enables both capture and recall for exec. Setup preserves it and
+`status` shows it only when on. The signal is the verified, session-bound
+`session_meta.payload.source` in the transcript header, plus a native exec
+ancestor for `exec resume` of a thread originally created interactively. Missing, partial or
+unverifiable headers skip capture and recall. Interactive CLI sessions continue
+normally once their header is available. Older frozen runtimes need a setup
+update first; config prints the exact setup command before changing anything.
+
+Codex 用 exec 自動執行的工作預設不會記下，也不會注入提問回想。
+若需要，可用 `npx @cairn-ink/memory config --codex-capture-exec on` 開啟，
+或安裝時加上同名選項；改成 `off` 就能關閉。這個設定同時開啟保存與回想。
+重跑安裝會保留設定；只有開啟時，`status` 才會顯示。
+來源以 transcript 首筆經驗證、符合本次 session ID 的
+`session_meta.payload.source` 判斷；也檢查原生程序的 exec 指令，
+避免自動續跑互動對話時漏判。無法確認 transcript 時，略過保存與回想。
+
 Codex defaults to 200 automatic captures per day. Existing installs keep their
 stored cap. Use `setup --codex-daily-cap N` or `config --codex-daily-cap N` to change
 it (integer 1–100000). With an existing daily counter, cap changes apply at the next daily reset.

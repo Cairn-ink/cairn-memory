@@ -6,8 +6,9 @@ import { validVersion } from './qualification.mjs';
 export const exact = (value, names) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === names.length && Object.keys(value).every(key => names.includes(key));
 export function validateInstallation(value) {
-  if (!exact(value, ['version','enabled','hostVersion','codex','node','home','root','pairingRecord','usesClaude',
-    'endpoint','runtime','dailyCap']) || value.version !== 1 || typeof value.enabled !== 'boolean' ||
+  const legacy = value && !Object.hasOwn(value, 'captureExec');
+  if ((!legacy && typeof value?.captureExec !== 'boolean') || !exact(value, ['version','enabled','hostVersion','codex','node','home','root','pairingRecord','usesClaude',
+    'endpoint','runtime','dailyCap', ...(legacy ? [] : ['captureExec'])]) || value.version !== 1 || typeof value.enabled !== 'boolean' ||
     !validVersion(value.hostVersion) || typeof value.usesClaude !== 'boolean' ||
     ![value.codex,value.node,value.home,value.root,value.runtime].every(path => typeof path === 'string' && isAbsolute(path)) ||
     !(value.pairingRecord === null || (typeof value.pairingRecord === 'string' && isAbsolute(value.pairingRecord))) ||

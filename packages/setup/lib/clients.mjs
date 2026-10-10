@@ -10,7 +10,7 @@ export async function confirmStopped({write,prompt,t}) {
   while (!affirmative(await prompt(t('ask_hosts_stopped')))) { /* Ctrl+C/EOF cancels at prompt seam. */ }
 }
 export async function setupDetected(argv, context) {
-  const {write,prompt,interactive,t,SetupError,runClient,endpointOverride,dailyCap,verbose} = context;
+  const {write,prompt,interactive,t,SetupError,runClient,endpointOverride,dailyCap,captureExec,verbose} = context;
   const [action,...flags] = argv;
   if (flags.some(flag=>!setupFlags.includes(flag)) || (action==='status' && flags.length))
     throw new SetupError('unknown_command',2);
@@ -19,6 +19,7 @@ export async function setupDetected(argv, context) {
   const call = (client,overrides={}) => runClient([action,...flags,'--client',client,
     '--lang',t.locale==='zh-TW'?'zh':'en',...(verbose?['--verbose']:[]),
     ...(dailyCap===undefined||client!=='codex'?[]:['--codex-daily-cap',String(dailyCap)]),
+    ...(captureExec===undefined||client!=='codex'?[]:['--codex-capture-exec',captureExec?'on':'off']),
     ...((overrides.endpointOverride??endpointOverride)?['--endpoint',overrides.endpointOverride??endpointOverride]:[])],overrides);
   if (action==='status' || flags.includes('--dry-run')) {
     let code=0;

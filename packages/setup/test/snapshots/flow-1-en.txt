@@ -23,6 +23,7 @@ browser opened
 ✓ Signed in to Cairn, valid until <date>
   Codex keeps this sign-in in a file only you can read. It is not encrypted.
 ✓ Codex automatic memory installed
+Automated codex exec runs are not saved.
 
 ✓ Both tools share one memory
 Next:

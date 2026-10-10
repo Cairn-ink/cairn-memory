@@ -32,9 +32,22 @@ export async function binaryIdentity(binaryPath) {
 
 // The shell/env trampoline is below the actual host. Walk upward, never fall
 // back to the install-time CLI. The closest native Codex process wins.
+export function execInvocation(args) {
+  const values = new Set(['-c','--config','--enable','--disable','-m','--model','-p','--profile',
+    '-C','--cd','-a','--ask-for-approval','-s','--sandbox','--local-provider','--add-dir']);
+  for(let index=1;index<args.length;index++) {
+    const arg=args[index];
+    if(arg==='--')return false;
+    if(values.has(arg)){index++;continue;}
+    if(arg.startsWith('-'))continue;
+    return ['exec','e'].includes(arg);
+  }
+  return false;
+}
 export async function detectRunningHost({pid=process.ppid,proc='/proc',read=readFile,link=readlink,identity=binaryIdentity}={}) {
   if (process.platform!=='linux') return undefined;
   const visited=new Set();
+  let host, execSession=false;
   for(let depth=0;depth<24 && pid>1 && !visited.has(pid);depth++) {
     visited.add(pid);
     try {
@@ -42,13 +55,16 @@ export async function detectRunningHost({pid=process.ppid,proc='/proc',read=read
       const args=(await read(join(proc,String(pid),'cmdline'))).toString().split('\0').filter(Boolean);
       if (basename(executable.replace(/ \(deleted\)$/u,''))==='codex') {
         const binaryPath=executable.replace(/ \(deleted\)$/u,''),processPath=join(proc,String(pid),'exe');
-        return {identity:await identity(processPath),binaryPath,processPath,kind:args.includes('app-server')?'app-server':'cli',pid};
+        host ??= {identity:await identity(processPath),binaryPath,processPath,kind:args.includes('app-server')?'app-server':'cli',pid};
+        execSession ||= execInvocation(args);
       }
       const status=(await read(join(proc,String(pid),'stat'))).toString();
       pid=Number(status.slice(status.lastIndexOf(')')+2).split(' ')[1]);
-    } catch {return undefined;}
+    } catch {break;}
   }
-  return undefined;
+  // Keep the closest host's identity; an outer exec launcher only narrows its
+  // eligible sessions, including an app-server child resuming an old cli file.
+  return host && {...host,...(execSession?{execSession:true}:{})};
 }
 
 export async function resolveCLI(env=process.env) {
@@ -88,6 +104,7 @@ async function safeCache(configPath,{create=false}={}) {
 const verdictPath = (configPath,host) => join(directory(configPath),host.identity+'.json');
 export function validHost(host) {
   return host && /^[a-f0-9]{64}$/u.test(host.identity) && ['cli','app-server'].includes(host.kind) &&
+    (host.execSession===undefined || typeof host.execSession==='boolean') &&
     typeof host.binaryPath==='string' && host.binaryPath.startsWith('/') && !host.binaryPath.includes('\0') &&
     (host.processPath===undefined || /^\/proc\/\d+\/exe$/u.test(host.processPath));
 }

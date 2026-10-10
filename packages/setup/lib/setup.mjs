@@ -206,18 +206,19 @@ export async function main(argv, {
     t.locale = translate.locale;
     if (forceReauthorize && !options.argv.includes('--reauthorize')) options.argv.push('--reauthorize');
     const selection = parseClient(options.argv, SetupError);
+    if (options.captureExec !== undefined && selection.client === 'claude') throw new SetupError('invalid_exec_setting', 2);
     if (options.dailyCap !== undefined && selection.client === 'claude') throw new SetupError('invalid_cap', 2);
     if (!coordinated && ['setup', 'status'].includes(selection.argv[0]))
       write(t(selection.argv[0] === 'status' ? 'status_header' : 'installer_version', { version: installerVersion }));
     if (!coordinated && !selection.client && ['setup', 'status'].includes(selection.argv[0])) {
       return await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
-        authOptions, env, locale, t, endpointOverride, dailyCap:options.dailyCap, verbose, progress, signal, supportedNode, SetupError, validEndpoint, inspectCodex,
+        authOptions, env, locale, t, endpointOverride, dailyCap:options.dailyCap, captureExec:options.captureExec, verbose, progress, signal, supportedNode, SetupError, validEndpoint, inspectCodex,
         inspectClaude: async () => (await installed(run)).length ? configuration(run) : undefined,
         runClient: (args, overrides) => main(args, { write, prompt, interactive, browse, nodeVersion,
           authOptions, env, locale, progress, coordinated: true, ...overrides }) });
     }
     const dispatch = await dispatchClient(options.argv, { write, prompt, interactive, browse: launchBrowser,
-      nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride, dailyCap:options.dailyCap, verbose, authOptions, signal, pairingConsent,
+      nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride, dailyCap:options.dailyCap, captureExec:options.captureExec, verbose, authOptions, signal, pairingConsent,
       identityPlan, endpointChoice, expectedCodex, hostsStopped, coordinated, progress });
     if (dispatch.handled) return dispatch.code;
     argv = dispatch.argv;

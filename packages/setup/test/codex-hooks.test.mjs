@@ -259,7 +259,7 @@ async function memoryRuntime(t,options={}) {
   const f=await fixture(t,options);assert.equal(f.code,0,f.stdout);
   const path=join(f.ws.path,'synthetic.jsonl');
   const text=await readFile(new URL('../../../integrations/codex/test/fixtures/primary-0.160.1.jsonl',import.meta.url),'utf8');
-  await writeFile(path,text);
+  await writeFile(path,options.sessionSource === 'exec' ? text : text.replace('"source":"exec"','"source":"cli"').replace('"originator":"codex_exec"','"originator":"codex_cli"'));
   const project='/synthetic/project',requests=[];
   const projectId=await clientProjectId({client:'codex',home:f.home,root:f.installed.root,
     usesClaude:f.installed.usesClaude,pairingRecord:f.installed.pairingRecord??undefined,env:{HOME:f.home}},project);
@@ -308,12 +308,12 @@ test('CX-5 fake host lifecycle: Stop/PreCompact capture canonical redacted text,
   assert.ok(!JSON.stringify(f.requests).includes('sk-'+ 'x'.repeat(36)));
 });
 
-test('CX-5 prompt recall injects receipt framing and shares project identity without reading transcript',async t=>{
+test('CX-5 prompt recall injects receipt framing and shares project identity after verifying the session header',async t=>{
   const f=await memoryRuntime(t);
   f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',
     scope:'project',projectId:f.projectId,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
     receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
-  const output=await f.invoke('UserPromptSubmit',{prompt:'Recall my preference sk-'+ 'x'.repeat(36),transcript_path:null});
+  const output=await f.invoke('UserPromptSubmit',{prompt:'Recall my preference sk-'+ 'x'.repeat(36),transcript_path:f.path});
   const context=JSON.parse(output).hookSpecificOutput;
   assert.equal(context.hookEventName,'UserPromptSubmit');assert.match(context.additionalContext,/untrusted source-attributed recollections/);
   assert.match(context.additionalContext,/"client":"claude-code"/);assert.match(context.additionalContext,/"receipts":/);
@@ -439,7 +439,7 @@ test('CX-5 default installed prompt hook injects on the A7-qualified host; the k
     receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
   // Only ancestry is synthetic; production schema qualification decides. Hook JSON cannot change it.
   const prompt=()=>{const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,
-    cwd:f.project,transcript_path:null,prompt:'Preferences?',contextQualification:false}));
+    cwd:f.project,transcript_path:f.path,prompt:'Preferences?',contextQualification:false}));
     return runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:f.detectHost});};
   assert.match(JSON.parse(await prompt()).hookSpecificOutput.additionalContext,/untrusted source-attributed recollections/);
   assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
@@ -472,7 +472,7 @@ test('CX-5 switching prompt recall off during an in-flight recall injects nothin
   // The switch is on when the hook starts and flips off while the recall reply is in flight.
   f.delay(async route=>{if(route.endsWith('/recall'))await writeFile(switchPath,'{"version":1,"enabled":false}',{mode:0o600});});
   const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,
-    cwd:f.project,transcript_path:null,prompt:'Preferences?'}));
+    cwd:f.project,transcript_path:f.path,prompt:'Preferences?'}));
   assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:f.detectHost}),'');
   assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
   assert.equal(JSON.parse(await readFile(switchPath,'utf8')).enabled,false);
@@ -483,7 +483,7 @@ test('CX-5 pause, generation change or cancellation during the final kill-switch
   f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',
     scope:'personal',projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
     receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
-  const input={hook_event_name:'UserPromptSubmit',session_id:session,cwd:f.project,transcript_path:null,prompt:'Preferences?'};
+  const input={hook_event_name:'UserPromptSubmit',session_id:session,cwd:f.project,transcript_path:f.path,prompt:'Preferences?'};
   const run=async during=>{
     const controller=new AbortController();let reads=0;
     const output=await recallContext(input,f.installed,secret,f.projectId,controller.signal,async()=>{
@@ -514,7 +514,7 @@ test('CX-5 remote generation change between recall fetch and injection withholds
     scope:'personal',projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
     receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
   f.delay(async route=>{if(route.endsWith('/recall'))f.pause({paused:false,generation:1,enforced:true});});
-  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?',transcript_path:null}),'');
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?',transcript_path:f.path}),'');
   assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
   f.pause({paused:false,generation:0,enforced:true});
   await assert.rejects(f.invoke('SessionStart'),/pause_unavailable/);
@@ -530,7 +530,7 @@ test('CX-5 slow recall consumes one 2 second budget and never injects late conte
     });
   });
   const started=performance.now();
-  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?',transcript_path:null}),'');
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?',transcript_path:f.path}),'');
   assert.ok(performance.now()-started<2400);
   assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
 });
@@ -735,7 +735,7 @@ for(const version of ['0.161.0','0.162.0','0.999.0'])test('CX-5 status qualifies
   assert.equal(status.code,0,status.stdout);assert.ok(status.stdout.includes(`Codex ${version}`));
   if(version==='0.162.0') {
     f.host.kind='app-server'; // actual hook host may differ from install-time CLI kind
-    await writeFile(f.path,await readFile(new URL('../../../integrations/codex/test/fixtures/partial-final-0.162.0.jsonl',import.meta.url),'utf8'));
+    await writeFile(f.path,(await readFile(new URL('../../../integrations/codex/test/fixtures/partial-final-0.162.0.jsonl',import.meta.url),'utf8')).replace('"source":"exec"','"source":"cli"'));
   } else await writeFile(f.path,(await readFile(f.path,'utf8')).replace('0.160.1',version));
   assert.equal(await f.invoke('Stop'),'{}');await f.invoke('worker');
   assert.equal(f.requests.filter(row=>row.route.endsWith('/capture')).length,1);
@@ -760,7 +760,7 @@ test('CX-5 app-server format verdict controls recall independently of install-ti
   await qualifyBinary(f.installation,daemonHost,{collect:async()=>({version:'0.163.0',evidence:changed,binarySha256:'a'.repeat(64)})});
   await observeHost(f.installation,daemonHost);
   const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,cwd:f.project,
-    transcript_path:null,prompt:'Preferences?',host:f.host}));
+    transcript_path:f.path,prompt:'Preferences?',host:f.host}));
   assert.equal(await runInstalled(f.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:async()=>daemonHost}),'');
   assert.equal(f.requests.length,0);
   const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
@@ -844,8 +844,10 @@ test('A7 disposable install primes an identity-bound verdict before its first pr
     if(new URL(url).pathname.endsWith('/recall')){recalls++;return Response.json({memories:[]});}
     return Response.json({paused:false,generation:0,enforced:true});
   };
+  const path=join(f.ws.path,'a7-interactive.jsonl');
+  await writeFile(path,(await readFile(new URL('../../../integrations/codex/test/fixtures/primary-0.160.1.jsonl',import.meta.url),'utf8')).replace('"source":"exec"','"source":"cli"'));
   const stream=new PassThrough();stream.end(JSON.stringify({hook_event_name:'UserPromptSubmit',session_id:session,
-    cwd:'/synthetic/project',transcript_path:null,prompt:'First prompt preference?'}));
+    cwd:'/synthetic/project',transcript_path:path,prompt:'First prompt preference?'}));
   await runInstalled(installed.installation,'UserPromptSubmit',stream,{signal:AbortSignal.timeout(2000),detectHost:async()=>f.host});
   assert.equal(recalls,1);
 });
@@ -872,4 +874,106 @@ test('CX-5 installed status reports pending qualification with a retry hint',asy
   const status=await f.run(['status','--client','codex']);assert.equal(status.code,0,status.stdout);
   assert.match(status.stdout,/Codex unknown has not been verified/);
   assert.doesNotMatch(status.stdout,/format changed|format probe failed/);
+});
+
+for(const legacy of [false,true])test(`exec default skips every installed hook without capture, recall or quota use (legacy=${legacy})`,async t=>{
+  const f=await memoryRuntime(t,{sessionSource:'exec'});
+  if(legacy){const {captureExec,...previous}=f.installed;await writeFile(f.installation,JSON.stringify(previous),{mode:0o600});}
+  for(const event of ['SessionStart','Stop','PreCompact','SessionEnd','UserPromptSubmit']) {
+    assert.equal(await f.invoke(event,{prompt:'Automation preferences?',source:'cli'}),'');
+    assert.equal(f.handoff(),undefined);
+  }
+  assert.equal(f.requests.length,0);assert.equal(await f.cursor(),null);
+  assert.equal(await readFile(join(f.installed.root,'usage',hostedTargetId(f.installed)+'.json'),'utf8').catch(error=>{
+    assert.equal(error.code,'ENOENT');return null;}),null);
+});
+
+test('exec opt-in captures and recalls; opt-out fences queued work without changing the daily cap',async t=>{
+  const f=await memoryRuntime(t,{sessionSource:'exec'});
+  const on=await f.run(['config','--codex-capture-exec','on']);assert.equal(on.code,0,on.stdout);
+  assert.equal((await readInstallation(f.installation)).captureExec,true);
+  assert.equal((await readInstallation(f.installation)).dailyCap,200);
+  // Changing policy revokes old generations. SessionStart establishes the EOF
+  // boundary; only new automation conversation after the opt-in is captured.
+  await f.invoke('SessionStart');assert.equal((await f.cursor()).status,'pause_boundary');
+  await appendFile(f.path,JSON.stringify({type:'event_msg',payload:{type:'item_completed',thread_id:session,turn_id:'opt-in-turn',
+    item:{type:'UserMessage',id:'opt-in-user',content:[{type:'text',text:'Capture this opted-in automation.',text_elements:[]}]}}})+'\n');
+  assert.equal(await f.invoke('Stop'),'{}');assert.ok(f.handoff());await f.invoke('worker');
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,1);
+  await f.invoke('UserPromptSubmit',{prompt:'Automation preferences?'});
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
+  // Queue another range, then revoke its generation by turning exec off.
+  await appendFile(f.path,JSON.stringify({type:'event_msg',payload:{type:'item_completed',thread_id:session,turn_id:'t2',
+    item:{type:'UserMessage',id:'u2',content:[{type:'text',text:'Automation followup.',text_elements:[]}]}}})+'\n');
+  await f.invoke('Stop');assert.ok(f.handoff());
+  const usagePath=join(f.installed.root,'usage',hostedTargetId(f.installed)+'.json');
+  const usage=await readFile(usagePath,'utf8');
+  const off=await f.run(['config','--codex-capture-exec','off']);assert.equal(off.code,0,off.stdout);
+  const before=f.requests.length;await f.invoke('worker');
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Automation preferences?'}),'');
+  assert.equal(f.requests.length,before);assert.equal(await readFile(usagePath,'utf8'),usage);
+  assert.equal((await readInstallation(f.installation)).dailyCap,200);
+});
+
+test('unavailable or mismatched session headers skip capture and recall even with exec opt-in',async t=>{
+  const f=await memoryRuntime(t);
+  assert.equal((await f.run(['config','--codex-capture-exec','on'])).code,0);
+  const original=await readFile(f.path,'utf8');
+  for(const path of [null,join(f.ws.path,'missing.jsonl')])for(const event of ['Stop','UserPromptSubmit'])
+    assert.equal(await f.invoke(event,{transcript_path:path,prompt:'Preferences?'}),'');
+  for(const text of [original.replace('"id":"'+session+'"','"id":"other-session"'),original.replace('"source":"cli"','"source":"unknown"'),'{"type":"session_meta"']) {
+    await writeFile(f.path,text);
+    for(const event of ['Stop','UserPromptSubmit'])assert.equal(await f.invoke(event,{prompt:'Preferences?'}),'');
+  }
+  assert.equal(f.requests.length,0);assert.equal(f.handoff(),undefined);
+});
+
+test('legacy frozen runtime requires stopped-host setup before exec config; cap-only config stays compatible',async t=>{
+  const f=await fixture(t);assert.equal(f.code,0,f.stdout);
+  const {captureExec,...legacy}=f.installed;
+  const oldRuntime=join(f.codexHome,'cairn/runtime/legacy-v05');
+  await cp(f.installed.runtime,oldRuntime,{recursive:true});
+  await writeFile(join(oldRuntime,'manifest.json'),'{"version":1,"files":{}}',{mode:0o600});
+  await writeFile(f.installation,JSON.stringify({...legacy,runtime:oldRuntime}),{mode:0o600});
+  const before=await readFile(f.installation);
+  const hooks=await readFile(join(f.codexHome,'hooks.json'));
+  const result=await f.run(['config','--codex-capture-exec','on']);assert.equal(result.code,2,result.stdout);
+  assert.match(result.stdout,/setup --client codex --codex-capture-exec on/);
+  assert.deepEqual(await readFile(f.installation),before);
+  assert.deepEqual(await readFile(join(f.codexHome,'hooks.json')),hooks);
+  const cap=await f.run(['config','--codex-daily-cap','347']);assert.equal(cap.code,0,cap.stdout);
+  const stored=await readInstallation(f.installation);assert.equal(stored.dailyCap,347);
+  assert.equal(Object.hasOwn(stored,'captureExec'),false);assert.equal(stored.runtime,oldRuntime);
+  const setup=await f.run(['setup','--client','codex','--codex-capture-exec','on']);assert.equal(setup.code,0,setup.stdout);
+  const updated=await readInstallation(f.installation);assert.equal(updated.captureExec,true);assert.equal(updated.dailyCap,347);
+  assert.notEqual(updated.runtime,oldRuntime);
+});
+
+test('turning exec opt-in off during an in-flight recall withholds its context',async t=>{
+  const f=await memoryRuntime(t,{sessionSource:'exec'});
+  assert.equal((await f.run(['config','--codex-capture-exec','on'])).code,0);
+  f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',
+    scope:'personal',projectId:null,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
+    receipts:[{client:'codex',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
+  f.delay(async route=>{if(route.endsWith('/recall')){
+    const off=await f.run(['config','--codex-capture-exec','off']);assert.equal(off.code,0,off.stdout);
+  }});
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
+  assert.equal((await readInstallation(f.installation)).captureExec,false);
+});
+
+test('exec resume of an interactive transcript skips capture/recall unless opted in',async t=>{
+  const f=await memoryRuntime(t); // persisted header stays source: cli on resume
+  f.host.execSession=true;
+  for(const event of ['Stop','PreCompact','UserPromptSubmit'])assert.equal(await f.invoke(event,{prompt:'Automated resume?',host:{...f.host,execSession:false}}),'');
+  assert.equal(f.requests.length,0);assert.equal(f.handoff(),undefined);assert.equal(await f.cursor(),null);
+  assert.equal((await f.run(['config','--codex-capture-exec','on'])).code,0);
+  await f.invoke('SessionStart');
+  await appendFile(f.path,JSON.stringify({type:'event_msg',payload:{type:'item_completed',thread_id:session,turn_id:'resumed-exec',
+    item:{type:'UserMessage',id:'resumed-exec-user',content:[{type:'text',text:'Opted-in automated resume.',text_elements:[]}]}}})+'\n');
+  await f.invoke('Stop');assert.equal(f.handoff().host.execSession,true);await f.invoke('worker');
+  await f.invoke('UserPromptSubmit',{prompt:'Automated resume?'});
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,1);
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
 });
