@@ -1,5 +1,104 @@
 # Known limitations
 
+The [three-stage reliability plan](plans/reliability-three-stage.md) records an
+ongoing development sequence with the first Stage 2 candidate rejected, not
+improved quality. Its pinned earlier thirty
+remains Cairn 13/10/7 versus Mem0 21/8/1, and the separate later six remains
+2/4/0 versus 4/2/0 (correct/incorrect/unresolved). Four later wrong answers and
+seven earlier incomplete arms require separate diagnosis. A fixed development
+gate or future pilot cannot establish population parity; natural installed
+Hermes use, independent reliability and lightweight resources remain open.
+Historical preference exhaustion prevents an all-six-type fresh coverage claim.
+This checkpoint launches no paid work and preserves all prior evidence below.
+
+The first paid [24-case synthetic algorithm comparison](plans/algorithm-dev24-results.md)
+completed both arms 24/24. Agreement on its full frozen development rubric
+was ordinary labels 10/14/0 and full labels 9/14/1
+(correct/incorrect/unresolved). The original advancement gate rejected full
+labels at net −1, despite packed-anchor presence rising from 32/42 to 34/42.
+Both arms had one unsupported-answer question, zero stale-use/severe errors
+and no safety unknowns; resource caps passed. An independent Spec audit found
+required propositions mixing sufficient direct answers with unasked
+explanatory/background detail, so these counts are not ordinary or general
+answer-accuracy estimates. The original results, version-1 sources and
+rejection stay frozen. The accepted next direction prospectively separates
+answer correctness from context completeness and targets bounded multi-card
+evidence-chain assembly. A source-bound D11 replay localized its recorded loss
+to rank output (two selected/fetched cards became one packed card); retaining
+both raised literal coverage from 1/2 to 2/2 at 188 versus 248 answer-input
+tokens. This replay used no provider call and establishes a mechanical
+opportunity, not semantic gain, a QA fix or promotion. A new metric needs a
+newly frozen paired baseline, not comparison with these 10/9 counts.
+This small authored corpus does not establish LongMemEval/Mem0, long-history
+or installed-host performance; future versions remain previously seen
+development data, and no new paid comparison or default change is enabled.
+
+The evaluation-only [bounded evidence-set assembler](plans/bounded-evidence-sets.md)
+is not a default or demonstrated QA gain. Primary's source-bound replay of all
+48 original arm slots found only D11 full-label packed-anchor restoration
+(1/2 to 2/2) and D10 ordinary-label redundant-card exposure (still 2/3);
+ordinary-label D11 stayed at 1/2 because its missing bridge never reached
+ranking. Literal shared identifiers are navigation cues, not proven entity
+identity. This narrow policy is held from a paid rerun pending candidate
+selection/source-diversity work. The original scores and result bytes remain
+untouched.
+
+The evaluation-only [source-diverse selector](plans/source-diverse-selection.md)
+preserves the original selector call and adds bounded exact-source-set deduplication
+and visible-page novelty expansion. Its cold synthetic control restores a packed
+complementary source, but an unchanged downstream rank-loss control still drops
+that source. Source diversity is not relevance, truth or a demonstrated QA gain;
+it can expose unrelated sources and increase downstream context. No core/default,
+speaker-role projection, old score or paid-run authorization changes. A prospective
+requested-answer/context rubric and new paired baseline are required before any
+future paid comparison; reused development cases are not holdout evidence.
+
+The [prospective requested-answer comparison](plans/source-diverse-qa24.md) adds
+an explicit source-diverse treatment to the existing runner, not a new default
+or a retry/rescore of the closed full-label experiment. Its separately versioned
+rubric requires asked propositions and necessary qualifications; non-scoring
+background/examples do not demand unasked rationale. Original 42 source anchors,
+multi-source sets and safety definitions stay unchanged, with packed support
+judged separately from source-history QA. Effective selection is traced separately
+from raw selector output. Real-core/fake-HTTP controls establish mechanical source
+restoration and retain a later rank-loss negative, not real-model QA gain. No
+new paid answers or scores are produced by this delivery; a later run requires
+reviewed clean code, a new manifest/current budget checkpoint and independent
+blind judgments on a fresh paired baseline using previously seen development data.
+
+The later [closed source-diverse requested-answer run](plans/source-diverse-qa24-results.md)
+completed all 24 captures / 48 answers at reviewed runtime #383. Effective source
+selection improved from 31/42 to 42/42 anchors and actual packed presence from
+30/42 to 37/42, while five treatment anchors still failed to survive final recall.
+All anchors were retained/candidate-reachable for this small seen-data set; source
+novelty/presence is not relevance or correctness. The unchanged resource ceilings
+passed (392 HTTP attempts; US$1.96 conservative reservation delta, not an invoice).
+Independent blind judges agree on all 48 requested-answer verdicts: ordinary
+20/4/0 versus source-diverse 23/1/0, with three paired wins and zero losses.
+The unchanged gate still blocks advancement: D04 treatment's unsupported-claim
+judgments disagree and remain unknown. Known unsupported questions are two per
+arm, stale/severe zero; false conservative safety flags do not mean observed
+increased stale counts. No adjudication, historical rescoring or gate relaxation
+occurred. This one seen-data trial's requested-answer count gain is not accepted
+product improvement, an old-rubric comparison, default promotion, long-history,
+LongMemEval/Mem0 parity or installed-host performance.
+
+D04 retains the assistant source role through core receipts and rank input,
+but the evaluation projects text-only evidence before answering; both answers
+misattribute the adviser. That observed role loss does not establish causation
+or show that a rendering fix would resolve the treatment's separate “not a
+technician” unsupported-claim unknown. D10/D12 treatment selects the needed
+bridges, then loses them at ranking while its requested answers remain correct
+with known unsupported claims. The offline replay of existing source-linked rank
+assembly restores those two bridges (ordinary packed anchors 30→30/42;
+source-diverse 37→39/42), without new answers or scores. A separate red/control
+probe confirms that core receipt role flips produce identical packed requests.
+The next candidate is a small opt-in, versioned rendering fix, whose QA/safety
+effect remains unproven; rank assembly is a separate future comparison candidate
+and old profiles stay frozen. A later live experiment requires a new
+prospective freeze, independent review and current shared-ledger preflight;
+this result does not authorize spending or promotion.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
@@ -1401,3 +1500,14 @@ validation, no-install CLI exit status, dry-run MCP queries, non-TTY setup, and
 release/readme wording. This follow-up retains those reviewed behaviors: the
 explicit authorization brief still governs endpoint/TTY/network safety and
 publication is still reserved for chichi.
+
+## Algorithm development comparison preparation (2026-10-10)
+
+The [three-stage plan](plans/reliability-three-stage.md) now has a fixed synthetic
+24-case paired ordinary/full-label selection runner, separate source/rubric
+assets and agreement-only independent judgment aggregation. Offline real-core
+controls establish capture-once, cold-state identity and different selection
+exposure; they do not establish an answer-quality gain. The small conversations
+are not a long-history or official LongMemEval score. Both development arms use
+default selection, not the historical benchmark's complete-map scan shortcut.
+Paid execution and semantic acceptance remain pending at this checkpoint.
