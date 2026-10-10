@@ -45,6 +45,9 @@ export async function setupDetected(argv, context) {
   }
   write(t(clients.length === 2 ? 'found_both' : `found_${clients[0]}`));
   if (!interactive) {
+    if (endpointOverride && flags.includes('--reauthorize')) {
+      throw new SetupError('tty_confirmation_required', 2, { endpoint: endpointOverride });
+    }
     // Read-only diagnostics make conflicts actionable even when the terminal cannot ask.
     const credential = await readCodexCredential().catch(() => undefined);
     const metadata = clients.includes('claude') ? await context.inspectClaude() : undefined;
@@ -78,9 +81,11 @@ export async function setupDetected(argv, context) {
     write('');
   }
   const agreed = [];
+  let claudeDeclined = false;
   if (clients.includes('claude')) {
     const answer = claudeReady ? '' : await prompt(t('connect_claude'));
     if (claudeReady || !answer.trim() || affirmative(answer)) agreed.push('claude');
+    else claudeDeclined = true;
   }
   let fallback = false;
   if (codexVerdict?.reason === 'codex_windows') write(t('codex_windows_skipped'));
@@ -164,7 +169,7 @@ export async function setupDetected(argv, context) {
     const forced = client === 'claude' ? forceClaude : forceCodex;
     const result = await call(client, { authOptions, pairingConsent: shared ? 'shared' : undefined,
       ...(shared || agreed.includes('claude') ? {} : { pairingConsent: 'standalone',
-        claudeDeclined: Boolean(metadata && !claudeReady && clients.includes('claude')) }), identityPlan,
+        claudeDeclined }), identityPlan,
       ...(endpointChoice && (forced || reauthorize) ? { endpointOverride: endpointChoice } : {}), endpointChoice,
       forceReauthorize: forced, expectedCodex: codexVerdict?.before, hostsStopped: shared });
     code = Math.max(code, result);

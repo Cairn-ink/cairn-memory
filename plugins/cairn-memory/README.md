@@ -15,16 +15,16 @@ With Node ≥22.16 and the Claude Code CLI:
 npx @cairn-ink/memory setup
 ```
 
-Installer 0.3.0 was published on 2026-10-10; this checkout prepares 0.4.0,
-awaiting chichi's release approval. Try `node packages/setup/bin/memory.mjs setup`.
-Without `--client`, 0.4.0 detects Claude Code and Codex, discloses each tool's
-behavior and asks once per tool. Both agreed tools share one browser grant and
-project key through the existing pairing transaction. Codex first, Claude added
-later: reuse the installer-owned Codex credential with no new approval.
-Claude first, Codex added later: one new browser approval, explicitly agreed to;
-Claude's existing credential stays. Setup never reads or imports Claude Code's
-native secrets and creates no extra credential cache. Endpoint metadata is
-optional; missing values are treated as unknown and never refuse setup alone.
+This checkout prepares installer **0.5.0**; publication is a separate step.
+Try it with `node packages/setup/bin/memory.mjs setup`. The plugin stays 0.3.2.
+Setup asks about new tools, updates connected tools, and uses one browser sign-in
+when connecting both. The default server is cairn.ink. Conflicting servers or
+memory IDs present a choice; non-interactive conflicts change nothing.
+Automated `codex exec` runs skip capture and prompt recall by default; opt in with
+`npx @cairn-ink/memory config --codex-capture-exec on`.
+Setup never reads or imports Claude Code's native secrets.
+Claude first, Codex added later: one new browser approval in the same account.
+Codex first: reuse its installer-owned sign-in when adding Claude.
 Use `--client claude` to
 restrict setup to this plugin. Setup prints the plugin and installer versions
 separately and saves credentials through stdin. Enter the displayed code on

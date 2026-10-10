@@ -100,6 +100,39 @@ for (const lang of ['zh', 'en']) {
     assert.match(result.stdout, /npx @cairn-ink\/memory uninstall --client codex/u);
     assert.doesNotMatch(result.stdout, /cannot share|外掛無法共用/u);
   });
+  test(`declining fresh Claude explains standalone Codex and later sharing (${lang})`, async t => {
+    const f = await fixture(t);
+    assert.equal(Boolean((await f.claudeState()).installed), false);
+    const result = await f.run({ args: ['setup', '--lang', lang], choices: { claude: 'n', codex: 'y' } });
+    assert.equal(result.code, 0, result.stdout);
+    assert.equal((await readInstallation(f.installation)).usesClaude, false);
+    assert.equal(Boolean((await f.claudeState()).installed), false);
+    await assert.rejects(readFile(join(f.profileRoot, 'project-key')), { code: 'ENOENT' });
+    assert.match(result.stdout, lang === 'zh' ? /你選擇不連接 Claude Code/u : /You chose not to connect Claude Code/u);
+    assert.match(result.stdout, /npx @cairn-ink\/memory uninstall --client codex/u);
+    assert.match(result.stdout, /npx @cairn-ink\/memory setup/u);
+    assert.doesNotMatch(result.stdout, /cannot share|外掛無法共用/u);
+  });
+  test(`explicit endpoint without a terminal asks for confirmation and preserves the command (${lang})`, async t => {
+    const f = await fixture(t);
+    assert.equal((await f.run()).code, 0);
+    await conflict(f);
+    const paths = [f.installation, join(f.codexHome, 'config.toml'), join(f.codexHome, 'cairn/credential.json')];
+    const before = await Promise.all(paths.map(path => readFile(path)));
+    const claude = await f.claudeState(), requests = f.server.requests.length;
+    const result = await f.run({
+      args: ['setup', '--endpoint', 'https://third.test', '--reauthorize', '--lang', lang], interactive: false,
+    });
+    assert.equal(result.code, 2, result.stdout);
+    assert.deepEqual(result.prompts, []);
+    assert.equal(f.server.requests.length, requests);
+    assert.deepEqual(await Promise.all(paths.map(path => readFile(path))), before);
+    assert.deepEqual(await f.claudeState(), claude);
+    assert.match(result.stdout, lang === 'zh' ? /需要在終端機裡確認/u : /needs a terminal to confirm/u);
+    assert.doesNotMatch(result.stdout, /will ask which one|會問你要用哪一個/u);
+    const command = result.stdout.replace(/ \\\n\s*/gu, ' ');
+    assert.ok(command.includes('npx @cairn-ink/memory setup --endpoint "https://third.test" --reauthorize'), result.stdout);
+  });
   test(`fresh Codex endpoint choice 2 does not claim a replaced login (${lang})`, async t => {
     const f = await fixture(t);
     await f.setClaudeState({ installed: true, configured: true, marketplace: true, endpoint: f.server.endpoint });
@@ -170,8 +203,37 @@ test('cap option scope, custom CODEX_HOME lock, and Chinese verbose diagnostics'
   await writeFile(join(f.codexHome, '.cairn-setup.lock'), 'synthetic lock', { mode: 0o600 });
   const locked = await f.run();
   assert.equal(locked.code, 2, locked.stdout);
-  assert.ok(locked.stdout.replaceAll('\n  ', '').includes(join(f.codexHome, '.cairn-setup.lock')));
+  const path = join(f.codexHome, '.cairn-setup.lock');
+  assert.ok(locked.stdout.split('\n').includes(path), locked.stdout);
   assert.doesNotMatch(locked.stdout, /~\/\.codex/u);
+});
+
+test('literal paths stay copyable through nested terminal writers', () => {
+  const lines = [], path = '/tmp/' + 'a'.repeat(180) + '/.cairn-setup.lock';
+  const writer = terminalWriter(terminalWriter(line => lines.push(line)));
+  writer.literal(path);
+  assert.deepEqual(lines, [path]);
+});
+
+test('legacy MCP lock recovery prints the actual CODEX_HOME path intact', async t => {
+  const f = await fixture(t, { claude: false, qualified: false });
+  await mkdir(f.codexHome, { mode: 0o700 });
+  const path = join(f.codexHome, '.cairn-setup.lock');
+  await writeFile(path, 'synthetic lock', { mode: 0o600 });
+  const result = await f.run({ args: ['setup', '--client', 'codex', '--endpoint', f.server.endpoint, '--manual-token'] });
+  assert.equal(result.code, 2, result.stdout);
+  assert.ok(result.stdout.split('\n').includes(path), result.stdout);
+  assert.doesNotMatch(result.stdout, /~\/\.codex|^undefined$/mu);
+  assert.equal(await readFile(path, 'utf8'), 'synthetic lock');
+  await assert.rejects(readFile(join(f.codexHome, 'config.toml')), { code: 'ENOENT' });
+});
+
+for (const kind of ['constructor', '__proto__', 'toString']) test(`server error ${kind} uses the details recovery`, async t => {
+  const f = await fixture(t, { auth: { sequence: [kind] } });
+  const result = await f.run();
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(result.stdout, /npx @cairn-ink\/memory setup --verbose/u);
+  await assert.rejects(readFile(f.installation), { code: 'ENOENT' });
 });
 
 for (const answer of ['1', '2', 'n', null]) test(`unknown Claude memory ID numbered choice ${answer}`, async t => {

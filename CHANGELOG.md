@@ -23,6 +23,9 @@
   Chinese status/verbose output, and use the actual CODEX_HOME in lock recovery.
   Check saved sign-ins with actionable rejection errors while accepting legacy
   servers without scope metadata.
+- Claude-only `pause` and `resume` now exit 2 and show the corresponding plugin
+  command, because the installer has not changed anything. Scripts that previously
+  relied on exit 0 should run the plugin command in Claude Code instead.
 - Never read Claude Code's credential store or import its saved token. Existing
   locking, stopped-host consent and identity safety checks remain in place.
   Installer is 0.5.0; plugin remains 0.3.2. Publication is a separate step.

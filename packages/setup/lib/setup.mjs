@@ -27,7 +27,7 @@ const recoveryByKind = {
 const recoveryByKey = {
   authorization_credential_unavailable: 'recovery_reauthorize', credential_endpoint_unset: 'recovery_reauthorize',
   codex_lock: 'lock_retry', authorization_endpoint_conflict: 'conflict_retry', identity_conflict: 'conflict_retry',
-  tty_required: 'retry_setup',
+  tty_required: 'retry_setup', tty_confirmation_required: 'confirmation_retry',
 };
 
 const installerVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -425,9 +425,11 @@ export async function main(argv, {
       if (progress.claudeConfigured) write(t(progress.codexSelected?'progress_claude_configured':'progress_claude_only'));
       else if (progress.claudePluginInstalled) write(t('progress_claude_plugin'));
       else if (!changes.length) write(t('nothing_changed'));
-      const recovery = recoveryByKind[error.kind] ?? recoveryByKey[error.key] ?? 'error_details';
+      const recovery = (Object.hasOwn(recoveryByKind, error.kind) ? recoveryByKind[error.kind] : undefined) ??
+        (Object.hasOwn(recoveryByKey, error.key) ? recoveryByKey[error.key] : 'error_details');
       write(t(recovery, { ...error.params,
         url: new URL('/settings/tokens', authOptions.authorization?.endpoint ?? progress.endpoint ?? DEFAULT_ENDPOINT).href }));
+      if (recovery === 'lock_retry') write.literal(error.params.path);
       if (verbose && error.params?.phase) write(t('phase_details',error.params));
       if (verbose && error.key==='command_failed') write(t('command_details',error.params));
     }

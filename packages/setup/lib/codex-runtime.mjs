@@ -397,8 +397,13 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged,neutr
     }
     throw error;
   }
-  if (action==='pause') {await setPaused(config.root,
-    true);write(t('pause_done'));if(config.usesClaude)write(t('pause_shared'));write(t('pause_no_backfill'));return 0;}
+  if (action === 'pause') {
+    await setPaused(config.root, true);
+    write(t('pause_done'));
+    if (config.usesClaude) write(t('pause_shared'));
+    write(t('pause_no_backfill'));
+    return 0;
+  }
   if (action==='prompt-recall-off' || action==='prompt-recall-on') {
     const enabled = action==='prompt-recall-on';
     await writePromptRecall(path,enabled);
@@ -475,8 +480,9 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged,neutr
       await rm(directory,{recursive:true});
       if (!restored) {write(t('codex_unpair_failed'));return 1;}
     }
-    write(t(action==='uninstall'?'uninstalled_control':'disabled_control',{url:new URL('/settings/tokens',
-      config.endpoint).href.replace(/^https?:\/\//u,'')}));return 0;
+    const url = new URL('/settings/tokens', config.endpoint).href.replace(/^https?:\/\//u, '');
+    write(t(action === 'uninstall' ? 'uninstalled_control' : 'disabled_control', { url }));
+    return 0;
   } finally {await lock.close();await unlink(lockPath);}
 }
 

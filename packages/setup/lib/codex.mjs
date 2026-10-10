@@ -343,7 +343,7 @@ export async function setupCodex({ action, flags, write, prompt, interactive, br
       await validate(token);
       try { lock = await open(lockPath, 'wx', 0o600); }
       catch (error) {
-        if (error.code === 'EEXIST') throw new SetupError('codex_lock',2);
+        if (error.code === 'EEXIST') throw new SetupError('codex_lock',2,{path:lockPath});
         throw error;
       }
       if (!unchanged(before, await snapshot(configPath))) throw fail('codex_concurrent');

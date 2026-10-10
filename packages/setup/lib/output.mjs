@@ -24,10 +24,15 @@ export function wrapLine(line) {
   }
   return [...lines, line];
 }
-export const terminalWriter = write => text => {
-  if (text === undefined || text === null) return;
-  for (const line of String(text).split('\n')) for (const wrapped of wrapLine(line)) write(wrapped);
-};
+export function terminalWriter(write) {
+  const writer = text => {
+    if (text === undefined || text === null) return;
+    for (const line of String(text).split('\n')) for (const wrapped of wrapLine(line)) write(wrapped);
+  };
+  // File paths must stay copyable, including through nested coordinator writers.
+  writer.literal = write.literal ?? write;
+  return writer;
+}
 export const technical = new Set(['authorization_shared','codex_hooks_dry','codex_startup_gate',
   'claude_available','codex_available','marketplace_ready','marketplace_status','endpoint_flag',
   'endpoint_config','endpoint_default','endpoint_prompt_source','codex_user_status',

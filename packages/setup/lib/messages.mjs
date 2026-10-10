@@ -200,12 +200,10 @@ export const messages = {
     "zh": "✗ Codex 已移除，但無法確認 Claude Code 已恢復成單獨使用。\n" +
       "  Codex 的登入和設定已刪除；Claude Code 的記憶身分沒有改動。\n" +
       "  保持兩個工具關閉，確認 claude 指令能執行後，再跑一次：\n" +
-      " \n" +
       "npx @cairn-ink/memory uninstall --client codex",
     "en": "✗ Codex was removed, but Claude Code's standalone setup couldn't be confirmed.\n" +
       "  Codex's sign-in and settings were deleted. Claude Code's memory ID is kept.\n" +
       "  Keep both tools closed, make sure the claude command runs, then run again:\n" +
-      " \n" +
       "npx @cairn-ink/memory uninstall --client codex"
   },
   "codex_policy_cleanup_unsafe": {
@@ -350,10 +348,6 @@ export const messages = {
     "zh": "已設定",
     "en": "configured"
   },
-  "unset": {
-    "zh": "未設定",
-    "en": "unset"
-  },
   "configuration_unavailable": {
     "zh": "無法讀取外掛設定（Claude Code 版本可能太舊）。",
     "en": "Cannot read plugin settings (Claude Code may be too old)."
@@ -405,6 +399,16 @@ export const messages = {
   "tty_required": {
     "zh": "安裝需要在終端機裡回答幾個問題。",
     "en": "Setup needs you to answer a few questions in a terminal."
+  },
+  "tty_confirmation_required": {
+    "zh": "安裝需要在終端機裡確認這次連接。",
+    "en": "Setup needs a terminal to confirm this connection."
+  },
+  "confirmation_retry": {
+    "zh": "  請在終端機執行：\n" +
+      "npx @cairn-ink/memory setup --endpoint {endpointArg} --reauthorize",
+    "en": "  Run this command in a terminal:\n" +
+      "npx @cairn-ink/memory setup --endpoint {endpointArg} --reauthorize"
   },
   "claude_manual_required": {
     "zh": "這個 Claude Code 版本不能自動安裝外掛。",
@@ -1100,10 +1104,8 @@ export const messages = {
   },
   "conflict_retry": {
     "zh": "  在終端機直接執行，安裝程式會問你要用哪一個：\n" +
-      " \n" +
       "npx @cairn-ink/memory setup",
     "en": "  Run setup in a terminal and it will ask which one to use:\n" +
-      " \n" +
       "npx @cairn-ink/memory setup"
   },
   "identity_choices": {
@@ -1218,10 +1220,8 @@ export const messages = {
     "en": "memory hooks written"
   },
   "lock_retry": {
-    "zh": "  等它結束再試；確定沒有在跑時，刪除這個鎖檔：\n" +
-      "{path}",
-    "en": "  Wait for it to finish. If none is running, remove this lock file:\n" +
-      "{path}"
+    "zh": "  等它結束再試；確定沒有在跑時，刪除這個鎖檔：",
+    "en": "  Wait for it to finish. If none is running, remove this lock file:"
   },
   "invalid_cap": {
     "zh": "--codex-daily-cap 必須是 1–100000 的整數。",
@@ -1457,10 +1457,8 @@ export const messages = {
   },
   "exec_runtime_update_required": {
     "zh": "先更新 Codex 的記憶設定，才能修改自動工作的記憶。\n" +
-      " \n" +
       "npx @cairn-ink/memory setup --client codex --codex-capture-exec {setting}",
     "en": "Update Codex memory setup before changing automation memory.\n" +
-      " \n" +
       "npx @cairn-ink/memory setup --client codex --codex-capture-exec {setting}"
   },
   "invalid_exec_setting": {

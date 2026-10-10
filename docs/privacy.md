@@ -587,8 +587,7 @@ mechanisms, not a change enabled by this documentation. Neither forgetting nor
 redaction guarantees physical erasure of journals, free pages, backups or prior
 provider/caller copies. Hosted schemas/defaults and paid-pilot boundaries are unchanged.
 
-
-### Hosted 0.2.0 client boundary
+### Automated Codex exec sessions
 
 Installer 0.5.0 skips automated `codex exec` sessions by default, for both
 conversation capture and prompt recall. No recall request or context injection
@@ -616,6 +615,7 @@ setting is changed; config refuses without changing configuration and prints the
 exact setup command. This changes installed hooks only; explicit MCP tool calls
 remain explicit.
 
+### Hosted 0.2.0 client boundary
 
 The Codex discriminator identifies filtered user/assistant conversation text;
 it admits no tools, credentials, metadata or transcript paths. CX-5 installs
