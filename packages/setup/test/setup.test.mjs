@@ -1,3 +1,4 @@
+import './approved-flows.test.mjs';
 import './device-ui.test.mjs';
 import './clients.test.mjs';
 import './authorization.test.mjs';
@@ -60,7 +61,7 @@ async function fixture(t, state = {}, options = {}) {
     import {installChildWire} from ${JSON.stringify(wireURL)};
     import {appendFileSync, readFileSync, writeSync} from 'node:fs';
     const disconnect = installChildWire();
-    let clock = 0, pollCount = 0;
+    let clock = 0, pollCount = 0, tokenAttempts = 0;
     let wallJump = 0;
     const wallNow = Date.now.bind(Date);
     Date.now = () => wallNow() + ${options.clientSkew ?? 0} + wallJump;
@@ -92,7 +93,7 @@ async function fixture(t, state = {}, options = {}) {
         }
       },
       prompt: async (question, options) => {
-        if (/^Connect Claude|^連接 Claude/u.test(question)) {
+        if (/Connect Claude Code\?|連接 Claude Code？/u.test(question)) {
           appendFileSync(${JSON.stringify(consentsPath)}, JSON.stringify({question, options}) + '\\n');
           return '';
         }
@@ -104,8 +105,8 @@ async function fixture(t, state = {}, options = {}) {
           ${options.interruptEnter ? "const interrupted = new Promise(resolve => options.signal.addEventListener('abort', resolve, {once:true})); process.kill(process.pid, 'SIGINT'); await interrupted;" : ''}
           return '';
         }
-        return options?.secret ? ${options.invalidToken ? "secret + '\\n'" : 'secret'} :
-          /MCP cairn|legacy MCP/iu.test(question) ? ${JSON.stringify(options.mcpAnswer ?? '')} : ${JSON.stringify(options.endpoint ?? server.endpoint)};
+        return options?.secret ? ${options.invalidToken ? "(tokenAttempts++ === 0 ? secret + '\\n' : secret)" : 'secret'} :
+          /MCP/iu.test(question) ? ${JSON.stringify(options.mcpAnswer ?? '')} : ${JSON.stringify(options.endpoint ?? server.endpoint)};
       }, browse: async (_write, url) => {
         appendFileSync(${JSON.stringify(browsesPath)}, JSON.stringify(url) + '\\n');
         ${options.browserFail ? "throw new Error('browser unavailable');" : "writeSync(1, 'browser opened\\n');"}
@@ -113,7 +114,7 @@ async function fixture(t, state = {}, options = {}) {
     });
     disconnect();`);
   const result = await new Promise((resolve, reject) => {
-    const proc = spawn(process.execPath, [options.realBin ? bin : harness, ...(options.args ?? ['setup', '--no-browser'])], {
+    const proc = spawn(process.execPath, [options.realBin ? bin : harness, ...(options.args ?? ['setup', '--no-browser']), ...((options.args??['setup'])[0]==='setup' && (!state.configured || options.forceEndpoint) && !(options.args??[]).includes('--endpoint') ? ['--endpoint',server.endpoint] : [])], {
       cwd: workspace.path, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       env: { LANG: 'en_US.UTF-8', PATH: fakeBin, HOME: workspace.path, FAKE_CALLS: callsPath, FAKE_STATE: statePath, ...(options.clipboard ? {WAYLAND_DISPLAY:'fixture',XDG_RUNTIME_DIR:workspace.path} : {}), ...options.env },
     });
@@ -159,19 +160,19 @@ test('browser happy path uses S256, safe stdin, credential check then ACK and re
   assert.equal(saved(r).tokenDigest, scryptSync(secret, 'cairn-fake-claude', 16).toString('hex'));
   assert.deepEqual(saved(r).keys, ['api_endpoint', 'api_token']);
   assert.equal(saved(r).endpoint, r.server.endpoint);
-  assert.deepEqual(r.prompts.length, 2);
+  assert.deepEqual(r.prompts.length, 1);
   assert.deepEqual(r.sleeps, [5000, 5000]);
   assert.deepEqual(r.browses, [`${r.server.endpoint}/device`]);
   assert.deepEqual(r.server.requests.map(r => r.route), ['device-authorizations', 'token', 'token', 'credential', 'ack']);
   assert.equal(r.server.grant.state, 'delivered');
-  assert.match(r.stdout, /plugin 0\.3\.1/); assert.match(r.stdout, /Installer @cairn-ink\/memory 0\.4\.0/);
-  assert.match(r.stdout, /Cairn Memory is connected.*expires/);
+  assert.match(r.stdout, /plugin (?:updated to )?0\.3\.1/); assert.match(r.stdout, /Cairn.ink Memory setup 0\.5\.0/);
+  assert.match(r.stdout, /Signed in to Cairn, valid until/);
   const second = await localWireRequest(r.server.server, requestJSON, new URL('/api/cli-auth/v1/token', r.server.endpoint), { body: r.server.lastProof, env: {} });
   assert.equal(second.status, 400); assert.equal(second.value.error, 'invalid_grant');
   assert.ok(!JSON.stringify(second.value).includes(secret), 'a second poll after delivery gets no token');
 });
 
-for (const [machine, message] of [['access_denied', /Authorization was denied/], ['expired_token', /Authorization code expired/]]) {
+for (const [machine, message] of [['access_denied', /clicked Deny/], ['expired_token', /code has expired/]]) {
   test(`localized terminal failure: ${machine}`, async t => {
     const r = await fixture(t, {}, { server: { sequence: [machine] } });
     assert.equal(r.code, 1); assert.match(r.stdout, message); assert.equal(saved(r), undefined);
@@ -181,7 +182,7 @@ for (const [machine, message] of [['access_denied', /Authorization was denied/],
 
 test('600-second timeout cancels without configure or ACK', async t => {
   const r = await fixture(t, {}, { server: { pendingForever: true, interval: 120 } });
-  assert.equal(r.code, 1); assert.match(r.stdout, /Authorization timed out/);
+  assert.equal(r.code, 1); assert.match(r.stdout, /timed out/);
   assert.equal(r.sleeps.reduce((a, b) => a + b, 0), 600000);
   assert.equal(r.server.grant.state, 'cancelled'); assert.equal(saved(r), undefined);
 });
@@ -204,12 +205,12 @@ test('slow_down permanently adds 5 seconds; 429 obeys Retry-After; 5xx uses back
   const r = await fixture(t, {}, { server: { sequence: ['slow_down', 'authorization_pending', 'rate_limited', 503, 503] } });
   assert.equal(r.code, 0, r.stdout);
   assert.deepEqual(r.sleeps, [5000, 10000, 10000, 17000, 20250, 40250]);
-  assert.match(r.stdout, /Rate-limited/); assert.equal(r.prompts.length, 1);
+  assert.match(r.stdout, /slow down/); assert.equal(r.prompts.length, 0);
 });
 
 test('rate limit beyond grant deadline has its own message and cancels', async t => {
   const r = await fixture(t, {}, { server: { sequence: ['rate_limited'], retryAfter: 700 } });
-  assert.equal(r.code, 1); assert.match(r.stdout, /rate-limited/); assert.equal(r.server.grant.state, 'cancelled');
+  assert.equal(r.code, 1); assert.match(r.stdout, /rate-limiting/); assert.equal(r.server.grant.state, 'cancelled');
 });
 
 test('lost exchange response retries the same exchange id and delivers only one PAT', async t => {
@@ -224,16 +225,16 @@ test('lost exchange response retries the same exchange id and delivers only one 
 for (const createStatus of [404, 501]) {
   test(`${createStatus} create falls back to hidden manual input; old credential route saves unverified`, async t => {
     const r = await fixture(t, {}, { server: { createStatus, createHTML: true, credentialStatus: createStatus } });
-    assert.equal(r.code, 0, r.stdout); assert.match(r.stdout, /falling back to hidden PAT/);
-    assert.equal(r.prompts[1].options.secret, true); assert.deepEqual(saved(r).keys, ['api_endpoint', 'api_token']);
-    assert.match(r.stdout, /Configured, not verified/); assert.doesNotMatch(r.stdout, /Cairn Memory is connected/);
+    assert.equal(r.code, 0, r.stdout); assert.match(r.stdout, /Use an access token instead/);
+    assert.equal(r.prompts[0].options.secret, true); assert.deepEqual(saved(r).keys, ['api_endpoint', 'api_token']);
+    assert.match(r.stdout, /cannot verify the access token/); assert.doesNotMatch(r.stdout, /Cairn Memory is connected/);
   });
 }
 
 for (const server of [{ createStatus: 503 }, { createMalformed: true }, { redirect: true }, { foreignURI: 'https://evil.example/device' }]) {
   test(`create does not downgrade on server/protocol/redirect/origin failure ${JSON.stringify(server)}`, async t => {
     const r = await fixture(t, {}, { server });
-    assert.equal(r.code, 1); assert.equal(r.prompts.length, 1); assert.equal(saved(r), undefined);
+    assert.equal(r.code, 1); assert.equal(r.prompts.length, 0); assert.equal(saved(r), undefined);
     assert.equal(r.server.requests.filter(r => r.route === 'device-authorizations').length, 1);
     assert.ok(!r.server.requests.some(r => r.route === 'trap'));
   });
@@ -242,7 +243,7 @@ for (const server of [{ createStatus: 503 }, { createMalformed: true }, { redire
 for (const state of [{ fail: 'plugin configure cairn-memory@cairn-memory --values-stdin' }, { incompleteSave: true }]) {
   test(`configure failure cancels before ACK: ${JSON.stringify(state)}`, async t => {
     const r = await fixture(t, state);
-    assert.equal(r.code, 1); assert.match(r.stdout, /Credential configuration failed/);
+    assert.equal(r.code, 1); assert.match(r.stdout, /could not be saved/);
     assert.equal(r.server.grant.state, 'cancelled'); assert.equal(r.server.requests.at(-1).route, 'cancel');
     assert.ok(!r.server.requests.some(r => r.route === 'ack'));
   });
@@ -259,13 +260,13 @@ test('lost ACK retries identical proof and receipt; ambiguous ACK retains saved 
   const acks = r.server.requests.filter(r => r.route === 'ack');
   assert.equal(acks.length, 2); assert.deepEqual(acks[0].body, acks[1].body);
   const unknown = await fixture(t, {}, { server: { ackUnavailable: true } });
-  assert.equal(unknown.code, 1); assert.match(unknown.stdout, /delivery is unconfirmed/);
+  assert.equal(unknown.code, 1); assert.match(unknown.stdout, /delivery to Cairn could not be confirmed/);
   assert.equal(unknown.state.configured, true); assert.ok(!unknown.server.requests.some(r => r.route === 'cancel'));
 });
 
 test('explicit failed_revoked ACK asks for new authorization', async t => {
   const r = await fixture(t, {}, { server: { ackRevoked: true } });
-  assert.equal(r.code, 1); assert.match(r.stdout, /was revoked/);
+  assert.equal(r.code, 1); assert.match(r.stdout, /Cairn revoked it/);
 });
 
 test('marketplace and already-installed plugin update before pairing; preserve existing credential', async t => {
@@ -275,28 +276,28 @@ test('marketplace and already-installed plugin update before pairing; preserve e
   assert.ok(commands.includes('plugin marketplace update cairn-memory'));
   assert.ok(commands.includes('plugin update cairn-memory@cairn-memory --scope user'));
   assert.ok(commands.indexOf('plugin marketplace update cairn-memory') < commands.indexOf('plugin update cairn-memory@cairn-memory --scope user'));
-  assert.equal(saved(r), undefined); assert.match(r.stdout, /plugin 0\.3\.1/);
+  assert.equal(saved(r), undefined); assert.match(r.stdout, /plugin (?:updated to )?0\.3\.1/);
 });
 
 test('an existing token without an endpoint is kept unless --reauthorize is explicit', async t => {
   const r = await fixture(t, { partial: ['api_token'] });
-  assert.equal(r.code, 1); assert.match(r.stdout, /Existing credential kept, but endpoint is unset/);
+  assert.equal(r.code, 1); assert.match(r.stdout, /missing the server address/);
   assert.deepEqual(r.prompts, []); assert.deepEqual(r.server.requests, []); assert.equal(saved(r), undefined);
 });
 
 for (const state of [{ configured: true, endpoint: 'https://old.example' }, { partial: ['api_endpoint'], endpoint: 'https://old.example' }, { partial: ['api_token'] }]) {
   test(`new authorization confirms endpoint and saves both values ${JSON.stringify(state)}`, async t => {
-    const r = await fixture(t, state, { args: ['setup', '--no-browser', '--reauthorize'] });
-    assert.equal(r.code, 0); assert.equal(r.prompts.length, 1);
+    const r = await fixture(t, state, { args: ['setup', '--no-browser', '--reauthorize'], forceEndpoint:true });
+    assert.equal(r.code, 0, r.stdout); assert.equal(r.prompts.length, 0);
     assert.equal(saved(r).endpoint, r.server.endpoint); assert.deepEqual(saved(r).keys, ['api_endpoint', 'api_token']);
   });
 }
 
 test('--manual-token checks the PAT, preserves legacy expiry semantics, and skips grant', async t => {
   const r = await fixture(t, {}, { args: ['setup', '--manual-token', '--no-browser'], server: { legacy: true } });
-  assert.equal(r.code, 0, r.stdout); assert.equal(r.prompts[1].options.secret, true);
+  assert.equal(r.code, 0, r.stdout); assert.equal(r.prompts[0].options.secret, true);
   assert.deepEqual(r.server.requests.map(r => r.route), ['credential']); assert.deepEqual(r.browses, []);
-  assert.match(r.stdout, /no reported expiry/);
+  assert.match(r.stdout, /no expiry/);
 });
 
 test('manual credential 5xx does not save unverified settings', async t => {
@@ -307,7 +308,7 @@ test('manual credential 5xx does not save unverified settings', async t => {
 test('--no-browser still authorizes; browser-open failure prints bare URL and proceeds', async t => {
   const r = await fixture(t); assert.equal(r.code, 0); assert.deepEqual(r.browses, []);
   const failure = await fixture(t, {}, { args: ['setup'], browserFail: true });
-  assert.equal(failure.code, 0); assert.match(failure.stdout, /Open manually: http:\/\/127\.0\.0\.1:\d+\/device/);
+  assert.equal(failure.code, 0); assert.match(failure.stdout, /Open this URL yourself: http:\/\/127\.0\.0\.1:\d+\/device/);
 });
 
 for (const args of [['setup'], ['setup', '--no-browser'], ['setup', '--manual-token']]) {
@@ -326,8 +327,8 @@ test('dry run uses only read-only CLI calls and no potentially networked mcp get
 
 test('status prints presence without reading sensitive userConfig or claiming verification', async t => {
   const r = await fixture(t, { installed: true, marketplace: true, configured: true, mcp: true }, { args: ['status'] });
-  assert.equal(r.code, 0); assert.match(r.stdout, /api_token: configured/);
-  assert.match(r.stdout, /Status does not test the PAT/); assert.deepEqual(r.server.requests, []);
+  assert.equal(r.code, 0); assert.match(r.stdout, /Sign-in saved/);
+  assert.match(r.stdout, /no connection was tested/); assert.deepEqual(r.server.requests, []);
 });
 
 for (const state of [{ noInstall: true }, { noConfigure: true }, { disabled: true }, { loadErrors: true }]) {
@@ -347,7 +348,7 @@ for (const answer of ['y', 'N', '']) {
 for (const fail of ['--version', 'plugin marketplace add Cairn-ink/cairn-memory', 'plugin install cairn-memory@cairn-memory', 'mcp get cairn', 'mcp remove cairn']) {
   test(`preserves non-zero child exit without child output: ${fail}`, async t => {
     const r = await fixture(t, { fail, mcp: true }, { mcpAnswer: 'y' });
-    assert.equal(r.code, 7); assert.match(r.stdout, /exit 7/);
+    assert.equal(r.code, 7); assert.match(r.stdout, /A Claude Code command failed/);
   });
 }
 
@@ -357,9 +358,9 @@ test('missing CLI, unsupported Node, invalid endpoint/PAT and malformed CLI JSON
   const explicitMissing = await fixture(t, {}, { noClaude: true, args: ['setup', '--client', 'claude'] });
   assert.equal(explicitMissing.code, 1); assert.match(explicitMissing.stdout, /not found on PATH/);
   const old = await fixture(t, {}, { nodeVersion: '22.15.0' }); assert.equal(old.code, 1); assert.deepEqual(old.calls, []);
-  const endpoint = await fixture(t, {}, { endpoint: 'http://example.com' }); assert.equal(endpoint.code, 1); assert.deepEqual(endpoint.server.requests, []);
-  const token = await fixture(t, {}, { args: ['setup', '--manual-token', '--no-browser'], invalidToken: true }); assert.equal(token.code, 1); assert.equal(saved(token), undefined);
-  const json = await fixture(t, { badJSON: true }, { args: ['status'] }); assert.equal(json.code, 1); assert.match(json.stdout, /Cannot read CLI state/);
+  const endpoint = await fixture(t, {}, { args: ['setup', '--endpoint', 'http://example.com'] }); assert.equal(endpoint.code, 2); assert.deepEqual(endpoint.server.requests, []);
+  const token = await fixture(t, {}, { args: ['setup', '--manual-token', '--no-browser'], invalidToken: true }); assert.equal(token.code, 0, token.stdout); assert.equal(token.prompts.length,2); assert.ok(saved(token));
+  const json = await fixture(t, { badJSON: true }, { args: ['status'] }); assert.equal(json.code, 1); assert.match(json.stdout, /Cannot read the Claude Code state/);
 });
 
 test('unknown flags are not echoed, even if a token is accidentally passed', async t => {
@@ -375,7 +376,7 @@ test('NO_PROXY grammar, uppercase/lowercase variables, and unsupported proxies f
   assert.equal(proxyFor(url, { HTTPS_PROXY: 'http://proxy', NO_PROXY: '*' }), null);
   assert.equal(proxyFor(new URL('http://[::1]:8080'), { HTTP_PROXY: 'http://proxy', NO_PROXY: '[::1]:8080' }), null);
   assert.equal(proxyFor(url, { https_proxy: 'http://proxy', no_proxy: '.example.com' }), null);
-  assert.throws(() => proxyFor(url, { HTTPS_PROXY: 'socks5://proxy:8080' }), /Cannot securely reach/);
+  assert.throws(() => proxyFor(url, { HTTPS_PROXY: 'socks5://proxy:8080' }), /Couldn't reach Cairn/);
 });
 
 // These tests exercise actual HTTP and TLS parsers and CONNECT bytes over a
@@ -563,8 +564,8 @@ test('ACK retries are capped by the remaining monotonic window and provide concr
   assert.equal(r.error.kind, 'ack_unknown'); assert.equal(r.configured, true);
   assert.deepEqual(r.budgets.filter(entry => entry.route === 'ack').map(entry => entry.timeout), [15000, 15000, 7500]);
   assert.equal(r.clock, 64000); // exchange began at 5s; conservative window is 59s
-  assert.match(r.error.message, /Wait 60 seconds.*restart Claude Code.*\/cairn-memory:status/);
-  assert.match(r.error.message, /\/settings\/tokens.*setup --reauthorize/);
+  assert.match(r.error.message, /delivery to Cairn could not be confirmed/);
+  assert.equal(r.error.key,'auth_ack_unknown');
   assert.ok(!r.server.requests.some(request => request.route === 'cancel'));
 });
 
@@ -572,7 +573,7 @@ test('saving that consumes the ACK budget cancels instead of starting another wi
   const r = await timedAuthorization(t, { saveTime: 60000 });
   assert.equal(r.error.kind, 'configure'); assert.equal(r.server.grant.state, 'cancelled');
   assert.ok(!r.server.requests.some(request => request.route === 'ack'));
-  assert.match(r.error.message, /setup --reauthorize/);
+  assert.equal(r.error.key,'auth_configure');
 });
 
 for (const server of [{ sequence: [501] }, { ackStatus: 501 }]) {
@@ -581,17 +582,17 @@ for (const server of [{ sequence: [501] }, { ackStatus: 501 }]) {
     assert.equal(r.code, 1);
     if (server.sequence) {
       assert.equal(r.server.polls, 1); assert.equal(r.server.grant.state, 'cancelled');
-      assert.match(r.stdout, /protocol error/);
+      assert.match(r.stdout, /response was unexpected/);
     } else {
       assert.equal(r.server.requests.filter(request => request.route === 'ack').length, 1);
-      assert.match(r.stdout, /delivery is unconfirmed/);
+      assert.match(r.stdout, /delivery to Cairn could not be confirmed/);
     }
   });
 }
 
 test('active token limit is actionable instead of an indefinite rate-limit wait', async t => {
   const r = await fixture(t, {}, { server: { sequence: ['active_token_limit'] } });
-  assert.equal(r.code, 1); assert.match(r.stdout, /Active token limit reached.*\/settings\/tokens/);
+  assert.equal(r.code, 1); assert.match(r.stdout, /sign-in limit[\s\S]*\/settings\/tokens/);
   assert.equal(r.server.polls, 1); assert.equal(r.server.grant.state, 'cancelled');
 });
 
@@ -612,7 +613,7 @@ test('old CLI instructions include installation before configuration', async t =
 
 test('expiry uses the client timezone rather than a UTC date slice', async t => {
   const r = await fixture(t, {}, { env: { TZ: 'America/Los_Angeles' }, server: { expiresAt: '2027-04-05T00:30:00.000Z' } });
-  assert.equal(r.code, 0, r.stdout); assert.match(r.stdout, /Credential expires 4\/4\/2027/);
+  assert.equal(r.code, 0, r.stdout); assert.match(r.stdout, /valid until 4\/4\/2027/);
 });
 
 test('ACK attempts also reserve timestamp rounding before grant expiry', async t => {
@@ -650,11 +651,11 @@ for (const [name, env, locale, language] of [
     const r = await fixture(t, {}, { env, locale });
     assert.equal(r.code, 0, r.stdout);
     if (language === 'zh') {
-      assert.match(r.stdout, /安裝器.*複製這組一次性代碼.*Cairn Memory 已連線/su);
+      assert.match(r.stdout, /安裝程式.*一次性代碼.*已登入 Cairn/su);
       assert.doesNotMatch(r.stdout, /Installer|Copy this one-time code|Waiting for approval|is connected/);
-      assert.match(r.prompts[0].question, /確認 Cairn endpoint/u);
+      assert.equal(r.prompts.length,0);
     } else {
-      assert.match(r.stdout, /Installer.*Copy this one-time code.*Cairn Memory is connected/s);
+      assert.match(r.stdout, /Cairn.ink Memory setup.*One-time code.*Signed in to Cairn/s);
       assert.doesNotMatch(r.stdout + JSON.stringify(r.prompts), /[\p{Script=Han}]/u);
     }
   });
@@ -665,10 +666,10 @@ for (const lang of ['zh', 'en']) {
     const env = { LC_ALL: lang === 'zh' ? 'en_US.UTF-8' : 'zh_TW.UTF-8' };
     const r = await fixture(t, {}, { args: ['setup', '--lang', lang, '--no-browser'], env, server: { sequence: ['access_denied'] } });
     assert.equal(r.code, 1);
-    assert.match(r.stdout, lang === 'zh' ? /你已拒絕授權/u : /Authorization was denied/);
-    assert.doesNotMatch(r.stdout, lang === 'zh' ? /Authorization was denied/ : /[\p{Script=Han}]/u);
+    assert.match(r.stdout, lang === 'zh' ? /你在瀏覽器選了「拒絕」/u : /clicked Deny/);
+    assert.doesNotMatch(r.stdout, lang === 'zh' ? /clicked Deny/ : /[\p{Script=Han}]/u);
     const help = await fixture(t, {}, { args: ['--help', '--lang', lang], env });
-    assert.equal(help.code, 0); assert.match(help.stdout, /--endpoint <origin>.*--lang zh\|en/);
+    assert.equal(help.code, 0); assert.match(help.stdout, /--endpoint URL[\s\S]*--lang zh\|en/);
     assert.match(help.stdout, lang === 'zh' ? /用法/u : /Usage/);
   });
 }
@@ -679,7 +680,7 @@ test('--endpoint wins over prompt/default and old configured endpoint during rea
   });
   assert.equal(r.code, 0, r.stdout); assert.deepEqual(r.prompts, []);
   assert.equal(saved(r).endpoint, 'http://localhost:3030');
-  assert.match(r.stdout, /Cairn endpoint: http:\/\/localhost:3030 \(from --endpoint\)/);
+  assert.match(r.stdout,/Signed in again/);
   assert.ok(r.server.requests.every(request => request.headers.host === 'localhost:3030'));
 });
 
@@ -689,9 +690,10 @@ test('endpoint source is explicit for default, prompt and preserved Claude confi
   assert.equal(endpoint, 'https://cairn.ink');
   assert.match(lines[0], /Cairn endpoint: https:\/\/cairn\.ink \(default\)/);
   const fromPrompt = await fixture(t);
-  assert.match(fromPrompt.stdout, /Cairn endpoint: .*\(from prompt\)/);
+  assert.match(fromPrompt.stdout, /Sign in to Cairn in your browser/);
+  assert.equal(fromPrompt.prompts.some(p=>/Confirm Cairn endpoint/.test(p.question)),false);
   const kept = await fixture(t, { configured: true });
-  assert.match(kept.stdout, /Cairn endpoint: kept from existing config.*native configuration unchanged.*no new browser authorization/);
+  assert.match(kept.stdout, /Reusing the existing sign-in/);
   assert.deepEqual(kept.server.requests, []);
 });
 
@@ -717,7 +719,7 @@ for (const args of [
 
 test('--endpoint dry-run reports origin without network, prompt or mutation', async t => {
   const r = await fixture(t, {}, { args: ['setup', '--dry-run', '--endpoint', 'http://localhost:3030', '--lang', 'zh'] });
-  assert.equal(r.code, 0); assert.match(r.stdout, /Cairn endpoint：http:\/\/localhost:3030（來自 --endpoint）/u);
+  assert.equal(r.code, 0); assert.match(r.stdout,/http:\/\/localhost:3030（來自 --endpoint）/u);
   assert.deepEqual(r.prompts, []); assert.deepEqual(r.server.requests, []); assert.deepEqual(r.browses, []);
 });
 
@@ -746,12 +748,12 @@ test('TTY redraw retains the visible endpoint question; hidden paste never echoe
 for (const lang of ['en', 'zh']) {
   test(`device code stands out and Enter gates browser open (${lang})`, async t => {
     const r = await fixture(t, {}, { args: ['setup', '--lang', lang, '--no-clipboard'], outputTTY: true });
-    assert.equal(r.code, 0, r.stdout); assert.equal(r.prompts.length, 2);
-    assert.match(r.stdout, /\n\n! .*\x1b\[1;36mABCD-EFGH\x1b\[0m\n\n(?:Press Enter|按 Enter)/u);
-    assert.match(r.prompts[1].question, lang === 'zh' ? /按 Enter.*127\.0\.0\.1:31415\/device/u : /Press Enter.*127\.0\.0\.1:31415\/device/);
+    assert.equal(r.code, 0, r.stdout); assert.equal(r.prompts.length, 1);
+    assert.match(r.stdout,/一次性代碼|One-time code/u);assert.match(r.stdout,/\x1b\[1;36mABCD-EFGH\x1b\[0m/u);
+    assert.match(r.prompts[0].question, lang === 'zh' ? /按 Enter.*127\.0\.0\.1:31415\/device/u : /Press Enter.*127\.0\.0\.1:31415\/device/);
     assert.ok(r.stdout.indexOf('browser opened') > r.stdout.indexOf(lang === 'zh' ? '按 Enter' : 'Press Enter'));
-    assert.match(r.stdout, lang === 'zh' ? /代碼將於 10 分鐘後到期/u : /Code expires in 10 minutes/);
-    assert.match(r.stdout, lang === 'zh' ? /等待你在瀏覽器允許（代碼 ABCD-EFGH）/u : /Waiting for approval \(code ABCD-EFGH\)/);
+    assert.doesNotMatch(r.stdout, /Code expires|代碼將於/u);
+    assert.match(r.stdout, lang === 'zh' ? /等待你在瀏覽器按「允許」/u : /Waiting for you to click Allow/);
     assert.doesNotMatch(r.stdout, /GMT|Code deadline|AM |PM /);
   });
 }
@@ -759,14 +761,14 @@ for (const lang of ['en', 'zh']) {
 test('non-TTY output brackets the code, prints only the URL with --no-browser, and repeats it while waiting', async t => {
   const r = await fixture(t, {}, { args: ['setup', '--no-browser', '--no-clipboard'] });
   assert.equal(r.code, 0);
-  assert.match(r.stdout, /\n\n! Copy this one-time code: \[ ABCD-EFGH \]\n\nhttp:\/\/127\.0\.0\.1:31415\/device\n/);
-  assert.doesNotMatch(r.stdout, /\x1b|Press Enter/); assert.equal(r.prompts.length, 1); assert.deepEqual(r.browses, []);
-  assert.match(r.stdout, /Waiting for approval \(code ABCD-EFGH\)… 10:00/);
+  assert.match(r.stdout,/One-time code: \[ ABCD-EFGH \][\s\S]*Open 127\.0\.0\.1:31415\/device/);
+  assert.doesNotMatch(r.stdout, /\x1b|Press Enter/); assert.equal(r.prompts.length, 0); assert.deepEqual(r.browses, []);
+  assert.match(r.stdout, /Waiting for you to click Allow.*10:00/);
 });
 
 test('NO_COLOR suppresses bold/color in a TTY but preserves a prominent code', async t => {
   const r = await fixture(t, {}, { outputTTY: true, env: {NO_COLOR:''} });
-  assert.equal(r.code, 0); assert.match(r.stdout, /! Copy this one-time code: \[ ABCD-EFGH \]/);
+  assert.equal(r.code, 0); assert.match(r.stdout, /One-time code: \[ ABCD-EFGH \]/);
   assert.doesNotMatch(r.stdout, /\x1b\[1;36m/);
 });
 
@@ -776,7 +778,7 @@ for (const clipboard of ['present', 'absent', 'failure', 'hang']) {
     assert.equal(r.code, 0, r.stdout);
     assert.doesNotMatch(r.stdout, /clipboard-child-output-hidden/);
     if (clipboard === 'present') {
-      assert.match(r.prompts[1].question, /copied to clipboard/);
+      assert.match(r.stdout,/\(copied\)/);
       assert.deepEqual(r.clipboard, [{args:['--type','text/plain'],input:'ABCD-EFGH'}]);
     } else assert.doesNotMatch(r.stdout, /copied to clipboard/);
     assert.ok(!JSON.stringify(r.clipboard).includes(secret));
@@ -801,7 +803,7 @@ test('waiting for Enter cannot reset or outlive the grant budget', async t => {
   const delayed = await fixture(t, {}, {args:['setup','--no-clipboard'],enterDelay:61000});
   assert.equal(delayed.code, 0); assert.match(delayed.stdout, /Code expires in 9 minutes/);
   const expired = await fixture(t, {}, {args:['setup','--no-clipboard'],enterDelay:600000});
-  assert.equal(expired.code, 1); assert.match(expired.stdout, /Authorization timed out/);
+  assert.equal(expired.code, 1); assert.match(expired.stdout, /timed out/);
   assert.deepEqual(expired.browses, []); assert.equal(saved(expired), undefined);
   assert.equal(expired.server.grant.state, 'cancelled');
 });
@@ -845,7 +847,7 @@ test('real readline Enter gates browser opening and polling until the code is vi
     request:(url,options)=>localWireRequest(server.server,requestJSON,url,{...options,env:{}}),
   });
   await gate;
-  assert.match(screen,/! Copy this one-time code: \[ ABCD-EFGH \].*Press Enter/s);
+  assert.match(screen,/One-time code: \[ ABCD-EFGH \].*Press Enter/s);
   assert.equal(browsed,false);assert.deepEqual(server.requests.map(request=>request.route),['device-authorizations']);
   input.write('\r');const result=await pending;
   assert.ok(result.expiresAt);assert.equal(browsed,true);assert.equal(server.grant.state,'delivered');

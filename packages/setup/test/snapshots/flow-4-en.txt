@@ -1,0 +1,24 @@
+Cairn.ink Memory setup 0.5.0
+Found Claude Code and Codex on this computer.
+
+✓ Claude Code is connected (its plugin will be updated)
+✓ Codex is connected
+This run signs in again and replaces the selected tools' current sign-in.
+
+To share one memory, both tools must be closed while setup runs.
+Quit Claude Code and Codex completely, and wait for background work to finish.
+? Are both closed? (y/N)
+✓ Claude Code plugin 0.3.1 is up to date
+
+Sign in to Cairn in your browser (cairn.ink)
+  One-time code: [ ABCD-EFGH ]
+  Press Enter to open cairn.ink/device
+Code expires in 10 minutes.
+browser opened
+✓ Signed in again, valid until <date>
+  The old sign-in is not revoked. Revoke it at cairn.ink/settings/tokens.
+  Codex keeps this sign-in in a file only you can read. It is not encrypted.
+✓ Codex automatic memory updated
+
+✓ Both tools share one memory
+Next: reopen Claude Code and Codex.

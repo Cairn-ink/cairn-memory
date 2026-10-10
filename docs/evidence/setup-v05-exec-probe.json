@@ -1,0 +1,19 @@
+{
+  "version": "0.162.1",
+  "hookEvents": [
+    {
+      "event": "SessionStart"
+    }
+  ],
+  "privateHome": true,
+  "personalCredentials": false,
+  "modelServer": "loopback port 9 (unavailable)",
+  "syntheticHookTrustBypass": true,
+  "timeoutSeconds": 20,
+  "observedCaptureRequest": false,
+  "completedModelTurn": false,
+  "interpretation": "Native non-interactive exec invoked SessionStart. Stop/capture behavior is inferred from source and offline runtime fixtures; no completed native model turn was tested.",
+  "returnCode": -9,
+  "exitCode": null,
+  "signal": "SIGKILL"
+}

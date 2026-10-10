@@ -13,7 +13,7 @@ export async function readCodexCredential() {
     const token = await readCredential(path, config.endpoint).catch(error => {
       if (error.code !== 'ENOENT') throw error;
     });
-    return { endpoint: config.endpoint, token };
+    return { endpoint: config.endpoint, token, enabled: config.enabled };
   } catch (error) {
     if (error.code === 'ENOENT') return undefined;
     throw new SetupError('codex_state_error');
@@ -21,7 +21,13 @@ export async function readCodexCredential() {
 }
 
 export async function sharedAuthorization({ stored, endpoint: existingEndpoint, authOptions, signal }) {
-  let current, checkedStored = false, newGrant = false;
+  let current, checkedStored = false, newGrant = false, reported = false;
+  if (stored) {
+    const checked = await credentialCheck(stored.endpoint,stored.token,{...authOptions,signal});
+    if (checked?.scopes?.length !== 2 || !checked.scopes.includes('memory:capture') || !checked.scopes.includes('memory:recall') || !checked.expires_at)
+      throw new SetupError('authorization_credential_unavailable',2);
+    current = {...stored,expiresAt:checked.expires_at}; checkedStored = true;
+  }
   const conflict = () => new SetupError(newGrant ? 'authorization_delivered_endpoint_conflict' : 'authorization_endpoint_conflict', 2);
   return {
     get endpoint() { return current?.endpoint ?? stored?.endpoint ?? existingEndpoint; },
@@ -40,8 +46,9 @@ export async function sharedAuthorization({ stored, endpoint: existingEndpoint, 
       if (current) {
         if (current.endpoint !== endpoint) throw conflict();
         await options.save({ api_endpoint: endpoint, api_token: current.token });
-        options.write(options.t(newGrant ? 'authorization_shared' : 'authorization_reused'));
-        return { expiresAt: current.expiresAt };
+        if (!newGrant && !reported) options.write(options.t('authorization_reused',{date:new Date(current.expiresAt).toLocaleDateString(options.t.locale)}));
+        reported = true;
+        return { expiresAt: current.expiresAt, reported: true };
       }
       const result = await browserAuthorize(endpoint, { ...options, save: async (values, timeout) => {
         const token = values.api_token;

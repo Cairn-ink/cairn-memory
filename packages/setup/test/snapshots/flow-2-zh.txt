@@ -1,0 +1,21 @@
+Cairn.ink Memory 安裝程式 0.5.0
+在這台電腦找到 Claude Code（沒有找到 Codex）。
+
+連接後，你和 AI 的對話會先在本機盡量遮掉密碼、金鑰等敏感資訊，再存到你的 Cairn。
+每次提問時，也會送出一段遮過、有長度上限的提問，用來找回相關記憶。
+Claude Code 外掛預設會送出使用統計，不含任何對話內容。
+使用統計可以關閉，記憶也隨時可以暫停。完整說明：cairn.ink/memory/privacy
+
+? 連接 Claude Code？ (Y/n)
+✓ Claude Code 外掛 0.3.1 已安裝
+
+在瀏覽器登入 Cairn（cairn.ink）
+  一次性代碼：[ ABCD-EFGH ]
+  按 Enter 開啟 cairn.ink/device
+代碼將於 10 分鐘後到期。
+browser opened
+✓ 已登入 Cairn，有效到 <date>
+
+接下來：
+  1. 重新開啟 Claude Code，送出一則訊息。
+  2. 確認狀態：在 Claude Code 輸入 /cairn-memory:status

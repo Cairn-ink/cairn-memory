@@ -14,6 +14,13 @@ const opaque = value => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/u.test
 const identifier = value => typeof value === 'string' && /^[\w-]{1,128}$/u.test(value);
 export const validToken = value => typeof value === 'string' && value.length > 0 &&
   value.length <= 8192 && !/[\s\x00-\x1f\x7f]/u.test(value);
+export async function collectToken({prompt,write,t}) {
+  while (true) {
+    const token = await prompt(t('token_prompt'),{secret:true});
+    if (validToken(token)) return token;
+    write(t('token_invalid'));
+  }
+}
 const date = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT/u.test(value) && Number.isFinite(Date.parse(value));
 const integer = value => Number.isInteger(value) && value > 0 && value <= 600;
 const scopesValid = value => value === null || (Array.isArray(value) && value.length === 2 &&
@@ -65,6 +72,8 @@ export async function browserAuthorize(endpoint, {
   let proof, token, receipt, grant, configured = false, ackStarted = false;
   let recoveryStart;
   let stop = () => {};
+  write('');
+  write(t('login_heading',{host:new URL(endpoint).host}));
   const start = now();
   let deadline = start + 600000;
   const post = (route, body, options = {}) => request(new URL(`${base}/${route}`, endpoint), { body, signal, ...options });
@@ -95,18 +104,15 @@ export async function browserAuthorize(endpoint, {
         grant.verification_uri !== uri || !integer(grant.expires_in) || !integer(grant.interval)) throw new AuthError('protocol');
     deadline = start + Math.min(600, grant.expires_in) * 1000;
     if (now() >= deadline) throw new AuthError('timeout');
-    write('');
-    write(t('authorization_code', { code: formatCode(grant.user_code, { tty, env }) }));
-    write('');
     let copied = false;
     if (!noClipboard) {
       try { copied = await copy(grant.user_code, { signal }); } catch { /* clipboard is optional */ }
     }
+    write(t('authorization_code', { code: formatCode(grant.user_code, { tty, env }), copied:copied?t('clipboard_copied'):'' }));
     if (signal?.aborted) throw new AuthError('interrupted');
     if (now() >= deadline) throw new AuthError('timeout');
     if (noBrowser) {
-      write(uri);
-      if (copied) write(t('clipboard_copied'));
+      write(t('login_open_other_device',{url:uri.replace(/^https?:\/\//u,'')}));
     } else {
       // Keep terminal focus until the user has read/copied the code. Bound this
       // prompt by the same grant deadline; abort restores readline's raw mode.
@@ -124,7 +130,7 @@ export async function browserAuthorize(endpoint, {
     if (signal?.aborted) throw new AuthError('interrupted');
     if (now() >= deadline) throw new AuthError('timeout');
     const seconds = Math.ceil((deadline - now()) / 1000);
-    write(seconds >= 60 ? t('code_deadline', { minutes: Math.ceil(seconds / 60) }) : t('code_deadline_seconds', { seconds }));
+    if (!tty) write(seconds >= 60 ? t('code_deadline', { minutes: Math.ceil(seconds / 60) }) : t('code_deadline_seconds', { seconds }));
     if (!noBrowser) {
       try { await browse(write, uri, signal); }
       catch { if (!signal?.aborted) write(t('open_manually', { url: uri })); }

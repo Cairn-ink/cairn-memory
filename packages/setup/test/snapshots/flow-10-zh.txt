@@ -1,0 +1,5 @@
+✓ 已從 Codex 移除 Cairn 自動記憶
+  Claude Code 不受影響，記憶也都還在。
+  已存的記憶仍在你的 Cairn。這台電腦的登入不會自動撤銷，
+  可到 cairn.ink/settings/tokens 撤銷。
+  Codex 裡的 Cairn 工具（/mcp）保留；要一併移除：codex mcp remove cairn

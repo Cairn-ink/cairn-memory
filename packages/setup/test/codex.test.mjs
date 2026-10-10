@@ -32,15 +32,16 @@ async function fixture(t, options = {}) {
   }
   const promptsPath = join(workspace.path, 'prompts.jsonl'); writeFileSync(promptsPath, '');
   const harness = join(workspace.path, 'harness.mjs');
-  writeFileSync(harness, `import {main} from ${JSON.stringify(moduleURL)};
+  writeFileSync(harness, `import {SetupError} from ${JSON.stringify(new URL('../lib/errors.mjs',import.meta.url).href)};
+    import {main} from ${JSON.stringify(moduleURL)};
     import {appendFileSync,writeFileSync,writeSync} from 'node:fs';
-    const answers = ${JSON.stringify(options.answers ?? ['', secret])};
+    const answers = ${JSON.stringify(options.answers ?? [secret])};
     process.exitCode = await main(process.argv.slice(2), {
       interactive: ${options.interactive ?? true}, nodeVersion: ${JSON.stringify(options.nodeVersion ?? process.versions.node)},
       prompt: async (question, options) => {
         appendFileSync(${JSON.stringify(promptsPath)}, JSON.stringify({question, options}) + '\\n');
         if (options?.secret && ${Boolean(options.concurrentChange)}) writeFileSync(${JSON.stringify(join(home, 'config.toml'))}, 'model = "concurrent"\\n');
-        return answers.shift() ?? '';
+        if(!answers.length && ${Boolean(options.cancelAfterAnswers)})throw new SetupError('input_cancelled',130);return answers.shift() ?? '';
       }, browse: async (_write, url) => writeSync(1, 'browser opened ' + url + '\\n')
     });`);
   const result = await new Promise((resolve, reject) => {
@@ -51,7 +52,8 @@ async function fixture(t, options = {}) {
     });
     let stdout = '', stderr = '';
     child.stdout.on('data', data => { stdout += data; }); child.stderr.on('data', data => { stderr += data; });
-    child.on('error', reject); child.on('close', code => resolve({ code, stdout, stderr }));
+    const timer=setTimeout(()=>child.kill('SIGKILL'),30000);
+    child.on('error', reject); child.on('close', code => {clearTimeout(timer);resolve({ code, stdout, stderr });});
   });
   const calls = readFileSync(callsPath, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
   const prompts = readFileSync(promptsPath, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
@@ -73,23 +75,23 @@ test('Codex setup saves native HTTP header privately and preserves unrelated con
   assert.ok(result.config.includes('Authorization = "Bearer ' + secret + '"'));
   assert.equal(result.mode, 0o600);
   assert.deepEqual(result.files, ['config.toml']);
-  assert.equal(result.prompts[1].options.secret, true);
-  assert.match(result.stdout, /plaintext; no keyring/);
-  assert.match(result.stdout, /Codex format not yet verified/);
+  assert.equal(result.prompts[0].options.secret, true);
+  assert.match(result.stdout, /unencrypted/);
+  assert.match(result.stdout, /Codex automatic memory is off/);
   assert.ok(result.calls.every(call => call.args[0] !== 'plugin'));
 });
 
 test('auto-detect Codex when Claude is absent', async t => {
-  const result = await fixture(t, { args: ['setup', '--no-browser'], answers: ['yes', '', secret] });
+  const result = await fixture(t, { args: ['setup', '--no-browser'], answers: ['yes', secret] });
   assert.equal(result.code, 0, result.stdout);
-  assert.match(result.stdout, /Only explicit MCP memory tools/);
+  assert.match(result.stdout, /manual memory/);
   assert.ok(result.config.includes('Authorization = "Bearer ' + secret + '"'));
   assert.equal(result.mode, 0o600);
 });
 
 test('status reports Codex even when Claude fails; explicit Codex restricts the run', async t => {
   const defaultResult = await fixture(t, { claude: true, args: ['status'] });
-  assert.equal(defaultResult.code, 8); assert.ok(defaultResult.calls.length); assert.match(defaultResult.stdout, /Client: codex/);
+  assert.equal(defaultResult.code, 8); assert.ok(defaultResult.calls.length); assert.match(defaultResult.stdout, /Codex/);
   const explicit = await fixture(t, { claude: true }); assert.equal(explicit.code, 0);
 });
 
@@ -107,15 +109,15 @@ test('configured Codex is idempotent and status never prints native secret outpu
     const result = await fixture(t, { config: configured, args: [action, '--client', 'codex'] });
     assert.equal(result.code, 0); assert.equal(result.config, configured); assert.equal(result.mode, 0o644);
     assert.deepEqual(result.prompts, []); assert.deepEqual(result.files, ['config.toml']);
-    assert.match(result.stdout, /Credential: configured/);
+    assert.match(result.stdout, /Cairn tools|PAT, remote service/);
   }
 });
 
 test('existing HTTP endpoint without credential prompts only for PAT', async t => {
-  const result = await fixture(t, { config: endpoint, answers: ['pat', secret] });
-  assert.equal(result.code, 0, result.stdout); assert.equal(result.prompts.length, 2);
-  assert.equal(result.prompts[1].options.secret, true); assert.equal(result.mode, 0o600);
-  assert.match(result.stdout, /Cairn endpoint: https:\/\/cairn\.ink \(from existing config\)/);
+  const result = await fixture(t, { config: endpoint, args:['setup','--client','codex','--no-browser','--manual-token'], answers: [secret] });
+  assert.equal(result.code, 0, result.stdout); assert.equal(result.prompts.length, 1);
+  assert.equal(result.prompts[0].options.secret, true); assert.equal(result.mode, 0o600);
+  assert.match(result.stdout, /The Cairn tools will use: https:\/\/cairn\.ink\/api\/mcp/);
 });
 
 for (const config of [endpoint + 'enabled = false\n', '[mcp_servers.cairn]\ncommand = "other"\n',
@@ -130,13 +132,13 @@ test('loaded environment credential is preserved and not written to config', asy
   const config = endpoint + 'bearer_token_env_var = "ORIGINAL_TOKEN"\n';
   const result = await fixture(t, { config, env: { ORIGINAL_TOKEN: secret } });
   assert.equal(result.code, 0); assert.equal(result.config, config); assert.deepEqual(result.prompts, []);
-  assert.match(result.stdout, /credential preserved/);
+  assert.match(result.stdout, /Cairn tools|PAT, remote service/);
 });
 
 test('noninteractive Codex setup leaves configuration pending without writing', async t => {
   const result = await fixture(t, { interactive: false });
   assert.equal(result.code, 0); assert.equal(result.homeExists, false); assert.deepEqual(result.prompts, []);
-  assert.match(result.stdout, /Configuration pending/); assert.match(result.stdout, /--bearer-token-env-var CAIRN_MCP_TOKEN/);
+  assert.match(result.stdout, /Not set up yet/); assert.match(result.stdout, /bearer-token-env-var[\s\S]*CAIRN_MCP_TOKEN/);
 });
 
 test('older Codex CLI falls back before collecting credentials', async t => {
@@ -161,31 +163,31 @@ test('unsupported Node fails before Codex calls', async t => {
 });
 
 test('invalid endpoint is rejected before hidden PAT collection', async t => {
-  const result = await fixture(t, { answers: ['http://remote.example', secret] });
-  assert.equal(result.code, 1); assert.equal(result.prompts.length, 1); assert.equal(result.config, null);
+  const result = await fixture(t, { args:['setup','--client','codex','--endpoint','http://remote.example'],answers:[secret] });
+  assert.equal(result.code, 2); assert.equal(result.prompts.length, 0); assert.equal(result.config, null);
 });
 
 test('invalid PAT leaves original file intact and cleans validation scratch', async t => {
-  const result = await fixture(t, { config: 'model = "preserve"\n', answers: ['', secret + '\n'] });
-  assert.equal(result.code, 1); assert.equal(result.config, 'model = "preserve"\n'); assert.deepEqual(result.files, ['config.toml']);
+  const result = await fixture(t, { config: 'model = "preserve"\n', answers: [secret + '\n'], cancelAfterAnswers:true });
+  assert.equal(result.code, 130); assert.equal(result.config, 'model = "preserve"\n'); assert.deepEqual(result.files, ['config.toml']);
 });
 
 for (const command of ['--version', 'mcp get cairn --json']) {
   test(`Codex failure propagates actual exit without secret-bearing child output: ${command}`, async t => {
-    const result = await fixture(t, { config: configured, state: { fail: command } });
-    assert.equal(result.code, 7); assert.match(result.stdout, /exit 7/); assert.equal(result.config, configured);
+    const result = await fixture(t, { args:['setup','--client','codex','--verbose'],config: configured, state: { fail: command } });
+    assert.equal(result.code, 7); assert.match(result.stdout, /exit code: 7/); assert.equal(result.config, configured);
   });
 }
 
 test('native candidate validation failure leaves original intact and asks for no PAT', async t => {
   const result = await fixture(t, { config: 'model = "preserve"\n', state: { failValidation: true } });
-  assert.equal(result.code, 7); assert.equal(result.prompts.length, 1);
+  assert.equal(result.code, 7); assert.equal(result.prompts.length, 0);
   assert.equal(result.config, 'model = "preserve"\n'); assert.deepEqual(result.files, ['config.toml']);
 });
 
 test('malformed CLI JSON fails closed without logging its contents', async t => {
   const result = await fixture(t, { state: { badJSON: true } }); assert.equal(result.code, 1);
-  assert.match(result.stdout, /Cannot read Codex CLI state/); assert.equal(result.homeExists, false);
+  assert.match(result.stdout, /Cannot read the Codex state/); assert.equal(result.homeExists, false);
 });
 
 test('concurrent config edit is never overwritten', async t => {
@@ -195,7 +197,7 @@ test('concurrent config edit is never overwritten', async t => {
 
 test('existing setup lock is retained and original config not overwritten', async t => {
   const result = await fixture(t, { config: 'model = "preserve"\n', lock: true });
-  assert.equal(result.code, 1); assert.equal(result.config, 'model = "preserve"\n');
+  assert.equal(result.code, 2); assert.equal(result.config, 'model = "preserve"\n');
   assert.deepEqual(result.files, ['.cairn-setup.lock', 'config.toml']);
 });
 
@@ -205,14 +207,14 @@ test('symlink config is refused before credential collection and target is intac
 });
 
 test('browser opens only for interactive Codex PAT pairing', async t => {
-  const result = await fixture(t, { args: ['setup', '--client', 'codex'] });
+  const result = await fixture(t, { args: ['setup', '--client', 'codex'],answers:[secret] });
   assert.equal(result.code, 0); assert.match(result.stdout, /browser opened https:\/\/cairn\.ink\/settings\/tokens/);
 });
 
 
 test('bare user entry defaults to native OAuth login and preserves stored OAuth credentials', async t => {
   const result = await fixture(t, { config: endpoint, answers: [''] });
-  assert.equal(result.code, 0); assert.equal(result.config, endpoint); assert.equal(result.prompts.length, 1);
+  assert.equal(result.code, 0); assert.equal(result.config, endpoint); assert.equal(result.prompts.length, 0);
   assert.match(result.stdout, /codex mcp login cairn/); assert.ok(!result.prompts.some(p => p.options?.secret));
 });
 
@@ -235,7 +237,7 @@ test('explicit Claude never auto-selects the available Codex binary', async t =>
 
 test('trusted-project-only Cairn entry cannot select a header-only user config or project URL', async t => {
   const result = await fixture(t, { projectConfig: '[mcp_servers.cairn]\nurl = "http://127.0.0.1:18768/api/mcp"\n' });
-  assert.equal(result.code, 0, result.stdout); assert.equal(result.prompts.length, 2);
+  assert.equal(result.code, 0, result.stdout); assert.equal(result.prompts.length, 1);
   assert.ok(result.config.startsWith('[mcp_servers.cairn]\nurl = "https://cairn.ink/api/mcp"\n'));
   assert.doesNotMatch(result.stdout, /18768/);
   assert.ok(result.calls.every(call => call.cwd !== call.home));
@@ -245,14 +247,14 @@ test('trusted-project-only Cairn entry cannot select a header-only user config o
 });
 
 test('project layer cannot override the existing user-level Cairn endpoint', async t => {
-  const result = await fixture(t, { config: endpoint, projectConfig: '[mcp_servers.cairn]\nurl = "http://127.0.0.1:18768/api/mcp"\n', answers: ['pat', secret] });
+  const result = await fixture(t, { args:['setup','--client','codex','--verbose','--manual-token','--no-browser'],config: endpoint, projectConfig: '[mcp_servers.cairn]\nurl = "http://127.0.0.1:18768/api/mcp"\n', args:['setup','--client','codex','--no-browser','--manual-token'], answers: [secret] });
   assert.equal(result.code, 0, result.stdout); assert.ok(result.config.includes('url = "https://cairn.ink/api/mcp"'));
-  assert.doesNotMatch(result.stdout, /18768/); assert.match(result.stdout, /Cairn endpoint: https:\/\/cairn\.ink \(from existing config\)/);
+  assert.doesNotMatch(result.stdout, /18768/); assert.match(result.stdout, /The Cairn tools will use: https:\/\/cairn\.ink\/api\/mcp/);
 });
 
 for (const authStatus of ['not_logged_in', 'unknown', 'unsupported']) {
   test(`PAT explicitly selected works without OAuth discovery state (${authStatus})`, async t => {
-    const result = await fixture(t, { config: endpoint, state: { authStatus }, answers: ['pat', secret] });
+    const result = await fixture(t, { config: endpoint, state: { authStatus }, args:['setup','--client','codex','--no-browser','--manual-token'], answers: [secret] });
     assert.equal(result.code, 0, result.stdout); assert.equal(result.mode, 0o600);
     assert.ok(result.config.includes('Bearer ' + secret)); assert.ok(result.calls.every(call => !call.args.includes('list')));
   });
@@ -268,7 +270,7 @@ test('Claude-only help does not prepend the Codex client line', async t => {
 test('a temporary parent with project config fails closed before any CLI or credential collection', async t => {
   const result = await fixture(t, { projectTmp: true });
   assert.equal(result.code, 1); assert.deepEqual(result.prompts, []); assert.deepEqual(result.calls, []);
-  assert.match(result.stdout, /choose a neutral temporary directory/); assert.equal(result.config, null);
+  assert.match(result.stdout, /Choose a neutral temporary directory/); assert.equal(result.config, null);
 });
 
 test('an incomplete user header table fails rather than borrowing a project transport', async t => {
@@ -285,22 +287,22 @@ test('relative CLI PATH entries still work after moving to neutral cwd', async t
 
 
 test('Codex shares language selection and explicit endpoint precedence', async t => {
-  const result = await fixture(t, { args: ['setup', '--client', 'codex', '--no-browser', '--endpoint', 'https://selected.example/', '--lang', 'zh'], answers: [secret], env: { LANG: 'C' } });
+  const result = await fixture(t, { args: ['setup', '--client', 'codex', '--no-browser', '--endpoint', 'https://selected.example/', '--verbose', '--lang', 'zh'], answers: [secret], env: { LANG: 'C' } });
   assert.equal(result.code, 0, result.stdout);
   assert.match(result.config, /url = "https:\/\/selected\.example\/api\/mcp"/);
   assert.equal(result.prompts.length, 1); assert.equal(result.prompts[0].options.secret, true);
   assert.match(result.stdout, /Cairn endpoint：https:\/\/selected\.example（來自 --endpoint）/u);
-  assert.match(result.stdout, /Cairn MCP 與 PAT 已保存/u); assert.doesNotMatch(result.stdout, /Cairn MCP and PAT saved/);
+  assert.match(result.stdout, /已把 Cairn 工具加入 Codex/u); assert.doesNotMatch(result.stdout, /Cairn MCP and PAT saved/);
 });
 
 test('Codex explicit endpoint cannot silently replace an existing credential target', async t => {
   const result = await fixture(t, { config: configured, args: ['setup', '--client', 'codex', '--endpoint', 'https://selected.example'] });
   assert.equal(result.code, 2); assert.equal(result.config, configured); assert.deepEqual(result.prompts, []);
-  assert.match(result.stdout, /differs from existing Codex config/);
+  assert.match(result.stdout, /use a different server/);
 });
 
 test('Codex reports the existing origin when preserving configuration', async t => {
-  const result = await fixture(t, { config: configured });
+  const result = await fixture(t, { args:['setup','--client','codex','--verbose'], config: configured });
   assert.equal(result.code, 0);
   assert.match(result.stdout, /Cairn endpoint: https:\/\/cairn\.ink \(from existing config\)/);
   assert.doesNotMatch(result.stdout, /[\p{Script=Han}]/u);

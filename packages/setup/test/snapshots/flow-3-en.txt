@@ -1,0 +1,34 @@
+Cairn.ink Memory setup 0.5.0
+Found Claude Code and Codex on this computer.
+
+✓ Claude Code is connected (its plugin will be updated)
+
+Once connected, your conversations with the AI are saved to your Cairn.
+Passwords and keys are masked on this computer first (best effort).
+Each prompt also sends a masked, length-limited copy to find related memories.
+You can pause memory at any time. Details: cairn.ink/memory/privacy
+
+? Connect Codex and share Claude Code's memory? (y/N)
+
+To share one memory, both tools must be closed while setup runs.
+Quit Claude Code and Codex completely, and wait for background work to finish.
+? Are both closed? (y/N)
+Codex needs its own sign-in. Setup never reads Claude Code's sign-in.
+  Use the same Cairn account as Claude Code.
+✓ Claude Code plugin 0.3.1 is up to date
+✓ Reusing the existing sign-in
+
+Sign in to Cairn in your browser (cairn.ink)
+  One-time code: [ ABCD-EFGH ]
+  Press Enter to open cairn.ink/device
+Code expires in 10 minutes.
+browser opened
+✓ Signed in to Cairn, valid until <date>
+  Codex keeps this sign-in in a file only you can read. It is not encrypted.
+✓ Codex automatic memory installed
+
+✓ Both tools share one memory
+Next:
+  1. Reopen Claude Code and send a message.
+  2. Reopen Codex, type /hooks and allow the 4 Cairn entries.
+  3. Check status: npx @cairn-ink/memory status

@@ -1,0 +1,21 @@
+Cairn.ink Memory 安裝程式 0.5.0
+在這台電腦找到 Claude Code 和 Codex。
+
+✓ Claude Code 已連接（外掛會順便更新）
+✓ Codex 已連接
+
+Claude Code 連 staging.cairn.ink、Codex 連 cairn.ink，還不能共用記憶。
+  1. cairn.ink  Claude Code 改用 Codex 的登入，不必再登入
+  2. staging.cairn.ink  Codex 要在瀏覽器重新登入
+換過去的工具，之後的記憶存到新的 Cairn；已經存的記憶留在原處。
+? 要統一用哪一個？(1/2)
+
+兩個工具要共用同一份記憶，安裝時都必須關閉。
+請完全結束 Claude Code 和 Codex，並等背景工作結束。
+? 都關好了嗎？ (y/N)
+✓ Claude Code 外掛 0.3.1 已是最新版
+✓ 沿用 Codex 的登入（有效到 <date>）
+✓ Codex 自動記憶已更新
+
+✓ 兩個工具共用同一份記憶
+接下來：重新開啟 Claude Code 和 Codex。

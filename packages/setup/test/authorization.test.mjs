@@ -29,21 +29,21 @@ test('round 3: whole-package grep forbids Claude host secret-store references', 
 });
 for (const lang of ['zh', 'en']) test(`shared endpoint refusal is localized (${lang}) and cannot start authorization`, async () => {
   const authorization = await sharedAuthorization({ stored: { endpoint: 'https://old.example', token: 'synthetic-token' },
-    authOptions: { request: () => { throw new Error('must not request'); } } });
+    authOptions: { request: async () => ({status:200,value:{valid:true,token_id:'synthetic-token-id',scopes:['memory:capture','memory:recall'],expires_at:'2027-04-01T00:00:00.000Z'}}) } });
   await assert.rejects(authorization.authorize('https://new.example', {}), error => {
     assert.equal(error.key, 'authorization_endpoint_conflict'); assert.equal(error.code, 2);
-    const text = translator(lang)(error.key); assert.match(text, /--reauthorize/);
-    assert.match(text, lang === 'zh' ? /既有 endpoint/ : /endpoints conflict/); return true;
+    const text = translator(lang)(error.key); assert.match(text, /Cairn/);
+    assert.match(text, lang === 'zh' ? /不同的 Cairn/ : /different Cairn/); return true;
   });
 });
 test('round 3: documentation states approval direction and prohibits importing Claude secrets', async () => {
   const packageRoot = process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(process.env.CAIRN_SETUP_TEST_PACKAGE + '/') : new URL('../', import.meta.url);
   const root = new URL('../../', packageRoot);
   for (const [url, pattern] of [
-    [new URL('README.md', root), /Claude first[^\n]*one new browser approval/],
+    [new URL('README.md', root), /[Aa]dding Codex after Claude[\s\S]*browser[\s\S]*same account/],
     [new URL('plugins/cairn-memory/README.md', root), /Claude first[^\n]*one new browser approval/],
     [new URL('docs/codex-setup.md', root), /Claude 先裝[^\n]*一次新的瀏覽器核准/],
-    [new URL('README.md', packageRoot), /Claude first[^\n]*one new browser approval/],
+    [new URL('README.md', packageRoot), /[Aa]dding Codex after Claude[\s\S]*browser[\s\S]*same account/],
     [new URL('CHANGELOG.md', root), /Never read Claude Code's credential store/],
   ]) assert.match(await readFile(url, 'utf8'), pattern, url.pathname);
 });
@@ -59,8 +59,8 @@ for (const lang of ['en', 'zh']) test(`round 3: endpoint conflict after delivery
     assert.equal(error.key, 'authorization_delivered_endpoint_conflict');
     assert.equal(error.code, 2);
     const text = translator(lang)(error.key);
-    assert.match(text, /--reauthorize/);
-    assert.match(text, lang === 'en' ? /already delivered/ : /已交付憑證/);
+    assert.match(text, /Cairn/);
+    assert.match(text, lang === 'en' ? /already delivered/ : /已交付登入/);
     assert.doesNotMatch(text, /credentials and endpoints were kept|已保留憑證與 endpoint/);
     return true;
   });
