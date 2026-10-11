@@ -1986,3 +1986,23 @@ accounted transport and upstream arm need separate controls, then entirely new
 frozen paired sources/rubric and independent first-answer/support judgments,
 with harm/resource rejection gates. Original cumulative/protected spending
 limits remain untouched; this prototype authorizes no paid execution.
+
+The separately named [source-bundle planner transport](plans/source-bundle-plan-rank-transport.md)
+adds offline accounting/wire controls only. It is a single-use explicit capability,
+not an old-guard allowlist extension, runner or live experiment grant. Both actual
+provider envelopes and the prepared planner representation must fit 6,000 local
+tokens, with the pinned model, one count/at most one generation, no retry and one
+logical deadline. Existing cumulative schema-2 accounting retains all 5,000-
+microUSD reservations, including unsent durably reserved intents; known profile
+prices are estimates, not invoices. Fatal accounting/usage/model/auth/credential/
+observer anomalies must stop any future coordinating runner globally.
+
+Dependency-free generic discovery skips the optional actual-tokenizer transport
+parent once; it does not validate transport behavior. Required offline acceptance
+and the existing core CI matrix execute real-tokenizer controls with both required
+flags. Fake HTTP and synthetic-ledger/source fidelity demonstrate neither reliable
+supported answers nor identity, adoption or temporal correctness. Closed cohorts,
+D12 and Stage 2/3 remain unchanged; no upstream recovery, default/core/adapter
+change, paid replay or new spending is authorized. Future paired work needs newly
+frozen source/rubric and independent first-answer/support judgments, preserving
+the original cumulative US$400 ceiling and protected US$30.

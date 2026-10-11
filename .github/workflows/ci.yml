@@ -96,6 +96,8 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm ci --prefix adapters/openai
+      - name: Required offline query-local bundle controls
+        run: CAIRN_BUNDLE_TOKENIZER_REQUIRED=1 CAIRN_BUNDLE_TRANSPORT_REQUIRED=1 node tools/testing/run.mjs evaluation/architecture/test/source-bundle-rank.test.mjs evaluation/architecture/test/source-bundle-integration.test.mjs evaluation/architecture/test/source-bundle-plan-rank-transport.test.mjs
       - run: npm run test:core
       - run: npm run demo:store
       - run: npm run demo:history
