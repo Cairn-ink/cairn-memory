@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { createOwnedGitFixture } from '../../../tools/testing/owned-git-fixture.mjs';
 import { loadDevelopmentFreeze } from '../corpus.mjs';
 import { loadRequestedAnswerFreeze, compileRequestedAnswerRubric, REQUESTED_ANSWER_PROTOCOL,
   buildBlindRequestedAnswerPacket, aggregateRequestedAnswerJudgments } from '../requested-answer.mjs';
@@ -173,7 +174,7 @@ test('wrong launch/rubric/treatment versions reject before key lookup or budget 
 test('owned clean synthetic checkout freezes distinct manifests and retains one-shot closure on key failure', async context => {
   const workspace = createTestWorkspace(null, { prefix: 'cairn-requested-answer-launch-' });
   try {
-    const root = fileURLToPath(new URL('../../../', import.meta.url)), checkout = join(workspace.path, 'runtime'); mkdirSync(checkout);
+    const root = fileURLToPath(new URL('../../../', import.meta.url)), fixture = createOwnedGitFixture(workspace), checkout = fixture.path;
     const archive = execFileSync('/usr/bin/git', ['archive', 'HEAD'], { cwd: root, maxBuffer: 128 * 1024 * 1024 });
     execFileSync('/usr/bin/tar', ['-x', '-C', checkout], { input: archive });
     assert.equal(existsSync(join(checkout, 'node_modules')), false, 'Source-only checkout has no root dependency install');
@@ -182,10 +183,11 @@ test('owned clean synthetic checkout freezes distinct manifests and retains one-
     for (const file of overlay) copyFileSync(new URL(`../${file}`, import.meta.url), join(checkout, 'evaluation/algorithm-development', file));
     copyFileSync(join(root, 'docs/plans/source-diverse-qa24.md'), join(checkout, 'docs/plans/source-diverse-qa24.md'));
     cpSync(join(root, 'adapters/openai/node_modules'), join(checkout, 'adapters/openai/node_modules'), { recursive: true });
-    const git = args => execFileSync('/usr/bin/git', ['-C', checkout, ...args], { stdio: 'ignore',
-      env: { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_AUTHOR_NAME: 'Synthetic fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
-        GIT_COMMITTER_NAME: 'Synthetic fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' } });
-    git(['init']); git(['add', '--all']); git(['commit', '-m', 'Synthetic owned launch fixture']);
+    fixture.commit('Synthetic owned launch fixture');
+    assert.equal(existsSync(join(checkout, '.git', 'objects', 'maintenance.lock')), false,
+      'Owned Git maintenance must finish before the fixture proceeds toward disposal');
+    assert.equal(existsSync(join(checkout, '.git', 'gc.pid')), false,
+      'Owned Git auto-GC must finish before the fixture proceeds toward disposal');
     const configuration = { directory: join(workspace.path, 'ledger'), runId: randomUUID(), limitMicroUsd: 400_000_000, requestCap: 100_000 };
     createExperimentBudget(configuration).close();
     const before = inspectExperimentBudgetForEmbeddingUpgrade(configuration);
