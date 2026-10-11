@@ -16,6 +16,13 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [opt-in MOC-prior candidate experiment](docs/plans/moc-prior-candidates.md)
+  reorders only the already eligible source-context pool with bounded valid
+  title hints, without an extra model call or default change. Manual-filing and
+  scripted pressure regression are not real first-answer QA improvement.
+  Natural classification/consumption, local resource measurement and fresh
+  paired model acceptance remain open; no old-study rerun is authorized.
+
 - The [closed relation-bound first-answer diagnostic](docs/plans/relation-binding-results.md)
   returned 12/12 correct per arm with zero paired gain and no baseline targeted
   binding errors. Four first-judge abstention classifications remain null;

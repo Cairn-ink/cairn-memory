@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { transaction } from "./database.mjs";
 import { fail } from "./validation.mjs";
 import { QUERY_SCAN_LIMIT, SOURCE_QUERY_RECEIPT_LIMIT,
-  BOUNDED_KEYSET_SOURCE_CANDIDATES } from './query-candidates.mjs';
+  BOUNDED_KEYSET_SOURCE_CANDIDATES, MOC_PRIOR_SOURCE_CANDIDATES,
+  mixMocPriorCandidates } from './query-candidates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -360,11 +361,62 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     AND EXISTS (SELECT 1 FROM moc_title_sources present WHERE present.moc_id = moc.id)
     THEN moc.title ELSE NULL END`;
 
+  // Prior titles have a stricter bounded read than public title inspection:
+  // every original binding must also survive the current published projection.
+  // Metadata only is read until that check succeeds; never score source text.
+  function candidateTitlePrior(ns, rows, score) {
+    const bounds = MOC_PRIOR_SOURCE_CANDIDATES;
+    const state = db.prepare(`SELECT s.active_generation, g.published, g.owner_id, g.scope, g.project_id
+      FROM namespace_index_state s LEFT JOIN index_generations g ON g.id = s.active_generation
+      WHERE ${qualifiedNamespace('s')}`).get(...boundary(ns));
+    if (state?.active_generation !== undefined && state.active_generation !== null &&
+        (state.published !== 1 || state.owner_id !== ns.ownerId || state.scope !== ns.scope ||
+         state.project_id !== ns.projectId)) return rows;
+    const members = new Map();
+    for (const row of rows) {
+      if (row.item.type !== 'ref') continue;
+      const id = row.item.ref.parentId;
+      if (!members.has(id)) members.set(id, []);
+      if (members.get(id).length < bounds.priorMembers) members.get(id).push(row);
+    }
+    const topic = projectPrepare(`SELECT id, revision, title FROM mocs
+      WHERE ${namespaceWhere} AND id = ? AND level = 1 AND revision = ?`);
+    const sources = db.prepare(`SELECT s.memory_revision, source.id, source.revision,
+        source.owner_id, source.scope, source.project_id, source.deleted, source.currentness,
+        source.review_state
+      FROM moc_title_sources s LEFT JOIN memories source ON source.id = s.memory_id
+      WHERE s.moc_id = ? ORDER BY s.memory_id LIMIT ?`);
+    // Exact parameterized point reads push keys into both UNION view arms;
+    // joining those views to the bounded outer page can materialize all rows.
+    const projectedSource = db.prepare(`SELECT memory_id FROM index_read_title_sources
+      WHERE moc_id = ? AND memory_id = ? AND memory_revision = ?`);
+    const projectedMemory = projectPrepare(`SELECT id FROM memories WHERE ${namespaceWhere}
+      AND id = ? AND revision = ? AND deleted = 0 AND currentness = 'current' AND review_state != 'awaiting'`);
+    const hints = [];
+    for (const id of [...members.keys()].sort().slice(0, bounds.topics)) {
+      const moc = topic.get(...boundary(ns), id, members.get(id)[0].item.ref.parentRevision);
+      if (!moc) continue;
+      const bindings = sources.all(id, bounds.titleBindings + 1);
+      if (!bindings.length || bindings.length > bounds.titleBindings || bindings.some(source =>
+        !source.id || source.deleted || source.currentness !== 'current' || source.review_state === 'awaiting' ||
+        source.owner_id !== ns.ownerId || source.scope !== ns.scope || source.project_id !== ns.projectId ||
+        source.revision !== source.memory_revision)) continue;
+      if (bindings.some(source => !projectedSource.get(id, source.id, source.memory_revision) ||
+        !projectedMemory.get(...boundary(ns), source.id, source.memory_revision))) continue;
+      if (typeof moc.title !== 'string' || !moc.title.trim() || moc.title.length > 240 || [...moc.title].length > 120) continue;
+      const overlap = score(moc.title);
+      if (overlap > 0) hints.push({ id, score: overlap });
+    }
+    hints.sort((left, right) => right.score - left.score || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+    return mixMocPriorCandidates(rows, hints.slice(0, bounds.priorTopics).flatMap(hint => members.get(hint.id)));
+  }
+
   function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
     sourceCandidatePolicy = null }) {
     return transaction(db, () => {
       if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
-      const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
+      const mocPrior = sourceCandidatePolicy === MOC_PRIOR_SOURCE_CANDIDATES.version;
+      const keyset = mocPrior || sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
       if (sourceCandidatePolicy !== null && (!keyset || sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT)) {
         fail('invalid_input');
       }
@@ -480,7 +532,10 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision },
             label: sourceLabel ?? memoryLabel(memory.content) } };
       });
-      return { rows, epoch: currentEpoch, scanExhausted };
+      if (mocPrior && epoch(ns) !== currentEpoch) fail('index_revision_conflict');
+      const ordered = mocPrior ? candidateTitlePrior(ns, rows, score) : rows;
+      if (mocPrior && epoch(ns) !== currentEpoch) fail('index_revision_conflict');
+      return { rows: ordered, epoch: currentEpoch, scanExhausted };
     });
   }
 

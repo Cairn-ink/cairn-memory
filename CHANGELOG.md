@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — opt-in core candidate experiment
+
+- Add explicit `sourceCandidatePolicy: 'moc-prior-keyset-v1'` for source/rationale
+  evidence recall. It mixes at most 6 source/revision/projection-valid L1-prior
+  members into the same eligible top 1,024 while preserving first 2 lexical
+  candidates, row payloads, source authority, model budgets and defaults.
+- Bound extra title work to 64 topics and 64 original bindings plus a sentinel
+  each; no extra model call, graph traversal, raw archive, schema or host option.
+  Manual-filing/scripted visibility evidence is not natural QA improvement.
+
 ## Unreleased — @cairn-ink/memory installer 0.2.0
 
 - Highlight the one-time code with blank lines and bold/color in a TTY, or
