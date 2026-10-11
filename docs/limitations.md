@@ -1788,3 +1788,26 @@ query/keyset MOC references do not prove hierarchical MOC-only navigation.
 Primary's prior runtime-78 engineering checks and 27 CI passes do not establish
 semantic acceptance or final verification of this docs-only delivery candidate;
 its checks, independent reviews and latest-head CI remain pending.
+
+### Closed answer-format diagnostic and prospective larger-pool follow-up
+
+The separately frozen answer-only diagnostic closed on 2026-10-11 with 16/16
+answers. Nested and flat formats each returned four expected known answers and
+four expected unknown abstentions. Two fresh nonauthor blind judges agreed on
+all 16 outcomes, with no wrong joins or unresolved judgments. This did not
+reproduce D12 or show a format advantage; it is neither a cause nor a repair.
+Its 16 HTTP requests reserved $0.08; recorded model-profile token usage was
+4,648 input / 253 output, estimated $0.002275, not an invoice. The original
+three-arm findings and D12 safety failure remain unchanged.
+
+The [new six-case contract](plans/large-pool-six.md) is a prospective closed
+development experiment, not a paid result. Natural capture and one natural
+selection/rank trace feed two real cold-core arms; the second replays only raw
+replies under exact request identity, while answers are independent. This
+isolates the compiler intervention under a coupled trace and cannot establish
+standalone end-to-end treatment cost or quality. Actual rank pools >6, seed
+slack and lexical-branch diagnostics determine eligibility; zero additions
+remain observations. Six batches can admit at most 30 cards, so archives >36,
+long-history operation, official benchmarks and natural-host use remain
+unproven. Even conditional support is only for further development, with Stage 3
+and product promotion blocked by retained earlier failures.

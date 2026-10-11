@@ -6,6 +6,7 @@ import { openBoundEmbeddingExperimentBudget } from '../experiment-budget/index.m
 import { packMixedAnswer } from '../longmemeval/mixed-answer.mjs';
 import { snapshotJson } from '../longmemeval/mixed-validation.mjs';
 import { complementaryArms, complementaryLimits } from './complementary-profile.mjs';
+import { largePoolArms, largePoolLimits, largePoolRoster } from './large-pool-profile.mjs';
 
 export const algorithmLimits = Object.freeze({ cases: 24, coreCallsPerCase: 40,
   answersPerCase: 2, httpRequests: 1968, reservationMicroUsd: 5000,
@@ -73,9 +74,9 @@ function containsCredential(value, secret) {
 
 /** Existing-only shared ledger; explicit credential and HTTP injection. No retries. */
 function createTransport({ configuration, checkpoint, historySha256,
-  apiKey, fetchImpl = globalThis.fetch, onRecord = () => {} } = {}, complementary = false) {
-  const limits = complementary ? complementaryLimits : algorithmLimits;
-  const arms = complementary ? complementaryArms : ['baseline', 'full'];
+  apiKey, fetchImpl = globalThis.fetch, onRecord = () => {} } = {}, complementary = false, largePool = false) {
+  const limits = largePool ? largePoolLimits : complementary ? complementaryLimits : algorithmLimits;
+  const arms = largePool ? largePoolArms : complementary ? complementaryArms : ['baseline', 'full'];
   const frozen = freezeObservation(snapshotJson({ configuration, checkpoint, historySha256 },
     { bytes: 65536, nodes: 128, depth: 4 }, 'invalid_algorithm_configuration'));
   if (typeof apiKey !== 'string' || !apiKey || apiKey.length > 512 || /[\s\x00-\x1f\x7f]/u.test(apiKey)
@@ -188,8 +189,10 @@ function createTransport({ configuration, checkpoint, historySha256,
     if (!active || busy || expected || request.system !== prompts[method]
       || request.maxOutputTokens !== 1024 || (method === 'extract' || method === 'classify'
         ? active.arm !== 'capture' : !arms.includes(active.arm))) stop('algorithm_method_denied');
-    if (active.coreCalls >= 40) fail('algorithm_case_call_cap');
+    if (active.coreCalls >= (largePool ? 20 : 40)) fail('algorithm_case_call_cap');
     if (complementary && active.phaseCalls[active.arm] >= (active.arm === 'capture' ? 16 : 8)) fail('algorithm_phase_call_cap');
+    if (largePool && (active.arm !== 'capture' && active.arm !== active.naturalArm
+      || active.phaseCalls[active.arm] >= (active.arm === 'capture' ? 12 : 8))) fail('algorithm_phase_call_cap');
     if (deadline() <= 0) fail('model_timeout');
     active.coreCalls++;
     active.phaseCalls[active.arm]++;
@@ -207,13 +210,16 @@ function createTransport({ configuration, checkpoint, historySha256,
   return Object.freeze({ model: Object.freeze(model),
     beginCase({ id, ordinal }) {
       check();
-      if (active || busy || seen.has(id) || ordinal !== seen.size + 1 || ordinal > 24) stop('algorithm_lifecycle');
+      if (active || busy || seen.has(id) || ordinal !== seen.size + 1 || ordinal > (largePool ? 6 : 24)
+        || largePool && id !== largePoolRoster[ordinal - 1].id) stop('algorithm_lifecycle');
       seen.add(id); started ??= performance.now();
       active = { id, ordinal, started: performance.now(), arm: 'capture', coreCalls: 0,
         phaseCalls: Object.fromEntries(['capture', ...arms].map(name => [name, 0])), answers: new Set(), arms: new Set() };
     },
     beginArm(name) { check(); if (!active || busy || expected || !arms.includes(name)
-      || active.arms.has(name)) stop('algorithm_lifecycle'); active.arms.add(name); active.arm = name; },
+      || active.arms.has(name) || largePool && !active.arms.size && name !== (active.ordinal % 2 ? 'linked' : 'complementary')) stop('algorithm_lifecycle');
+      if (largePool) active.naturalArm ??= name;
+      active.arms.add(name); active.arm = name; },
     async answer({ question, units }) {
       check();
       if (!active || busy || expected || !arms.includes(active.arm) || active.answers.has(active.arm)) stop('algorithm_lifecycle');
@@ -237,3 +243,4 @@ function createTransport({ configuration, checkpoint, historySha256,
 }
 export const createAlgorithmDevelopmentTransport = options => createTransport(options);
 export const createComplementarySourceTransport = options => createTransport(options, true);
+export const createLargePoolTransport = options => createTransport(options, false, true);

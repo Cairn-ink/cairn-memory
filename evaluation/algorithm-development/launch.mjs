@@ -15,6 +15,10 @@ import { runComplementarySourceComparison } from './runner.mjs';
 import { createComplementarySourceTransport } from './transport.mjs';
 import { loadComplementarySourceFreeze } from './complementary.mjs';
 import { complementaryPolicies, complementaryLimits, COMPLEMENTARY_VERSION } from './complementary-profile.mjs';
+import { LARGE_POOL_VERSION, largePoolLimits, largePoolPolicies, loadLargePoolInputs } from './large-pool-profile.mjs';
+import { loadLargePoolFreeze } from './large-pool.mjs';
+import { createLargePoolTransport } from './transport.mjs';
+import { runLargePoolComparison } from './runner.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const fail = code => { const error = new Error(code); error.code = code; throw error; };
@@ -29,17 +33,26 @@ function checkpointOf(state) {
 }
 
 /** Read-only preflight. Returned values are observations, not a spending grant. */
-async function prepare({ configuration }, prospective) {
-  const complementary = prospective === 'source-diverse-complementary-v1';
+async function prepare({ configuration, outputDirectory }, prospective) {
+  const largePool = prospective === LARGE_POOL_VERSION;
+  const complementary = prospective === 'source-diverse-complementary-v1' || largePool;
   const bundle = complementary || prospective === 'source-diverse-linked-v1';
-  const limits = complementary ? complementaryLimits : algorithmLimits;
+  const limits = largePool ? largePoolLimits : complementary ? complementaryLimits : algorithmLimits;
+  let outputIdentity;
+  if (largePool) {
+    if (typeof outputDirectory !== 'string') fail('unsafe_output_directory');
+    const directory = resolve(outputDirectory), identity = lstatSync(directory);
+    if (!identity.isDirectory() || identity.isSymbolicLink() || realpathSync(directory) !== directory
+      || identity.uid !== process.getuid() || (identity.mode & 0o777) !== 0o700) fail('unsafe_output_directory');
+    outputIdentity = { directory, dev: identity.dev, ino: identity.ino, uid: identity.uid, mode: identity.mode & 0o777 };
+  }
   if (configuration.limitMicroUsd !== 400_000_000) fail('campaign_limit_mismatch');
   if (git(['status', '--porcelain', '--untracked-files=normal'])) fail('runtime_not_clean');
-  const corpus = complementary ? await loadComplementarySourceFreeze() : bundle ? await loadEvidenceBundleFreeze()
+  const corpus = largePool ? await loadLargePoolFreeze() : complementary ? await loadComplementarySourceFreeze() : bundle ? await loadEvidenceBundleFreeze()
     : prospective ? await loadRequestedAnswerFreeze() : await loadDevelopmentFreeze();
   const state = inspectEmbeddingExperimentBudgetSnapshot(configuration);
   if (state.state !== 'open' || state.attempts.some(row => row.outcome === null)) fail('campaign_unsettled');
-  if (state.reservedMicroUsd + 10_000_000 + 30_000_000 > configuration.limitMicroUsd
+  if (state.reservedMicroUsd + limits.reservedMicroUsd + 30_000_000 > configuration.limitMicroUsd
     || state.requestCount + limits.httpRequests > configuration.requestCap) fail('campaign_unaffordable');
   const boundFiles = ['runner.mjs', 'transport.mjs', 'launch.mjs', 'requested-answer.mjs', 'coverage.mjs',
     'test/requested-answer.test.mjs', 'test/requested-answer-runner.test.mjs'];
@@ -64,51 +77,55 @@ async function prepare({ configuration }, prospective) {
       'evaluation/algorithm-development', 'evaluation/architecture',
       'evaluation/longmemeval', 'evaluation/experiment-budget', 'plugins/cairn-memory/lib', 'tools/testing',
       'evaluation/experiments/cloud-retrieval-v1/candidate.mjs',
-      'docs/plans/cloud-retrieval-v1-candidate.md', 'docs/plans/complementary-qa24.md']).split('\n').filter(Boolean);
+      'docs/plans/cloud-retrieval-v1-candidate.md', 'docs/plans/complementary-qa24.md',
+      ...(largePool ? ['docs/plans/large-pool-six.md', 'docs/plans/large-pool-six-fixtures.md'] : [])]).split('\n').filter(Boolean);
     for (const path of files) artifactHashes[path] = hash(readFileSync(join(root, path)));
   }
   const treatment = bundle ? 'source-diverse-linked-v1' : 'source-diverse-v1';
-  return Object.freeze({ version: complementary ? `${COMPLEMENTARY_VERSION}-launch-v1`
+  return Object.freeze({ version: largePool ? `${LARGE_POOL_VERSION}-launch` : complementary ? `${COMPLEMENTARY_VERSION}-launch-v1`
     : bundle ? 'source-diverse-linked-requested-answer-launch-v1'
     : prospective ? 'source-diverse-requested-answer-launch-v1' : 'algorithm-development-launch-v1',
     ...(bundle ? { evidenceFormat: 'source-role-evidence-v1', originalCorpusHashes: corpus.originalHashes } : {}),
     ...(prospective ? { treatment: complementary ? complementaryPolicies.complementary : treatment,
-      armPolicies: complementary ? complementaryPolicies : { baseline: 'ordinary-v1', full: treatment },
-      rubricVersion: bundle ? corpus.rubricVersion : corpus.version, model: DEFAULT_MODEL, limits, artifactHashes,
+      armPolicies: largePool ? largePoolPolicies : complementary ? complementaryPolicies : { baseline: 'ordinary-v1', full: treatment },
+      rubricVersion: largePool ? LARGE_POOL_VERSION : bundle ? corpus.rubricVersion : corpus.version, model: DEFAULT_MODEL, limits, artifactHashes,
       campaign: { schemaVersion: state.schemaVersion, runId: state.runId, limitMicroUsd: state.limitMicroUsd,
         requestCap: state.requestCap, configurationSha256: hash(JSON.stringify(configuration)) } } : {}), runtimeCommit: git(['rev-parse', 'HEAD']),
     nodeVersion: process.versions.node, nodeSha256: hash(readFileSync(process.execPath)),
+    ...(largePool ? { outputIdentity } : {}),
     ...(complementary ? { nodeExecutable: realpathSync(process.execPath) } : {}),
     corpusHashes: corpus.hashes, checkpoint: checkpointOf(state),
-    requestMaximum: limits.httpRequests, reservationMaximumMicroUsd: 10_000_000, protectedMicroUsd: 30_000_000 });
+    requestMaximum: limits.httpRequests, reservationMaximumMicroUsd: limits.reservedMicroUsd, protectedMicroUsd: 30_000_000 });
 }
 export const prepareAlgorithmDevelopment = options => prepare(options, false);
 export const prepareRequestedAnswerComparison = options => prepare(options, true);
 export const prepareEvidenceBundleComparison = options => prepare(options, 'source-diverse-linked-v1');
 export const prepareComplementarySourceComparison = options => prepare(options, 'source-diverse-complementary-v1');
+export const prepareLargePoolComparison = options => prepare(options, LARGE_POOL_VERSION);
 
 /** The caller must supply a reviewed prospective manifest and a fresh owned directory. */
 async function launch({ configuration, manifest, outputDirectory, keyProvider,
   fetchImpl = globalThis.fetch }, prospective) {
-  const complementary = prospective === 'source-diverse-complementary-v1';
+  const largePool = prospective === LARGE_POOL_VERSION;
+  const complementary = prospective === 'source-diverse-complementary-v1' || largePool;
   const bundle = complementary || prospective === 'source-diverse-linked-v1';
   if (typeof keyProvider !== 'function' || typeof fetchImpl !== 'function') fail('invalid_launch');
-  const version = complementary ? `${COMPLEMENTARY_VERSION}-launch-v1`
+  const version = largePool ? `${LARGE_POOL_VERSION}-launch` : complementary ? `${COMPLEMENTARY_VERSION}-launch-v1`
     : bundle ? 'source-diverse-linked-requested-answer-launch-v1'
     : prospective ? 'source-diverse-requested-answer-launch-v1' : 'algorithm-development-launch-v1';
   if (manifest?.version !== version || prospective && (manifest.treatment !== (complementary ? complementaryPolicies.complementary : bundle ? 'source-diverse-linked-v1' : 'source-diverse-v1')
-    || manifest.rubricVersion !== 'algorithm-development-requested-answer-v2')
+    || manifest.rubricVersion !== (largePool ? LARGE_POOL_VERSION : 'algorithm-development-requested-answer-v2'))
     || bundle && manifest.evidenceFormat !== 'source-role-evidence-v1'
     || !prospective && Object.hasOwn(manifest, 'treatment')) fail('manifest_mismatch');
   // Detach operator data before awaiting credential lookup or caller callbacks.
   configuration = structuredClone(configuration);
   manifest = structuredClone(manifest);
-  const observed = await prepare({ configuration }, prospective);
+  const observed = await prepare({ configuration, ...(largePool ? { outputDirectory } : {}) }, prospective);
   if (JSON.stringify(observed) !== JSON.stringify(manifest)) fail('manifest_mismatch');
   // Retain only the validated source-facing half before the marker/key. Its
   // canonical identity is already bound by the reviewed manifest; pre-run
   // failures remain representable even if the on-disk corpus is then damaged.
-  const sourceSnapshot = complementary ? await loadModelInputs() : null;
+  const sourceSnapshot = complementary ? await (largePool ? loadLargePoolInputs() : loadModelInputs()) : null;
   if (complementary && hashCanonicalValue(sourceSnapshot) !== manifest.corpusHashes.modelInputs) fail('manifest_mismatch');
   const directory = resolve(outputDirectory), identity = lstatSync(directory);
   if (!identity.isDirectory() || identity.isSymbolicLink() || realpathSync(directory) !== directory
@@ -133,8 +150,8 @@ async function launch({ configuration, manifest, outputDirectory, keyProvider,
   let transport, records = 0, report, launchError, runnerStarted = false, reportPersisted = false;
   try {
     const apiKey = await keyProvider();
-    if (complementary && JSON.stringify(await prepare({ configuration }, prospective)) !== JSON.stringify(manifest)) fail('manifest_mismatch');
-    transport = (complementary ? createComplementarySourceTransport : createAlgorithmDevelopmentTransport)({ configuration,
+    if (complementary && JSON.stringify(await prepare({ configuration, ...(largePool ? { outputDirectory } : {}) }, prospective)) !== JSON.stringify(manifest)) fail('manifest_mismatch');
+    transport = (largePool ? createLargePoolTransport : complementary ? createComplementarySourceTransport : createAlgorithmDevelopmentTransport)({ configuration,
       checkpoint: { requestCount: manifest.checkpoint.requestCount,
         reservedMicroUsd: manifest.checkpoint.reservedMicroUsd },
       historySha256: manifest.checkpoint.historySha256, apiKey, fetchImpl,
@@ -142,7 +159,7 @@ async function launch({ configuration, manifest, outputDirectory, keyProvider,
     // Only the model-facing half leaves preflight; no evaluator gold reaches the runner.
     const modelInputs = complementary ? sourceSnapshot : (await loadDevelopmentFreeze()).modelInputs;
     runnerStarted = true;
-    report = await (complementary ? runComplementarySourceComparison : runAlgorithmDevelopmentComparison)({ cases: modelInputs, transport,
+    report = await (largePool ? runLargePoolComparison : complementary ? runComplementarySourceComparison : runAlgorithmDevelopmentComparison)({ cases: modelInputs, transport,
       ...(prospective ? { treatment: bundle ? 'source-diverse-linked-v1' : 'source-diverse-v1' } : {}),
       outputDirectory: directory, onCase: row => persist(`case-${row.id}.json`, row) });
     persist('report.json', report);
@@ -153,7 +170,7 @@ async function launch({ configuration, manifest, outputDirectory, keyProvider,
     if (complementary && !runnerStarted && report === undefined) {
       const failure = error.code ?? 'complementary_launch_failure';
       try {
-        report = await runComplementarySourceComparison({ cases: sourceSnapshot,
+        report = await (largePool ? runLargePoolComparison : runComplementarySourceComparison)({ cases: sourceSnapshot,
           transport: { records: () => [], assertHealthy() { fail(failure); }, endCase() { fail(failure); } },
           outputDirectory: directory, onCase: row => persist(`case-${row.id}.json`, row) });
         persist('report.json', report);
@@ -191,3 +208,4 @@ export const launchAlgorithmDevelopment = options => launch(options, false);
 export const launchRequestedAnswerComparison = options => launch(options, true);
 export const launchEvidenceBundleComparison = options => launch(options, 'source-diverse-linked-v1');
 export const launchComplementarySourceComparison = options => launch(options, 'source-diverse-complementary-v1');
+export const launchLargePoolComparison = options => launch(options, LARGE_POOL_VERSION);

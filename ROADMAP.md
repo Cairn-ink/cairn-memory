@@ -118,6 +118,9 @@ gates. The latest [closed complementary three-arm development result](docs/plans
 scores ordinary 19/24, linked 23/24 and complementary 23/24, but fails safety:
 complementary introduces an unsupported severe D12 error against ordinary and
 has no QA gain over linked. Stage 2 acceptance and Stage 3 remain blocked.
+The [prospective six-case larger-pool experiment](docs/plans/large-pool-six.md)
+tests natural capture with a coupled raw ranking trace and independent answers;
+it introduces no result, standalone quality claim or promotion authorization.
 The bounded offline D12 replay now reconstructs sealed evidence/request exactly;
 integrity/controls exit 0 and the symptom exits expected 1 on both pinned Nodes,
 without generation or a cause/fix claim. Next is a separately frozen fresh

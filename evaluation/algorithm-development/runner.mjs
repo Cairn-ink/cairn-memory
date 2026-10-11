@@ -15,6 +15,7 @@ import { DEFAULT_MODEL } from '../../adapters/openai/profiles.mjs';
 import { freezeObservation } from './transport.mjs';
 import { createComplementarySourceSetModel, assembleComplementarySourceSet } from '../experiments/cloud-retrieval-v1/candidate.mjs';
 import { complementaryPolicies, complementaryOrders, COMPLEMENTARY_VERSION } from './complementary-profile.mjs';
+import { LARGE_POOL_VERSION, largePoolPolicies, largePoolOrders, validateLargePoolInputs, freezeLargePool } from './large-pool-profile.mjs';
 
 const fail = code => { const error = new Error(code); error.code = code; throw error; };
 const frozen = value => !value || typeof value !== 'object' || Object.isFrozen(value) && Object.values(value).every(frozen);
@@ -54,10 +55,10 @@ function logicalState(path) {
 }
 const candidateIdentity = input => input.maps?.map(map => ({ namespaceIndex: map.namespaceIndex,
   items: map.items.map(({ label, ...item }) => item), exhausted: map.exhausted })) ?? null;
-function tracedModel(model, trace) {
+function tracedModel(model, trace, origin) {
   const result = { contextWindow: model.contextWindow, countTokens: model.countTokens };
   for (const method of ['extract', 'classify', 'select', 'rank']) result[method] = async request => {
-    const row = { method, system: request.system, input: structuredClone(request.input),
+    const row = { ...(origin ? { origin } : {}), method, system: request.system, input: structuredClone(request.input),
       maxOutputTokens: request.maxOutputTokens, inputBytes: Buffer.byteLength(JSON.stringify(request.input)),
       localRequestTokens: countOpenAITokens(JSON.stringify({ system: request.system, input: request.input,
         maxOutputTokens: request.maxOutputTokens })), output: null, failure: null };
@@ -76,19 +77,41 @@ const emptyArm = (name, failure = 'not_run') => ({ name, status: 'unresolved', f
   failureStage: 'not_run', coreInputs: [], modelCalls: [], recalled: null, evidence: null,
   packed: null, answer: null, records: [], latencyMs: null, stateBefore: null, stateAfter: null });
 
+const rawBytes = call => JSON.stringify({ method: call.method, system: call.system,
+  input: call.input, maxOutputTokens: call.maxOutputTokens });
+/** Frozen natural raw replies only. No model/transport fallback is exposed. */
+export function createLargePoolReplayModel(model, naturalCalls) {
+  const calls = freezeLargePool(structuredClone(naturalCalls)); let cursor = 0;
+  if (!Array.isArray(calls) || calls.length > 8 || calls.some(call => !['select', 'rank'].includes(call.method) || call.failure || !call.output)) fail('large_pool_replay_unavailable');
+  const replay = method => async request => {
+    if (request.signal.aborted) throw new DOMException('Replay cancelled', 'AbortError');
+    const original = calls[cursor];
+    if (!original || rawBytes({ method, ...request }) !== rawBytes(original)) fail('large_pool_pairing_integrity');
+    cursor++;
+    return freezeLargePool(structuredClone(original.output));
+  };
+  return Object.freeze({ model: Object.freeze({ contextWindow: model.contextWindow,
+    countTokens: model.countTokens, select: replay('select'), rank: replay('rank') }),
+    assertConsumed() { if (cursor !== calls.length) fail('large_pool_pairing_integrity'); } });
+}
+
 /** Caller owns retained databases and formal observations. No rubric/gold import. */
 async function runComparison({ cases, transport, outputDirectory,
-  onCase = () => {}, treatment = 'full-label-v1' } = {}, complementary = false) {
+  onCase = () => {}, treatment = 'full-label-v1' } = {}, complementary = false, largePool = false) {
   if (!['full-label-v1', 'source-diverse-v1', 'source-diverse-linked-v1'].includes(treatment)) fail('invalid_algorithm_treatment');
-  const bundle = complementary || treatment === 'source-diverse-linked-v1';
+  const bundle = complementary || largePool || treatment === 'source-diverse-linked-v1';
   const prospective = treatment === 'source-diverse-v1' || bundle;
-  if (!Array.isArray(cases) || cases.length !== 24 || !frozen(cases)
-    || new Set(cases.map(row => row.id)).size !== 24 || cases.some(row => !/^D(?:0[1-9]|1[0-9]|2[0-4])$/u.test(row.id))
+  if (largePool) {
+    validateLargePoolInputs(cases);
+    if (cases.some(source => prepareAlgorithmDevelopmentCase(source).plan.cairnPlan.batches.length !== 6)) fail('large_pool_batch_count');
+  }
+  if (!Array.isArray(cases) || cases.length !== (largePool ? 6 : 24) || !frozen(cases)
+    || !largePool && (new Set(cases.map(row => row.id)).size !== 24 || cases.some(row => !/^D(?:0[1-9]|1[0-9]|2[0-4])$/u.test(row.id)))
     || typeof onCase !== 'function'
     || typeof outputDirectory !== 'string' || !statSync(outputDirectory).isDirectory()) fail('invalid_algorithm_cases');
   const began = performance.now(), observations = []; let fatal = null;
   for (const [index, source] of cases.entries()) {
-    const ordinal = index + 1, order = complementary ? complementaryOrders[index % 6]
+    const ordinal = index + 1, order = largePool ? largePoolOrders[index % 2] : complementary ? complementaryOrders[index % 6]
       : index % 2 ? ['full', 'baseline'] : ['baseline', 'full'];
     const observation = { id: source.id, family: source.family, ordinal, order,
       source: structuredClone(source), capture: { status: 'unresolved', failure: null,
@@ -108,7 +131,7 @@ async function runComparison({ cases, transport, outputDirectory,
       ({ namespace, plan } = prepareAlgorithmDevelopmentCase(source));
       const folder = join(outputDirectory, `${String(ordinal).padStart(2, '0')}-${source.id}`);
       mkdirSync(folder); path = join(folder, 'memory.sqlite');
-      core = openMemoryCore({ path, model: tracedModel(transport.model, observation.capture.modelCalls),
+      core = openMemoryCore({ path, model: tracedModel(transport.model, observation.capture.modelCalls, largePool ? 'natural-model' : undefined),
         captureSourcePolicy: 'indexed-evidence-v1', sourceCandidatePolicy: 'bounded-keyset-v1' });
       const memoryIds = new Set();
       for (const batch of plan.cairnPlan.batches) {
@@ -127,14 +150,18 @@ async function runComparison({ cases, transport, outputDirectory,
         for (const arm of Object.values(observation.arms)) { arm.failure = observation.capture.failure; arm.failureStage = 'capture'; }
       } else {
         observation.capture.status = 'completed';
-        for (const name of order) {
+        let naturalTrace = null;
+        for (const [position, name] of order.entries()) {
           const arm = observation.arms[name], armBegan = performance.now(), armRecordStart = transport.records().length;
           let stage = 'recall';
           try {
             transport.assertHealthy(); transport.beginArm(name);
             arm.stateBefore = logicalState(path);
             if (arm.stateBefore !== observation.capture.stateSha256) fail('captured_state_changed');
-            const baseModel = tracedModel(transport.model, arm.modelCalls);
+            if (largePool && position === 1 && !naturalTrace) fail('large_pool_replay_unavailable');
+            const replay = largePool && position === 1 ? createLargePoolReplayModel(transport.model, naturalTrace) : null;
+            const baseModel = tracedModel(replay?.model ?? transport.model, arm.modelCalls,
+              largePool ? replay ? 'replay' : 'natural-model' : undefined);
             let activeTrace = null;
             const getMemory = input => {
               const response = core.get(input);
@@ -144,9 +171,9 @@ async function runComparison({ cases, transport, outputDirectory,
             const selection = name === 'baseline' ? baseModel : prospective
               ? createSourceDiverseSelectionModel(baseModel, { readSet: [namespace], getMemory })
               : createFullLabelSelectionModel(baseModel, { readSet: [namespace], getMemory });
-            const ranking = complementary && name === 'complementary' ? createComplementarySourceSetModel(selection)
+            const ranking = (complementary || largePool) && name === 'complementary' ? createComplementarySourceSetModel(selection)
               : bundle && name !== 'baseline' ? createSourceLinkedEvidenceModel(selection) : selection;
-            const policy = complementary ? complementaryPolicies[name] : name === 'full' ? treatment : 'ordinary-v1';
+            const policy = largePool ? largePoolPolicies[name] : complementary ? complementaryPolicies[name] : name === 'full' ? treatment : 'ordinary-v1';
             core = openMemoryCore({ path, sourceCandidatePolicy: 'bounded-keyset-v1',
               model: { ...ranking, ...(bundle ? { async rank(request) {
                 const observed = { policy,
@@ -161,7 +188,7 @@ async function runComparison({ cases, transport, outputDirectory,
                   const raw = rawCalls[0];
                   if (!isDeepStrictEqual(raw.input, observed.input) || raw.system !== observed.system
                     || raw.maxOutputTokens !== observed.maxOutputTokens) fail('algorithm_trace_failure');
-                  const compiled = complementary && name === 'complementary' ? assembleComplementarySourceSet(request.input, raw.output)
+                  const compiled = (complementary || largePool) && name === 'complementary' ? assembleComplementarySourceSet(request.input, raw.output)
                     : name !== 'baseline' ? assembleSourceLinkedEvidence(request.input, raw.output) : { output: raw.output };
                   if (!isDeepStrictEqual(compiled.output, output)) fail('algorithm_trace_failure');
                   observed.diagnostics = name !== 'baseline' ? structuredClone(compiled.diagnostics) : null;
@@ -195,13 +222,18 @@ async function runComparison({ cases, transport, outputDirectory,
               } } });
             arm.recalled = unwrap(await core.recall({ readSet: [namespace], query: plan.mem0Input.query,
               limit: 6, contextMode: 'source-evidence' }));
+            replay?.assertConsumed();
+            if (largePool && position === 0) naturalTrace = freezeLargePool(structuredClone(arm.modelCalls));
             stage = 'packing';
             arm.evidence = (bundle ? verifiedRoleEvidence : verifiedEvidence)(arm.recalled, input => core.get(input), plan, namespace);
             arm.packed = packMixedAnswer({ question: source.question, units: arm.evidence.units, countTokens: countOpenAITokens });
             stage = 'answer';
             const answer = await transport.answer({ question: source.question, units: arm.evidence.units });
             arm.answer = answer.answer; arm.status = 'completed'; arm.failure = null; arm.failureStage = null;
-          } catch (error) { arm.failure = reason(error); arm.failureStage = stage; }
+          } catch (error) { arm.failure = reason(error); arm.failureStage = stage;
+            if (largePool && arm.modelCalls.some(call => call.failure === 'large_pool_pairing_integrity')) arm.failure = 'large_pool_pairing_integrity';
+            if (largePool && ['large_pool_pairing_integrity', 'algorithm_trace_failure'].includes(arm.failure)) fatal = arm.failure;
+          }
           finally {
             core?.close(); core = null;
             arm.stateAfter = logicalState(path); arm.databaseBytes = statSync(path).size;
@@ -211,7 +243,7 @@ async function runComparison({ cases, transport, outputDirectory,
           try { transport.assertHealthy(); } catch (error) { fatal = reason(error); }
           if (fatal) break;
         }
-        const baseline = observation.arms.baseline, full = observation.arms[complementary ? 'linked' : 'full'];
+        const baseline = observation.arms[largePool ? 'linked' : 'baseline'], full = observation.arms[largePool ? 'complementary' : complementary ? 'linked' : 'full'];
         const left = baseline.modelCalls.filter(row => row.method === 'select'), right = full.modelCalls.filter(row => row.method === 'select');
         observation.navigation = { firstCandidateIdentityEqual: left.length && right.length
           ? isDeepStrictEqual(left[0].candidateIdentity, right[0].candidateIdentity) : null,
@@ -219,6 +251,21 @@ async function runComparison({ cases, transport, outputDirectory,
           candidateSequenceEqual: isDeepStrictEqual(left.map(row => row.candidateIdentity), right.map(row => row.candidateIdentity)),
           rankInputSequenceEqual: isDeepStrictEqual(baseline.modelCalls.filter(row => row.method === 'rank').map(row => row.input),
             full.modelCalls.filter(row => row.method === 'rank').map(row => row.input)) };
+        if (largePool) {
+          const natural = observation.arms[order[0]], replay = observation.arms[order[1]];
+          const paired = naturalTrace !== null && natural.modelCalls.length === replay.modelCalls.length
+            && natural.modelCalls.every((call, index) => rawBytes(call) === rawBytes(replay.modelCalls[index])
+              && JSON.stringify(call.output) === JSON.stringify(replay.modelCalls[index].output));
+          observation.pairing = { naturalArm: order[0], replayArm: order[1], integrity: paired,
+            naturalLogicalCalls: natural.modelCalls.length, replayLogicalCalls: replay.modelCalls.length };
+          if (naturalTrace && !paired && replay.failure !== 'large_pool_replay_unavailable') fatal ??= 'large_pool_pairing_integrity';
+          const trace = observation.arms.complementary.effectiveRanks[0], raw = observation.arms.complementary.modelCalls.find(call => call.method === 'rank');
+          observation.mechanism = { rankCandidateCount: trace?.input.candidates.length ?? null,
+            originalRankRefs: raw?.output?.refs ?? null, reason: trace?.diagnostics?.reason ?? null,
+            eligible: Boolean(paired && trace?.input.candidates.length > 6 && raw?.output?.refs.length > 0
+              && raw.output.refs.length < 6 && trace.input.limit === 6 && trace.diagnostics?.reason === 'lexical_bridges'),
+            addedRefs: trace?.addedRefs ?? [], paths: trace?.diagnostics?.paths ?? [], displacedRefs: trace?.displacedRefs ?? [] };
+        }
       }
     } catch (error) {
       observation.capture.failure ??= reason(error);
@@ -237,20 +284,33 @@ async function runComparison({ cases, transport, outputDirectory,
       'limitMicroUsd', 'requestCap', 'reservedMicroUsd', 'requestCount', 'state', 'historySha256'].map(key => [key, state[key]])); }
     catch (error) { fatal = reason(error); }
   }
-  return freezeObservation({ schemaVersion: complementary ? `${COMPLEMENTARY_VERSION}-comparison-v1`
+  return freezeObservation({ schemaVersion: largePool ? `${LARGE_POOL_VERSION}-comparison` : complementary ? `${COMPLEMENTARY_VERSION}-comparison-v1`
     : bundle ? 'source-diverse-linked-requested-answer-comparison-v1'
     : prospective ? 'source-diverse-requested-answer-comparison-v1' : 'algorithm-development-comparison-v1', model: DEFAULT_MODEL,
-    ...(prospective ? { treatment: complementary ? 'source-diverse-complementary-v1' : treatment,
-      armPolicies: complementary ? complementaryPolicies : { baseline: 'ordinary-v1', full: treatment } } : {}),
+    ...(prospective ? { treatment: complementary || largePool ? 'source-diverse-complementary-v1' : treatment,
+      armPolicies: largePool ? largePoolPolicies : complementary ? complementaryPolicies : { baseline: 'ordinary-v1', full: treatment } } : {}),
+    ...(largePool ? { coupling: 'natural-raw-trace-replay-v1' } : {}),
+    ...(largePool ? { executionResources: {
+      costInterpretation: 'paired-execution-only-not-standalone-treatment-cost',
+      captureNaturalLogicalCalls: observations.reduce((n, row) => n + row.capture.modelCalls.length, 0),
+      recallNaturalLogicalCalls: observations.reduce((n, row) => n + row.arms[row.order[0]].modelCalls.length, 0),
+      recallReplayLogicalCalls: observations.reduce((n, row) => n + row.arms[row.order[1]].modelCalls.length, 0),
+      httpRequests: transport.records().length,
+      reservedMicroUsd: transport.records().reduce((n, row) => n + row.reservedMicroUsd, 0),
+      knownModelProfileMicroUsd: transport.records().reduce((n, row) => n + (row.actualMicroUsd ?? 0), 0),
+      unknownUsageRequests: transport.records().filter(row => row.endpoint !== 'responses/input_tokens' && row.actualMicroUsd === null).length,
+    } } : {}),
     ...(bundle ? { evidenceFormat: 'source-role-evidence-v1' } : {}),
     profile: { captureSourcePolicy: 'indexed-evidence-v1', sourceCandidatePolicy: 'bounded-keyset-v1',
       contextMode: 'source-evidence', selectionMode: 'default-select', limit: 6, coreLogicalCallMs: 30_000 },
-    denominator: 24, attemptsPerArm: 24, fatal, observations, records: transport.records(),
+    denominator: largePool ? 6 : 24, attemptsPerArm: largePool ? 6 : 24, fatal, observations, records: transport.records(),
     finalBudget, latencyMs: performance.now() - began });
 }
 export const runAlgorithmDevelopmentComparison = options => runComparison(options);
 export const runComplementarySourceComparison = options => runComparison({ ...options,
   treatment: 'source-diverse-linked-v1' }, true);
+export const runLargePoolComparison = options => runComparison({ ...options,
+  treatment: 'source-diverse-linked-v1' }, false, true);
 
 /** Explicit combined evaluation entrypoint; both arms use recorded-role evidence. */
 export const runEvidenceBundleComparison = options => runAlgorithmDevelopmentComparison({
