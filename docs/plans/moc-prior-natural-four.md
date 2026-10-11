@@ -312,4 +312,3 @@ but execution fails closed and never overwrites its first evidence or retries.
 No semantic paid-result, holdout/default/Stage-3 claim is made. Primary owns its
 fresh frozen acceptance, final combined diff, local commit and independent
 two-axis review; worker stops before those gates.
-
