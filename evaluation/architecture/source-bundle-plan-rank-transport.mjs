@@ -117,9 +117,9 @@ export async function createSourceBundlePlanRankTransport(options) {
   const key = opts.apiKey, fetchImpl = opts.fetchImpl, onRecord = opts.onRecord;
   if (typeof key !== 'string' || !/^[A-Za-z0-9_-]{12,200}$/u.test(key)
     || typeof fetchImpl !== 'function' || typeof onRecord !== 'function'
-    || manifest.version !== VERSION || !/^[A-Za-z0-9_-]{1,128}$/u.test(manifest.slotId)
-    || !/^[a-f0-9]{64}$/u.test(manifest.preparedRequestSha256)
-    || !/^[a-f0-9]{64}$/u.test(opts.historySha256)
+    || manifest.version !== VERSION || typeof manifest.slotId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(manifest.slotId)
+    || typeof manifest.preparedRequestSha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(manifest.preparedRequestSha256)
+    || typeof opts.historySha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(opts.historySha256)
     || ![manifest.runDeadline, manifest.caseDeadline].every(n => Number.isFinite(n) && n > 0)
     || !Number.isSafeInteger(configuration.limitMicroUsd) || configuration.limitMicroUsd > 400000000
     || !Object.values(checkpoint).every(n => Number.isSafeInteger(n) && n >= 0)
@@ -217,6 +217,11 @@ export async function createSourceBundlePlanRankTransport(options) {
           check(); accounting(() => ledger.getState()); check(); dispatched = true; outcome = 'unknown';
           const response = await race(fetchImpl(endpoint, { method: 'POST', redirect: 'error',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: encoded, signal: controller.signal }), cancelBody);
+          // A known safety status is fatal even if its body cannot be read or
+          // parsed. Defer rejection so safely reported generation usage settles.
+          const responseFailure = response.redirected || response.status >= 300 && response.status < 400
+            ? 'redirect_rejected' : response.status === 401 || response.status === 403 ? 'authentication_failed' : null;
+          if (responseFailure) mark(responseFailure);
           const raw = await read(response, kind === 'count' ? 65536 : 262144);
           outcome = 'failed';
           const credentialEcho = echo(raw, key);
@@ -246,8 +251,7 @@ export async function createSourceBundlePlanRankTransport(options) {
             if ((Object.hasOwn(parsed, 'model') || response.ok) && parsed.model !== MODEL) fail('model_mismatch');
           }
           if (credentialEcho) fail('credential_echo');
-          if (response.redirected || response.status >= 300 && response.status < 400) fail('redirect_rejected');
-          if (response.status === 401 || response.status === 403) fail('authentication_failed');
+          if (responseFailure) fail(responseFailure);
           if (!response.ok) fail('provider_failed');
           if (kind === 'count') {
             own(parsed, ['object', 'input_tokens'], 'invalid_response');

@@ -291,3 +291,51 @@ exit 1 with empty diagnostics as whitespace failure (`inventory-first-probe.log`
 The corrected probe distinguishes that status from whitespace diagnostics and
 cross-checks diff-plus-untracked against porcelain inventory; no source edit was
 needed for that harness correction. Primary repeats inventory independently.
+
+### QT correction round 1 — observed safety status and primitive witnesses
+
+Correction base: local candidate `ca8339668f110b75c21ea3ce6d1abd3d8b6743cb`.
+Initial independent Standards passed; Spec identified two contract defects, not
+semantic-quality findings. Primary retained six original required red assertions
+(auth/redirect/history on both Nodes) in
+`/tmp/cairn-bundle-transport-primary-regression-bkdND6/proof.json`.
+
+Regression-first author evidence is retained in
+`/tmp/cairn-bundle-transport-correction1.MC6OHbJF`: the standalone required suite
+on unchanged runtime SHA `60029b2c1171203e381a0bb896d21e04872255be64ecfdb6441a467b6c62e289`
+exited **1** on both pinned Nodes (`regression-old-node22.log`,
+`regression-old-node24.log`). All fifteen count-status/body combinations
+(401/403/301/302/307 × malformed/oversized/stalled) failed the fatal-health
+assertion. History toString/Symbol.toPrimitive/getter/boxed values and numeric
+slot ID failed typed primitive-denial controls; descriptor-unsafe slot objects
+were already denied without invoking their methods. Owned fixtures were cleaned.
+
+Root causes: response reading/JSON interpretation preceded marking a known
+auth/redirect status, so body failure hid the global safety anomaly; regexp
+coercion of an unsnapshotted history witness could execute caller code and leak
+its thrown message. The minimal correction marks observed auth/redirect health
+immediately after response arrival, without throwing before safe generation
+usage extraction/settlement. Body failure may remain the invocation/record code;
+fatal health independently retains the observed safety reason and is mandatory
+for a future coordinator's global-stop decision. Primitive string guards now
+precede regex checks for history SHA, prepared SHA and slot ID. No coercion is
+used as configuration validation.
+
+Changed entrypoints are only constructor validation and the private response
+handling seam; their consumers remain the same explicit factory/planRank caller
+and future health observer. No wire, model, schema, prompt, ledger behavior,
+deadline, reservation, compiler, default or CI changes were made. The test adds
+real-tokenizer safety/primitive regressions and valid generation usage on 403/307,
+preserving reported known price before final rejection. The plan append is the
+only documentary change; its full previous bytes and prospective prefix remain.
+
+The first proposed correction passed required inherited QB+QT focused commands
+on both Nodes: actual **0**, **66/66**, zero skips (`focused-fixed-node22.log`,
+`focused-fixed-node24.log`). The original reviewer harness
+`/tmp/cairn-bundle-transport-spec-diagnostics-ExFxGitq/reproduce.mjs` was rerun
+unchanged in auth/redirect/history required modes on each Node: all six actual
+exits **0**, with `original-fixed-node{22,24}-{auth,redirect,history}.log` retaining
+output and actual owned-workspace removal. Final validation and inventory are
+separate author closure checks; primary personally reruns full gates and both
+independent axes on the corrected candidate. No commit, push, live call, closed
+cohort inspection, score change or D12 clearance is implied.

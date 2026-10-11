@@ -171,7 +171,9 @@ test('source-bundle one-shot transport with actual local tokenizer', async t => 
       { value: { error: { message: 'synthetic provider failure' } }, status: 500, code: 'provider_failed', price: null, fatal: null },
       { value: { model: MODEL }, code: 'invalid_usage', price: null, fatal: 'invalid_usage' },
       { value: envelope(), status: 401, code: 'authentication_failed', price: 72, fatal: 'authentication_failed' },
+      { value: envelope(), status: 403, code: 'authentication_failed', price: 72, fatal: 'authentication_failed' },
       { value: envelope(), status: 302, code: 'redirect_rejected', price: 72, fatal: 'redirect_rejected' },
+      { value: envelope(), status: 307, code: 'redirect_rejected', price: 72, fatal: 'redirect_rejected' },
       { value: envelope(undefined, { model: 'other' }), code: 'model_mismatch', price: 72, fatal: 'model_mismatch' },
       { value: envelope(undefined, { usage: { input_tokens: 100, output_tokens: 1025, total_tokens: 1125 } }), code: 'usage_overrun', price: 1680, fatal: 'usage_overrun' },
       { value: envelope(undefined, { usage: { input_tokens: 100, output_tokens: 'bad', total_tokens: 120 } }), code: 'invalid_usage', price: null, fatal: 'invalid_usage' },
@@ -181,6 +183,46 @@ test('source-bundle one-shot transport with actual local tokenizer', async t => 
       await assert.rejects(f.transport.planRank(f.request), code(variant.code));
       assert.equal(f.transport.getState().attempts.at(-1).actualMicroUsd, variant.price);
       assert.equal(f.transport.health().fatalCode, variant.fatal); assert.equal(f.transport.getState().attempts.at(-1).outcome, 'failed'); f.checkPrefix(); }
+  });
+  await t.test('QT correction: observed auth/redirect stays fatal despite malformed, oversized or stalled count body', async c => {
+    for (const status of [401, 403, 301, 302, 307]) for (const body of ['malformed', 'oversized', 'stalled']) {
+      await c.test(`${status}/${body}`, async child => {
+        const expected = status < 300 || status >= 400 ? 'authentication_failed' : 'redirect_rejected';
+        const failure = body === 'malformed' ? 'invalid_response' : body === 'oversized' ? 'response_too_large' : 'cancelled';
+        let readerCanceled = false;
+        const f = await fixture(child, { fetch() {
+          if (body !== 'stalled') return response(body === 'malformed' ? 'not json' : 'x'.repeat(65537), status);
+          return { ok: false, status, body: { getReader() { return {
+            read() { f.controller.abort(); return new Promise(() => {}); },
+            cancel() { readerCanceled = true; }, releaseLock() {} }; } } };
+        } });
+        await assert.rejects(f.transport.planRank(f.request), code(failure));
+        assert.equal(f.transport.health().fatalCode, expected, 'Observed safety status must survive subsequent read/parse failure');
+        assert.equal(f.calls.length, 1); assert.equal(f.transport.getState().requestCount, 2);
+        assert.equal(f.transport.getState().attempts.at(-1).actualMicroUsd, null);
+        assert.equal(f.transport.getRecords().at(-1).dispatched, true);
+        assert.ok(f.transport.getState().attempts.at(-1).outcome !== null);
+        if (body === 'stalled') assert.equal(readerCanceled, true);
+        await assert.rejects(f.transport.planRank(f.request), code('slot_consumed')); f.checkPrefix();
+      });
+    }
+  });
+  await t.test('QT correction: witnesses and identifiers require primitive strings without getter/coercion execution', async c => {
+    for (const kind of ['history-toString', 'history-primitive', 'history-getter', 'history-boxed', 'slot-number', 'slot-toString']) {
+      await c.test(kind, async child => {
+        const f = await fixture(child); f.transport.close(); let calls = 0, transport;
+        const poison = kind === 'history-primitive' ? { [Symbol.toPrimitive]() { calls++; throw new Error(KEY); } }
+          : kind === 'history-getter' ? Object.defineProperty({}, 'toString', { get() { calls++; throw new Error(KEY); } })
+            : { toString() { calls++; throw new Error(KEY); } };
+        const args = kind.startsWith('history') ? { ...f.args,
+          historySha256: kind === 'history-boxed' ? new String(f.args.historySha256) : poison }
+          : { ...f.args, manifest: { ...f.args.manifest, slotId: kind === 'slot-number' ? 123 : poison } };
+        try { await assert.rejects(async () => { transport = await createSourceBundlePlanRankTransport(args); }, error => {
+          assert.equal(error.message.includes(KEY), false); return error.code === 'invalid_configuration'; }); }
+        finally { transport?.close(); }
+        assert.equal(calls, 0); assert.equal(f.calls.length, 0); f.checkPrefix();
+      });
+    }
   });
   await t.test('unchanged combined price ceiling retains nonmultiple and credential-echo usage', async c => {
     for (const mode of ['none', 'direct', 'escaped']) {
