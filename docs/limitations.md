@@ -1987,6 +1987,26 @@ frozen paired sources/rubric and independent first-answer/support judgments,
 with harm/resource rejection gates. Original cumulative/protected spending
 limits remain untouched; this prototype authorizes no paid execution.
 
+The separately named [source-bundle planner transport](plans/source-bundle-plan-rank-transport.md)
+adds offline accounting/wire controls only. It is a single-use explicit capability,
+not an old-guard allowlist extension, runner or live experiment grant. Both actual
+provider envelopes and the prepared planner representation must fit 6,000 local
+tokens, with the pinned model, one count/at most one generation, no retry and one
+logical deadline. Existing cumulative schema-2 accounting retains all 5,000-
+microUSD reservations, including unsent durably reserved intents; known profile
+prices are estimates, not invoices. Fatal accounting/usage/model/auth/credential/
+observer anomalies must stop any future coordinating runner globally.
+
+Dependency-free generic discovery skips the optional actual-tokenizer transport
+parent once; it does not validate transport behavior. Required offline acceptance
+and the existing core CI matrix execute real-tokenizer controls with both required
+flags. Fake HTTP and synthetic-ledger/source fidelity demonstrate neither reliable
+supported answers nor identity, adoption or temporal correctness. Closed cohorts,
+D12 and Stage 2/3 remain unchanged; no upstream recovery, default/core/adapter
+change, paid replay or new spending is authorized. Future paired work needs newly
+frozen source/rubric and independent first-answer/support judgments, preserving
+the original cumulative US$400 ceiling and protected US$30.
+
 The prospective [source-bundle QA24 corpus](plans/source-bundle-qa24.md) freezes
 24 new synthetic source-only cases and a separate evaluator rubric before any
 model result. Offline schema, source-window, original-anchor and hash checks
@@ -1996,3 +2016,52 @@ or complete provider wire fit. Those execution preconditions remain required
 in a later independently reviewed runner before any paid launch. No closed
 cohort is rerun or rescored; no efficacy, parity, D12 repair, product/default
 change or original Stage 2/3 clearance follows from this corpus-only packet.
+
+The prospective [source-bundle paired comparison](plans/source-bundle-comparison.md)
+adds offline real-core, fake-HTTP and owned synthetic-ledger execution controls:
+24 prepared cases, 48 fixed QA slots and 24 separate later probes. Exact source,
+wire, ownership, cumulative-history and deadline controls are plumbing evidence,
+not semantic correctness, supported-first-answer improvement, provider parity or
+a paid launch. Known-price totals are partial; unknown usage reservations and
+missing final records remain explicit, and peak RSS is unmeasured. No scorer,
+model-answer judgment, operational ledger or real credential is used here.
+Closed cohorts, D12, defaults and original Stage 2/3 clearance remain unchanged;
+any future launch still needs separate independent acceptance and authority.
+
+Independent final review of the first comparison candidate found an uncovered
+global resource-stop path despite its green offline matrices. Actual fake-HTTP
+controls reproduced ordinary provider counts of 7,025 continuing both from QA
+rank and the later select probe: the raw settled overflow cause survived, but
+adapter/core error projection obscured it. The bounded coordinator correction
+retains that exact final cause, stops globally without rewriting transport
+records, waits for settlement and preserves all 48 QA plus 24 probe slots and
+conservative unknown reservations. Both overflow controls pass on the two
+pinned Nodes; the existing actual ordinary/QT nonfatal timeout continuation
+control also passes. These are accounting/stop-policy regressions, not semantic
+answer gains, provider parity or launch authority. Earlier candidate matrices
+remain historical; corrected full matrices and independent reviews are still
+required before delivery. No inherited cap/transport, closed cohort, scoring
+outcome, operational ledger, credential or original Stage 2/3 gate was changed.
+
+Independent review and actual all24 fake-HTTP diagnostics also found that legal
+maximum-size response bodies could exceed the final aggregate report's 32MiB
+snapshot budget after all intents had settled, losing the returned and persisted
+report despite durable literal per-event records. The bounded final-only
+correction charges actual retained response-body UTF-8 bytes separately, with
+the existing 192-intent/physical-body bound, while preserving the original 32MiB
+nonresponse and per-observation budgets and node/depth checks. It must preserve
+both the complete first report and a late resource-stopped report without
+trimming bodies, changing transport/token/accounting limits or permitting retry.
+This is artifact-retention evidence, not measured RSS, file size, semantic gain,
+provider parity or paid authority. Disk/process failures still cannot guarantee
+final persistence; existing durable event evidence and no-resume policy remain.
+Final corrected full matrices, independent reviews and exact-head CI remain
+required before delivery; closed cohorts and original Stage 2/3 gates are unchanged.
+
+Both complete and late-overflow padded-response regressions pass on Node22.16
+and24.15 using actual core/ordinary/QT paths and fresh owned synthetic ledgers.
+They retain equal returned/persisted reports, all48 first answers/all24 probe
+slots and each literal raw response, with zero pending attempts and owned
+cleanup. The unchanged default callback limit still rejects excess observations.
+These offline regressions do not measure provider or model quality, whole-process
+RSS, file-size bounds or full execution cost, and do not clear semantic gates.
