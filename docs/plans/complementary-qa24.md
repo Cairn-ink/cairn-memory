@@ -19,7 +19,7 @@ Q3: Closed limits: 40 logical core calls per case, split into capture <=16 and e
 
 Q4: Require a current reviewed one-shot manifest, clean committed runtime, exact Node executable hash/version, and complete artifact hashes including candidate and all live protocol paths. Write the exclusive durable marker before credential lookup. Preserve failed/unrun observations over denominator 24. Authentication, usage or accounting anomalies stop the entire run. Retain ordinary arm timeouts/failures without retry or alternate questions. Never resume closed runs. Old and new launch profiles reject each other. Secrets stay private; no hidden key discovery.
 
-Q5: At most 72 independently blind answers, judged by two nonauthor judges with the same frozen requested-answer semantic rubric. Disagreement/missing judgments stay unresolved; unknown safety blocks advancement. Preserve per-case outcomes and denominator 24 per arm. C-A retains >=3 net correct and >0 packed-anchor gain; C-B has no net-correct or coverage regression. Require no safety block and affirmative resource acceptance. Claim positive incremental superiority over the old combined algorithm only for positive same-batch C-B QA after all advancement gates pass, never from historical 22/24 or offline 36. Unknown gates do not advance.
+Q5: At most 72 independently blind answers, judged by two nonauthor judges with the same frozen requested-answer semantic rubric. Disagreement/missing judgments stay unresolved; unresolved correctness or unknown safety blocks advancement. Preserve per-case outcomes and denominator 24 per arm. C-A retains >=3 net correct and >0 packed-anchor gain; C-B has no net-correct or coverage regression. Require resolved correct/incorrect outcomes in every arm, no safety block and affirmative resource acceptance. Incorrect answers remain valid resolved outcomes; this is not a perfect-accuracy requirement. Claim positive incremental superiority over the old combined algorithm only for positive same-batch C-B QA after all advancement gates pass, never from historical 22/24 or offline 36. Unknown gates do not advance.
 
 Prospective primary clarification before any paid results: preserve the existing B8 safety meaning. Candidate C must have no increased unsupported/stale question counts against both same-batch controls, no newly failing severe case against either control, and no unknown safety in any arm. Known preexisting positive harm in baseline/linked alone does not block advancement; no new requirement that all three arms be perfect. Accuracy remains C-A>=3 and C-B>=0. Preserve per-arm harm/claim counts.
 
@@ -46,12 +46,20 @@ Evaluator calls: `loadComplementarySourceFreeze` ->
 Pure compilers replay effective selection/ranking against actual visible inputs;
 authoritative role packing determines credit. Both pairs have 42 anchor counts.
 
-Gate fields: `noFatal`, `primaryQA` (C-A>=3), `primaryPackedGain` (C-A>0),
+Gate fields: `noFatal`, `correctnessResolved` (all 24 outcomes in each arm
+are resolved correct/incorrect), `primaryQA` (C-A>=3), `primaryPackedGain` (C-A>0),
 `linkedQANoRegression` (C-B>=0), `linkedPackedNoRegression` (C-B>=0), `safety`
 (all arms known; no C unsupported/stale question-count increase or newly severe
 case against either control) and `resourcesWithinLimits` (caller audit true).
 `advances` requires all fields true. `incrementalSuperiority` additionally
 requires C-B net correct >0. Historical 18/24–22/24 and offline 36 are never inputs.
+
+Complementary paired summaries retain denominator 24. Any pair with an unresolved
+verdict contributes to `unresolvedPairs`, never wins, losses, bothCorrect or
+neitherCorrect; those five categories sum to 24. `netCorrect` remains the
+difference between the arms' certified correct counts. With unresolved pairs,
+that descriptive difference need not equal wins minus losses and cannot authorize
+advancement. Existing two-arm aggregation and gate contracts stay unchanged.
 
 Launch binds clean committed runtime, exact Node executable/hash/version,
 corpus/protocol, complete tracked runtime/control closure, existing checkpoint,
@@ -145,3 +153,54 @@ pool rare lexical bridge strategy improved. Selection and ranking invoke the
 model independently per arm: shared policy does not guarantee identical
 selection or outputs. Same-batch results are point estimates, not robust proof
 of semantic reliability. These limits add no advancement gate.
+
+## Bounded correctness-resolution correction
+
+The primary's Spec review at exact candidate
+`43e4686a1ba7331329de9475d2ca37fd8b0423ed` found a Q5 failure: a control's
+correctness-only disagreement, with all harm judgments agreed clean, could
+retain an apparent C-A +3 and advance, although resolving that control as correct
+would give only +2. That historical FAIL is preserved; passing earlier checks
+does not erase it. No paid results prompted this correction.
+
+Actual implementer: GPT-6.1 Sol High, under the primary's accepted bounded
+design. Isolated worktree `complementary-verdict-resolution`, branch
+`fix/complementary-verdict-resolution`, starts clean at the exact candidate above.
+The primary's worktree under full gates is unchanged. Ownership is limited to
+this plan, `evaluator.mjs`, `complementary.mjs` and `test/complementary.test.mjs`.
+The new gate is complementary-only; no candidate, corpus, rubric, runtime,
+transport, budget, default or existing two-arm contract changes are authorized.
+
+`adapters/openai/node_modules` was absent, not a symlink; isolated locked
+`npm ci --offline --prefix adapters/openai` exited 0 with locked files unchanged.
+Before implementation, Node 22 ran the three new verdict-only controls:
+
+```sh
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node tools/testing/run.mjs --test-name-pattern='Q5 verdict-only|Q5 unknown-verdict|Q5 resolved-pair' evaluation/algorithm-development/test/complementary.test.mjs
+```
+
+Actual exit 1, 0/3 passed: the clean-harm disagreement and unknown-verdict controls
+incorrectly advanced, and the resolved positive control lacked the new field.
+An intermediate implementation run also exited 1 (0/3) because the closed arm
+list import was initially missing; after adding that import, the same command
+exited 0 (3/3). The positive control includes an incorrect answer in all three
+arms and still advances; unknown controls cover every arm and both unresolved
+outcomes in a pair. Neither fault injection nor verification uses real HTTP or
+an operational ledger. Primary owns final combined acceptance and review.
+
+Complete affected complementary tests plus existing evaluator and both closed
+two-arm protocol suites ran before commit with HEAD still `43e4686`:
+
+```sh
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node tools/testing/run.mjs evaluation/algorithm-development/test/complementary.test.mjs evaluation/algorithm-development/test/evaluator.test.mjs evaluation/algorithm-development/test/requested-answer.test.mjs evaluation/algorithm-development/test/evidence-bundle.test.mjs
+/home/chichieh/.nvm/versions/node/v24.15.0/bin/node tools/testing/run.mjs evaluation/algorithm-development/test/complementary.test.mjs evaluation/algorithm-development/test/evaluator.test.mjs evaluation/algorithm-development/test/requested-answer.test.mjs evaluation/algorithm-development/test/evidence-bundle.test.mjs
+```
+
+Both actual exits were 0: 30/30 passed, fail/skip/cancel/todo 0, durations
+30.780s / 30.800s. Existing unresolved-inclusive two-arm pair classifications
+and its gates passed unchanged. The new launch failure/snapshot/collision controls
+also passed unchanged. Code/test content stayed fixed during these runs; only
+this verification record was appended afterward. Independently derived Git-diff
+and filesystem Git-blob-hash/new-file-walk inventories match exactly four files,
+all owned above; `git diff --check` exited 0. No claim about primary combined
+gates, fresh QA scores or paid-run permission follows from these offline results.

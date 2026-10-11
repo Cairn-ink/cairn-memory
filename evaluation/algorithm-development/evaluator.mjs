@@ -101,10 +101,15 @@ function aggregateJudgments({ observations, judgmentsA, judgmentsB }, complement
     }
   }
   const pair = (control, treatment) => {
-    const result = { denominator: 24, wins: 0, losses: 0, bothCorrect: 0, neitherCorrect: 0, netCorrect: arms[treatment].correct - arms[control].correct };
+    const result = { denominator: 24, wins: 0, losses: 0, bothCorrect: 0, neitherCorrect: 0,
+      ...(complementary ? { unresolvedPairs: 0 } : {}), netCorrect: arms[treatment].correct - arms[control].correct };
     for (const item of DEVELOPMENT_ROSTER) {
-      const baseline = outcomes.find(row => row.id === item.id && row.arm === control).verdict === 'correct';
-      const full = outcomes.find(row => row.id === item.id && row.arm === treatment).verdict === 'correct';
+      const controlVerdict = outcomes.find(row => row.id === item.id && row.arm === control).verdict;
+      const treatmentVerdict = outcomes.find(row => row.id === item.id && row.arm === treatment).verdict;
+      if (complementary && (controlVerdict === 'unresolved' || treatmentVerdict === 'unresolved')) {
+        result.unresolvedPairs++; continue;
+      }
+      const baseline = controlVerdict === 'correct', full = treatmentVerdict === 'correct';
       if (full && !baseline) result.wins++; else if (baseline && !full) result.losses++;
       else if (baseline) result.bothCorrect++; else result.neitherCorrect++;
     }

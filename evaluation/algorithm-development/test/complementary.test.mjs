@@ -71,6 +71,74 @@ function reportFixture() {
 }
 const coverage = report => scoreComplementarySourceCoverage({ report, modelInputs: original.modelInputs, evaluatorRubric: original.evaluatorRubric });
 
+function resolvedJudgmentFixture() {
+  const report = { ...identity, observations: original.modelInputs.map(source => ({ id: source.id, family: source.family,
+    capture: { status: 'completed' }, arms: Object.fromEntries(complementaryArms.map(name => [name,
+      { name, status: 'completed', answer: 'Synthetic verdict control.' }])) })) };
+  const rows = original.modelInputs.flatMap((source, index) => complementaryArms.map(arm => ({ id: source.id, arm,
+    verdict: index === 23 || arm === 'baseline' && index < 3 || arm === 'linked' && index < 1 ? 'incorrect' : 'correct',
+    reviewedClaims: 1, unsupportedClaims: 0, staleClaims: 0, severeError: false, rationale: 'Synthetic clean-harm verdict control.' })));
+  return { report, judgmentsA: rows, judgmentsB: structuredClone(rows), resourcesWithinLimits: true,
+    coverage: { schemaVersion: `${COMPLEMENTARY_VERSION}-coverage-v1`, anchorDenominator: 42,
+      paired: { complementaryBaseline: { denominator: 42, gain: 1 }, complementaryLinked: { denominator: 42, gain: 0 } } } };
+}
+
+function assertPairedDenominators(result) {
+  for (const pair of Object.values(result.paired)) {
+    assert.equal(pair.denominator, 24);
+    assert.equal(pair.wins + pair.losses + pair.bothCorrect + pair.neitherCorrect + pair.unresolvedPairs, 24);
+  }
+}
+
+test('Q5 verdict-only disagreement with agreed clean harms blocks advancement, not counted as control wrong', () => {
+  const options = resolvedJudgmentFixture();
+  options.judgmentsB.find(row => row.id === 'D01' && row.arm === 'baseline').verdict = 'correct';
+  const result = aggregateComplementarySourceJudgments(options);
+  assert.equal(result.safety.unknown, false); assert.equal(result.safety.blocksAdvancement, false);
+  assert.equal(result.paired.complementaryBaseline.netCorrect, 3, 'certified correct counts alone retain the apparent +3');
+  assert.equal(result.advances, false); assert.equal(result.incrementalSuperiority, false);
+  assert.equal(result.gates.correctnessResolved, false); assert.equal(result.arms.baseline.unresolved, 1);
+  assert.equal(result.outcomesDenominator, 72); assert.equal(result.arms.baseline.denominator, 24);
+  assert.deepEqual(result.paired.complementaryBaseline, { denominator: 24, wins: 2, losses: 0,
+    bothCorrect: 20, neitherCorrect: 1, unresolvedPairs: 1, netCorrect: 3 });
+  assertPairedDenominators(result);
+  options.judgmentsA.find(row => row.id === 'D01' && row.arm === 'baseline').verdict = 'correct';
+  const resolved = aggregateComplementarySourceJudgments(options);
+  assert.equal(resolved.gates.correctnessResolved, true);
+  assert.equal(resolved.paired.complementaryBaseline.netCorrect, 2); assert.equal(resolved.gates.primaryQA, false);
+});
+
+test('Q5 unknown-verdict controls keep clean harms and all24 denominators while skipping unresolved pairs', () => {
+  for (const name of complementaryArms) {
+    const options = resolvedJudgmentFixture();
+    for (const rows of [options.judgmentsA, options.judgmentsB]) rows.find(row => row.id === 'D01' && row.arm === name).verdict = 'unresolved';
+    const result = aggregateComplementarySourceJudgments(options);
+    assert.equal(result.safety.unknown, false); assert.equal(result.safety.blocksAdvancement, false);
+    assert.equal(result.advances, false); assert.equal(result.incrementalSuperiority, false);
+    assert.equal(result.gates.correctnessResolved, false); assert.equal(result.arms[name].unresolved, 1);
+    assert.equal(result.arms[name].denominator, 24); assert.equal(result.outcomesDenominator, 72);
+    for (const [pairName, pair] of Object.entries(result.paired))
+      assert.equal(pair.unresolvedPairs, name === 'complementary' || pairName.endsWith(name === 'baseline' ? 'Baseline' : 'Linked') ? 1 : 0);
+    assertPairedDenominators(result);
+  }
+  const options = resolvedJudgmentFixture();
+  for (const rows of [options.judgmentsA, options.judgmentsB])
+    for (const row of rows.filter(row => row.id === 'D01')) row.verdict = 'unresolved';
+  const result = aggregateComplementarySourceJudgments(options);
+  assert.equal(result.paired.complementaryBaseline.unresolvedPairs, 1, 'both unresolved outcomes form one unresolved pair');
+  assert.equal(result.paired.complementaryLinked.unresolvedPairs, 1); assertPairedDenominators(result);
+});
+
+test('Q5 resolved-pair positive control permits incorrect answers and passes without requiring perfect accuracy', () => {
+  const result = aggregateComplementarySourceJudgments(resolvedJudgmentFixture());
+  assert.equal(result.advances, true); assert.equal(result.incrementalSuperiority, true);
+  assert.equal(result.gates.correctnessResolved, true);
+  for (const name of complementaryArms) { assert.ok(result.arms[name].incorrect > 0); assert.equal(result.arms[name].unresolved, 0); }
+  assert.equal(result.paired.complementaryBaseline.netCorrect, 3); assert.equal(result.paired.complementaryLinked.netCorrect, 1);
+  for (const pair of Object.values(result.paired)) { assert.equal(pair.unresolvedPairs, 0); assert.equal(pair.neitherCorrect, 1); }
+  assertPairedDenominators(result);
+});
+
 test('Q1/Q5 separate freeze preserves requested v2 and all42 anchors; blind identity/cross-profile guards', async () => {
   assert.deepEqual(frozen.originalHashes, original.hashes); assert.deepEqual(frozen.evaluatorRubric, original.evaluatorRubric);
   assert.deepEqual(frozen.qaRubric, original.qaRubric);

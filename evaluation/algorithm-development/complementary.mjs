@@ -4,7 +4,7 @@ import { hashCanonicalValue } from './corpus.mjs';
 import { buildBlindComplementaryDevelopmentPacket } from './judging.mjs';
 import { aggregateComplementaryDevelopmentJudgments } from './evaluator.mjs';
 import { freeze } from '../longmemeval/mixed-validation.mjs';
-import { COMPLEMENTARY_VERSION, requireComplementaryReport } from './complementary-profile.mjs';
+import { COMPLEMENTARY_VERSION, complementaryArms, requireComplementaryReport } from './complementary-profile.mjs';
 
 export const COMPLEMENTARY_PROTOCOL = freeze({ ...REQUESTED_ANSWER_PROTOCOL,
   version: `${COMPLEMENTARY_VERSION}-blind-judging-v1` });
@@ -53,7 +53,9 @@ export function aggregateComplementarySourceJudgments({ report, judgmentsA, judg
     || !Number.isSafeInteger(coverage.paired.complementaryLinked.gain)
     || typeof resourcesWithinLimits !== 'boolean') throw new TypeError('missing complementary gate evidence');
   const result = aggregateComplementaryDevelopmentJudgments({ observations: report.observations, judgmentsA, judgmentsB });
-  const gates = { noFatal: report.fatal === null, primaryQA: result.paired.complementaryBaseline.netCorrect >= 3,
+  const gates = { noFatal: report.fatal === null,
+    correctnessResolved: complementaryArms.every(name => result.arms[name].unresolved === 0),
+    primaryQA: result.paired.complementaryBaseline.netCorrect >= 3,
     primaryPackedGain: coverage.paired.complementaryBaseline.gain > 0,
     linkedQANoRegression: result.paired.complementaryLinked.netCorrect >= 0,
     linkedPackedNoRegression: coverage.paired.complementaryLinked.gain >= 0,
