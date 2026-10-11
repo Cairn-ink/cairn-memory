@@ -1,6 +1,7 @@
 // Post-run evaluator integration only. Nothing here is imported by model execution.
 import { randomBytes, randomInt } from 'node:crypto';
 import { validateEvaluatorRubric } from './corpus.mjs';
+import { complementaryArms } from './complementary-profile.mjs';
 
 export const JUDGING_PROTOCOL = Object.freeze({
   version: 'algorithm-development-blind-judging-v1',
@@ -17,14 +18,14 @@ export const JUDGING_PROTOCOL = Object.freeze({
   aggregation: 'agreement-only; disagreements/missing judgments unresolved; no adjudication or favorable picking',
 });
 
-export function buildBlindDevelopmentPacket({ observations, modelInputs, evaluatorRubric }) {
+function buildBlindPacket({ observations, modelInputs, evaluatorRubric }, arms) {
   validateEvaluatorRubric(evaluatorRubric, modelInputs);
   const rows = new Map(observations.map(row => [row.id, row]));
   if (rows.size !== observations.length || observations.some(row => !modelInputs.some(input => input.id === row.id))) {
     throw new TypeError('invalid observation identities');
   }
   const mapping = [], items = [];
-  for (const source of modelInputs) for (const arm of ['baseline', 'full']) {
+  for (const source of modelInputs) for (const arm of arms) {
     const row = rows.get(source.id), attempt = row?.arms?.[arm];
     if (row?.capture?.status !== 'completed' || attempt?.status !== 'completed') continue;
     const label = randomBytes(16).toString('hex');
@@ -38,6 +39,8 @@ export function buildBlindDevelopmentPacket({ observations, modelInputs, evaluat
   }
   return { mapping, packet: { protocol: JUDGING_PROTOCOL, items } };
 }
+export const buildBlindDevelopmentPacket = options => buildBlindPacket(options, ['baseline', 'full']);
+export const buildBlindComplementaryDevelopmentPacket = options => buildBlindPacket(options, complementaryArms);
 
 export function unblindDevelopmentJudgments(mapping, judgments) {
   const identities = new Map(mapping.map(row => [row.label, row]));
