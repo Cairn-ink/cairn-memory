@@ -1,0 +1,1410 @@
+[
+  {
+    "id": "P01",
+    "family": "narrow-topic-identity-location",
+    "question": {
+      "text": "As of October 10, where do we keep the mobile puncture bench I call Stitch?",
+      "date": "2026-10-10"
+    },
+    "sessions": [
+      {
+        "id": "P01-s1",
+        "eventTime": "2026-08-03T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I joined the Bellwether Cycle Collective's Thursday repair shift. I prefer the early shift because I cycle home before dark."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "My own commuter has a belt drive. I keep its service receipts in the blue folder at home."
+          }
+        ]
+      },
+      {
+        "id": "P01-s2",
+        "eventTime": "2026-08-07T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The collective's pump loan runs for three days. Borrowers leave their phone number on the paper loan slip."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "We charge a refundable ten-pound deposit for the floor pump. My home track pump is not part of that loan stock."
+          }
+        ]
+      },
+      {
+        "id": "P01-s3",
+        "eventTime": "2026-08-12T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Our mobile puncture bench is the cart tagged MP-7. When I say Stitch in our workshop notes, I mean that MP-7 cart."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "The Stitch sewing table belongs to the upstairs costume group. I use the puncture bench for roadside demonstrations."
+          }
+        ]
+      },
+      {
+        "id": "P01-s4",
+        "eventTime": "2026-08-16T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For my commute, the canal path is open again after the resurfacing. The east stair at the station still has no wheel ramp."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "I prefer the bridge route when carrying panniers. The repair collective's east stair is inside our building, not at the station."
+          }
+        ]
+      },
+      {
+        "id": "P01-s5",
+        "eventTime": "2026-08-20T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The workshop's patch tins cost two pounds each. The self-adhesive patches are for demonstrations rather than our permanent repairs."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "I keep a rubber offcut for showing people how to roughen a surface. Our demo tyre is deliberately unrideable."
+          }
+        ]
+      },
+      {
+        "id": "P01-s6",
+        "eventTime": "2026-08-25T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The yellow crate holds the loan helmets. Its numbered tags match the sizes on the sign-out sheet."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "The helmet crate stays in the front lobby. The yellow crate on my balcony holds plant pots."
+          }
+        ]
+      },
+      {
+        "id": "P01-s7",
+        "eventTime": "2026-08-29T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Anika Bell leads the children's balance-bike session on Saturdays. We ask parents to stay for the whole session."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "That session uses the yard behind the collective. Rain moves the balance bikes into the covered loading area."
+          }
+        ]
+      },
+      {
+        "id": "P01-s8",
+        "eventTime": "2026-09-02T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "My pannier seam needs stitching, so I booked the upstairs costume group's sewing table for September 4. They call that table Stitch too."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "The sewing group's fabric scissors stay upstairs. I will bring my own heavy needle for the pannier."
+          }
+        ]
+      },
+      {
+        "id": "P01-s9",
+        "eventTime": "2026-09-07T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The autumn roadside demonstrations are at the riverside market. Tomas Adebayo brings the puncture practice tubes."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "Visitors can try fitting a patch before working on their own bike. The market organisers supply the folding chairs."
+          }
+        ]
+      },
+      {
+        "id": "P01-s10",
+        "eventTime": "2026-09-11T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Our volunteers' first-aid refresher is September 24. The community nurse asked us to bring the yard incident book."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "The first-aid bag hangs by the front lobby door. The workshop spill kit stays by the parts washer."
+          }
+        ]
+      },
+      {
+        "id": "P01-s11",
+        "eventTime": "2026-09-16T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Facilities calls cart MP-7 the roaming bench on its floor plan. That name refers to the cart, not the fixed wheel-truing bench."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "The floor plan's dashed line marks the indoor evacuation route. I print the plan in large type for new volunteers."
+          }
+        ]
+      },
+      {
+        "id": "P01-s12",
+        "eventTime": "2026-09-20T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The wheel-truing bench has a new spoke ruler. I prefer metric measurements when ordering replacement spokes."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "The fixed truing bench remains against the west wall. Its lamp has a foot switch so people can keep both hands on the wheel."
+          }
+        ]
+      },
+      {
+        "id": "P01-s13",
+        "eventTime": "2026-09-24T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "At the refresher we practised calling for help from the yard. The nurse wants the incident book checked after each shift."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "We agreed that children should wait with an adult during an incident. I keep the nurse's contact card with the first-aid bag."
+          }
+        ]
+      },
+      {
+        "id": "P01-s14",
+        "eventTime": "2026-09-28T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The south porch will be enclosed for building work from October 6. Facilities offered alcove K as indoor parking for the roaming bench."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "The porch work will also close the outside tap. We will fill the cleaning bucket from the parts-room sink during that work."
+          }
+        ]
+      },
+      {
+        "id": "P01-s15",
+        "eventTime": "2026-10-01T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Our October market session needs two tyre levers per demonstration kit. I have counted twelve sound levers."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "The kit bags are green so volunteers can spot them on the market table. The orange bag holds my own commuting tools."
+          }
+        ]
+      },
+      {
+        "id": "P01-s16",
+        "eventTime": "2026-10-04T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The lobby helmet crate now has a laminated size chart. The old paper chart tore when a wet helmet was returned."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "I put a drying mat under the loan helmets. Returns still go to the lobby, even while the porch work is under way."
+          }
+        ]
+      },
+      {
+        "id": "P01-s17",
+        "eventTime": "2026-10-06T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I finished the October 6 move: the roaming bench is now in alcove K beside the collective's east stair. Its old south-porch parking spot is no longer used for it."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "The alcove's power socket is for the vacuum, not charging bike batteries. I secured the bench wheels before leaving."
+          }
+        ]
+      },
+      {
+        "id": "P01-s18",
+        "eventTime": "2026-10-08T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The sewing group has moved its Stitch table to the upstairs cutting room. Our September pannier repair is holding up well."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "I will return their heavy thread spool on Friday. The cutting room is reached by the west stair."
+          }
+        ]
+      },
+      {
+        "id": "P01-s19",
+        "eventTime": "2026-10-09T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The collective's indoor bike parking is full on Thursdays. Volunteers can lock bikes to the yard rail instead."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "I prefer the rail nearest the covered loading area. The market kit bags are packed for Saturday's demonstration."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "P02",
+    "family": "dated-scope-handoff",
+    "question": {
+      "text": "Who was the sign-off contact for Whisk's evening beginner welcome pack on September 8?",
+      "date": "2026-10-10"
+    },
+    "sessions": [
+      {
+        "id": "P02-s1",
+        "eventTime": "2026-08-02T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I'm helping Saltglass Kitchen School with its autumn welcome materials. I prefer recipes measured in grams because our scales are metric."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "The school's evening beginners meet on Tuesdays. I bring my own apron rather than borrow one."
+          }
+        ]
+      },
+      {
+        "id": "P02-s2",
+        "eventTime": "2026-08-06T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The morning bread course has a welcome sheet called Rise. Owen Tariq checks its room information."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "Rise prints on cream paper. The bread tutors want the allergy notice on the front."
+          }
+        ]
+      },
+      {
+        "id": "P02-s3",
+        "eventTime": "2026-08-10T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Our public tasting invitations go through Celia Mensah. Those invitations cover weekend visitors rather than enrolled classes."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "I use plain-language directions for the tasting queue. The tasting door opens onto Market Lane."
+          }
+        ]
+      },
+      {
+        "id": "P02-s4",
+        "eventTime": "2026-08-14T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Whisk is our working name for the E8 evening beginner welcome pack. The pack covers joining instructions for enrolled E8 students."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "The daytime beginner cohort is D3 and has a separate welcome pack called Spoon. I print both packs double-sided."
+          }
+        ]
+      },
+      {
+        "id": "P02-s5",
+        "eventTime": "2026-08-18T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The E8 class has two portable induction rings. Students practise knife grips with carrots before using the rings."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "We keep spare aprons by the wash basin. Students should tie back long hair before the cooking demonstration."
+          }
+        ]
+      },
+      {
+        "id": "P02-s6",
+        "eventTime": "2026-08-22T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I arranged a Spanish translation of the tasting invitation with Luz Ortega. Luz does translations, not course sign-off."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "We reimburse her bus fare for the weekend visit. The invitation's contact number belongs to the tasting desk."
+          }
+        ]
+      },
+      {
+        "id": "P02-s7",
+        "eventTime": "2026-08-26T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The school newsletter is called Whisk Weekly. Its editor is Dario Sanz."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "The newsletter covers every course, not just E8. I send Dario photos only after students consent."
+          }
+        ]
+      },
+      {
+        "id": "P02-s8",
+        "eventTime": "2026-08-30T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The September evening timetable places E8 in teaching room Two. The daytime D3 class remains in teaching room One."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "Room Two's accessible entrance is through the courtyard. I put that route on the E8 pack's back page."
+          }
+        ]
+      },
+      {
+        "id": "P02-s9",
+        "eventTime": "2026-09-03T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A dairy-free cake lesson has been added to the daytime Spoon course. Owen Tariq approved that course's ingredient list."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "My own preference is oat milk for tea. The staff kitchen keeps a separate jug for dairy milk."
+          }
+        ]
+      },
+      {
+        "id": "P02-s10",
+        "eventTime": "2026-09-07T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I delivered the E8 joining packs to reception for the September 8 intake. The reception team puts them inside the enrolled students' envelopes."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "Tasting visitors receive a single invitation sheet. I use different envelope sizes to avoid mixing those mailings."
+          }
+        ]
+      },
+      {
+        "id": "P02-s11",
+        "eventTime": "2026-09-10T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The school replaced a cracked chopping board in room Two. We mark the replacement with the room number underneath."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "I prefer the smaller board for the onion demonstration. The old board has been taken out of teaching use."
+          }
+        ]
+      },
+      {
+        "id": "P02-s12",
+        "eventTime": "2026-09-14T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The E8 evening beginner welcome pack had Celia Mensah as sign-off contact through September 9 inclusive. Dario Sanz took over that same sign-off role on September 10; I wrote up the completed handoff on September 14."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "Celia continues to handle public tasting invitations. The handoff concerns the enrolled E8 pack rather than those invitations."
+          }
+        ]
+      },
+      {
+        "id": "P02-s13",
+        "eventTime": "2026-09-17T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "E8 students asked for a larger map of the courtyard entrance. I will use the whole back page for the next printing."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "The map's dotted path avoids the kitchen loading ramp. The ramp is for deliveries, not a student entrance."
+          }
+        ]
+      },
+      {
+        "id": "P02-s14",
+        "eventTime": "2026-09-21T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Luz returned the Spanish tasting translation with a clearer allergy sentence. Celia accepted that version for the October tasting."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "The E8 packs remain in English for this intake. Students can request a telephone explanation from reception."
+          }
+        ]
+      },
+      {
+        "id": "P02-s15",
+        "eventTime": "2026-09-25T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Spoon pack's course contact is still Owen Tariq. D3's next lesson is vegetable stock."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "I saved the stock recipe as a large-print handout. The course tutor asked for unsalted stock in the demonstration."
+          }
+        ]
+      },
+      {
+        "id": "P02-s16",
+        "eventTime": "2026-09-29T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Dario wants the E8 welcome pack's room map checked before the October reprint. He will sign off the revised pack after that check."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "The newsletter photo deadline is October 3. That deadline applies to Whisk Weekly rather than joining packs."
+          }
+        ]
+      },
+      {
+        "id": "P02-s17",
+        "eventTime": "2026-10-03T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I sent the consented kneading photos for Whisk Weekly. One student declined, so I left that student's picture out."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "The October tasting will offer two dairy-free samples. Celia asked for separate serving spoons at those stations."
+          }
+        ]
+      },
+      {
+        "id": "P02-s18",
+        "eventTime": "2026-10-07T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reception now has fifty E8 welcome packs ready for the next intake. The courtyard directions were checked during yesterday's class."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "I stored the spare packs in the reception cupboard. The recipe handouts stay in teaching room Two."
+          }
+        ]
+      },
+      {
+        "id": "P02-s19",
+        "eventTime": "2026-10-09T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The E8 tutor asked me to bring sticky labels for students' takeaway boxes. I prefer labels that peel off for washing."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "Our reusable boxes have blue lids. The tasting samples use paper dishes instead."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "P03",
+    "family": "shared-topic-interference",
+    "question": {
+      "text": "What sample rate and channel format do we currently use for Lantern Lives public listening exports?",
+      "date": "2026-09-30"
+    },
+    "sessions": [
+      {
+        "id": "P03-s1",
+        "eventTime": "2026-08-01T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Lantern Lives is our neighbourhood oral-history project. I coordinate its audio preparation at Beacon Terrace Library."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "Interview consent sheets are kept in the locked records cabinet. I use the interview code rather than a surname in filenames."
+          }
+        ]
+      },
+      {
+        "id": "P03-s2",
+        "eventTime": "2026-08-04T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The project has separate folders for raw interviews and public listening exports. I put the interview date at the start of each raw filename."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "The public filenames start with the story title. Our catalogue uses the interview code to connect the two copies."
+          }
+        ]
+      },
+      {
+        "id": "P03-s3",
+        "eventTime": "2026-08-07T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "We record each interview on two memory cards. I copy both cards before erasing either one."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "The second card is a backup, not an extra interview. I label cards with the recorder's letter so volunteers can return them."
+          }
+        ]
+      },
+      {
+        "id": "P03-s4",
+        "eventTime": "2026-08-10T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For Lantern Lives I remove spoken phone numbers from public listening copies. The untouched recordings remain in the restricted raw folder."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "Volunteers note redaction timecodes in the edit log. A redaction note does not change the transcript's speaker labels."
+          }
+        ]
+      },
+      {
+        "id": "P03-s5",
+        "eventTime": "2026-08-13T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Our catalogue's 🎧 symbol means a clip needs headphones because its volume is low. I test those clips at the library's listening desk."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "The desk headphones are wiped after every use. I keep spare ear pads in the audio cupboard."
+          }
+        ]
+      },
+      {
+        "id": "P03-s6",
+        "eventTime": "2026-08-16T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For Lantern Lives public listening exports, I use the profile Listening A. Archival masters use the separate profile Vault B."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "The profiles are saved on the editing computer. I ask volunteers to check the export profile before starting an overnight render."
+          }
+        ]
+      },
+      {
+        "id": "P03-s7",
+        "eventTime": "2026-08-19T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Listening A exports include a short title announcement. I leave half a second of silence before that announcement."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "We use the approved story title from the catalogue. The interviewer's name belongs in the catalogue credits, not that announcement."
+          }
+        ]
+      },
+      {
+        "id": "P03-s8",
+        "eventTime": "2026-08-22T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Lantern Lives transcripts use square brackets for laughter. I keep interruptions on a new line."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "For unclear words we use a timecode rather than guess. Volunteers can leave a comment for a second listener."
+          }
+        ]
+      },
+      {
+        "id": "P03-s9",
+        "eventTime": "2026-08-25T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Amina Farouk reviews consent restrictions before a listening copy is published. I check technical playback after her review."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "Her review is about permission, not audio mastering. The library manager schedules the public listening sessions."
+          }
+        ]
+      },
+      {
+        "id": "P03-s10",
+        "eventTime": "2026-08-28T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Lantern Lives listening desk uses a playlist with one story per entry. I arrange the entries alphabetically by approved title."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "The desk tablet's screen timeout is ten minutes. We disable automatic playlist continuation so visitors choose their next story."
+          }
+        ]
+      },
+      {
+        "id": "P03-s11",
+        "eventTime": "2026-08-31T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I replaced a noisy cable on recorder C. Its next test recording should include a quiet-room section."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "Recorder A is booked for the September 4 interview. Volunteers collect recorders from the library equipment desk."
+          }
+        ]
+      },
+      {
+        "id": "P03-s12",
+        "eventTime": "2026-09-03T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Lantern Lives edit log now includes the editor's initials. I keep a separate column for consent-related cuts."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "Technical trims go in the timing column. Amina wants the consent column visible when she checks a draft."
+          }
+        ]
+      },
+      {
+        "id": "P03-s13",
+        "eventTime": "2026-09-06T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Lantern Lives listening room closes at five on Saturdays. Public story sessions last forty minutes."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "We reserve ten minutes afterward for visitor comments. Visitors can write comments anonymously on the printed cards."
+          }
+        ]
+      },
+      {
+        "id": "P03-s14",
+        "eventTime": "2026-09-09T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For the Lantern Lives transcript index, street names use their current spelling. Historical spellings remain in the transcript when speakers use them."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "The index has a separate field for mentioned years. I do not convert approximate recollections into exact dates."
+          }
+        ]
+      },
+      {
+        "id": "P03-s15",
+        "eventTime": "2026-09-15T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Vault B archival exports retain the original interview channel layout. I verify that both recorded channels are present before archiving."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "Our archive checksums are saved next to the master files. The public playlist does not contain those master files."
+          }
+        ]
+      },
+      {
+        "id": "P03-s16",
+        "eventTime": "2026-09-22T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "🎧 Export settings update: Listening A is now 48 kHz stereo after today's September 22 switch. Until September 21 it was 44.1 kHz mono."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "The switch applies to new public listening exports and replacements. Vault B remains the separate archival profile."
+          }
+        ]
+      },
+      {
+        "id": "P03-s17",
+        "eventTime": "2026-09-25T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I regenerated the Lantern Lives public playlist files with the updated Listening A profile. The desk tablet played all fourteen entries successfully."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "The playlist titles did not change. I kept the old exports in the restricted revision folder for troubleshooting."
+          }
+        ]
+      },
+      {
+        "id": "P03-s18",
+        "eventTime": "2026-09-28T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Lantern Lives caption sheets use eighteen-point type. Each sheet has the same title as its listening entry."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "We lend magnifiers at the library desk. The sheets use cream paper because several visitors found bright white uncomfortable."
+          }
+        ]
+      },
+      {
+        "id": "P03-s19",
+        "eventTime": "2026-09-29T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Our next Lantern Lives volunteer session covers checking transcripts against audio. I will demonstrate how to record an unclear-word timecode."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "Volunteers should bring wired headphones. I booked the small meeting room so they can hear quiet passages."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "P04",
+    "family": "explicitly-unresolved-choice",
+    "question": {
+      "text": "Which carrier did Saltbrook Pantry finally adopt for its winter Wednesday insulated-box route as of October 9?",
+      "date": "2026-10-09"
+    },
+    "sessions": [
+      {
+        "id": "P04-s1",
+        "eventTime": "2026-08-03T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I help organise deliveries for Saltbrook Pantry. Our winter Wednesday route will take insulated boxes to housebound members."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "The summer Tuesday route carries dry goods. I prefer to keep separate lists for those two delivery rounds."
+          }
+        ]
+      },
+      {
+        "id": "P04-s2",
+        "eventTime": "2026-08-07T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The pantry's front collection window is open from ten to noon. Members can nominate a neighbour to collect for them."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "We ask nominees to bring the member's collection code. I use large type on the printed collection slips."
+          }
+        ]
+      },
+      {
+        "id": "P04-s3",
+        "eventTime": "2026-08-11T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Our insulated boxes hold six meal tubs each. The box lids have replaceable rubber seals."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "I wash lids separately from the tubs. The damaged seal on box Four has been removed."
+          }
+        ]
+      },
+      {
+        "id": "P04-s4",
+        "eventTime": "2026-08-15T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Mei Anton supervises the summer Tuesday dry-goods drivers. That team uses volunteers' cars."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "The Wednesday winter delivery list is still being assembled. I do not move people between routes without checking their availability."
+          }
+        ]
+      },
+      {
+        "id": "P04-s5",
+        "eventTime": "2026-08-19T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Plover Parcel offered to carry the winter Wednesday insulated-box route. Harbor Cart also sent a proposal for that same route."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "Plover quoted a per-stop price. Harbor's quote is a flat price for the round."
+          }
+        ]
+      },
+      {
+        "id": "P04-s6",
+        "eventTime": "2026-08-23T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The pantry freezer needs a temperature check at opening and closing. I keep the check sheet on its side panel."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "The freezer key hangs in the staff kitchen. Public collection volunteers use the front room rather than that kitchen."
+          }
+        ]
+      },
+      {
+        "id": "P04-s7",
+        "eventTime": "2026-08-27T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For Wednesday insulated boxes, the food-safety volunteer recommends a maximum two-hour delivery round. We need each carrier to confirm it can meet that limit."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "The timing starts when boxes leave the pantry. Returned boxes are washed before they go back on the packing table."
+          }
+        ]
+      },
+      {
+        "id": "P04-s8",
+        "eventTime": "2026-08-31T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The committee adopted blue tamper labels for winter meal tubs. That label decision did not choose a carrier."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "The labels peel off before washing. I ordered one roll to try during the packing rehearsal."
+          }
+        ]
+      },
+      {
+        "id": "P04-s9",
+        "eventTime": "2026-09-04T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Plover Parcel said it can supply a chilled van on Wednesdays. Its proposal still needs a revised list of stops."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "The van's loading height matters for our volunteers. I asked for a photograph of its rear step."
+          }
+        ]
+      },
+      {
+        "id": "P04-s10",
+        "eventTime": "2026-09-08T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Harbor Cart offered an assistant to lift boxes at each stop. Its quote allows twelve stops per round."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "We currently have eleven households on the winter list. One household needs the box left with a named neighbour."
+          }
+        ]
+      },
+      {
+        "id": "P04-s11",
+        "eventTime": "2026-09-12T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The pantry's dry-goods stocktake is on September 30. I count opened cartons separately from sealed cartons."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "We donate spare tote bags to new members. The insulated boxes remain pantry property."
+          }
+        ]
+      },
+      {
+        "id": "P04-s12",
+        "eventTime": "2026-09-16T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Mei prefers Harbor Cart's lifting help for winter Wednesdays. Her preference is advice to the committee, not an appointment."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "I prefer Plover's chilled van if it can meet the two-hour limit. We need to compare the revised quotes before deciding."
+          }
+        ]
+      },
+      {
+        "id": "P04-s13",
+        "eventTime": "2026-09-20T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The September 20 committee meeting deferred the winter Wednesday carrier choice. Neither proposal was accepted at that meeting."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "Plover still owes us its timing confirmation. Harbor was asked to price a possible thirteenth stop."
+          }
+        ]
+      },
+      {
+        "id": "P04-s14",
+        "eventTime": "2026-09-24T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The winter packing rehearsal uses water-filled tubs rather than food. We will time how long it takes to load eleven boxes."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "I asked two volunteers to practise lifting together. The rehearsal is on the pantry premises."
+          }
+        ]
+      },
+      {
+        "id": "P04-s15",
+        "eventTime": "2026-09-28T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Plover's photograph shows a rear step with a handrail. I forwarded it to the food-safety volunteer."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted the arrangements."
+          },
+          {
+            "role": "user",
+            "content": "Harbor has supplied the thirteenth-stop price. I kept both replies with their original proposals."
+          }
+        ]
+      },
+      {
+        "id": "P04-s16",
+        "eventTime": "2026-10-01T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The stocktake found enough rice for the next four dry-goods rounds. We need more small tins of tomatoes."
+          },
+          {
+            "role": "assistant",
+            "content": "I've noted those details."
+          },
+          {
+            "role": "user",
+            "content": "Mei will collect the summer Tuesday mileage slips this week. Those slips do not cover the planned winter Wednesday round."
+          }
+        ]
+      },
+      {
+        "id": "P04-s17",
+        "eventTime": "2026-10-04T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The packing rehearsal took eighteen minutes for eleven boxes. The volunteers want a trolley with larger wheels."
+          },
+          {
+            "role": "assistant",
+            "content": "Thanks for the update."
+          },
+          {
+            "role": "user",
+            "content": "The borrowed trolley belonged to the adjacent library. I returned it after the rehearsal."
+          }
+        ]
+      },
+      {
+        "id": "P04-s18",
+        "eventTime": "2026-10-07T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The committee adopted a larger-wheeled pantry trolley for winter packing. It did not use that equipment vote to appoint a delivery carrier."
+          },
+          {
+            "role": "assistant",
+            "content": "I've recorded that distinction."
+          },
+          {
+            "role": "user",
+            "content": "Our next agenda includes the revised carrier proposals. I will bring the loading times from the rehearsal."
+          }
+        ]
+      },
+      {
+        "id": "P04-s19",
+        "eventTime": "2026-10-09T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "As of October 9, Saltbrook Pantry has not adopted a carrier for the winter Wednesday insulated-box route. Plover Parcel and Harbor Cart remain proposals; the next discussion is scheduled for October 14."
+          },
+          {
+            "role": "assistant",
+            "content": "Understood."
+          },
+          {
+            "role": "user",
+            "content": "The collection window will still open this Saturday. I am printing the current member collection codes this afternoon."
+          }
+        ]
+      }
+    ]
+  }
+]

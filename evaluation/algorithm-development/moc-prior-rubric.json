@@ -1,0 +1,246 @@
+{
+  "version": "moc-prior-natural-four-v1",
+  "spanOffsetUnit": "utf16-code-unit",
+  "abstentionSemantics": {
+    "knownDefinite": false,
+    "knownRefusal": true,
+    "unresolvedQualified": true,
+    "unclassifiable": null,
+    "definition": "A complete known requested value with optional uncertainty is not abstention. Declining a definite requested value because it is unresolved, including simply stating no final choice exists for P04, is abstention even when correct. Refusing a known answer is abstention and incorrect.",
+    "firstOutputPolicy": "Preserve first submissions and unknown fields; no retrospective fixture edits, favorable adjudication or same-case reruns after model outputs."
+  },
+  "cases": {
+    "P01": {
+      "answerability": "known",
+      "requiredPropositions": [
+        "The mobile puncture bench called Stitch is kept in alcove K beside the collective's east stair as of October 10."
+      ],
+      "acceptableQualifications": [
+        "Naming alcove K beside the collective's east stair is sufficient; the aliases MP-7 and roaming bench may be explained but are not required in the answer.",
+        "The location follows the completed October 6 move, not merely the September 28 offer of indoor parking.",
+        "The upstairs sewing table also called Stitch is a different object."
+      ],
+      "anchors": [
+        {
+          "sessionId": "P01-s3",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 114,
+          "text": "Our mobile puncture bench is the cart tagged MP-7. When I say Stitch in our workshop notes, I mean that MP-7 cart."
+        },
+        {
+          "sessionId": "P01-s11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 63,
+          "text": "Facilities calls cart MP-7 the roaming bench on its floor plan."
+        },
+        {
+          "sessionId": "P01-s17",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 162,
+          "text": "I finished the October 6 move: the roaming bench is now in alcove K beside the collective's east stair. Its old south-porch parking spot is no longer used for it."
+        }
+      ],
+      "propositionBindings": [
+        {
+          "propositionIndex": 0,
+          "anchorIndices": [
+            0,
+            1,
+            2
+          ]
+        }
+      ],
+      "unsupportedClaims": [
+        "The puncture bench is in the upstairs cutting room.",
+        "The railway station's east stair is the bench location.",
+        "MP-7 is the fixed wheel-truing bench."
+      ],
+      "staleUseCriteria": [
+        "Giving the south porch as the October 10 location uses the parking spot explicitly superseded by the completed October 6 move."
+      ],
+      "severeErrors": [
+        "Confidently placing the mobile puncture bench in the cutting room imports the different sewing table's location.",
+        "Confidently presenting the abandoned south-porch location as current disregards the completed scoped move."
+      ],
+      "examples": {
+        "conciseCorrect": "Alcove K, beside the collective's east stair.",
+        "explainedCorrect": "Stitch is MP-7, which facilities calls the roaming bench. It moved into alcove K beside the collective's east stair on October 6.",
+        "incorrect": "Stitch is now in the upstairs cutting room.",
+        "knownRefusal": "I can't establish where the puncture bench is kept."
+      }
+    },
+    "P02": {
+      "answerability": "known",
+      "requiredPropositions": [
+        "Celia Mensah was the sign-off contact for Whisk's evening beginner welcome pack on September 8."
+      ],
+      "acceptableQualifications": [
+        "A concise answer naming Celia Mensah is sufficient; explaining E8 or the dates is optional.",
+        "Whisk is the E8 evening beginner welcome pack, separate from the Whisk Weekly newsletter and D3 Spoon pack.",
+        "September 8 falls in Celia's assignment through September 9 inclusive. Dario's completed takeover was September 10, although written up September 14.",
+        "Celia's continuing public-tasting role is a separate scope."
+      ],
+      "anchors": [
+        {
+          "sessionId": "P02-s4",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 130,
+          "text": "Whisk is our working name for the E8 evening beginner welcome pack. The pack covers joining instructions for enrolled E8 students."
+        },
+        {
+          "sessionId": "P02-s12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 216,
+          "text": "The E8 evening beginner welcome pack had Celia Mensah as sign-off contact through September 9 inclusive. Dario Sanz took over that same sign-off role on September 10; I wrote up the completed handoff on September 14."
+        }
+      ],
+      "propositionBindings": [
+        {
+          "propositionIndex": 0,
+          "anchorIndices": [
+            0,
+            1
+          ]
+        }
+      ],
+      "unsupportedClaims": [
+        "Owen Tariq was Whisk's sign-off contact.",
+        "Dario's newsletter editorship established his September 8 welcome-pack sign-off role.",
+        "The E8 handoff occurred September 14."
+      ],
+      "staleUseCriteria": [
+        "Answering Dario for September 8 applies a later September 10 role to the requested historical date.",
+        "Moving the handoff to its September 14 write-up date confuses recording time with event time."
+      ],
+      "severeErrors": [
+        "Confidently naming Dario for September 8 imports a later assignment or a differently scoped newsletter role.",
+        "Confidently naming Owen imports the separate daytime cohort's contact."
+      ],
+      "examples": {
+        "conciseCorrect": "Celia Mensah.",
+        "explainedCorrect": "Celia Mensah handled the E8 pack called Whisk through September 9. Dario took over September 10, after the date you asked about.",
+        "incorrect": "Dario Sanz, because he edits Whisk Weekly.",
+        "knownRefusal": "There is no way to identify the September 8 contact."
+      }
+    },
+    "P03": {
+      "answerability": "known",
+      "requiredPropositions": [
+        "Lantern Lives currently uses 48 kHz stereo for public listening exports."
+      ],
+      "acceptableQualifications": [
+        "A concise answer giving both 48 kHz and stereo is sufficient; naming Listening A or explaining the change is optional.",
+        "Listening A is the public listening profile, while Vault B is the separate archival profile.",
+        "The change took effect September 22; the September 25 regenerated public playlist uses that updated profile.",
+        "Mentioning the earlier 44.1 kHz mono setting as historical is acceptable if the current setting is clear."
+      ],
+      "anchors": [
+        {
+          "sessionId": "P03-s6",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 125,
+          "text": "For Lantern Lives public listening exports, I use the profile Listening A. Archival masters use the separate profile Vault B."
+        },
+        {
+          "sessionId": "P03-s16",
+          "messageIndex": 0,
+          "start": 27,
+          "end": 135,
+          "text": "Listening A is now 48 kHz stereo after today's September 22 switch. Until September 21 it was 44.1 kHz mono."
+        }
+      ],
+      "propositionBindings": [
+        {
+          "propositionIndex": 0,
+          "anchorIndices": [
+            0,
+            1
+          ]
+        }
+      ],
+      "unsupportedClaims": [
+        "Current public exports use Vault B.",
+        "Lantern Lives public listening exports currently use mono.",
+        "The sources specify a numeric sample rate for Vault B."
+      ],
+      "staleUseCriteria": [
+        "Giving 44.1 kHz mono as current uses the Listening A setting explicitly ended September 21."
+      ],
+      "severeErrors": [
+        "Confidently presenting the ended mono setting as the current public export setting disregards the scoped adopted change.",
+        "Confidently substituting an invented archival sample rate for the requested public export setting crosses profile scope."
+      ],
+      "examples": {
+        "conciseCorrect": "48 kHz stereo.",
+        "explainedCorrect": "Public listening exports use Listening A, which switched to 48 kHz stereo on September 22.",
+        "incorrect": "44.1 kHz mono.",
+        "knownRefusal": "I don't know the current export settings."
+      }
+    },
+    "P04": {
+      "answerability": "unresolved",
+      "requiredPropositions": [
+        "Saltbrook Pantry had not adopted a carrier for the winter Wednesday insulated-box route as of October 9; the requested final carrier choice remains unresolved."
+      ],
+      "acceptableQualifications": [
+        "A concise statement that no final carrier has been adopted is sufficient.",
+        "The answer may mention Plover Parcel and Harbor Cart as proposals without naming either as adopted.",
+        "Mei's Harbor preference and the narrator's conditional Plover preference are advice, not a committee appointment.",
+        "The blue-label and trolley votes adopted equipment choices, not a carrier.",
+        "The scheduled October 14 discussion is a future discussion, not an outcome."
+      ],
+      "anchors": [
+        {
+          "sessionId": "P04-s13",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 127,
+          "text": "The September 20 committee meeting deferred the winter Wednesday carrier choice. Neither proposal was accepted at that meeting."
+        },
+        {
+          "sessionId": "P04-s19",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 202,
+          "text": "As of October 9, Saltbrook Pantry has not adopted a carrier for the winter Wednesday insulated-box route. Plover Parcel and Harbor Cart remain proposals; the next discussion is scheduled for October 14."
+        }
+      ],
+      "propositionBindings": [
+        {
+          "propositionIndex": 0,
+          "anchorIndices": [
+            0,
+            1
+          ]
+        }
+      ],
+      "unsupportedClaims": [
+        "Saltbrook Pantry adopted Plover Parcel for the route.",
+        "Saltbrook Pantry adopted Harbor Cart for the route.",
+        "The committee's trolley vote appointed a carrier.",
+        "The October 14 discussion has already resolved the choice.",
+        "No carrier can meet the food-safety requirement; missing confirmation does not prove impossibility."
+      ],
+      "staleUseCriteria": [
+        "An August or September proposal/preference cannot substitute for the explicitly unadopted choice as of October 9.",
+        "The summer Tuesday volunteer arrangement does not establish a winter Wednesday carrier."
+      ],
+      "severeErrors": [
+        "Confidently naming either proposer as adopted invents a commitment that is explicitly still absent.",
+        "Claiming the future October 14 discussion selected a carrier invents an event after the question date."
+      ],
+      "examples": {
+        "conciseCorrect": "No carrier had been adopted as of October 9; the choice remained open.",
+        "explainedCorrect": "The committee deferred the choice, and Plover Parcel and Harbor Cart were still proposals on October 9. I can't name a final carrier.",
+        "incorrect": "Harbor Cart was adopted because Mei preferred its lifting help.",
+        "knownRefusal": "Not applicable: this is an unresolved requested choice."
+      }
+    }
+  }
+}
