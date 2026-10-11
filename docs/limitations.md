@@ -2065,3 +2065,19 @@ slots and each literal raw response, with zero pending attempts and owned
 cleanup. The unchanged default callback limit still rejects excess observations.
 These offline regressions do not measure provider or model quality, whole-process
 RSS, file-size bounds or full execution cost, and do not clear semantic gates.
+
+The offline source-bundle scorer now checks explicit frozen sources and retained
+BR observations, recorded reads, original turn-body anchors, literal dispatched
+answer wires, first returned answers, bounded first judgments and conservative
+fixed-denominator gates. Its actual24 fake-HTTP fixture retains large raw bodies
+and an honest consumed missing answer; a separate pre-aborted fixture preserves
+all not-run slots. Scripted labels establish scoring arithmetic, not semantic
+quality, three-hop efficacy, provider parity or readiness. Original history
+prefix and absolute per-phase deadlines depend on the accepted pinned runtime
+and external execution provenance; token counts are bound recorded measurements,
+not independently retokenized. Entire-transcript fabrication and firstness are
+not proven by data consistency. RSS and agent service costs remain unmeasured;
+known model pricing remains partial and unknown usage/reservations explicit.
+Shared harm cannot clear D12, and original Stage2/3 gates remain unchanged.
+Primary's full two-runtime matrices, independent reviews and exact-head CI are
+still required before delivery or any separately authorized first live launch.
