@@ -131,6 +131,14 @@ establish no new QA score, provider spend permission or product promotion.
 
 ## Interpretation limits fixed before results
 
+Primary integration rebased only the two QA commits onto the exact reviewed
+PR 392 candidate `c206879518e14f06419e2e26d86e9c7951e2a696`. The original
+worker base and verification SHAs above remain historical observations, not
+claims about the final integration. This incorporates the owned fixture's
+immediate teardown correction without duplicating its implementation history.
+Final primary checks, independent Standards/Spec reviews and latest-head CI
+are separate gates; all must pass before the new one-shot paid operation.
+
 The same 24 previously seen synthetic development cases include many rank
 candidate pools of at most six. Their QA score cannot prove that the larger
 pool rare lexical bridge strategy improved. Selection and ranking invoke the

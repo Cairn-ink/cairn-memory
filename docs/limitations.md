@@ -1668,3 +1668,40 @@ Primary combined acceptance, independent final-head reviews and new CI remain
 separate delivery gates. The previous setup/core failures remain unexplained;
 this test-only correction does not resolve them. No new real-model QA score,
 default promotion, release or competitive-parity claim follows from these tests.
+
+### Prospective complementary-source three-arm comparison (2026-10-11)
+
+The [new development protocol](plans/complementary-qa24.md) compares ordinary
+recall, the previous source-diverse/source-linked combination, and the frozen
+complementary-source candidate on the same 24 previously seen authored cases.
+It keeps all 42 requested-answer anchors, the existing rubric, model and
+evidence packer. Each case is captured once and all three arms cold-open the
+same logical database. No new official benchmark or fresh holdout is claimed.
+
+The separate profile permits at most 1,992 HTTP attempts, $10 in new
+reservations, the original $400 cumulative ceiling and $30 protected balance.
+It never resets the ledger, retries a failed arm, resumes a closed operation,
+or changes the old two-arm profile. Missing/disagreed judgments remain
+unresolved in the denominator of 24; unknown safety blocks advancement.
+Same-batch comparisons against both controls are required. Historical 22/24
+and offline 36/36 are not inputs to a new QA score.
+
+The worker's clean pre-correction candidate `fa26f7c` passed 82/82 offline
+algorithm tests on Node 22.16.0 and 24.15.0, actual exit 0. The subsequent
+source-snapshot and durable-report correction passed its affected 5/5 tests
+on both Nodes, actual exit 0. Those observations precede primary integration
+and cannot stand in for final-head review, primary validation or CI.
+
+The launch retains a validated source-only snapshot before credential lookup
+and rejects runtime/source/ledger mutation before transport. Pre-run failures
+retain all 24 observations when persistence succeeds; post-dispatch persistence
+failures retain actual partial evidence and never run the comparison again to
+fabricate a replacement report. Durable report availability is explicit.
+
+Independent arm model calls can select different evidence despite sharing a
+policy. Many development pools contain at most six candidates, so the result
+cannot isolate the candidate's larger-pool lexical bridging benefit. Repeated
+known-case development is not an unbiased generalization estimate. Functional
+tests and a prospective protocol establish neither measured QA gain nor
+semantic reliability, production promotion or competitive parity. No paid
+three-arm result is recorded by this change.
