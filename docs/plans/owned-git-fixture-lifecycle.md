@@ -166,3 +166,35 @@ instrumentation; all temporary replay/source-loader files live outside the
 deliverable in the diagnostic root. The worker's frozen commit SHA and clean
 status are reported in its handoff. The primary independently verifies the
 combined behavior and keeps the historical CI attribution boundary explicit.
+
+## Standards review correction
+
+The independent Standards review of the first candidate found P3: the native
+auto-GC test created its parent workspace without a cleanup hook, then created
+a child and sibling before entering the outer `try`. An early setup failure
+could bypass the explicit `finally`. The correction takes the test context
+and registers the parent immediately with `createTestWorkspace(t)`. Explicit
+`finally` cleanup and its error propagation remain intact.
+
+A temporary in-memory control throws at the actual child-creation seam before
+the outer `try`. Restoring the old unregistered parent on Node22 produced the
+expected child exit 1 and retained the owned parent. With registration, both
+pinned Nodes produced the expected child exit 1 and removed the parent. All
+three verification harnesses exited 0 after checking those outcomes; the
+deliberately retained old-control artifact stays in the diagnostic root.
+
+```sh
+node /tmp/cairn-owned-git-diagnosis.kHwSLr/verify-setup-failure.mjs unregistered
+node /tmp/cairn-owned-git-diagnosis.kHwSLr/verify-setup-failure.mjs registered
+/home/chichieh/.nvm/versions/node/v24.15.0/bin/node /tmp/cairn-owned-git-diagnosis.kHwSLr/verify-setup-failure.mjs registered
+```
+
+After correction, the helper tests passed 2/2 and the full lifecycle tests
+passed 27/27 on each pinned Node, all actual exits 0. Commands are the helper
+file and lifecycle glob under `node tools/testing/run.mjs`; raw outputs are
+`review-helper-node{22,24}.log` and `review-lifecycle-node{22,24}.log` in the
+diagnostic root. No generic cleanup implementation changed. The correction
+touches only this plan and the helper test; independently derived Git diff
+and status inventories agree on 2 files. The original Standards FAIL is
+retained as historical evidence; the new combined candidate requires a new
+independent review before delivery.

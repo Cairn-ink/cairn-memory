@@ -11,8 +11,8 @@ function assertQuiescent(path) {
   assert.equal(existsSync(join(path, '.git', 'gc.pid')), false);
 }
 
-test('owned fixture returns after native auto-GC and removes scratch on later caller failure', async () => {
-  const owner = createTestWorkspace(null);
+test('owned fixture returns after native auto-GC and removes scratch on later caller failure', async t => {
+  const owner = createTestWorkspace(t);
   const workspace = createTestWorkspace(null, { parent: owner.path });
   const sibling = join(owner.path, 'keep'); writeFileSync(sibling, 'outside the fixture');
   try {
