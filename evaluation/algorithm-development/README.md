@@ -1,5 +1,49 @@
 # Synthetic algorithm comparison
 
+The prospective [relation-bound first-answer probe](../../docs/plans/relation-binding-probe.md)
+is a separate answer-only diagnostic: 12 new submitted-source cases, 24 first
+answers, six supported and six uncertain requested relations. It changes only
+the system instruction, using the named `packRelationBoundAnswer` builder and
+`createRelationBindingTransport`; ordinary request bytes/defaults stay unchanged.
+There is no capture, core/MOC change, rubric/gold in answering requests, or model
+quality claim from fake HTTP tests. Sources remain untrusted quoted data.
+
+`prepareRelationBindingProbe({ configuration, outputDirectory })` is read-only
+and binds the clean committed runtime, source/rubric/protocol hashes, exact Node,
+owned empty output identity, original cumulative checkpoint and all 24 final
+requests. `executeRelationBindingProbe` requires that exact manifest, distinct
+approved Standards/Spec review receipts, explicit `keyProvider`/`fetchImpl`, and
+durably starts once before credential lookup. It rechecks sources/checkpoint after
+the asynchronous callback, dispatches each slot once and retains failures/unrun
+slots without resume/retry. Actual maximum is 24 HTTP requests and $0.12 reserved,
+with a $1 local ceiling; the original $400/$30 campaign and stricter existing
+$10/1,968-request affordability requirement remain. No CLI or key discovery exists.
+
+Post-run `buildBlindRelationBindingPacket`, `unblindRelationBindingJudgments`
+and `aggregateRelationBindingJudgments` are evaluator-only. Judgment fields are
+`verdict` (correct/incorrect/unresolved), `unsupported`/`stale`
+(clean/positive/unknown), and boolean-or-null `severeError`, `bindingError`,
+`abstained`. Binding errors must concern the requested relation and be judged
+independently; generic incorrectness or optional unsupported background is
+insufficient. Reviewer identity is caller-attested. Preserve first submissions;
+missing/disagreeing judgments remain unknown. At least two distinct baseline
+binding-error cases, positive paired QA, preserved known-answer usefulness,
+known safety and accepted resources are necessary for a diagnostic signal.
+Even a positive signal sets `advances: false` and requires fresh full-pipeline
+validation. A baseline ceiling or no gain is inconclusive/stop, not a fix.
+`loadRelationBindingRubric()` returns `{ bytes, sha256, rubric }`; both blind
+packing and aggregation require this freeze envelope and verify its exact byte
+hash against the report's recorded rubric identity before use. Unblinding accepts
+only `label` plus the six judgment fields and cannot accept caller `cellId`
+overrides. Scripted verdict controls test aggregation; detecting actual semantic
+binding errors remains the independent reviewers' task.
+
+Run the focused offline files with the owned runner:
+`node tools/testing/run.mjs evaluation/algorithm-development/test/relation-binding.test.mjs evaluation/longmemeval/test/relation-binding-answer.test.mjs`.
+The test-only `CAIRN_RELATION_CONTROL_DISABLED=1` substitutes the ordinary builder
+at the treatment seam; the `red-capable` test must exit 1. It never changes a
+production builder or measures model behavior.
+
 `runAlgorithmDevelopmentComparison({ cases, transport, outputDirectory, onCase })`
 accepts the separately validated, deeply frozen 24 source-only cases. Each case
 has `{ id, family, question: { text, date }, sessions: [{ id, eventTime,

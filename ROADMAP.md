@@ -16,6 +16,13 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The prospective [relation-bound first-answer diagnostic](docs/plans/relation-binding-probe.md)
+  tests one generic instruction after evidence delivery, with twelve new cases
+  and twenty-four first answers. Baseline targeted-error opportunities, paired QA,
+  known-answer usefulness, claim safety and resources must all support any signal.
+  It is answer consumption, not a core MOC/retrieval improvement or promotion;
+  positive results would require a separately frozen full-pipeline validation.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It

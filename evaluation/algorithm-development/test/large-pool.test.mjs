@@ -39,6 +39,7 @@ test('L5/L9 exact manifest, source pre-key snapshot, key failure and exclusive o
   const archive = execFileSync('/usr/bin/git', ['archive', 'HEAD'], { cwd: root, maxBuffer: 128 * 1024 * 1024 });
   execFileSync('/usr/bin/tar', ['-x', '-C', checkout], { input: archive });
   cpSync(join(root, 'evaluation/algorithm-development'), join(checkout, 'evaluation/algorithm-development'), { recursive: true });
+  cpSync(join(root, 'evaluation/longmemeval/mixed-answer.mjs'), join(checkout, 'evaluation/longmemeval/mixed-answer.mjs'));
   cpSync(join(root, 'docs/plans/large-pool-six.md'), join(checkout, 'docs/plans/large-pool-six.md'));
   cpSync(join(root, 'docs/plans/large-pool-six-fixtures.md'), join(checkout, 'docs/plans/large-pool-six-fixtures.md'));
   cpSync(join(root, 'adapters/openai/node_modules'), join(checkout, 'adapters/openai/node_modules'), { recursive: true });

@@ -6,6 +6,15 @@ export const MIXED_ANSWER_CONTEXT_WINDOW = 123_000;
 export const MIXED_ANSWER_OUTPUT_TOKENS = 512;
 export const MIXED_ANSWER_TIMEOUT_MS = 200_000;
 
+// Closed, opt-in answer-consumption diagnostic. No caller-supplied prompt port.
+export const RELATION_BINDING_INSTRUCTION = [
+  PUBLIC_ANSWER_INSTRUCTION,
+  'Relation-binding protocol v1: Bind the requested subject and property to the applicable time and scope.',
+  'For an answer requiring multiple source relations, join only relations about the same entity or an equivalence explicitly stated in the evidence.',
+  "Do not borrow a neighboring entity's known value to fill a missing relation.",
+  'Answer supported parts of the requested question and state uncertainty for missing or unresolved parts; do not invent an unsupported join or add unrequested background.',
+].join(' ');
+
 function optionsData(options) {
   if (options === null || typeof options !== 'object' || Array.isArray(options)
     || Object.getPrototypeOf(options) !== Object.prototype) fail('invalid_answer_options');
@@ -25,16 +34,24 @@ function optionsData(options) {
   return values;
 }
 
-function answerRequest(question, texts) {
+function answerRequest(question, texts, instruction) {
   const evidence = texts.map(text => ({ text }));
   return { model: MIXED_ANSWER_MODEL, messages: [
-    { role: 'system', content: PUBLIC_ANSWER_INSTRUCTION },
+    { role: 'system', content: instruction },
     { role: 'user', content: JSON.stringify({ evidence,
       currentQuestion: { text: question.text, date: question.date } }) },
   ], temperature: 0, max_tokens: MIXED_ANSWER_OUTPUT_TOKENS, n: 1 };
 }
 
 export function packMixedAnswer(options) {
+  return packAnswer(options, PUBLIC_ANSWER_INSTRUCTION);
+}
+
+export function packRelationBoundAnswer(options) {
+  return packAnswer(options, RELATION_BINDING_INSTRUCTION);
+}
+
+function packAnswer(options, instruction) {
   const { question: inputQuestion, units: inputUnits, countTokens } = optionsData(options);
   const data = snapshotJson({ question: inputQuestion, units: inputUnits },
     { bytes: 7 * 1024 * 1024, nodes: 128, depth: 4 }, 'invalid_answer_options');
@@ -50,7 +67,7 @@ export function packMixedAnswer(options) {
       || Buffer.byteLength(unit.text, 'utf8') > 1024 * 1024) fail('invalid_answer_units');
   }
   const measure = texts => {
-    const request = answerRequest(question, texts);
+    const request = answerRequest(question, texts, instruction);
     let inputTokens;
     try { inputTokens = countTokens(JSON.stringify(request)); }
     catch { fail('answer_token_count_unavailable'); }

@@ -1,5 +1,17 @@
 # Known limitations
 
+The prospective [relation-bound first-answer diagnostic](plans/relation-binding-probe.md)
+tests one fixed instruction at harness answer consumption, with 12 new submitted
+source/question cases and 24 first answers. It does not change core MOC, retrieval
+or source authority. D12's retained wrong join remains observed after full evidence
+delivery; no natural causal reproduction or fix is established. The closed
+16-answer nested/flat probe was correct in both formats and showed no advantage.
+Offline request/accounting/evaluator controls are not model QA. A baseline with
+fewer than two distinct targeted binding errors or no paired QA gain cannot
+support an improvement claim; known-answer usefulness and claim safety remain
+separate gates. Any future positive signal requires fresh full capture/retrieval
+validation and does not promote the instruction or waive Stage 2 acceptance.
+
 The [three-stage reliability plan](plans/reliability-three-stage.md) records an
 ongoing development sequence. The latest
 [closed six-case larger-pool result](plans/large-pool-six-results.md) is
