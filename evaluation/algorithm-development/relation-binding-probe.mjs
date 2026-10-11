@@ -90,10 +90,25 @@ function requireReview(receipt, manifest) {
 const redact = (value, secret) => typeof value === 'string' ? (secret ? value.split(secret).join('[REDACTED]') : value)
   : Array.isArray(value) ? value.map(row => redact(row, secret))
     : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, row]) => [key, redact(row, secret)])) : value;
+// Closed local diagnostic vocabulary. External exception messages/codes are not
+// trusted labels, even before a credential has been returned. No wire data changes.
+const diagnosticCodes = new Set([
+  'relation_binding_failure', 'relation_binding_credential_lookup_failure',
+  'relation_binding_context_exceeded', 'relation_binding_request_cap', 'relation_binding_local_ceiling',
+  'relation_binding_unplanned_request', 'relation_binding_request_mismatch', 'relation_binding_accounting_drift',
+  'relation_binding_accounting_failure', 'relation_binding_persistence_failure',
+  'manifest_mismatch', 'runtime_not_clean', 'campaign_limit_mismatch', 'campaign_unsettled', 'campaign_unaffordable',
+  'unsafe_output_directory', 'output_already_used', 'output_directory_changed',
+  'algorithm_persistence_failure', 'algorithm_accounting_failure', 'algorithm_checkpoint_mismatch',
+  'algorithm_unaffordable', 'algorithm_closed', 'algorithm_request_denied', 'algorithm_credential_echo',
+  'algorithm_budget_exceeded', 'algorithm_auth_transport_failure', 'algorithm_usage_anomaly', 'algorithm_usage_overrun',
+  'algorithm_method_denied', 'algorithm_case_call_cap', 'algorithm_phase_call_cap', 'algorithm_lifecycle',
+  'provider_failure', 'model_timeout', 'response_body_bounds', 'context_budget_exceeded', 'invalid_answer_response',
+]);
 function failure(error, secret) {
-  // Retain stable codes, never arbitrary exception messages (including key lookup errors).
-  const code = typeof error?.code === 'string' ? error.code : 'relation_binding_failure';
-  return secret && code.includes(secret) ? 'relation_binding_failure' : code;
+  let code;
+  try { code = Object.getOwnPropertyDescriptor(error, 'code')?.value; } catch { /* Untrusted error shape. */ }
+  return diagnosticCodes.has(code) && !(secret && code.includes(secret)) ? code : 'relation_binding_failure';
 }
 
 export async function executeRelationBindingProbe({ configuration, outputDirectory, manifest,
@@ -122,18 +137,21 @@ export async function executeRelationBindingProbe({ configuration, outputDirecto
   const ownAttemptIds = new Set();
   const cells = planned.map(cell => ({ cellId: cell.cellId, id: cell.id, ordinal: cell.ordinal, arm: cell.arm,
     status: 'unresolved', failure: 'not_run', answer: null, latencyMs: null }));
+  const diagnosticRecord = row => ({ ...row,
+    failure: row.failure === null ? null : failure({ code: row.failure }, secret) });
   const onRecord = row => {
     if (row.outcome === 'unknown' && row.latencyMs === undefined) {
       ownAttemptIds.add(row.attemptId);
       if (++attempts > relationBindingLimits.httpRequests) fail('relation_binding_request_cap');
     }
     if (attempts * row.reservedMicroUsd > relationBindingLimits.localCeilingMicroUsd) fail('relation_binding_local_ceiling');
-    persist(`request-${String(++requestSnapshots).padStart(3, '0')}.json`, redact(row, secret));
+    persist(`request-${String(++requestSnapshots).padStart(3, '0')}.json`, redact(diagnosticRecord(row), secret));
   };
   const began = performance.now();
   try {
     if (JSON.stringify(prepareInternal({ configuration, outputDirectory }, true)) !== JSON.stringify(manifest)) fail('manifest_mismatch');
-    secret = await keyProvider();
+    try { secret = await keyProvider(); }
+    catch { fail('relation_binding_credential_lookup_failure'); }
     if (JSON.stringify(prepareInternal({ configuration, outputDirectory }, true)) !== JSON.stringify(manifest)) fail('manifest_mismatch');
     transport = createRelationBindingTransport({ configuration,
       checkpoint: { requestCount: manifest.checkpoint.requestCount, reservedMicroUsd: manifest.checkpoint.reservedMicroUsd },
@@ -171,7 +189,7 @@ export async function executeRelationBindingProbe({ configuration, outputDirecto
         || state.attempts.slice(manifest.checkpoint.requestCount).some(row => !ownAttemptIds.has(row.attemptId))) fail('relation_binding_accounting_drift');
     } catch (error) { accountingFailure = failure(error, secret); fatal ??= 'relation_binding_accounting_failure'; }
     for (const cell of cells) if (cell.failure === 'not_run') cell.failure = fatal ?? 'not_run';
-    const records = transport?.records() ?? [];
+    const records = (transport?.records() ?? []).map(diagnosticRecord);
     const resources = Object.fromEntries(relationBindingArms.map(arm => {
       const rows = records.filter(row => row.arm === arm), requests = planned.filter(row => row.arm === arm);
       return [arm, { plannedAnswers: requests.length, attemptedRequests: rows.length,

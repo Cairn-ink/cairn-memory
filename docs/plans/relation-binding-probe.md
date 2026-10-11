@@ -231,3 +231,40 @@ files and four untouched independent corpus files. `git diff --check` exited 0.
 No core/MOC, adapter, dependency, lock, CI, default, old rubric/scorer or ledger
 implementation changed. Primary final combined matrix, independent reviews,
 commit/CI and any spending decision remain separate acceptance gates.
+
+## First independent-review correction round
+
+Before any paid output or operational prepare, Standards identified external
+credential exception `.code` surviving when lookup rejected before assigning
+the secret. A real owned-fixture regression first exited 1 with the fake sensitive
+code retained as `fatal`. Lookup now catches synchronous throws and asynchronous
+rejections at its boundary and emits only `relation_binding_credential_lookup_failure`.
+Inspection also found fetch/response-stream exceptions reaching transport
+diagnostics. A closed local diagnostic vocabulary projects unknown codes to
+`relation_binding_failure`, without reading arbitrary messages or code getters;
+the same projection is used for request snapshots and final report records.
+No shared transport or provider body, request bytes, usage, outcome or accounting
+is rewritten. Fake lookup/fetch/body controls check every output artifact for
+their private sentinels; lookup performs zero dispatch, preserves ledger bytes
+and all 24 unresolved slots. The existing valid-key control still sends 24 calls.
+This addresses diagnostic exception values, not a blanket claim that all submitted
+source or provider text is secret-free; those remain private evidence artifacts.
+
+Spec separately identified an exported evaluator accepting a changed source
+snapshot under an unchanged source hash. Its new owned regression also first
+exited 1 (missing expected rejection). Evaluator-only
+`freezeRelationBindingSources(bytes)` / `loadRelationBindingSources()` return
+`{ bytes, sha256, sources }`. Blind packing now requires this envelope as its
+third argument; aggregation requires `sources` alongside the rubric envelope.
+Both verify raw bytes against `report.sourceSha256` and canonical parsed sources
+against the report snapshot and supplied parsed sources. Text, question, role,
+date, changed raw bytes, malformed and missing-source controls reject; valid
+12-source/24-answer behavior is unchanged. The private postrun caller alone was
+updated to supply this required source freeze; its operator is unchanged.
+No corpus, instruction, profile, old scorer or model output changed.
+
+After these corrections the three focused relation files exited 0 on both
+Nodes: 19/19 (22.16.0: 18.674 s; 24.15.0: 18.364 s). The final rerun including
+the exact ledger-byte assertion also exited 0, 19/19 (18.997 s / 18.641 s).
+Both initial red runs exited 1, one failed test each. This is pre-paid review
+correction evidence, not a new model-quality result or spending authorization.

@@ -39,6 +39,23 @@ function frozenRubric(report, input) {
   return observed.rubric;
 }
 
+export function freezeRelationBindingSources(bytes) {
+  if (!wellFormed(bytes) || Buffer.byteLength(bytes) > 256_000) fail('invalid_relation_binding_sources');
+  let parsed;
+  try { parsed = JSON.parse(bytes); } catch { fail('invalid_relation_binding_sources'); }
+  return freeze({ bytes, sha256: sha256(bytes), sources: validateRelationBindingInputs(parsed) });
+}
+export const loadRelationBindingSources = () => freezeRelationBindingSources(
+  readFileSync(new URL('./relation-binding-cases.json', import.meta.url), 'utf8'));
+function frozenSources(report, input) {
+  const data = snapshot(input); exact(data, ['bytes', 'sha256', 'sources'], 'invalid_relation_binding_sources');
+  const observed = freezeRelationBindingSources(data.bytes);
+  if (observed.sha256 !== data.sha256 || observed.sha256 !== report.sourceSha256
+    || canonical(observed.sources) !== canonical(data.sources)
+    || canonical(observed.sources) !== canonical(report.sourceSnapshot)) fail('relation_binding_source_mismatch');
+  return observed.sources;
+}
+
 function requireReport(input) {
   const report = snapshot(input);
   if (report.schemaVersion !== `${RELATION_BINDING_VERSION}-result` || report.denominator !== 24
@@ -55,11 +72,12 @@ function requireReport(input) {
   }
   return report;
 }
-export function buildBlindRelationBindingPacket(input, rubricInput) {
+export function buildBlindRelationBindingPacket(input, rubricInput, sourcesInput) {
   const report = requireReport(input), rubric = frozenRubric(report, rubricInput), mapping = [];
+  const sources = frozenSources(report, sourcesInput);
   const items = report.cells.map(cell => {
     const label = randomBytes(16).toString('hex'); mapping.push({ label, cellId: cell.cellId });
-    const source = report.sourceSnapshot.cases.find(row => row.id === cell.id);
+    const source = sources.cases.find(row => row.id === cell.id);
     return { label, question: source.question, sourceUnits: source.sourceUnits,
       rubric: rubric.cases[cell.id], answer: cell.answer, status: cell.status, failure: cell.failure };
   }).sort((a, b) => a.label.localeCompare(b.label));
@@ -101,9 +119,10 @@ function judgments(input, report) {
   }
   return { reviewerId: data.reviewerId, rows };
 }
-export function aggregateRelationBindingJudgments({ report: input, rubric: rubricInput,
+export function aggregateRelationBindingJudgments({ report: input, rubric: rubricInput, sources: sourcesInput,
   judgmentsA, judgmentsB, resourcesWithinLimits }) {
   const report = requireReport(input), rubric = frozenRubric(report, rubricInput);
+  const sources = frozenSources(report, sourcesInput);
   if (typeof resourcesWithinLimits !== 'boolean') fail('invalid_relation_binding_resources');
   const a = judgments(judgmentsA, report), b = judgments(judgmentsB, report);
   if (a.reviewerId === b.reviewerId) fail('invalid_relation_binding_judgment');
@@ -127,7 +146,7 @@ export function aggregateRelationBindingJudgments({ report: input, rubric: rubri
       uncertainCorrect: rows.filter(row => row.answerability === 'uncertain' && row.verdict === 'correct').length,
       targetedBindingErrors: rows.filter(row => row.bindingError === true && (row.verdict === 'incorrect' || row.unsupported === 'positive')).length }];
   }));
-  const paired = report.sourceSnapshot.cases.map(row => {
+  const paired = sources.cases.map(row => {
     const baseline = outcomes.find(item => item.id === row.id && item.arm === 'baseline');
     const relation = outcomes.find(item => item.id === row.id && item.arm === 'relation');
     return { id: row.id, answerability: baseline.answerability, baseline: baseline.verdict, relation: relation.verdict,

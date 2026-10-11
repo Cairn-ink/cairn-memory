@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -12,7 +12,8 @@ import { createExperimentBudget, inspectExperimentBudgetForEmbeddingUpgrade, upg
 import { RELATION_BINDING_INSTRUCTION, packMixedAnswer } from '../../longmemeval/mixed-answer.mjs';
 import { RELATION_BINDING_VERSION, loadRelationBindingInputs, validateRelationBindingInputs, relationBindingLimits } from '../relation-binding-profile.mjs';
 import { planRelationBindingAnswers } from '../relation-binding-probe.mjs';
-import { aggregateRelationBindingJudgments, buildBlindRelationBindingPacket, freezeRelationBindingRubric, loadRelationBindingRubric, unblindRelationBindingJudgments } from '../relation-binding-evaluator.mjs';
+import { aggregateRelationBindingJudgments, buildBlindRelationBindingPacket, freezeRelationBindingRubric, freezeRelationBindingSources,
+  loadRelationBindingRubric, loadRelationBindingSources, unblindRelationBindingJudgments } from '../relation-binding-evaluator.mjs';
 import { sha256 } from '../../longmemeval/mixed-validation.mjs';
 import { createRelationBindingTransport } from '../transport.mjs';
 
@@ -27,6 +28,7 @@ const rubric = () => ({ schemaVersion: `${RELATION_BINDING_VERSION}-rubric`, cas
   acceptableQualifications: [], unsupportedClaims: ['Synthetic wrong join.'], staleUseCriteria: [], severeErrors: ['Synthetic severe join.'],
 }])) });
 const rubricFreeze = () => freezeRelationBindingRubric(JSON.stringify(rubric()));
+const sourceFreeze = () => freezeRelationBindingSources(JSON.stringify(sources()));
 const response = body => Response.json({ object: 'chat.completion', model: body.model,
   choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'Synthetic answer.' } }],
   usage: { prompt_tokens: 100, completion_tokens: 5, total_tokens: 105 } });
@@ -167,6 +169,59 @@ test('RB5 source/manifest/review tamper rejects before key, and post-key source 
   assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(f.configuration), before);
 });
 
+test('RB5 credential rejection diagnostics never retain external secret codes', async t => {
+  const f = await fixture(t);
+  for (const asynchronous of [false, true]) {
+    const configuration = ledger(f.workspace), before = inspectEmbeddingExperimentBudgetSnapshot(configuration);
+    const ledgerBytes = readFileSync(join(configuration.directory, 'experiment-budget.sqlite'));
+    const outputDirectory = join(f.workspace.path, `key-code-${asynchronous}`); mkdirSync(outputDirectory, { mode: 0o700 });
+    const manifest = f.module.prepareRelationBindingProbe({ configuration, outputDirectory });
+    const sensitive = 'synthetic-sensitive-key-code-not-a-returned-credential'; let calls = 0, keys = 0;
+    const reject = () => { keys++; throw Object.assign(new Error('synthetic-private-message'), { code: sensitive }); };
+    const report = await f.module.executeRelationBindingProbe({ configuration, outputDirectory, manifest,
+      reviewReceipt: review(manifest), keyProvider: asynchronous ? async () => reject() : reject,
+      fetchImpl: () => { calls++; assert.fail('credential failure must not dispatch'); } });
+    assert.equal(report.fatal, 'relation_binding_credential_lookup_failure');
+    assert.equal(report.denominator, 24); assert.equal(report.completed, 0); assert.equal(report.attempted, 0);
+    assert.equal(report.dispatched, 0); assert.equal(calls, 0); assert.equal(keys, 1);
+    assert.equal(report.cells.length, 24); assert.ok(report.cells.every(row => row.status === 'unresolved'));
+    assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(configuration), before);
+    assert.deepEqual(readFileSync(join(configuration.directory, 'experiment-budget.sqlite')), ledgerBytes);
+    for (const file of readdirSync(outputDirectory)) {
+      const bytes = readFileSync(join(outputDirectory, file), 'utf8');
+      assert.equal(bytes.includes(sensitive), false); assert.equal(bytes.includes('synthetic-private-message'), false);
+    }
+    const closure = JSON.parse(readFileSync(join(outputDirectory, 'closure.json')));
+    assert.equal(closure.fatal, 'relation_binding_credential_lookup_failure'); assert.equal(closure.reportAvailable, true);
+  }
+});
+
+test('RB5 fetch and response-body failures project the same nonsecret diagnostic in every record', async t => {
+  const f = await fixture(t);
+  for (const variant of ['fetch', 'body']) {
+    const configuration = ledger(f.workspace), outputDirectory = join(f.workspace.path, `external-code-${variant}`);
+    mkdirSync(outputDirectory, { mode: 0o700 }); const manifest = f.module.prepareRelationBindingProbe({ configuration, outputDirectory });
+    const sensitive = `synthetic-private-${variant}-error-code`; let calls = 0;
+    const error = Object.assign(new Error('synthetic-private-external-message'), { code: sensitive });
+    const report = await f.module.executeRelationBindingProbe({ configuration, outputDirectory, manifest,
+      reviewReceipt: review(manifest), keyProvider: () => 'synthetic-key', fetchImpl: async () => {
+        calls++; if (variant === 'fetch') throw error;
+        return new Response(new ReadableStream({ start(controller) { controller.error(error); } }));
+      } });
+    assert.equal(calls, 1); assert.equal(report.attempted, 1); assert.equal(report.dispatched, 1);
+    assert.equal(report.denominator, 24); assert.equal(report.completed, 0);
+    assert.ok(report.cells.every(row => row.status === 'unresolved')); assert.equal(report.fatal, 'relation_binding_failure');
+    assert.equal(report.records[0].failure, 'relation_binding_failure');
+    assert.deepEqual(JSON.parse(readFileSync(join(outputDirectory, 'request-002.json'))), report.records[0]);
+    const state = inspectEmbeddingExperimentBudgetSnapshot(configuration);
+    assert.equal(state.requestCount, 1); assert.equal(state.reservedMicroUsd, 5000); assert.equal(state.attempts[0].outcome, 'unknown');
+    for (const file of readdirSync(outputDirectory)) {
+      const bytes = readFileSync(join(outputDirectory, file), 'utf8');
+      assert.equal(bytes.includes(sensitive), false); assert.equal(bytes.includes('synthetic-private-external-message'), false);
+    }
+  }
+});
+
 test('RB5 malformed/auth/usage/network/echo/key/persistence failures stop once and retain fixed denominators', async t => {
   const f = await fixture(t);
   for (const variant of ['malformed', 'auth', 'usage', 'network', 'echo', 'key', 'record-persistence', 'foreign-ledger', 'report-collision']) {
@@ -231,10 +286,38 @@ function judgePair(report) {
   }
   return [first, { ...structuredClone(first), reviewerId: 'second-independent' }];
 }
+test('RB6 blind and aggregate reject a source snapshot not bound to exact frozen bytes', () => {
+  const report = syntheticReport(), [judgmentsA, judgmentsB] = judgePair(report);
+  for (const mutate of [value => value.cases[0].sourceUnits[0].text += ' altered',
+    value => value.cases[0].question.text += ' altered', value => value.cases[0].question.date = '2026-08-13',
+    value => value.cases[0].sourceUnits[0].recordedRole = 'assistant',
+    value => value.cases[0].sourceUnits[0].eventAt = '2026-08-03T09:00:00.000Z']) {
+    const changed = structuredClone(report); mutate(changed.sourceSnapshot);
+    assert.throws(() => buildBlindRelationBindingPacket(changed, rubricFreeze(), sourceFreeze()), { code: 'relation_binding_source_mismatch' });
+    assert.throws(() => aggregateRelationBindingJudgments({ report: changed, rubric: rubricFreeze(), sources: sourceFreeze(),
+      judgmentsA, judgmentsB, resourcesWithinLimits: true }), { code: 'relation_binding_source_mismatch' });
+  }
+  const frozen = sourceFreeze();
+  for (const value of [undefined, {}, { ...frozen, bytes: '{' }, { ...frozen, sources: null }]) {
+    assert.throws(() => buildBlindRelationBindingPacket(report, rubricFreeze(), value));
+    assert.throws(() => aggregateRelationBindingJudgments({ report, rubric: rubricFreeze(), sources: value,
+      judgmentsA, judgmentsB, resourcesWithinLimits: true }));
+  }
+  const bytesOnly = freezeRelationBindingSources(`${frozen.bytes}\n`);
+  const parsedOnly = structuredClone(frozen); parsedOnly.sources.cases[0].sourceUnits[0].text += ' changed';
+  for (const value of [bytesOnly, parsedOnly, { ...frozen, sha256: '0'.repeat(64) }]) {
+    assert.throws(() => buildBlindRelationBindingPacket(report, rubricFreeze(), value), { code: 'relation_binding_source_mismatch' });
+    assert.throws(() => aggregateRelationBindingJudgments({ report, rubric: rubricFreeze(), sources: value,
+      judgmentsA, judgmentsB, resourcesWithinLimits: true }), { code: 'relation_binding_source_mismatch' });
+  }
+  const real = loadRelationBindingSources(); assert.deepEqual(real.sources, loadRelationBindingInputs());
+  assert.equal(real.sha256, sha256(real.bytes));
+  assert.equal(buildBlindRelationBindingPacket(report, rubricFreeze(), frozen).packet.items.length, 24);
+});
 test('RB6/RB7 distinct binding-error opportunities and positive requested relation gain only justify pipeline followup', () => {
   const report = syntheticReport(), [a, b] = judgePair(report);
   const aggregate = (judgmentsA = a, judgmentsB = b, extra = {}) => aggregateRelationBindingJudgments({
-    report, rubric: rubricFreeze(), judgmentsA, judgmentsB, resourcesWithinLimits: true, ...extra });
+    report, rubric: rubricFreeze(), sources: sourceFreeze(), judgmentsA, judgmentsB, resourcesWithinLimits: true, ...extra });
   const positive = aggregate(); assert.equal(positive.positiveSignal, true); assert.equal(positive.netCorrect, 2);
   assert.equal(positive.arms.baseline.targetedBindingErrors, 2); assert.equal(positive.decision, 'fresh-full-pipeline-validation-only');
   assert.equal(positive.advances, false); assert.equal(positive.paired.length, 12);
@@ -279,7 +362,7 @@ test('RB6/RB7 distinct binding-error opportunities and positive requested relati
   });
   assert.equal(uncertainLoss.netCorrect, -1); assert.equal(uncertainLoss.gates.knownNoRegression, true);
   assert.equal(uncertainLoss.arms.baseline.targetedBindingErrors, 0); assert.equal(uncertainLoss.decision, 'reject-stop');
-  const blind = buildBlindRelationBindingPacket(report, rubricFreeze()); assert.equal(blind.packet.items.length, 24);
+  const blind = buildBlindRelationBindingPacket(report, rubricFreeze(), sourceFreeze()); assert.equal(blind.packet.items.length, 24);
   assert.ok(blind.packet.items.every(row => !Object.hasOwn(row, 'arm') && !Object.hasOwn(row, 'id')));
   const privateByCell = new Map(a.judgments.map(row => [row.cellId, row]));
   const blinded = { reviewerId: a.reviewerId, judgments: blind.mapping.map(row => {
@@ -291,5 +374,5 @@ test('RB6/RB7 distinct binding-error opportunities and positive requested relati
   const changedRubric = structuredClone(rubricFreeze()); changedRubric.rubric.cases.R01.requiredPropositions = ['changed'];
   assert.throws(() => aggregate(a, b, { rubric: changedRubric }), { code: 'relation_binding_rubric_mismatch' });
   const changedBytes = freezeRelationBindingRubric(`${rubricFreeze().bytes}\n`);
-  assert.throws(() => buildBlindRelationBindingPacket(report, changedBytes), { code: 'relation_binding_rubric_mismatch' });
+  assert.throws(() => buildBlindRelationBindingPacket(report, changedBytes, sourceFreeze()), { code: 'relation_binding_rubric_mismatch' });
 });
