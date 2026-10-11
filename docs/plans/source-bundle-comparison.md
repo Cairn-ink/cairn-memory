@@ -575,3 +575,139 @@ STOP WRITES for primary fixed-byte inspection and final acceptance. This is an
 uncommitted five-path handoff; the author did not commit, push, merge or dispatch
 a provider. Primary's final complete two-Node matrix and independent reviews
 remain required before delivery or any later separately authorized launch.
+
+## BR4 correction1 — resource overflow is a global stop
+
+This bounded correction starts from fixed candidate
+`f9ad1477bebe2756a92f035f37a01827facf0ae4`, after its complete primary
+two-Node, eleven-command matrices passed but its final independent Spec review
+found an uncovered resource-stop path. Those green matrices remain historical
+evidence for f9ad, not acceptance of the corrected bytes. The full PR base stays
+`51bf373de67680d1fcf5ac0a7b29de1ae0f7055b`; the integrated author base stays
+`4423cd2bf91e3c479767bd1bebac3a6510846f07`. The original 14,669-byte contract
+and every existing plan/limitations byte are preserved as prefixes.
+
+The primary froze the prospective packet before dispatch at
+`/tmp/cairn-complementary-qa-acceptance.7sG2vXdH/bundle-comparison-correction1-contract.md`,
+SHA-256 `040bfa2cc937700dad9b5c813a3fd21ed9f0af13ebbfdb629a1a3e16521bed3e`.
+Its complete final Spec report is retained in
+`bundle-comparison-reviews-candidate1.md`, SHA-256
+`864b8642fc77aa2ff0b5fe52591c38abdde17a2fd5c069ef0cf830b909eaa724`.
+Only the coordinator, its test, this append-only plan and append-only limitations
+are in this correction. The accepted store, ordinary adapter/transport, QT/QB/CF,
+core, corpus, rubric, limits and dependencies remain unchanged. The separate
+three-file SJ3 subpacket remains stopped and byte-identical. Author model/effort
+is actual GPT-6.1 Sol/high; model cost is not exposed and is not inferred.
+
+### Observed red paths and causal correction
+
+Both new controls first ran against the unchanged f9ad runtime. Each creates a
+fresh owned complete 24-case preparation and uses the actual imported ordinary
+transport, core and runner with the existing fake envelopes, changing only one
+BQ01 count response to valid `input_tokens: 7025`. They use deterministic stage
+identity, not evaluator answers or gold-informed selection. The rank control
+actually exited 1 (0/1, zero skips, about 49.5 seconds): status `accounted`,
+no stop reason, ordinary slot `provider_failed`, 190 calls/intents and 119 closed
+owners. The separate natural-probe select control actually exited 1 (0/1, zero
+skips, about 45.5 seconds): status `accounted`, probe `invalid_model_output`,
+191 calls/intents and 120 closed owners. Both retained the exact raw count
+failure `context_budget_exceeded`, provider count 7025 and a settled unknown
+5,000-microUSD reservation with no pending attempt. Both retained 48 QA and 24
+probe slots, but erroneously continued the remaining schedule.
+
+These are reproduced offline coordinator failures, not semantic model outcomes.
+The actual chain has two normalization seams: ordinary transport rejects the
+count while persisting its raw closed cause; unchanged adapter `post` normalizes
+the rejection to provider failure; core can then return an error envelope.
+The former probe path discarded even the settled port cause. The review also
+identified a potential core-timeout priority masking path; the two count controls
+do not independently reproduce a delayed-overflow/time-race variant.
+
+The coordinator now classifies `context_budget_exceeded` as globally fatal.
+After a successfully persisted, already attempt/wire-bound ordinary final
+record, its exact closed overflow code sets the coordinator stop without
+throwing from the record callback or changing any raw field. This avoids a false
+persistence failure and preserves the inherited transport's healthy status.
+Rank and select wrappers retain the coordinator fatal cause before an adapter
+or core envelope can mask it; select records `artifacts.selectFailure: {code}`.
+The select catch also encloses local pre-dispatch validation/serialization
+failures. Fatal settled port causes have priority over logical timeout
+projection. No exception is treated as authority through an arbitrary error
+string or accessor. Actual in-flight settlement is still awaited before owner
+state/close; there is no retry, deadline renewal, cap change or transport edit.
+
+The pre-fix runtime SHA-256 was
+`d4fe4e382be0d63aa5f4146e132bd9239c3f341a99ba65ff83aeeb7f0e0f2c07`.
+Final corrected runtime SHA-256 is
+`564fed8502536e6b8612ae018479527ffe356bec0fed5aa7570747ae284c7f89`.
+The same red/green test file SHA-256 is
+`b44dace759ba566013418b0d398c8beb1a8559906f374f73721e7dab0af50c5c`.
+An initial corrected Node22 run passed both controls; after indentation-only
+alignment, both final-byte runtime checks below were rerun. Earlier logs are
+retained rather than overwritten.
+
+### Final correction verification
+
+Evidence directory: `/tmp/cairn-br-correction1-author.O9vPAsa7`.
+The owned runner command for each pinned executable was
+`node tools/testing/run.mjs --test-name-pattern='provider count overflow at BQ01 ordinary' evaluation/algorithm-development/test/source-bundle-runner.test.mjs`.
+`green-final-overflow-node22.log` actually exited 0, 2/2, zero skips or
+cancellations, about 55.8 seconds. `green-final-overflow-node24.log` actually
+exited 0, 2/2, zero skips or cancellations, about 64.3 seconds. The two fresh
+preparations run sequentially within each invocation; heavy invocations never
+overlap. Both boundaries stop with exact `context_budget_exceeded`: rank has
+only one count intent and one healthy closed owner; probe has seven total
+intents and five healthy closed owners, including its two already-completed QA
+answers. Neither dispatches the failed boundary's generation or binds any later
+owner. The tests independently inspect the owned schema-2 ledger, proving no
+pending attempts and the conservative unknown 5,000-microUSD count reservation.
+Every remaining slot is not-run with the exact stop reason; all 48 QA and 24
+probe denominators remain. Both exact owned workspaces are removed in `finally`,
+including the initial assertion failures, and the genuine preparation remains
+single-use.
+
+The existing actual ordinary/QT logical-timeout/nonfatal continuation group was
+also rerun on final bytes using Node22 and
+`--test-name-pattern='healthy malformed, provider and logical-timeout'`.
+`nonfatal-timeouts-final-node22.log` actually exited 0, 1/1, zero skips or
+cancellations, about 108.8 seconds. Healthy provider/malformed/local-timeout
+failures still consume their slots and continue; ordinary and planner failures
+remain `model_timeout`, raw QT `cancelled` remains unchanged with settlement
+persisted, global stop remains null and all 24 probes complete. No real 30-second
+timeout, fixture or expectation was shortened or relaxed.
+
+The final seven selected boundary checks use
+`--test-name-pattern='concrete guard|runtime observation|actual ordinary headroom|native loopback|actual ordinary transport consumes|preparation accepts|owned actual SQLite'`.
+Both pinned Nodes actually exited 0, 7/7, zero skips/cancellations, retained in
+`short-final-node22.log` and `short-final-node24.log`. These include owned child
+SQLite cleanup after success, assertion and setup failure. Node22.16.0 and
+Node24.15.0 are the pinned executables under `/home/chichieh/.nvm/versions/node`;
+no dependency install or shared-target mutation was performed. Final validation,
+syntax, whitespace and independent four-path inventory are closing checks.
+Primary owns the corrected complete eleven-command matrices on both runtimes
+and fresh full ten-path Standards/Spec reviews before any delivery. The author
+does not claim a new complete algorithm/generic matrix from selected controls.
+
+The retained red logs are `red-rank-node22.log` (SHA-256
+`d6826ee0c9ed37fa0547d45900f41ad89e8f982d38f1fb33759ce040a4c862d7`)
+and `red-select-node22.log` (SHA-256
+`a4481e3f8a9abdbd41871592e72f8f9377cd9971366795012f56300ff750a153`).
+`red-input-hashes.txt`, `green-input-hashes.txt` and `final-input-hashes.txt`
+bind the exact tested source snapshots. Final inventory compares Git's diff
+against f9ad with an independent filesystem/base-blob/mode scan, checking four
+correction paths, zero staged paths, append-only documentation and unchanged
+store/dependencies plus all three stopped SJ3 hashes. No operational ledger,
+real key/provider, paid authority, efficacy score, D12 repair or original Stage
+2/3 clearance is involved. STOP uncommitted/unstaged for primary acceptance.
+
+Closing validation actually exited 0 on both pinned Nodes, retained in
+`validate-final-node22.log` and `validate-final-node24.log`; syntax checks on
+both runtimes and `git diff --check` also actually exited 0. The independent
+inventory actually exited 0, count four, zero staged paths. It proves the full
+prior plan and limitations prefixes are append-only, the original contract is
+unchanged, every other f9ad base blob/mode including the accepted store is
+unchanged, and all three stopped SJ3 hashes still match. The existing ignored
+tokenizer-only symlink was verified with `git check-ignore` and `ls -ld`, with
+its same relation-binding-probe target untouched. `inventory-final.json` retains
+the four final candidate hashes. No owned test invocation or subprocess remains
+active; no broad cleanup was used. The author is now STOP WRITES.

@@ -2027,3 +2027,18 @@ missing final records remain explicit, and peak RSS is unmeasured. No scorer,
 model-answer judgment, operational ledger or real credential is used here.
 Closed cohorts, D12, defaults and original Stage 2/3 clearance remain unchanged;
 any future launch still needs separate independent acceptance and authority.
+
+Independent final review of the first comparison candidate found an uncovered
+global resource-stop path despite its green offline matrices. Actual fake-HTTP
+controls reproduced ordinary provider counts of 7,025 continuing both from QA
+rank and the later select probe: the raw settled overflow cause survived, but
+adapter/core error projection obscured it. The bounded coordinator correction
+retains that exact final cause, stops globally without rewriting transport
+records, waits for settlement and preserves all 48 QA plus 24 probe slots and
+conservative unknown reservations. Both overflow controls pass on the two
+pinned Nodes; the existing actual ordinary/QT nonfatal timeout continuation
+control also passes. These are accounting/stop-policy regressions, not semantic
+answer gains, provider parity or launch authority. Earlier candidate matrices
+remain historical; corrected full matrices and independent reviews are still
+required before delivery. No inherited cap/transport, closed cohort, scoring
+outcome, operational ledger, credential or original Stage 2/3 gate was changed.

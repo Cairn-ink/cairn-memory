@@ -191,6 +191,76 @@ test('57,655 historical attempts retain one exact base across real ordinary and 
   await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
 });
 
+for (const boundary of ['rank', 'select']) test(`provider count overflow at BQ01 ordinary ${boundary} stops the entire fixed schedule`,
+  { skip: !supported }, async t => {
+    const workspace = createTestWorkspace(t, { prefix: `cairn-bundle-count-overflow-${boundary}-` });
+    try {
+      const preparation = await prepareSourceBundleComparison({ outputRoot: workspace.path });
+      assert.equal(preparation.observation.cases.length, 24);
+      const ledger = await ledgerFixture(workspace), controller = new AbortController(), calls = [];
+      const manifest = createSourceBundleComparisonManifest(preparation.observation);
+      let current;
+      const result = await runSourceBundleComparison({ preparation, manifest, ...ledger,
+        apiKey: KEY, signal: controller.signal, onCheckpoint() {},
+        onRecord(record) { if (record.normalized?.phase === 'pre') current = record; },
+        fetchImpl(url, init) {
+          const designated = current.caseId === 'BQ01' && current.ownerKind === 'ordinary' && current.phase === boundary;
+          calls.push({ caseId: current.caseId, arm: current.arm, method: current.phase, url, designated });
+          if (designated && url.endsWith('/input_tokens'))
+            return Response.json({ object: 'response.input_tokens', input_tokens: 7025 });
+          return fakeProvider(url, init);
+        } });
+      const budget = await import('../../experiment-budget/index.mjs');
+      const final = budget.inspectEmbeddingExperimentBudgetSnapshot(ledger.configuration);
+      const failedSlot = boundary === 'rank' ? result.cases[0].answers.ordinary : result.cases[0].probe;
+      const boundaryIntents = result.intents.filter(intent => intent.caseId === 'BQ01' && intent.method === boundary);
+      const designatedCalls = calls.filter(call => call.designated);
+      console.log(JSON.stringify({ countOverflowBoundary: { boundary, status: result.status, stopReason: result.stopReason,
+        slotFailure: failedSlot.failure, calls: calls.length, designatedCalls: designatedCalls.length,
+        owners: result.transitions.length, intents: result.resources.physicalIntents,
+        rawFailures: boundaryIntents.map(intent => ({ failure: intent.final?.failure,
+          providerInputTokens: intent.final?.providerInputTokens, outcome: intent.final?.outcome })),
+        qaSlots: result.cases.flatMap(c => Object.values(c.answers)).length, probeSlots: result.cases.length } }));
+      assert.equal(result.resources.missingFinalRecords, 0);
+      assert.equal(final.attempts.every(attempt => attempt.outcome !== null), true);
+      assert.equal(boundaryIntents.length, 1);
+      const failedIntent = boundaryIntents[0];
+      assert.equal(failedIntent.dispatched, true); assert.equal(failedIntent.final.failure, 'context_budget_exceeded');
+      assert.equal(failedIntent.final.providerInputTokens, 7025); assert.equal(failedIntent.final.reservedMicroUsd, 5000);
+      assert.equal(failedIntent.final.actualMicroUsd, null); assert.equal(failedIntent.final.outcome, 'unknown');
+      const settled = final.attempts.find(attempt => attempt.attemptId === failedIntent.attemptId);
+      assert.equal(settled.reservedMicroUsd, 5000); assert.equal(settled.outcome, 'unknown'); assert.equal(settled.actualMicroUsd, null);
+      assert.equal(designatedCalls.length, 1); assert.ok(designatedCalls[0].url.endsWith('/input_tokens'));
+      assert.equal(result.cases.length, 24); assert.equal(result.cases.flatMap(c => Object.values(c.answers)).length, 48);
+      assert.equal(result.cases.map(c => c.probe).length, 24);
+      assert.equal(result.status, 'stopped'); assert.equal(result.stopReason, 'context_budget_exceeded');
+      assert.equal(failedSlot.failure, 'context_budget_exceeded'); assert.equal(failedSlot.execution, 'failed');
+      const expectedIntents = boundary === 'rank' ? 1 : 7, expectedOwners = boundary === 'rank' ? 1 : 5;
+      assert.equal(calls.length, expectedIntents); assert.equal(result.intents.length, expectedIntents);
+      assert.equal(result.transitions.length, expectedOwners);
+      assert.ok(result.transitions.every(transition => transition.closed && transition.healthy));
+      assert.equal(final.requestCount, expectedIntents); assert.equal(final.reservedMicroUsd, expectedIntents * 5000);
+      assert.equal(result.finalState.header.requestCount, expectedIntents);
+      if (boundary === 'rank') {
+        assert.equal(failedSlot.answerInvoked, false); assert.equal(failedSlot.artifacts.rankFailure.code, 'context_budget_exceeded');
+        for (const slot of [result.cases[0].answers['source-bundle'], result.cases[0].probe]) {
+          assert.equal(slot.execution, 'not-run'); assert.equal(slot.failure, 'context_budget_exceeded');
+        }
+      } else {
+        for (const slot of Object.values(result.cases[0].answers)) {
+          assert.equal(slot.status, 'answered'); assert.equal(slot.execution, 'completed');
+          assert.equal(slot.answer, 'Offline plumbing control.'); assert.equal(slot.answerInvoked, true);
+        }
+        assert.equal(failedSlot.artifacts.recall.ok, false);
+        assert.equal(failedSlot.artifacts.selectCalls, 1); assert.equal(failedSlot.artifacts.rankCalls, 0);
+      }
+      for (const c of result.cases.slice(1)) for (const slot of [...Object.values(c.answers), c.probe]) {
+        assert.equal(slot.execution, 'not-run'); assert.equal(slot.failure, 'context_budget_exceeded');
+      }
+      await assert.rejects(runSourceBundleComparison({ preparation }), /invalid_source_bundle_preparation/);
+    } finally { await workspace.cleanup(); assert.equal(existsSync(workspace.path), false); }
+  });
+
 test('healthy malformed, provider and logical-timeout slots consume once and preserve the remaining schedule', { skip: !supported }, async t => {
   const workspace = createTestWorkspace(t, { prefix: 'cairn-bundle-consumed-' });
   const preparation = await prepareSourceBundleComparison({ outputRoot: workspace.path }), ledger = await ledgerFixture(workspace);

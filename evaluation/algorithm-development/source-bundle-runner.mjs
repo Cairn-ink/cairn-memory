@@ -25,7 +25,7 @@ const CODES = new Set(['invalid_options', 'invalid_manifest', 'invalid_preparati
 const FATAL = new Set(['invalid_manifest', 'invalid_preparation', 'cancelled', 'deadline_exceeded',
   'request_denied', 'wire_mismatch', 'rank_mismatch', 'store_drift', 'provenance_mismatch', 'ledger_failed',
   'budget_blocked', 'record_persistence_failed', 'credential_echo', 'authentication_failed',
-  'redirect_rejected', 'invalid_usage', 'usage_overrun', 'model_mismatch']);
+  'redirect_rejected', 'invalid_usage', 'usage_overrun', 'model_mismatch', 'context_budget_exceeded']);
 let running = false;
 const sha = value => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 const fail = code => { const error = new Error(CODES.has(code) ? code : 'invalid_response'); error.code = error.message; throw error; };
@@ -270,6 +270,11 @@ export async function runSourceBundleComparison(options) {
       if (!first) intent.final = copy(raw);
       trace({ caseId: phase.caseId, caseOrdinal: phase.caseOrdinal, arm: phase.arm,
         slotId: phase.slotId, phaseId: phase.phaseId, phase: phase.method, ownerKind: phase.kind, normalized, raw });
+      // The unchanged adapter may normalize a transport rejection before the
+      // model port sees it. Preserve this exact attempt/wire-bound final cause
+      // without throwing from onRecord or rewriting the transport's record.
+      if (!first && phase.kind === 'ordinary' && intent.final.failure === 'context_budget_exceeded')
+        stop('context_budget_exceeded');
     } catch (error) { stop(sourceBundleFailureCode(error)); throw Object.assign(new Error(fatal), { code: fatal }); }
   };
   const compactState = (state, diagnostic = false) => {
@@ -381,7 +386,8 @@ export async function runSourceBundleComparison(options) {
             activePort = (async () => {
               try { const output = arm === 'ordinary' ? await owner.model.rank(request) : await bundleModel.rank(request);
                 slot.artifacts.rankOutput = copy(output); return output; }
-              catch (error) { methodFailure = sourceBundleFailureCode(error);
+              catch (error) { methodFailure = fatal ?? sourceBundleFailureCode(error);
+                if (FATAL.has(methodFailure)) stop(methodFailure);
                 slot.artifacts.rankFailure = copy({ code: methodFailure }); throw error; }
             })(); return activePort;
           } };
@@ -395,7 +401,7 @@ export async function runSourceBundleComparison(options) {
         });
       slot.artifacts.recall = copy(recall);
       slot.artifacts.afterRecallStore = await assertSourceBundleStoreUnchanged(c); check();
-      requireTrue(recall.ok === true, recall.error?.code === 'model_timeout' ? 'model_timeout'
+      requireTrue(recall.ok === true, FATAL.has(methodFailure) ? methodFailure : recall.error?.code === 'model_timeout' ? 'model_timeout'
         : methodFailure ?? (recall.error?.code === 'invalid_model_output' ? 'invalid_model_output' : 'provenance_mismatch'));
       requireTrue(rankCount === 1 && recall.value.coverage === 'complete' && !recall.value.recallTruncated
         && recall.value.selection.strategy === 'complete-map', 'rank_mismatch');
@@ -422,28 +428,34 @@ export async function runSourceBundleComparison(options) {
       catch { stop('store_drift'); slot.failure = 'store_drift'; } }
   }
   async function probe(c, report) {
-    const slot = report.probe; slot.execution = 'failed'; let core, activePort, selects = 0, ranks = 0;
+    const slot = report.probe; slot.execution = 'failed'; let core, activePort, selects = 0, ranks = 0, methodFailure = null;
     try {
       slot.artifacts.beforeStore = await assertSourceBundleStoreUnchanged(c); check();
       const result = await paidPhase(c, report, 'probe', 'select', 'ordinary', [], async transport => {
         const model = { contextWindow: 8192, countTokens,
           async select(request) {
-            if (selects) { stop('request_denied'); fail('request_denied'); }
-            requireTrue(++selects === 1 && request.input.maps.length === 1 && request.input.maps[0].items.length === 12
-              && request.input.maps[0].exhausted === true && request.input.query === c.plan.mem0Input.query
-              && request.input.maps[0].namespaceIndex === 0 && isDeepStrictEqual(request.input.maps[0].items, c.recallMap.items), 'rank_mismatch');
-            slot.artifacts.selectRequest = copy({ system: request.system, input: request.input, maxOutputTokens: request.maxOutputTokens });
-            // Serialize the unchanged select request to attest its actual wire.
-            const { createOpenAIModel } = await import('../../adapters/openai/index.mjs');
-            const bodies = [];
-            const serializer = createOpenAIModel({ apiKey: 'serializer-only', fetchImpl: async (_url, init) => {
-              bodies.push(init.body); if (bodies.length === 1) return Response.json({ object: 'response.input_tokens', input_tokens: 0 });
-              throw new Error('serializer_complete'); } });
-            try { await serializer.select(request); } catch { /* Stops at generation, no external HTTP. */ }
-            requireTrue(bodies.length === 2 && bodies.every(body => countTokens(body) <= 6000), 'context_budget_exceeded');
-            phase.expectedBodies = bodies;
-            activePort = transport.model.select(request);
-            const output = await activePort; slot.artifacts.selected = copy(output); return output;
+            try {
+              if (selects) { stop('request_denied'); fail('request_denied'); }
+              requireTrue(++selects === 1 && request.input.maps.length === 1 && request.input.maps[0].items.length === 12
+                && request.input.maps[0].exhausted === true && request.input.query === c.plan.mem0Input.query
+                && request.input.maps[0].namespaceIndex === 0 && isDeepStrictEqual(request.input.maps[0].items, c.recallMap.items), 'rank_mismatch');
+              slot.artifacts.selectRequest = copy({ system: request.system, input: request.input, maxOutputTokens: request.maxOutputTokens });
+              // Serialize the unchanged select request to attest its actual wire.
+              const { createOpenAIModel } = await import('../../adapters/openai/index.mjs');
+              const bodies = [];
+              const serializer = createOpenAIModel({ apiKey: 'serializer-only', fetchImpl: async (_url, init) => {
+                bodies.push(init.body); if (bodies.length === 1) return Response.json({ object: 'response.input_tokens', input_tokens: 0 });
+                throw new Error('serializer_complete'); } });
+              try { await serializer.select(request); } catch { /* Stops at generation, no external HTTP. */ }
+              requireTrue(bodies.length === 2 && bodies.every(body => countTokens(body) <= 6000), 'context_budget_exceeded');
+              phase.expectedBodies = bodies;
+              activePort = transport.model.select(request);
+              const output = await activePort; slot.artifacts.selected = copy(output); return output;
+            } catch (error) {
+              methodFailure = fatal ?? sourceBundleFailureCode(error);
+              if (FATAL.has(methodFailure)) stop(methodFailure);
+              slot.artifacts.selectFailure = copy({ code: methodFailure }); throw error;
+            }
           }, rank({ system, input, maxOutputTokens }) {
             if (ranks) { stop('request_denied'); fail('request_denied'); }
             requireTrue(++ranks === 1, 'request_denied'); slot.artifacts.rankRequest = copy({ system, input, maxOutputTokens }); return { refs: [] };
@@ -454,7 +466,8 @@ export async function runSourceBundleComparison(options) {
         if (activePort) await activePort.catch(() => {}); return returned;
       });
       slot.artifacts.recall = copy(result); slot.artifacts.selectCalls = selects; slot.artifacts.rankCalls = ranks; check();
-      requireTrue(result.ok === true && selects === 1, 'invalid_model_output'); slot.execution = 'completed';
+      requireTrue(result.ok === true && selects === 1, FATAL.has(methodFailure) ? methodFailure
+        : result.error?.code === 'model_timeout' ? 'model_timeout' : methodFailure ?? 'invalid_model_output'); slot.execution = 'completed';
     } catch (error) { const code = fatal ?? sourceBundleFailureCode(error); slot.failure = code; if (FATAL.has(code)) stop(code); }
     finally { core?.close(); try { slot.artifacts.afterStore = await assertSourceBundleStoreUnchanged(c); } catch { stop('store_drift'); } }
   }
