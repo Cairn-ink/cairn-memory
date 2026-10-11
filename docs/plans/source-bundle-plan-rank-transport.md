@@ -339,3 +339,74 @@ output and actual owned-workspace removal. Final validation and inventory are
 separate author closure checks; primary personally reruns full gates and both
 independent axes on the corrected candidate. No commit, push, live call, closed
 cohort inspection, score change or D12 clearance is implied.
+
+### QT correction round 2 — native Fetch redirect rejection
+
+Correction base: `e1372bb12fbd28b1974dcfd25559f03482f4f8d8`. The next independent
+Spec review found a real native-Fetch branch: `redirect:'error'` rejects before
+returning a Response, with a native TypeError `fetch failed` and native Error
+cause `unexpected redirect`. The old rejection handler discarded that cause,
+reported ordinary provider failure and left fatal health unset. Primary retained
+the unchanged native reviewer's required red runs on both Nodes in
+`/tmp/cairn-bundle-native-redirect-primary-HXe907/proof.json`.
+
+The diagnosing-bugs feedback loop used newly owned loopback servers on
+127.0.0.1/port0, synthetic keys and fresh synthetic schema-2 ledgers only. No
+external HTTP/provider, operational data or arbitrary runtime endpoint was used.
+The original reviewer command was personally reproduced red (actual 1), then
+regressions were added before changing runtime. Evidence is retained at
+`/tmp/cairn-bundle-native-redirect-correction2.yjBizPTI`:
+`original-old-node22.log`, `regression-old-node22.log`,
+`regression-old-node24.log` and `sync-hostile-old-node22.log`.
+Native 301/302/307 count and generation controls and a safe matching synthetic
+cause all failed on old code. A separately minimized direct synchronous hostile
+fetch rejection invoked one proxy hook and failed its zero-hook assertion. The
+fixture's asynchronous wrapper had masked that direct synchronous seam, so the
+regression now explicitly binds a direct throwing fetch there.
+
+Ranked hypotheses were loss of observable rejection cause, redirect following,
+and cancellation overriding classification. Exactly one local HTTP request with
+redirect:error ruled out following; non-aborted native controls and an explicit
+aborted matching-cause control distinguished classification from cancellation.
+The rejected native shape and matching synthetic shape confirmed cause loss.
+
+The minimal fix recognizes only the tested Node native TypeError/native Error
+cause shape through own data descriptors and native/proxy checks. It never reads
+stack/name getters, stringifies raw errors, coerces message values or traverses
+proxies. Other network failures stay ordinary. Synchronous fetch throws enter
+the same rejection path; cancellation still takes precedence and late-response
+cleanup remains unchanged. Missing Responses keep unknown usage and the full
+reservation, with no follow/retry/refund. The changed entrypoint is private
+fetch-rejection classification; unchanged planRank/health callers must still
+propagate fatal health globally. No wire, URL, model, prompt, schema, budget,
+deadline, compiler, CI or public capability changes were made.
+
+One unrelated existing usage control in the old Node24 regression run failed
+with deadline_exceeded at its code assertion: group duration 21544.24976ms,
+unchanged fixture manifest allowance 10s. The original loop did not log variant
+index or actual remaining deadline; both are unknown and cannot be recovered.
+The whole old run lasted 91295.454007ms. This failure is not silently relabeled
+as the native-redirect finding or resolved by a later green result.
+
+An isolated control loaded the exact e137 runtime and unchanged e137 usage-case
+body in memory, instrumenting only per-variant timing. On Node24 it exited 0
+(`isolated-unchanged-usage-node24.log`, three registered tests, 2231.114103ms).
+All eleven variants passed, invocation durations 82.355461–231.464032ms,
+starting manifest remainder 9998.297873–9999.196993ms, ending remainder at least
+9767.525442ms. Scheduling/resource pressure is a supported inference, not a
+proved reconstruction of the original failure. No fixture's 10s allowance,
+production 30s logical bound or expected error was extended/relaxed. Diagnostic
+tags exist only in the retained isolated log, not in repository runtime/tests.
+
+The first proposed native-branch fix passed required inherited QB+QT gates on
+both pinned Nodes, actual 0, 84/84 and zero skips (`focused-fixed-node22.log`,
+`focused-fixed-node24.log`). These worker gates were run sequentially. The
+unchanged original native reviewer harness required mode passed both (actual 0,
+`original-fixed-node22.log`, `original-fixed-node24.log`), reporting server and
+workspace removal and one loopback request. All six unchanged mock reviewer
+auth/redirect/history required probes also passed (actual 0,
+`mock-fixed-node{22,24}-{auth,redirect,history}.log`). Formal controls retain
+server/fixture cleanup, ordinary network failure, hostile accessor/coercion/
+proxy denials, and unchanged abort/late-body semantics. Final validation and
+three-path/full-six inventory/prefix gates are separately retained for primary
+acceptance. No commit/push, live grant, score improvement or D12 clearance follows.

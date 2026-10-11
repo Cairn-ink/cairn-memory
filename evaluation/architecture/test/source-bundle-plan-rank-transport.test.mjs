@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { createServer } from 'node:http';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { BUNDLE_RANK_INSTRUCTION, prepareBundleRankRequest } from '../source-bundle-rank.mjs';
 import { createSourceBundlePlanRankTransport } from '../source-bundle-plan-rank-transport.mjs';
@@ -221,6 +222,72 @@ test('source-bundle one-shot transport with actual local tokenizer', async t => 
           assert.equal(error.message.includes(KEY), false); return error.code === 'invalid_configuration'; }); }
         finally { transport?.close(); }
         assert.equal(calls, 0); assert.equal(f.calls.length, 0); f.checkPrefix();
+      });
+    }
+  });
+  await t.test('QT native redirect regression: actual Fetch rejects count/generation without following', async c => {
+    for (const status of [301, 302, 307]) for (const phase of ['count', 'generation']) {
+      await c.test(`${status}/${phase}`, async child => {
+        let requests = 0, serverClosed = false;
+        const server = createServer((request, reply) => {
+          requests++; request.resume(); reply.writeHead(status, { location: '/must-not-follow' }); reply.end('synthetic local redirect');
+        });
+        child.after(async () => { if (!serverClosed) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } });
+        await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+        const local = `http://127.0.0.1:${server.address().port}`;
+        const f = await fixture(child, { fetch: (url, init, n) => {
+          assert.equal(init.redirect, 'error');
+          if (phase === 'generation' && n === 1) return response({ object: 'response.input_tokens', input_tokens: 100 });
+          return fetch(local, init);
+        } });
+        try {
+          await assert.rejects(f.transport.planRank(f.request), code('redirect_rejected'));
+          assert.equal(f.controller.signal.aborted, false, 'This native failure is not cancellation');
+          assert.equal(f.transport.health().fatalCode, 'redirect_rejected');
+          assert.equal(requests, 1, 'No redirect follow or retry');
+          assert.equal(f.calls.length, phase === 'count' ? 1 : 2);
+          const last = f.transport.getState().attempts.at(-1);
+          assert.equal(last.reservedMicroUsd, 5000); assert.equal(last.actualMicroUsd, null); assert.equal(last.outcome, 'unknown');
+          assert.equal(f.transport.getRecords().at(-1).dispatched, true); f.checkPrefix();
+        } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); serverClosed = true;
+          await f.workspace.cleanup(); assert.equal(existsSync(f.workspace.path), false); }
+        assert.equal(server.listening, false);
+      });
+    }
+  });
+  await t.test('QT native rejection controls: safe matching cause only, ordinary network failure and hostile hooks stay bounded', async c => {
+    for (const mode of ['matching', 'ordinary', 'abort-matching', 'cause-getter', 'message-getter',
+      'cause-message-getter', 'coercion', 'error-proxy', 'cause-proxy', 'sync-proxy']) {
+      await c.test(mode, async child => {
+        let hooks = 0;
+        const trap = () => { hooks++; throw new Error(KEY); };
+        let reason = new TypeError('fetch failed', { cause: new Error(mode === 'ordinary' ? 'ECONNRESET' : 'unexpected redirect') });
+        if (mode === 'cause-getter') Object.defineProperty(reason, 'cause', { get: trap });
+        if (mode === 'message-getter') Object.defineProperty(reason, 'message', { get: trap });
+        if (mode === 'cause-message-getter') Object.defineProperty(reason.cause, 'message', { get: trap });
+        if (mode === 'coercion') reason.cause.message = { toString: trap, [Symbol.toPrimitive]: trap };
+        if (mode === 'error-proxy' || mode === 'sync-proxy') reason = new Proxy(reason,
+          { get: trap, getPrototypeOf: trap, getOwnPropertyDescriptor: trap });
+        if (mode === 'cause-proxy') reason.cause = new Proxy(reason.cause,
+          { get: trap, getPrototypeOf: trap, getOwnPropertyDescriptor: trap });
+        const f = await fixture(child, { fetch() {
+          if (mode === 'abort-matching') f.controller.abort();
+          if (mode === 'sync-proxy') throw reason;
+          return Promise.reject(reason);
+        } });
+        if (mode === 'sync-proxy') {
+          f.transport.close();
+          f.transport = await createSourceBundlePlanRankTransport({ ...f.args,
+            fetchImpl(url, init) { f.calls.push({ url, init }); throw reason; } });
+          f.workspace.defer(() => f.transport.close());
+        }
+        const expected = mode === 'matching' ? 'redirect_rejected' : mode === 'abort-matching' ? 'cancelled' : 'provider_failed';
+        await assert.rejects(f.transport.planRank(f.request), error => error.code === expected && !error.message.includes(KEY));
+        assert.equal(f.transport.health().fatalCode, mode === 'matching' ? 'redirect_rejected' : null);
+        assert.equal(hooks, 0, 'No getter/coercion/proxy trap may be invoked to classify rejection');
+        assert.equal(f.calls.length, 1); assert.equal(f.transport.getState().attempts.at(-1).outcome, 'unknown');
+        assert.equal(f.transport.getState().attempts.at(-1).actualMicroUsd, null);
+        assert.ok(!JSON.stringify(f.transport.getRecords()).includes(KEY)); f.checkPrefix();
       });
     }
   });

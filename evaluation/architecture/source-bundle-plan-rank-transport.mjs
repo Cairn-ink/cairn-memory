@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { types } from 'node:util';
 import { freeze, sha256, snapshotJson } from '../longmemeval/mixed-validation.mjs';
 import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 import { modelProfile } from '../../adapters/openai/profiles.mjs';
@@ -38,6 +39,26 @@ function copy(value, code) {
 function echo(text, key) {
   return text.includes(key) || text.replace(/\\u([0-9a-f]{4})/gi,
     (_, hex) => String.fromCharCode(parseInt(hex, 16))).includes(key);
+}
+
+// Node's native Fetch rejects redirect:error before exposing a Response. Inspect
+// only the observed native data-field shape; never stringify errors or execute
+// accessors/proxy traps. Other network failures remain ordinary and unpriced.
+function fetchRejection(error) {
+  try {
+    if (types.isProxy(error) || !types.isNativeError(error)
+      || Object.getPrototypeOf(error) !== TypeError.prototype) return 'provider_failed';
+    const message = Object.getOwnPropertyDescriptor(error, 'message');
+    const cause = Object.getOwnPropertyDescriptor(error, 'cause');
+    if (!message || !Object.hasOwn(message, 'value') || message.value !== 'fetch failed'
+      || !cause || !Object.hasOwn(cause, 'value')) return 'provider_failed';
+    const reason = cause.value;
+    if (types.isProxy(reason) || !types.isNativeError(reason)
+      || Object.getPrototypeOf(reason) !== Error.prototype) return 'provider_failed';
+    const detail = Object.getOwnPropertyDescriptor(reason, 'message');
+    return detail && Object.hasOwn(detail, 'value') && detail.value === 'unexpected redirect'
+      ? 'redirect_rejected' : 'provider_failed';
+  } catch { return 'provider_failed'; }
 }
 
 // JSON.parse alone silently erases duplicate usage/output fields. Reject that
@@ -179,13 +200,14 @@ export async function createSourceBundlePlanRankTransport(options) {
         catch { fail('request_mutated'); }
         if (now !== source.encoded) fail('request_mutated');
       };
-      async function race(promise, late) {
+      async function race(promise, late, network = false) {
         return await new Promise((resolve, reject) => {
           const listener = () => { controller.signal.removeEventListener('abort', listener); reject(new SourceBundleTransportError(cancellation)); };
           controller.signal.addEventListener('abort', listener, { once: true });
           Promise.resolve(promise).then(value => { controller.signal.removeEventListener('abort', listener);
             if (controller.signal.aborted) { late?.(value); reject(new SourceBundleTransportError(cancellation)); } else resolve(value);
-          }, () => { controller.signal.removeEventListener('abort', listener); reject(new SourceBundleTransportError(controller.signal.aborted ? cancellation : 'provider_failed')); });
+          }, error => { controller.signal.removeEventListener('abort', listener); reject(new SourceBundleTransportError(
+            controller.signal.aborted ? cancellation : network ? fetchRejection(error) : 'provider_failed')); });
           if (controller.signal.aborted) listener();
         });
       }
@@ -215,8 +237,11 @@ export async function createSourceBundlePlanRankTransport(options) {
           observe({ ...identity, phase: 'pre', dispatched: false, inputTokens, outputTokens, actualMicroUsd,
             outcome: null, responseBody, responseSha256, requestId, latencyMs: 0, failureCode: null });
           check(); accounting(() => ledger.getState()); check(); dispatched = true; outcome = 'unknown';
-          const response = await race(fetchImpl(endpoint, { method: 'POST', redirect: 'error',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: encoded, signal: controller.signal }), cancelBody);
+          let pending;
+          try { pending = fetchImpl(endpoint, { method: 'POST', redirect: 'error',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: encoded, signal: controller.signal }); }
+          catch (error) { pending = Promise.reject(error); }
+          const response = await race(pending, cancelBody, true);
           // A known safety status is fatal even if its body cannot be read or
           // parsed. Defer rejection so safely reported generation usage settles.
           const responseFailure = response.redirected || response.status >= 300 && response.status < 400
