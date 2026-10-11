@@ -302,3 +302,10 @@ gain. Next review a separate accounted planner transport and upstream-recovery
 control before freezing entirely new paired sources/rubric and independent
 first-answer/support judgments. Keep MOC opt-in, D12 and Stage 2/3 blocked;
 no closed-case tuning/replay, default change or new spending is authorized.
+
+The separately named [planner transport packet](docs/plans/source-bundle-plan-rank-transport.md)
+now has offline one-shot wire/accounting controls and a required actual-tokenizer
+CI path. Finish primary gates, independent fixed-diff reviews and CI before any
+new-source experiment proposal. Fake HTTP is not a supported-answer gain or paid
+grant; upstream-recovery controls and entirely new frozen paired sources/rubric
+remain later work, with D12/Stage 2/3 and original spending protections unchanged.
