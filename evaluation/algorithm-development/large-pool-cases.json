@@ -1,0 +1,710 @@
+[
+  {
+    "id": "L01",
+    "family": "three-source-handoff",
+    "question": {
+      "text": "Who currently approves the cleaned Marsh reel for the listening booth, and which package names connect that handoff?",
+      "date": "2026-05-22"
+    },
+    "sessions": [
+      {
+        "id": "L01-s1",
+        "eventTime": "2026-04-03T09:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For the wetland exhibit, the cleaned Marsh reel is the audio package we call Tern. The unedited takes stay on the field recorder until the exhibit closes."
+          },
+          {
+            "role": "assistant",
+            "content": "That separates the listening copy from the raw recordings."
+          },
+          {
+            "role": "user",
+            "content": "I keep the recorder in the equipment cupboard. The exhibit captions use the species names approved by the local bird group."
+          }
+        ]
+      },
+      {
+        "id": "L01-s2",
+        "eventTime": "2026-04-07T11:20:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The foyer display uses the Reed slideshow, and Niko approves its captions. Visitors can borrow the large-print captions at the ticket desk."
+          },
+          {
+            "role": "assistant",
+            "content": "I can distinguish the foyer display from the listening booth."
+          },
+          {
+            "role": "user",
+            "content": "The foyer projector is on a timer that stops at six. The ticket desk also holds the tactile map of the trail."
+          }
+        ]
+      },
+      {
+        "id": "L01-s3",
+        "eventTime": "2026-04-14T14:10:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "When Tern reaches the listening-booth team, they file that same audio package as Evening set. The delivery folder keeps the original Tern label as well."
+          },
+          {
+            "role": "assistant",
+            "content": "The two labels describe the same delivered audio package."
+          },
+          {
+            "role": "user",
+            "content": "I send booth deliveries to the shared exhibit folder. Elias checks that each audio file opens before it goes into the booth schedule."
+          }
+        ]
+      },
+      {
+        "id": "L01-s4",
+        "eventTime": "2026-04-19T10:30:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The outdoor walk uses the Dawn set, and Elias signs off its playback. It is separate from the listening-booth schedule."
+          },
+          {
+            "role": "assistant",
+            "content": "The outdoor playback has its own approval scope."
+          },
+          {
+            "role": "user",
+            "content": "The walking group starts at the north gate. Rain moves the talk into the potting shed, but the start point stays the north gate."
+          }
+        ]
+      },
+      {
+        "id": "L01-s5",
+        "eventTime": "2026-05-05T13:05:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The caption review happens on Tuesdays with Niko. The listening booth uses over-ear headphones because the foyer gets noisy."
+          },
+          {
+            "role": "assistant",
+            "content": "Those arrangements cover captions and visitor playback."
+          },
+          {
+            "role": "user",
+            "content": "Spare headphone cushions live in the booth drawer. The volunteer rota is posted beside the exhibit door each Friday."
+          }
+        ]
+      },
+      {
+        "id": "L01-s6",
+        "eventTime": "2026-05-18T15:40:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Priya is now the approver for Evening set in the listening booth. Elias still checks file playback, but that check is not the approval."
+          },
+          {
+            "role": "assistant",
+            "content": "Priya approves the booth package; Elias checks whether its files play."
+          },
+          {
+            "role": "user",
+            "content": "Priya wants approval requests in the exhibit folder. The booth is closed on Monday mornings for cleaning."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "L02",
+    "family": "dated-location-update",
+    "question": {
+      "text": "As of May 20, where should Mara collect glaze sample boxes for weekday studio pickups, and when did that arrangement take effect?",
+      "date": "2026-05-20"
+    },
+    "sessions": [
+      {
+        "id": "L02-s1",
+        "eventTime": "2026-04-02T08:40:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Mara collects glaze sample boxes for weekday studio pickups from the North gallery locker. The locker is beside the loading entrance."
+          },
+          {
+            "role": "assistant",
+            "content": "The weekday glaze pickup point is clear."
+          },
+          {
+            "role": "user",
+            "content": "We put invoices in a separate tray at reception. Mara uses the studio van for the boxes and cycles in for paperwork."
+          }
+        ]
+      },
+      {
+        "id": "L02-s2",
+        "eventTime": "2026-04-20T12:10:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I suggested the South foyer for weekday glaze pickups while the gallery floor is repaired. Mara has not agreed to that suggestion."
+          },
+          {
+            "role": "assistant",
+            "content": "The South foyer is still a proposal."
+          },
+          {
+            "role": "user",
+            "content": "The repair crew stores cones in the South foyer. The Saturday pottery class continues to collect its samples at the kiln door."
+          }
+        ]
+      },
+      {
+        "id": "L02-s3",
+        "eventTime": "2026-04-25T16:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The studio van needs a height clearance of two metres. The West annex entrance has enough clearance for it."
+          },
+          {
+            "role": "assistant",
+            "content": "That entrance is suitable for the van."
+          },
+          {
+            "role": "user",
+            "content": "Mara prefers pickup slips printed on plain paper. We keep packing blankets on a rack inside the annex."
+          }
+        ]
+      },
+      {
+        "id": "L02-s4",
+        "eventTime": "2026-05-10T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Mara and I agreed that weekday studio pickups of glaze sample boxes move to the West annex, shelf C, starting May 12. The North gallery locker stops serving those pickups then."
+          },
+          {
+            "role": "assistant",
+            "content": "The agreed location and effective date replace the old weekday pickup point."
+          },
+          {
+            "role": "user",
+            "content": "Reception still handles invoice collection. Saturday class samples still go out through the kiln door."
+          }
+        ]
+      },
+      {
+        "id": "L02-s5",
+        "eventTime": "2026-04-08T14:25:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I found an April 8 pickup note while sorting the files: Mara used the North gallery locker for glaze boxes that day. The note belongs with the April records."
+          },
+          {
+            "role": "assistant",
+            "content": "That note describes an earlier pickup."
+          },
+          {
+            "role": "user",
+            "content": "The April sample inventory was printed in green ink. The gallery locker key stays with the exhibition attendant."
+          }
+        ]
+      },
+      {
+        "id": "L02-s6",
+        "eventTime": "2026-05-18T10:50:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Mara used shelf C in the West annex for this morning’s weekday glaze pickup. The new pickup slips identify that shelf by letter."
+          },
+          {
+            "role": "assistant",
+            "content": "This morning’s pickup follows the agreed move."
+          },
+          {
+            "role": "user",
+            "content": "Invoice slips still say reception. The Saturday class list still says kiln door, so I keep those slips in separate folders."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "L03",
+    "family": "decision-premise-reconfirmation",
+    "question": {
+      "text": "What is the recorded venue decision for the summer sound workshops, what reason supported it, and does that reason still hold after the staffing update?",
+      "date": "2026-05-30"
+    },
+    "sessions": [
+      {
+        "id": "L03-s1",
+        "eventTime": "2026-03-05T09:20:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I chose to keep the summer sound workshops at Dock Hall because its evening technician is included in our hire. Avoiding a separate technician fee is the reason for that choice."
+          },
+          {
+            "role": "assistant",
+            "content": "The venue choice rests on the included evening technician."
+          },
+          {
+            "role": "user",
+            "content": "The summer sessions start after six. I keep the daytime school demonstrations on a separate booking sheet."
+          }
+        ]
+      },
+      {
+        "id": "L03-s2",
+        "eventTime": "2026-03-18T11:30:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Dock Hall lends us twelve folding chairs with each hire. We bring our own microphones for the sound workshops."
+          },
+          {
+            "role": "assistant",
+            "content": "That covers chairs and microphones for the booking."
+          },
+          {
+            "role": "user",
+            "content": "The school demonstrations use the library room. Those demonstrations finish before the library closes at four."
+          }
+        ]
+      },
+      {
+        "id": "L03-s3",
+        "eventTime": "2026-04-04T13:45:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A friend suggested moving the sound workshops to Birch Studio. I have not adopted that suggestion; its shorter walk from the station is appealing, though."
+          },
+          {
+            "role": "assistant",
+            "content": "Birch Studio is an option you are considering."
+          },
+          {
+            "role": "user",
+            "content": "Birch Studio’s courtyard suits the daytime picnic. I booked that courtyard for the volunteer lunch, which is separate from the workshops."
+          }
+        ]
+      },
+      {
+        "id": "L03-s4",
+        "eventTime": "2026-05-12T08:55:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Dock Hall says that from June 1 its evening technician will be charged separately. The summer sound workshops run in July, so the included-technician arrangement will not cover them."
+          },
+          {
+            "role": "assistant",
+            "content": "The stated fee change affects the reason given for the summer venue choice."
+          },
+          {
+            "role": "user",
+            "content": "Daytime Dock Hall hires still include a room attendant. Our school demonstrations remain daytime library bookings."
+          }
+        ]
+      },
+      {
+        "id": "L03-s5",
+        "eventTime": "2026-05-19T14:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The transport grant can cover workshop participants’ bus tickets. It cannot pay venue staffing charges under the grant terms."
+          },
+          {
+            "role": "assistant",
+            "content": "The grant covers participant travel but not venue staffing."
+          },
+          {
+            "role": "user",
+            "content": "I store the grant receipts by workshop date. Volunteers can claim bus tickets through the same receipts folder."
+          }
+        ]
+      },
+      {
+        "id": "L03-s6",
+        "eventTime": "2026-05-26T16:20:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Dock Hall remains my recorded choice for the summer sound workshops; I have not changed the venue booking since the staffing notice. I will review the extra cost before deciding whether to move."
+          },
+          {
+            "role": "assistant",
+            "content": "The current recorded choice remains Dock Hall pending your review."
+          },
+          {
+            "role": "user",
+            "content": "I have not booked Birch Studio for the sound workshops. The volunteer lunch booking in its courtyard remains in place."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "L04",
+    "family": "cjk-paraphrase-retrieval",
+    "question": {
+      "text": "河岸口述歷史的訪談裡，受訪者想暫停錄音時，要怎麼示意？暫停後由誰決定何時繼續？",
+      "date": "2026-05-16"
+    },
+    "sessions": [
+      {
+        "id": "L04-s1",
+        "eventTime": "2026-04-01T09:10:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "河岸口述歷史的訪談安排在週三下午，地點是社區閱覽室。每次訪談由一位主持人和一位收音志工一起進行。"
+          },
+          {
+            "role": "assistant",
+            "content": "時間、地點和人員分工都清楚了。"
+          },
+          {
+            "role": "user",
+            "content": "受訪者可以帶一位親友陪同。親友的交通補助和受訪者一樣，採實報實銷。"
+          }
+        ]
+      },
+      {
+        "id": "L04-s2",
+        "eventTime": "2026-04-06T14:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "我們為訪談訂了一個小動作：受訪者只要把掌心朝向主持人舉起，就表示先別把談話收進音檔。主持人看到後會請收音志工停機。"
+          },
+          {
+            "role": "assistant",
+            "content": "這個手勢可以讓受訪者不用出聲就先停下錄音。"
+          },
+          {
+            "role": "user",
+            "content": "沒有舉手時也可以直接口頭提出休息。手勢和口頭要求都由主持人接應。"
+          }
+        ]
+      },
+      {
+        "id": "L04-s3",
+        "eventTime": "2026-04-12T10:35:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "河岸展覽的開幕式採用紙本流程表，主持人拿藍色那份。舞台音控看到主持人指向手錶時，會播放下一段音樂。"
+          },
+          {
+            "role": "assistant",
+            "content": "開幕式有自己的舞台提示方式。"
+          },
+          {
+            "role": "user",
+            "content": "開幕式的攝影只在舞台區進行。訪談室不會直播到舞台螢幕。"
+          }
+        ]
+      },
+      {
+        "id": "L04-s4",
+        "eventTime": "2026-04-21T15:10:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "河岸口述歷史的訪談停機休息後，是否重新開機要等受訪者說可以。主持人不能因為下一位在等，就自行恢復收音。"
+          },
+          {
+            "role": "assistant",
+            "content": "是否繼續由受訪者決定，排程不會代替這個確認。"
+          },
+          {
+            "role": "user",
+            "content": "休息時志工會把錄音設備留在桌上。訪談前的設備測試使用志工自己的聲音。"
+          }
+        ]
+      },
+      {
+        "id": "L04-s5",
+        "eventTime": "2026-05-03T11:50:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "訪談錄音整理後先送逐字稿給受訪者確認。沒有取得受訪者同意的段落，不會放進河岸展覽的聆聽區。"
+          },
+          {
+            "role": "assistant",
+            "content": "逐字稿確認和展覽使用都有受訪者的同意流程。"
+          },
+          {
+            "role": "user",
+            "content": "聆聽區提供耳機，字幕另外放在桌邊。展覽導覽員不參加訪談錄音整理。"
+          }
+        ]
+      },
+      {
+        "id": "L04-s6",
+        "eventTime": "2026-05-11T09:45:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "我把訪談邀請函改成大字版，方便長輩閱讀。邀請函仍請大家提早十分鐘到閱覽室。"
+          },
+          {
+            "role": "assistant",
+            "content": "大字版保留原來的報到安排。"
+          },
+          {
+            "role": "user",
+            "content": "陪同親友可以坐在受訪者身旁。茶水放在門邊，和錄音設備分開。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "L05",
+    "family": "missing-entity-binding",
+    "question": {
+      "text": "Who borrowed the Alder projector at 16:10 on May 9, and which room did that borrower take it to?",
+      "date": "2026-05-12"
+    },
+    "sessions": [
+      {
+        "id": "L05-s1",
+        "eventTime": "2026-04-28T10:10:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Alder projector belongs to the media desk and has a padded grey case. The Birch projector belongs to the teaching cupboard and has a black case."
+          },
+          {
+            "role": "assistant",
+            "content": "The cases distinguish the two projectors."
+          },
+          {
+            "role": "user",
+            "content": "The media desk keeps lens cloths in a drawer. Teaching staff collect cupboard keys from reception."
+          }
+        ]
+      },
+      {
+        "id": "L05-s2",
+        "eventTime": "2026-05-02T13:20:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Nora hosts the sketch group in Studio D on Mondays. Her group uses the wall whiteboard rather than a projector."
+          },
+          {
+            "role": "assistant",
+            "content": "The sketch group has its own room and equipment arrangement."
+          },
+          {
+            "role": "user",
+            "content": "Nora takes group attendance on paper. She stores the sketch materials in the tall studio cabinet."
+          }
+        ]
+      },
+      {
+        "id": "L05-s3",
+        "eventTime": "2026-05-09T16:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The media desk log has an Alder projector loan at 16:10 today. The borrower-name field on that entry is blank."
+          },
+          {
+            "role": "assistant",
+            "content": "The log records the loan time without a borrower’s name."
+          },
+          {
+            "role": "user",
+            "content": "Alder loans are due back the next morning. The padded case has to come back with the projector."
+          }
+        ]
+      },
+      {
+        "id": "L05-s4",
+        "eventTime": "2026-05-09T16:40:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "That 16:10 Alder loan entry records Studio D as the room the borrower took it to. The room field and the blank name field are on the same entry."
+          },
+          {
+            "role": "assistant",
+            "content": "The room is recorded even though the borrower is unidentified."
+          },
+          {
+            "role": "user",
+            "content": "The desk closes at five on Saturdays. Returns left after closing go on the indoor cart by reception."
+          }
+        ]
+      },
+      {
+        "id": "L05-s5",
+        "eventTime": "2026-05-10T09:05:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Owen returned the Birch projector after the Sunday photography class. His class meets in Studio B and uses the black projector case."
+          },
+          {
+            "role": "assistant",
+            "content": "That return concerns Birch and the photography class."
+          },
+          {
+            "role": "user",
+            "content": "The class lights stay dim during slide review. Owen leaves the class sign-in sheet with reception."
+          }
+        ]
+      },
+      {
+        "id": "L05-s6",
+        "eventTime": "2026-05-11T12:30:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Leena prepares the media desk’s weekly equipment report. Preparing the report does not mean she borrowed every item listed in it."
+          },
+          {
+            "role": "assistant",
+            "content": "The report author and equipment borrowers have different roles."
+          },
+          {
+            "role": "user",
+            "content": "Leena labels damaged cables with a paper tag. Intact spare cables go in the low equipment drawer."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "L06",
+    "family": "lexical-scope-collision",
+    "question": {
+      "text": "Has the weekend book club adopted Lantern Cafe as its June meeting venue?",
+      "date": "2026-05-29"
+    },
+    "sessions": [
+      {
+        "id": "L06-s1",
+        "eventTime": "2026-03-06T10:10:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The weekend book club met at Lantern Cafe for a one-off March reading. That trial booking covered only the March meeting."
+          },
+          {
+            "role": "assistant",
+            "content": "The March cafe booking has a limited scope."
+          },
+          {
+            "role": "user",
+            "content": "The club reads one novel each month. Members bring their own copies rather than borrowing a club set."
+          }
+        ]
+      },
+      {
+        "id": "L06-s2",
+        "eventTime": "2026-04-03T12:40:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The weekend book club agreed to meet in the Ash courtyard for April and May. That venue agreement does not set the June location."
+          },
+          {
+            "role": "assistant",
+            "content": "The agreed courtyard dates stop after May."
+          },
+          {
+            "role": "user",
+            "content": "The club keeps its shared notes in a paper binder. The binder stays with whoever hosts that month."
+          }
+        ]
+      },
+      {
+        "id": "L06-s3",
+        "eventTime": "2026-04-17T15:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I suggested Lantern Cafe as the weekend book club’s June venue. The club has not accepted that suggestion; we are waiting for members’ travel dates."
+          },
+          {
+            "role": "assistant",
+            "content": "The June cafe suggestion is awaiting a club decision."
+          },
+          {
+            "role": "user",
+            "content": "The cafe can seat eight people indoors. The weekend book club currently has seven regular members."
+          }
+        ]
+      },
+      {
+        "id": "L06-s4",
+        "eventTime": "2026-05-06T09:25:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Wednesday cycling group has adopted Lantern Cafe as its June meeting venue. Its rides begin from the cafe entrance."
+          },
+          {
+            "role": "assistant",
+            "content": "That adoption concerns the Wednesday cycling group."
+          },
+          {
+            "role": "user",
+            "content": "The cycling group meets before its ride each week. Its route sheets are kept in the cafe’s blue folder."
+          }
+        ]
+      },
+      {
+        "id": "L06-s5",
+        "eventTime": "2026-05-15T14:50:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The weekday reading circle booked Lantern Cafe for its June lunchtime discussion. The reading circle has a different membership list from the weekend book club."
+          },
+          {
+            "role": "assistant",
+            "content": "The lunchtime booking belongs to the weekday circle."
+          },
+          {
+            "role": "user",
+            "content": "The weekday circle discusses essays instead of novels. Its organiser sends a reading link two days before each lunch."
+          }
+        ]
+      },
+      {
+        "id": "L06-s6",
+        "eventTime": "2026-05-25T11:15:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I checked the weekend book club’s venue notes today: June still contains the Lantern Cafe suggestion, with no accepted venue entered. Members are still comparing their June travel dates."
+          },
+          {
+            "role": "assistant",
+            "content": "The weekend club notes still show a suggestion rather than an accepted June venue."
+          },
+          {
+            "role": "user",
+            "content": "The May meeting remains in the Ash courtyard. I will circulate the next novel’s title before we settle the June location."
+          }
+        ]
+      }
+    ]
+  }
+]
