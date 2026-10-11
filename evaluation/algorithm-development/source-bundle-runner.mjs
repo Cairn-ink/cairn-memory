@@ -32,6 +32,25 @@ const fail = code => { const error = new Error(CODES.has(code) ? code : 'invalid
 const requireTrue = (condition, code) => { if (!condition) fail(code); };
 const copy = value => freeze(JSON.parse(JSON.stringify(snapshotJson(value,
   { bytes: 32 * 1024 * 1024, nodes: 500000, depth: 28 }, 'invalid_options'))));
+function copyFinalReport(value) {
+  // Raw bodies occur once per intent here. Keep the default metadata budget,
+  // adding only their actual retained UTF-8 bytes, never a caller allowance.
+  requireTrue(value.intents.length <= LIMITS.physicalIntents, 'invalid_options');
+  const maximumBodyBytes = 262144 * 3; // Unchanged ordinary UTF-8 replacement bound.
+  let responseBytes = 0;
+  for (const intent of value.intents) {
+    const body = intent.final?.responseBody;
+    if (body === null || body === undefined) continue;
+    requireTrue(typeof body === 'string', 'invalid_options');
+    const bytes = Buffer.byteLength(body, 'utf8');
+    requireTrue(Number.isSafeInteger(bytes) && bytes <= maximumBodyBytes, 'invalid_options');
+    responseBytes += bytes;
+    requireTrue(Number.isSafeInteger(responseBytes)
+      && responseBytes <= LIMITS.physicalIntents * maximumBodyBytes, 'invalid_options');
+  }
+  return freeze(JSON.parse(JSON.stringify(snapshotJson(value,
+    { bytes: 32 * 1024 * 1024 + responseBytes, nodes: 500000, depth: 28 }, 'invalid_options'))));
+}
 function own(value, keys) {
   try {
     requireTrue(!types.isProxy(value) && value !== null && typeof value === 'object'
@@ -503,7 +522,7 @@ export async function runSourceBundleComparison(options) {
   if (fatal) for (const report of cases) {
     for (const slot of [...Object.values(report.answers), report.probe]) if (slot.execution === 'not-run') slot.failure = fatal;
   }
-  const result = copy({ version: VERSION, manifest: input?.manifest ?? null, manifestSha256: input?.manifest ? sha(input.manifest) : null,
+  const result = copyFinalReport({ version: VERSION, manifest: input?.manifest ?? null, manifestSha256: input?.manifest ? sha(input.manifest) : null,
     status: fatal ? 'stopped' : 'accounted', stopReason: fatal, limits: LIMITS, deadlines: { began, runDeadline }, cases,
     history: { representation: 'initial-artifact-plus-transition-deltas-v1', base: historyBase },
     resources: { physicalIntents: intents.size, reservedMicroUsd: intents.size * 5000, peakRss: null,

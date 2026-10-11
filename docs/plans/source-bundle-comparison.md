@@ -711,3 +711,235 @@ tokenizer-only symlink was verified with `git check-ignore` and `ls -ld`, with
 its same relation-binding-probe target untouched. `inventory-final.json` retains
 the four final candidate hashes. No owned test invocation or subprocess remains
 active; no broad cleanup was used. The author is now STOP WRITES.
+
+## Prospective correction2 contract (verbatim)
+
+# BR4 correction2 — bounded aggregate report retention
+
+Prospective primary decision, 2026-10-11 21:20 UTC. No paid launch, new algorithm,
+metric, retry, budget, transport/model/output/token relaxation or main merge.
+
+Worktree `/home/chichieh/Github/cairn-memory-worktrees/source-bundle-comparison`,
+branch `experiment/source-bundle-comparison`, current runtime
+`d60855fc6fc8563d32441ae2d76504a672c8158d`.
+Full review base remains `51bf373de67680d1fcf5ac0a7b29de1ae0f7055b`; integration
+base remains `4423cd2bf91e3c479767bd1bebac3a6510846f07`.
+The diagnostic test is the only existing uncommitted change, SHA256
+`96509ff99cfe244585ba4915be45581caabaf590a3ecd02199d7a9ce67be1be6`.
+
+## Diagnosis and scope
+
+Actual original all24 runner regression exited1:192 dispatched and settled
+intents,120 healthy closed owners, no pending attempts, all192 literal callback
+and durable post records retained, consumed preparation rejected a second call.
+Raw response strings total36,175,872 bytes; final snapshot's32MiB byte charge
+throws invalid_options before result.json. Error stack identifies byte charge,
+not node/depth rejection or disk writing. Owned inner and outer scratch cleanup
+passed. Preserve `/tmp/cairn-br-correction2-author.GpNPzFdN/red-node22.log` and
+its original inventory/diff unchanged.
+
+Primary independently ran `probe-bundle-report-budget.mjs`, actual0: the real
+snapshot helper rejects those body strings at32MiB, accepts them with a separate
+literal-response allowance under the SAME500000-node/depth28 checks, and still
+rejects excessive nonresponse metadata. This is a pure minimizing control, not
+a substitute for the actual runner regression.
+
+Allowed correction files only:
+
+- evaluation/algorithm-development/source-bundle-runner.mjs
+- evaluation/algorithm-development/test/source-bundle-runner.test.mjs
+- docs/plans/source-bundle-comparison.md (append only)
+- docs/limitations.md (append only)
+
+Do not change store/QT/QB/CF/core/ordinary transport, corpus/rubric, provider
+serialization, ceilings, dependencies/CI, scored results or the SC worktree.
+
+## C2.1 — separate the aggregate raw-body allowance
+
+Keep the existing default32MiB/500000-node/depth28 defensive snapshot for every
+ordinary input, callback, individual raw record and structured observation.
+Only final report construction may add an allowance equal to the UTF-8 byte
+length of its already retained intent.final.responseBody strings. Those strings
+appear once each in the final report, and must remain literal: no trimming,
+summarization, replacement by hashes, dropped intents or missing slots. The
+nonresponse aggregate budget remains32MiB, nodes/depth unchanged. Do not globally
+raise copy()'s ordinary limit or accept a caller-supplied report budget.
+
+The aggregate allowance must itself be bounded by the existing192 intents and
+the existing physical body ceiling. A conservative bound is192*262144*3 bytes:
+the unchanged ordinary transport decodes UTF-8 with replacement (at most3 UTF-8
+bytes per physical input byte); QT uses a fatal decoder and is tighter. Count
+bodies remain65536 and generation/answer bodies262144 physical bytes. Secret
+redaction does not expand these admitted bodies. Validate finite safe bounds,
+do not reinterpret this as new network permission. This yields at most176MiB
+of admitted string/key bytes in the final defensive snapshot; it is NOT a
+whole-process RSS or serialized-file-size promise. Charge only actual literal
+response bytes, not the conservative maximum, to preserve metadata isolation.
+
+Keep the runner's public result schema, one-use lifecycle, fixed48QA+24probes,
+fatal/nonfatal policy, raw observation persistence, accounting and external
+callbacks unchanged. Do not add an export/factory solely for tests. No unrelated
+refactor or memory optimization. A genuine disk/process failure still cannot
+promise a persisted report; existing durable per-event evidence remains, and no
+resume/retry is introduced. This correction concerns accepted aggregate bodies.
+
+## C2.2 — actual full and resource-stopped regressions
+
+Retain the existing complete192-intent padded-response diagnostic as the exact
+red/green control, with tiny valid model content and literal-body verification.
+Add one bounded sibling variant: same fresh all24 setup and legal padded HTTP,
+but BQ24 natural-probe ordinary select count returns input_tokens7025. Expected:
+191 settled intents, no last select generation,120closed healthy owners, all48
+actual first answers retained,24probe slots (last failed), status stopped with
+context_budget_exceeded, all literal response bodies/report retained and no
+pending attempts. This exceeds32MiB before the resource stop and therefore
+proves the fix preserves reporting of a real resource failure too.
+
+Run that new sibling once RED on unchanged d60855 runtime before patching it.
+Keep the first full192 diagnostic log unchanged; do not rerun it merely to get
+another red. Then implement C2.1 and run both actual regressions on22.16/24.15.
+Assert persisted result equals returned report and each retained raw body equals
+its actual dispatched fixture; preserve all72slot identities/first answers,
+raw overflow cause, reservation and closed capability. Owned workspace removed
+after each successful/failed test. No paid/cohort replay or operational ledger.
+
+Add a short negative at the existing callback boundary proving a32MiB excess
+observation still fails record_persistence_failed without calling the callback;
+do not export a general copy helper. Keep the original required failure/timeout
+controls unchanged. No source-index/gold/rubric-informed semantic answers.
+
+## C2.3 — evidence, freeze and delivery
+
+Append the exact root cause, the two-budget rationale and conservative bound,
+red/green logs/actual exits/cleanup, changed entrypoints and limitations to the
+existing plan and limitations. Original14669-byte contract and all prior records
+remain byte-exact. This prospective correction2 contract is appended verbatim
+to the plan before final author STOP; it clarifies local artifact retention,
+not any paid-execution or semantic-quality gate.
+
+Author: actual GPT-6.1 Sol/high, same bounded owner. Run targeted two regressions
+on both Nodes, short controls and validate; independently derive exactly four
+changed paths and preserve dependency hashes. STOP uncommitted/unstaged, report
+actual exits and raw artifacts. Primary directly inspects all four changed files,
+runs the required final11-command matrices on both runtimes (including complete
+algorithm and unchanged budget/guard/LongMemEval/generic/demo/Claude gates), and
+cross-checks tested snapshots and Git versus filesystem inventory before commit.
+No tests or source mutation concurrently with a primary matrix.
+
+Both nonauthor final full10-path review axes must pass on the same new fixed
+candidate before push/dependent PR. Latest exact-head CI and mergeability before
+delivery. Existing prospective offline-SC-during-CI scheduling amendment applies
+only after those local gates, both reviews and exact push. No new user decision
+is required for this bounded correction; no full SC or paid GO is given here.
+
+
+## Correction2 implementation and diagnostic history
+
+Author: actual GPT-6.1 Sol/high. Fixed correction base is
+`d60855fc6fc8563d32441ae2d76504a672c8158d`; no inherited source, store,
+transport, core, source/rubric, dependency, cap or schema changes are authorized.
+The original diagnostic uses the genuine all24 preparation, real ordinary/QT
+transports, a fresh owned synthetic schema2 ledger and deterministic fake HTTP.
+Legal trailing JSON whitespace fills each count response to 65,536 physical
+bytes and each generation/answer response to 262,144 bytes, without changing
+model content, token counts, output ceilings or the fixed schedule.
+
+The original 192-intent diagnostic actually exited 1 on Node22, 0/1, zero skips
+or cancellations, about 54.3 seconds. Retained evidence is
+`/tmp/cairn-br-correction2-author.GpNPzFdN/red-node22.log` (SHA-256
+`371db801cd35fd654ee66d9cb059597e0767aa9d2e64b4bf341242285299f755`),
+with its unchanged original diff and two-route inventory. All 192 responses
+were literal in callback and durable post records; all 120 owners were closed
+healthy, all 192 ledger attempts settled, 960,000 microUSD reserved, zero pending.
+The raw bodies totaled 36,175,872 bytes. Final aggregate snapshot byte charging
+threw `invalid_options` at runner line 506 before returning or writing
+`result.json`; this was not a transport, node/depth or disk-writing failure.
+The consumed capability rejected another invocation and finally cleanup removed
+both the owned case workspace and the outer runner workspace.
+
+Before any runtime edit, the distinct BQ24 natural-select overflow sibling
+actually exited 1 on Node22, 0/1, zero skips/cancellations, about 58.0 seconds.
+Its retained log is
+`/tmp/cairn-br-correction2-fix.zZuYrdqa/red-stopped-node22.log` (SHA-256
+`044f147445e91fd0b402ab50a0016dbb16c37460a30ecf6fce17a2ce47706e27`),
+with exact tested input hashes. Its 191 responses totaled 35,913,728 bytes;
+191 intents settled, 120 owners closed healthy, 955,000 microUSD reserved,
+zero pending, and every callback/durable response remained literal. The same
+aggregate byte charge lost the final report after that resource stop. Capability
+reuse was rejected and owned cleanup passed. Neither red log is overwritten.
+
+The only changed runtime call site is final report construction in
+`runSourceBundleComparison`. Its private `copyFinalReport` grants only the
+actual UTF-8 bytes of already retained `intent.final.responseBody` strings,
+which occur once each in that report. It validates safe integer byte counts,
+at most 192 intents and at most `262144 * 3` bytes per admitted decoded body,
+then applies the same 500,000-node/depth28 checks with 32MiB plus those actual
+body bytes. The total admitted string/key ceiling is at most 176MiB; remaining
+metadata still gets only 32MiB. No caller-controlled budget, helper export,
+network allowance or result-schema change is introduced. Ordinary `copy`,
+inputs, callbacks and individual observations retain their original 32MiB cap.
+The separate oversized callback negative must reject before calling its observer.
+
+This addresses accepted aggregate retention, not whole-process RSS or file-size
+measurement; JSON escaping, copies and runtime allocations are separate. Genuine
+disk/process failures can still prevent a final report; durable per-event
+evidence and no-resume/no-retry policy remain. Both corrected padded regressions,
+short controls and validation will be retained below; primary owns complete
+final eleven-command matrices and both new full ten-path review axes.
+
+### Correction2 targeted red/green verification
+
+Corrected runtime/test input hashes are retained in
+`/tmp/cairn-br-correction2-fix.zZuYrdqa/green-input-hashes.txt`. Both heavy
+invocations ran sequentially, with no source mutation while either was active.
+The command on each pinned executable was
+`node tools/testing/run.mjs --test-name-pattern='all 24 padded-valid responses retain' evaluation/algorithm-development/test/source-bundle-runner.test.mjs`,
+under an explicit key-free environment and an owned `test-parent` directory.
+`green-padded-node22.log` actually exited 0, 2/2, zero skips/cancellations,
+about 119.4 seconds; `green-padded-node24.log` actually exited 0, 2/2, zero
+skips/cancellations, about 125.3 seconds. All48 first literal plumbing answers
+and all24 probe slots survive in both returned and persisted reports; every
+intent's response body equals its actual dispatched padded fixture and durable
+post record, and `result.json` equals the returned report.
+
+The full variant is accounted with 192 intents, 960,000 microUSD reservation,
+120 healthy closed owners, zero pending and 24 completed probes. The late BQ24
+select-overflow variant remains honestly stopped with `context_budget_exceeded`,
+191 intents, 955,000 microUSD reservation, 120 healthy closed owners, zero pending,
+23 completed probes and the last probe failed. Its raw count remains 7,025,
+`selectFailure` remains the exact fatal code, no last select generation occurs,
+and its unknown outcome/null price conservatively retains the 5,000 microUSD
+reservation. All72 canonical public slot identities remain present; the
+natural probe is not an answer or semantic score. Each successful and red
+fixture rejects another invocation with the consumed preparation and removes
+its owned workspace in `finally`.
+
+The selected eight short checks use
+`--test-name-pattern='default callback snapshot|concrete guard|runtime observation|actual ordinary headroom|native loopback|actual ordinary transport consumes|preparation accepts|owned actual SQLite'`.
+`short-node22.log` and `short-node24.log` each actually exited 0, 8/8, zero skips
+or cancellations. The new negative sends an observation exceeding 32MiB through
+the existing public callback boundary: it still throws
+`record_persistence_failed` before invoking that callback. Existing HTTP/body,
+native redirect, headroom, malformed-envelope and owned SQLite cleanup controls
+are unchanged. No complete algorithm/generic matrix is claimed by these
+selected author commands; primary owns the final full gates and reviews.
+
+All logs and snapshots above are retained under
+`/tmp/cairn-br-correction2-fix.zZuYrdqa`; the original full192 red directory
+remains untouched. Final syntax/validation and independent four-path inventory
+are the closing checks. The inventory compares Git's d60855 diff with a separate
+recursive filesystem Git-blob/mode derivation, and checks append-only plan and
+limitations, unchanged inherited dependencies/store, original14669-byte prefix,
+the verbatim prospective correction2 contract and zero owned scratch residue.
+No real key/provider, operational ledger, closed cohort, score, launch grant,
+commit, push, merge or stopped SC source is changed.
+
+Closing validation actually exited 0 on both pinned Nodes, retained in
+`validate-first-node22.log` and `validate-first-node24.log`; `git diff --check`
+also actually exited 0. The first independent inventory actually exited 0,
+exactly four paths, zero staged paths and zero owned parent-directory residue,
+with full append-only and contract/dependency checks. Final validation and
+inventory are repeated after this closing evidence append to bind final bytes;
+their logs and `inventory-final.json` retain the handoff evidence and hashes.
+No owned test subprocess remains. The author stops uncommitted/unstaged for
+primary inspection, final full matrices and both independent review axes.

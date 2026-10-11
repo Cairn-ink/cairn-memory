@@ -191,6 +191,121 @@ test('57,655 historical attempts retain one exact base across real ordinary and 
   await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
 });
 
+for (const overflow of [false, true]) test('all 24 padded-valid responses retain the complete returned and persisted first report'
+  + (overflow ? ' when BQ24 natural probe stops on provider count overflow' : ''), { skip: !supported }, async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-bundle-padded-report-' });
+  try {
+    const preparation = await prepareSourceBundleComparison({ outputRoot: workspace.path });
+    assert.equal(preparation.observation.cases.length, 24);
+    const ledger = await ledgerFixture(workspace), controller = new AbortController();
+    const sent = [], posts = [], checkpoints = [];
+    let current, result, runtimeError;
+    try {
+      result = await runSourceBundleComparison({ preparation,
+        manifest: createSourceBundleComparisonManifest(preparation.observation), ...ledger,
+        apiKey: KEY, signal: controller.signal,
+        onRecord(record) {
+          if (record.normalized?.phase === 'pre') current = record;
+          if (record.normalized?.phase === 'post') posts.push(record);
+        }, onCheckpoint(checkpoint) { checkpoints.push(checkpoint); },
+        async fetchImpl(url, init) {
+          const count = url.endsWith('/input_tokens'), maximum = count ? 65536 : 262144;
+          const designated = overflow && current.caseId === 'BQ24' && current.arm === 'probe' && current.phase === 'select';
+          const original = designated && count ? JSON.stringify({ object: 'response.input_tokens', input_tokens: 7025 })
+            : await fakeProvider(url, init).text();
+          assert.ok(Buffer.byteLength(original) < maximum);
+          const raw = original + ' '.repeat(maximum - Buffer.byteLength(original));
+          assert.equal(Buffer.byteLength(raw), maximum);
+          sent.push({ attemptId: current.normalized.attemptId, kind: count ? 'count' : 'generation-or-answer', raw });
+          return new Response(raw, { status: 200, headers: { 'content-type': 'application/json' } });
+        } });
+    } catch (error) { runtimeError = error; }
+    const budget = await import('../../experiment-budget/index.mjs');
+    const final = budget.inspectEmbeddingExperimentBudgetSnapshot(ledger.configuration);
+    const directory = join(workspace.path, 'comparison'), resultPath = join(directory, 'result.json');
+    const durablePosts = [];
+    for (const filename of (await readdir(directory)).filter(name => /^\d{6}-event\.json$/u.test(name)).sort()) {
+      const event = JSON.parse(await readFile(join(directory, filename), 'utf8'));
+      if (event.normalized?.phase === 'post') durablePosts.push(event);
+    }
+    console.log(JSON.stringify({ paddedReportBoundary: {
+      overflow, dispatched: sent.length, countResponses: sent.filter(response => response.kind === 'count').length,
+      generationOrAnswerResponses: sent.filter(response => response.kind !== 'count').length,
+      responseSizes: [...new Set(sent.map(response => Buffer.byteLength(response.raw)))].sort((a, b) => a - b),
+      aggregateRawResponseBytes: sent.reduce((sum, response) => sum + Buffer.byteLength(response.raw), 0),
+      observedFinalRecords: posts.length, durableFinalRecords: durablePosts.length,
+      settledOwners: checkpoints.length, closedHealthyOwners: checkpoints.filter(owner => owner.closed && owner.healthy).length,
+      requestCount: final.requestCount, reservedMicroUsd: final.reservedMicroUsd,
+      settledAttempts: final.attempts.filter(attempt => attempt.outcome !== null).length,
+      pendingAttempts: final.attempts.filter(attempt => attempt.outcome === null).length,
+      returnedReport: result !== undefined, resultJsonExists: existsSync(resultPath),
+      runtimeErrorCode: runtimeError ? sourceBundleFailureCode(runtimeError) : null,
+      runtimeErrorMessage: runtimeError?.message ?? null, runtimeErrorStack: runtimeError?.stack ?? null } }));
+    const expectedIntents = overflow ? 191 : 192;
+    assert.equal(sent.length, expectedIntents); assert.equal(posts.length, expectedIntents); assert.equal(durablePosts.length, expectedIntents);
+    assert.equal(sent.filter(response => response.kind === 'count').length, 72);
+    assert.equal(sent.filter(response => response.kind !== 'count').length, overflow ? 119 : 120);
+    assert.equal(sent.reduce((sum, response) => sum + Buffer.byteLength(response.raw), 0), overflow ? 35913728 : 36175872);
+    assert.equal(checkpoints.length, 120); assert.ok(checkpoints.every(owner => owner.closed && owner.healthy));
+    assert.equal(final.requestCount, expectedIntents); assert.equal(final.reservedMicroUsd, expectedIntents * 5000);
+    assert.ok(final.attempts.every(attempt => attempt.outcome !== null));
+    const expected = new Map(sent.map(response => [response.attemptId, response.raw]));
+    for (const records of [posts, durablePosts]) for (const record of records) {
+      assert.ok(expected.has(record.raw.attemptId));
+      assert.equal(record.raw.responseBody, expected.get(record.raw.attemptId));
+    }
+    await assert.rejects(runSourceBundleComparison({ preparation }), /invalid_source_bundle_preparation/);
+    console.log(JSON.stringify({ paddedReportRetention: { literalObservedResponses: posts.length,
+      literalDurableResponses: durablePosts.length, secondInvocationRejected: true } }));
+    // Successful settlement is insufficient if aggregate export loses the first report.
+    assert.ifError(runtimeError);
+    assert.equal(result.status, overflow ? 'stopped' : 'accounted');
+    assert.equal(result.stopReason, overflow ? 'context_budget_exceeded' : null);
+    assert.equal(result.cases.length, 24); assert.equal(result.cases.flatMap(c => Object.values(c.answers)).length, 48);
+    assert.equal(result.cases.filter(c => c.probe.execution === 'completed').length, overflow ? 23 : 24);
+    assert.ok(result.cases.every(c => Object.values(c.answers).every(answer => answer.status === 'answered'
+      && answer.answer === 'Offline plumbing control.' && answer.artifacts.answerResult.answer === answer.answer)));
+    assert.equal(result.resources.physicalIntents, expectedIntents); assert.equal(result.resources.missingFinalRecords, 0);
+    const publicSlots = result.cases.flatMap(c => [`${c.id}_ordinary_qa`, `${c.id}_source_bundle_qa`, `${c.id}_probe`]);
+    assert.equal(publicSlots.length, 72); assert.equal(new Set(publicSlots).size, 72);
+    assert.ok(result.intents.every(intent => publicSlots.includes(intent.slotId)));
+    if (overflow) {
+      const last = result.cases.at(-1), intent = result.intents.at(-1);
+      assert.equal(last.id, 'BQ24'); assert.equal(last.probe.execution, 'failed');
+      assert.equal(last.probe.failure, 'context_budget_exceeded');
+      assert.equal(last.probe.artifacts.selectFailure.code, 'context_budget_exceeded');
+      assert.equal(last.probe.artifacts.selectCalls, 1); assert.equal(last.probe.artifacts.rankCalls, 0);
+      assert.equal(intent.caseId, 'BQ24'); assert.equal(intent.slotId, 'BQ24_probe'); assert.equal(intent.method, 'select');
+      assert.equal(intent.final.failure, 'context_budget_exceeded'); assert.equal(intent.final.providerInputTokens, 7025);
+      assert.equal(intent.final.outcome, 'unknown'); assert.equal(intent.final.actualMicroUsd, null);
+      assert.equal(intent.final.reservedMicroUsd, 5000);
+      assert.equal(final.attempts.at(-1).outcome, 'unknown'); assert.equal(final.attempts.at(-1).actualMicroUsd, null);
+    }
+    assert.equal(existsSync(resultPath), true);
+    const persisted = JSON.parse(await readFile(resultPath, 'utf8'));
+    assert.deepEqual(persisted, result);
+    for (const report of [result, persisted]) for (const intent of report.intents)
+      assert.equal(intent.final.responseBody, expected.get(intent.attemptId));
+    console.log(JSON.stringify({ paddedReportOutcome: { overflow, status: result.status, stopReason: result.stopReason,
+      answers: result.cases.flatMap(c => Object.values(c.answers)).length, probeSlots: result.cases.length,
+      completedProbes: result.cases.filter(c => c.probe.execution === 'completed').length,
+      literalReturnedResponses: result.intents.length, literalPersistedResponses: persisted.intents.length,
+      overflowCause: overflow ? result.intents.at(-1).final.failure : null } }));
+  } finally {
+    await workspace.cleanup();
+    assert.equal(existsSync(workspace.path), false);
+    console.log(JSON.stringify({ paddedReportCleanup: { workspace: workspace.path, exists: existsSync(workspace.path) } }));
+  }
+});
+
+test('default callback snapshot still rejects oversized observations before invocation', () => {
+  let invoked = false;
+  const observation = { retainedText: 'x'.repeat(32 * 1024 * 1024 + 1) };
+  assert.throws(() => deliverSourceBundleObservation(() => { invoked = true; }, observation),
+    error => sourceBundleFailureCode(error) === 'record_persistence_failed');
+  assert.equal(invoked, false);
+});
+
 for (const boundary of ['rank', 'select']) test(`provider count overflow at BQ01 ordinary ${boundary} stops the entire fixed schedule`,
   { skip: !supported }, async t => {
     const workspace = createTestWorkspace(t, { prefix: `cairn-bundle-count-overflow-${boundary}-` });

@@ -2042,3 +2042,26 @@ answer gains, provider parity or launch authority. Earlier candidate matrices
 remain historical; corrected full matrices and independent reviews are still
 required before delivery. No inherited cap/transport, closed cohort, scoring
 outcome, operational ledger, credential or original Stage 2/3 gate was changed.
+
+Independent review and actual all24 fake-HTTP diagnostics also found that legal
+maximum-size response bodies could exceed the final aggregate report's 32MiB
+snapshot budget after all intents had settled, losing the returned and persisted
+report despite durable literal per-event records. The bounded final-only
+correction charges actual retained response-body UTF-8 bytes separately, with
+the existing 192-intent/physical-body bound, while preserving the original 32MiB
+nonresponse and per-observation budgets and node/depth checks. It must preserve
+both the complete first report and a late resource-stopped report without
+trimming bodies, changing transport/token/accounting limits or permitting retry.
+This is artifact-retention evidence, not measured RSS, file size, semantic gain,
+provider parity or paid authority. Disk/process failures still cannot guarantee
+final persistence; existing durable event evidence and no-resume policy remain.
+Final corrected full matrices, independent reviews and exact-head CI remain
+required before delivery; closed cohorts and original Stage 2/3 gates are unchanged.
+
+Both complete and late-overflow padded-response regressions pass on Node22.16
+and24.15 using actual core/ordinary/QT paths and fresh owned synthetic ledgers.
+They retain equal returned/persisted reports, all48 first answers/all24 probe
+slots and each literal raw response, with zero pending attempts and owned
+cleanup. The unchanged default callback limit still rejects excess observations.
+These offline regressions do not measure provider or model quality, whole-process
+RSS, file-size bounds or full execution cost, and do not clear semantic gates.
