@@ -275,3 +275,86 @@ resources. It never authorizes product promotion or Stage 3 or repairs old D12.
 Run `test/large-pool*.test.mjs` and the existing algorithm suite on both pinned
 Node runtimes. The real-core scripted controls prove orchestration, not model
 quality. See [the prospective contract](../../docs/plans/large-pool-six.md).
+
+## Natural MOC-prior paired diagnostic
+
+`moc-prior-natural-four-v1` is a separately named four-case authored development
+profile. `loadMocNaturalInputs` validates the frozen source-only bytes and reuses
+the existing preparation to check exactly nineteen batches for each P01–P04
+case. The source-facing runner and model inputs never load or include the separate
+rubric; preflight and evaluator load it only for frozen identity and evaluation.
+`runMocNaturalComparison`
+captures each history once with ordinary indexed-evidence extraction and
+classification. At most five admissions per batch permits at most 95 memories;
+fewer or zero admissions are valid evidence. Both arms cold-reopen that store
+and independently use ordinary select/rank ports, limit six, recorded-role
+provenance verification and the unchanged answer packer. Only the constructor
+candidate policy differs. P01/P03 run baseline first; P02/P04 run prior first.
+
+The runner retains raw model requests/replies, capture outcomes and filing,
+verified receipts, actual packed requests, dispatched HTTP bodies and first
+answers. State hashes fence every cold reopen and recall. Core handles are not
+SQL read-only. Safety, accounting, persistence and state errors stop the roster;
+an ordinary settled model failure may leave one arm unresolved while the other
+arm or next case proceeds without retry. Four cases/eight planned slots always
+remain in the report. `allFirstAnswersSettled` means execution has reached its
+terminal observations, including unrun slots; `firstAnswerSlots` separately
+counts executed, completed and unresolved answers.
+
+`prepareMocNaturalComparison({ configuration, outputDirectory })` is a read-only
+preflight, not spending authority. It binds clean committed source/control
+closure (including unused transitive preparation imports), original ledger
+checkpoint/history, exact Node executable, actual resolved tokenizer JS/WASM
+package bytes and realpath, source/rubric/protocol, limits and owned output
+identity. The directory must be real, owned, mode `0700`; its only permitted
+preexisting files are the declared `preflight-review.json` and
+`operator-review.json`, regular owned files at `0600`. Their bytes are bound.
+Keep the prepared manifest outside that output directory. Named
+`launchMocNaturalComparison` requires the reviewed manifest and explicit key
+callback. An exclusive durable start marker precedes key lookup; revalidation
+follows the callback and precedes dispatch. Every request has durable pre/post
+records. After accepting a valid manifest and owned output and writing the start
+marker, a failed launch consumes its directory and cannot resume. Malformed
+manifests and undeclared preexisting output are rejected before ownership/start;
+no marker is promised for those rejected inputs. Unwritable
+or replaced output fails closed; successful persistence of a closure cannot be
+promised after the owned filesystem itself fails.
+
+The unchanged evaluated model is `gpt-4.1-mini-2025-04-14`. Limits are 38 capture
+plus three independent recall core calls per arm, two first answers per case,
+360 maximum count/generation/answer HTTP attempts, $1.80 maximum conservative
+reservation and a separate fixed $4 local ceiling. Count plus generation is
+not retry. The original $400 cumulative authority, append-only history and
+$30 protected allowance remain required. Core logical timeout is 30 seconds,
+case timeout 20 minutes and run ceiling 80 minutes. Resource reporting charges
+common capture once and labels profile-price estimates as estimates, not invoices
+or standalone arm deployment bills.
+
+Evaluator-only `loadMocNaturalFreeze`, `buildBlindMocNaturalPacket`,
+`analyzeMocNaturalReport` and `aggregateMocNaturalJudgments` keep eight opaque
+judging slots and both first submissions. Correctness uses full frozen source;
+support uses actual packed source only. Missing or disagreeing fields remain
+unknown; unresolved pairs are neither wins nor losses. Capture validity is common;
+an invalid arm trace makes only that arm unresolved, while whole-case integrity
+still gates promotion. A correct P04 qualified
+no-final-choice answer counts as abstained; complete known answers do not.
+After terminal first-answer observations, source exposure and order derivation
+use the existing exact query/scorer/four-receipt bound on the unchanged retained
+store. Derived orders are distinct from actual selector inputs, and private
+prior-queue membership remains unobserved. A valid opportunity requires actual
+baseline omission and actual prior visibility/packing of a retained supported
+source. Short stores, no useful topics and baseline ceilings can leave that
+precondition unmet. No case replacement, padding, replay or rerun follows.
+
+Positive development support requires resolved correctness/safety, an observed
+opportunity, positive paired first-answer gain, no correct case lost and no
+added harm or degraded known-case usefulness, plus intact state/accounting and
+fixed resources. Every decision retains `productPromotion:false` and
+`stage3:false`. This runtime and its fake-provider controls establish no measured
+QA gain, holdout result or competitive parity. See the
+[prospective contract](../../docs/plans/moc-prior-natural-four.md); the focused
+`test/moc-prior*.test.mjs` suite and required contributor gates run offline on
+both pinned Node runtimes. Paid execution requires a separate primary gate.
+The new profile's 6,000-token input limit applies to the
+adapter's count payload, not the serialized generation envelope. Generation
+adds `max_output_tokens`/`store`/`stream`; the provider bound remains 7,024.
