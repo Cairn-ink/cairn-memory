@@ -294,3 +294,11 @@ tuning/replaying consumed cases. MOC stays opt-in; D12 is uncleared, Stage 2/
 Stage 3 and product promotion remain blocked. The original observer failure,
 first-score recovery, resources and identities remain in the result record.
 These documents supply no new experiment or spending authority.
+
+The [query-local source-bundle packet](docs/plans/query-local-evidence-bundles.md)
+now supplies offline scripted controls for preserving declared whole-card
+prerequisites through real source verification/packing, not a supported-answer
+gain. Next review a separate accounted planner transport and upstream-recovery
+control before freezing entirely new paired sources/rubric and independent
+first-answer/support judgments. Keep MOC opt-in, D12 and Stage 2/3 blocked;
+no closed-case tuning/replay, default change or new spending is authorized.

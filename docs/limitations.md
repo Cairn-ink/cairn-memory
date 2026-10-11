@@ -1966,3 +1966,23 @@ gates and accounting are in the results record. Result-head independent reviews/
 CI remain separate delivery gates. Diagnose selective evidence-chain composition
 before a new proposal; no rerun, tuning or new spend is authorized, and the closed
 D12 safety failure remains uncleared.
+
+The [query-local source-bundle prototype](plans/query-local-evidence-bundles.md)
+is evaluator-only and offline. One injected scripted planner replaces rank and
+declares unverified source groupings; actual core finalization, whole-card role
+verification and unchanged answer packing preserve exact submitted passages.
+Six unique cards/six units and independent 6,000-token request/answer caps apply;
+overlap, missing provenance or partial packing fail rather than return a terminal-
+only success. The inherited 384-total-receipt verifier and 123,000-token packer
+ceiling are unchanged, not permissions to exceed the stricter prototype cap.
+The explicit canonical question/date must be identical in any future paired
+baseline/treatment invocation; no caller date is silently rewritten.
+
+Fresh synthetic source-fidelity controls are not first-answer, supported-QA,
+identity, adoption, temporal-safety or missing-source-detection evidence. No
+provider transport, upstream selection recovery, default/core/adapter change,
+closed-case rerun/rescore, D12 repair or Stage 2/3 promotion follows. Any later
+accounted transport and upstream arm need separate controls, then entirely new
+frozen paired sources/rubric and independent first-answer/support judgments,
+with harm/resource rejection gates. Original cumulative/protected spending
+limits remain untouched; this prototype authorizes no paid execution.
