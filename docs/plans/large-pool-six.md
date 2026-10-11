@@ -1,6 +1,11 @@
 # Six-case larger-pool ranking experiment
 
-Status: prospective, offline implementation only. No new score or paid launch.
+Status: closed and scored once on 2026-10-11. The
+[six-case result](large-pool-six-results.md) is INCONCLUSIVE: linked B and
+complementary C each scored 6/6, with zero paired QA gain. Four cases exercised
+the larger-pool lexical branch; no advancement, promotion or D12 repair follows.
+The original prospective L1–L10 contract and implementation history below remain
+unchanged; results delivery follows the pre-dispatch R1–R8 addendum.
 Owner: primary DRI. Fixed dependency base:
 `afa68cb47ead699725aef6878194b6d4fe6f8236` (reviewed PR #393, not merged).
 Worktree: `cairn-memory-worktrees/large-pool-six`; branch:
@@ -144,8 +149,11 @@ primary before implementing it.
 
 ## Verification and execution record
 
-Pending. This prospective contract establishes no passing test, paid result,
-new model bill, quality acceptance or installation claim.
+The initial prospective record established no passing test, paid result,
+new model bill, quality acceptance or installation claim. Subsequent runtime
+acceptance and the closed operation are recorded in the
+[result report](large-pool-six-results.md); earlier WIP checks below remain
+historical and do not substitute for final results-delivery verification.
 
 ### Implementation and caller evidence
 
@@ -251,3 +259,76 @@ An earlier HEAD-based cross-check independently matched all 14 runtime files.
 Primary inspected the actual runtime/evaluator/caller/test diff before granting
 the scoped runtime delivery commit. No push, provider call, live preparation,
 production action or old-run mutation occurred.
+
+## Results-delivery acceptance (fixed before documentation implementation)
+
+This addendum records the already closed run; it does not revise L1–L10 or
+authorize a rerun. Delivery base is the frozen runtime
+`954507b1ef8b404b6f09b36a6ccd12da91b347ca` in a separate results worktree.
+
+- R1 — Publish the first agreement-only six-case/twelve-answer result, with
+  correct/incorrect/unresolved, paired wins/losses, unsupported/stale/severe
+  counts and every predeclared gate. Keep historical 24-case, 16-answer and
+  official benchmark cohorts separate. No regrading or excluded observations.
+- R2 — Record actual capture/card/rank-pool/seed/addition counts, eligibility
+  including eligible zero additions, and source-bound stage coverage. Literal
+  anchor gains are not additional correct answers or semantic proof.
+- R3 — Report HTTP and natural/replay call counts, observed tokens, elapsed
+  time, retained SQLite size, original-ledger delta and protected remainder.
+  Reservation, model-profile estimate and invoice are distinct. The paired
+  operation is not standalone-arm cost/latency or a peak-memory measurement.
+- R4 — Bind results to runtime, source/rubric, report, aggregate and resource
+  hashes; retain raw evidence privately. Do not publish keys, local credentials,
+  blind-label mappings or whole private answer payloads.
+- R5 — State the L8 decision without changing thresholds after results. The
+  tied QA result does not justify promoting the complementary heuristic; old
+  D12 remains unrepaired and Stage 3/product/host/parity claims remain blocked.
+- R6 — Update only this plan, a new `large-pool-six-results.md`, the current
+  three-stage plan, limitations and roadmap. Preserve historical acceptance
+  records and all runtime, fixtures, prompts, models, dependency and CI files.
+- R7 — Primary cross-checks numerical evidence and the changed-file inventory
+  by independent routes, reruns applicable final-head contributor checks on
+  both Node versions, and obtains distinct nonauthor Standards/Spec reviews
+  of the full dependency-base-to-candidate diff. All actual exit codes recorded.
+- R8 — Update existing PR #394, not a duplicate. Latest-head CI must pass before
+  ready; no merge, publication or deployment. Keep frozen runtime worktree and
+  all closed operations unchanged. Next work diagnoses the observed answer-use
+  boundary; this result is not permission to tune and rerun L01–L06.
+
+### Results-delivery ownership and checkpoint
+
+Requested and actual documentation implementer: GPT-6.1 Sol/high, one bounded
+worker at base `954507b1ef8b404b6f09b36a6ccd12da91b347ca`, worktree
+`cairn-memory-worktrees/large-pool-six-results`, branch
+`docs/large-pool-six-results`. Primary fixed R1–R8 before dispatch and owns
+acceptance, final contributor gates, distinct nonauthor Standards/Spec review
+and the update of existing PR #394. The worker writes only the five R6 documents,
+with no runtime, corpus, scorer, provider or operational-ledger mutation. No
+browser or product-flow entrypoint changes; affected readers are the plan,
+limitations and roadmap links to the closed result.
+
+The first documentation pass preserves L1–L10, all prior rejection records and
+the independent 24-case/16-answer cohorts. It traces numbers and public hashes
+to the retained closed artifacts. Primary's initial numeric acceptance check
+exited 1 on the worker's transcription of C packed-input tokens (4,543 versus
+the actual 4,545). Correction round 1 fixes that local-estimate sum without
+changing runtime or scoring evidence. Elapsed/token/cost measurements for this
+documentation assignment are unavailable; no primary takeover or model fallback
+occurred. Worker checks and primary's final candidate/review/CI evidence must
+be recorded as they actually complete; the frozen runtime's earlier green
+checks do not certify this documentation head.
+
+Worker precommit checks: `git diff --check` actual exit 0; read-only Node
+assertions actual exit 0 for six card rows, six coverage rows, resource/ledger
+arithmetic, every L8 gate, twelve public SHA-256 identities, 159 local-link
+targets and preservation of L1–L10/R1–R8. The initial assertions did not cover
+the summed packed inputs; after correction round 1, the expanded check exited
+0 on B/C packed tokens 2,788/4,545, units 16/31, zero omissions, HTTP split
+84 token-count / 84 core / 12 answers and logical calls 72/12/12/12. These are
+mechanical documentation checks, not a second scorer or semantic regrade.
+
+Delivery inventory actual exit 0: Git diff plus untracked paths independently
+matched fixed-base Git blob hashes plus an `rg --files --hidden` filesystem
+walk. Count: **five files** — `ROADMAP.md`, `docs/limitations.md`,
+`docs/plans/large-pool-six-results.md`, `docs/plans/large-pool-six.md` and
+`docs/plans/reliability-three-stage.md`. No runtime or other file changed.

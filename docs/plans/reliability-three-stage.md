@@ -1,13 +1,18 @@
 # Reliability and answer quality development plan
 
 Status: accepted development direction; Stage 2 candidates completed but not
-accepted. The latest [closed complementary three-arm comparison](complementary-qa24-results.md)
+accepted. The latest [closed six-case larger-pool result](large-pool-six-results.md)
+is INCONCLUSIVE: linked B and complementary C each score 6/6, with zero QA gain.
+Four cases exercise the lexical branch, but its +1 packed-anchor gain does not
+satisfy the positive-QA gate. This separate authored development cohort does
+not repair D12 or advance Stage 2/3. The earlier
+[closed complementary three-arm comparison](complementary-qa24-results.md)
 records ordinary A 19/24, linked B 23/24 and complementary C 23/24: C−A +4,
 C−B 0, and packed anchors 28/39/42. C introduces a known unsupported severe
 D12 error against baseline, so the frozen safety gate fails. Decision: revise,
 not advance. Earlier requested-answer/source-diverse and
 [role-preserving combined](evidence-bundle-qa24-results.md) safety-unknown
-rejections remain frozen; this latest failure is known harm, not unknown safety.
+rejections remain frozen; the 24-case failure is known harm, not unknown safety.
 Stage 3 and quality/installed-host acceptance remain blocked.
 Owner: primary DRI. This is the single current plan for the three-stage sequence
 agreed with the owner on 2026-10-09. Executed checkpoints link separate frozen
