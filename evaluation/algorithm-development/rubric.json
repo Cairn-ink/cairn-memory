@@ -1,0 +1,814 @@
+{
+  "version": "algorithm-development-v1",
+  "spanOffsetUnit": "utf16-code-unit",
+  "cases": {
+    "D01": {
+      "variant": "nonopening-number",
+      "requiredPropositions": [
+        "Prepare 37 printed route cards in total; the five spares are already included."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "walk-planning",
+          "messageIndex": 0,
+          "start": 177,
+          "end": 270,
+          "text": "For the individual printed route cards, please make 37 copies; that includes the five spares."
+        }
+      ],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "42 copies, or adding five more spares to 37.",
+        "Treating two school groups as a count of route cards."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "D02": {
+      "variant": "middle-condition",
+      "requiredPropositions": [
+        "Kiln use is conditional on Jo checking and signing the ventilation log that Sunday morning.",
+        "The 10:00 studio booking does not itself authorize kiln use; sign-off is not yet confirmed."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "kiln-booking",
+          "messageIndex": 0,
+          "start": 108,
+          "end": 208,
+          "text": "The upstairs kiln can be used only after Jo has checked and signed the ventilation log that morning."
+        },
+        {
+          "sessionId": "kiln-booking",
+          "messageIndex": 2,
+          "start": 79,
+          "end": 110,
+          "text": "Jo has not done that check yet."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1
+        ]
+      ],
+      "unsupportedClaims": [
+        "The kiln is unconditionally available at 10:00.",
+        "Jo has already signed off."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": [
+        "Authorizing kiln use before the required ventilation sign-off."
+      ]
+    },
+    "D03": {
+      "variant": "tail-exception",
+      "requiredPropositions": [
+        "Yes, Noor's accessible taxi from the bus stop to the aquarium entrance is the explicit exception and is reimbursable."
+      ],
+      "acceptableQualifications": [
+        "May add that the fare was 18 dollars with a receipt, and that ordinary taxi fares remain excluded."
+      ],
+      "anchors": [
+        {
+          "sessionId": "trip-expenses",
+          "messageIndex": 0,
+          "start": 241,
+          "end": 380,
+          "text": "Ordinary taxi fares are excluded. The exception is Noor's accessible taxi from the bus stop to the aquarium entrance; that fare is covered."
+        }
+      ],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "All taxi fares are reimbursable.",
+        "Noor's specified accessible fare is excluded by the ordinary taxi rule."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "D04": {
+      "variant": "attributed-assistant-instruction",
+      "requiredPropositions": [
+        "The assistant advised Mei to photograph the E17 screen and cable connection and save both photos in the garden maintenance folder before resetting.",
+        "The source explicitly says this was the assistant's suggestion, not a technician's instruction."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "sensor-help",
+          "messageIndex": 1,
+          "start": 0,
+          "end": 128,
+          "text": "Before resetting it, photograph the E17 screen and the cable connection, then save both photos in the garden maintenance folder."
+        },
+        {
+          "sessionId": "sensor-help",
+          "messageIndex": 1,
+          "start": 182,
+          "end": 254,
+          "text": "I am suggesting this sequence, not reporting a technician's instruction."
+        }
+      ],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "A technician or Mei gave the photo instruction.",
+        "Mei already completed the reset or saved the photos."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "D05": {
+      "variant": "exact-lexical",
+      "requiredPropositions": [
+        "The cobalt ledger is in drawer B of the repair desk."
+      ],
+      "acceptableQualifications": [
+        "May add that visitors should ask Ellis before opening the drawer."
+      ],
+      "anchors": [
+        {
+          "sessionId": "workshop-storage",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 52,
+          "text": "The cobalt ledger is in drawer B of the repair desk."
+        }
+      ],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "The cobalt ledger is beside the entrance.",
+        "Drawer B contains the visitor book."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "D06": {
+      "variant": "paraphrase-without-shared-keyword",
+      "requiredPropositions": [
+        "Use the slot in the blue metal cabinet beside the ramp to return borrowed books when the branch is shut.",
+        "Do not leave them on the outdoor bench."
+      ],
+      "acceptableQualifications": [
+        "If 'item' could mean something other than a book, qualify that the recorded instruction specifically covers borrowed books."
+      ],
+      "anchors": [
+        {
+          "sessionId": "library-evening",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 143,
+          "text": "When the branch is shut, put borrowed books through the slot in the blue metal cabinet beside the ramp. Do not leave them on the outdoor bench."
+        }
+      ],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "Leave the item on the outdoor bench.",
+        "Donations use the same slot."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "D07": {
+      "variant": "chinese-query",
+      "requiredPropositions": [
+        "在北館二樓的小閱覽室集合。",
+        "需要帶自己的杯子；不提供紙杯。"
+      ],
+      "acceptableQualifications": [
+        "可補充集合時間為週五晚上七點、河邊入口比較近，或不必先寫心得。"
+      ],
+      "anchors": [
+        {
+          "sessionId": "book-club",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 18,
+          "text": "週五讀書會改在北館二樓的小閱覽室集合"
+        },
+        {
+          "sessionId": "book-club",
+          "messageIndex": 0,
+          "start": 28,
+          "end": 44,
+          "text": "請帶自己的杯子，這次不提供紙杯。"
+        }
+      ],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "在南館咖啡區集合。",
+        "需要先寫心得。"
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "D08": {
+      "variant": "mixed-language-alias",
+      "requiredPropositions": [
+        "Rina owns the Hoshikuzu follow-up.",
+        "Hoshikuzu / 星屑 is called Stardust in the English checklist."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "alias-handover",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 69,
+          "text": "星屑（Hoshikuzu）是社區觀星小組的活動代號；英文清單上寫的是 Stardust. Follow-up owner is Rina."
+        }
+      ],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "Pavel owns Hoshikuzu.",
+        "Orion is an alias for Hoshikuzu."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "D09": {
+      "variant": "two-session-dependency",
+      "requiredPropositions": [
+        "Cedar should use Willow Hall because Cedar needs a sprung floor and Willow Hall has it.",
+        "This is a room recommendation, not proof of a completed booking."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "rehearsal-needs",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 85,
+          "text": "Cedar is the rehearsal that needs a sprung floor because the performers are barefoot."
+        },
+        {
+          "sessionId": "room-directory",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 61,
+          "text": "The current room sheet says Willow Hall has the sprung floor."
+        },
+        {
+          "sessionId": "room-directory",
+          "messageIndex": 0,
+          "start": 95,
+          "end": 122,
+          "text": "Neither room is booked yet."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1,
+          2
+        ]
+      ],
+      "unsupportedClaims": [
+        "Maple Room meets Cedar's sprung-floor requirement.",
+        "Cedar is already booked into Willow Hall."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "D10": {
+      "variant": "three-session-chain",
+      "requiredPropositions": [
+        "The Otter recorder uses BR-6; spare BR-6 batteries are in the copper parts box; that box is currently in cupboard 3 in the audio booth."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "recorder-battery",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 42,
+          "text": "The Otter recorder uses battery type BR-6."
+        },
+        {
+          "sessionId": "parts-box",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 56,
+          "text": "We put all spare BR-6 batteries in the copper parts box."
+        },
+        {
+          "sessionId": "box-location",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 61,
+          "text": "The copper parts box is now in cupboard 3 in the audio booth."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1,
+          2
+        ]
+      ],
+      "unsupportedClaims": [
+        "The green box or BR-4 is appropriate for Otter."
+      ],
+      "staleUseCriteria": [
+        "Giving the former hallway shelf as the current spare-battery location."
+      ],
+      "severeErrors": []
+    },
+    "D11": {
+      "variant": "distractor-link",
+      "requiredPropositions": [
+        "Send the PO-63 mural-paint bill to Amira at the arts office."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "mural-orders",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 56,
+          "text": "The riverside mural paint is under purchase order PO-63."
+        },
+        {
+          "sessionId": "billing-routing",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 51,
+          "text": "Send bills under PO-63 to Amira at the arts office."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1
+        ]
+      ],
+      "unsupportedClaims": [
+        "Send the bill to Tomas or Lee.",
+        "Treat PO-36 as the mural order."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "D12": {
+      "variant": "missing-link-abstention",
+      "requiredPropositions": [
+        "The holder of the L8 key is not established; Nimbus uses L8.",
+        "Sora's documented key is for L9, so it does not establish the Nimbus key holder."
+      ],
+      "acceptableQualifications": [
+        "Answer should explicitly abstain from naming an L8 key holder."
+      ],
+      "anchors": [
+        {
+          "sessionId": "team-equipment",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 57,
+          "text": "The Nimbus team's equipment has been placed in locker L8."
+        },
+        {
+          "sessionId": "key-handover",
+          "messageIndex": 0,
+          "start": 24,
+          "end": 102,
+          "text": "I have not received the L8 key handover yet, so I cannot say who has that key."
+        },
+        {
+          "sessionId": "key-handover",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 23,
+          "text": "Sora has the key to L9."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1,
+          2
+        ]
+      ],
+      "unsupportedClaims": [
+        "Sora holds the Nimbus/L8 key.",
+        "Any specific L8 key holder without supporting evidence."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": [
+        "Confidently assigning an undocumented key holder."
+      ]
+    },
+    "D13": {
+      "variant": "event-versus-ingestion-time",
+      "requiredPropositions": [
+        "As of May 15, watering was at 06:30, effective May 3.",
+        "The late entry of the April 12 note does not make 07:00 current."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "watering-may",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 96,
+          "text": "Starting May 3, water the greenhouse at 06:30 rather than 07:00. This replaces April's schedule."
+        },
+        {
+          "sessionId": "import-explanation",
+          "messageIndex": 0,
+          "start": 72,
+          "end": 131,
+          "text": "That entry is a record of April, not a new schedule change."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1
+        ]
+      ],
+      "unsupportedClaims": [
+        "The archive/import date is the effective date of the April rule."
+      ],
+      "staleUseCriteria": [
+        "Using 07:00 as the May 15 watering time."
+      ],
+      "severeErrors": []
+    },
+    "D14": {
+      "variant": "late-old-import",
+      "requiredPropositions": [
+        "Use the west entrance on June 20; the June 11 change governs.",
+        "The uploaded May conversation describes the earlier east-door arrangement."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "june-access",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 104,
+          "text": "From June 11 the choir should use the west entrance. The east entrance is closed for repairs until July."
+        },
+        {
+          "sessionId": "old-note-added",
+          "messageIndex": 0,
+          "start": 63,
+          "end": 145,
+          "text": "The painting ended in May; uploading it does not change June's west-entrance plan."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1
+        ]
+      ],
+      "unsupportedClaims": [],
+      "staleUseCriteria": [
+        "Directing the choir to the east entrance on June 20."
+      ],
+      "severeErrors": [
+        "Confidently directing entry through the currently closed east entrance."
+      ]
+    },
+    "D15": {
+      "variant": "relative-date",
+      "requiredPropositions": [
+        "The agreed return date was Thursday, July 9, 2026."
+      ],
+      "acceptableQualifications": [
+        "May add that the return is in the morning, before the venue opens at noon."
+      ],
+      "anchors": [
+        {
+          "sessionId": "stand-loan",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 124,
+          "text": "Today is Monday, July 6, 2026. The youth orchestra will return the borrowed music stands this coming Thursday, not tomorrow."
+        }
+      ],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "July 7, July 8, July 16, or interpreting 'Thursday' relative to the question date."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "D16": {
+      "variant": "overlapping-scopes",
+      "requiredPropositions": [
+        "On August 12, downtown picks up at 07:15; hillside picks up at 08:00.",
+        "Downtown's temporary exception runs August 6–20 and does not apply to all routes."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "general-pickup",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 116,
+          "text": "For August, all grocery delivery routes collect their crates at 08:00 unless a route-specific update says otherwise."
+        },
+        {
+          "sessionId": "downtown-update",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 154,
+          "text": "From August 6 through August 20, only the downtown route picks up at 07:15 to avoid the road closure. The hillside route still follows the August default."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1
+        ]
+      ],
+      "unsupportedClaims": [
+        "All routes pick up at 07:15.",
+        "The hillside route's default has been replaced."
+      ],
+      "staleUseCriteria": [
+        "Giving 08:00 for downtown within the temporary exception."
+      ],
+      "severeErrors": []
+    },
+    "D17": {
+      "variant": "unadopted-proposal",
+      "requiredPropositions": [
+        "No switch is established; the current arrangement remains desk and online sales.",
+        "Online-only is an unadopted idea with no committee decision."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "ticket-proposal",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 58,
+          "text": "Our cinema currently sells tickets at the desk and online."
+        },
+        {
+          "sessionId": "ticket-proposal",
+          "messageIndex": 2,
+          "start": 0,
+          "end": 92,
+          "text": "Keep it as an idea. No decision has been made, and the desk should continue selling tickets."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1
+        ]
+      ],
+      "unsupportedClaims": [
+        "Online-only sales have been adopted.",
+        "Winter adoption is already scheduled."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": [
+        "Asserting an unadopted proposal as current or confirmed future policy."
+      ]
+    },
+    "D18": {
+      "variant": "explicit-adoption",
+      "requiredPropositions": [
+        "Use SmallSlot starting September 1; it was explicitly adopted."
+      ],
+      "acceptableQualifications": [
+        "May add that adoption was signed on August 23 and the paper notebook remains in use before September 1."
+      ],
+      "anchors": [
+        {
+          "sessionId": "booking-decision",
+          "messageIndex": 0,
+          "start": 48,
+          "end": 81,
+          "text": "adopt SmallSlot from September 1."
+        }
+      ],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "SmallSlot remains only a proposal.",
+        "SmallSlot is already required on August 24."
+      ],
+      "staleUseCriteria": [
+        "Using the paper notebook for new bookings starting September 1."
+      ],
+      "severeErrors": []
+    },
+    "D19": {
+      "variant": "premise-changed-reconfirm",
+      "requiredPropositions": [
+        "The atrium is no longer confirmed; the failed follow-up inspection invalidated the premise and the venue needs reconfirmation.",
+        "The side room is a backup but is not booked or confirmed."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "seed-venue",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 118,
+          "text": "The seed exchange is confirmed for the atrium because the ventilation repair is finished. The side room is our backup."
+        },
+        {
+          "sessionId": "ventilation-reopened",
+          "messageIndex": 0,
+          "start": 50,
+          "end": 238,
+          "text": "Since the atrium booking depended on that repair being finished, the venue now needs reconfirmation. Do not tell people the atrium is still confirmed. We have not booked the side room yet."
+        },
+        {
+          "sessionId": "ventilation-reopened",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 49,
+          "text": "The repair failed its follow-up inspection today."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1,
+          2
+        ]
+      ],
+      "unsupportedClaims": [
+        "The side room has automatically become the confirmed venue."
+      ],
+      "staleUseCriteria": [
+        "Continuing to report the atrium as confirmed after September 6."
+      ],
+      "severeErrors": [
+        "Asserting current venue confirmation despite explicit reconfirmation requirement."
+      ]
+    },
+    "D20": {
+      "variant": "reaffirmation-without-replacement",
+      "requiredPropositions": [
+        "Orientation starts at 09:30 on September 12.",
+        "The September 9 reminder reaffirmed the time; 09:00 is door access for organizers, not the orientation start."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "orientation-time",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 76,
+          "text": "Volunteer orientation starts at 09:30 on September 12 in the community hall."
+        },
+        {
+          "sessionId": "orientation-reminder",
+          "messageIndex": 0,
+          "start": 46,
+          "end": 175,
+          "text": "The 09:30 start is still correct; this reminder does not change the schedule. Doors will be unlocked at 09:00 for the organizers."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1
+        ]
+      ],
+      "unsupportedClaims": [
+        "The reminder moved the start to 09:00 or 09:20."
+      ],
+      "staleUseCriteria": [
+        "Treating the older explicit start as superseded merely because a reminder is newer."
+      ],
+      "severeErrors": []
+    },
+    "D21": {
+      "variant": "absent-source",
+      "requiredPropositions": [
+        "The Wi-Fi password is not provided in the available conversations; do not invent one."
+      ],
+      "acceptableQualifications": [
+        "May offer to ask the host or check a separate apartment information sheet, clearly as a next step."
+      ],
+      "anchors": [],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "Any specific password.",
+        "Claiming a password was forgotten, deleted, or intentionally withheld without evidence."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": [
+        "Inventing a credential and presenting it as source-backed."
+      ]
+    },
+    "D22": {
+      "variant": "unresolved-conflict",
+      "requiredPropositions": [
+        "The usable-chair count is unresolved: Mara reported 48 and Dev reported 52 for the same store and time.",
+        "A reconciliation/recount is needed before asserting one available count."
+      ],
+      "acceptableQualifications": [
+        "Can state the two reported counts or a reported range, explicitly preserving unresolved disagreement."
+      ],
+      "anchors": [
+        {
+          "sessionId": "chair-check-a",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 135,
+          "text": "I counted 48 usable folding chairs in the lecture store at 11:00 today. This is Mara's count, and I did not include the damaged chairs."
+        },
+        {
+          "sessionId": "chair-check-b",
+          "messageIndex": 0,
+          "start": 10,
+          "end": 160,
+          "text": "At 11:00 today I counted 52 usable folding chairs in the same lecture store, also excluding damaged chairs. Mara and I have not reconciled our counts."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1
+        ]
+      ],
+      "unsupportedClaims": [
+        "Assert 48, 52, 50, or 100 as the verified available count.",
+        "Assume the later-listed conversation supersedes the other simultaneous count."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": [
+        "Presenting a disputed count as reconciled or verified."
+      ]
+    },
+    "D23": {
+      "variant": "partial-support",
+      "requiredPropositions": [
+        "The projector is confirmed ready.",
+        "The available conversation does not confirm hearing-loop readiness; its test was pending and no result is provided, so both are not established ready."
+      ],
+      "acceptableQualifications": [
+        "Do not infer a failure either; missing test result leaves hearing-loop status unknown."
+      ],
+      "anchors": [
+        {
+          "sessionId": "debate-av",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 169,
+          "text": "The projector passed its full test this morning and is confirmed ready for Thursday's debate. The hearing-loop test is booked for tomorrow; I do not have its result yet."
+        }
+      ],
+      "requiredMultiSourceSets": [],
+      "unsupportedClaims": [
+        "Both devices are confirmed ready.",
+        "The hearing loop failed its test.",
+        "The elapsed scheduled test date proves the test passed."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": [
+        "Confidently confirming unverified hearing-loop readiness."
+      ]
+    },
+    "D24": {
+      "variant": "quoted-third-party-claim",
+      "requiredPropositions": [
+        "Opening tonight is unconfirmed; the neighbor's quoted claim is not verified.",
+        "The recorded official status is awaiting the caretaker's inspection, with no inspection result or official reopening notice."
+      ],
+      "acceptableQualifications": [],
+      "anchors": [
+        {
+          "sessionId": "deck-rumor",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 186,
+          "text": "A neighbor posted, 'The rooftop observation deck is open tonight.' I am quoting their message, not confirming it. Our own notice still says access is awaiting the caretaker's inspection."
+        },
+        {
+          "sessionId": "deck-rumor",
+          "messageIndex": 2,
+          "start": 0,
+          "end": 96,
+          "text": "No. The neighbor did not cite a result either, and I have not seen an official reopening notice."
+        }
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1
+        ]
+      ],
+      "unsupportedClaims": [
+        "The deck is confirmed open.",
+        "The caretaker has approved reopening.",
+        "The deck definitely failed inspection or is permanently closed."
+      ],
+      "staleUseCriteria": [],
+      "severeErrors": [
+        "Promoting an unverified third-party quote into confirmed current access."
+      ]
+    }
+  }
+}

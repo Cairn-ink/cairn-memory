@@ -138,6 +138,13 @@ the public memory core and ordinary scorer do not invoke Python.
 For conflict lifecycle changes also run `npm run demo:conflicts` on both core
 runtime versions. It uses explicit synthetic hints, not semantic detection.
 
+For `evaluation/algorithm-development` changes, install the locked isolated
+OpenAI adapter dependencies and run `npm run test:algorithm-development` on
+Node 22.16 and 24.15. The suite uses synthetic SQLite/ledgers and fake HTTP,
+never credentials or the operational campaign. See that directory's README
+and `docs/plans/reliability-three-stage.md` for the separately frozen paid
+comparison. Passing offline tests does not grant spending or establish QA gains.
+
 For index generation changes also run `npm run demo:rebuild` on both core
 runtime versions. This validates existing organization without a model service.
 

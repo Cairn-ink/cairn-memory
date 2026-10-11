@@ -251,3 +251,121 @@ test('actual recall uses expanded labels but unchanged ranking and current sourc
     else assert.equal(result.ok, false);
   }
 });
+
+test('cold paired recall isolates qualifier label exposure through selection and source-only answer packing', {
+  skip: major < 22 || major === 22 && minor < 16 ? 'SQLite integration requires Node >=22.16; pure tests stay enabled.' : false,
+}, async t => {
+  const { openMemoryCore } = await import('../../../core/contract.mjs');
+  const { createTestWorkspace } = await import('../../../tools/testing/workspace.mjs');
+  const { packMixedAnswer } = await import('../../longmemeval/mixed-answer.mjs');
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-full-label-paired-' });
+  const path = join(workspace.path, 'memory.sqlite'), ns = namespace('paired'), readSet = [ns];
+  const query = 'display: basis; reconfirm', question = { text: query, date: '2026-10-03' };
+  // Freeze both sources before either arm. The later qualifier is beyond the
+  // ordinary query-aware label, not an evaluator-substituted select input.
+  const contents = [
+    'On 2026-10-01 the display choice had a basis: the gallery lease remained active.',
+    'The display archive records ordinary inventory notes without resolving the current decision. '.repeat(3)
+      + 'On 2026-10-02 the lease ended; reconfirm the prior choice before using it.',
+  ];
+  const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
+  // This byte-based counter and literal-cue selector are scripted mechanical
+  // controls, not tokenizer/provider costs, semantic judgments or answer scores.
+  const countTokens = text => Math.ceil(Buffer.byteLength(text, 'utf8') / 4);
+  let core = openMemoryCore({ path, model: { contextWindow: 8192, countTokens } });
+  workspace.defer(() => core?.close());
+  const records = contents.map((content, i) => ok(core.admit({ namespace: ns,
+    memory: { content, kind: 'fact' }, receipts: [{ client: 'test', sessionId: `session-${i}`,
+      eventId: `source-${i}`, role: 'user', excerpt: content }] })).memory);
+  core.close(); core = undefined;
+
+  const arms = [];
+  for (const expanded of [false, true]) {
+    const trace = { coreInputs: [], selectInputs: [], selected: [], rankInputs: [],
+      counts: { select: 0, rank: 0, counter: 0, labelReads: 0, packCounter: 0 }, labelBytes: 0 };
+    // The callbacks read only their requests. In particular, neither callback
+    // closes over records, source contents, expected anchors or target IDs.
+    const model = { contextWindow: 8192,
+      countTokens(text) { trace.counts.counter++; return countTokens(text); },
+      async select({ input }) {
+        trace.counts.select++; trace.selectInputs.push(structuredClone(input));
+        trace.labelBytes += input.maps.reduce((sum, map) => sum + map.items.reduce(
+          (bytes, item) => bytes + Buffer.byteLength(item.label ?? '', 'utf8'), 0), 0);
+        const cues = input.query.split(':').slice(1).join(':').split(';').map(cue => cue.trim().toLowerCase()).filter(Boolean);
+        const refs = input.maps.flatMap(map => map.items.filter(item => {
+          const words = new Set((item.label ?? '').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
+          return cues.some(cue => words.has(cue));
+        })
+          .map(item => ({ namespaceIndex: map.namespaceIndex,
+            memoryId: item.type === 'unfiled' ? item.ref.memoryId : item.ref.childId,
+            revision: item.type === 'unfiled' ? item.ref.revision : item.ref.childRevision }))).slice(0, input.maxRefs);
+        trace.selected.push(structuredClone(refs));
+        return { refs };
+      },
+      async rank({ input }) {
+        trace.counts.rank++; trace.rankInputs.push(structuredClone(input));
+        return { refs: input.candidates.slice(0, input.limit).map(candidate => ({
+          namespaceIndex: candidate.namespaceIndex, memoryId: candidate.memory.id, revision: candidate.memory.revision })) };
+      } };
+    // Evaluator-only red control: temporarily replace the true arm's wrapper
+    // below with `model`, run this test by name and require exit 1, then restore
+    // identical file bytes. No product/config escape flag is involved.
+    const selectionModel = expanded ? createFullLabelSelectionModel(model, { readSet,
+      getMemory(request) { trace.counts.labelReads++; return core.get(request); } }) : model;
+    core = openMemoryCore({ path, model: { ...selectionModel, select(request) {
+      trace.coreInputs.push(structuredClone(request.input));
+      return selectionModel.select(request);
+    } } });
+    for (const [i, memory] of records.entries()) {
+      const cold = ok(core.get({ namespace: ns, memoryId: memory.id }));
+      assert.equal(cold.memory.content, contents[i]);
+      assert.equal(cold.receipts[0].excerpt, contents[i]);
+    }
+    const recalled = ok(await core.recall({ readSet, query, limit: 2, contextMode: 'source-evidence' }));
+    // Pack only the actual returned receipts, never generated memory content or
+    // missing evaluator anchors. Both arms use the unchanged public packer.
+    const packed = packMixedAnswer({ question, units: recalled.memories.map(item => ({
+      text: item.receipts.map(receipt => receipt.excerpt).join('\n') })),
+    countTokens(text) { trace.counts.packCounter++; return countTokens(text); } });
+    const evidence = JSON.parse(packed.request.messages[1].content).evidence.map(unit => unit.text);
+    arms.push({ trace, recalled, packed, evidence });
+    core.close(); core = undefined;
+  }
+
+  const [ordinary, full] = arms;
+  assert.deepEqual(full.trace.coreInputs, ordinary.trace.coreInputs, 'same actual maps, IDs, order, query and limits');
+  assert.equal(ordinary.trace.coreInputs.length, 1);
+  const visible = ordinary.trace.coreInputs[0].maps[0].items;
+  assert.equal(visible.length, 2);
+  assert.deepEqual(new Set(visible.map(item => item.ref.memoryId)), new Set(records.map(memory => memory.id)));
+  const qualifierLabel = input => input.maps[0].items.find(item => item.ref.memoryId === records[1].id).label;
+  assert.equal(/\breconfirm\b/i.test(qualifierLabel(ordinary.trace.selectInputs[0])), false,
+    'refuted if the ordinary query-aware label already exposes the qualifier');
+  assert.equal(qualifierLabel(full.trace.selectInputs[0]), contents[1]);
+  const withoutLabels = input => ({ ...input, maps: input.maps.map(map => ({ ...map,
+    items: map.items.map(({ label, ...item }) => item) })) });
+  assert.deepEqual(withoutLabels(full.trace.selectInputs[0]), withoutLabels(ordinary.trace.selectInputs[0]));
+  assert.deepEqual(ordinary.trace.selected[0].map(ref => ref.memoryId), [records[0].id]);
+  assert.deepEqual(new Set(full.trace.selected[0].map(ref => ref.memoryId)), new Set(records.map(memory => memory.id)));
+  for (const [arm, expected] of [[ordinary, [contents[0]]], [full, contents]]) {
+    assert.equal(arm.trace.counts.select, 1); assert.equal(arm.trace.counts.rank, 1);
+    assert.equal(arm.trace.rankInputs[0].query, query); assert.equal(arm.trace.rankInputs[0].limit, 2);
+    assert.deepEqual(new Set(arm.trace.rankInputs[0].candidates.flatMap(item => item.receipts.map(receipt => receipt.excerpt))), new Set(expected));
+    assert.deepEqual(new Set(arm.recalled.memories.flatMap(item => item.receipts.map(receipt => receipt.excerpt))), new Set(expected));
+    assert.ok(arm.recalled.memories.every(item => item.interpretationStatus === 'omitted'));
+    assert.deepEqual(new Set(arm.evidence), new Set(expected));
+    assert.deepEqual(arm.packed.omittedIndices, []); assert.deepEqual(arm.packed.duplicateIndices, []);
+  }
+  assert.equal(ordinary.trace.counts.labelReads, 0); assert.equal(full.trace.counts.labelReads, 8);
+  assert.equal(full.trace.labelBytes, contents.reduce((bytes, text) => bytes + Buffer.byteLength(text), 0));
+  assert.ok(full.trace.labelBytes > ordinary.trace.labelBytes);
+  // The ordinary arm is the retained negative control: a visible, cold-retained
+  // source is not selected/packed. This assertion must reject that omission.
+  const requireQualifier = evidence => assert.ok(evidence.includes(contents[1]), 'required qualifier missing from packed source');
+  assert.throws(() => requireQualifier(ordinary.evidence), { code: 'ERR_ASSERTION' });
+  requireQualifier(full.evidence);
+  t.diagnostic(JSON.stringify({ scripted: true, candidateCount: visible.length,
+    arms: arms.map((arm, i) => ({ labels: i ? 'full' : 'ordinary', calls: arm.trace.counts,
+      labelBytes: arm.trace.labelBytes, selectedCount: arm.trace.selected[0].length,
+      recalledCount: arm.recalled.memories.length, packedCount: arm.evidence.length })) }));
+});

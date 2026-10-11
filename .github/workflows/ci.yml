@@ -123,6 +123,7 @@ jobs:
       # Reference-rendering tests invoke the runner's Python 3, standard library only.
       - run: python3 --version
       - run: npm run test:longmemeval
+      - run: npm run test:algorithm-development
       - run: npm run test:long-history
       - run: npm run test:long-history-live:offline
       - run: npm run demo:longmemeval-ingestion

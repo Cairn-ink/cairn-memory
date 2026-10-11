@@ -1,0 +1,878 @@
+[
+  {
+    "id": "D01",
+    "family": "detail-retention",
+    "question": {
+      "text": "How many printed route cards should Lina prepare for the Saturday bird walk?",
+      "date": "2026-04-03"
+    },
+    "sessions": [
+      {
+        "id": "walk-planning",
+        "eventTime": "2026-04-01T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Lina and I are preparing the Saturday bird walk at Reedbank Park. Meet by the east gate at 07:30. There are two school groups, and each teacher will carry a laminated overview. For the individual printed route cards, please make 37 copies; that includes the five spares. Bring binocular straps and the quiet-watching signs too."
+          },
+          {
+            "role": "assistant",
+            "content": "I can turn that into a packing checklist. Should the route cards include the pond detour?"
+          },
+          {
+            "role": "user",
+            "content": "Yes, use the version with the pond detour. The printer is working again, so there is no need to switch to QR-only cards."
+          },
+          {
+            "role": "assistant",
+            "content": "I will keep the printed cards on the checklist and use the detour version."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D02",
+    "family": "detail-retention",
+    "question": {
+      "text": "When can the ceramics club use the upstairs kiln on Sunday?",
+      "date": "2026-04-04"
+    },
+    "sessions": [
+      {
+        "id": "kiln-booking",
+        "eventTime": "2026-04-02T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The ceramics club has the upstairs studio on Sunday from 10:00 to 15:00. We can arrange tables immediately. The upstairs kiln can be used only after Jo has checked and signed the ventilation log that morning. The sink and drying racks are available throughout our booking. Please keep the glaze tubs away from the stair rail."
+          },
+          {
+            "role": "assistant",
+            "content": "Should I announce the kiln as available from 10:00?"
+          },
+          {
+            "role": "user",
+            "content": "Mention the booking time, but keep the ventilation sign-off condition visible. Jo has not done that check yet."
+          },
+          {
+            "role": "assistant",
+            "content": "I will describe the studio booking separately from permission to use the kiln."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D03",
+    "family": "detail-retention",
+    "question": {
+      "text": "Can Noor reimburse the aquarium taxi fare from the field-trip fund?",
+      "date": "2026-04-05"
+    },
+    "sessions": [
+      {
+        "id": "trip-expenses",
+        "eventTime": "2026-04-03T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For the aquarium field trip, Noor is collecting the receipts and I will reconcile the sheet on Monday. The field-trip fund covers admission, the hired bus, and one lunch voucher per pupil. Staff should submit receipts rather than estimates. Ordinary taxi fares are excluded. The exception is Noor's accessible taxi from the bus stop to the aquarium entrance; that fare is covered."
+          },
+          {
+            "role": "assistant",
+            "content": "Do you want a separate category for that accessible transfer?"
+          },
+          {
+            "role": "user",
+            "content": "Yes, call it accessible transfer. It was 18 dollars, and Noor kept the receipt."
+          },
+          {
+            "role": "assistant",
+            "content": "I will list the receipt under accessible transfer."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D04",
+    "family": "detail-retention",
+    "question": {
+      "text": "Who advised Mei to photograph the screen before resetting the garden sensor, and what did they advise?",
+      "date": "2026-04-06"
+    },
+    "sessions": [
+      {
+        "id": "sensor-help",
+        "eventTime": "2026-04-04T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The garden sensor shows E17 after yesterday's rain. I am Mei, the volunteer on site, and I can reach the reset button. I have not reset it."
+          },
+          {
+            "role": "assistant",
+            "content": "Before resetting it, photograph the E17 screen and the cable connection, then save both photos in the garden maintenance folder. That preserves the error display for the technician. I am suggesting this sequence, not reporting a technician's instruction."
+          },
+          {
+            "role": "user",
+            "content": "I can take the photos now. The maintenance folder is on the shared tablet."
+          },
+          {
+            "role": "assistant",
+            "content": "After saving them, use the manual's reset procedure. If the code returns, stop and ask the technician."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D05",
+    "family": "lexical-paraphrase-cjk",
+    "question": {
+      "text": "Where is the cobalt ledger kept?",
+      "date": "2026-04-07"
+    },
+    "sessions": [
+      {
+        "id": "workshop-storage",
+        "eventTime": "2026-04-05T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The cobalt ledger is in drawer B of the repair desk. It records borrowed soldering irons. The yellow visitor book stays beside the entrance."
+          },
+          {
+            "role": "assistant",
+            "content": "Should I add the drawer location to the handover note?"
+          },
+          {
+            "role": "user",
+            "content": "Yes. Ellis is the desk volunteer this week; visitors should ask them before opening that drawer."
+          },
+          {
+            "role": "assistant",
+            "content": "I will include the location and the request to ask Ellis first."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D06",
+    "family": "lexical-paraphrase-cjk",
+    "question": {
+      "text": "What should I do if I arrive to return a library item after everyone has gone home?",
+      "date": "2026-04-08"
+    },
+    "sessions": [
+      {
+        "id": "library-evening",
+        "eventTime": "2026-04-06T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "When the branch is shut, put borrowed books through the slot in the blue metal cabinet beside the ramp. Do not leave them on the outdoor bench. The cabinet is emptied the next working morning."
+          },
+          {
+            "role": "assistant",
+            "content": "Is the cabinet also for donated books?"
+          },
+          {
+            "role": "user",
+            "content": "No, donations go to the staffed desk during opening hours. The slot is for loans being brought back."
+          },
+          {
+            "role": "assistant",
+            "content": "I will keep the donation instructions separate."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D07",
+    "family": "lexical-paraphrase-cjk",
+    "question": {
+      "text": "週五讀書會的集合地點在哪裡？需要帶什麼？",
+      "date": "2026-04-09"
+    },
+    "sessions": [
+      {
+        "id": "book-club",
+        "eventTime": "2026-04-07T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "週五讀書會改在北館二樓的小閱覽室集合，時間仍是晚上七點。請帶自己的杯子，這次不提供紙杯。南館咖啡區只是散會後自由聊天的地方。"
+          },
+          {
+            "role": "assistant",
+            "content": "要在通知上附上入口方向嗎？"
+          },
+          {
+            "role": "user",
+            "content": "可以，北館從河邊入口進去比較近。這週讀到第三章，不用先寫心得。"
+          },
+          {
+            "role": "assistant",
+            "content": "我會提醒大家帶杯子，並保留北館小閱覽室的集合資訊。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D08",
+    "family": "lexical-paraphrase-cjk",
+    "question": {
+      "text": "Who owns the Hoshikuzu follow-up, and what is it called in the English checklist?",
+      "date": "2026-04-10"
+    },
+    "sessions": [
+      {
+        "id": "alias-handover",
+        "eventTime": "2026-04-08T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "星屑（Hoshikuzu）是社區觀星小組的活動代號；英文清單上寫的是 Stardust. Follow-up owner is Rina. Orion is a different school's event and belongs to Pavel."
+          },
+          {
+            "role": "assistant",
+            "content": "Should I use all three spellings in the volunteer handover?"
+          },
+          {
+            "role": "user",
+            "content": "Yes, keep 星屑, Hoshikuzu, and Stardust together so the two language teams do not create duplicate tasks."
+          },
+          {
+            "role": "assistant",
+            "content": "I will make one handover entry for that activity."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D09",
+    "family": "multi-session-links",
+    "question": {
+      "text": "Which room should the Cedar rehearsal use?",
+      "date": "2026-04-11"
+    },
+    "sessions": [
+      {
+        "id": "rehearsal-needs",
+        "eventTime": "2026-04-08T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Cedar is the rehearsal that needs a sprung floor because the performers are barefoot. Juniper is the seated read-through and can use an ordinary floor."
+          },
+          {
+            "role": "assistant",
+            "content": "I will keep the two room requirements separate."
+          }
+        ]
+      },
+      {
+        "id": "room-directory",
+        "eventTime": "2026-04-10T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The current room sheet says Willow Hall has the sprung floor. Maple Room has a concrete floor. Neither room is booked yet."
+          },
+          {
+            "role": "assistant",
+            "content": "Both remain available on the sheet."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D10",
+    "family": "multi-session-links",
+    "question": {
+      "text": "Which cupboard contains the spare battery for the Otter recorder?",
+      "date": "2026-04-12"
+    },
+    "sessions": [
+      {
+        "id": "recorder-battery",
+        "eventTime": "2026-04-06T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Otter recorder uses battery type BR-6. The Finch recorder uses BR-4. Please do not interchange them."
+          },
+          {
+            "role": "assistant",
+            "content": "I will retain the two battery types separately."
+          }
+        ]
+      },
+      {
+        "id": "parts-box",
+        "eventTime": "2026-04-09T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "We put all spare BR-6 batteries in the copper parts box. The green box holds spare microphone clips."
+          },
+          {
+            "role": "assistant",
+            "content": "The copper box is the one to check for BR-6 spares."
+          }
+        ]
+      },
+      {
+        "id": "box-location",
+        "eventTime": "2026-04-11T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The copper parts box is now in cupboard 3 in the audio booth. I moved it from the hallway shelf today."
+          },
+          {
+            "role": "assistant",
+            "content": "I will use cupboard 3 as its current location."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D11",
+    "family": "multi-session-links",
+    "question": {
+      "text": "Who should receive the bill for the riverside mural paint?",
+      "date": "2026-04-13"
+    },
+    "sessions": [
+      {
+        "id": "mural-orders",
+        "eventTime": "2026-04-09T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The riverside mural paint is under purchase order PO-63. PO-36 is for the bakery's window repair. The numbers are easy to transpose."
+          },
+          {
+            "role": "assistant",
+            "content": "I will identify the mural order as PO-63."
+          }
+        ]
+      },
+      {
+        "id": "billing-routing",
+        "eventTime": "2026-04-12T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Send bills under PO-63 to Amira at the arts office. Send bills under PO-36 to Tomas at the bakery. Delivery questions for both go to Lee."
+          },
+          {
+            "role": "assistant",
+            "content": "I will distinguish billing recipients from the shared delivery contact."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D12",
+    "family": "multi-session-links",
+    "question": {
+      "text": "Who holds the locker key for the Nimbus team's equipment?",
+      "date": "2026-04-14"
+    },
+    "sessions": [
+      {
+        "id": "team-equipment",
+        "eventTime": "2026-04-10T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Nimbus team's equipment has been placed in locker L8. The Cirrus team's equipment is in L9."
+          },
+          {
+            "role": "assistant",
+            "content": "I will note those storage locations."
+          }
+        ]
+      },
+      {
+        "id": "key-handover",
+        "eventTime": "2026-04-13T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Sora has the key to L9. I have not received the L8 key handover yet, so I cannot say who has that key."
+          },
+          {
+            "role": "assistant",
+            "content": "The L8 key holder is still unspecified in this handover."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D13",
+    "family": "event-time-late-import",
+    "question": {
+      "text": "As of May 15, what was the greenhouse watering time?",
+      "date": "2026-05-15"
+    },
+    "sessions": [
+      {
+        "id": "watering-may",
+        "eventTime": "2026-05-02T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Starting May 3, water the greenhouse at 06:30 rather than 07:00. This replaces April's schedule."
+          },
+          {
+            "role": "assistant",
+            "content": "I will use 06:30 from May 3."
+          }
+        ]
+      },
+      {
+        "id": "archived-april-note",
+        "eventTime": "2026-04-12T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Today's greenhouse note: water at 07:00. We are keeping that time through the rest of April."
+          },
+          {
+            "role": "assistant",
+            "content": "I will note the April watering time."
+          }
+        ]
+      },
+      {
+        "id": "import-explanation",
+        "eventTime": "2026-05-14T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I just entered the old April 12 conversation after finding my notebook. That entry is a record of April, not a new schedule change."
+          },
+          {
+            "role": "assistant",
+            "content": "I will treat the notebook entry according to its April event date."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D14",
+    "family": "event-time-late-import",
+    "question": {
+      "text": "Which entrance should the choir use on June 20?",
+      "date": "2026-06-20"
+    },
+    "sessions": [
+      {
+        "id": "june-access",
+        "eventTime": "2026-06-10T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "From June 11 the choir should use the west entrance. The east entrance is closed for repairs until July."
+          },
+          {
+            "role": "assistant",
+            "content": "I will update the choir arrival note to west entrance."
+          }
+        ]
+      },
+      {
+        "id": "may-access",
+        "eventTime": "2026-05-04T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For May rehearsals, the choir enters through the east door. The west door is being painted this month."
+          },
+          {
+            "role": "assistant",
+            "content": "I will note the east door for May rehearsals."
+          }
+        ]
+      },
+      {
+        "id": "old-note-added",
+        "eventTime": "2026-06-19T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I uploaded the May rehearsal conversation today as an archive. The painting ended in May; uploading it does not change June's west-entrance plan."
+          },
+          {
+            "role": "assistant",
+            "content": "I will retain the distinction between the archived May plan and the June plan."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D15",
+    "family": "event-time-late-import",
+    "question": {
+      "text": "On what date did the youth orchestra agree to return the borrowed stands?",
+      "date": "2026-07-08"
+    },
+    "sessions": [
+      {
+        "id": "stand-loan",
+        "eventTime": "2026-07-06T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Today is Monday, July 6, 2026. The youth orchestra will return the borrowed music stands this coming Thursday, not tomorrow. Mina will drive the van."
+          },
+          {
+            "role": "assistant",
+            "content": "I will note the Thursday return rather than Tuesday."
+          },
+          {
+            "role": "user",
+            "content": "Yes, the return is in the morning, before the venue opens at noon."
+          },
+          {
+            "role": "assistant",
+            "content": "I will include the morning timing."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D16",
+    "family": "event-time-late-import",
+    "question": {
+      "text": "On August 12, what pickup times apply to the downtown and hillside routes?",
+      "date": "2026-08-12"
+    },
+    "sessions": [
+      {
+        "id": "general-pickup",
+        "eventTime": "2026-08-01T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For August, all grocery delivery routes collect their crates at 08:00 unless a route-specific update says otherwise."
+          },
+          {
+            "role": "assistant",
+            "content": "I will treat 08:00 as the August default."
+          }
+        ]
+      },
+      {
+        "id": "downtown-update",
+        "eventTime": "2026-08-05T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "From August 6 through August 20, only the downtown route picks up at 07:15 to avoid the road closure. The hillside route still follows the August default."
+          },
+          {
+            "role": "assistant",
+            "content": "The temporary change applies only to downtown."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D17",
+    "family": "proposal-adoption-premise-update",
+    "question": {
+      "text": "Has the neighborhood cinema switched its ticket desk to online-only sales?",
+      "date": "2026-08-15"
+    },
+    "sessions": [
+      {
+        "id": "ticket-proposal",
+        "eventTime": "2026-08-10T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Our cinema currently sells tickets at the desk and online. I am considering online-only sales for winter, but I have not proposed it to the committee yet."
+          },
+          {
+            "role": "assistant",
+            "content": "Online-only could simplify the queue, though it would need a plan for visitors who pay cash."
+          },
+          {
+            "role": "user",
+            "content": "Keep it as an idea. No decision has been made, and the desk should continue selling tickets."
+          },
+          {
+            "role": "assistant",
+            "content": "I will record it as an unadopted idea and retain desk sales in the current instructions."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D18",
+    "family": "proposal-adoption-premise-update",
+    "question": {
+      "text": "Which booking tool will the pottery studio use starting September 1?",
+      "date": "2026-08-24"
+    },
+    "sessions": [
+      {
+        "id": "booking-options",
+        "eventTime": "2026-08-16T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "We are deciding whether to replace the paper booking notebook with SmallSlot. We should keep the notebook until a decision is signed."
+          },
+          {
+            "role": "assistant",
+            "content": "I will keep SmallSlot as a candidate rather than a selected tool."
+          }
+        ]
+      },
+      {
+        "id": "booking-decision",
+        "eventTime": "2026-08-23T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The studio committee signed the decision today: adopt SmallSlot from September 1. Keep the paper notebook for bookings before September 1, then stop adding new bookings to it."
+          },
+          {
+            "role": "assistant",
+            "content": "I will describe SmallSlot as adopted with a September 1 start date."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D19",
+    "family": "proposal-adoption-premise-update",
+    "question": {
+      "text": "Is the atrium still confirmed as the venue for the seed exchange?",
+      "date": "2026-09-07"
+    },
+    "sessions": [
+      {
+        "id": "seed-venue",
+        "eventTime": "2026-09-01T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The seed exchange is confirmed for the atrium because the ventilation repair is finished. The side room is our backup."
+          },
+          {
+            "role": "assistant",
+            "content": "I will list the atrium as the confirmed venue."
+          }
+        ]
+      },
+      {
+        "id": "ventilation-reopened",
+        "eventTime": "2026-09-06T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The repair failed its follow-up inspection today. Since the atrium booking depended on that repair being finished, the venue now needs reconfirmation. Do not tell people the atrium is still confirmed. We have not booked the side room yet."
+          },
+          {
+            "role": "assistant",
+            "content": "I will mark the venue as awaiting reconfirmation rather than announcing either room."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D20",
+    "family": "proposal-adoption-premise-update",
+    "question": {
+      "text": "What time does the volunteer orientation start, and did the reminder change it?",
+      "date": "2026-09-10"
+    },
+    "sessions": [
+      {
+        "id": "orientation-time",
+        "eventTime": "2026-09-02T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Volunteer orientation starts at 09:30 on September 12 in the community hall. Please arrive ten minutes early."
+          },
+          {
+            "role": "assistant",
+            "content": "I will include the 09:30 start and 09:20 arrival suggestion."
+          }
+        ]
+      },
+      {
+        "id": "orientation-reminder",
+        "eventTime": "2026-09-09T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Please send another reminder for orientation. The 09:30 start is still correct; this reminder does not change the schedule. Doors will be unlocked at 09:00 for the organizers."
+          },
+          {
+            "role": "assistant",
+            "content": "I will keep the orientation start at 09:30 and label 09:00 as organizers' door access."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D21",
+    "family": "unknown-conflicting-evidence",
+    "question": {
+      "text": "What is the Wi-Fi password for the visiting artists' apartment?",
+      "date": "2026-09-12"
+    },
+    "sessions": [
+      {
+        "id": "apartment-arrival",
+        "eventTime": "2026-09-10T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The visiting artists' apartment is above the print shop. Check-in is after 16:00, and Ren will meet the group by the shop entrance."
+          },
+          {
+            "role": "assistant",
+            "content": "Do you want the arrival note to include parking?"
+          },
+          {
+            "role": "user",
+            "content": "Yes, use the courtyard parking spaces marked guest. The shop loading bay must stay clear."
+          },
+          {
+            "role": "assistant",
+            "content": "I will include the check-in contact and guest parking instructions."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D22",
+    "family": "unknown-conflicting-evidence",
+    "question": {
+      "text": "How many folding chairs are available for the lecture?",
+      "date": "2026-09-14"
+    },
+    "sessions": [
+      {
+        "id": "chair-check-a",
+        "eventTime": "2026-09-13T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I counted 48 usable folding chairs in the lecture store at 11:00 today. This is Mara's count, and I did not include the damaged chairs."
+          },
+          {
+            "role": "assistant",
+            "content": "I will label that as Mara's count."
+          }
+        ]
+      },
+      {
+        "id": "chair-check-b",
+        "eventTime": "2026-09-13T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "I am Dev. At 11:00 today I counted 52 usable folding chairs in the same lecture store, also excluding damaged chairs. Mara and I have not reconciled our counts."
+          },
+          {
+            "role": "assistant",
+            "content": "I will leave the discrepancy open rather than choose a count."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D23",
+    "family": "unknown-conflicting-evidence",
+    "question": {
+      "text": "Are the projector and the hearing loop both confirmed ready for the debate?",
+      "date": "2026-09-16"
+    },
+    "sessions": [
+      {
+        "id": "debate-av",
+        "eventTime": "2026-09-14T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The projector passed its full test this morning and is confirmed ready for Thursday's debate. The hearing-loop test is booked for tomorrow; I do not have its result yet."
+          },
+          {
+            "role": "assistant",
+            "content": "I will mark the projector ready and the hearing loop awaiting test results."
+          },
+          {
+            "role": "user",
+            "content": "Please tell the moderator only what is confirmed. The microphone stand is already at the lectern."
+          },
+          {
+            "role": "assistant",
+            "content": "I will keep the hearing-loop readiness qualified until its test result is available."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "D24",
+    "family": "unknown-conflicting-evidence",
+    "question": {
+      "text": "Is the rooftop observation deck confirmed open tonight?",
+      "date": "2026-09-18"
+    },
+    "sessions": [
+      {
+        "id": "deck-rumor",
+        "eventTime": "2026-09-18T09:00:00Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A neighbor posted, 'The rooftop observation deck is open tonight.' I am quoting their message, not confirming it. Our own notice still says access is awaiting the caretaker's inspection."
+          },
+          {
+            "role": "assistant",
+            "content": "Have you received the inspection result from the caretaker?"
+          },
+          {
+            "role": "user",
+            "content": "No. The neighbor did not cite a result either, and I have not seen an official reopening notice."
+          },
+          {
+            "role": "assistant",
+            "content": "I will treat reopening as unconfirmed until the caretaker or an official notice verifies it."
+          }
+        ]
+      }
+    ]
+  }
+]
