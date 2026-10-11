@@ -13,6 +13,8 @@ import { packMixedAnswer } from '../longmemeval/mixed-answer.mjs';
 import { countOpenAITokens } from '../../adapters/openai/index.mjs';
 import { DEFAULT_MODEL } from '../../adapters/openai/profiles.mjs';
 import { freezeObservation } from './transport.mjs';
+import { createComplementarySourceSetModel, assembleComplementarySourceSet } from '../experiments/cloud-retrieval-v1/candidate.mjs';
+import { complementaryPolicies, complementaryOrders, COMPLEMENTARY_VERSION } from './complementary-profile.mjs';
 
 const fail = code => { const error = new Error(code); error.code = code; throw error; };
 const frozen = value => !value || typeof value !== 'object' || Object.isFrozen(value) && Object.values(value).every(frozen);
@@ -75,10 +77,10 @@ const emptyArm = (name, failure = 'not_run') => ({ name, status: 'unresolved', f
   packed: null, answer: null, records: [], latencyMs: null, stateBefore: null, stateAfter: null });
 
 /** Caller owns retained databases and formal observations. No rubric/gold import. */
-export async function runAlgorithmDevelopmentComparison({ cases, transport, outputDirectory,
-  onCase = () => {}, treatment = 'full-label-v1' } = {}) {
+async function runComparison({ cases, transport, outputDirectory,
+  onCase = () => {}, treatment = 'full-label-v1' } = {}, complementary = false) {
   if (!['full-label-v1', 'source-diverse-v1', 'source-diverse-linked-v1'].includes(treatment)) fail('invalid_algorithm_treatment');
-  const bundle = treatment === 'source-diverse-linked-v1';
+  const bundle = complementary || treatment === 'source-diverse-linked-v1';
   const prospective = treatment === 'source-diverse-v1' || bundle;
   if (!Array.isArray(cases) || cases.length !== 24 || !frozen(cases)
     || new Set(cases.map(row => row.id)).size !== 24 || cases.some(row => !/^D(?:0[1-9]|1[0-9]|2[0-4])$/u.test(row.id))
@@ -86,7 +88,8 @@ export async function runAlgorithmDevelopmentComparison({ cases, transport, outp
     || typeof outputDirectory !== 'string' || !statSync(outputDirectory).isDirectory()) fail('invalid_algorithm_cases');
   const began = performance.now(), observations = []; let fatal = null;
   for (const [index, source] of cases.entries()) {
-    const ordinal = index + 1, order = index % 2 ? ['full', 'baseline'] : ['baseline', 'full'];
+    const ordinal = index + 1, order = complementary ? complementaryOrders[index % 6]
+      : index % 2 ? ['full', 'baseline'] : ['baseline', 'full'];
     const observation = { id: source.id, family: source.family, ordinal, order,
       source: structuredClone(source), capture: { status: 'unresolved', failure: null,
         inputs: [], modelCalls: [], outcomes: [], receipts: [], stateSha256: null, databaseBytes: null },
@@ -138,13 +141,15 @@ export async function runAlgorithmDevelopmentComparison({ cases, transport, outp
               if (activeTrace) activeTrace.publicReads.push({ input: structuredClone(input), response: structuredClone(response) });
               return response;
             };
-            const selection = name !== 'full' ? baseModel : prospective
+            const selection = name === 'baseline' ? baseModel : prospective
               ? createSourceDiverseSelectionModel(baseModel, { readSet: [namespace], getMemory })
               : createFullLabelSelectionModel(baseModel, { readSet: [namespace], getMemory });
-            const ranking = bundle && name === 'full' ? createSourceLinkedEvidenceModel(selection) : selection;
+            const ranking = complementary && name === 'complementary' ? createComplementarySourceSetModel(selection)
+              : bundle && name !== 'baseline' ? createSourceLinkedEvidenceModel(selection) : selection;
+            const policy = complementary ? complementaryPolicies[name] : name === 'full' ? treatment : 'ordinary-v1';
             core = openMemoryCore({ path, sourceCandidatePolicy: 'bounded-keyset-v1',
               model: { ...ranking, ...(bundle ? { async rank(request) {
-                const observed = { policy: name === 'full' ? treatment : 'ordinary-v1',
+                const observed = { policy,
                   system: request.system, input: structuredClone(request.input), maxOutputTokens: request.maxOutputTokens,
                   output: null, failure: null, diagnostics: null, addedRefs: [], displacedRefs: [] };
                 arm.effectiveRanks.push(observed);
@@ -156,9 +161,10 @@ export async function runAlgorithmDevelopmentComparison({ cases, transport, outp
                   const raw = rawCalls[0];
                   if (!isDeepStrictEqual(raw.input, observed.input) || raw.system !== observed.system
                     || raw.maxOutputTokens !== observed.maxOutputTokens) fail('algorithm_trace_failure');
-                  const compiled = name === 'full' ? assembleSourceLinkedEvidence(request.input, raw.output) : { output: raw.output };
+                  const compiled = complementary && name === 'complementary' ? assembleComplementarySourceSet(request.input, raw.output)
+                    : name !== 'baseline' ? assembleSourceLinkedEvidence(request.input, raw.output) : { output: raw.output };
                   if (!isDeepStrictEqual(compiled.output, output)) fail('algorithm_trace_failure');
-                  observed.diagnostics = name === 'full' ? structuredClone(compiled.diagnostics) : null;
+                  observed.diagnostics = name !== 'baseline' ? structuredClone(compiled.diagnostics) : null;
                   observed.addedRefs = output.refs.filter(ref => !raw.output.refs.some(seed => isDeepStrictEqual(ref, seed)));
                   observed.displacedRefs = raw.output.refs.filter(seed => !output.refs.some(ref => isDeepStrictEqual(ref, seed)));
                   observed.output = structuredClone(output);
@@ -167,13 +173,13 @@ export async function runAlgorithmDevelopmentComparison({ cases, transport, outp
               } } : {}), async select(request) {
                 arm.coreInputs.push({ system: request.system, input: structuredClone(request.input), maxOutputTokens: request.maxOutputTokens });
                 if (!prospective) return selection.select(request);
-                const observed = { policy: name === 'full' ? treatment : 'ordinary-v1',
+                const observed = { policy,
                   system: request.system, input: structuredClone(request.input), maxOutputTokens: request.maxOutputTokens,
                   output: null, failure: null, publicReads: [], diagnostics: null };
                 arm.effectiveSelections.push(observed); activeTrace = observed;
                 try {
                   const output = await selection.select(request);
-                  if (name === 'full') {
+                  if (name !== 'baseline') {
                     const raw = arm.modelCalls.filter(row => row.method === 'select').at(-1).output;
                     const first = observed.publicReads.slice(0, observed.publicReads.length / 2);
                     const compiled = assembleSourceDiverseSelection(request.input, raw, { readSet: [namespace],
@@ -205,7 +211,7 @@ export async function runAlgorithmDevelopmentComparison({ cases, transport, outp
           try { transport.assertHealthy(); } catch (error) { fatal = reason(error); }
           if (fatal) break;
         }
-        const baseline = observation.arms.baseline, full = observation.arms.full;
+        const baseline = observation.arms.baseline, full = observation.arms[complementary ? 'linked' : 'full'];
         const left = baseline.modelCalls.filter(row => row.method === 'select'), right = full.modelCalls.filter(row => row.method === 'select');
         observation.navigation = { firstCandidateIdentityEqual: left.length && right.length
           ? isDeepStrictEqual(left[0].candidateIdentity, right[0].candidateIdentity) : null,
@@ -231,15 +237,20 @@ export async function runAlgorithmDevelopmentComparison({ cases, transport, outp
       'limitMicroUsd', 'requestCap', 'reservedMicroUsd', 'requestCount', 'state', 'historySha256'].map(key => [key, state[key]])); }
     catch (error) { fatal = reason(error); }
   }
-  return freezeObservation({ schemaVersion: bundle ? 'source-diverse-linked-requested-answer-comparison-v1'
+  return freezeObservation({ schemaVersion: complementary ? `${COMPLEMENTARY_VERSION}-comparison-v1`
+    : bundle ? 'source-diverse-linked-requested-answer-comparison-v1'
     : prospective ? 'source-diverse-requested-answer-comparison-v1' : 'algorithm-development-comparison-v1', model: DEFAULT_MODEL,
-    ...(prospective ? { treatment, armPolicies: { baseline: 'ordinary-v1', full: treatment } } : {}),
+    ...(prospective ? { treatment: complementary ? 'source-diverse-complementary-v1' : treatment,
+      armPolicies: complementary ? complementaryPolicies : { baseline: 'ordinary-v1', full: treatment } } : {}),
     ...(bundle ? { evidenceFormat: 'source-role-evidence-v1' } : {}),
     profile: { captureSourcePolicy: 'indexed-evidence-v1', sourceCandidatePolicy: 'bounded-keyset-v1',
       contextMode: 'source-evidence', selectionMode: 'default-select', limit: 6, coreLogicalCallMs: 30_000 },
     denominator: 24, attemptsPerArm: 24, fatal, observations, records: transport.records(),
     finalBudget, latencyMs: performance.now() - began });
 }
+export const runAlgorithmDevelopmentComparison = options => runComparison(options);
+export const runComplementarySourceComparison = options => runComparison({ ...options,
+  treatment: 'source-diverse-linked-v1' }, true);
 
 /** Explicit combined evaluation entrypoint; both arms use recorded-role evidence. */
 export const runEvidenceBundleComparison = options => runAlgorithmDevelopmentComparison({

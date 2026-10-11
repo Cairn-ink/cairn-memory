@@ -7,6 +7,8 @@ import { assembleSourceDiverseSelection } from '../architecture/source-diverse-s
 import { assembleSourceLinkedEvidence } from '../architecture/source-linked-evidence-model.mjs';
 import { prepareAlgorithmDevelopmentCase } from './runner.mjs';
 import { validateEvaluatorRubric } from './corpus.mjs';
+import { assembleComplementarySourceSet } from '../experiments/cloud-retrieval-v1/candidate.mjs';
+import { complementaryArms, complementaryPolicies, requireComplementaryReport, COMPLEMENTARY_VERSION } from './complementary-profile.mjs';
 
 // Evaluator-only literal exposure metric; neither presence nor normalization proves semantic support.
 export const REQUIRED_ANCHOR_DENOMINATOR = 42;
@@ -93,7 +95,8 @@ function statusFor(anchor, source, observed) {
   return present ? 'present' : observed.complete ? 'absent' : observed.started ? 'unknown' : 'not-run';
 }
 
-function scoreCoverage({ observations, modelInputs, evaluatorRubric }, effective = false, role = false) {
+function scoreCoverage({ observations, modelInputs, evaluatorRubric }, effective = false, role = false, complementary = false) {
+  const ARMS = complementary ? complementaryArms : ['baseline', 'full'];
   validateEvaluatorRubric(evaluatorRubric, modelInputs);
   if (!Array.isArray(observations) || observations.length > 24) throw new TypeError('invalid coverage observations');
   const anchorCount = Object.values(evaluatorRubric.cases).reduce((total, rule) => total + rule.anchors.length, 0);
@@ -123,11 +126,15 @@ function scoreCoverage({ observations, modelInputs, evaluatorRubric }, effective
     });
     cases.push({ id: source.id, family: source.family, anchorDenominator: anchors.length, anchors });
   }
-  return { schemaVersion: role ? 'source-diverse-linked-requested-answer-coverage-v1'
+  return { schemaVersion: complementary ? `${COMPLEMENTARY_VERSION}-coverage-v1`
+    : role ? 'source-diverse-linked-requested-answer-coverage-v1'
     : effective ? 'source-diverse-requested-answer-coverage-v1' : 'algorithm-development-coverage-v1', metric: 'literal-normalized-origin-bound-anchor-presence',
     normalization: 'NFKC;redactSecrets;Unicode-whitespace-to-ASCII-space;trim;no-truncation',
     targetedStage: 'packed', anchorDenominator: REQUIRED_ANCHOR_DENOMINATOR, aggregates, cases,
-    gain: aggregates.full.packed.present - aggregates.baseline.packed.present };
+    ...(complementary ? { paired: {
+      complementaryBaseline: { denominator: 42, gain: aggregates.complementary.packed.present - aggregates.baseline.packed.present },
+      complementaryLinked: { denominator: 42, gain: aggregates.complementary.packed.present - aggregates.linked.packed.present },
+    } } : { gain: aggregates.full.packed.present - aggregates.baseline.packed.present }) };
 }
 
 export const scoreDevelopmentCoverage = options => scoreCoverage(options);
@@ -155,11 +162,11 @@ export function scoreRequestedAnswerCoverage({ report, modelInputs, evaluatorRub
 /** Evaluator only: validate actual effective traces against raw calls and pure
  * compilers. Failed pre-delegation calls may have no raw record, never a fallback.
  */
-function validateBundleTraces(arm, name, namespace, details, plan) {
+function validateBundleTraces(arm, name, namespace, details, plan, complementary = false) {
   if (!arm || !Array.isArray(arm.modelCalls) || !Array.isArray(arm.coreInputs)
     || !Array.isArray(arm.effectiveSelections) || !Array.isArray(arm.effectiveRanks)
     || arm.effectiveSelections.length !== arm.coreInputs.length) throw new TypeError('missing effective bundle traces');
-  const policy = name === 'full' ? 'source-diverse-linked-v1' : 'ordinary-v1';
+  const policy = complementary ? complementaryPolicies[name] : name === 'full' ? 'source-diverse-linked-v1' : 'ordinary-v1';
   for (const [method, traces] of [['select', arm.effectiveSelections], ['rank', arm.effectiveRanks]]) {
     const raw = arm.modelCalls.filter(call => call.method === method);
     let cursor = 0;
@@ -183,7 +190,8 @@ function validateBundleTraces(arm, name, namespace, details, plan) {
         // The shared compiler also validates raw refs against the visible rank
         // candidates. Ordinary ranking keeps its raw output, never its links.
         const linked = assembleSourceLinkedEvidence(trace.input, call.output);
-        const compiled = name === 'full' ? linked : { output: call.output, diagnostics: null };
+        const compiled = complementary && name === 'complementary' ? assembleComplementarySourceSet(trace.input, call.output)
+          : name !== 'baseline' ? linked : { output: call.output, diagnostics: null };
         expected = compiled.output;
         const added = expected.refs.filter(ref => !call.output.refs.some(seed => isDeepStrictEqual(ref, seed)));
         const displaced = call.output.refs.filter(seed => !expected.refs.some(ref => isDeepStrictEqual(ref, seed)));
@@ -196,7 +204,7 @@ function validateBundleTraces(arm, name, namespace, details, plan) {
           && ref.memoryId === candidate.memory.id && ref.revision === candidate.memory.revision))) {
           throw new TypeError('rank candidate was not effectively selected');
         }
-      } else if (name === 'full') {
+      } else if (name !== 'baseline') {
         if (trace.publicReads.length % 2) throw new TypeError('incomplete selection freshness reads');
         const first = trace.publicReads.slice(0, trace.publicReads.length / 2);
         if (!isDeepStrictEqual(first, trace.publicReads.slice(first.length))) throw new TypeError('selection freshness reads differ');
@@ -240,4 +248,15 @@ export function scoreEvidenceBundleCoverage({ report, modelInputs, evaluatorRubr
     for (const name of ARMS) validateBundleTraces(row.arms?.[name], name, namespace, row.capture?.receipts ?? [], plan);
   }
   return scoreCoverage({ observations: report.observations, modelInputs, evaluatorRubric }, true, true);
+}
+
+export function scoreComplementarySourceCoverage({ report, modelInputs, evaluatorRubric }) {
+  requireComplementaryReport(report);
+  const known = new Map(modelInputs.map(source => [source.id, source]));
+  for (const row of report.observations) {
+    if (!known.has(row.id)) throw new TypeError('unknown complementary case');
+    const { namespace, plan } = prepareAlgorithmDevelopmentCase(known.get(row.id));
+    for (const name of complementaryArms) validateBundleTraces(row.arms[name], name, namespace, row.capture?.receipts ?? [], plan, true);
+  }
+  return scoreCoverage({ observations: report.observations, modelInputs, evaluatorRubric }, true, true, true);
 }

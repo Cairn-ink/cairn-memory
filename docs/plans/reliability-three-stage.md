@@ -1,11 +1,13 @@
 # Reliability and answer quality development plan
 
-Status: accepted development direction; first Stage 2 candidate completed and
-rejected. The requested-answer/source-diverse comparison closed at net +3
-correct but failed its safety-unknown gate. The separately frozen
-[role-preserving combined comparison](evidence-bundle-qa24-results.md) now
-records 18 versus 22 correct (+4) and 29 versus 37 packed anchors, but also
-fails the unchanged safety-unknown gate. Decision: revise, not advance;
+Status: accepted development direction; Stage 2 candidates completed but not
+accepted. The latest [closed complementary three-arm comparison](complementary-qa24-results.md)
+records ordinary A 19/24, linked B 23/24 and complementary C 23/24: C−A +4,
+C−B 0, and packed anchors 28/39/42. C introduces a known unsupported severe
+D12 error against baseline, so the frozen safety gate fails. Decision: revise,
+not advance. Earlier requested-answer/source-diverse and
+[role-preserving combined](evidence-bundle-qa24-results.md) safety-unknown
+rejections remain frozen; this latest failure is known harm, not unknown safety.
 Stage 3 and quality/installed-host acceptance remain blocked.
 Owner: primary DRI. This is the single current plan for the three-stage sequence
 agreed with the owner on 2026-10-09. Executed checkpoints link separate frozen
@@ -405,7 +407,7 @@ serialized answer input as output-stage variation, not a retrieval regression.
 No accepted fix, new paid operation, default promotion or
 Stage 3 acceptance follows; all prior closed results remain unchanged.
 
-The next bounded offline candidate is
+The next bounded offline candidate at that historical checkpoint was
 [seed-gated small source-set preservation](seed-gated-source-preservation.md):
 one unchanged rank call, nonempty raw seeds first, then omitted rank-visible
 siblings only when the complete supplied pool is single-namespace and fits
@@ -413,6 +415,39 @@ siblings only when the complete supplied pool is single-namespace and fits
 irrelevant/old evidence and cannot recover upstream omissions or fix D19's
 generation variation. Its offline restoration controls do not establish QA or
 safety gains, authorize paid work, or relax any failed development gate.
+
+Latest complementary execution checkpoint (2026-10-11): the
+[three-arm result](complementary-qa24-results.md) closes the separately frozen
+[Q1–Q8 protocol](complementary-qa24.md) at reviewed runtime
+`78d7e37b2cb55afe14d26422beca11864cb9d9aa`. All 24 captures / 72 answers
+completed, with A 19/5/0, B 23/1/0 and C 23/1/0
+(correct/incorrect/unresolved). Two new independent nonauthor blind judges
+agreed on all verdicts and harms. C−A has five wins and one loss (D12), net +4;
+C−B has no wins/losses, net 0. All 42 anchors were retained/reachable;
+selected coverage was 30/42/42 and packed 28/39/42. C's actual pools never
+exceeded five cards, so this establishes no live larger-pool lexical benefit.
+All declared resources passed (512 HTTP; $2.56 reservation; $0.110216 known
+model-profile estimate, not invoice), but C's unsupported severe D12 is new
+against A. `advances` and `incrementalSuperiority` are false, not promotion.
+
+Current bounded checkpoint: primary's offline sealed D12 replay reconstructs
+the full evidence/request with the existing preparation, role verifier and real
+packer from recorded authoritative snapshots (not a new SQLite read). Integrity
+and controls exited 0 on both pinned Nodes; symptom mode exited 1 with expected
+`D12_UNSUPPORTED_ENTITY_BINDING`. The narrow evaluator-only oracle rejects
+always-abstaining answers on its known-holder control; it generates no new
+answer, score, counterfactual cause or fix. The first integrity exit 2 was a
+corrected answer-hash convention mismatch, retained as diagnostic-harness error.
+Next, separately freeze a fresh entity-binding/evidence-use experiment only if
+warranted by that boundary evidence. All needed B/C sources were packed and their exact answer
+request bytes were identical; the wrong-holder answer is an answer-use boundary,
+not missing retrieval or a proven formatting/model-internal cause. Preserve all
+old verdicts without rerun/rescore; no immediate Stage 3 or broad reader fix.
+Long-history expansion remains unexecuted. Eight capture batches can yield at
+most 40 cards under ≤16 capture calls, making >36 archived cards a fragile
+precondition. >6 rank-visible cards and >36 archived cards test different seams;
+ordinary keyset/query-scored MOC refs are not hierarchical MOC-only navigation.
+This record authorizes no paid operation or retention/default expansion.
 
 Freeze 24 questions, four in each family, before treatment observations. Each
 listed variant contributes one question; publish every slot and family count.

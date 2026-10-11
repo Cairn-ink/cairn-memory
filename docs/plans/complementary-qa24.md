@@ -1,0 +1,271 @@
+# Complementary source QA development comparison
+
+Fixed base `56f555df56184e7ea7980cea2351c84c12f72572`; branch
+`experiment/complementary-qa24`; worktree
+`/home/chichieh/Github/cairn-memory-worktrees/complementary-qa24`.
+Bounded implementation owner: actual GPT-6.1 Sol High. Primary owns design,
+integration, final gates, nonauthor review and paid decisions. Before editing,
+HEAD matched this base and worktree was clean; primary accepted the design
+checkpoint. Author cost/token usage unavailable; no evaluated-model HTTP or
+operational-ledger writes occurred.
+
+## Frozen contract (Q1–Q8)
+
+Q1: Use the same 24 known source-only D01–D24 cases, unchanged requested-answer-v2 rubric and all 42 anchors. Capture each case once into a fresh database, cold reopen the same logical state for every arm, and preserve immutable observations. Use distinct report, freeze, launch, coverage and judgment versions. This is development evidence, not a fresh holdout, official LongMemEval or a competitive score.
+
+Q2: Three arms: A baseline = ordinary-v1; B linked = source-diverse selection plus source-linked-evidence ranking; C complementary = the same source-diverse selection plus createComplementarySourceSetModel/assembleComplementarySourceSet from the frozen evaluation/experiments/cloud-retrieval-v1/candidate.mjs. All use verifiedRoleEvidence, the unchanged packMixedAnswer and gpt-4.1-mini-2025-04-14. Preserve frozen candidate bytes. Repeat all six permutations A B C / A C B / B A C / B C A / C A B / C B A four times, giving eight occurrences at each position. No evaluator gold reaches models or rankers. Record actual raw ranking and deterministic compiler reconstruction; actual packed evidence is authoritative, with no raw-reference fallback.
+
+Q3: Closed limits: 40 logical core calls per case, split into capture <=16 and each arm <=8, three answers per case (one each), 24 cases, and 1992 maximum HTTP attempts =24*(2*40+3). Reserve 5000 microUSD per request; local cap 10,000,000 microUSD ($9.96 worst case), protected 30,000,000, total ceiling 400,000,000. Keep local input 6000, provider input 7024, core output 1024, answer output 512, physical timeout 200,000ms and core logical timeout 30,000ms unchanged. Preserve the original two-arm 1968 profile. Manifest binds exact limits; arbitrary inputs cannot elevate them. Use only the existing original money/request ledger with immutable history/checkpoint checked before key lookup. Observe the existing request cap without resetting it.
+
+Q4: Require a current reviewed one-shot manifest, clean committed runtime, exact Node executable hash/version, and complete artifact hashes including candidate and all live protocol paths. Write the exclusive durable marker before credential lookup. Preserve failed/unrun observations over denominator 24. Authentication, usage or accounting anomalies stop the entire run. Retain ordinary arm timeouts/failures without retry or alternate questions. Never resume closed runs. Old and new launch profiles reject each other. Secrets stay private; no hidden key discovery.
+
+Q5: At most 72 independently blind answers, judged by two nonauthor judges with the same frozen requested-answer semantic rubric. Disagreement/missing judgments stay unresolved; unresolved correctness or unknown safety blocks advancement. Preserve per-case outcomes and denominator 24 per arm. C-A retains >=3 net correct and >0 packed-anchor gain; C-B has no net-correct or coverage regression. Require resolved correct/incorrect outcomes in every arm, no safety block and affirmative resource acceptance. Incorrect answers remain valid resolved outcomes; this is not a perfect-accuracy requirement. Claim positive incremental superiority over the old combined algorithm only for positive same-batch C-B QA after all advancement gates pass, never from historical 22/24 or offline 36. Unknown gates do not advance.
+
+Prospective primary clarification before any paid results: preserve the existing B8 safety meaning. Candidate C must have no increased unsupported/stale question counts against both same-batch controls, no newly failing severe case against either control, and no unknown safety in any arm. Known preexisting positive harm in baseline/linked alone does not block advancement; no new requirement that all three arms be perfect. Accuracy remains C-A>=3 and C-B>=0. Preserve per-arm harm/claim counts.
+
+Q6: Measure capture/candidate/selected/recalled/packed coverage from actual traces, independently replaying selection/rank compilers. Report C-A and C-B with 42-anchor denominators; coverage is not QA. Preserve failures and resource/latency breakdown by arm and capture, without inventing cost or calling recorded usage an invoice.
+
+Q7: Offline tests exercise actual caller seams: 24 captures/72 answers/balanced order; same cold database and role evidence; new versus old compiler choice; grading/disagreement/unknown/harm in all three arms; 1992 arithmetic and fair capture/arm caps; invalid profile/manifest/dirty runtime/hashes; key-failure one-shot lifecycle; mutation/cross-profile/closed state/fatal-unrun denominator 24; no additional candidate model call. Fault injection uses only synthetic ledgers in owned fixtures with cleanup on success/failure; generic workspace errors are not masked.
+
+Q8: Derive changed-file inventories independently by two routes and verify count agreement. Record actual test exit codes on pinned Node 22.16.0 and 24.15.0 for targeted and existing algorithm suites where possible. Primary owns final combined gates, dual review and CI before any paid run. Make no unmeasured claims. Record entrypoints/callers/test ownership, actual routing/base and precommit states in this plan. Inspect node_modules for symlinks before isolated locked installation.
+
+## Entrypoints, gates and ownership
+
+New explicit runner/transport/launch exports select a private closed profile;
+old public treatment allowlists and two-arm profiles remain unchanged. Calls:
+`launchComplementarySourceComparison` -> `createComplementarySourceTransport`
+-> `runComplementarySourceComparison` -> real capture -> cold core recall ->
+source-diverse selector for B/C -> linked or frozen complementary rank ->
+verifiedRoleEvidence -> unchanged packMixedAnswer -> one answer per arm.
+Candidate bytes and gold separation remain unchanged. Existing traces preserve
+model calls, observed source reads, failures, latency, reservation and usage.
+
+Evaluator calls: `loadComplementarySourceFreeze` ->
+`scoreComplementarySourceCoverage` -> `buildBlindComplementarySourcePacket`
+-> independent unblinding -> `aggregateComplementarySourceJudgments`.
+Pure compilers replay effective selection/ranking against actual visible inputs;
+authoritative role packing determines credit. Both pairs have 42 anchor counts.
+
+Gate fields: `noFatal`, `correctnessResolved` (all 24 outcomes in each arm
+are resolved correct/incorrect), `primaryQA` (C-A>=3), `primaryPackedGain` (C-A>0),
+`linkedQANoRegression` (C-B>=0), `linkedPackedNoRegression` (C-B>=0), `safety`
+(all arms known; no C unsupported/stale question-count increase or newly severe
+case against either control) and `resourcesWithinLimits` (caller audit true).
+`advances` requires all fields true. `incrementalSuperiority` additionally
+requires C-B net correct >0. Historical 18/24–22/24 and offline 36 are never inputs.
+
+Complementary paired summaries retain denominator 24. Any pair with an unresolved
+verdict contributes to `unresolvedPairs`, never wins, losses, bothCorrect or
+neitherCorrect; those five categories sum to 24. `netCorrect` remains the
+difference between the arms' certified correct counts. With unresolved pairs,
+that descriptive difference need not equal wins minus losses and cannot authorize
+advancement. Existing two-arm aggregation and gate contracts stay unchanged.
+
+Launch binds clean committed runtime, exact Node executable/hash/version,
+corpus/protocol, complete tracked runtime/control closure, existing checkpoint,
+history and request cap. Exclusive durable marker precedes key lookup. Before
+the marker, complementary launch retains a validated source-only snapshot and
+checks its canonical hash against the existing manifest corpus hash. Normal
+run and pre-run failure placeholders use that detached snapshot. Post-key
+preflight still rejects source/runtime/ledger changes before any transport call.
+Before runner dispatch, failure writes all 24 failed/unrun observations when persistence
+works. After dispatch, catastrophic persistence failure preserves actual partial
+records and failure in closure; it never reruns the runner or invents unrun
+observations. `reportAvailable` records successful exclusive report persistence,
+not the presence of an in-memory report. Closed operations never resume/refund.
+Missing report is a blocker.
+
+Worker owns new complementary tests: actual core/HTTP/caps in
+`test/complementary-runner.test.mjs`, freeze/coverage/blind/gates/manifest in
+`test/complementary.test.mjs`. Parallel Git worker owns shared owned-Git helper
+and existing requested/evidence bundle test migration. Primary owns combined
+gates, mechanically cross-checked file inventory, final dual review and CI.
+No browser/product flow, core, defaults, corpus, rubric, prompts, adapter,
+campaign-budget or CI changes. No postimplementation commit before primary diff
+inspection. Any final SHA and precommit test state must be recorded at acceptance.
+
+## Offline verification
+
+`adapters/openai/node_modules` was absent (not a shared symlink) before
+`npm ci --offline --prefix adapters/openai`, exit 0. Locked files unchanged.
+`scripts/README.md` absent in this fixed checkout; no operational script ran.
+Pinned Nodes: `/home/chichieh/.nvm/versions/node/v22.16.0/bin/node` and
+`/home/chichieh/.nvm/versions/node/v24.15.0/bin/node`.
+The Git fixture dependency was integrated unchanged from
+`33cba02777a85ed087451c991c4a315e7edceeb4` as
+`df2c95c0b5eb4854f743d674ce810d7a356cf388`. Its five files and prior verification
+remain owned by the Git worker, not new implementation results here.
+
+Precommit targeted results: new runner first Node 22 invocation exited 0
+(3/3, 88.37s), then the separately added real-core mutation test exited 0
+(1/1, 2.29s). Node 24 ran all four runner tests and exited 0 (4/4, 82.42s).
+New protocol/manifest suite initially exited 1 on Node 22 (4/5): a handcrafted
+fixture aliased its raw/effective inputs, so mutating one changed both. The
+fixture now matches separately serialized formal observations. Both complete
+reruns exited 0 (5/5, Node 22 5.62s, Node 24 5.41s). Later transport-closure
+hardening and testing-helper artifact binding require final revalidation.
+Full algorithm comparison at the exact clean committed candidate
+`fa26f7c6cf4d2739c2ae3f424c478b0b14c2cc23`:
+
+```sh
+PATH=/home/chichieh/.nvm/versions/node/v22.16.0/bin:$PATH NODE_DISABLE_COMPILE_CACHE=1 npm run test:algorithm-development
+PATH=/home/chichieh/.nvm/versions/node/v24.15.0/bin:$PATH NODE_DISABLE_COMPILE_CACHE=1 npm run test:algorithm-development
+```
+
+Both actual exits were 0, 82/82 tests, fail/skip/cancel/todo 0. Durations were
+328.911s / 327.918s. These are observations, not a performance comparison.
+The subsequent narrow launch correction handles report-persistence availability
+and pre-key source snapshots. Its complete affected suite was run before the
+correction commit, with HEAD still `fa26f7c` and exactly launch, new protocol
+test and this plan modified:
+
+```sh
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node tools/testing/run.mjs evaluation/algorithm-development/test/complementary.test.mjs
+/home/chichieh/.nvm/versions/node/v24.15.0/bin/node tools/testing/run.mjs evaluation/algorithm-development/test/complementary.test.mjs
+```
+
+Both actual exits were 0, 5/5, fail/skip/cancel/todo 0, with durations
+30.267s / 30.185s. Controls include zero HTTP and an unchanged synthetic ledger
+after key-time corpus corruption, all 24/72 pre-run placeholders, genuine partial
+records after case persistence failure, and one full 24/72 batch retained after
+exclusive report collision with reportAvailable false and no rerun/overwrite.
+Code/test content remained unchanged after these gates; this record was appended.
+Primary owns final rebased combined gates and independent reviews.
+The changed-file inventory was independently derived by Git diff plus untracked
+listing and by filesystem Git-blob hashes plus a new-file walk, then compared:
+17 files match (12 implementation packet, 5 unchanged dependency files).
+Worker targeted/regression gates above passed; primary final acceptance pending. Offline gates
+establish no new QA score, provider spend permission or product promotion.
+
+## Interpretation limits fixed before results
+
+Primary integration rebased only the two QA commits onto the exact reviewed
+PR 392 candidate `c206879518e14f06419e2e26d86e9c7951e2a696`. The original
+worker base and verification SHAs above remain historical observations, not
+claims about the final integration. This incorporates the owned fixture's
+immediate teardown correction without duplicating its implementation history.
+Final primary checks, independent Standards/Spec reviews and latest-head CI
+are separate gates; all must pass before the new one-shot paid operation.
+
+The same 24 previously seen synthetic development cases include many rank
+candidate pools of at most six. Their QA score cannot prove that the larger
+pool rare lexical bridge strategy improved. Selection and ranking invoke the
+model independently per arm: shared policy does not guarantee identical
+selection or outputs. Same-batch results are point estimates, not robust proof
+of semantic reliability. These limits add no advancement gate.
+
+## Bounded correctness-resolution correction
+
+The primary's Spec review at exact candidate
+`43e4686a1ba7331329de9475d2ca37fd8b0423ed` found a Q5 failure: a control's
+correctness-only disagreement, with all harm judgments agreed clean, could
+retain an apparent C-A +3 and advance, although resolving that control as correct
+would give only +2. That historical FAIL is preserved; passing earlier checks
+does not erase it. No paid results prompted this correction.
+
+Actual implementer: GPT-6.1 Sol High, under the primary's accepted bounded
+design. Isolated worktree `complementary-verdict-resolution`, branch
+`fix/complementary-verdict-resolution`, starts clean at the exact candidate above.
+The primary's worktree under full gates is unchanged. Ownership is limited to
+this plan, `evaluator.mjs`, `complementary.mjs` and `test/complementary.test.mjs`.
+The new gate is complementary-only; no candidate, corpus, rubric, runtime,
+transport, budget, default or existing two-arm contract changes are authorized.
+
+`adapters/openai/node_modules` was absent, not a symlink; isolated locked
+`npm ci --offline --prefix adapters/openai` exited 0 with locked files unchanged.
+Before implementation, Node 22 ran the three new verdict-only controls:
+
+```sh
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node tools/testing/run.mjs --test-name-pattern='Q5 verdict-only|Q5 unknown-verdict|Q5 resolved-pair' evaluation/algorithm-development/test/complementary.test.mjs
+```
+
+Actual exit 1, 0/3 passed: the clean-harm disagreement and unknown-verdict controls
+incorrectly advanced, and the resolved positive control lacked the new field.
+An intermediate implementation run also exited 1 (0/3) because the closed arm
+list import was initially missing; after adding that import, the same command
+exited 0 (3/3). The positive control includes an incorrect answer in all three
+arms and still advances; unknown controls cover every arm and both unresolved
+outcomes in a pair. Neither fault injection nor verification uses real HTTP or
+an operational ledger. Primary owns final combined acceptance and review.
+
+Complete affected complementary tests plus existing evaluator and both closed
+two-arm protocol suites ran before commit with HEAD still `43e4686`:
+
+```sh
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node tools/testing/run.mjs evaluation/algorithm-development/test/complementary.test.mjs evaluation/algorithm-development/test/evaluator.test.mjs evaluation/algorithm-development/test/requested-answer.test.mjs evaluation/algorithm-development/test/evidence-bundle.test.mjs
+/home/chichieh/.nvm/versions/node/v24.15.0/bin/node tools/testing/run.mjs evaluation/algorithm-development/test/complementary.test.mjs evaluation/algorithm-development/test/evaluator.test.mjs evaluation/algorithm-development/test/requested-answer.test.mjs evaluation/algorithm-development/test/evidence-bundle.test.mjs
+```
+
+Both actual exits were 0: 30/30 passed, fail/skip/cancel/todo 0, durations
+30.780s / 30.800s. Existing unresolved-inclusive two-arm pair classifications
+and its gates passed unchanged. The new launch failure/snapshot/collision controls
+also passed unchanged. Code/test content stayed fixed during these runs; only
+this verification record was appended afterward. Independently derived Git-diff
+and filesystem Git-blob-hash/new-file-walk inventories match exactly four files,
+all owned above; `git diff --check` exited 0. No claim about primary combined
+gates, fresh QA scores or paid-run permission follows from these offline results.
+
+## Closed execution and results-doc delivery (2026-10-11)
+
+This append-only record preserves Q1–Q8 and all implementation/review/install
+history above. Primary integrated the correctness-resolution correction and
+froze reviewed runtime `78d7e37b2cb55afe14d26422beca11864cb9d9aa`; primary
+checks on both pinned Nodes exited 0 and all 27 CI checks passed before execution.
+The prior `43e4686` Spec FAIL and isolated Claude native-postinstall installation
+failure remain retained in [limitations](../limitations.md), not erased by green
+later checks. They are distinct from the closed run's semantic safety failure.
+The earlier primary plugin-validation runs exited 1 after the isolated Claude
+install used `--ignore-scripts`, leaving its native-binary placeholder; running
+the inspected locked local postinstall corrected that installation omission
+without product/lock/shared-install changes. The earlier exits stay failures.
+
+The [closed three-arm result](complementary-qa24-results.md) ran once at runtime
+78 on 2026-10-11, approximately 07:18–07:41 UTC, with actual exit 0, 24 captures,
+72 answers, 512 HTTP, no retry/failure/fatal. Post-run preparation/scoring each
+ran once, actual exit 0. Two new independent nonauthor fork-none GPT-6.1 Sol/high
+judges each submitted 72 judgments: no disagreement, missing or unknown verdict.
+A/B/C correctness is 19/5/0, 23/1/0, 23/1/0 over 24; C−A has five wins / one
+loss, net +4, C−B zero wins/losses, net 0. Packed anchors are 28/39/42 over 42.
+All resource gates pass, but C has a newly unsupported severe D12 against A;
+`advances: false`, `incrementalSuperiority: false`. No promotion or Stage 3.
+
+Primary's private trace audit initially exited 1 on baseline diagnostics=null;
+corrected audit exited 0. This audit assumption failure is not a runtime/product
+failure. All 1,048 artifact hashes and independently derived readdir/find
+inventories matched; an independent nonauthor operator trace review passed.
+Exact D12 B/C answer request bytes match while all needed sources were packed:
+an answer-use/entity-binding boundary, not a proven formatting cause. Primary's
+bounded sealed replay now reconstructs full evidence/request via the existing
+preparation, role verifier and real packer using recorded authoritative get
+snapshots, not a new SQLite read. Integrity/controls each exited 0 and symptom
+mode exited expected 1 (`D12_UNSUPPORTED_ENTITY_BINDING`) on both pinned Nodes,
+with zero provider calls. Known-holder and always-abstain controls bound its
+narrow evaluator-only oracle: no fresh generation, cause, fix or score. Initial
+integrity exit 2 from an answer-hash convention mismatch remains a corrected
+diagnostic-harness error. Next is a separately frozen fresh experiment if
+warranted. Closed evidence and first judgments are immutable;
+no old rerun/rescore or new paid authority follows.
+
+Results-doc owner: actual GPT-6.1 Sol/high under primary's accepted R1–R8,
+fixed base `78d7e37b2cb55afe14d26422beca11864cb9d9aa`, initially clean
+`complementary-qa24-results` worktree / `docs/complementary-qa24-results` branch.
+Exactly five scoped docs are allowed: new result report, this append-only plan
+record, three-stage current status, limitations and ROADMAP next-gate status.
+Runtime worktree, code, schema, fixtures, historical result files, README, CI,
+defaults and budget remain unchanged. Worker reads only closed evidence;
+no key/environment/operational-ledger access or paid calls. Artifact digests and
+source-free tables are in the result; blind labels/mapping and raw bodies are
+not published. No dependency install is needed. Primary owns candidate checks,
+same-SHA independent review and latest-head CI, pending until explicitly recorded.
+
+Precommit results-doc evidence: read-only JSON reconciliation independently
+rederived 24/72 outcomes, pairs, safety/claim counts, all 42-anchor stage totals,
+trace totals and 512-request phase/accounting totals, actual exit 0. A second
+published-Markdown check matched eight numeric tables, all 24 outcome rows and
+ten file digests to sealed JSON, actual exit 0. Relative-link checking covered
+149 links across the five docs with no missing targets, actual exit 0.
+Git diff plus untracked paths and independent filesystem Git-blob hashes plus
+new-file walk agree exactly on the five allowed files; this plan's old bytes
+are a preserved prefix (append-only), actual exit 0. `git diff --check` exited 0.
+No contributor-suite, review or CI pass for the docs candidate is inferred from
+these worker checks. Primary inspects the diff before any scoped commit.

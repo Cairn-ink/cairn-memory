@@ -114,8 +114,18 @@ its past hosted tests do not establish local-preview quality.
 The current sequence is the [three-stage reliability and answer-quality plan](docs/plans/reliability-three-stage.md):
 trace retained failures offline, select a bounded correction on 24 development
 questions, then review a fresh paired thirty and independent reliability/Hermes
-gates. All stages remain pending; this planning checkpoint authorizes no run
-and changes no historical result or release-readiness claim.
+gates. The latest [closed complementary three-arm development result](docs/plans/complementary-qa24-results.md)
+scores ordinary 19/24, linked 23/24 and complementary 23/24, but fails safety:
+complementary introduces an unsupported severe D12 error against ordinary and
+has no QA gain over linked. Stage 2 acceptance and Stage 3 remain blocked.
+The bounded offline D12 replay now reconstructs sealed evidence/request exactly;
+integrity/controls exit 0 and the symptom exits expected 1 on both pinned Nodes,
+without generation or a cause/fix claim. Next is a separately frozen fresh
+entity-binding/evidence-use experiment only if warranted. All needed B/C
+evidence was packed under identical answer requests; no missing-retrieval or
+formatting root cause is established. Long-history expansion is still planned,
+not executed. This status authorizes no paid run, old rerun/rescore, broader
+reader/architecture change or release-readiness claim; historical blocks remain.
 
 The next reliability design slice is the
 [memory reliability contract](docs/plans/memory-reliability-contract.md): qualified

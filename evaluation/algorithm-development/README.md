@@ -154,3 +154,32 @@ control exits 1 because ordinary ranking omits the chain and removes only its
 owned synthetic scratch. The crowded-source control retains the existing
 four-addition selection limit: later rank assembly cannot recover a source
 that selection never supplied. None of these scripted controls is a QA result.
+
+## Complementary source comparison
+
+`runComplementarySourceComparison` captures the same 24 development cases once,
+then runs ordinary, source-diverse-linked and source-diverse plus the frozen
+complementary compiler on the same cold database. Three arms share verified
+recorded-role evidence, unchanged answer packing/model and balanced ordering.
+Actual raw calls and effective compiler traces remain separately recorded.
+
+`prepareComplementarySourceComparison` / `launchComplementarySourceComparison`
+bind a separate closed manifest: capture<=16 logical calls, each arm<=8,
+40 total, three answers, 1992 HTTP maximum, 5000 microUSD/request, US$10 local and
+US$30 protected under the existing US$400 ceiling. Node and complete artifacts
+including unchanged candidate are bound. Old 1968 two-arm profiles stay separate.
+One-shot marker precedes explicit key lookup; failed lookup retains all 24 slots.
+
+`loadComplementarySourceFreeze`, `scoreComplementarySourceCoverage`,
+`buildBlindComplementarySourcePacket` and
+`aggregateComplementarySourceJudgments` preserve requested-v2 and 42 anchors
+under new identities. Two independent nonauthor judges review at most 72 opaque
+answers. C-A requires +3 net correct and positive packed anchor gain; C-B has
+no QA/packed regression. Unknown safety/resources, increased candidate harm
+question counts or newly severe cases against either control block
+advancement. Incremental superiority additionally needs positive samebatch C-B.
+Historical 18/24–22/24 and offline 36 controls establish no new QA score.
+
+See [the frozen contract](../../docs/plans/complementary-qa24.md). Run the new
+`test/complementary*.test.mjs` and entire existing algorithm suite offline on
+both pinned Node 22.16/24.15 runtimes. Passing grants no spending permission.

@@ -5,6 +5,7 @@ import { DEFAULT_MODEL, modelProfile } from '../../adapters/openai/profiles.mjs'
 import { openBoundEmbeddingExperimentBudget } from '../experiment-budget/index.mjs';
 import { packMixedAnswer } from '../longmemeval/mixed-answer.mjs';
 import { snapshotJson } from '../longmemeval/mixed-validation.mjs';
+import { complementaryArms, complementaryLimits } from './complementary-profile.mjs';
 
 export const algorithmLimits = Object.freeze({ cases: 24, coreCallsPerCase: 40,
   answersPerCase: 2, httpRequests: 1968, reservationMicroUsd: 5000,
@@ -71,8 +72,10 @@ function containsCredential(value, secret) {
 }
 
 /** Existing-only shared ledger; explicit credential and HTTP injection. No retries. */
-export function createAlgorithmDevelopmentTransport({ configuration, checkpoint, historySha256,
-  apiKey, fetchImpl = globalThis.fetch, onRecord = () => {} } = {}) {
+function createTransport({ configuration, checkpoint, historySha256,
+  apiKey, fetchImpl = globalThis.fetch, onRecord = () => {} } = {}, complementary = false) {
+  const limits = complementary ? complementaryLimits : algorithmLimits;
+  const arms = complementary ? complementaryArms : ['baseline', 'full'];
   const frozen = freezeObservation(snapshotJson({ configuration, checkpoint, historySha256 },
     { bytes: 65536, nodes: 128, depth: 4 }, 'invalid_algorithm_configuration'));
   if (typeof apiKey !== 'string' || !apiKey || apiKey.length > 512 || /[\s\x00-\x1f\x7f]/u.test(apiKey)
@@ -87,13 +90,13 @@ export function createAlgorithmDevelopmentTransport({ configuration, checkpoint,
     if (state.requestCount !== frozen.checkpoint.requestCount || state.reservedMicroUsd !== frozen.checkpoint.reservedMicroUsd
       || state.historySha256 !== frozen.historySha256) fail('algorithm_checkpoint_mismatch');
     if (state.limitMicroUsd > 400_000_000 || state.limitMicroUsd - state.reservedMicroUsd
-      < algorithmLimits.protectedMicroUsd + algorithmLimits.reservedMicroUsd
-      || state.requestCap - state.requestCount < algorithmLimits.httpRequests) fail('algorithm_unaffordable');
+      < limits.protectedMicroUsd + limits.reservedMicroUsd
+      || state.requestCap - state.requestCount < limits.httpRequests) fail('algorithm_unaffordable');
   } });
   const check = () => { if (fatal) fail(fatal); if (closed) fail('algorithm_closed'); };
   const ledgerState = () => { try { return handle.getState(); } catch (error) { stop(error.code ?? 'algorithm_accounting_failure'); } };
-  const deadline = () => Math.min(algorithmLimits.caseMs - (performance.now() - active.started),
-    algorithmLimits.runMs - (performance.now() - started));
+  const deadline = () => Math.min(limits.caseMs - (performance.now() - active.started),
+    limits.runMs - (performance.now() - started));
 
   async function send(url, options) {
     check();
@@ -106,9 +109,9 @@ export function createAlgorithmDevelopmentTransport({ configuration, checkpoint,
       || (counting ? request.counted : !answer && !request.counted)) stop('algorithm_request_denied');
     if (options.body.includes(apiKey)) stop('algorithm_credential_echo');
     if (options.signal.aborted || deadline() <= 0) fail('model_timeout');
-    if (attempted >= algorithmLimits.httpRequests || reserved + 5000 > algorithmLimits.reservedMicroUsd) stop('algorithm_budget_exceeded');
+    if (attempted >= limits.httpRequests || reserved + 5000 > limits.reservedMicroUsd) stop('algorithm_budget_exceeded');
     const state = ledgerState();
-    if (state.limitMicroUsd - state.reservedMicroUsd < algorithmLimits.protectedMicroUsd + 5000) stop('algorithm_budget_exceeded');
+    if (state.limitMicroUsd - state.reservedMicroUsd < limits.protectedMicroUsd + 5000) stop('algorithm_budget_exceeded');
     const attemptId = randomUUID();
     try { handle.reserve({ attemptId, channel: counting ? 'cairn-count' : answer ? 'host-completion' : 'cairn-generation', reservedMicroUsd: 5000 }); }
     catch (error) { stop(error.code ?? 'algorithm_accounting_failure'); }
@@ -116,7 +119,7 @@ export function createAlgorithmDevelopmentTransport({ configuration, checkpoint,
     const began = performance.now(), controller = new AbortController();
     const cancel = () => controller.abort();
     options.signal.addEventListener('abort', cancel, { once: true });
-    const timer = setTimeout(cancel, Math.max(1, Math.min(algorithmLimits.callMs, deadline())));
+    const timer = setTimeout(cancel, Math.max(1, Math.min(limits.callMs, deadline())));
     const row = { id: active.id, ordinal: active.ordinal, arm: active.arm, method: request.method,
       endpoint: url.slice(origin.length + 1), attemptId, requestBody: options.body,
       requestBytes: Buffer.byteLength(options.body), localInputTokens: countOpenAITokens(options.body),
@@ -184,10 +187,12 @@ export function createAlgorithmDevelopmentTransport({ configuration, checkpoint,
     check();
     if (!active || busy || expected || request.system !== prompts[method]
       || request.maxOutputTokens !== 1024 || (method === 'extract' || method === 'classify'
-        ? active.arm !== 'capture' : !['baseline', 'full'].includes(active.arm))) stop('algorithm_method_denied');
+        ? active.arm !== 'capture' : !arms.includes(active.arm))) stop('algorithm_method_denied');
     if (active.coreCalls >= 40) fail('algorithm_case_call_cap');
+    if (complementary && active.phaseCalls[active.arm] >= (active.arm === 'capture' ? 16 : 8)) fail('algorithm_phase_call_cap');
     if (deadline() <= 0) fail('model_timeout');
     active.coreCalls++;
+    active.phaseCalls[active.arm]++;
     const bodies = {};
     const serializer = createOpenAIModel({ apiKey: 'serializer-only', fetchImpl: async (url, options) => {
       if (url.endsWith('/input_tokens')) { bodies.count = options.body;
@@ -204,13 +209,14 @@ export function createAlgorithmDevelopmentTransport({ configuration, checkpoint,
       check();
       if (active || busy || seen.has(id) || ordinal !== seen.size + 1 || ordinal > 24) stop('algorithm_lifecycle');
       seen.add(id); started ??= performance.now();
-      active = { id, ordinal, started: performance.now(), arm: 'capture', coreCalls: 0, answers: new Set(), arms: new Set() };
+      active = { id, ordinal, started: performance.now(), arm: 'capture', coreCalls: 0,
+        phaseCalls: Object.fromEntries(['capture', ...arms].map(name => [name, 0])), answers: new Set(), arms: new Set() };
     },
-    beginArm(name) { check(); if (!active || busy || expected || !['baseline', 'full'].includes(name)
+    beginArm(name) { check(); if (!active || busy || expected || !arms.includes(name)
       || active.arms.has(name)) stop('algorithm_lifecycle'); active.arms.add(name); active.arm = name; },
     async answer({ question, units }) {
       check();
-      if (!active || busy || expected || !['baseline', 'full'].includes(active.arm) || active.answers.has(active.arm)) stop('algorithm_lifecycle');
+      if (!active || busy || expected || !arms.includes(active.arm) || active.answers.has(active.arm)) stop('algorithm_lifecycle');
       active.answers.add(active.arm);
       const packed = packMixedAnswer({ question, units, countTokens: countOpenAITokens });
       if (packed.inputTokens > 6000) fail('context_budget_exceeded');
@@ -229,3 +235,5 @@ export function createAlgorithmDevelopmentTransport({ configuration, checkpoint,
     assertHealthy: check, records: () => snapshot(rows), state: () => { check(); return ledgerState(); },
     close() { if (busy) stop('algorithm_lifecycle'); closed = true; handle.close(); } });
 }
+export const createAlgorithmDevelopmentTransport = options => createTransport(options);
+export const createComplementarySourceTransport = options => createTransport(options, true);

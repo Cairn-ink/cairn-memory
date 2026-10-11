@@ -1,9 +1,12 @@
 # Known limitations
 
 The [three-stage reliability plan](plans/reliability-three-stage.md) records an
-ongoing development sequence: the latest combined candidate gained four correct
-development answers but failed the unchanged safety-unknown gate, not accepted
-product quality. Its pinned earlier thirty
+ongoing development sequence: the latest [three-arm development result](plans/complementary-qa24-results.md)
+is ordinary 19/24, linked 23/24 and complementary 23/24. Complementary gained
+four correct answers over ordinary but none over linked, and fails the frozen
+safety gate with a new unsupported severe D12 error against ordinary. This is
+known harm, not accepted product quality or the earlier safety-unknown failure.
+Its pinned earlier thirty
 remains Cairn 13/10/7 versus Mem0 21/8/1, and the separate later six remains
 2/4/0 versus 4/2/0 (correct/incorrect/unresolved). Four later wrong answers and
 seven earlier incomplete arms require separate diagnosis. A fixed development
@@ -1668,3 +1671,120 @@ Primary combined acceptance, independent final-head reviews and new CI remain
 separate delivery gates. The previous setup/core failures remain unexplained;
 this test-only correction does not resolve them. No new real-model QA score,
 default promotion, release or competitive-parity claim follows from these tests.
+
+### Prospective complementary-source three-arm comparison (2026-10-11)
+
+The [new development protocol](plans/complementary-qa24.md) compares ordinary
+recall, the previous source-diverse/source-linked combination, and the frozen
+complementary-source candidate on the same 24 previously seen authored cases.
+It keeps all 42 requested-answer anchors, the existing rubric, model and
+evidence packer. Each case is captured once and all three arms cold-open the
+same logical database. No new official benchmark or fresh holdout is claimed.
+
+The separate profile permits at most 1,992 HTTP attempts, $10 in new
+reservations, the original $400 cumulative ceiling and $30 protected balance.
+It never resets the ledger, retries a failed arm, resumes a closed operation,
+or changes the old two-arm profile. Missing/disagreed judgments remain
+unresolved in the denominator of 24; unknown safety blocks advancement.
+Same-batch comparisons against both controls are required. Historical 22/24
+and offline 36/36 are not inputs to a new QA score.
+
+The worker's clean pre-correction candidate `fa26f7c` passed 82/82 offline
+algorithm tests on Node 22.16.0 and 24.15.0, actual exit 0. The subsequent
+source-snapshot and durable-report correction passed its affected 5/5 tests
+on both Nodes, actual exit 0. Those observations precede primary integration
+and cannot stand in for final-head review, primary validation or CI.
+
+The launch retains a validated source-only snapshot before credential lookup
+and rejects runtime/source/ledger mutation before transport. Pre-run failures
+retain all 24 observations when persistence succeeds; post-dispatch persistence
+failures retain actual partial evidence and never run the comparison again to
+fabricate a replacement report. Durable report availability is explicit.
+
+Independent arm model calls can select different evidence despite sharing a
+policy. Many development pools contain at most six candidates, so the result
+cannot isolate the candidate's larger-pool lexical bridging benefit. Repeated
+known-case development is not an unbiased generalization estimate. Functional
+tests and a prospective protocol establish neither measured QA gain nor
+semantic reliability, production promotion or competitive parity. No paid
+three-arm result is recorded by this change.
+
+Before paid execution, independent Spec review at `43e4686` found that a
+correctness-only judge disagreement could be counted as a control loss and
+grant an unproven C-A threshold. The complementary profile now explicitly
+requires resolved correctness, retains unresolved pairs outside win/loss
+categories, and preserves the 24-case denominator. Incorrect answers remain
+valid resolved outcomes; this does not require perfect accuracy. The retained
+red regression and positive controls are recorded in the comparison plan.
+The original two-arm scoring contract is unchanged.
+
+Primary integration checks at `43e4686` passed algorithm 82/82, generic 669/669,
+controls 36/36, fixture tests 16/16 and lifecycle 27/27 on both pinned Nodes,
+actual exit 0. Both runs then stopped at plugin validation, actual exit 1:
+the primary had installed the isolated Claude tooling with `--ignore-scripts`,
+leaving its native-binary placeholder. Inspecting and running that locked
+package's local postinstall fixes the installation omission without changing
+product code, dependency locks or shared installs. Final corrected-head gates,
+independent reviews and CI must still be checked; the earlier failed runs
+are not retroactively marked successful.
+
+### Closed complementary-source three-arm result (2026-10-11)
+
+The [closed result](plans/complementary-qa24-results.md) records all 24 fresh
+captures and 72 successful answers at reviewed runtime
+`78d7e37b2cb55afe14d26422beca11864cb9d9aa`. Agreement-only requested-answer
+counts are A ordinary 19/5/0, B source-diverse/linked 23/1/0 and C complementary
+23/1/0 (correct/incorrect/unresolved). Two new independent nonauthor same-family
+blind judges agreed on all 72 verdicts and harms. C−A has five wins and one
+loss, net +4; C−B has zero wins/losses, net 0. This is the same known authored
+development set, not fresh holdout, official LongMemEval, Mem0 parity, natural
+Hermes use, long-history or production evidence. Old scores remain unchanged.
+
+The frozen safety gate fails on known harm: baseline has no unsupported/severe
+questions, B has unsupported D10/D12 and severe D12, C has unsupported/severe
+D12. Stale and unknown counts are zero in all arms. C is no worse than B on
+these counts but regresses against A; `advances: false` and
+`incrementalSuperiority: false`. More coverage cannot waive this failed gate.
+
+All 42 anchors were retained/reachable; selected counts are 30/42/42 and actual
+packed counts 28/39/42. C delivered all diagnostic anchors but did not gain QA
+over B. All actual C rank pools had ≤5 cards (23 small-pool completions, one
+empty-rank result), so no live larger-pool lexical benefit is demonstrated.
+B/C raw model selection/rank can differ despite shared selection policy; the
+run supports no ranking-only causal QA claim. C packed 65 units / 10,570
+answer-input tokens versus B 37 / 7,725 and A 26 / 6,407, without extra candidate
+model calls. Added context is not free or necessarily safer.
+
+D12's needed anchors were all packed in B/C and their exact serialized answer
+requests were identical, yet both returned the wrong holder. This places the
+observed loss at answer use / entity binding, not missing retrieval or a proven
+formatting/model-internal mechanism. Primary's bounded offline sealed replay now
+reconstructs the full evidence/request using existing preparation, role verifier
+and real packer from recorded authoritative get snapshots, not a new SQLite
+read. On both pinned Nodes, integrity/controls exited 0 and symptom mode exited 1
+with expected `D12_UNSUPPORTED_ENTITY_BINDING`; no provider calls or fresh
+generative reproduction occurred. A narrow evaluator-only oracle includes a
+known-holder positive control and rejects always abstaining; it proves no cause,
+fix or new score. Initial integrity exit 2 was a corrected answer-hash convention
+mismatch, a retained diagnostic-harness error. Next separately freeze a fresh
+evidence-use experiment if warranted; no old rerun/rescore, immediate Stage 3 or
+broad architecture fix follows.
+
+Resources passed at 512 HTTP, $2.56 conservative reservation and $0.110216 known
+model-profile usage estimate, not an invoice. The 24 cold stores contain 92
+cards, 2–7 each, totaling 13,467,648 bytes; neither growth nor peak RSS was
+measured. Runtime was about 22.469 minutes. The historical original-ledger close
+was 57,075 requests / $329.712281 reservations, leaving $40.287719 outside the
+$30 protection under the original $400 ceiling. This is not current affordability
+or another paid grant. All 1,048 artifact identities/inventories passed the
+primary audit and independent operator trace review; the primary's first private
+trace audit exited 1 on a null-baseline-diagnostics assumption, then corrected
+audit exited 0, not a product failure. Prior review/install failures above remain.
+
+Long-history expansion is planned, not executed; eight capture batches can yield
+at most 40 cards under ≤16 capture calls, so >36-card archives are not assured.
+>6-card rank pools and >36-card archives are distinct preconditions; ordinary
+query/keyset MOC references do not prove hierarchical MOC-only navigation.
+Primary's prior runtime-78 engineering checks and 27 CI passes do not establish
+semantic acceptance or final verification of this docs-only delivery candidate;
+its checks, independent reviews and latest-head CI remain pending.
