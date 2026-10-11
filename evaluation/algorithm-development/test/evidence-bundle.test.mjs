@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { createOwnedGitFixture } from '../../../tools/testing/owned-git-fixture.mjs';
 import { countOpenAITokens } from '../../../adapters/openai/index.mjs';
 import { assembleSourceDiverseSelection } from '../../architecture/source-diverse-selection-model.mjs';
 import { assembleSourceLinkedEvidence } from '../../architecture/source-linked-evidence-model.mjs';
@@ -230,7 +231,7 @@ test('B2/B9 cross-profile manifests reject before explicit key lookup or budget 
 test('B9 clean owned fixture binds wrappers/projection/protocol/Node and preserves one-shot closure', async () => {
   const workspace = createTestWorkspace(null, { prefix: 'cairn-evidence-bundle-launch-' });
   try {
-    const root = fileURLToPath(new URL('../../../', import.meta.url)), checkout = join(workspace.path, 'runtime'); mkdirSync(checkout);
+    const root = fileURLToPath(new URL('../../../', import.meta.url)), fixture = createOwnedGitFixture(workspace), checkout = fixture.path;
     const archive = execFileSync('/usr/bin/git', ['archive', 'HEAD'], { cwd: root, maxBuffer: 128 * 1024 * 1024 });
     execFileSync('/usr/bin/tar', ['-x', '-C', checkout], { input: archive });
     for (const file of ['runner.mjs', 'launch.mjs', 'coverage.mjs', 'requested-answer.mjs',
@@ -239,10 +240,11 @@ test('B9 clean owned fixture binds wrappers/projection/protocol/Node and preserv
     }
     copyFileSync(join(root, 'docs/plans/evidence-bundle-qa24.md'), join(checkout, 'docs/plans/evidence-bundle-qa24.md'));
     cpSync(join(root, 'adapters/openai/node_modules'), join(checkout, 'adapters/openai/node_modules'), { recursive: true });
-    const git = args => execFileSync('/usr/bin/git', ['-C', checkout, ...args], { stdio: 'ignore',
-      env: { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_AUTHOR_NAME: 'Synthetic fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
-        GIT_COMMITTER_NAME: 'Synthetic fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' } });
-    git(['init']); git(['add', '--all']); git(['commit', '-m', 'Owned synthetic manifest fixture']);
+    fixture.commit('Owned synthetic manifest fixture');
+    assert.equal(existsSync(join(checkout, '.git', 'objects', 'maintenance.lock')), false,
+      'Owned Git maintenance must finish before the fixture proceeds toward disposal');
+    assert.equal(existsSync(join(checkout, '.git', 'gc.pid')), false,
+      'Owned Git auto-GC must finish before the fixture proceeds toward disposal');
     const configuration = { directory: join(workspace.path, 'ledger'), runId: randomUUID(), limitMicroUsd: 400_000_000, requestCap: 100_000 };
     createExperimentBudget(configuration).close(); const before = inspectExperimentBudgetForEmbeddingUpgrade(configuration);
     upgradeExperimentBudgetForEmbeddings({ ...configuration, expectedCheckpoint: { requestCount: 0, reservedMicroUsd: 0 }, expectedHistorySha256: before.historySha256 });
