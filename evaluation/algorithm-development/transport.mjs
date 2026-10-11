@@ -3,10 +3,11 @@ import { readFileSync } from 'node:fs';
 import { createOpenAIModel, countOpenAITokens } from '../../adapters/openai/index.mjs';
 import { DEFAULT_MODEL, modelProfile } from '../../adapters/openai/profiles.mjs';
 import { openBoundEmbeddingExperimentBudget } from '../experiment-budget/index.mjs';
-import { packMixedAnswer } from '../longmemeval/mixed-answer.mjs';
+import { packMixedAnswer, packRelationBoundAnswer } from '../longmemeval/mixed-answer.mjs';
 import { snapshotJson } from '../longmemeval/mixed-validation.mjs';
 import { complementaryArms, complementaryLimits } from './complementary-profile.mjs';
 import { largePoolArms, largePoolLimits, largePoolRoster } from './large-pool-profile.mjs';
+import { RELATION_BINDING_VERSION, relationBindingArms, relationBindingId, relationBindingLimits } from './relation-binding-profile.mjs';
 
 export const algorithmLimits = Object.freeze({ cases: 24, coreCallsPerCase: 40,
   answersPerCase: 2, httpRequests: 1968, reservationMicroUsd: 5000,
@@ -74,9 +75,13 @@ function containsCredential(value, secret) {
 
 /** Existing-only shared ledger; explicit credential and HTTP injection. No retries. */
 function createTransport({ configuration, checkpoint, historySha256,
-  apiKey, fetchImpl = globalThis.fetch, onRecord = () => {} } = {}, complementary = false, largePool = false) {
-  const limits = largePool ? largePoolLimits : complementary ? complementaryLimits : algorithmLimits;
-  const arms = largePool ? largePoolArms : complementary ? complementaryArms : ['baseline', 'full'];
+  apiKey, fetchImpl = globalThis.fetch, onRecord = () => {} } = {}, mode = 'ordinary') {
+  const largePool = mode === 'large-pool', complementary = mode === 'complementary';
+  const relationBinding = mode === RELATION_BINDING_VERSION;
+  const limits = relationBinding ? relationBindingLimits : largePool ? largePoolLimits : complementary ? complementaryLimits : algorithmLimits;
+  const arms = relationBinding ? relationBindingArms : largePool ? largePoolArms : complementary ? complementaryArms : ['baseline', 'full'];
+  // The smaller diagnostic attempt cap does not relax the established preflight allowance.
+  const affordability = relationBinding ? algorithmLimits : limits;
   const frozen = freezeObservation(snapshotJson({ configuration, checkpoint, historySha256 },
     { bytes: 65536, nodes: 128, depth: 4 }, 'invalid_algorithm_configuration'));
   if (typeof apiKey !== 'string' || !apiKey || apiKey.length > 512 || /[\s\x00-\x1f\x7f]/u.test(apiKey)
@@ -91,8 +96,8 @@ function createTransport({ configuration, checkpoint, historySha256,
     if (state.requestCount !== frozen.checkpoint.requestCount || state.reservedMicroUsd !== frozen.checkpoint.reservedMicroUsd
       || state.historySha256 !== frozen.historySha256) fail('algorithm_checkpoint_mismatch');
     if (state.limitMicroUsd > 400_000_000 || state.limitMicroUsd - state.reservedMicroUsd
-      < limits.protectedMicroUsd + limits.reservedMicroUsd
-      || state.requestCap - state.requestCount < limits.httpRequests) fail('algorithm_unaffordable');
+      < affordability.protectedMicroUsd + affordability.reservedMicroUsd
+      || state.requestCap - state.requestCount < affordability.httpRequests) fail('algorithm_unaffordable');
   } });
   const check = () => { if (fatal) fail(fatal); if (closed) fail('algorithm_closed'); };
   const ledgerState = () => { try { return handle.getState(); } catch (error) { stop(error.code ?? 'algorithm_accounting_failure'); } };
@@ -186,6 +191,7 @@ function createTransport({ configuration, checkpoint, historySha256,
   const model = { contextWindow: adapter.contextWindow, countTokens: adapter.countTokens };
   for (const method of ['extract', 'classify', 'select', 'rank']) model[method] = async request => {
     check();
+    if (relationBinding) stop('algorithm_method_denied');
     if (!active || busy || expected || request.system !== prompts[method]
       || request.maxOutputTokens !== 1024 || (method === 'extract' || method === 'classify'
         ? active.arm !== 'capture' : !arms.includes(active.arm))) stop('algorithm_method_denied');
@@ -210,21 +216,24 @@ function createTransport({ configuration, checkpoint, historySha256,
   return Object.freeze({ model: Object.freeze(model),
     beginCase({ id, ordinal }) {
       check();
-      if (active || busy || seen.has(id) || ordinal !== seen.size + 1 || ordinal > (largePool ? 6 : 24)
-        || largePool && id !== largePoolRoster[ordinal - 1].id) stop('algorithm_lifecycle');
+      if (active || busy || seen.has(id) || ordinal !== seen.size + 1 || ordinal > (relationBinding ? 12 : largePool ? 6 : 24)
+        || largePool && id !== largePoolRoster[ordinal - 1].id
+        || relationBinding && id !== relationBindingId(ordinal)) stop('algorithm_lifecycle');
       seen.add(id); started ??= performance.now();
       active = { id, ordinal, started: performance.now(), arm: 'capture', coreCalls: 0,
         phaseCalls: Object.fromEntries(['capture', ...arms].map(name => [name, 0])), answers: new Set(), arms: new Set() };
     },
     beginArm(name) { check(); if (!active || busy || expected || !arms.includes(name)
-      || active.arms.has(name) || largePool && !active.arms.size && name !== (active.ordinal % 2 ? 'linked' : 'complementary')) stop('algorithm_lifecycle');
+      || active.arms.has(name) || largePool && !active.arms.size && name !== (active.ordinal % 2 ? 'linked' : 'complementary')
+      || relationBinding && !active.arms.size && name !== (active.ordinal % 2 ? 'baseline' : 'relation')) stop('algorithm_lifecycle');
       if (largePool) active.naturalArm ??= name;
       active.arms.add(name); active.arm = name; },
     async answer({ question, units }) {
       check();
       if (!active || busy || expected || !arms.includes(active.arm) || active.answers.has(active.arm)) stop('algorithm_lifecycle');
       active.answers.add(active.arm);
-      const packed = packMixedAnswer({ question, units, countTokens: countOpenAITokens });
+      const packed = (relationBinding && active.arm === 'relation' ? packRelationBoundAnswer : packMixedAnswer)(
+        { question, units, countTokens: countOpenAITokens });
       if (packed.inputTokens > 6000) fail('context_budget_exceeded');
       expected = { method: 'answer', generation: JSON.stringify(packed.request) };
       try {
@@ -242,5 +251,6 @@ function createTransport({ configuration, checkpoint, historySha256,
     close() { if (busy) stop('algorithm_lifecycle'); closed = true; handle.close(); } });
 }
 export const createAlgorithmDevelopmentTransport = options => createTransport(options);
-export const createComplementarySourceTransport = options => createTransport(options, true);
-export const createLargePoolTransport = options => createTransport(options, false, true);
+export const createComplementarySourceTransport = options => createTransport(options, 'complementary');
+export const createLargePoolTransport = options => createTransport(options, 'large-pool');
+export const createRelationBindingTransport = options => createTransport(options, RELATION_BINDING_VERSION);

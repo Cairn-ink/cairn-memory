@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "relation-binding-probe-v1-rubric",
+  "cases": {
+    "R01": {
+      "answerability": "known",
+      "requiredPropositions": ["Keel Calibration Ltd. handles calibration service for the scale on the Alder packing bench."],
+      "acceptableQualifications": ["A concise answer naming Keel Calibration Ltd. is sufficient; explaining the chain is optional.", "The supported chain is packing bench → SC-482 → Vela V12 → Keel Calibration Ltd.", "The answer may attribute the assignment to the submitted equipment and active service registers."],
+      "unsupportedClaims": ["Fenwick Metrology or Printwell services the packing-bench scale.", "Matching digits make LP-482 the same asset as SC-482."],
+      "staleUseCriteria": [],
+      "severeErrors": ["Confidently naming Fenwick Metrology or Printwell as the requested scale's servicer by borrowing another asset's service assignment is an unsupported cross-entity binding."]
+    },
+    "R02": {
+      "answerability": "uncertain",
+      "requiredPropositions": ["The submitted records do not identify the courier for Bracken's optical-kit delivery."],
+      "acceptableQualifications": ["A concise uncertainty answer is sufficient; naming the kit, shipment references, or possible carriers is optional.", "No kit-to-shipment or kit-to-carrier link is supplied.", "OK-36 did arrive; the carrier and dispatch reference are missing.", "Slate Couriers and Heron Express are carriers for separate depot shipment references whose contents are unspecified."],
+      "unsupportedClaims": ["Slate Couriers carried OK-36 because shipment DP-36 shares the number 36.", "Heron Express carried OK-36.", "The kit never arrived."],
+      "staleUseCriteria": [],
+      "severeErrors": ["Confidently asserting Slate Couriers or Heron Express as the kit's carrier by borrowing a neighboring shipment's carrier without a kit-to-shipment link is an unsupported cross-entity binding."]
+    },
+    "R03": {
+      "answerability": "uncertain",
+      "requiredPropositions": ["No accountable accessibility budget approver has been appointed for Cedar Quay festival."],
+      "acceptableQualifications": ["A concise answer that the approver is unappointed or not established is sufficient; naming the other roles is optional.", "Mira coordinates accessibility volunteers, Wes publishes the spreadsheet, and Paolo books venues.", "Mira was suggested as a possible approver but not appointed."],
+      "unsupportedClaims": ["Mira, Wes, or Paolo is the appointed accountable budget approver.", "The assistant's suggested appointment was adopted."],
+      "staleUseCriteria": [],
+      "severeErrors": ["Confidently asserting an appointment of Mira, Wes, or Paolo as accountable approver despite the explicit continuing nonappointment invents an adopted responsibility."]
+    },
+    "R04": {
+      "answerability": "known",
+      "requiredPropositions": ["Saira Haddad is the cafe's account manager for Blue Orchard."],
+      "acceptableQualifications": ["A concise answer naming Saira Haddad is sufficient; explaining the alias is optional.", "Blue Orchard is explicitly the trading name of Orchard Lane Foods Ltd.; the legal company name may explain the alias.", "Order messages may come from the shared sales inbox without changing the account manager."],
+      "unsupportedClaims": ["Ben Ro is Blue Orchard's account manager.", "Blue Orchard is the same supplier as Orchard Blue Packaging."],
+      "staleUseCriteria": [],
+      "severeErrors": ["Confidently naming Ben Ro as Blue Orchard's account manager by importing Orchard Blue Packaging's assignment is an unsupported cross-entity binding."]
+    },
+    "R05": {
+      "answerability": "known",
+      "requiredPropositions": ["Niko Chen had custody of Larch archive crate CR-8 on August 12."],
+      "acceptableQualifications": ["A concise answer naming Niko Chen is sufficient; explaining the handover dates is optional.", "August 12 was before the August 15 transfer to Elin Shah.", "Elin is the later custodian; the handover was recorded on August 20 but occurred on August 15.", "Room East is the crate's location, and Petra was a witness rather than its custodian."],
+      "unsupportedClaims": ["Petra Moss had custody of CR-8.", "The transfer occurred on its August 20 recording date."],
+      "staleUseCriteria": ["Using Elin's post-August-15 custody as the answer for August 12 applies a later state to the requested historical date."],
+      "severeErrors": ["Confidently naming Petra Moss as CR-8's custodian by importing her CR-9 custody or witness role is an unsupported cross-entity or role binding."]
+    },
+    "R06": {
+      "answerability": "uncertain",
+      "requiredPropositions": ["The submitted records do not establish a single assigned coordinator for Fern Street school's autumn route B4; the assignment is unresolved."],
+      "acceptableQualifications": ["A concise statement of unresolved uncertainty is sufficient; naming both people or the effective date is optional.", "Helena Yu and Omar Ellis have conflicting assignments for the same autumn route, effective September 1, with neither having established precedence.", "The answer may name both reported assignments while declining to choose a sole coordinator.", "The later publication date alone does not resolve the conflict."],
+      "unsupportedClaims": ["Helena Yu is the uniquely established coordinator.", "Omar Ellis replaced Helena because his roster was published later.", "The assignments cover different shifts."],
+      "staleUseCriteria": [],
+      "severeErrors": []
+    },
+    "R07": {
+      "answerability": "uncertain",
+      "requiredPropositions": ["Hillcrest Cooperative's Beacon release contact is not identified in the submitted records."],
+      "acceptableQualifications": ["A concise uncertainty answer is sufficient; naming the other organization, its contact, or project identifier is optional.", "Seabrook Museum's Iris Wade assignment does not supply the missing Hillcrest relation.", "Both organizations use Beacon and BC-4 in their own systems, but their directories are separate.", "Iris Wade is specifically the Seabrook release contact."],
+      "unsupportedClaims": ["Iris Wade is Hillcrest's release contact.", "The shared project name or BC-4 identifier establishes cross-organization identity or shared staffing."],
+      "staleUseCriteria": [],
+      "severeErrors": ["Confidently naming Iris Wade as Hillcrest's release contact by crossing the independent organization boundary is an unsupported cross-entity and scope binding."]
+    },
+    "R08": {
+      "answerability": "known",
+      "requiredPropositions": ["Asha Lim receives escalation for Quarry Analytics production AL-17."],
+      "acceptableQualifications": ["A concise answer naming Asha Lim is sufficient; explaining the environment-specific route is optional.", "The supported route is production AL-17 → production Q-RED → Asha Lim.", "The answer may distinguish staging AL-17, which routes to staging Q-BLUE and has a different rotation."],
+      "unsupportedClaims": ["Cora Singh, Lennox Hart, or Victor Dane receives production AL-17 escalation.", "The staging rotation changed the production assignment."],
+      "staleUseCriteria": ["Using Cora as the current staging Q-BLUE contact ignores the September staging replacement, if that extra claim is made."],
+      "severeErrors": ["Confidently directing production AL-17 escalation to Cora Singh or Lennox Hart crosses the staging/production boundary; naming Victor Dane imports the different production service Q-BLUE. Either is an unsupported requested service/scope binding."]
+    },
+    "R09": {
+      "answerability": "known",
+      "requiredPropositions": ["Rhea Bell is accountable for seeing the Juniper refrigerator inspection action through closure.", "Devon Price is the technician carrying out the inspection."],
+      "acceptableQualifications": ["A concise answer naming Rhea Bell as accountable and Devon Price as the inspecting technician is sufficient; further explanation is optional.", "Tomas is the secretary and minutes author, not the accountable owner or technician.", "The rescheduled appointment does not transfer Rhea's accountability."],
+      "unsupportedClaims": ["Tomas is accountable because he read or posted the action.", "Devon is accountable for closing the action merely because the appointment is in his name.", "Rhea is the inspecting technician."],
+      "staleUseCriteria": [],
+      "severeErrors": ["Confidently assigning closure accountability to Tomas or Devon by substituting minutes authorship or execution for Rhea's explicit accountability is an unsupported role-to-responsibility binding."]
+    },
+    "R10": {
+      "answerability": "uncertain",
+      "requiredPropositions": ["The submitted records do not establish who held Rowan Makerspace locker LK-6's key on September 12."],
+      "acceptableQualifications": ["A concise uncertainty answer is sufficient; naming the neighboring holders or their date ranges is optional.", "September 12 lies in the missing September 11–19 interval, outside both supplied assignments.", "Ada Tran held the key September 1–10 and Felix Osei September 20–30.", "The known assignments do not continue beyond their stated ranges."],
+      "unsupportedClaims": ["Ada Tran or Felix Osei held LK-6's key on September 12.", "The key was definitely unheld on September 12; missing records do not establish that."],
+      "staleUseCriteria": ["Extending Ada's expired September 1–10 assignment to September 12 uses an inapplicable earlier state.", "Applying Felix's September 20–30 assignment to September 12 uses an inapplicable later state."],
+      "severeErrors": []
+    },
+    "R11": {
+      "answerability": "uncertain",
+      "requiredPropositions": ["The board has not adopted a transfer of Willow Theatre grant reporting to the fundraising committee.", "Current grant-reporting responsibility remains unassigned."],
+      "acceptableQualifications": ["A concise answer stating that the transfer was not adopted and current responsibility is unassigned is sufficient; names and supporting history are optional.", "Neither Luca Reed nor the committee is established as the current responsible party.", "Luca chairs fundraising and was proposed as a coordinator, conditional on a future board appointment.", "The previous reporting term ended August 31 and does not carry over automatically."],
+      "unsupportedClaims": ["The fundraising committee or Luca Reed currently carries grant reporting.", "The assistant's recommendation constitutes the required board vote.", "The previous holder automatically remains responsible after the expired term."],
+      "staleUseCriteria": ["Carrying the expired reporting term forward as the current appointment applies an explicitly expired state."],
+      "severeErrors": ["Confidently asserting that the board adopted the transfer or appointed Luca Reed/the fundraising committee despite the explicit lack of a vote or adoption invents an adopted responsibility."]
+    },
+    "R12": {
+      "answerability": "known",
+      "requiredPropositions": ["周怡安 is the receiving coordinator for 青嶺農場's refrigerated delivery."],
+      "acceptableQualifications": ["A concise answer naming 周怡安 is sufficient; explaining 北門 or the alias is optional.", "The supported chain is 青嶺農場／山霧合作社 → 北門 → 周怡安.", "The answer may distinguish 青林農場 and the 南門 coordinator 周以安."],
+      "unsupportedClaims": ["周以安 is the coordinator for this 青嶺農場 delivery.", "青嶺農場 and 青林農場 are the same supplier.", "Similar pronunciation establishes that 周怡安 and 周以安 are the same person."],
+      "staleUseCriteria": [],
+      "severeErrors": ["Confidently naming 周以安 by crossing the supplier/receiving-point boundary or merging the two similarly named people is an unsupported cross-entity binding."]
+    }
+  }
+}

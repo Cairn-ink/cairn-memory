@@ -220,6 +220,7 @@ test('Q3/Q4 clean reviewed manifest binds candidate/helpers/Node, mutation fails
   execFileSync('/usr/bin/tar', ['-x', '-C', checkout], { input: archive });
   // Use the exact current packet while HEAD may still be the preimplementation base.
   cpSync(join(root, 'evaluation/algorithm-development'), join(checkout, 'evaluation/algorithm-development'), { recursive: true });
+  cpSync(join(root, 'evaluation/longmemeval/mixed-answer.mjs'), join(checkout, 'evaluation/longmemeval/mixed-answer.mjs'));
   cpSync(join(root, 'docs/plans/complementary-qa24.md'), join(checkout, 'docs/plans/complementary-qa24.md'));
   cpSync(join(root, 'adapters/openai/node_modules'), join(checkout, 'adapters/openai/node_modules'), { recursive: true });
   fixture.commit('Owned complementary manifest fixture');

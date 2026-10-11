@@ -1,0 +1,129 @@
+{
+  "schemaVersion": "relation-binding-probe-v1",
+  "cases": [
+    {
+      "id": "R01",
+      "family": "supported-two-hop",
+      "question": { "text": "Which company handles calibration service for the scale assigned to the Alder workshop's packing bench?", "date": "2026-08-18" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-08-01T09:00:00.000Z", "text": "The Alder workshop has two benches this season. Packing uses the scale whose asset tag is SC-482; the receiving bench uses SC-219. The packing station's label printer is LP-482." },
+        { "recordedRole": "assistant", "eventAt": "2026-08-02T10:00:00.000Z", "text": "The equipment register lists SC-482 as a Vela Instruments V12 bench scale and SC-219 as a Northline N7 scale. LP-482 is a Printwell printer. These are separate assets, despite the matching digits on two tags." },
+        { "recordedRole": "user", "eventAt": "2026-08-03T11:00:00.000Z", "text": "Our active service register assigns calibration of every Vela V12 scale in this workshop to Keel Calibration Ltd. Northline N7 calibration goes to Fenwick Metrology. Printer repairs go through Printwell." },
+        { "recordedRole": "user", "eventAt": "2026-08-16T12:00:00.000Z", "text": "The August packing rota changed, but the bench equipment and service contracts are unchanged." }
+      ]
+    },
+    {
+      "id": "R02",
+      "family": "missing-link",
+      "question": { "text": "Which courier carried the optical kit borrowed by the Bracken field team to the marsh site?", "date": "2026-08-19" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-08-10T08:00:00.000Z", "text": "Bracken borrowed optical kit OK-36 for the marsh survey. The loan desk released it on Monday. The loan entry does not record a dispatch reference or carrier." },
+        { "recordedRole": "assistant", "eventAt": "2026-08-11T09:00:00.000Z", "text": "Two depot shipments left on Monday: shipment DP-36 was carried by Slate Couriers and DP-82 by Heron Express. Their contents were not included in the dispatch extract." },
+        { "recordedRole": "user", "eventAt": "2026-08-18T14:00:00.000Z", "text": "The Bracken team confirms that OK-36 arrived at the marsh site. They retained the kit loan receipt, but no shipping label or tracking number." }
+      ]
+    },
+    {
+      "id": "R03",
+      "family": "explicit-unknown",
+      "question": { "text": "Who is accountable for approving the Cedar Quay festival's accessibility budget?", "date": "2026-08-22" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-08-05T09:00:00.000Z", "text": "Cedar Quay festival roles: Paolo books the venues, Mira coordinates accessibility volunteers, and Wes publishes the budget spreadsheet. We have not named the person accountable for approving the accessibility budget." },
+        { "recordedRole": "assistant", "eventAt": "2026-08-06T10:00:00.000Z", "text": "Mira could be a practical choice for accessibility budget approval because she coordinates the volunteers. That would require a separate appointment by the organizers." },
+        { "recordedRole": "user", "eventAt": "2026-08-21T11:00:00.000Z", "text": "The organizers still have not appointed an accessibility budget approver. Mira's volunteer-coordination role and Wes's spreadsheet duties continue." }
+      ]
+    },
+    {
+      "id": "R04",
+      "family": "explicit-alias",
+      "question": { "text": "Who is the account manager for the supplier called 'Blue Orchard' in our cafe's order emails?", "date": "2026-08-23" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-08-02T08:00:00.000Z", "text": "Our cafe orders tea from Blue Orchard. That is the trading name of Orchard Lane Foods Ltd.; the invoices use Orchard Lane Foods Ltd. Blue Orchard is not Orchard Blue Packaging, which supplies our cartons." },
+        { "recordedRole": "assistant", "eventAt": "2026-08-07T09:00:00.000Z", "text": "The cafe's current supplier contact register lists Saira Haddad as account manager for Orchard Lane Foods Ltd. The account manager for Orchard Blue Packaging is Ben Ro." },
+        { "recordedRole": "user", "eventAt": "2026-08-20T10:00:00.000Z", "text": "Saira remains our tea-supplier account manager this month. Order confirmations may still come from their shared sales inbox." }
+      ]
+    },
+    {
+      "id": "R05",
+      "family": "transfer-event-time",
+      "question": { "text": "Who had custody of the Larch archive's crate CR-8 on August 12, 2026?", "date": "2026-08-25" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-08-03T09:00:00.000Z", "text": "Niko Chen has held custody of Larch archive crate CR-8 since July 28. The nearby crate CR-9 is in Petra Moss's custody." },
+        { "recordedRole": "user", "eventAt": "2026-08-20T08:00:00.000Z", "text": "I am filing the signed handover late: Niko transferred custody of CR-8 to Elin Shah on August 15 at 09:00 UTC. Until that handover Niko retained custody. Petra witnessed the handover; she did not take custody of CR-8." },
+        { "recordedRole": "assistant", "eventAt": "2026-08-21T10:00:00.000Z", "text": "The archive location register puts CR-8 in Room East from August 10 onward. A location entry does not name a different custodian." },
+        { "recordedRole": "user", "eventAt": "2026-08-24T11:00:00.000Z", "text": "Elin still has CR-8 after the August 15 handover." }
+      ]
+    },
+    {
+      "id": "R06",
+      "family": "unresolved-conflict",
+      "question": { "text": "Who is the assigned coordinator of the Fern Street school's autumn bus route B4?", "date": "2026-08-28" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-08-18T09:00:00.000Z", "text": "The transport office's autumn roster assigns Fern Street school route B4 coordination to Helena Yu, effective September 1." },
+        { "recordedRole": "user", "eventAt": "2026-08-19T09:00:00.000Z", "text": "The school office's autumn roster assigns that same Fern Street route B4 coordination to Omar Ellis, effective September 1. Both offices describe their rosters as final." },
+        { "recordedRole": "assistant", "eventAt": "2026-08-23T10:00:00.000Z", "text": "These are conflicting assignments for the same route and start date, rather than two different shifts. The two offices have equal assignment authority; publication time does not decide precedence." },
+        { "recordedRole": "user", "eventAt": "2026-08-27T11:00:00.000Z", "text": "The offices have not reconciled the B4 rosters. Neither appointment has been withdrawn or declared to replace the other." }
+      ]
+    },
+    {
+      "id": "R07",
+      "family": "organization-scope-collision",
+      "question": { "text": "Who is the release contact for the Beacon project at Hillcrest Cooperative?", "date": "2026-09-02" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-08-12T09:00:00.000Z", "text": "Hillcrest Cooperative and Seabrook Museum each run a project called Beacon. They are independent organizations with separate staff directories; project names are not cross-organization identifiers." },
+        { "recordedRole": "assistant", "eventAt": "2026-08-13T10:00:00.000Z", "text": "Seabrook Museum's Beacon release contact is Iris Wade. Seabrook's project identifier is BC-4." },
+        { "recordedRole": "user", "eventAt": "2026-08-29T11:00:00.000Z", "text": "Hillcrest's Beacon project identifier is also BC-4 in Hillcrest's own system. The Hillcrest extract lists its release date and build number, but leaves the release-contact field blank. No shared staffing agreement is recorded." }
+      ]
+    },
+    {
+      "id": "R08",
+      "family": "same-id-different-environment",
+      "question": { "text": "Who receives escalation for production alert AL-17 at Quarry Analytics?", "date": "2026-09-05" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-08-14T09:00:00.000Z", "text": "Quarry Analytics assigns alert identifiers independently inside staging and production. Production AL-17 routes to service Q-RED; staging AL-17 routes to service Q-BLUE. A route is the service responsible for escalation." },
+        { "recordedRole": "assistant", "eventAt": "2026-08-15T10:00:00.000Z", "text": "In the production escalation directory, Q-RED is assigned to Asha Lim and Q-BLUE to Victor Dane. In staging, Q-BLUE is assigned to Cora Singh. The directories have separate environment scopes." },
+        { "recordedRole": "user", "eventAt": "2026-09-04T11:00:00.000Z", "text": "The September production rotation retains Asha on Q-RED. Only the staging rotation changed, moving staging Q-BLUE from Cora to Lennox Hart." }
+      ]
+    },
+    {
+      "id": "R09",
+      "family": "role-versus-owner",
+      "question": { "text": "Who is accountable for closing the Juniper clinic's refrigerator inspection action, and who is carrying out the inspection?", "date": "2026-09-08" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-08-26T09:00:00.000Z", "text": "At the Juniper clinic meeting, secretary Tomas read out the refrigerator inspection action. Rhea Bell accepted responsibility for seeing it completed and remains accountable for closing it. The external technician, Devon Price, will carry out the inspection." },
+        { "recordedRole": "assistant", "eventAt": "2026-08-27T10:00:00.000Z", "text": "The meeting minutes were posted by Tomas. He is the minutes author, and the inspection appointment is under Devon's name." },
+        { "recordedRole": "user", "eventAt": "2026-09-07T11:00:00.000Z", "text": "Devon moved the inspection appointment to Friday. Rhea confirmed she still carries the action through closure; this scheduling change did not transfer that responsibility." }
+      ]
+    },
+    {
+      "id": "R10",
+      "family": "inapplicable-time",
+      "question": { "text": "Who held the rotating key to locker LK-6 at Rowan Makerspace on September 12, 2026?", "date": "2026-09-25" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-09-01T09:00:00.000Z", "text": "Rowan Makerspace's rotating locker-key register names Ada Tran as holder of LK-6 for September 1 through September 10 inclusive. Entries apply only to their stated date ranges; keys are returned at the end of each range." },
+        { "recordedRole": "assistant", "eventAt": "2026-09-21T10:00:00.000Z", "text": "The next available LK-6 register entry names Felix Osei as holder from September 20 through September 30 inclusive. The supplied register has no entry for September 11–19." },
+        { "recordedRole": "user", "eventAt": "2026-09-24T11:00:00.000Z", "text": "We have not found the missing LK-6 key log for September 11–19. The Ada and Felix entries are accurate for their respective ranges." }
+      ]
+    },
+    {
+      "id": "R11",
+      "family": "proposal-versus-adoption",
+      "question": { "text": "Has the Willow Theatre board transferred the grant-reporting responsibility to its fundraising committee, and who carries it now?", "date": "2026-09-28" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-09-03T09:00:00.000Z", "text": "The Willow Theatre board is reviewing who should carry grant reporting after the previous reporting term ended on August 31. A new appointment needs a recorded board vote; the expired term does not carry over automatically." },
+        { "recordedRole": "assistant", "eventAt": "2026-09-04T10:00:00.000Z", "text": "A possible arrangement would transfer grant reporting to the fundraising committee, with committee chair Luca Reed coordinating submissions. This is a recommendation for the board's consideration." },
+        { "recordedRole": "user", "eventAt": "2026-09-27T11:00:00.000Z", "text": "The board has not voted on the grant-reporting appointment or adopted the fundraising-committee proposal. The current responsible person or body remains unassigned. Luca continues to chair fundraising." }
+      ]
+    },
+    {
+      "id": "R12",
+      "family": "cjk-alias-and-join",
+      "question": { "text": "青嶺農場這次冷藏車交貨，應聯絡哪位收貨協調人？", "date": "2026-09-30" },
+      "sourceUnits": [
+        { "recordedRole": "user", "eventAt": "2026-09-10T09:00:00.000Z", "text": "青嶺農場的訂單由「山霧合作社」開立發票；山霧合作社就是青嶺農場對外使用的法人名稱，兩者是同一供貨方。青林農場是另一家，不能混用。" },
+        { "recordedRole": "assistant", "eventAt": "2026-09-11T10:00:00.000Z", "text": "本月配送表：山霧合作社的冷藏車交貨走北門收貨點；青林農場的常溫車交貨走南門收貨點。卸貨地點和供貨方的名稱是不同欄位。" },
+        { "recordedRole": "user", "eventAt": "2026-09-12T11:00:00.000Z", "text": "九月收貨輪值：北門由周怡安協調，南門由周以安協調。名字讀音接近，但她們是兩位不同的人。這份輪值適用到九月底。" },
+        { "recordedRole": "user", "eventAt": "2026-09-29T12:00:00.000Z", "text": "青嶺農場這次仍使用冷藏車、仍在北門交貨。收貨輪值沒有變更。" }
+      ]
+    }
+  ]
+}
