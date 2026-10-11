@@ -21,7 +21,7 @@ import { emitDiagnostic } from './model-diagnostics.mjs';
 import { createQueryExcerpt, QUERY_EXCERPT_VERSION } from './query-excerpt.mjs';
 import { createQueryScore, QUERY_CANDIDATE_VERSION, QUERY_SCAN_LIMIT,
   SOURCE_QUERY_CANDIDATE_VERSION, SOURCE_QUERY_RECEIPT_LIMIT,
-  BOUNDED_KEYSET_SOURCE_CANDIDATES } from './query-candidates.mjs';
+  BOUNDED_KEYSET_SOURCE_CANDIDATES, MOC_PRIOR_SOURCE_CANDIDATES } from './query-candidates.mjs';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
 import { proposeRationale } from './rationale.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
@@ -165,7 +165,7 @@ export function openMemoryCore(input) {
   const sourceCandidateDescriptor = Object.getOwnPropertyDescriptor(input, 'sourceCandidatePolicy');
   const sourceCandidatePolicy = sourceCandidateDescriptor?.value;
   if (sourceCandidateDescriptor && (!Object.hasOwn(sourceCandidateDescriptor, 'value') ||
-      sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version)) {
+      ![BOUNDED_KEYSET_SOURCE_CANDIDATES.version, MOC_PRIOR_SOURCE_CANDIDATES.version].includes(sourceCandidatePolicy))) {
     throw new MemoryStoreError('invalid_input');
   }
   const hasCaptureDeadline = Object.hasOwn(input, 'captureDeadlineMs');
@@ -653,6 +653,14 @@ export function openMemoryCore(input) {
       if (navigation?.sourceCandidatePolicy) Object.assign(binding, {
         physicalPage: BOUNDED_KEYSET_SOURCE_CANDIDATES.page,
         top: BOUNDED_KEYSET_SOURCE_CANDIDATES.top,
+      });
+      if (navigation?.sourceCandidatePolicy === MOC_PRIOR_SOURCE_CANDIDATES.version) Object.assign(binding, {
+        topics: MOC_PRIOR_SOURCE_CANDIDATES.topics,
+        titleBindings: MOC_PRIOR_SOURCE_CANDIDATES.titleBindings,
+        priorTopics: MOC_PRIOR_SOURCE_CANDIDATES.priorTopics,
+        priorMembers: MOC_PRIOR_SOURCE_CANDIDATES.priorMembers,
+        lexicalBatch: MOC_PRIOR_SOURCE_CANDIDATES.lexicalBatch,
+        priorBatch: MOC_PRIOR_SOURCE_CANDIDATES.priorBatch,
       });
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||

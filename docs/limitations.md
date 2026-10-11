@@ -1,5 +1,20 @@
 # Known limitations
 
+The [MOC-prior candidate experiment](plans/moc-prior-candidates.md) is a separate
+explicit `moc-prior-keyset-v1` constructor policy, not a default or a demonstrated
+QA improvement. It only reorders the existing eligible top 1,024 using bounded
+source/revision/projection-valid title hints (64 topics, 64 bindings plus sentinel,
+top 2 topics/first 3 members); it reads no raw archive and adds no model call.
+Manual filing and request-only scripted ports on a supported 96-card pressure
+fixture establish plumbing, not natural capture/classification, relevance or
+real first-answer quality. Small visibility thresholds varied across UUID
+replicas and are not universal. Shared noisy topics can supply only noisy prior
+members; unfiled/misfiled targets depend on the unchanged lexical backstop, which
+is not complete-source selection. Natural filing/candidate consumption and a
+fresh pre-frozen paired model study remain separate gates; none is authorized
+or executed by this offline packet. Historical instruction/ranking datasets,
+scores and default settings remain unchanged.
+
 The prospective [relation-bound first-answer diagnostic](plans/relation-binding-probe.md)
 tests one fixed instruction at harness answer consumption, with 12 new submitted
 source/question cases and 24 first answers. It does not change core MOC, retrieval

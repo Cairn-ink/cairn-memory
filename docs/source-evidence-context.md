@@ -56,6 +56,23 @@ constructor, body-only recall, namespace authority, selector/answer budgets,
 and final source payload stay unchanged. There is no MCP or hosted option for
 this constructor policy.
 
+The separate opt-in constructor policy `sourceCandidatePolicy: 'moc-prior-keyset-v1'`
+reorders only that same eligible top-1,024 pool; it adds no missing source or
+model call. It considers at most 64 first current L1 topics by opaque ID, with
+at most 64 original source bindings plus an overflow sentinel per topic. Only
+titles whose complete original bindings and published projections remain valid
+may contribute literal query overlap. At most 2 matching topics supply the first 3
+lexically ordered members each. Mixing repeatedly emits 2 unseen lexical
+candidates then 1 unseen prior while hints remain; the first 2 lexical candidates
+stay first. The unchanged lexical backstop follows. Row payloads and complete retained sources
+are unchanged. No matches retain legacy order; misleading filing can distract,
+and a shared noisy topic's first 3 members may all be noise. This is not a full
+topic catalog traversal or a claim that every relevant memory will be selected.
+Bounds and policy are cursor-bound, and all existing freshness checks remain.
+The manually filed 96-card scripted control verifies visibility/packing only;
+natural classification, first-answer QA and local resource benefit are unmeasured.
+There is still no MCP/Hermes configuration or default promotion.
+
 Fetch returns every retained receipt for one memory or fails; it does not slice
 an excerpt or silently return an incomplete receipt set. The existing 101-row
 sentinel supports at most 100 receipts, still within the <=4000-token response

@@ -91,6 +91,9 @@ durable budget; see `docs/plans/live-value-evidence.md`.
 For changes to `core/` or its example, also run `npm run test:core` and
 `npm run demo:store` on Node >=22.16. CI checks the minimum 22.16 runtime and
 Node 24. There is no TypeScript/typecheck gate in this JavaScript repository.
+Install the locked isolated adapter tooling with `npm ci --prefix adapters/openai`
+before `test:core`: the opt-in candidate regression uses its real local tokenizer;
+the public core runtime remains dependency-free and the test makes no provider call.
 Use only synthetic temporary databases; never point tests at user or production
 data. See `docs/local-store.md` for the preview's boundaries and retention limits.
 

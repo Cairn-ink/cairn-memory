@@ -693,6 +693,28 @@ the same authoritative stored identity, ownership, role, canonical excerpt and
 receipt-key validation used by source output; corrupted rows fail before selector
 invocation.
 
+The separate explicit constructor policy `sourceCandidatePolicy: 'moc-prior-keyset-v1'`
+uses that identical eligible top-1,024 pool for source/rationale-evidence recall
+only. It considers the first valid current L1 placement already exposed by each
+candidate, inspects at most 64 distinct topic IDs in opaque-ID order, and uses
+positive literal query/title overlap to retain at most 2 topics (score then ID).
+Every original title binding must be current, nondeleted, nonawaiting, exact
+namespace/revision and present in the published title-source and memory
+projections before its title is scored. At most 64 bindings plus one overflow
+sentinel are read per topic; empty, invalid or over-cap titles cannot supply a
+prior. Projected validation uses bounded indexed point reads, not a graph walk.
+The first 3 members per chosen topic retain their lexical order, giving at most 6
+unique prior candidates. Stable mixing emits 2 unseen lexical candidates then 1
+unseen prior candidate, then appends the lexical remainder. First 2 lexical
+candidates remain first 2, the exact eligible set/payloads are preserved, and
+no usable match preserves legacy order. Cursor state binds these fixed bounds
+and the distinct policy. Epoch/revision/final snapshot fences remain in force.
+Titles are untrusted filing hints, not answer evidence or authenticated truth.
+No extra model call, raw archive access, schema or captured field is added.
+Default/body recall, public maps, classification, automatic rationale discovery
+and MCP/Hermes settings remain unchanged. Manual-filing/scripted pressure tests
+establish visibility/selection plumbing only, not natural filing or QA gains.
+
 Default recall and automatic rationale discovery remain body-only; public maps
 and the classification topic catalog remain unchanged. Source-aware cursor
 state binds the explicit mode, query, policy version and four-receipt limit
