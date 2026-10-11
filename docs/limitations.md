@@ -1637,3 +1637,34 @@ cloud candidate scope, frozen public synthetic fixture, algorithm defaults and
 budgets are otherwise unchanged. This history establishes neither completed
 delivery nor semantic or answer-quality gain; paid execution and semantic
 acceptance remain pending.
+
+### Owned Git fixture lifecycle correction (2026-10-11)
+
+The later clean candidate `56f555df56184e7ea7980cea2351c84c12f72572`
+retained another B9 failure in
+[run 38070224313, job 114265935845](https://github.com/Cairn-ink/cairn-memory/actions/runs/38070224313/job/114265935845).
+This time the nested error identified `ENOTEMPTY` while removing the owned
+fixture's `runtime/.git/objects`. The algorithm suite passed 72/73; the head's
+27 checks comprised 26 successes and one failure. No retry changed that record.
+
+The [bounded lifecycle diagnosis](plans/owned-git-fixture-lifecycle.md) separately
+proved that Git 2.55 can return from synchronous commit while its detached
+maintenance still writes into the fixture. The original archive pattern, with
+no added inputs, failed an immediate unfinished-maintenance assertion. An
+older-Git amplified control also exposed detached auto-GC. Fixture-local
+`maintenance.autoDetach=false` and `gc.autoDetach=false` keep both native paths
+joined to the caller. Both synthetic checkout tests now use the same owned
+helper; normal Git packing still runs, and generic cleanup errors remain fatal.
+No system/user Git setting, product path, algorithm, rubric or budget changed.
+
+Both real caller regressions failed in the retained before/control observations
+and passed after the change on isolated Git 2.55. Worker checks on Node 22.16.0
+and 24.15.0 passed algorithm-development 73/73 and workspace lifecycle 27/27,
+all actual exit 0. The historical CI `ENOTEMPTY` itself was not reproduced:
+immediate disposal could succeed despite an active writer. This is a proven
+lifecycle correction, not proof of the historical failure's sole cause.
+
+Primary combined acceptance, independent final-head reviews and new CI remain
+separate delivery gates. The previous setup/core failures remain unexplained;
+this test-only correction does not resolve them. No new real-model QA score,
+default promotion, release or competitive-parity claim follows from these tests.
