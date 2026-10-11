@@ -1986,3 +1986,13 @@ accounted transport and upstream arm need separate controls, then entirely new
 frozen paired sources/rubric and independent first-answer/support judgments,
 with harm/resource rejection gates. Original cumulative/protected spending
 limits remain untouched; this prototype authorizes no paid execution.
+
+The prospective [source-bundle QA24 corpus](plans/source-bundle-qa24.md) freezes
+24 new synthetic source-only cases and a separate evaluator rubric before any
+model result. Offline schema, source-window, original-anchor and hash checks
+establish authored data integrity only. They do not establish semantic truth,
+first-answer improvement, packed support, actual core capture/map/rank behavior
+or complete provider wire fit. Those execution preconditions remain required
+in a later independently reviewed runner before any paid launch. No closed
+cohort is rerun or rescored; no efficacy, parity, D12 repair, product/default
+change or original Stage 2/3 clearance follows from this corpus-only packet.

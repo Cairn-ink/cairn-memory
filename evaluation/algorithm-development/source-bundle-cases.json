@@ -1,0 +1,3122 @@
+[
+  {
+    "id": "BQ01",
+    "family": "two-card",
+    "question": {
+      "text": "Which handling sleeve should the quilt exhibit team use for the crate assigned to Nara?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ01-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Nara is responsible for crate R17 in the Sable quilt exhibit; her assignment is to that crate, not the loose display rolls."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Crate R19 in the Sable quilt exhibit uses a nitrile sleeve because its fittings were recently treated."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Nara agreed to photograph the Sable entrance panel after lunch; that job does not involve opening a crate."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The loose display rolls for the Sable quilt exhibit may be moved with clean bare hands if their covers stay sealed."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Eli handles crate R19 for the Sable quilt exhibit and has already collected the treatment record."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For crate R17 in the Sable quilt exhibit, the handling sheet requires a cotton sleeve whenever its lid is opened."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Sable exhibit cotton sleeve stock is stored beside the loading door; the linen sleeves are for wall mounting."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Crate R17 has a shallow lid and should be opened on a level table; its dimensions are on the packing sheet."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Sable exhibit will use a grey fabric backdrop, after the blue sample looked too cold under the lights."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Nara asked whether the archive could lend a linen sleeve for a personal sewing demonstration next month."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Sable shipment contains four crates and two loose rolls; the courier counted packages at arrival."
+          }
+        ]
+      },
+      {
+        "id": "BQ01-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "A paper checklist for the Sable exhibit is clipped to each crate, and the room steward collects it after closing."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ02",
+    "family": "three-card",
+    "question": {
+      "text": "What logging cadence applies to the observatory badge issued to Pavel for the night pilot?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ02-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Controller D7 in the observatory night pilot logs every 10 minutes, so its chart has more closely spaced marks."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Pavel received observatory badge Orbit-6 for the night pilot; the badge number is written on his shift slip."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Pavel used badge Orbit-9 during a training drill in August; that drill is separate from the October night pilot."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The observatory day tour uses controller D4 only for a static display and does not collect interval logs."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Badge Orbit-6 has a cracked plastic clip; the desk will replace the clip without changing its controller assignment."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For the observatory night pilot, badge Orbit-6 is assigned to controller D4; badge Orbit-9 is assigned to controller D7."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Pavel will check the observatory roof hatch before his shift; the hatch checklist records inspection time in hours."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The observatory camera clocks were synchronized on Monday; their image cadence is independent of the pilot logs."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Controller D4 has a spare power cable in the cabinet, with a yellow tag to distinguish it from the D7 cable."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Controller D4 in the observatory night pilot logs at a 22-minute cadence; the interval belongs to D4, not to a person."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Observatory pilot visitors should leave badges at the desk on departure; the collection box is numbered by shift."
+          }
+        ]
+      },
+      {
+        "id": "BQ02-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The October observatory volunteer schedule puts Pavel on nights and Oona on the daytime school visits."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ03",
+    "family": "missing-link",
+    "question": {
+      "text": "Which allergen notice belongs to Leena’s tasting receipt at the Maple bakery?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ03-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Maple bakery tasting receipt Q61 covers the almond tart sample and carries an almond allergen notice."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Maple bakery 12:30 table has two chairs; Leena said a friend might join but has not given a name."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Receipt Q52 was placed beside the tasting counter, where several appointments collected their sample boxes."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Leena booked the 12:30 tasting at Maple bakery; the booking note records her name and time but no receipt number."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Leena asked Maple bakery to provide tea without milk; her drink request does not identify the biscuit sample."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Maple bakery morning tasting group tried oat biscuits; their receipts were filed in a separate envelope."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Maple bakery uses green stickers for vegetarian samples; allergen notices are printed as text rather than sticker colors."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "An unnamed visitor picked up receipt Q61 after asking about the tart glaze; the staff did not note a booking name."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Maple bakery rye biscuit recipe was revised for texture, with the rye flour retained in the revised batch."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Leena’s payment entry at Maple bakery records her booking name only; it does not state her tasting receipt number."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Maple bakery tasting receipt Q52 covers the rye biscuit sample and carries a rye allergen notice; no guest name is printed."
+          }
+        ]
+      },
+      {
+        "id": "BQ03-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Maple bakery tasting menu lists rye biscuits and almond tarts as separate sample choices for every appointment."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ04",
+    "family": "scope-time",
+    "question": {
+      "text": "As of October 12, what test pressure is specified for the municipal pump’s western shaft?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ04-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Bracken pump control panel shows a 40 kPa warning threshold; that threshold is not the inspection test setting."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The western shaft of the Bracken pump had its seals replaced on October 8, and the work order is closed."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Bracken pump supervisor requested a new eastern shaft gauge, with delivery expected later this month."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For the Bracken municipal pump inspection on October 3, the western shaft test pressure was set at 40 kPa."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For the Bracken pump training rig, instructors use 65 kPa to demonstrate the pressure display without a connected shaft."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Bracken municipal pump inspection book is kept in the service shed and should be returned there after each shift."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A 50 kPa trial was suggested for Bracken pump maintenance training; no inspection setting was adopted from that suggestion."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Bracken pump supervisor revised the western shaft test pressure to 65 kPa for inspections from October 9 onward."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Bracken pump western access ladder is temporarily blocked by a toolbox; the shift lead will move it before inspection."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Bracken pump evening shift records pressure observations every hour, separately from the specified test pressure."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The spare Bracken pump gauge has a maximum reading of 100 kPa and is stored in a padded case."
+          }
+        ]
+      },
+      {
+        "id": "BQ04-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Bracken municipal pump eastern shaft uses 90 kPa during its October inspection; this setting applies only to the east."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ05",
+    "family": "proposal-uncertainty",
+    "question": {
+      "text": "What wash color has the theatre adopted for the Fern production?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ05-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Fern theatre lighting meeting adopted a neutral-white wash for the production; the lighting lead signed that decision."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Fern costume team chose an amber ribbon for the final scene; that costume choice does not change the lighting wash."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Fern theatre lighting lead booked a test session for next week but has not reported its results."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Fern stage floor will use a dark grey finish, chosen to reduce glare under the adopted wash."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For Fern, a designer later proposed an amber wash as an experiment; the note says the proposal awaits the lighting lead’s decision."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The theatre’s Birch production adopted amber last season; its lighting file is separate from the Fern production."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Fern follow spot has a pale blue gel for one solo, while the general wash is controlled on a separate channel."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Fern lighting lead asked the designer to compare electricity usage for two wash options before the next meeting."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Fern director quoted a previous show’s note, \"Amber makes the set feel warmer,\" while discussing possible experiments."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Fern rehearsal calendar reserves Tuesday for lighting adjustments and Wednesday for costume fittings."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The theatre store has spare neutral-white lamps and amber gels; inventory availability is not a production decision."
+          }
+        ]
+      },
+      {
+        "id": "BQ05-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Fern producer approved an extra rehearsal hour, with no approval recorded for any proposed wash change."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ06",
+    "family": "two-card",
+    "question": {
+      "text": "Which microphone connector fits the field recorder reserved for Tessa’s lake survey?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ06-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Shale field recorder accepts an XLR microphone connector and is assigned to another Larch lake survey crew."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Tessa reserved the Pebble field recorder for the Larch lake survey; the reservation refers to the recorder, not the backup handset."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Tessa borrowed an XLR microphone for a studio session last winter; that reservation has already ended."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Larch lake backup handset charges over USB-C; its charging socket is not a microphone connector for a recorder."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Pebble recorder’s protective pouch is orange, while the Shale recorder has a dark blue pouch."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Larch lake survey team plans to record bird calls at dawn and boat traffic during the afternoon."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Pebble field recorder accepts a 3.5 mm microphone connector; the connector specification is printed on its equipment card."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Tessa asked for a longer microphone cable for the lake survey but did not request a different recorder."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Larch lake survey spare cable box holds XLR and 3.5 mm leads in separate labeled compartments."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Pebble recorder batteries were tested after charging; the equipment desk recorded four hours of playback."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Larch lake south jetty is closed this week, so the survey team will launch from the north ramp."
+          }
+        ]
+      },
+      {
+        "id": "BQ06-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The recorder desk requires returned equipment to be dry before it is placed in the charging cupboard."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ07",
+    "family": "three-card",
+    "question": {
+      "text": "How long should Jin soak the seeds in the packet checked out for the Glasshouse library trial?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ07-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Seed lot L48 for the Glasshouse display needs a two-hour soak before planting and is not in trial packet H8."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Jin also borrowed a seed sowing tray, which should be rinsed after use; the tray record contains no seed lot."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Jin checked out packet H8 for the Glasshouse seed-library trial; the checkout sheet gives H8 as the packet identifier."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Glasshouse library trial uses packet H9 for Uma, with seed lot L48 listed on that separate checkout."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Glasshouse seed librarian moved the display jars to a lower shelf but did not change their lot labels."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Packet H8 has a torn paper corner; the Glasshouse desk taped it before handing it to the checkout counter."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Glasshouse trial packet H8 contains seed lot L46; the packet record links H8 to L46 rather than to the display lot."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Glasshouse trial planting beds will be watered in the evening if the afternoon remains windy."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Seed lot L46 was counted twice at the Glasshouse desk, and both counts showed enough seeds for the trial row."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Glasshouse library hosts a germination workshop next Friday, using demonstration packets kept apart from checkouts."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For the Glasshouse trial, seed lot L46 needs a six-hour soak before planting; this instruction applies to that lot."
+          }
+        ]
+      },
+      {
+        "id": "BQ07-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Jin plans to return the empty Glasshouse packet with a planting note after the trial seedlings appear."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ08",
+    "family": "missing-link",
+    "question": {
+      "text": "What firing temperature was assigned to Mina’s cobalt tray at the Solstice ceramics studio?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ08-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Solstice kiln batch Cobalt-3 is assigned 1220 degrees Celsius and also contains several cobalt-glazed pieces."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Mina asked Solstice studio for a photograph of her tray before firing; the photographer used the shared intake table."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Solstice studio shelf for cobalt work holds trays from several owners, sorted by arrival rather than kiln batch."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Solstice studio fired a demonstration tray at 1200 degrees Celsius during a workshop in September."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Mina submitted a cobalt-glazed tray to Solstice studio; the intake note describes the tray but omits its kiln batch code."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Cobalt-2 Solstice batch includes a bowl and two small tiles, with additional shapes left undescribed on the load list."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Solstice ceramics technician replaced a kiln thermocouple before the October batches were loaded."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Mina paid the Solstice studio firing fee online; the payment receipt records her name but no load or temperature."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Solstice studio cobalt glaze dries pale grey before firing; its unfired color does not distinguish the kiln batches."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Solstice staff will email owners when trays are ready, using intake names rather than batch codes in those messages."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Solstice studio overflow shelf contains unassigned work awaiting a later kiln load, including several unnamed trays."
+          }
+        ]
+      },
+      {
+        "id": "BQ08-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Solstice kiln batch Cobalt-2 is assigned 1180 degrees Celsius; its load list does not name owners or identify Mina’s tray."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ09",
+    "family": "scope-time",
+    "question": {
+      "text": "What watering schedule is currently established for the northern block of Quince orchard?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ09-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Quince orchard adopted watering every 18 days for the northern block while its soil-moisture sensor was working."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Quince orchard northern tank was refilled on October 8, which records water availability rather than a new schedule."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A Quince contractor suggested checking the northern soil daily until a new sensor arrives; the manager has not adopted that suggestion."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Quince orchard eastern nursery pots are watered every morning, separately from either field block."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Quince northern-block sensor failed on October 7; the manager says the 18-day plan needs reconfirmation, without choosing a replacement."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The northern Quince sensor replacement is expected on October 16, subject to courier delivery."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Quince orchard used a 14-day northern schedule two years ago before changing the soil covering."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Quince orchard staff rota assigns Lio to northern tank checks and Vera to the southern irrigation valves."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Quince orchard’s southern block follows a 12-day watering schedule; its sensor remains working and its soil is different."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Quince manager requested a written review of sensor failures at the next staff meeting."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Quince orchard harvest crates are washed after each use; that cleaning routine does not set field watering intervals."
+          }
+        ]
+      },
+      {
+        "id": "BQ09-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Quince southern sensor was recalibrated on October 9 and still reports readings within its expected range."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ10",
+    "family": "proposal-uncertainty",
+    "question": {
+      "text": "What delivery commitment is recorded for the Velvet courier’s parcel V31?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ10-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Velvet parcel V32 has a confirmed 10 am delivery to a different address; its dispatch entry is separate from V31."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For Velvet parcel V31, the courier confirmed delivery by noon on October 12; the confirmation does not promise an earlier time."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Velvet customer would prefer to receive V31 before leaving for work, but did not receive a revised courier commitment."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Velvet courier route starts at 8 am; route departure alone does not establish a parcel arrival time."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Velvet parcel V31 needs a signature from the building desk, which is staffed from 9 am until 5 pm."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Velvet customer quoted a draft request for V31 saying \"Please guarantee 10 am\"; the courier has not accepted that draft request."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Velvet courier offered a paid priority service for future bookings; V31 was not changed to that service."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Velvet dispatch desk asked the driver to call ahead if traffic delays the morning route."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Velvet customer saved the draft request in a shared folder labeled delivery wording, alongside several unused templates."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Velvet courier dispatcher says V31’s 10 am draft remains an unconfirmed request, while its noon delivery commitment is unchanged."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Velvet parcel V31 was packed on October 9 and handed to the courier on the morning of October 10."
+          }
+        ]
+      },
+      {
+        "id": "BQ10-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Velvet building desk closes for lunch at 12:30 pm and asked tenants to collect signed parcels later in the afternoon."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ11",
+    "family": "two-card",
+    "question": {
+      "text": "Which score edition belongs to the choir set assigned to Fen for the Reed festival?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ11-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Choir set Inlet in the Reed festival uses the 2024 score edition and is assigned to the afternoon guest choir."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Fen rehearsed from a 2024 score during an unrelated winter workshop before joining the Reed festival choir."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Fen was assigned choir set Harbor for the Reed festival; the roster uses Harbor as the set name for that assignment."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Reed festival Harbor folders have blue ribbons, while the Inlet folders use green ribbons."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Reed festival stage manager will collect choir folders after the closing performance."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Fen asked whether page turns could be marked in pencil; the librarian approved pencil marks but no replacement edition."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Reed festival choir rehearsal starts at 6 pm, with Harbor singers meeting near the piano."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Choir set Harbor in the Reed festival uses the 2022 score edition; the edition is written on the set inventory sheet."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A spare 2020 score edition is held in the Reed archive for comparison and is not assigned to any festival set."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Reed festival guest choir requested extra chairs for the afternoon set; the Harbor staging plan remains standing."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Choir set Harbor has two missing folder clips, and the Reed librarian will add them before rehearsal."
+          }
+        ]
+      },
+      {
+        "id": "BQ11-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Reed festival program prints composers’ names but does not list the score editions used in the choir folders."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ12",
+    "family": "three-card",
+    "question": {
+      "text": "Which gasket color is required for the pump assigned to Salma’s Oriel aquarium shift?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ12-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Oriel aquarium pump V3 requires a red gasket and serves the neighboring reef tank."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Salma helped replace a red gasket during an Oriel training shift last month, before the current tank rota."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Oriel aquarium gasket stock is kept in two bins, with blue and red parts having the same outer diameter."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Salma’s Oriel aquarium shift covers tank Cove; the rota assigns her to Cove rather than the neighboring reef tank."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Tank Cove at Oriel aquarium will receive new lighting later this month; the lighting job does not change its pump."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Oriel aquarium weekend cleaning schedule puts Salma on early shift and Dev on late shift."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Pump V2 at Oriel aquarium has a yellow maintenance tag noting its next inspection date."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Oriel aquarium tank Cove is served by pump V2; the plumbing chart links that tank to the pump identifier."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Oriel aquarium reef tank has its own spare pump, labeled V3-backup in the service cupboard."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Salma asked the Oriel desk for waterproof gloves before the shift; glove color is chosen by size rather than tank."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Oriel aquarium public feeding demonstration happens at noon, outside the pump maintenance window."
+          }
+        ]
+      },
+      {
+        "id": "BQ12-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For Oriel aquarium pump V2, the replacement gasket must be blue; the service sheet specifies gasket color by pump."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ13",
+    "family": "missing-link",
+    "question": {
+      "text": "Which pickup route is assigned to Niko’s Saturday shift described in these Copper pantry notes?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ13-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Niko is on the Copper pantry pickup volunteer shift this Saturday; the rota gives a shift but no van or route assignment."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Copper pantry van V9 runs the Riverside loop this Saturday and is listed on the same vehicle sheet."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Niko asked the Copper pantry desk whether the Market loop includes a steep stairway, before route assignments were posted."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Copper pantry pickup shift has three volunteers, with two vans available and one volunteer serving as a loader."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Copper pantry desk plans to post a driver list after checking licenses, but that list is not in these notes."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Copper pantry van V8 runs the Market loop this Saturday; the vehicle sheet does not name a driver or volunteer."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Van V8 at Copper pantry had its tires checked on Friday; the inspection records the van but no shift member."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Copper pantry Market loop visits two bakeries, while the Riverside loop visits the produce cooperative."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Niko volunteered on the Market loop last spring; the Saturday rota does not say that assignment carries forward."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Copper pantry loading bay opens at 7 am and closes when the final van returns."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Copper pantry volunteer badges show first names only; badge color indicates training completion, not pickup route."
+          }
+        ]
+      },
+      {
+        "id": "BQ13-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Copper pantry Riverside collection includes chilled produce that must be unloaded before the dry goods."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ14",
+    "family": "scope-time",
+    "question": {
+      "text": "What admission price applies to a night visit to the Juniper museum annex on October 12?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ14-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Juniper museum main building charges 16 credits for daytime admission, under a separate main-building price list."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Juniper museum annex night visits cost 12 credits through October 5; the price notice gives that last valid date."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Juniper museum annex shop sells a 12-credit guidebook; a guidebook purchase does not include admission."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Annex night visits at Juniper museum begin at 7 pm, and doors close to new visitors at 9 pm."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Juniper museum members may reserve annex visits online, with their membership discount handled separately at checkout."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "From October 6, Juniper museum annex night visits cost 16 credits; the replacement notice applies to night visits only."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Juniper museum annex ticket desk replaced its printer on October 8 after several receipts were unreadable."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "A proposed Juniper museum all-day ticket would cost 20 credits, but the proposal is awaiting board approval."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Juniper museum annex daytime school program runs until 3 pm and uses prebooked group tickets."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Juniper museum annex daytime admission remains 12 credits during October; the daytime ticket does not include night entry."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Juniper museum pricing notice is posted beside the annex entrance and includes the effective date."
+          }
+        ]
+      },
+      {
+        "id": "BQ14-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Juniper museum annex night event on October 12 is a regular visit session rather than a separately priced concert."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ15",
+    "family": "proposal-uncertainty",
+    "question": {
+      "text": "Which launch gate has been approved for the Kite sailing lesson?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ15-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Kite sailing club opens gate A for equipment deliveries, separately from lesson launch access."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Kite lesson instructor asked whether the boats could be moved earlier, without requesting a gate change."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For the Kite sailing lesson, the coordinator approved gate B for launching; the lesson plan records that gate as the approved access."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Gate B at the Kite sailing club has a wider ramp but requires volunteers to carry paddles farther."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Kite sailing lesson assistant drew a possible route through gate A on a planning sketch marked suggestion."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Kite sailing club manager will inspect gate A next week; an inspection booking does not authorize lesson use."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "I suggest gate A for the Kite sailing lesson because it is closer to the boats; this is advice, and I have no approval from the coordinator."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Kite sailing lesson group should meet outside the clubhouse ten minutes before its launch time."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Kite sailing club uses gate C for a separate regatta, and that permission applies only to regatta crews."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Kite sailing coordinator approved extra flotation jackets for the lesson but gave no new gate approval."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Kite lesson coordinator says gate A is not approved and gate B remains the approved launch access."
+          }
+        ]
+      },
+      {
+        "id": "BQ15-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Kite sailing club tide chart predicts calm water during the lesson; tide conditions do not alter access approval."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ16",
+    "family": "two-card",
+    "question": {
+      "text": "What respirator size is stocked in the rescue locker assigned to Rhys for the Mica exercise?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ16-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Rescue locker J7 for the Mica exercise contains a large respirator and is assigned to the east team."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Rhys wore a large respirator during an old mine-safety workshop; the Mica exercise uses its own assigned equipment."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Mica exercise equipment desk keeps spare medium respirators in a separate unassigned cabinet."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Rhys has been assigned rescue locker J4 for the Mica exercise; the assignment identifies the locker rather than a respirator size."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Rescue locker J4 has a blue padlock, with the key held at the Mica exercise registration desk."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Rhys asked for a fit check before the Mica exercise; a fit-check request does not change the stock entry."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Mica exercise east team will collect locker J7 after the west team finishes its briefing."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Mica rescue instructor will confirm fit before entering the practice tunnel; stocked size alone is not a fit guarantee."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Rescue locker J4 for the Mica exercise contains a small respirator; the stock sheet records its size under that locker."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Mica exercise tunnel has two marked exits and will remain free of smoke during the introductory walk."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Rescue locker J4 contains gloves and a torch alongside the respirator, with batteries checked yesterday."
+          }
+        ]
+      },
+      {
+        "id": "BQ16-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Mica exercise ends with equipment inspection, and damaged respirators must be returned to the desk."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ17",
+    "family": "three-card",
+    "question": {
+      "text": "What prepaid deposit is recorded for the shift attached to booth Echo at the Marigold pottery fair?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ17-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "At the Marigold pottery fair, booth Echo is attached to the Lateleaf shift; the booth schedule names that shift explicitly."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Marigold fair invoice T11 records a prepaid deposit of 45 credits for the Earlybloom shift."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Booth Ember at the Marigold pottery fair is attached to Earlybloom, with a separate billing entry."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Marigold pottery fair final booth charge is 80 credits before deductions; prepaid deposits reduce the remaining balance."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Marigold Lateleaf shift is billed on invoice T9; the billing register links the shift to that invoice."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Booth Echo requested an extra display shelf from Marigold fair staff, with no additional deposit recorded for that request."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Marigold Lateleaf shift starts at 2 pm and finishes at 6 pm, after the morning visitors leave."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Invoice T9 at Marigold fair is filed in the paid folder; the balance receipt will be issued after the event."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Marigold fair invoice T9 records a prepaid deposit of 30 credits; that amount is the deposit, not the final booth charge."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Marigold fair staff suggested a 40-credit deposit for next year, but this year’s registered payments remain unchanged."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Marigold pottery fair map marks Echo near the garden exit and Ember beside the main entrance."
+          }
+        ]
+      },
+      {
+        "id": "BQ17-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Lateleaf shift at Marigold fair shares a cleaning cart with Earlybloom; shared equipment does not merge their invoices."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ18",
+    "family": "missing-link",
+    "question": {
+      "text": "What preference did Ada state in the guest interview recorded by the Nimbus audio club?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ18-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Nimbus recording M4 attributes a preference for spoken introductions to a guest labeled Kestrel."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ada booked a guest interview with Nimbus audio club; her booking note gives a date but no recording identifier or guest alias."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ada asked Nimbus audio club whether the guest could review the edited recording before release."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Nimbus interview calendar has two unnamed guest slots on the day Ada booked, one morning and one afternoon."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Nimbus audio editor uses guest aliases in release files and keeps the alias-to-name sheet separately from these notes."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Nimbus recording M3 has background chair noise removed; the editing log does not contain the guest’s legal name."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Nimbus recording M3 attributes \"I prefer silent introductions\" to a guest labeled Jun; its record does not identify that guest as Ada."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Nimbus audio club host prefers short spoken introductions, which is the host’s view rather than a guest’s preference."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ada previously attended a Nimbus panel about microphones without speaking in a recorded interview."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Nimbus recording cupboard holds two spare microphones, with model labels unrelated to guest aliases."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Nimbus audio club will ask each guest to approve the transcript before publication; approval requests are still pending."
+          }
+        ]
+      },
+      {
+        "id": "BQ18-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Nimbus audio newsletter lists upcoming interviews by topic and does not associate names with recording identifiers."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ19",
+    "family": "scope-time",
+    "question": {
+      "text": "For the Vale university winter study’s October analysis, should exported group labels be blinded or unblinded?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ19-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Vale university protocol family M7 shares a storage folder for winter and spring documents, with separate suffixes on each file."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Vale university winter analysis meeting is scheduled for October 12 and will use the winter-study export."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Vale university’s winter study is assigned protocol M7-W; the winter study register distinguishes it from the spring extension."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Vale university’s spring team requested the label revision to reconcile participant reports for its extension only."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Vale university winter participant roster contains 40 entries, with names stored apart from the group-label export."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "A Vale university lecturer used unblinded labels in a teaching demo that is outside both registered studies."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Protocol M7-W at Vale university retains blinded group labels for winter-study exports, including the October analysis."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Vale winter export script was rerun on October 9 after a filename typo, with no masking change recorded."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Vale university spring extension has a later follow-up date than the winter study and uses its own export authorization."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Vale university data steward asked each study team to keep protocol suffixes visible in analysis notes."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Vale university’s spring extension uses protocol M7-S, revised on October 8 to export unblinded group labels."
+          }
+        ]
+      },
+      {
+        "id": "BQ19-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Vale university winter-study folder has an old draft about unblinding, marked unapproved and separate from M7-W."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ20",
+    "family": "proposal-uncertainty",
+    "question": {
+      "text": "What fertilizing interval has the Linden garden adopted after its hose failure?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ20-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Linden garden’s courtyard pots use a 7-day interval under a separate hand-mixing routine."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Linden gardener ordered a replacement hose, with the supplier estimating delivery next week."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A Linden neighbor quoted a handbook recommending 14 days for sandy soil; the garden’s soil has not been classified in these notes."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Linden garden adopted a 10-day fertilizing interval because its hose delivered a steady dilution rate; the decision records that reason."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Linden garden fertilizer stock was counted on October 9 and is sufficient for two further applications."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Linden garden compost beds are turned each month, which is a different activity from fertilizing intervals."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Linden gardener asked for a dilution test before deciding whether the old schedule remains suitable."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Linden garden hose failed on October 8, removing the steady-dilution premise; the gardener says the existing interval needs review."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Linden garden used a 12-day interval several years ago, before the steady-rate hose was installed."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Linden garden notes say the hose failure is a reported equipment problem, not a measured soil deficiency."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Linden gardener will discuss options at the October 15 volunteer meeting; no replacement decision has been recorded yet."
+          }
+        ]
+      },
+      {
+        "id": "BQ20-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Linden gardener is considering a 14-day interval after the hose failure but explicitly has not adopted a new fertilizing schedule."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ21",
+    "family": "two-card",
+    "question": {
+      "text": "Which fuse rating is listed for the appliance card assigned to Imani at the Flint repair cafe?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ21-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Flint repair cafe appliance card K31 lists a 5 A fuse rating for a heater assigned to another volunteer."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Imani repaired a 5 A heater at the Flint cafe last month; that completed job is not the current bench-radio assignment."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Flint repair cafe stocks 2 A and 5 A fuses in different trays, each tray labeled by rating."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Appliance card K29 at Flint cafe records an intermittent power fault; no repair completion is recorded yet."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Imani was assigned appliance card K29 at the Flint repair cafe; the card tracks the bench radio in her repair queue."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Flint repair cafe supervisor requires a safety check before any appliance is returned to its owner."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Flint cafe desk keeps the bench radio’s wiring diagram behind appliance card K29 for the assigned volunteer."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Flint repair cafe heater queue is handled at a separate bench with its own extension lead."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Flint cafe volunteer training sheet uses a 3 A example circuit, unrelated to any current appliance card."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Flint repair cafe appliance card K29 lists a 2 A fuse rating for its bench radio; the rating belongs to that card’s appliance."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Appliance card K31 at Flint cafe has an extra note about a damaged plug, with inspection still pending."
+          }
+        ]
+      },
+      {
+        "id": "BQ21-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Flint repair cafe opens Saturday morning and returns repaired appliances only after the supervisor’s signoff."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ22",
+    "family": "three-card",
+    "question": {
+      "text": "What launch time is posted for the boat borrowed by Edda from the Willow rowing club?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ22-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Willow rowing club berth F9 has an 8:45 am practice launch time and is allocated to hull Finch."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Edda borrowed the Willow rowing club hull Wren for the October practice; the checkout identifies Wren as her boat."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Edda used hull Finch at the Willow rowing club summer camp; that earlier checkout has been returned."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Hull Wren at Willow rowing club has a new bow cover, fitted before the October practice."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Willow rowing club morning briefing is at 8 am for all crews, before any posted berth launch."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For the October Willow rowing practice, hull Wren is allocated berth F6; the berth register maps hull names to slips."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Berth F6 at Willow rowing club has a narrow approach, so crews should carry oars separately to the dock."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Willow rowing club coach may delay launches in unsafe weather; no weather delay is recorded in the practice notes."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Edda asked the Willow desk for a seat cushion and received one from the common equipment shelf."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Willow rowing club berth F6 has a posted practice launch time of 8:20 am; the board assigns time by berth."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hull Finch at Willow rowing club is reserved by Tomas for the October practice and will use berth F9."
+          }
+        ]
+      },
+      {
+        "id": "BQ22-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Willow rowing club return board asks crews to wipe hulls after practice and record any damage."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ23",
+    "family": "two-card",
+    "question": {
+      "text": "Where should the return pouch assigned to Lin be deposited at the Hazel library?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ23-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hazel library return pouch slip P8 directs deposit at the North desk and was issued to another borrower."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Lin returned loose books at the Hazel library North desk last month, before receiving this pouch assignment."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Lin was given return pouch slip P5 at the Hazel library; the lending desk recorded that slip as Lin’s pouch assignment."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Hazel library general drop box accepts ordinary books but has no listed instruction for numbered return pouches."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Return pouch P5 at Hazel library has a fabric loop and contains the interlibrary loan packing checklist."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Hazel library South desk is staffed until 6 pm on weekdays and closes earlier on Saturday."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Lin asked Hazel library whether the pouch could be returned by a friend; the desk accepted returns by a named delegate."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hazel library return pouch slip P5 directs deposit at the South desk; the instruction is specific to that pouch slip."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Hazel library North desk handles children’s reservations, separately from the numbered pouch procedure."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Hazel library pouch stock has new orange labels replacing faded ones; slip numbers remain unchanged."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Lin plans to return the Hazel pouch on Monday afternoon after checking that its borrowed atlas is inside."
+          }
+        ]
+      },
+      {
+        "id": "BQ23-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Hazel library mailing room receives courier deliveries in the morning; those deliveries are separate from pouch deposits."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "BQ24",
+    "family": "three-card",
+    "question": {
+      "text": "What curing period applies to the paint batch authorized for the Alder mural?",
+      "date": "2026-10-12"
+    },
+    "sessions": [
+      {
+        "id": "BQ24-S01",
+        "eventTime": "2026-10-10T08:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Paint batch N18 requires a 24-hour curing period before washing and is authorized for the Bower mural."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S02",
+        "eventTime": "2026-10-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Alder mural team tested batch N18 on a removable sample board last month; it was not approved for the current mural."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S03",
+        "eventTime": "2026-10-10T08:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Permit U8 allows two coats of paint, with the coat count recorded separately from the paint batch instructions."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S04",
+        "eventTime": "2026-10-10T08:30:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Alder mural is authorized under permit U8; the mural register records U8 as its current permit identifier."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S05",
+        "eventTime": "2026-10-10T08:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Alder mural wall is sheltered from rain by a temporary cover, which does not change the recorded curing requirement."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S06",
+        "eventTime": "2026-10-10T08:50:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The Bower mural materials permit is U11, with paint batch N18 listed in its separate materials entry."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S07",
+        "eventTime": "2026-10-10T09:00:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Alder mural volunteer crew plans to remove the temporary cover after the paint has cured."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S08",
+        "eventTime": "2026-10-10T09:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Permit U8 authorizes paint batch N14; its materials entry names the batch rather than a curing time."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S09",
+        "eventTime": "2026-10-10T09:20:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Paint batch N14 was delivered in sealed tins, with the batch number stamped on each lid."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S10",
+        "eventTime": "2026-10-10T09:30:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "An Alder volunteer suggested washing the wall after one day to meet the photo schedule; the batch requirement was not revised."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S11",
+        "eventTime": "2026-10-10T09:40:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The Alder mural photograph is planned for October 15, and the photographer can reschedule if curing is incomplete."
+          }
+        ]
+      },
+      {
+        "id": "BQ24-S12",
+        "eventTime": "2026-10-10T09:50:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Paint batch N14 requires a 48-hour curing period before its surface is washed; the batch sheet specifies this waiting period."
+          }
+        ]
+      }
+    ]
+  }
+]

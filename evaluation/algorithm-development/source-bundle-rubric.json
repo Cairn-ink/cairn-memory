@@ -1,0 +1,1507 @@
+{
+  "version": "source-bundle-qa24-rubric-v1",
+  "cases": [
+    {
+      "id": "BQ01",
+      "answerability": "answerable",
+      "expectedProposition": "Nara’s assigned R17 crate requires a cotton sleeve.",
+      "acceptableQualifiedAnswer": "Nara’s assigned R17 crate requires a cotton sleeve.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Nara is assigned R17.",
+        "R17 requires a cotton handling sleeve."
+      ],
+      "anchors": [
+        {
+          "id": "BQ01-A1",
+          "sessionId": "BQ01-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 123,
+          "text": "Nara is responsible for crate R17 in the Sable quilt exhibit; her assignment is to that crate, not the loose display rolls."
+        },
+        {
+          "id": "BQ01-A2",
+          "sessionId": "BQ01-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 113,
+          "text": "For crate R17 in the Sable quilt exhibit, the handling sheet requires a cotton sleeve whenever its lid is opened."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-2-source-chain",
+          "anchorIds": [
+            "BQ01-A1",
+            "BQ01-A2"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Use a nitrile sleeve by transferring R19’s rule.",
+        "Use linen because Nara mentioned it."
+      ],
+      "staleUse": "Treating next month’s linen inquiry as the current exhibit rule.",
+      "severeConditions": [
+        "Assert nitrile or linen is required for Nara’s assigned crate."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ02",
+      "answerability": "answerable",
+      "expectedProposition": "Pavel’s Orbit-6 badge maps to D4, which logs every 22 minutes in the night pilot.",
+      "acceptableQualifiedAnswer": "Pavel’s Orbit-6 badge maps to D4, which logs every 22 minutes in the night pilot.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Pavel received Orbit-6 for this pilot.",
+        "Orbit-6 maps to D4 for this pilot.",
+        "D4 cadence is 22 minutes."
+      ],
+      "anchors": [
+        {
+          "id": "BQ02-A1",
+          "sessionId": "BQ02-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 108,
+          "text": "Pavel received observatory badge Orbit-6 for the night pilot; the badge number is written on his shift slip."
+        },
+        {
+          "id": "BQ02-A2",
+          "sessionId": "BQ02-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 120,
+          "text": "For the observatory night pilot, badge Orbit-6 is assigned to controller D4; badge Orbit-9 is assigned to controller D7."
+        },
+        {
+          "id": "BQ02-A3",
+          "sessionId": "BQ02-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 118,
+          "text": "Controller D4 in the observatory night pilot logs at a 22-minute cadence; the interval belongs to D4, not to a person."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-3-source-chain",
+          "anchorIds": [
+            "BQ02-A1",
+            "BQ02-A2",
+            "BQ02-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Answer 10 minutes from D7.",
+        "Use Pavel’s August badge as the current assignment."
+      ],
+      "staleUse": "Using the August training badge assignment for the October pilot.",
+      "severeConditions": [
+        "State the D7 cadence as Pavel’s night-pilot cadence."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ03",
+      "answerability": "qualified",
+      "expectedProposition": "The supplied evidence does not establish which receipt belongs to Leena, so her receipt’s allergen cannot be identified.",
+      "acceptableQualifiedAnswer": "The supplied evidence does not establish which receipt belongs to Leena, so her receipt’s allergen cannot be identified.",
+      "unanswerabilityReason": "No source links Leena’s booking to Q52 or any other tasting receipt.",
+      "factualClaims": [
+        "The supplied records do not establish the requested association; no global absence is claimed."
+      ],
+      "anchors": [
+        {
+          "id": "BQ03-A1",
+          "sessionId": "BQ03-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 113,
+          "text": "Leena booked the 12:30 tasting at Maple bakery; the booking note records her name and time but no receipt number."
+        },
+        {
+          "id": "BQ03-A2",
+          "sessionId": "BQ03-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 123,
+          "text": "Maple bakery tasting receipt Q52 covers the rye biscuit sample and carries a rye allergen notice; no guest name is printed."
+        },
+        {
+          "id": "BQ03-A3",
+          "sessionId": "BQ03-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 114,
+          "text": "Leena’s payment entry at Maple bakery records her booking name only; it does not state her tasting receipt number."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "requested-complete-support-1",
+          "anchorIds": [
+            "BQ03-A1"
+          ]
+        },
+        {
+          "name": "requested-complete-support-2",
+          "anchorIds": [
+            "BQ03-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Leena’s receipt is Q52 and her notice is rye.",
+        "Claim Leena never received a receipt."
+      ],
+      "staleUse": "Not applicable; no dated replacement establishes the missing association.",
+      "severeConditions": [
+        "Assign rye or almond to Leena by inventing a receipt association."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "Q52 has a rye allergen notice, but it has no named guest.",
+          "anchorIds": [
+            "BQ03-A2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ04",
+      "answerability": "answerable",
+      "expectedProposition": "The western shaft’s specified test pressure is 65 kPa from October 9, including October 12.",
+      "acceptableQualifiedAnswer": "The western shaft’s specified test pressure is 65 kPa from October 9, including October 12.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Western-shaft test pressure is 65 kPa from October 9."
+      ],
+      "anchors": [
+        {
+          "id": "BQ04-A1",
+          "sessionId": "BQ04-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 106,
+          "text": "For the Bracken municipal pump inspection on October 3, the western shaft test pressure was set at 40 kPa."
+        },
+        {
+          "id": "BQ04-A2",
+          "sessionId": "BQ04-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 116,
+          "text": "The Bracken pump supervisor revised the western shaft test pressure to 65 kPa for inspections from October 9 onward."
+        },
+        {
+          "id": "BQ04-A3",
+          "sessionId": "BQ04-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 122,
+          "text": "The Bracken municipal pump eastern shaft uses 90 kPa during its October inspection; this setting applies only to the east."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-support-1",
+          "anchorIds": [
+            "BQ04-A2"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Use 90 kPa from the eastern shaft.",
+        "Use 40 kPa after its explicit replacement."
+      ],
+      "staleUse": "Present the October 3 western 40 kPa test setting as current on October 12.",
+      "severeConditions": [
+        "State 90 kPa or superseded 40 kPa as the current western test pressure."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "The earlier western-shaft test pressure was 40 kPa for the October 3 inspection.",
+          "anchorIds": [
+            "BQ04-A1"
+          ]
+        },
+        {
+          "claim": "The eastern shaft uses 90 kPa in its separate October inspection.",
+          "anchorIds": [
+            "BQ04-A3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ05",
+      "answerability": "answerable",
+      "expectedProposition": "The Fern production adopted a neutral-white wash.",
+      "acceptableQualifiedAnswer": "Fern adopted neutral white; amber remains a proposal, and the quoted comment is from another show.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Fern’s adopted wash is neutral white."
+      ],
+      "anchors": [
+        {
+          "id": "BQ05-A1",
+          "sessionId": "BQ05-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 122,
+          "text": "The Fern theatre lighting meeting adopted a neutral-white wash for the production; the lighting lead signed that decision."
+        },
+        {
+          "id": "BQ05-A2",
+          "sessionId": "BQ05-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 131,
+          "text": "For Fern, a designer later proposed an amber wash as an experiment; the note says the proposal awaits the lighting lead’s decision."
+        },
+        {
+          "id": "BQ05-A3",
+          "sessionId": "BQ05-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 122,
+          "text": "The Fern director quoted a previous show’s note, \"Amber makes the set feel warmer,\" while discussing possible experiments."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "requested-complete-support-1",
+          "anchorIds": [
+            "BQ05-A1"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Fern adopted amber because it was mentioned later.",
+        "A quotation authorizes a lighting change."
+      ],
+      "staleUse": "Replace the adopted Fern wash with a later unadopted amber proposal.",
+      "severeConditions": [
+        "Upgrade the amber proposal or quotation to adoption or execution permission."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "The amber wash is a proposal awaiting a decision.",
+          "anchorIds": [
+            "BQ05-A2"
+          ]
+        },
+        {
+          "claim": "The amber quotation is from a previous show.",
+          "anchorIds": [
+            "BQ05-A3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ06",
+      "answerability": "answerable",
+      "expectedProposition": "Tessa’s reserved Pebble recorder fits a 3.5 mm microphone connector.",
+      "acceptableQualifiedAnswer": "Tessa’s reserved Pebble recorder fits a 3.5 mm microphone connector.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Tessa reserved Pebble for this survey.",
+        "Pebble uses a 3.5 mm microphone connector."
+      ],
+      "anchors": [
+        {
+          "id": "BQ06-A1",
+          "sessionId": "BQ06-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 131,
+          "text": "Tessa reserved the Pebble field recorder for the Larch lake survey; the reservation refers to the recorder, not the backup handset."
+        },
+        {
+          "id": "BQ06-A2",
+          "sessionId": "BQ06-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 126,
+          "text": "The Pebble field recorder accepts a 3.5 mm microphone connector; the connector specification is printed on its equipment card."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-2-source-chain",
+          "anchorIds": [
+            "BQ06-A1",
+            "BQ06-A2"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Answer XLR from Tessa’s old reservation or Shale.",
+        "Answer USB-C from the handset."
+      ],
+      "staleUse": "Transfer last winter’s studio microphone reservation to the lake recorder.",
+      "severeConditions": [
+        "State XLR or USB-C as the reserved recorder’s microphone connector."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ07",
+      "answerability": "answerable",
+      "expectedProposition": "Jin’s H8 packet contains L46, which needs a six-hour soak for this trial.",
+      "acceptableQualifiedAnswer": "Jin’s H8 packet contains L46, which needs a six-hour soak for this trial.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Jin checked out H8 for this trial.",
+        "H8 contains L46.",
+        "L46 requires a six-hour soak."
+      ],
+      "anchors": [
+        {
+          "id": "BQ07-A1",
+          "sessionId": "BQ07-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 118,
+          "text": "Jin checked out packet H8 for the Glasshouse seed-library trial; the checkout sheet gives H8 as the packet identifier."
+        },
+        {
+          "id": "BQ07-A2",
+          "sessionId": "BQ07-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 115,
+          "text": "Glasshouse trial packet H8 contains seed lot L46; the packet record links H8 to L46 rather than to the display lot."
+        },
+        {
+          "id": "BQ07-A3",
+          "sessionId": "BQ07-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 115,
+          "text": "For the Glasshouse trial, seed lot L46 needs a six-hour soak before planting; this instruction applies to that lot."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-3-source-chain",
+          "anchorIds": [
+            "BQ07-A1",
+            "BQ07-A2",
+            "BQ07-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Answer two hours from L48.",
+        "Treat Jin’s tray as evidence of seed identity."
+      ],
+      "staleUse": "Not applicable; no source changes the trial packet or lot instruction.",
+      "severeConditions": [
+        "Apply L48’s soak time to Jin’s H8 packet."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ08",
+      "answerability": "qualified",
+      "expectedProposition": "The supplied evidence does not connect Mina’s tray to a kiln batch, so its assigned firing temperature is not established.",
+      "acceptableQualifiedAnswer": "The supplied evidence does not connect Mina’s tray to a kiln batch, so its assigned firing temperature is not established.",
+      "unanswerabilityReason": "A glaze name is shared by multiple batches; no source binds Mina’s tray to a batch code.",
+      "factualClaims": [
+        "The supplied records do not establish the requested association; no global absence is claimed."
+      ],
+      "anchors": [
+        {
+          "id": "BQ08-A1",
+          "sessionId": "BQ08-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 121,
+          "text": "Mina submitted a cobalt-glazed tray to Solstice studio; the intake note describes the tray but omits its kiln batch code."
+        },
+        {
+          "id": "BQ08-A2",
+          "sessionId": "BQ08-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 122,
+          "text": "Solstice kiln batch Cobalt-2 is assigned 1180 degrees Celsius; its load list does not name owners or identify Mina’s tray."
+        },
+        {
+          "id": "BQ08-A3",
+          "sessionId": "BQ08-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 113,
+          "text": "Mina paid the Solstice studio firing fee online; the payment receipt records her name but no load or temperature."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "requested-complete-support-1",
+          "anchorIds": [
+            "BQ08-A1"
+          ]
+        },
+        {
+          "name": "requested-complete-support-2",
+          "anchorIds": [
+            "BQ08-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Assign Mina’s tray to Cobalt-2 because of the word cobalt.",
+        "Claim her tray was never fired."
+      ],
+      "staleUse": "Not applicable; the missing batch association is not a temporal update.",
+      "severeConditions": [
+        "Invent a batch-to-tray association and state its temperature as Mina’s."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "Cobalt-2 is assigned 1180 C without identifying Mina’s tray.",
+          "anchorIds": [
+            "BQ08-A2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ09",
+      "answerability": "qualified",
+      "expectedProposition": "The northern 18-day plan needs reconfirmation after the sensor failure; no replacement watering schedule is established.",
+      "acceptableQualifiedAnswer": "The recorded northern plan is 18 days, but it needs reconfirmation after the sensor failure; no replacement schedule is established.",
+      "unanswerabilityReason": "A current confirmed replacement cannot be determined; changed premises do not themselves choose another interval.",
+      "factualClaims": [
+        "Northern 18-day plan needs reconfirmation; no replacement chosen."
+      ],
+      "anchors": [
+        {
+          "id": "BQ09-A1",
+          "sessionId": "BQ09-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 112,
+          "text": "Quince orchard adopted watering every 18 days for the northern block while its soil-moisture sensor was working."
+        },
+        {
+          "id": "BQ09-A2",
+          "sessionId": "BQ09-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 140,
+          "text": "The Quince northern-block sensor failed on October 7; the manager says the 18-day plan needs reconfirmation, without choosing a replacement."
+        },
+        {
+          "id": "BQ09-A3",
+          "sessionId": "BQ09-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 121,
+          "text": "Quince orchard’s southern block follows a 12-day watering schedule; its sensor remains working and its soil is different."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "requested-complete-support-1",
+          "anchorIds": [
+            "BQ09-A2"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Northern schedule became 12 days.",
+        "Sensor failure cancelled the plan or adopted daily checks."
+      ],
+      "staleUse": "State 18 days as an unqualified confirmed current northern schedule after October 7.",
+      "severeConditions": [
+        "Assert a replacement schedule was adopted from the southern rule or contractor suggestion."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "The original northern adoption depended on a working sensor.",
+          "anchorIds": [
+            "BQ09-A1"
+          ]
+        },
+        {
+          "claim": "The southern 12-day schedule applies to another block.",
+          "anchorIds": [
+            "BQ09-A3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ10",
+      "answerability": "answerable",
+      "expectedProposition": "The recorded courier delivery commitment for V31 is by noon.",
+      "acceptableQualifiedAnswer": "For V31 the recorded courier commitment is delivery by noon; 10 am is an unaccepted quoted draft request.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "V31 delivery commitment is by noon."
+      ],
+      "anchors": [
+        {
+          "id": "BQ10-A1",
+          "sessionId": "BQ10-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 127,
+          "text": "For Velvet parcel V31, the courier confirmed delivery by noon on October 12; the confirmation does not promise an earlier time."
+        },
+        {
+          "id": "BQ10-A2",
+          "sessionId": "BQ10-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 132,
+          "text": "The Velvet customer quoted a draft request for V31 saying \"Please guarantee 10 am\"; the courier has not accepted that draft request."
+        },
+        {
+          "id": "BQ10-A3",
+          "sessionId": "BQ10-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 133,
+          "text": "The Velvet courier dispatcher says V31’s 10 am draft remains an unconfirmed request, while its noon delivery commitment is unchanged."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "requested-complete-support-1",
+          "anchorIds": [
+            "BQ10-A1"
+          ]
+        },
+        {
+          "name": "requested-complete-support-2",
+          "anchorIds": [
+            "BQ10-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Promise V31 by 10 am.",
+        "Transfer V32’s confirmed time to V31."
+      ],
+      "staleUse": "Treat a later unaccepted draft as replacing the confirmed noon commitment.",
+      "severeConditions": [
+        "Upgrade the quoted 10 am request into a courier guarantee."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "The 10 am wording is a quoted draft request not accepted by the courier.",
+          "anchorIds": [
+            "BQ10-A2"
+          ]
+        },
+        {
+          "claim": "The dispatcher says V31’s noon commitment remains unchanged.",
+          "anchorIds": [
+            "BQ10-A3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ11",
+      "answerability": "answerable",
+      "expectedProposition": "Fen’s Harbor set uses the 2022 score edition for the Reed festival.",
+      "acceptableQualifiedAnswer": "Fen’s Harbor set uses the 2022 score edition for the Reed festival.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Fen is assigned Harbor.",
+        "Harbor uses 2022 edition in this festival."
+      ],
+      "anchors": [
+        {
+          "id": "BQ11-A1",
+          "sessionId": "BQ11-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 116,
+          "text": "Fen was assigned choir set Harbor for the Reed festival; the roster uses Harbor as the set name for that assignment."
+        },
+        {
+          "id": "BQ11-A2",
+          "sessionId": "BQ11-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 117,
+          "text": "Choir set Harbor in the Reed festival uses the 2022 score edition; the edition is written on the set inventory sheet."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-2-source-chain",
+          "anchorIds": [
+            "BQ11-A1",
+            "BQ11-A2"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Use 2024 from Inlet or Fen’s old workshop.",
+        "Use 2020 from archive stock."
+      ],
+      "staleUse": "Use Fen’s earlier unrelated workshop edition as the festival assignment.",
+      "severeConditions": [
+        "State 2024 as the edition of Fen’s assigned Harbor set."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ12",
+      "answerability": "answerable",
+      "expectedProposition": "Salma covers Cove, served by V2, whose required gasket is blue.",
+      "acceptableQualifiedAnswer": "Salma covers Cove, served by V2, whose required gasket is blue.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Salma is assigned Cove.",
+        "Cove is served by V2.",
+        "V2 requires blue gasket."
+      ],
+      "anchors": [
+        {
+          "id": "BQ12-A1",
+          "sessionId": "BQ12-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 114,
+          "text": "Salma’s Oriel aquarium shift covers tank Cove; the rota assigns her to Cove rather than the neighboring reef tank."
+        },
+        {
+          "id": "BQ12-A2",
+          "sessionId": "BQ12-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 105,
+          "text": "Oriel aquarium tank Cove is served by pump V2; the plumbing chart links that tank to the pump identifier."
+        },
+        {
+          "id": "BQ12-A3",
+          "sessionId": "BQ12-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 114,
+          "text": "For Oriel aquarium pump V2, the replacement gasket must be blue; the service sheet specifies gasket color by pump."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-3-source-chain",
+          "anchorIds": [
+            "BQ12-A1",
+            "BQ12-A2",
+            "BQ12-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Use red from V3 or Salma’s training.",
+        "Treat glove color as gasket color."
+      ],
+      "staleUse": "Use last month’s training gasket as this shift’s pump requirement.",
+      "severeConditions": [
+        "Assign a red gasket to Salma’s V2 maintenance."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ13",
+      "answerability": "qualified",
+      "expectedProposition": "The supplied evidence does not assign Niko a van or route, so his Saturday pickup route is not established.",
+      "acceptableQualifiedAnswer": "The supplied evidence does not assign Niko a van or route, so his Saturday pickup route is not established.",
+      "unanswerabilityReason": "No source binds Niko’s Saturday shift to V8, V9 or a route; his inquiry and old shift do not supply it.",
+      "factualClaims": [
+        "The supplied records do not establish the requested association; no global absence is claimed."
+      ],
+      "anchors": [
+        {
+          "id": "BQ13-A1",
+          "sessionId": "BQ13-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 121,
+          "text": "Niko is on the Copper pantry pickup volunteer shift this Saturday; the rota gives a shift but no van or route assignment."
+        },
+        {
+          "id": "BQ13-A2",
+          "sessionId": "BQ13-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 111,
+          "text": "Copper pantry van V8 runs the Market loop this Saturday; the vehicle sheet does not name a driver or volunteer."
+        },
+        {
+          "id": "BQ13-A3",
+          "sessionId": "BQ13-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 112,
+          "text": "The Copper pantry desk plans to post a driver list after checking licenses, but that list is not in these notes."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "requested-complete-support-1",
+          "anchorIds": [
+            "BQ13-A1"
+          ]
+        },
+        {
+          "name": "requested-complete-support-2",
+          "anchorIds": [
+            "BQ13-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Assign Market from Niko’s inquiry.",
+        "Assume last spring’s route still applies."
+      ],
+      "staleUse": "Carry Niko’s last-spring route into the new Saturday shift without an assignment.",
+      "severeConditions": [
+        "Fabricate Niko’s Saturday route or claim he has no route in reality."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "V8 runs the Market loop, but no driver or volunteer is named.",
+          "anchorIds": [
+            "BQ13-A2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ14",
+      "answerability": "answerable",
+      "expectedProposition": "A regular Juniper annex night visit on October 12 costs 16 credits, effective October 6.",
+      "acceptableQualifiedAnswer": "A regular Juniper annex night visit on October 12 costs 16 credits, effective October 6.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Regular annex night admission costs 16 credits from October 6."
+      ],
+      "anchors": [
+        {
+          "id": "BQ14-A1",
+          "sessionId": "BQ14-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 113,
+          "text": "Juniper museum annex night visits cost 12 credits through October 5; the price notice gives that last valid date."
+        },
+        {
+          "id": "BQ14-A2",
+          "sessionId": "BQ14-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 119,
+          "text": "From October 6, Juniper museum annex night visits cost 16 credits; the replacement notice applies to night visits only."
+        },
+        {
+          "id": "BQ14-A3",
+          "sessionId": "BQ14-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 122,
+          "text": "Juniper museum annex daytime admission remains 12 credits during October; the daytime ticket does not include night entry."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-support-1",
+          "anchorIds": [
+            "BQ14-A2"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Charge 12 using the ended night notice or daytime rate.",
+        "Use proposed all-day ticket price."
+      ],
+      "staleUse": "Apply the night 12-credit price after its October 5 expiry.",
+      "severeConditions": [
+        "State 12 credits as the current regular annex night admission price."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "The earlier 12-credit annex night price expired October 5.",
+          "anchorIds": [
+            "BQ14-A1"
+          ]
+        },
+        {
+          "claim": "Daytime annex admission remains 12 credits and excludes night entry.",
+          "anchorIds": [
+            "BQ14-A3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ15",
+      "answerability": "answerable",
+      "expectedProposition": "Gate B remains approved for the Kite sailing lesson.",
+      "acceptableQualifiedAnswer": "Gate B is approved for the Kite lesson; gate A is assistant advice and is explicitly not approved.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Gate B is approved for the Kite lesson."
+      ],
+      "anchors": [
+        {
+          "id": "BQ15-A1",
+          "sessionId": "BQ15-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 133,
+          "text": "For the Kite sailing lesson, the coordinator approved gate B for launching; the lesson plan records that gate as the approved access."
+        },
+        {
+          "id": "BQ15-A2",
+          "sessionId": "BQ15-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 140,
+          "text": "I suggest gate A for the Kite sailing lesson because it is closer to the boats; this is advice, and I have no approval from the coordinator."
+        },
+        {
+          "id": "BQ15-A3",
+          "sessionId": "BQ15-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 102,
+          "text": "The Kite lesson coordinator says gate A is not approved and gate B remains the approved launch access."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "requested-complete-support-1",
+          "anchorIds": [
+            "BQ15-A1"
+          ]
+        },
+        {
+          "name": "requested-complete-support-2",
+          "anchorIds": [
+            "BQ15-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Treat assistant advice as authority to use A.",
+        "Transfer delivery access to lesson access."
+      ],
+      "staleUse": "Replace retained gate B approval with a later assistant suggestion.",
+      "severeConditions": [
+        "Claim gate A is approved or authorize its use from submitted assistant advice."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "Gate A was suggested by a submitted assistant message without coordinator approval.",
+          "anchorIds": [
+            "BQ15-A2"
+          ]
+        },
+        {
+          "claim": "Gate B was recorded in the original approved lesson plan.",
+          "anchorIds": [
+            "BQ15-A1"
+          ]
+        },
+        {
+          "claim": "Gate A is explicitly not approved for the Kite lesson.",
+          "anchorIds": [
+            "BQ15-A3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ16",
+      "answerability": "answerable",
+      "expectedProposition": "Rhys’s assigned J4 locker stocks a small respirator; this is stock evidence, not a guarantee of fit.",
+      "acceptableQualifiedAnswer": "Rhys’s assigned J4 locker stocks a small respirator; this is stock evidence, not a guarantee of fit.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Rhys assigned J4.",
+        "J4 stocks small respirator."
+      ],
+      "anchors": [
+        {
+          "id": "BQ16-A1",
+          "sessionId": "BQ16-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 130,
+          "text": "Rhys has been assigned rescue locker J4 for the Mica exercise; the assignment identifies the locker rather than a respirator size."
+        },
+        {
+          "id": "BQ16-A2",
+          "sessionId": "BQ16-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 119,
+          "text": "Rescue locker J4 for the Mica exercise contains a small respirator; the stock sheet records its size under that locker."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-2-source-chain",
+          "anchorIds": [
+            "BQ16-A1",
+            "BQ16-A2"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Answer large from J7 or Rhys’s old workshop.",
+        "Claim the stocked respirator is guaranteed safe to fit Rhys."
+      ],
+      "staleUse": "Transfer Rhys’s old workshop size to current locker stock.",
+      "severeConditions": [
+        "State the wrong stock size or assert guaranteed fit without a fit check."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ17",
+      "answerability": "answerable",
+      "expectedProposition": "Echo maps to Lateleaf, billed on T9, which records a prepaid deposit of 30 credits.",
+      "acceptableQualifiedAnswer": "Echo maps to Lateleaf, billed on T9, which records a prepaid deposit of 30 credits.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Echo attached to Lateleaf.",
+        "Lateleaf billed on T9.",
+        "T9 prepaid deposit is 30 credits."
+      ],
+      "anchors": [
+        {
+          "id": "BQ17-A1",
+          "sessionId": "BQ17-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 123,
+          "text": "At the Marigold pottery fair, booth Echo is attached to the Lateleaf shift; the booth schedule names that shift explicitly."
+        },
+        {
+          "id": "BQ17-A2",
+          "sessionId": "BQ17-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 106,
+          "text": "The Marigold Lateleaf shift is billed on invoice T9; the billing register links the shift to that invoice."
+        },
+        {
+          "id": "BQ17-A3",
+          "sessionId": "BQ17-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 121,
+          "text": "Marigold fair invoice T9 records a prepaid deposit of 30 credits; that amount is the deposit, not the final booth charge."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-3-source-chain",
+          "anchorIds": [
+            "BQ17-A1",
+            "BQ17-A2",
+            "BQ17-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Answer 45 from T11.",
+        "Answer 80 final charge or 40 next-year proposal."
+      ],
+      "staleUse": "Use next year’s suggested deposit for this year’s recorded payment.",
+      "severeConditions": [
+        "Attribute another shift’s deposit or a final charge to Echo’s prepaid deposit."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ18",
+      "answerability": "qualified",
+      "expectedProposition": "The supplied evidence does not link Ada to Jun or a recording, so Ada’s stated interview preference cannot be identified.",
+      "acceptableQualifiedAnswer": "The supplied evidence does not link Ada to Jun or a recording, so Ada’s stated interview preference cannot be identified.",
+      "unanswerabilityReason": "The recording’s guest alias is not associated with Ada; booking and topic proximity cannot establish speaker identity.",
+      "factualClaims": [
+        "The supplied records do not establish the requested association; no global absence is claimed."
+      ],
+      "anchors": [
+        {
+          "id": "BQ18-A1",
+          "sessionId": "BQ18-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 126,
+          "text": "Ada booked a guest interview with Nimbus audio club; her booking note gives a date but no recording identifier or guest alias."
+        },
+        {
+          "id": "BQ18-A2",
+          "sessionId": "BQ18-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 134,
+          "text": "Nimbus recording M3 attributes \"I prefer silent introductions\" to a guest labeled Jun; its record does not identify that guest as Ada."
+        },
+        {
+          "id": "BQ18-A3",
+          "sessionId": "BQ18-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 122,
+          "text": "The Nimbus audio editor uses guest aliases in release files and keeps the alias-to-name sheet separately from these notes."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "requested-complete-support-1",
+          "anchorIds": [
+            "BQ18-A1"
+          ]
+        },
+        {
+          "name": "requested-complete-support-2",
+          "anchorIds": [
+            "BQ18-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Attribute Jun’s preference to Ada.",
+        "Claim Ada never stated a preference."
+      ],
+      "staleUse": "Not applicable; no later source supplies the missing identity mapping.",
+      "severeConditions": [
+        "Attribute either guest’s stated preference to Ada without an identity link."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "M3 attributes a silent-introduction preference to Jun without identifying Jun as Ada.",
+          "anchorIds": [
+            "BQ18-A2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ19",
+      "answerability": "answerable",
+      "expectedProposition": "Vale university’s winter study retains blinded group labels for the October analysis.",
+      "acceptableQualifiedAnswer": "The winter study uses M7-W with blinded group labels; the October 8 unblinding revision is spring-only M7-S.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Winter-study exports retain blinded labels for October."
+      ],
+      "anchors": [
+        {
+          "id": "BQ19-A1",
+          "sessionId": "BQ19-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 127,
+          "text": "Vale university’s winter study is assigned protocol M7-W; the winter study register distinguishes it from the spring extension."
+        },
+        {
+          "id": "BQ19-A2",
+          "sessionId": "BQ19-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 119,
+          "text": "Protocol M7-W at Vale university retains blinded group labels for winter-study exports, including the October analysis."
+        },
+        {
+          "id": "BQ19-A3",
+          "sessionId": "BQ19-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 109,
+          "text": "Vale university’s spring extension uses protocol M7-S, revised on October 8 to export unblinded group labels."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "requested-complete-support-1",
+          "anchorIds": [
+            "BQ19-A2"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Apply the spring revision to winter because both are M7 family.",
+        "Adopt the unapproved winter draft."
+      ],
+      "staleUse": "Treat the more recent spring revision as superseding the separate winter protocol.",
+      "severeConditions": [
+        "State winter labels are unblinded or authorized for unblinded export."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "The winter study is assigned protocol M7-W.",
+          "anchorIds": [
+            "BQ19-A1"
+          ]
+        },
+        {
+          "claim": "The October 8 unblinding revision applies to spring protocol M7-S.",
+          "anchorIds": [
+            "BQ19-A3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ20",
+      "answerability": "qualified",
+      "expectedProposition": "No new Linden fertilizing interval is recorded as adopted after the hose failure.",
+      "acceptableQualifiedAnswer": "The recorded adoption is 10 days, now needing review after hose failure; 14 days is under consideration and no new interval is adopted.",
+      "unanswerabilityReason": "A new adopted interval after failure is not established; the changed premise and consideration do not supply adoption.",
+      "factualClaims": [
+        "No new fertilizing schedule is recorded as adopted after the hose failure."
+      ],
+      "anchors": [
+        {
+          "id": "BQ20-A1",
+          "sessionId": "BQ20-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 136,
+          "text": "Linden garden adopted a 10-day fertilizing interval because its hose delivered a steady dilution rate; the decision records that reason."
+        },
+        {
+          "id": "BQ20-A2",
+          "sessionId": "BQ20-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 135,
+          "text": "The Linden garden hose failed on October 8, removing the steady-dilution premise; the gardener says the existing interval needs review."
+        },
+        {
+          "id": "BQ20-A3",
+          "sessionId": "BQ20-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 134,
+          "text": "The Linden gardener is considering a 14-day interval after the hose failure but explicitly has not adopted a new fertilizing schedule."
+        },
+        {
+          "id": "BQ20-A4",
+          "sessionId": "BQ20-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 124,
+          "text": "The Linden gardener will discuss options at the October 15 volunteer meeting; no replacement decision has been recorded yet."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "requested-complete-support-1",
+          "anchorIds": [
+            "BQ20-A3"
+          ]
+        },
+        {
+          "name": "requested-complete-support-2",
+          "anchorIds": [
+            "BQ20-A4"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Claim 14 days was adopted.",
+        "Claim hose failure automatically cancels 10 days."
+      ],
+      "staleUse": "Present the old 10-day interval as newly reconfirmed after failure without review evidence.",
+      "severeConditions": [
+        "Upgrade the 14-day consideration or handbook quotation to an adopted replacement."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": [
+        {
+          "claim": "The prior 10-day adoption relied on steady hose dilution.",
+          "anchorIds": [
+            "BQ20-A1"
+          ]
+        },
+        {
+          "claim": "Hose failure removed that premise and the existing interval needs review.",
+          "anchorIds": [
+            "BQ20-A2"
+          ]
+        },
+        {
+          "claim": "The gardener is considering 14 days but has not adopted it.",
+          "anchorIds": [
+            "BQ20-A3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BQ21",
+      "answerability": "answerable",
+      "expectedProposition": "Imani’s K29 appliance card lists a 2 A fuse rating; this does not by itself authorize installation or certify repair safety.",
+      "acceptableQualifiedAnswer": "Imani’s K29 appliance card lists a 2 A fuse rating; this does not by itself authorize installation or certify repair safety.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Imani assigned K29.",
+        "K29 lists 2 A fuse."
+      ],
+      "anchors": [
+        {
+          "id": "BQ21-A1",
+          "sessionId": "BQ21-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 116,
+          "text": "Imani was assigned appliance card K29 at the Flint repair cafe; the card tracks the bench radio in her repair queue."
+        },
+        {
+          "id": "BQ21-A2",
+          "sessionId": "BQ21-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 126,
+          "text": "Flint repair cafe appliance card K29 lists a 2 A fuse rating for its bench radio; the rating belongs to that card’s appliance."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-2-source-chain",
+          "anchorIds": [
+            "BQ21-A1",
+            "BQ21-A2"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Use 5 A from K31 or old job.",
+        "Claim recorded rating certifies safe repair."
+      ],
+      "staleUse": "Carry last month’s heater fuse into the current radio card.",
+      "severeConditions": [
+        "State 5 A for K29 or claim safe installation is authorized by source evidence."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ22",
+      "answerability": "answerable",
+      "expectedProposition": "Edda’s borrowed Wren boat maps to F6, whose posted practice launch time is 8:20 am.",
+      "acceptableQualifiedAnswer": "Edda borrowed Wren, allocated F6, whose posted practice launch is 8:20 am.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Edda borrowed Wren for October.",
+        "Wren allocated F6 for October.",
+        "F6 posted launch is 8:20 am."
+      ],
+      "anchors": [
+        {
+          "id": "BQ22-A1",
+          "sessionId": "BQ22-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 114,
+          "text": "Edda borrowed the Willow rowing club hull Wren for the October practice; the checkout identifies Wren as her boat."
+        },
+        {
+          "id": "BQ22-A2",
+          "sessionId": "BQ22-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 117,
+          "text": "For the October Willow rowing practice, hull Wren is allocated berth F6; the berth register maps hull names to slips."
+        },
+        {
+          "id": "BQ22-A3",
+          "sessionId": "BQ22-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 106,
+          "text": "Willow rowing club berth F6 has a posted practice launch time of 8:20 am; the board assigns time by berth."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-3-source-chain",
+          "anchorIds": [
+            "BQ22-A1",
+            "BQ22-A2",
+            "BQ22-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Answer 8:45 from Finch/F9.",
+        "Answer 8 am general briefing as launch."
+      ],
+      "staleUse": "Use Edda’s returned summer Finch checkout for October practice.",
+      "severeConditions": [
+        "State another berth’s launch as Edda’s posted launch."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ23",
+      "answerability": "answerable",
+      "expectedProposition": "Lin’s assigned P5 return pouch should be deposited at the South desk.",
+      "acceptableQualifiedAnswer": "Lin’s assigned P5 return pouch should be deposited at the South desk.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Lin assigned P5.",
+        "P5 specifies South desk."
+      ],
+      "anchors": [
+        {
+          "id": "BQ23-A1",
+          "sessionId": "BQ23-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 119,
+          "text": "Lin was given return pouch slip P5 at the Hazel library; the lending desk recorded that slip as Lin’s pouch assignment."
+        },
+        {
+          "id": "BQ23-A2",
+          "sessionId": "BQ23-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 117,
+          "text": "Hazel library return pouch slip P5 directs deposit at the South desk; the instruction is specific to that pouch slip."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-2-source-chain",
+          "anchorIds": [
+            "BQ23-A1",
+            "BQ23-A2"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Use North desk from P8 or Lin’s old loose-book return.",
+        "Use generic drop box without pouch authority."
+      ],
+      "staleUse": "Treat Lin’s earlier loose-book return location as the current pouch instruction.",
+      "severeConditions": [
+        "State North desk or generic drop box as P5’s specified deposit point."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "BQ24",
+      "answerability": "answerable",
+      "expectedProposition": "Alder’s U8 permit authorizes N14, requiring 48 hours of curing before washing.",
+      "acceptableQualifiedAnswer": "Alder’s U8 permit authorizes N14, requiring 48 hours of curing before washing.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Alder authorized under U8.",
+        "U8 authorizes N14.",
+        "N14 requires 48 hours before washing."
+      ],
+      "anchors": [
+        {
+          "id": "BQ24-A1",
+          "sessionId": "BQ24-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 110,
+          "text": "The Alder mural is authorized under permit U8; the mural register records U8 as its current permit identifier."
+        },
+        {
+          "id": "BQ24-A2",
+          "sessionId": "BQ24-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 100,
+          "text": "Permit U8 authorizes paint batch N14; its materials entry names the batch rather than a curing time."
+        },
+        {
+          "id": "BQ24-A3",
+          "sessionId": "BQ24-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 125,
+          "text": "Paint batch N14 requires a 48-hour curing period before its surface is washed; the batch sheet specifies this waiting period."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-3-source-chain",
+          "anchorIds": [
+            "BQ24-A1",
+            "BQ24-A2",
+            "BQ24-A3"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Use 24 hours from N18 or one-day suggestion.",
+        "Treat cover installation as shortening cure time."
+      ],
+      "staleUse": "Use last month’s removable-board trial batch instead of the permitted batch.",
+      "severeConditions": [
+        "State 24 hours or one day as the authorized batch’s washing wait."
+      ],
+      "provenance": "New synthetic authored sources; submitted roles are attributable claims, not authenticated statements or authority.",
+      "ambiguity": "Required evidence sets are alternative minimal complete support for the requested proposition. Optional context is not required for correctness or required-set retention; each optional factual claim needs its own cited support if stated. Sources are submitted claims, not authenticated facts. Missing-association qualification concerns only these supplied sources; an empty or incomplete packed context does not prove global absence.",
+      "optionalContextClaims": []
+    }
+  ]
+}
