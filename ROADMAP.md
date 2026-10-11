@@ -118,6 +118,18 @@ gates. The latest [closed complementary three-arm development result](docs/plans
 scores ordinary 19/24, linked 23/24 and complementary 23/24, but fails safety:
 complementary introduces an unsupported severe D12 error against ordinary and
 has no QA gain over linked. Stage 2 acceptance and Stage 3 remain blocked.
+The [closed six-case larger-pool result](docs/plans/large-pool-six-results.md)
+is INCONCLUSIVE under its unchanged [prospective contract](docs/plans/large-pool-six.md):
+linked B and complementary C each score 6/6, paired wins/losses 0/0. Four
+eligible cases exercise the lexical branch (including zero additions in L04),
+but +1 lexical-attributable packed anchor and +3 overall do not meet the
+positive-QA gate. All harm/unknown counts are zero in this separate authored
+development cohort; older D12 remains unrepaired. Coupled raw-trace replay
+does not establish independent end-to-end arm quality, standalone resources,
+holdout/generalization, official scores or parity. The separate closed
+16-answer format probe also establishes no format advantage or D12 fix.
+Paired resources are 180 HTTP / $0.90 reservation / $0.053136 profile estimate,
+not invoice; no advancement or promotion follows.
 The bounded offline D12 replay now reconstructs sealed evidence/request exactly;
 integrity/controls exit 0 and the symptom exits expected 1 on both pinned Nodes,
 without generation or a cause/fix claim. Next is a separately frozen fresh

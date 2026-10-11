@@ -2,6 +2,7 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { validateEvaluatorRubric } from './corpus.mjs';
 import { complementaryArms } from './complementary-profile.mjs';
+import { largePoolArms, validateLargePoolInputs } from './large-pool-profile.mjs';
 
 export const JUDGING_PROTOCOL = Object.freeze({
   version: 'algorithm-development-blind-judging-v1',
@@ -18,8 +19,9 @@ export const JUDGING_PROTOCOL = Object.freeze({
   aggregation: 'agreement-only; disagreements/missing judgments unresolved; no adjudication or favorable picking',
 });
 
-function buildBlindPacket({ observations, modelInputs, evaluatorRubric }, arms) {
-  validateEvaluatorRubric(evaluatorRubric, modelInputs);
+function buildBlindPacket({ observations, modelInputs, evaluatorRubric }, arms, largePool = false) {
+  if (largePool) validateLargePoolInputs(modelInputs);
+  else validateEvaluatorRubric(evaluatorRubric, modelInputs);
   const rows = new Map(observations.map(row => [row.id, row]));
   if (rows.size !== observations.length || observations.some(row => !modelInputs.some(input => input.id === row.id))) {
     throw new TypeError('invalid observation identities');
@@ -41,6 +43,8 @@ function buildBlindPacket({ observations, modelInputs, evaluatorRubric }, arms) 
 }
 export const buildBlindDevelopmentPacket = options => buildBlindPacket(options, ['baseline', 'full']);
 export const buildBlindComplementaryDevelopmentPacket = options => buildBlindPacket(options, complementaryArms);
+// The evaluator integration validates the separate large-pool rubric before this seam.
+export const buildBlindLargePoolDevelopmentPacket = options => buildBlindPacket(options, largePoolArms, true);
 
 export function unblindDevelopmentJudgments(mapping, judgments) {
   const identities = new Map(mapping.map(row => [row.label, row]));

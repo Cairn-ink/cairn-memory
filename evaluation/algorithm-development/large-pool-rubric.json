@@ -1,0 +1,510 @@
+{
+  "version": "large-pool-six-v1",
+  "spanOffsetUnit": "utf16-code-unit",
+  "cases": {
+    "L01": {
+      "variant": "three-source-handoff",
+      "requiredPropositions": [
+        "Priya is the current approver for the cleaned Marsh reel in the listening booth.",
+        "The cleaned Marsh reel is called Tern, and the listening-booth team files that same package as Evening set."
+      ],
+      "acceptableQualifications": [
+        "A short answer naming Priya and the Tern → Evening set mapping is fully correct.",
+        "Attribution to the recorded exhibit arrangements is acceptable; no claim of independently verified identity is needed."
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1,
+          2
+        ]
+      ],
+      "unsupportedClaims": [
+        "Elias is the current approver for the listening-booth package.",
+        "Niko approves audio because Niko approves foyer captions.",
+        "Dawn set and Evening set are the same package."
+      ],
+      "staleUseCriteria": [
+        "Treating any earlier delivery or file-check role as the current approval authority is a scoped role error, even if that role remains active."
+      ],
+      "severeErrors": [
+        "Assigning listening-booth approval to Elias or Niko by joining their distinct check/caption roles."
+      ],
+      "optionalBackground": [
+        "Elias still checks whether the booth files play. This is useful background but is not required when Priya and the package mapping are given."
+      ],
+      "examples": {
+        "conciseCorrect": "Priya. The cleaned Marsh reel is Tern, which the listening-booth team files as Evening set.",
+        "explainedCorrect": "Priya currently approves it for the listening booth. The source chain is cleaned Marsh reel → Tern → Evening set; Priya approves Evening set, while Elias’s file-playback check is a separate role.",
+        "incorrect": "I do not know."
+      },
+      "anchors": [
+        {
+          "sessionId": "L01-s1",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 82,
+          "text": "For the wetland exhibit, the cleaned Marsh reel is the audio package we call Tern."
+        },
+        {
+          "sessionId": "L01-s3",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 93,
+          "text": "When Tern reaches the listening-booth team, they file that same audio package as Evening set."
+        },
+        {
+          "sessionId": "L01-s6",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 65,
+          "text": "Priya is now the approver for Evening set in the listening booth."
+        },
+        {
+          "sessionId": "L01-s6",
+          "messageIndex": 0,
+          "start": 66,
+          "end": 135,
+          "text": "Elias still checks file playback, but that check is not the approval."
+        }
+      ]
+    },
+    "L02": {
+      "variant": "dated-location-update",
+      "requiredPropositions": [
+        "Mara should collect glaze sample boxes for weekday studio pickups from shelf C in the West annex.",
+        "The agreed move took effect on May 12, 2026."
+      ],
+      "acceptableQualifications": [
+        "A concise location and effective date are sufficient; the earlier location and rejected suggestion need not be narrated.",
+        "The answer must apply specifically to weekday studio glaze pickups, not invoices or Saturday class samples."
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          2
+        ]
+      ],
+      "unsupportedClaims": [
+        "The South foyer was adopted as the weekday pickup point.",
+        "The April 8 note supersedes the May agreement because it appears later in the source array.",
+        "Invoice collection or Saturday class sample collection moved to shelf C."
+      ],
+      "staleUseCriteria": [
+        "Presenting the North gallery locker as the May 20 weekday glaze pickup point uses a historical arrangement as current.",
+        "The effective date is May 12, not the May 10 agreement date or the May 18 reaffirmation date."
+      ],
+      "severeErrors": [
+        "Directing the requested weekday glaze pickup to the North gallery locker or South foyer.",
+        "Conflating weekday glaze pickups with reception invoice collection or Saturday kiln-door pickups."
+      ],
+      "optionalBackground": [
+        "The North gallery locker was the earlier weekday pickup point. The South foyer was only suggested. Reception invoices and Saturday kiln-door collections remain separate scopes."
+      ],
+      "examples": {
+        "conciseCorrect": "Shelf C in the West annex, effective May 12, 2026.",
+        "explainedCorrect": "For weekday studio pickups, Mara should use shelf C in the West annex. The May 10 agreement made that change effective May 12, and the May 18 pickup followed it. The April 8 locker note describes an earlier pickup.",
+        "incorrect": "I do not know."
+      },
+      "anchors": [
+        {
+          "sessionId": "L02-s4",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 117,
+          "text": "Mara and I agreed that weekday studio pickups of glaze sample boxes move to the West annex, shelf C, starting May 12."
+        },
+        {
+          "sessionId": "L02-s4",
+          "messageIndex": 0,
+          "start": 118,
+          "end": 176,
+          "text": "The North gallery locker stops serving those pickups then."
+        },
+        {
+          "sessionId": "L02-s6",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 76,
+          "text": "Mara used shelf C in the West annex for this morning’s weekday glaze pickup."
+        },
+        {
+          "sessionId": "L02-s2",
+          "messageIndex": 0,
+          "start": 91,
+          "end": 130,
+          "text": "Mara has not agreed to that suggestion."
+        },
+        {
+          "sessionId": "L02-s5",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 116,
+          "text": "I found an April 8 pickup note while sorting the files: Mara used the North gallery locker for glaze boxes that day."
+        }
+      ]
+    },
+    "L03": {
+      "variant": "decision-premise-reconfirmation",
+      "requiredPropositions": [
+        "Dock Hall remains the recorded choice for the summer sound workshops; no move to Birch Studio has been adopted.",
+        "The original reason was that the evening technician was included, avoiding a separate technician fee.",
+      "That premise no longer applies to the July workshops because the evening technician will be charged separately; the basis needs review or reconfirmation without inventing a changed venue decision."
+      ],
+      "acceptableQualifications": [
+        "The answer can say the existing decision remains recorded but its original cost premise needs reconfirmation.",
+        "A concise answer covering the current choice, original reason and changed premise is fully correct.",
+      "The planned cost review does not establish cancellation, a replacement booking or a final revised budget.",
+      "The exact June 1 fee-change date is optional when the answer correctly explains that the July workshops no longer include the evening technician."
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          2,
+          3,
+          4
+        ]
+      ],
+      "unsupportedClaims": [
+        "The workshops have moved to Birch Studio.",
+        "The Dock Hall booking has been cancelled.",
+        "The summer workshops still receive a free evening technician.",
+        "A transport grant will pay the additional staffing charge."
+      ],
+      "staleUseCriteria": [
+        "Using the historically included technician as a current reason to say the July workshops avoid staffing fees.",
+        "Presenting Birch Studio consideration or the separate courtyard lunch booking as adoption of a new workshop venue."
+      ],
+      "severeErrors": [
+        "Inventing adoption, cancellation or a replacement venue from a changed supporting premise.",
+        "Claiming the included-technician arrangement still applies to the July evening workshops."
+      ],
+      "optionalBackground": [
+        "Birch Studio was suggested, and its courtyard is booked for a separate volunteer lunch. The transport grant cannot pay venue staffing charges. Neither detail is required to answer the question."
+      ],
+      "examples": {
+        "conciseCorrect": "Dock Hall is still the recorded choice. Its original reason was an included evening technician, which no longer applies to the July workshops, so that basis needs review; no move has been adopted.",
+        "explainedCorrect": "The recorded summer workshop decision remains Dock Hall, with no changed venue booking after the staffing notice. The choice originally avoided a separate evening technician fee. Dock Hall now charges that fee separately from June 1, before the July workshops, so the original premise needs reconfirmation. The organiser plans to review the cost before deciding whether to move.",
+        "incorrect": "I do not know."
+      },
+      "anchors": [
+        {
+          "sessionId": "L03-s1",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 111,
+          "text": "I chose to keep the summer sound workshops at Dock Hall because its evening technician is included in our hire."
+        },
+        {
+          "sessionId": "L03-s1",
+          "messageIndex": 0,
+          "start": 112,
+          "end": 177,
+          "text": "Avoiding a separate technician fee is the reason for that choice."
+        },
+        {
+          "sessionId": "L03-s4",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 82,
+          "text": "Dock Hall says that from June 1 its evening technician will be charged separately."
+        },
+        {
+          "sessionId": "L03-s4",
+          "messageIndex": 0,
+          "start": 83,
+          "end": 182,
+          "text": "The summer sound workshops run in July, so the included-technician arrangement will not cover them."
+        },
+        {
+          "sessionId": "L03-s6",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 132,
+          "text": "Dock Hall remains my recorded choice for the summer sound workshops; I have not changed the venue booking since the staffing notice."
+        },
+        {
+          "sessionId": "L03-s6",
+          "messageIndex": 0,
+          "start": 133,
+          "end": 194,
+          "text": "I will review the extra cost before deciding whether to move."
+        },
+        {
+          "sessionId": "L03-s6",
+          "messageIndex": 2,
+          "start": 0,
+          "end": 55,
+          "text": "I have not booked Birch Studio for the sound workshops."
+        }
+      ]
+    },
+    "L04": {
+      "variant": "cjk-paraphrase-retrieval",
+      "requiredPropositions": [
+      "受訪者把掌心朝向主持人舉起, 就是在示意暫停收音。",
+      "停機休息後, 要等受訪者表示可以才繼續; 何時繼續由受訪者決定。"
+      ],
+      "acceptableQualifications": [
+        "中文或語意相同的其他語言回答都可接受。",
+        "只回答手勢和受訪者決定何時繼續即可, 不必補述逐字稿、邀請函或開幕式。",
+        "也可以提到受訪者能口頭要求休息, 但這不是必要資訊。"
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1,
+          2,
+          3
+        ]
+      ],
+      "unsupportedClaims": [
+        "主持人可以按下一位的排程自行恢復錄音。",
+        "受訪者要指向手錶才能暫停訪談錄音。",
+        "收音志工可以自行決定何時繼續。"
+      ],
+      "staleUseCriteria": [
+        "把開幕式播放下一段音樂的提示套用到口述歷史訪談, 是活動範圍混淆, 不是時間更新。"
+      ],
+      "severeErrors": [
+        "把受訪者的重新開機決定權改成主持人、志工或排程。",
+        "把開幕式舞台提示當成訪談暫停手勢。"
+      ],
+      "optionalBackground": [
+      "受訪者也可以口頭提出休息。逐字稿確認、聆聽區使用同意和舞台音控都是其他流程。",
+      "主持人看到手勢會請收音志工停機, 且不能因排程自行恢復錄音。這些操作細節可省略, 只需回答手勢意義和受訪者決定何時繼續。"
+      ],
+      "examples": {
+        "conciseCorrect": "把掌心朝向主持人舉起就表示暫停錄音。休息後要等受訪者說可以, 才能繼續。",
+        "explainedCorrect": "受訪者把掌心朝向主持人舉起, 是請大家先別把談話收進音檔的示意; 主持人會請收音志工停機。何時重新開機由受訪者決定, 必須等對方表示可以, 不能因為下一位正在等候就自行恢復。",
+        "incorrect": "I do not know."
+      },
+      "anchors": [
+        {
+          "sessionId": "L04-s2",
+          "messageIndex": 0,
+          "start": 13,
+          "end": 28,
+          "text": "受訪者只要把掌心朝向主持人舉起"
+        },
+        {
+          "sessionId": "L04-s2",
+          "messageIndex": 0,
+          "start": 29,
+          "end": 41,
+          "text": "就表示先別把談話收進音檔"
+        },
+        {
+          "sessionId": "L04-s2",
+          "messageIndex": 0,
+          "start": 42,
+          "end": 56,
+          "text": "主持人看到後會請收音志工停機"
+        },
+        {
+          "sessionId": "L04-s4",
+          "messageIndex": 0,
+          "start": 15,
+          "end": 29,
+          "text": "是否重新開機要等受訪者說可以"
+        },
+        {
+          "sessionId": "L04-s4",
+          "messageIndex": 0,
+          "start": 30,
+          "end": 42,
+          "text": "主持人不能因為下一位在等"
+        },
+        {
+          "sessionId": "L04-s4",
+          "messageIndex": 0,
+          "start": 43,
+          "end": 50,
+          "text": "就自行恢復收音"
+        }
+      ]
+    },
+    "L05": {
+      "variant": "missing-entity-binding",
+      "requiredPropositions": [
+        "The record does not identify who borrowed the Alder projector at 16:10 on May 9, so the borrower cannot be named from these sources.",
+        "The unidentified borrower took it to Studio D, as recorded on that same loan entry."
+      ],
+      "acceptableQualifications": [
+        "A positive unknown answer can identify the supported destination while withholding the unsupported borrower identity.",
+        "Cannot identify from these records is preferable to claiming that nobody borrowed it.",
+        "The blank borrower-name field is sufficient explanation; no inventory of every named person is required."
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1,
+          2
+        ]
+      ],
+      "unsupportedClaims": [
+        "Nora borrowed Alder because her group uses Studio D.",
+        "Owen borrowed Alder because he returned the different Birch projector.",
+        "Leena borrowed Alder because she prepared the equipment report.",
+        "The projector was taken to Studio B or remained at the media desk."
+      ],
+      "staleUseCriteria": [
+        "Using an unrelated recurring group’s room or another projector’s later return to replace the room on the actual Alder loan entry."
+      ],
+      "severeErrors": [
+        "Naming Nora, Owen, Leena or any other borrower without an identity link in the source.",
+        "Treating a room match, report-author role or different-item return as borrower identity evidence."
+      ],
+      "optionalBackground": [
+        "Nora’s sketch group uses a whiteboard; Owen’s different projector/class is Birch in Studio B; Leena authors equipment reports. These distinctions are not required if the answer simply preserves the missing identity."
+      ],
+      "examples": {
+        "conciseCorrect": "The borrower is not identified in the record; the recorded destination was Studio D.",
+        "explainedCorrect": "I cannot name the borrower from these records: the May 9 16:10 Alder loan has a blank borrower-name field. The same entry does identify Studio D as the room the borrower took it to. Nora’s unrelated Studio D group does not supply that missing identity.",
+        "incorrect": "Nora borrowed the Alder projector and took it to Studio D, where she hosts her sketch group."
+      },
+      "anchors": [
+        {
+          "sessionId": "L05-s3",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 62,
+          "text": "The media desk log has an Alder projector loan at 16:10 today."
+        },
+        {
+          "sessionId": "L05-s3",
+          "messageIndex": 0,
+          "start": 63,
+          "end": 110,
+          "text": "The borrower-name field on that entry is blank."
+        },
+        {
+          "sessionId": "L05-s4",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 81,
+          "text": "That 16:10 Alder loan entry records Studio D as the room the borrower took it to."
+        },
+        {
+          "sessionId": "L05-s4",
+          "messageIndex": 0,
+          "start": 82,
+          "end": 144,
+          "text": "The room field and the blank name field are on the same entry."
+        },
+        {
+          "sessionId": "L05-s2",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 51,
+          "text": "Nora hosts the sketch group in Studio D on Mondays."
+        },
+        {
+          "sessionId": "L05-s5",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 69,
+          "text": "Owen returned the Birch projector after the Sunday photography class."
+        },
+        {
+          "sessionId": "L05-s6",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 56,
+          "text": "Leena prepares the media desk’s weekly equipment report."
+        }
+      ]
+    },
+    "L06": {
+      "variant": "lexical-scope-collision",
+      "requiredPropositions": [
+      "No adopted June venue for the weekend book club is established in the sources; Lantern Cafe remains a suggestion awaiting a decision."
+      ],
+      "acceptableQualifications": [
+        "A concise answer that the weekend club has no recorded adoption and Lantern Cafe remains proposed is fully correct; naming both distractor groups is optional explanation.",
+        "The answer must distinguish no recorded adoption from proving that the club has rejected Lantern Cafe or will never choose it.",
+        "The one-off March cafe booking and April–May courtyard agreement do not establish a June adoption."
+      ],
+      "requiredMultiSourceSets": [
+        [
+          0,
+          1,
+          2
+        ]
+      ],
+      "unsupportedClaims": [
+        "The weekend book club adopted Lantern Cafe for June.",
+        "The weekend book club rejected Lantern Cafe.",
+        "The Ash courtyard is the agreed June venue.",
+        "A cycling group or weekday reading circle booking constitutes a weekend book club decision."
+      ],
+      "staleUseCriteria": [
+        "Extending the one-off March cafe trial or April–May courtyard agreement into June.",
+        "Transferring another group’s June cafe adoption into the weekend book club’s scope."
+      ],
+      "severeErrors": [
+        "Inventing weekend book club adoption from another group’s matching cafe/date vocabulary.",
+        "Turning an unaccepted suggestion into a final decision or rejection."
+      ],
+      "optionalBackground": [
+        "Wednesday cycling and weekday reading have adopted or booked the cafe in their own scopes. The weekend club’s prior venue arrangements covered March, April and May only. Those explanations are optional."
+      ],
+      "examples": {
+        "conciseCorrect": "There is no recorded June adoption by the weekend book club. Lantern Cafe remains a suggestion awaiting its decision.",
+        "explainedCorrect": "The weekend book club has no accepted June venue in its May 25 notes; Lantern Cafe is still only a suggestion. The Wednesday cycling group adopted it and the weekday reading circle booked it, but those are separate groups. The weekend club’s March trial and April–May courtyard agreement do not settle June.",
+        "incorrect": "Yes. Lantern Cafe was adopted for June, as confirmed by the cycling group’s cafe meeting venue."
+      },
+      "anchors": [
+        {
+          "sessionId": "L06-s3",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 63,
+          "text": "I suggested Lantern Cafe as the weekend book club’s June venue."
+        },
+        {
+          "sessionId": "L06-s3",
+          "messageIndex": 0,
+          "start": 64,
+          "end": 148,
+          "text": "The club has not accepted that suggestion; we are waiting for members’ travel dates."
+        },
+        {
+          "sessionId": "L06-s6",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 133,
+          "text": "I checked the weekend book club’s venue notes today: June still contains the Lantern Cafe suggestion, with no accepted venue entered."
+        },
+        {
+          "sessionId": "L06-s4",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 79,
+          "text": "The Wednesday cycling group has adopted Lantern Cafe as its June meeting venue."
+        },
+        {
+          "sessionId": "L06-s5",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 81,
+          "text": "The weekday reading circle booked Lantern Cafe for its June lunchtime discussion."
+        },
+        {
+          "sessionId": "L06-s1",
+          "messageIndex": 0,
+          "start": 71,
+          "end": 121,
+          "text": "That trial booking covered only the March meeting."
+        },
+        {
+          "sessionId": "L06-s2",
+          "messageIndex": 0,
+          "start": 77,
+          "end": 129,
+          "text": "That venue agreement does not set the June location."
+        }
+      ]
+    }
+  }
+}

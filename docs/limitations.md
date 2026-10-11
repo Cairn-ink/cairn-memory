@@ -1,7 +1,12 @@
 # Known limitations
 
 The [three-stage reliability plan](plans/reliability-three-stage.md) records an
-ongoing development sequence: the latest [three-arm development result](plans/complementary-qa24-results.md)
+ongoing development sequence. The latest
+[closed six-case larger-pool result](plans/large-pool-six-results.md) is
+INCONCLUSIVE: linked and complementary each score 6/6, with no paired QA gain.
+Four eligible cases exercise the lexical branch, whose +1 packed-anchor gain
+does not satisfy the positive-QA gate or repair older D12 harm. The separate
+[three-arm development result](plans/complementary-qa24-results.md)
 is ordinary 19/24, linked 23/24 and complementary 23/24. Complementary gained
 four correct answers over ordinary but none over linked, and fails the frozen
 safety gate with a new unsupported severe D12 error against ordinary. This is
@@ -1788,3 +1793,50 @@ query/keyset MOC references do not prove hierarchical MOC-only navigation.
 Primary's prior runtime-78 engineering checks and 27 CI passes do not establish
 semantic acceptance or final verification of this docs-only delivery candidate;
 its checks, independent reviews and latest-head CI remain pending.
+
+### Closed answer-format diagnostic and six-case larger-pool result
+
+The separately frozen answer-only diagnostic closed on 2026-10-11 with 16/16
+answers. Nested and flat formats each returned four expected known answers and
+four expected unknown abstentions. Two fresh nonauthor blind judges agreed on
+all 16 outcomes, with no wrong joins or unresolved judgments. This did not
+reproduce D12 or show a format advantage; it is neither a cause nor a repair.
+Its 16 HTTP requests reserved $0.08; recorded model-profile token usage was
+4,648 input / 253 output, estimated $0.002275, not an invoice. The original
+three-arm findings and D12 safety failure remain unchanged.
+
+The [six-case result](plans/large-pool-six-results.md) closed and scored once at
+runtime `954507b1ef8b404b6f09b36a6ccd12da91b347ca` under the unchanged
+[prospective contract](plans/large-pool-six.md). Both B/C returned 6 correct,
+0 incorrect and 0 unresolved, with no unsupported/stale/severe or unknown
+safety cases. C−B has 0 wins / 0 losses / 6 both correct; no adjudication was
+needed between two fresh nonauthor first blind judges. Four eligible cases
+L01/L03/L04/L06 include L04's valid zero additions. L02/L05 have six-card pools
+and remain in all denominators despite being ineligible for the lexical branch.
+
+All 36 anchors were retained/reachable, 32 selected in each arm and 26/29
+recalled/packed in B/C. Only one of the overall +3 packed anchors is attributed
+to larger-pool lexical additions. Positive QA is false, so the frozen verdict
+is INCONCLUSIVE and `supportsFurtherDevelopment: false`; no threshold changed.
+Natural capture and one natural
+selection/rank trace feed two real cold-core arms; the second replays only raw
+replies under exact request identity, while answers are independent. This
+compares the compiler intervention under a coupled trace and cannot establish
+independent end-to-end arm quality or standalone treatment cost/latency.
+Actual cards are 117 across six stores, 15–23 per case; rank pools are 6–8.
+Archives >36, long-history operation, official benchmarks, independent holdout
+and natural-host use remain unproven. Stage 3 and product promotion remain
+blocked by retained earlier failures.
+
+Paired resources passed: 180 HTTP, $0.90 reservation, $0.053136 known
+model-profile estimate (not invoice), 97,582 input / 8,791 output tokens,
+499.206 seconds and 3,592,192 retained SQLite bytes, with no peak RSS measured.
+The original ledger's exact 180-attempt append leaves 57,271 requests and
+330,692,281 reserved microUSD, pending zero; $39.307719 remained outside
+protected $30 at closure. Historical accounting is not a future grant.
+Independent audit passed 360 snapshots / 366 bound hashes / six databases;
+two inventories matched 382 nonblind / 386 total before aggregate, and primary
+matched 384 / 388 after the two aggregate appends. Runtime offline/CI passes
+at `954507b` do not establish later docs-head verification or semantic acceptance.
+Next is bounded source-bound entity/answer-use diagnosis, with no definitive
+causal or fix claim and no tuned rerun of L01–L06.

@@ -183,3 +183,42 @@ Historical 18/24–22/24 and offline 36 controls establish no new QA score.
 See [the frozen contract](../../docs/plans/complementary-qa24.md). Run the new
 `test/complementary*.test.mjs` and entire existing algorithm suite offline on
 both pinned Node 22.16/24.15 runtimes. Passing grants no spending permission.
+
+## Closed six-case coupled larger-pool experiment
+
+`loadLargePoolInputs` is source-only and validates the distinct L01–L06 roster,
+six short user/assistant/user sessions per case and 4,000 source characters.
+`loadLargePoolFreeze` separately validates evaluator gold and exactly six normal
+indexed capture batches. The old D01–D24 loaders and profiles remain closed.
+
+`runLargePoolComparison` captures each source once, then cold-reopens the same
+database for linked and complementary ranking. First-arm order alternates three
+times each. Only that arm makes natural select/rank calls; the second consumes
+immutable raw replies in strict request order, with no model fallback. Both
+real core arms retain their own source-diverse selection, compiler, authoritative
+source reads, recorded-role verifier and unchanged packer, and each generates
+one independent answer. Traces distinguish natural-model and replay calls.
+Costs describe paired execution, not standalone treatment cost or latency.
+
+The explicit `prepareLargePoolComparison` / `launchLargePoolComparison` reuse
+the guarded transport, original cumulative ledger and one-shot closure.
+Preparation requires `{ configuration, outputDirectory }`, with a fresh owned
+real directory at mode `0700`; the manifest binds its path and filesystem identity
+and launch rechecks that exact directory before and after explicit key lookup.
+Limits
+are 12 capture plus eight natural recall logical calls, zero paid replay recall,
+two answers per case and 252 HTTP attempts ($1.26 maximum reservation), within
+the $2 local ceiling and $30 protection. Preparation grants no spending.
+
+`scoreLargePoolCoverage` independently reconstructs raw/effective compilers,
+source origin and actual packing. Eligibility requires an actual >6 rank pool,
+one to five original refs at limit six and the lexical branch; additions may
+be zero. Coverage computes which newly packed anchors came from actual lexical
+additions. Blind judging and aggregation retain all six/twelve slots and report
+every loss. Further-development support requires four eligible cases, positive
+QA and lexical packed gains, resolved safety/correctness and valid pairing and
+resources. It never authorizes product promotion or Stage 3 or repairs old D12.
+
+Run `test/large-pool*.test.mjs` and the existing algorithm suite on both pinned
+Node runtimes. The real-core scripted controls prove orchestration, not model
+quality. See [the prospective contract](../../docs/plans/large-pool-six.md).
