@@ -8,6 +8,8 @@ import { snapshotJson } from '../longmemeval/mixed-validation.mjs';
 import { complementaryArms, complementaryLimits } from './complementary-profile.mjs';
 import { largePoolArms, largePoolLimits, largePoolRoster } from './large-pool-profile.mjs';
 import { RELATION_BINDING_VERSION, relationBindingArms, relationBindingId, relationBindingLimits } from './relation-binding-profile.mjs';
+import { MOC_NATURAL_VERSION, mocNaturalArms, mocNaturalLimits, mocNaturalRoster,
+  mocNaturalOrders, naturalErrorCode } from './moc-prior-profile.mjs';
 
 export const algorithmLimits = Object.freeze({ cases: 24, coreCallsPerCase: 40,
   answersPerCase: 2, httpRequests: 1968, reservationMicroUsd: 5000,
@@ -78,8 +80,10 @@ function createTransport({ configuration, checkpoint, historySha256,
   apiKey, fetchImpl = globalThis.fetch, onRecord = () => {} } = {}, mode = 'ordinary') {
   const largePool = mode === 'large-pool', complementary = mode === 'complementary';
   const relationBinding = mode === RELATION_BINDING_VERSION;
-  const limits = relationBinding ? relationBindingLimits : largePool ? largePoolLimits : complementary ? complementaryLimits : algorithmLimits;
-  const arms = relationBinding ? relationBindingArms : largePool ? largePoolArms : complementary ? complementaryArms : ['baseline', 'full'];
+  const natural = mode === MOC_NATURAL_VERSION;
+  const limits = natural ? mocNaturalLimits : relationBinding ? relationBindingLimits : largePool ? largePoolLimits : complementary ? complementaryLimits : algorithmLimits;
+  const arms = natural ? mocNaturalArms : relationBinding ? relationBindingArms : largePool ? largePoolArms : complementary ? complementaryArms : ['baseline', 'full'];
+  const externalCode = (error, fallback) => natural ? naturalErrorCode(error, fallback) : error.code ?? fallback;
   // The smaller diagnostic attempt cap does not relax the established preflight allowance.
   const affordability = relationBinding ? algorithmLimits : limits;
   const frozen = freezeObservation(snapshotJson({ configuration, checkpoint, historySha256 },
@@ -89,6 +93,11 @@ function createTransport({ configuration, checkpoint, historySha256,
     || !Number.isSafeInteger(frozen.checkpoint?.requestCount) || !Number.isSafeInteger(frozen.checkpoint?.reservedMicroUsd)
     || Object.keys(frozen.checkpoint).length !== 2 || !/^[a-f0-9]{64}$/u.test(frozen.historySha256)) fail('invalid_algorithm_configuration');
   let fatal = null, closed = false, active = null, busy = false, expected = null;
+  const persistRecord = record => {
+    if (!natural) return persist(onRecord, record);
+    try { if (onRecord(snapshot(record)) !== undefined) fail('algorithm_persistence_failure'); }
+    catch (error) { fatal ??= naturalErrorCode(error, 'algorithm_persistence_failure'); fail(fatal); }
+  };
   let started = null, attempted = 0, reserved = 0;
   const rows = [], seen = new Set();
   const stop = code => { fatal ??= code; fail(fatal); };
@@ -100,7 +109,7 @@ function createTransport({ configuration, checkpoint, historySha256,
       || state.requestCap - state.requestCount < affordability.httpRequests) fail('algorithm_unaffordable');
   } });
   const check = () => { if (fatal) fail(fatal); if (closed) fail('algorithm_closed'); };
-  const ledgerState = () => { try { return handle.getState(); } catch (error) { stop(error.code ?? 'algorithm_accounting_failure'); } };
+  const ledgerState = () => { try { return handle.getState(); } catch (error) { stop(externalCode(error, 'algorithm_accounting_failure')); } };
   const deadline = () => Math.min(limits.caseMs - (performance.now() - active.started),
     limits.runMs - (performance.now() - started));
 
@@ -115,12 +124,13 @@ function createTransport({ configuration, checkpoint, historySha256,
       || (counting ? request.counted : !answer && !request.counted)) stop('algorithm_request_denied');
     if (options.body.includes(apiKey)) stop('algorithm_credential_echo');
     if (options.signal.aborted || deadline() <= 0) fail('model_timeout');
-    if (attempted >= limits.httpRequests || reserved + 5000 > limits.reservedMicroUsd) stop('algorithm_budget_exceeded');
+    if (attempted >= limits.httpRequests || reserved + 5000 > limits.reservedMicroUsd
+      || natural && reserved + 5000 > limits.localCeilingMicroUsd) stop('algorithm_budget_exceeded');
     const state = ledgerState();
     if (state.limitMicroUsd - state.reservedMicroUsd < limits.protectedMicroUsd + 5000) stop('algorithm_budget_exceeded');
     const attemptId = randomUUID();
     try { handle.reserve({ attemptId, channel: counting ? 'cairn-count' : answer ? 'host-completion' : 'cairn-generation', reservedMicroUsd: 5000 }); }
-    catch (error) { stop(error.code ?? 'algorithm_accounting_failure'); }
+    catch (error) { stop(externalCode(error, 'algorithm_accounting_failure')); }
     attempted++; reserved += 5000; busy = true;
     const began = performance.now(), controller = new AbortController();
     const cancel = () => controller.abort();
@@ -133,7 +143,7 @@ function createTransport({ configuration, checkpoint, historySha256,
       actualMicroUsd: null, usage: null, outcome: 'unknown', failure: null };
     rows.push(row);
     try {
-      persist(onRecord, row);
+      persistRecord(row);
       if (options.signal.aborted || deadline() <= 0) controller.abort();
       const response = await interrupted(controller.signal, () => fetchImpl(url, {
         method: 'POST', redirect: 'error', signal: controller.signal,
@@ -173,7 +183,7 @@ function createTransport({ configuration, checkpoint, historySha256,
       row.outcome = 'succeeded';
       return new Response(raw, { status: response.status });
     } catch (error) {
-      row.failure = fatal ?? (controller.signal.aborted ? 'model_timeout' : error.code ?? 'provider_failure');
+      row.failure = fatal ?? (controller.signal.aborted ? 'model_timeout' : externalCode(error, 'provider_failure'));
       if (row.failure === 'algorithm_persistence_failure') fatal ??= row.failure;
       throw error;
     } finally {
@@ -181,8 +191,8 @@ function createTransport({ configuration, checkpoint, historySha256,
       row.latencyMs = performance.now() - began;
       try { handle.recordOutcome({ attemptId, outcome: row.outcome,
         ...(row.actualMicroUsd === null ? {} : { actualMicroUsd: row.actualMicroUsd }) }); }
-      catch (error) { fatal ??= error.code ?? 'algorithm_accounting_failure'; }
-      try { persist(onRecord, row); } catch { fatal ??= 'algorithm_persistence_failure'; }
+      catch (error) { fatal ??= externalCode(error, 'algorithm_accounting_failure'); }
+      try { persistRecord(row); } catch { fatal ??= 'algorithm_persistence_failure'; }
       busy = false;
       if (fatal) fail(fatal);
     }
@@ -195,13 +205,16 @@ function createTransport({ configuration, checkpoint, historySha256,
     if (!active || busy || expected || request.system !== prompts[method]
       || request.maxOutputTokens !== 1024 || (method === 'extract' || method === 'classify'
         ? active.arm !== 'capture' : !arms.includes(active.arm))) stop('algorithm_method_denied');
-    if (active.coreCalls >= (largePool ? 20 : 40)) fail('algorithm_case_call_cap');
+    if (active.coreCalls >= (natural ? 44 : largePool ? 20 : 40)) fail('algorithm_case_call_cap');
+    if (natural && active.phaseCalls[active.arm] >= (active.arm === 'capture' ? 38 : 3)) fail('algorithm_phase_call_cap');
+    if (natural && active.methodCalls[active.arm][method] >= ({ extract: 19, classify: 19, select: 2, rank: 1 })[method]) fail('algorithm_phase_call_cap');
     if (complementary && active.phaseCalls[active.arm] >= (active.arm === 'capture' ? 16 : 8)) fail('algorithm_phase_call_cap');
     if (largePool && (active.arm !== 'capture' && active.arm !== active.naturalArm
       || active.phaseCalls[active.arm] >= (active.arm === 'capture' ? 12 : 8))) fail('algorithm_phase_call_cap');
     if (deadline() <= 0) fail('model_timeout');
     active.coreCalls++;
     active.phaseCalls[active.arm]++;
+    if (natural) active.methodCalls[active.arm][method]++;
     const bodies = {};
     const serializer = createOpenAIModel({ apiKey: 'serializer-only', fetchImpl: async (url, options) => {
       if (url.endsWith('/input_tokens')) { bodies.count = options.body;
@@ -216,15 +229,19 @@ function createTransport({ configuration, checkpoint, historySha256,
   return Object.freeze({ model: Object.freeze(model),
     beginCase({ id, ordinal }) {
       check();
-      if (active || busy || seen.has(id) || ordinal !== seen.size + 1 || ordinal > (relationBinding ? 12 : largePool ? 6 : 24)
+      if (active || busy || seen.has(id) || ordinal !== seen.size + 1 || ordinal > (natural ? 4 : relationBinding ? 12 : largePool ? 6 : 24)
+        || natural && id !== mocNaturalRoster[ordinal - 1].id
         || largePool && id !== largePoolRoster[ordinal - 1].id
         || relationBinding && id !== relationBindingId(ordinal)) stop('algorithm_lifecycle');
       seen.add(id); started ??= performance.now();
       active = { id, ordinal, started: performance.now(), arm: 'capture', coreCalls: 0,
         phaseCalls: Object.fromEntries(['capture', ...arms].map(name => [name, 0])), answers: new Set(), arms: new Set() };
+      if (natural) active.methodCalls = Object.fromEntries(['capture', ...arms].map(name =>
+        [name, Object.fromEntries(['extract', 'classify', 'select', 'rank'].map(method => [method, 0]))]));
     },
     beginArm(name) { check(); if (!active || busy || expected || !arms.includes(name)
       || active.arms.has(name) || largePool && !active.arms.size && name !== (active.ordinal % 2 ? 'linked' : 'complementary')
+      || natural && name !== mocNaturalOrders[(active.ordinal - 1) % 2][active.arms.size]
       || relationBinding && !active.arms.size && name !== (active.ordinal % 2 ? 'baseline' : 'relation')) stop('algorithm_lifecycle');
       if (largePool) active.naturalArm ??= name;
       active.arms.add(name); active.arm = name; },
@@ -254,3 +271,4 @@ export const createAlgorithmDevelopmentTransport = options => createTransport(op
 export const createComplementarySourceTransport = options => createTransport(options, 'complementary');
 export const createLargePoolTransport = options => createTransport(options, 'large-pool');
 export const createRelationBindingTransport = options => createTransport(options, RELATION_BINDING_VERSION);
+export const createMocNaturalTransport = options => createTransport(options, MOC_NATURAL_VERSION);

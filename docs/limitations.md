@@ -1904,3 +1904,37 @@ that is not a final-directory count. Raw private evidence stays retained locally
 public hashes bind identities without publishing bodies or promising public
 reproduction. Runtime engineering/CI passed before execution; later results-head
 acceptance is a separate gate.
+
+## Natural MOC-prior diagnostic boundary
+
+The opt-in `moc-prior-natural-four-v1` runtime is an authored four-case development
+diagnostic, with one ordinary nineteen-batch capture and two independent cold
+recalls per case. Its frozen P01–P04 sources and separate rubric are not a held-out
+benchmark, official LongMemEval cohort or Mem0 comparison. Passing scripted
+fake-provider tests verifies execution, provenance, state and budget boundaries;
+it supplies no model QA result and authorizes no paid calls. Earlier study
+sources, results, failures, denominators and operators remain frozen.
+
+Ninety-five is a maximum admitted-memory count, not a target. Natural extraction
+can omit or merge useful facts, classification may form no helpful topic, and
+two ordinary selector pages may already expose the required source. A topic
+with many related facts may not help the bounded prior. Derived order changes
+alone do not establish which private prior queue supplied an item. Report actual
+source retention, source-carrying selector references, selection, verified
+packing and judged correctness separately; a missing stage stays unknown.
+
+All eight planned first-answer slots remain visible, including capture failures,
+unrun arms and missing judgments. The terminal-observation flag does not mean
+eight completed answers. P04's correct qualified statement that no final carrier
+was adopted counts as abstention because the question requests that final choice;
+known complete answers, including optional uncertainty, do not. Two independent
+first submissions are retained without adjudication. No unmet precondition or
+unresolved pair becomes a gain, and no source replacement, padding or retry is
+authorized. Every scored outcome keeps product promotion and Stage 3 false.
+
+The existing original campaign ceiling and protected allowance are unchanged.
+Maximum new reservation is $1.80 for 360 HTTP attempts, with a separate fixed
+$4 local ceiling. Common capture is counted once; pair totals are not standalone
+arm deployment costs. Known profile-price estimates are not invoices or evidence
+of lightweight latency. Actual paid first-answer evidence, exact-head independent
+reviews/CI and a prospective primary execution grant remain separate gates.

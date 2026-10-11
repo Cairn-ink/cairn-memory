@@ -276,3 +276,11 @@ OpenClaw, additional clients, fully local model verification, automatic local
 capture and UI improvements follow their own evidence gates. Moss and shared
 team knowledge are separate work. No ten-person alpha prerequisite, guaranteed
 star count, hidden telemetry or automatic publication is implied.
+
+The [natural MOC-prior four-case diagnostic](docs/plans/moc-prior-natural-four.md)
+adds an opt-in offline runtime for the frozen authored sources, ordinary natural
+capture and independent baseline/prior first answers. Its readiness checks and
+any later authorized execution are separate from product acceptance. Smaller
+stores, baseline ceilings and unmet source-consumption opportunities remain valid
+outcomes. The diagnostic cannot promote defaults, repair a closed study or
+advance Stage 3; no paid result or QA gain is claimed by runtime implementation.
