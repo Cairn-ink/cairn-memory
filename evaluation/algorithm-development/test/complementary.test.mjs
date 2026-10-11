@@ -21,7 +21,7 @@ import { scoreComplementarySourceCoverage, scoreEvidenceBundleCoverage } from '.
 import { launchComplementarySourceComparison, launchEvidenceBundleComparison } from '../launch.mjs';
 import { complementaryArms, complementaryPolicies, complementaryLimits, COMPLEMENTARY_VERSION } from '../complementary-profile.mjs';
 
-const original = await loadRequestedAnswerFreeze(), frozen = await loadComplementarySourceFreeze();
+const original = await loadRequestedAnswerFreeze(), frozen = await loadComplementarySourceFreeze(), awaitableBundle = await loadEvidenceBundleFreeze();
 const identity = { schemaVersion: `${COMPLEMENTARY_VERSION}-comparison-v1`, treatment: complementaryPolicies.complementary,
   evidenceFormat: 'source-role-evidence-v1', armPolicies: complementaryPolicies, fatal: null };
 const empty = name => ({ name, status: 'unresolved', answer: null, recalled: null, packed: null, evidence: null,
@@ -86,7 +86,6 @@ test('Q1/Q5 separate freeze preserves requested v2 and all42 anchors; blind iden
   const changed = structuredClone(frozen); changed.protocol.instructions.push('changed');
   assert.throws(() => buildBlindComplementarySourcePacket({ report, freeze: changed }));
 });
-const awaitableBundle = await loadEvidenceBundleFreeze();
 
 test('Q6 actual selected/recalled/packed coverage reconstructs both compilers and rejects missing/raw fallback/forged traces', () => {
   const report = reportFixture(), result = coverage(report);
@@ -185,6 +184,26 @@ test('Q3/Q4 clean reviewed manifest binds candidate/helpers/Node, mutation fails
   assert.equal(JSON.parse(readFileSync(join(outputDirectory, 'closed.json'))).completed, false);
   await assert.rejects(module.launchComplementarySourceComparison(options), { code: 'EEXIST' }); assert.equal(keys, 1);
 
+  const corruptionDirectory = join(workspace.path, 'post-key-corruption'); mkdirSync(corruptionDirectory, { mode: 0o700 });
+  const casesFile = join(checkout, 'evaluation/algorithm-development/cases.json'), originalCases = readFileSync(casesFile);
+  const ledgerBeforeCorruption = inspectEmbeddingExperimentBudgetSnapshot(configuration);
+  let providerCalls = 0;
+  try {
+    await assert.rejects(module.launchComplementarySourceComparison({ configuration, manifest, outputDirectory: corruptionDirectory,
+      keyProvider: () => { writeFileSync(casesFile, '{'); return 'synthetic-complementary-secret'; },
+      fetchImpl: () => { providerCalls++; assert.fail('No HTTP after corpus mutation'); } }), { code: 'runtime_not_clean' });
+  } finally { writeFileSync(casesFile, originalCases); }
+  assert.equal(providerCalls, 0);
+  assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(configuration), ledgerBeforeCorruption);
+  const corruptReport = JSON.parse(readFileSync(join(corruptionDirectory, 'report.json')));
+  assert.equal(corruptReport.fatal, 'runtime_not_clean'); assert.equal(corruptReport.observations.length, 24);
+  assert.deepEqual(corruptReport.observations.map(row => row.source), original.modelInputs,
+    'pre-key detached source-only snapshot, not corrupted on-disk sources or evaluator gold');
+  assert.equal(corruptReport.observations.flatMap(row => Object.values(row.arms)).filter(arm => arm.status === 'unresolved').length, 72);
+  const corruptionClosure = JSON.parse(readFileSync(join(corruptionDirectory, 'closed.json')));
+  assert.equal(corruptionClosure.runnerStarted, false); assert.equal(corruptionClosure.reportAvailable, true);
+  assert.equal(corruptionClosure.failure, 'runtime_not_clean'); assert.equal(corruptionClosure.completed, false);
+
   // A real post-dispatch case persistence failure must preserve actual case1
   // and request records, never rerun the runner or replace them with unrun rows.
   const failedDirectory = join(workspace.path, 'post-dispatch'); mkdirSync(failedDirectory, { mode: 0o700 });
@@ -214,4 +233,20 @@ test('Q3/Q4 clean reviewed manifest binds candidate/helpers/Node, mutation fails
   assert.equal(closure.failure, 'algorithm_persistence_failure'); assert.equal(closure.completed, false);
   assert.ok(closure.records > 0);
   assert.ok(inspectEmbeddingExperimentBudgetSnapshot(configuration).requestCount > 0);
+
+  const reportDirectory = join(workspace.path, 'report-collision'); mkdirSync(reportDirectory, { mode: 0o700 });
+  const currentManifest = await module.prepareComplementarySourceComparison({ configuration });
+  let reportAnswers = 0;
+  await assert.rejects(module.launchComplementarySourceComparison({ configuration, manifest: currentManifest, outputDirectory: reportDirectory,
+    keyProvider: () => 'synthetic-complementary-secret', fetchImpl: async (url, request) => {
+      if (url.endsWith('/chat/completions') && ++reportAnswers === 1)
+        writeFileSync(join(reportDirectory, 'report.json'), '{"syntheticReportCollision":true}\n', { flag: 'wx' });
+      return fetchImpl(url, request);
+    } }), { code: 'EEXIST' });
+  assert.equal(reportAnswers, 72, 'one complete batch, no retries when durable report persistence fails');
+  assert.equal(JSON.parse(readFileSync(join(reportDirectory, 'report.json'))).syntheticReportCollision, true);
+  assert.equal(JSON.parse(readFileSync(join(reportDirectory, 'case-D24.json'))).arms.complementary.status, 'completed');
+  const reportClosure = JSON.parse(readFileSync(join(reportDirectory, 'closed.json')));
+  assert.equal(reportClosure.runnerStarted, true); assert.equal(reportClosure.reportAvailable, false);
+  assert.equal(reportClosure.completed, false); assert.equal(reportClosure.failure, 'EEXIST');
 });

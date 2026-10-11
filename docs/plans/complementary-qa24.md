@@ -56,10 +56,16 @@ requires C-B net correct >0. Historical 18/24–22/24 and offline 36 are never i
 Launch binds clean committed runtime, exact Node executable/hash/version,
 corpus/protocol, complete tracked runtime/control closure, existing checkpoint,
 history and request cap. Exclusive durable marker precedes key lookup. Before
-runner dispatch, failure writes all 24 failed/unrun observations when persistence
+the marker, complementary launch retains a validated source-only snapshot and
+checks its canonical hash against the existing manifest corpus hash. Normal
+run and pre-run failure placeholders use that detached snapshot. Post-key
+preflight still rejects source/runtime/ledger changes before any transport call.
+Before runner dispatch, failure writes all 24 failed/unrun observations when persistence
 works. After dispatch, catastrophic persistence failure preserves actual partial
 records and failure in closure; it never reruns the runner or invents unrun
-observations. Closed operations never resume/refund. Missing report is a blocker.
+observations. `reportAvailable` records successful exclusive report persistence,
+not the presence of an in-memory report. Closed operations never resume/refund.
+Missing report is a blocker.
 
 Worker owns new complementary tests: actual core/HTTP/caps in
 `test/complementary-runner.test.mjs`, freeze/coverage/blind/gates/manifest in
@@ -90,10 +96,37 @@ fixture aliased its raw/effective inputs, so mutating one changed both. The
 fixture now matches separately serialized formal observations. Both complete
 reruns exited 0 (5/5, Node 22 5.62s, Node 24 5.41s). Later transport-closure
 hardening and testing-helper artifact binding require final revalidation.
+Full algorithm comparison at the exact clean committed candidate
+`fa26f7c6cf4d2739c2ae3f424c478b0b14c2cc23`:
+
+```sh
+PATH=/home/chichieh/.nvm/versions/node/v22.16.0/bin:$PATH NODE_DISABLE_COMPILE_CACHE=1 npm run test:algorithm-development
+PATH=/home/chichieh/.nvm/versions/node/v24.15.0/bin:$PATH NODE_DISABLE_COMPILE_CACHE=1 npm run test:algorithm-development
+```
+
+Both actual exits were 0, 82/82 tests, fail/skip/cancel/todo 0. Durations were
+328.911s / 327.918s. These are observations, not a performance comparison.
+The subsequent narrow launch correction handles report-persistence availability
+and pre-key source snapshots. Its complete affected suite was run before the
+correction commit, with HEAD still `fa26f7c` and exactly launch, new protocol
+test and this plan modified:
+
+```sh
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node tools/testing/run.mjs evaluation/algorithm-development/test/complementary.test.mjs
+/home/chichieh/.nvm/versions/node/v24.15.0/bin/node tools/testing/run.mjs evaluation/algorithm-development/test/complementary.test.mjs
+```
+
+Both actual exits were 0, 5/5, fail/skip/cancel/todo 0, with durations
+30.267s / 30.185s. Controls include zero HTTP and an unchanged synthetic ledger
+after key-time corpus corruption, all 24/72 pre-run placeholders, genuine partial
+records after case persistence failure, and one full 24/72 batch retained after
+exclusive report collision with reportAvailable false and no rerun/overwrite.
+Code/test content remained unchanged after these gates; this record was appended.
+Primary owns final rebased combined gates and independent reviews.
 The changed-file inventory was independently derived by Git diff plus untracked
 listing and by filesystem Git-blob hashes plus a new-file walk, then compared:
 17 files match (12 implementation packet, 5 unchanged dependency files).
-Targeted/regression final results and primary acceptance pending. Offline gates
+Worker targeted/regression gates above passed; primary final acceptance pending. Offline gates
 establish no new QA score, provider spend permission or product promotion.
 
 ## Interpretation limits fixed before results

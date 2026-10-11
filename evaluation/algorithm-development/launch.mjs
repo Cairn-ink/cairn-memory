@@ -6,7 +6,7 @@ import { closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync,
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectEmbeddingExperimentBudgetSnapshot } from '../experiment-budget/index.mjs';
-import { loadDevelopmentFreeze } from './corpus.mjs';
+import { loadDevelopmentFreeze, loadModelInputs, hashCanonicalValue } from './corpus.mjs';
 import { loadRequestedAnswerFreeze, loadEvidenceBundleFreeze } from './requested-answer.mjs';
 import { createAlgorithmDevelopmentTransport, algorithmLimits } from './transport.mjs';
 import { DEFAULT_MODEL } from '../../adapters/openai/profiles.mjs';
@@ -105,6 +105,11 @@ async function launch({ configuration, manifest, outputDirectory, keyProvider,
   manifest = structuredClone(manifest);
   const observed = await prepare({ configuration }, prospective);
   if (JSON.stringify(observed) !== JSON.stringify(manifest)) fail('manifest_mismatch');
+  // Retain only the validated source-facing half before the marker/key. Its
+  // canonical identity is already bound by the reviewed manifest; pre-run
+  // failures remain representable even if the on-disk corpus is then damaged.
+  const sourceSnapshot = complementary ? await loadModelInputs() : null;
+  if (complementary && hashCanonicalValue(sourceSnapshot) !== manifest.corpusHashes.modelInputs) fail('manifest_mismatch');
   const directory = resolve(outputDirectory), identity = lstatSync(directory);
   if (!identity.isDirectory() || identity.isSymbolicLink() || realpathSync(directory) !== directory
     || identity.uid !== process.getuid() || (identity.mode & 0o777) !== 0o700) fail('unsafe_output_directory');
@@ -125,7 +130,7 @@ async function launch({ configuration, manifest, outputDirectory, keyProvider,
   };
   // Exclusive marker precedes credential lookup: a failed launch is never resumed.
   persist('started.json', { manifest, startedAt: new Date().toISOString() });
-  let transport, records = 0, report, launchError, runnerStarted = false;
+  let transport, records = 0, report, launchError, runnerStarted = false, reportPersisted = false;
   try {
     const apiKey = await keyProvider();
     if (complementary && JSON.stringify(await prepare({ configuration }, prospective)) !== JSON.stringify(manifest)) fail('manifest_mismatch');
@@ -135,23 +140,24 @@ async function launch({ configuration, manifest, outputDirectory, keyProvider,
       historySha256: manifest.checkpoint.historySha256, apiKey, fetchImpl,
       onRecord: record => persist(`request-${String(++records).padStart(5, '0')}.json`, record) });
     // Only the model-facing half leaves preflight; no evaluator gold reaches the runner.
-    const { modelInputs } = await loadDevelopmentFreeze();
+    const modelInputs = complementary ? sourceSnapshot : (await loadDevelopmentFreeze()).modelInputs;
     runnerStarted = true;
     report = await (complementary ? runComplementarySourceComparison : runAlgorithmDevelopmentComparison)({ cases: modelInputs, transport,
       ...(prospective ? { treatment: bundle ? 'source-diverse-linked-v1' : 'source-diverse-v1' } : {}),
       outputDirectory: directory, onCase: row => persist(`case-${row.id}.json`, row) });
     persist('report.json', report);
+    reportPersisted = true;
     return report;
   } catch (error) {
     launchError = error;
     if (complementary && !runnerStarted && report === undefined) {
       const failure = error.code ?? 'complementary_launch_failure';
-      const { modelInputs } = await loadDevelopmentFreeze();
       try {
-        report = await runComplementarySourceComparison({ cases: modelInputs,
+        report = await runComplementarySourceComparison({ cases: sourceSnapshot,
           transport: { records: () => [], assertHealthy() { fail(failure); }, endCase() { fail(failure); } },
           outputDirectory: directory, onCase: row => persist(`case-${row.id}.json`, row) });
         persist('report.json', report);
+        reportPersisted = true;
       } catch (persistenceError) {
         launchError = new AggregateError([error, persistenceError], 'Complementary launch and observation persistence failed', { cause: error });
       }
@@ -166,9 +172,9 @@ async function launch({ configuration, manifest, outputDirectory, keyProvider,
       closeError = error;
     }
     finally {
-      try { persist('closed.json', { completed: report !== undefined && (!complementary || report.fatal === null && !launchError && !closeError), records,
-        ...(complementary ? { runnerStarted, reportAvailable: report !== undefined,
-          failure: launchError?.code ?? closeError?.code ?? (launchError || closeError ? 'complementary_launch_failure' : report?.fatal ?? null) } : {}),
+      try { persist('closed.json', { completed: report !== undefined && (!complementary || reportPersisted && report.fatal === null && !launchError && !closeError), records,
+        ...(complementary ? { runnerStarted, reportAvailable: reportPersisted,
+          failure: launchError?.code ?? launchError?.cause?.code ?? closeError?.code ?? (launchError || closeError ? 'complementary_launch_failure' : report?.fatal ?? null) } : {}),
         closedAt: new Date().toISOString() }); }
       catch (persistenceError) {
         if (complementary && (launchError || closeError)) throw new AggregateError([launchError ?? closeError, persistenceError], 'Launch and closure persistence failed', { cause: launchError ?? closeError });
