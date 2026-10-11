@@ -204,3 +204,68 @@ this verification record was appended afterward. Independently derived Git-diff
 and filesystem Git-blob-hash/new-file-walk inventories match exactly four files,
 all owned above; `git diff --check` exited 0. No claim about primary combined
 gates, fresh QA scores or paid-run permission follows from these offline results.
+
+## Closed execution and results-doc delivery (2026-10-11)
+
+This append-only record preserves Q1–Q8 and all implementation/review/install
+history above. Primary integrated the correctness-resolution correction and
+froze reviewed runtime `78d7e37b2cb55afe14d26422beca11864cb9d9aa`; primary
+checks on both pinned Nodes exited 0 and all 27 CI checks passed before execution.
+The prior `43e4686` Spec FAIL and isolated Claude native-postinstall installation
+failure remain retained in [limitations](../limitations.md), not erased by green
+later checks. They are distinct from the closed run's semantic safety failure.
+The earlier primary plugin-validation runs exited 1 after the isolated Claude
+install used `--ignore-scripts`, leaving its native-binary placeholder; running
+the inspected locked local postinstall corrected that installation omission
+without product/lock/shared-install changes. The earlier exits stay failures.
+
+The [closed three-arm result](complementary-qa24-results.md) ran once at runtime
+78 on 2026-10-11, approximately 07:18–07:41 UTC, with actual exit 0, 24 captures,
+72 answers, 512 HTTP, no retry/failure/fatal. Post-run preparation/scoring each
+ran once, actual exit 0. Two new independent nonauthor fork-none GPT-6.1 Sol/high
+judges each submitted 72 judgments: no disagreement, missing or unknown verdict.
+A/B/C correctness is 19/5/0, 23/1/0, 23/1/0 over 24; C−A has five wins / one
+loss, net +4, C−B zero wins/losses, net 0. Packed anchors are 28/39/42 over 42.
+All resource gates pass, but C has a newly unsupported severe D12 against A;
+`advances: false`, `incrementalSuperiority: false`. No promotion or Stage 3.
+
+Primary's private trace audit initially exited 1 on baseline diagnostics=null;
+corrected audit exited 0. This audit assumption failure is not a runtime/product
+failure. All 1,048 artifact hashes and independently derived readdir/find
+inventories matched; an independent nonauthor operator trace review passed.
+Exact D12 B/C answer request bytes match while all needed sources were packed:
+an answer-use/entity-binding boundary, not a proven formatting cause. Primary's
+bounded sealed replay now reconstructs full evidence/request via the existing
+preparation, role verifier and real packer using recorded authoritative get
+snapshots, not a new SQLite read. Integrity/controls each exited 0 and symptom
+mode exited expected 1 (`D12_UNSUPPORTED_ENTITY_BINDING`) on both pinned Nodes,
+with zero provider calls. Known-holder and always-abstain controls bound its
+narrow evaluator-only oracle: no fresh generation, cause, fix or score. Initial
+integrity exit 2 from an answer-hash convention mismatch remains a corrected
+diagnostic-harness error. Next is a separately frozen fresh experiment if
+warranted. Closed evidence and first judgments are immutable;
+no old rerun/rescore or new paid authority follows.
+
+Results-doc owner: actual GPT-6.1 Sol/high under primary's accepted R1–R8,
+fixed base `78d7e37b2cb55afe14d26422beca11864cb9d9aa`, initially clean
+`complementary-qa24-results` worktree / `docs/complementary-qa24-results` branch.
+Exactly five scoped docs are allowed: new result report, this append-only plan
+record, three-stage current status, limitations and ROADMAP next-gate status.
+Runtime worktree, code, schema, fixtures, historical result files, README, CI,
+defaults and budget remain unchanged. Worker reads only closed evidence;
+no key/environment/operational-ledger access or paid calls. Artifact digests and
+source-free tables are in the result; blind labels/mapping and raw bodies are
+not published. No dependency install is needed. Primary owns candidate checks,
+same-SHA independent review and latest-head CI, pending until explicitly recorded.
+
+Precommit results-doc evidence: read-only JSON reconciliation independently
+rederived 24/72 outcomes, pairs, safety/claim counts, all 42-anchor stage totals,
+trace totals and 512-request phase/accounting totals, actual exit 0. A second
+published-Markdown check matched eight numeric tables, all 24 outcome rows and
+ten file digests to sealed JSON, actual exit 0. Relative-link checking covered
+149 links across the five docs with no missing targets, actual exit 0.
+Git diff plus untracked paths and independent filesystem Git-blob hashes plus
+new-file walk agree exactly on the five allowed files; this plan's old bytes
+are a preserved prefix (append-only), actual exit 0. `git diff --check` exited 0.
+No contributor-suite, review or CI pass for the docs candidate is inferred from
+these worker checks. Primary inspects the diff before any scoped commit.
