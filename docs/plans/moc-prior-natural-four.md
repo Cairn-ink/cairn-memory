@@ -312,3 +312,32 @@ but execution fails closed and never overwrites its first evidence or retries.
 No semantic paid-result, holdout/default/Stage-3 claim is made. Primary owns its
 fresh frozen acceptance, final combined diff, local commit and independent
 two-axis review; worker stops before those gates.
+
+## Closed first-result checkpoint
+
+The [first natural-four results](moc-prior-natural-results.md) retain four cases
+and eight completed first slots at executed runtime
+`68c58722cc3c280d00e4f43179109f1488443e3d`. Both arms are 4/4 correct with no
+paired gain; P01–P03 in each still contain unsupported scope/identity bindings
+against actual packed evidence. All nine required anchors per arm were retained;
+their source-carrying references were visible, six anchors selected and four
+packed. Reference visibility is not full passage/semantic-relation visibility.
+No required anchor moved earlier
+or met the frozen actual prior-consumption opportunity. Exact first decision:
+`precondition-unmet`, development support/product promotion/Stage 3 false.
+Correctness is not reliable acceptance; older D12 remains uncleared.
+
+The original pre-blind NUL-argv observer failure is retained. A separately
+reviewed first-scoring observer repaired serialization plus supplementary
+identity/first-only gates, not execution bytes or scoring rules. One new blind
+preparation and one first score closed exit 0, with no paid repeat/adjudication.
+The results bind raw identities, first judges, stage evidence and resources.
+
+RC1–RC6 documentation-only delivery uses a separate worktree at executed 68c587,
+appending after this entire inherited plan. Author owns four documentation edits
+and private whitespace/validate evidence; primary owns raw claims, four/17-path
+inventory and both-Node generic/Claude acceptance. Full af39-to-candidate
+independent Standards/Spec review, latest-head CI, commit/push approval and
+delivery remain primary-owned and pending. Next propose selective evidence-chain
+diagnosis: no private prior-membership inference, consumed-case tuning or
+ordering-benefit claim. The prospective NR1–NR10 contract is unchanged.

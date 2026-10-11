@@ -20,8 +20,11 @@ service must use the same public core, not separate engines.
   reorders only the already eligible source-context pool with bounded valid
   title hints, without an extra model call or default change. Manual-filing and
   scripted pressure regression are not real first-answer QA improvement.
-  Natural classification/consumption, local resource measurement and fresh
-  paired model acceptance remain open; no old-study rerun is authorized.
+  The [first natural-four result](docs/plans/moc-prior-natural-results.md)
+  completed natural capture/recall and measured paired resources, but is
+  `precondition-unmet`: both arms 4/4 correct, no gain/opportunity and three
+  unsupported scope/identity-bound answers per arm. Reliability acceptance
+  remains open; no old-study rerun or default promotion is authorized.
 
 - The [closed relation-bound first-answer diagnostic](docs/plans/relation-binding-results.md)
   returned 12/12 correct per arm with zero paired gain and no baseline targeted
@@ -278,9 +281,16 @@ team knowledge are separate work. No ten-person alpha prerequisite, guaranteed
 star count, hidden telemetry or automatic publication is implied.
 
 The [natural MOC-prior four-case diagnostic](docs/plans/moc-prior-natural-four.md)
-adds an opt-in offline runtime for the frozen authored sources, ordinary natural
-capture and independent baseline/prior first answers. Its readiness checks and
-any later authorized execution are separate from product acceptance. Smaller
-stores, baseline ceilings and unmet source-consumption opportunities remain valid
-outcomes. The diagnostic cannot promote defaults, repair a closed study or
-advance Stage 3; no paid result or QA gain is claimed by runtime implementation.
+has a [closed first result](docs/plans/moc-prior-natural-results.md): all eight
+answers completed, both arms 4/4 correct, paired wins/losses 0/0 and no actual
+prior-consumption opportunity. Both arms still have unsupported scope/identity
+binding in P01–P03: nine anchors retained with source-carrying references visible
+per arm (not full semantic relations), six selected and four packed. Exact
+decision is `precondition-unmet`, development support
+false, not reliable acceptance. Smaller stores/baseline ceilings are valid;
+changed derived orders establish neither private membership nor ordering gain.
+Next propose selective evidence-chain/evidence-composition diagnosis, without
+tuning/replaying consumed cases. MOC stays opt-in; D12 is uncleared, Stage 2/
+Stage 3 and product promotion remain blocked. The original observer failure,
+first-score recovery, resources and identities remain in the result record.
+These documents supply no new experiment or spending authority.

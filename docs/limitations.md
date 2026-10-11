@@ -11,8 +11,10 @@ real first-answer quality. Small visibility thresholds varied across UUID
 replicas and are not universal. Shared noisy topics can supply only noisy prior
 members; unfiled/misfiled targets depend on the unchanged lexical backstop, which
 is not complete-source selection. Natural filing/candidate consumption and a
-fresh pre-frozen paired model study remain separate gates; none is authorized
-or executed by this offline packet. Historical instruction/ranking datasets,
+fresh paired model study remain separate gates from this offline packet; the
+later [natural-four first result](plans/moc-prior-natural-results.md) is
+`precondition-unmet`, not QA improvement or acceptance. Historical
+instruction/ranking datasets,
 scores and default settings remain unchanged.
 
 The prospective [relation-bound first-answer diagnostic](plans/relation-binding-probe.md)
@@ -1936,5 +1938,31 @@ The existing original campaign ceiling and protected allowance are unchanged.
 Maximum new reservation is $1.80 for 360 HTTP attempts, with a separate fixed
 $4 local ceiling. Common capture is counted once; pair totals are not standalone
 arm deployment costs. Known profile-price estimates are not invoices or evidence
-of lightweight latency. Actual paid first-answer evidence, exact-head independent
-reviews/CI and a prospective primary execution grant remain separate gates.
+of lightweight latency.
+
+The later [closed first natural-four result](plans/moc-prior-natural-results.md)
+completed all captures/eight first answers. Both arms scored 4/4 correct,
+0 incorrect/0 unresolved, paired wins/losses 0/0, but P01–P03 in both arms have
+unsupported scope/identity binding against actual packs (three unsupported
+claims of four reviewed per arm). Correctness is not reliable acceptance.
+Stale/severe counts are zero; P04 is a supported correct qualified no-final-choice
+answer with abstained=true. First judges agree on all fields, without adjudication.
+All nine required anchors per arm were retained with source-carrying references
+visible, not necessarily full passages/semantic links; six selected and four
+packed. No actual prior opportunity occurred. Derived P03/P04 order changes
+identify neither private queue membership nor cause. Known-arm packs omit no
+supplied unit: the bridge losses precede packing. Exact decision is
+`precondition-unmet`, development support false; no default change, D12 repair,
+product promotion or Stage 3 advancement follows.
+
+Paired resources: 360 HTTP / $1.80 reserved / $0.104907 profile estimate,
+208,839 input / 13,310 output tokens, 3,059,712 store bytes and
+1206262.480071 ms elapsed. Shared capture is counted once, not a standalone
+arm bill; estimate is not invoice and peak RSS was not measured. The original
+pre-blind observer failed on NUL argv before any marker/packet/score; its
+reviewed serialization recovery plus supplemental identity gates preserved
+original artifacts/scoring, with one first score and no paid repeat. Raw hashes,
+gates and accounting are in the results record. Result-head independent reviews/
+CI remain separate delivery gates. Diagnose selective evidence-chain composition
+before a new proposal; no rerun, tuning or new spend is authorized, and the closed
+D12 safety failure remains uncleared.
