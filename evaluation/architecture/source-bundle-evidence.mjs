@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { countTokens } from '../../core/model-budget.mjs';
 import { fail } from '../../core/validation.mjs';
+import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 import { verifiedRoleEvidence } from '../longmemeval/mixed-evidence.mjs';
 import { packMixedAnswer } from '../longmemeval/mixed-answer.mjs';
 import { canonical, freeze, snapshotJson } from '../longmemeval/mixed-validation.mjs';
@@ -11,6 +12,13 @@ const snapshot = value => snapshotJson(value,
   { bytes: 8 * 1024 * 1024, nodes: 200_000, depth: 24 }, 'invalid_bundle_evidence');
 const same = (a, b) => canonical(a) === canonical(b);
 const assembled = new WeakSet();
+function questionQuery(question) {
+  if (typeof question?.text !== 'string' || typeof question?.date !== 'string') fail('invalid_bundle_evidence');
+  // Match mixed-source's query producer exactly: normalize the serialized object,
+  // not its individual fields. Keep the original question bytes for the packer.
+  return redactSecrets(JSON.stringify({ question: question.text, date: question.date }).normalize('NFKC'))
+    .replace(/\s+/gu, ' ').trim();
+}
 function fields(value, keys) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) fail('invalid_bundle_evidence');
@@ -29,6 +37,7 @@ export function assembleSourceBundleEvidence(options) {
   if (returned.ok !== true || !returned.value || !Array.isArray(returned.value.memories)
     || owned.originalInput.query !== cleanPlan.mem0Input?.query
     || !same(cleanQuestion, { text: cleanPlan.originalQuestion?.text, date: cleanPlan.canonicalQuestionDate })
+    || owned.originalInput.query !== questionQuery(cleanQuestion)
     || !same(cleanNamespace, cleanPlan.cairnPlan?.batches[0]?.captureInput.namespace)
     || typeof core?.get !== 'function') fail('invalid_bundle_evidence');
   const memories = returned.value.memories;

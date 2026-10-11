@@ -269,3 +269,62 @@ Reject increased harm, resource overrun or lack of useful supported-answer benef
 Do not reanswer, rescore or tune consumed cases. D12 remains uncleared, MOC remains
 opt-in and Stage 2/3/product gates stay blocked. Original US$400 cumulative and
 US$30 protected ledger limits are untouched; this packet grants no new spend.
+
+## QB4/QB7 review correction — round 1
+
+Fixed full-review base remains `74c32637da3b519a3198d9e8fd778ec291e53f60`;
+initial local candidate was `4be19fef3b7f0d4d1492d176a0be5a158e74bf1d`.
+Initial primary matrices and dependency-free archive gates passed, and the
+independent Standards axis passed, but Spec found an actual association bypass.
+Those earlier gates did not establish the missing transitive query binding.
+Root reproduced it on both pinned Nodes and authorized this three-file correction.
+
+Cause: the assembler compared the sidecar's ranked query with `plan.mem0Input.query`
+and compared the answer question with plan text/canonical date, but did not prove
+that those text/date fields produced that query. Coordinated changes to plan and
+supplied question therefore accepted a different text or date against the old
+successful recall. This is evaluator correctness, not a packer failure or evidence
+of semantic QA improvement.
+
+Regression first: fresh actual core capture/recall controls for coordinated
+text and canonical-date mutation each failed against the unchanged old assembler
+on Node22.16 and Node24.15 (`Missing expected exception`). A legitimate producer
+normalization control with full-width Unicode/Unicode spaces passed against the
+old code. Retained `regression22-old.log` / `regression24-old.log` each record
+actual exit 1, two red controls and one positive, with owned teardown.
+
+The minimal fix reconstructs the query from the detached explicit question/date
+and requires equality with the immutable sidecar ranked query, in addition to
+the existing plan checks. It exactly follows the producer's order:
+`redactSecrets(JSON.stringify({question:text,date:canonicalDate}).normalize('NFKC')).replace(/\s+/gu,' ').trim()`.
+The existing shared redactor is reused; the producer's exact normalizer is
+private. Core `boundedText` would add a raw-length restriction not part of that
+producer, so no new export, parser, date reinterpretation or limit is introduced.
+Inputs remain descriptor-safe snapshots; mismatches raise `invalid_bundle_evidence`
+and the already-consumed sidecar cannot be reused. The positive control uses an
+independent literal expected query and verifies that actual packed question/date
+bytes retain their original Unicode/whitespace, without normalization or rewriting.
+
+Changed entrypoint: `assembleSourceBundleEvidence`; its only repository caller
+is the existing integration test helper, checked by source search. Rank preparation/
+compilation, wrapper ownership, unchanged role verifier/core finalization and
+`packMixedAnswer` are not modified. New real-core regressions cover text/date
+association plus the normalization positive; existing question-only, query-only,
+forgery and freshness controls remain. Scope is only the evidence module,
+integration test and this appended plan record; limitations need no change.
+
+Author remains actual GPT-6.1 Sol/high. Evidence directory:
+`/tmp/cairn-query-bundle-correction1.BN7SaKXQ`.
+After the one proposed fix, required-tokenizer focused commands on both pinned
+Nodes (`CAIRN_BUNDLE_TOKENIZER_REQUIRED=1`, the same two-file owned runner command
+above) each exited 0, 20/20, no skips: `focused22-fixed.log` / `focused24-fixed.log`.
+The unmodified original reviewer reproduction, run through the owned runner's
+`--script` mode, now exits 0 on both Nodes: `original-harness22-fixed.log` /
+`original-harness24-fixed.log`; each confirms rejection and removed synthetic
+SQLite scratch. `npm run validate` on both Nodes exits 0 in
+`validate22-fixed.log` / `validate24-fixed.log`.
+
+No failed correction round occurred for this finding. Primary's personally rerun
+fixed-byte gates, new local commit authorization and both independent fixed-diff
+review axes remain pending at this author handoff. No provider, operational
+ledger, closed case/result, default, score, D12 clearance or paid authority changed.

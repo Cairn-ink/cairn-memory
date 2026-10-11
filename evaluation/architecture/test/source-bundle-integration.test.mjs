@@ -39,7 +39,8 @@ test('Test-only optional tokenizer seam permits scripted generic mechanics but n
   await assert.rejects(fixtureCounter(() => { throw other; }, false), error => error === other);
 });
 
-async function fixture(t, texts = chain, roles = texts.map(() => 'user'), merge = false, dates = []) {
+async function fixture(t, texts = chain, roles = texts.map(() => 'user'), merge = false, dates = [],
+  questionText = 'Which shelf applies to the Willow parcel?') {
   // No static SQLite/core imports: Node20 generic CI discovers this test safely.
   const { openMemoryCore } = await import('../../../core/contract.mjs');
   const { prepareMixedSourceCase } = await import('../../longmemeval/mixed-source.mjs');
@@ -52,7 +53,7 @@ async function fixture(t, texts = chain, roles = texts.map(() => 'user'), merge 
     turns: turns.map((content, turnIndex) => ({ turn_id: id('turn', `${sessionIndex}/${turnIndex}`),
       role: merge ? roles[turnIndex] : roles[sessionIndex], content })) }));
   const plan = prepareMixedSourceCase({ history: { question_id: caseId, sessions }, namespace,
-    question: { question_id: caseId, text: 'Which shelf applies to the Willow parcel?', date: '2026/10/13 (Tue) 12:00' } }, 'indexed-evidence-v1');
+    question: { question_id: caseId, text: questionText, date: '2026/10/13 (Tue) 12:00' } }, 'indexed-evidence-v1');
   const question = { text: plan.originalQuestion.text, date: plan.canonicalQuestionDate };
   const workspace = createTestWorkspace(t, { prefix: 'cairn-query-bundle-' }), path = join(workspace.path, 'memory.sqlite');
   const handles = new Set(); workspace.defer(() => { for (const handle of handles) handle.close(); });
@@ -240,6 +241,39 @@ test('QB4 stale/forged sidecars, failed recall, altered receipt/plan/query/quest
   assert.throws(() => assemble(failed), code('invalid_bundle_sidecar'));
   const run = await f.run(), evidence = assemble(run);
   assert.throws(() => packSourceBundleAnswer({ evidence: structuredClone(evidence), countTokens: f.countOpenAITokens }), code('invalid_bundle_evidence'));
+});
+
+test('QB4 coordinated plan/question text mutation cannot reuse a different ranked query', sqlite, async t => {
+  const f = await fixture(t), run = await f.run(); ok(run.recall);
+  const rankedQuery = run.sidecar.originalInput.query;
+  run.plan = structuredClone(run.plan);
+  run.plan.originalQuestion.text = 'Who received the unrelated dispatch?';
+  run.question = { text: run.plan.originalQuestion.text, date: run.plan.canonicalQuestionDate };
+  assert.equal(run.plan.mem0Input.query, rankedQuery, 'The stale query remains bound to the original successful recall');
+  assert.throws(() => assemble(run), code('invalid_bundle_evidence'));
+  assert.throws(() => assemble(run), code('invalid_bundle_sidecar'), 'Rejected sidecar remains consumed');
+});
+
+test('QB4 coordinated plan/question canonical-date mutation cannot reuse an earlier ranked query', sqlite, async t => {
+  const f = await fixture(t), run = await f.run(); ok(run.recall);
+  const rankedQuery = run.sidecar.originalInput.query;
+  run.plan = structuredClone(run.plan);
+  run.plan.canonicalQuestionDate = '2026-10-14 12:00';
+  run.question = { text: run.plan.originalQuestion.text, date: run.plan.canonicalQuestionDate };
+  assert.equal(run.plan.mem0Input.query, rankedQuery);
+  assert.throws(() => assemble(run), code('invalid_bundle_evidence'));
+  assert.throws(() => assemble(run), code('invalid_bundle_sidecar'));
+});
+
+test('QB4 legitimate producer query normalization keeps original Unicode/whitespace question bytes in the actual pack', sqlite, async t => {
+  const text = '  Ｗｈｉｃｈ\u3000shelf  applies\u00a0to the Willow parcel?  ';
+  const expectedQuery = '{"question":" Which shelf applies to the Willow parcel? ","date":"2026-10-13 12:00"}';
+  const f = await fixture(t, chain, undefined, false, [], text), run = await f.run(); ok(run.recall);
+  assert.equal(run.plan.mem0Input.query, expectedQuery, 'Independent literal oracle for the existing producer normalization');
+  assert.equal(run.sidecar.originalInput.query, expectedQuery);
+  const packed = packSourceBundleAnswer({ evidence: assemble(run), countTokens: f.countOpenAITokens });
+  assert.deepEqual(JSON.parse(packed.request.messages[1].content).currentQuestion,
+    { text, date: '2026-10-13 12:00' }, 'Binding must not normalize or rewrite the question supplied to the packer');
 });
 
 test('QB7 actual deletion/revision mutation in planner and onPlan are rejected by unchanged core freshness', sqlite, async t => {
