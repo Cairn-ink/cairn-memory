@@ -1852,3 +1852,40 @@ matched 384 / 388 after the two aggregate appends. Runtime offline/CI passes
 at `954507b` do not establish later docs-head verification or semantic acceptance.
 Next is bounded source-bound entity/answer-use diagnosis, with no definitive
 causal or fix claim and no tuned rerun of L01–L06.
+
+### Closed relation-bound first-answer diagnostic
+
+The [closed result](plans/relation-binding-results.md) executed and first-scored
+once on 2026-10-11 at `e1ebee6c015833453d873cc3258f658ddb752b40` under the
+unchanged [RB1–RB9 contract](plans/relation-binding-probe.md#acceptance-contract).
+Both arms returned 12 correct / 0 incorrect / 0 unresolved, with six supported
+and six uncertain relations correct. Net paired QA gain is zero and baseline
+targeted binding errors zero. Two fresh nonauthor first blind judges agreed on
+all correctness, unsupported, stale, severe and binding fields, with zero
+observed harm, but differed on `abstained` for both arms of R03/R11. Explicit
+nonappointment was treated as a factual answer by A and declining the identity
+by B. That distinction was not prospectively defined; four null classifications
+remain without adjudication or rescore. Thus `safetyKnown: false` and the frozen
+decision is exactly `reject-stop`, `positiveSignal: false`, `advances: false`.
+This is an unresolved classification gate, not an observed new harmful answer.
+
+The instruction branch is closed with no tuning/rerun or default promotion.
+Full submitted sources were supplied to both arms; only the system instruction
+changed. This authored answer-only cohort establishes neither natural capture,
+MOC/retrieval quality, installed-host/end-to-end QA, independent holdout,
+official benchmarks, competitive parity nor D12 repair. All earlier studies,
+scores and denominators remain unchanged, and Stage 2/Stage 3 stay blocked.
+
+All resource checks passed: 24 first HTTP attempts / $0.12 reserved, 9,932 input /
+973 output tokens, $0.005539 known model-profile estimate (not invoice),
+68.437 seconds. Treatment used +1,044 input / +107 output tokens and estimated
++$0.000589 without a correct-answer gain. The original ledger retained its
+57,271-row prefix and appended exactly 24 attempts, leaving 57,295 requests /
+330,812,281 reserved microUSD, pending zero, with $39.187719 outside protected
+$30 under the unchanged $400 ceiling. This snapshot grants no future spend.
+Primary's nonsemantic postflight matched two inventories at 108 artifacts /
+99 observations / 434 runtime hashes before later judgment/score files;
+that is not a final-directory count. Raw private evidence stays retained locally;
+public hashes bind identities without publishing bodies or promising public
+reproduction. Runtime engineering/CI passed before execution; later results-head
+acceptance is a separate gate.

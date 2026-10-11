@@ -16,12 +16,13 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
-- The prospective [relation-bound first-answer diagnostic](docs/plans/relation-binding-probe.md)
-  tests one generic instruction after evidence delivery, with twelve new cases
-  and twenty-four first answers. Baseline targeted-error opportunities, paired QA,
-  known-answer usefulness, claim safety and resources must all support any signal.
-  It is answer consumption, not a core MOC/retrieval improvement or promotion;
-  positive results would require a separately frozen full-pipeline validation.
+- The [closed relation-bound first-answer diagnostic](docs/plans/relation-binding-results.md)
+  returned 12/12 correct per arm with zero paired gain and no baseline targeted
+  binding errors. Four first-judge abstention classifications remain null;
+  the unchanged frozen evaluator returns `reject-stop`, `positiveSignal: false`,
+  `advances: false`, without an observed new harmful answer. The instruction
+  branch is closed, with no tuning/rerun or default promotion. Full-source
+  authored answering does not establish MOC/retrieval or installed-host quality.
 
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
@@ -139,8 +140,11 @@ Paired resources are 180 HTTP / $0.90 reservation / $0.053136 profile estimate,
 not invoice; no advancement or promotion follows.
 The bounded offline D12 replay now reconstructs sealed evidence/request exactly;
 integrity/controls exit 0 and the symptom exits expected 1 on both pinned Nodes,
-without generation or a cause/fix claim. Next is a separately frozen fresh
-entity-binding/evidence-use experiment only if warranted. All needed B/C
+without generation or a cause/fix claim. The later
+[closed instruction diagnostic](docs/plans/relation-binding-results.md) produced
+no answer gain or targeted baseline errors and retained four null abstention
+classifications; its exact decision is `reject-stop`, not D12 repair or Stage 2
+acceptance. That instruction branch is closed. All needed B/C
 evidence was packed under identical answer requests; no missing-retrieval or
 formatting root cause is established. Long-history expansion is still planned,
 not executed. This status authorizes no paid run, old rerun/rescore, broader

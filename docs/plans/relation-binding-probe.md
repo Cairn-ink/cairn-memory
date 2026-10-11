@@ -1,7 +1,14 @@
 # Relation-bound first-answer diagnostic
 
-Status: implemented offline candidate; primary acceptance and paid execution
-remain pending. No operational preparation, credential lookup or provider call.
+Status: CLOSED and first-scored once on 2026-10-11 at frozen runtime
+`e1ebee6c015833453d873cc3258f658ddb752b40`. Execution and first scoring each
+exited 0; the frozen decision is `reject-stop`, `positiveSignal: false`,
+`advances: false`. Both arms scored 12/12, paired gain zero, baseline targeted
+binding errors zero. Four uncertain-case abstention classifications remain null
+after first-judge disagreement, making `safetyKnown: false`; no new harmful
+answer was observed. See [the closed result](relation-binding-results.md).
+No tuning, rerun, rescore or default promotion. Historical implementation
+checkpoints below retain their original status; RB1–RB9 remain unchanged.
 Dependency
 base: `47a4eb14db3fc69d8538222f55a4b29c8ab4ec12` (PR #394 results candidate).
 Worktree: `cairn-memory-worktrees/relation-binding-probe`; branch:
@@ -268,3 +275,27 @@ Nodes: 19/19 (22.16.0: 18.674 s; 24.15.0: 18.364 s). The final rerun including
 the exact ledger-byte assertion also exited 0, 19/19 (18.997 s / 18.641 s).
 Both initial red runs exited 1, one failed test each. This is pre-paid review
 correction evidence, not a new model-quality result or spending authorization.
+
+## Closed execution and acceptance evidence
+
+Primary accepted the corrected immutable runtime `e1ebee6` before paid work:
+two independent full-diff Standards/Spec reviews and private manifest preflight
+reviews passed, both exact-head focused runs exited 0 (19/19), and all 27
+latest-runtime CI checks passed. The preceding corrected affected matrix had
+16 actual exit-0 commands across both Nodes, including algorithm 121/121 and
+LongMemEval 212/212 per runtime. These runtime gates do not establish results
+documentation's later head acceptance; its independent review/CI remain separate.
+
+All RB1/RB4 fixed slots are retained: twelve independently authored cases,
+six known/six uncertain, 24 first answers completed once at 11:03 UTC.
+RB2/RB3 instruction-only exact-wire identity and RB5 resource/accounting checks
+passed; no source omission, retry or accounting anomaly occurred. Under RB6,
+two fresh nonauthor GPT-6.1 Sol/high judges submitted all first verdicts and
+agreed on correctness/support/stale/severe/binding. Their four R03/R11
+`abstained` disagreements remain null without adjudication. RB7 is not met:
+net correct is zero, baseline binding opportunities zero, `safetyKnown` false,
+and the frozen evaluator returns exactly `reject-stop`. RB8/RB9 engineering
+and ownership evidence is retained above and in the
+[result's delivery boundary](relation-binding-results.md#engineering-acceptance-and-delivery-boundary).
+No contract, rubric, source or evaluator was changed after answers. All older
+scores and denominators remain unchanged; this branch is closed.

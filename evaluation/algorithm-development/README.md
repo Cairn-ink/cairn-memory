@@ -1,8 +1,15 @@
 # Synthetic algorithm comparison
 
-The prospective [relation-bound first-answer probe](../../docs/plans/relation-binding-probe.md)
-is a separate answer-only diagnostic: 12 new submitted-source cases, 24 first
-answers, six supported and six uncertain requested relations. It changes only
+The [closed relation-bound first-answer result](../../docs/plans/relation-binding-results.md)
+records `reject-stop` under its unchanged
+[prospective contract](../../docs/plans/relation-binding-probe.md): both arms
+12 correct / 0 incorrect / 0 unresolved, paired gain zero and no baseline
+targeted binding errors. Four uncertain-case abstention disagreements remain
+null, so `safetyKnown: false`; no newly harmful answer was observed.
+`positiveSignal: false`, `advances: false`. No tuning, rerun, rescore or default
+promotion follows. This is a separate answer-only diagnostic: 12 new
+submitted-source cases, 24 first answers, six supported and six uncertain
+requested relations. It changes only
 the system instruction, using the named `packRelationBoundAnswer` builder and
 `createRelationBindingTransport`; ordinary request bytes/defaults stay unchanged.
 There is no capture, core/MOC change, rubric/gold in answering requests, or model
@@ -30,7 +37,9 @@ missing/disagreeing judgments remain unknown. At least two distinct baseline
 binding-error cases, positive paired QA, preserved known-answer usefulness,
 known safety and accepted resources are necessary for a diagnostic signal.
 Even a positive signal sets `advances: false` and requires fresh full-pipeline
-validation. A baseline ceiling or no gain is inconclusive/stop, not a fix.
+validation. Safety/classification unknowns are rejected before the baseline
+ceiling/no-gain branches; this closed run's exact decision is `reject-stop`.
+No result establishes a fix or supersedes old scores.
 `loadRelationBindingRubric()` returns `{ bytes, sha256, rubric }`; both blind
 packing and aggregation require this freeze envelope and verify its exact byte
 hash against the report's recorded rubric identity before use. Unblinding accepts
