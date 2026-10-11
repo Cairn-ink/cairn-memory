@@ -1705,3 +1705,22 @@ known-case development is not an unbiased generalization estimate. Functional
 tests and a prospective protocol establish neither measured QA gain nor
 semantic reliability, production promotion or competitive parity. No paid
 three-arm result is recorded by this change.
+
+Before paid execution, independent Spec review at `43e4686` found that a
+correctness-only judge disagreement could be counted as a control loss and
+grant an unproven C-A threshold. The complementary profile now explicitly
+requires resolved correctness, retains unresolved pairs outside win/loss
+categories, and preserves the 24-case denominator. Incorrect answers remain
+valid resolved outcomes; this does not require perfect accuracy. The retained
+red regression and positive controls are recorded in the comparison plan.
+The original two-arm scoring contract is unchanged.
+
+Primary integration checks at `43e4686` passed algorithm 82/82, generic 669/669,
+controls 36/36, fixture tests 16/16 and lifecycle 27/27 on both pinned Nodes,
+actual exit 0. Both runs then stopped at plugin validation, actual exit 1:
+the primary had installed the isolated Claude tooling with `--ignore-scripts`,
+leaving its native-binary placeholder. Inspecting and running that locked
+package's local postinstall fixes the installation omission without changing
+product code, dependency locks or shared installs. Final corrected-head gates,
+independent reviews and CI must still be checked; the earlier failed runs
+are not retroactively marked successful.
