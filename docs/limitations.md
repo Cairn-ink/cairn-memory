@@ -2016,3 +2016,14 @@ or complete provider wire fit. Those execution preconditions remain required
 in a later independently reviewed runner before any paid launch. No closed
 cohort is rerun or rescored; no efficacy, parity, D12 repair, product/default
 change or original Stage 2/3 clearance follows from this corpus-only packet.
+
+The prospective [source-bundle paired comparison](plans/source-bundle-comparison.md)
+adds offline real-core, fake-HTTP and owned synthetic-ledger execution controls:
+24 prepared cases, 48 fixed QA slots and 24 separate later probes. Exact source,
+wire, ownership, cumulative-history and deadline controls are plumbing evidence,
+not semantic correctness, supported-first-answer improvement, provider parity or
+a paid launch. Known-price totals are partial; unknown usage reservations and
+missing final records remain explicit, and peak RSS is unmeasured. No scorer,
+model-answer judgment, operational ledger or real credential is used here.
+Closed cohorts, D12, defaults and original Stage 2/3 clearance remain unchanged;
+any future launch still needs separate independent acceptance and authority.
