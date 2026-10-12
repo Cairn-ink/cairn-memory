@@ -1691,3 +1691,248 @@ authenticity, caller/clock/firstness and fixed-runtime timing enforcement remain
 external execution provenance. No semantic efficacy, Mem0 parity, natural
 long-history success, measured lightweight fit, D12/Stage2/3 clearance, launch
 authority or paid spending approval follows.
+
+# SC-C5 — bind failed-probe causes across accounted and stopped runs
+
+Prospective correction, frozen before author implementation or public controls.
+Original full-review base: 6abed0ccdfe3815d42b25db04adb159483ded156.
+Rejected candidate/correction base: fb8407a2c7c95bbb8478f38ccf44dc5fc33a27d4.
+Worktree: /home/chichieh/Github/cairn-memory-worktrees/source-bundle-scoring.
+Branch: experiment/source-bundle-scoring. No push or paid invocation has occurred.
+
+## Ownership and scope
+
+One bounded original GPT-6.1 Sol/high author handles this follow-up to C4.
+C4 closed completed-probe omissions but its first failed-probe consistency
+implementation did not fully bind stopped causes and core envelopes. This is
+one coherent correction, not separate rounds for each error string. Root owns
+planning, actual-diff inspection and independent acceptance. If this correction
+again fails the same binding requirement, use the routing escalation rule.
+
+Only source-bundle-scoring.mjs, its existing test, and append-only additions to
+docs/plans/source-bundle-scoring.md and docs/limitations.md may change. Preserve
+all previous contracts, evidence and failure history, including the original
+21,844-byte and final C4 9,537-byte contracts. No judging helper, runner, adapter,
+core, corpus, rubric, model, schema, resource limit, deadline, scoring gate,
+first-answer/judgment policy, product default, dependency or closed cohort edits.
+No operational configuration, key or ledger access, provider call, push, merge,
+release or deployment. Offline fixtures use the existing owned test runner.
+Do not add an optional test-helper refactor merely to resolve a nonblocking smell.
+
+## Reproduced problem and ranked hypotheses
+
+Spec review identified one P2 against original SJ1/SJ2: inconsistent failed-probe
+records can still be assessed. The completed-probe omission finding is closed.
+Primary ran source-bundle-scoring-c5-probe.mjs twice at scorer SHA256
+fd1930979300e109b36ebbbee8a81e192d9b71141169edc8d133c63f964958ea;
+both actual exits1 demonstrated the stopped port/slot check bypass in the real
+extracted block. This shallow synthetic diagnostic is not a complete public
+retained execution; its initial generic core error was not a proved runtime
+positive. Use the actual generic-provider core cause recall_failed in the public
+fixture. Preserve the original diagnostic evidence instead of calling it a
+full-pipeline or legitimate stopped proof.
+
+Ranked hypotheses disclosed before the next tests:
+
+1. Accounted-only and equal-port/slot shortcuts skip observable cause binding.
+   Actual retained corruptions will remain assessed until these shortcuts are
+   replaced by consistent checks across both run statuses.
+2. Some differences are legitimate layer normalization. Actual HTTP-successful
+   invalid selection, local timeout and a later known fatal override must remain
+   reportable; unconditional string equality would over-reject those controls.
+3. An earlier complete validator already rejects the shallow mismatches. Test
+   both public exports against genuine retained fixtures before source changes.
+
+The consolidated review additionally demonstrated shallow admissions when port
+and slot both change to invalid_model_output or an invented code against an
+unchanged failed HTTP503 count, and when core cause/retryability is changed.
+These are the same failed-probe binding requirement, not transcript authenticity.
+
+## Observable acceptance
+
+C5.1 Trace the pinned sourceBundleFailureCode projection, probe coordinator,
+ordinary transport/adapter, core call/recall and contract failure envelope.
+Write a concise layer table in the existing plan: observable raw failure/output,
+port failure, core result, slot failure and allowed run/global-stop relationship.
+Bind what the actual record establishes; do not invent missing exception types,
+clock measurements or full transcript provenance.
+
+C5.2 For accounted AND stopped records, a generic failed HTTP503 count retains
+raw provider_failure, normalized port provider_failed and core recall_failed,
+retryable=false. Slot cause follows the pinned coordinator unless an actual
+known fatal global override applies. Changing only the port, changing port and
+slot together, invented closed-projection codes, contradictory core causes or
+retryability must deny through BOTH prepareSourceBundleScoring and
+scoreSourceBundleComparison. Agreement between two labels is not sufficient
+when they contradict the actual failed request.
+
+C5.3 A stopped status is not a generic bypass. Preserve a known fatal slot
+override only when it is consistent with the actual retained stop reason and
+the underlying port/core/raw record; do not permit an unwitnessed nonfatal or
+different-fatal substitute. The established local timeout layer split must
+remain narrowly bound to the recorded core/raw outcome and healthy closed
+settlement, in both accounted and honestly stopped controls. Successful HTTP
+with parsed invalid refs is distinct from transport failure and remains valid
+failed execution. Do not replace these normalizations with unconditional equality.
+
+C5.4 Every retained failed core envelope obeys the existing contract:
+retryable is true exactly for storage_busy, false otherwise. Reject impossible
+error codes/relations where the reached stage and actual record establish the
+cause, without requiring artifacts from a stage that legitimately was not reached.
+Preserve the original successful, pre-aborted, stopped, C1/C2/C3 and C4 controls.
+
+C5.5 Before changing source, use the existing C4 accounted fixture's genuine
+later failed probe for named public cause/core-envelope corruptions. Keep its
+87-intent/78-owner positive and original timeout/invalid/empty outcomes intact.
+Add one new genuinely executed all24-cold offline stopped fixture below. Assert
+its real preconditions and public baseline separately before mutations. Keep
+all48 QA/all24 probe slots, including later honest not-run slots. No mutation
+fixture may be described as an actually executed positive.
+
+C5.6 Keep concise named mutations covering status, raw/port/core/slot cause,
+closed projection, retryability and allowed override boundaries. Both public
+exports deny contradictions; actual baseline records remain ready/assessed,
+with promising=false for stopped or unsuccessful controls. No test-only scoring
+exception, threshold relaxation, removed failure or model-quality claim.
+
+C5.7 Run targeted public red first, narrow green, then complete focused suite,
+version, source/test syntax and validate on Node22.16/24.15. Use key-free owned
+workspaces, required dependencies, actual exit codes and no skipped/cancelled
+required tests or unexpected residue. No tolerance/timer/cap increase. Record
+red/intermediate/final hashes and exact content; do not edit during active tests.
+Then STOP WRITES with four hashes and independent two-route inventory/count.
+Primary repeats affected acceptance, scoped commit, current gate inspection and
+both full fixed-base nonauthor review axes before push and exact-head CI.
+
+## Prospective honest-stopped offline fixture
+
+One new all24 cold preparation, the same runner/core/transports/corpus, fake HTTP
+only; no hand-assembled positive result/status/history. Use predeclared case and
+method ordinals from onRecord metadata, not question, source, rubric or answers.
+All QA arms fail honestly at their first count with a short HTTP503 response.
+Probe schedule:
+
+1. BQ01: short HTTP503 count; normal provider failure, no generation or rank.
+2. BQ02: valid count, then generation pending until the unchanged actual core
+   30-second timeout. Require actual settled raw/core/port/slot evidence.
+3. BQ03: valid count and HTTP-successful response containing duplicate first
+   actually visible ref; semantic invalid_model_output, not transport failure.
+4. BQ04: short HTTP503 count. Abort the existing caller controller only from
+   onCheckpoint for BQ04_probe_select, after that real owner is closed healthy.
+   This witnesses a later caller-cancel override of the otherwise ordinary
+   failed probe. Callback must return undefined synchronously. Do not throw or
+   rewrite observations. All later slots remain honest not-run/cancelled.
+
+Require exact first-four probe owner identities/order, actual closed/healthy
+settlement, literal returned/persisted equality, original fixed denominators,
+and the actual override before public readiness. Expected physical counts are
+a prediction to check, not permission to synthesize records. If the pinned
+callback seam cannot produce these states, report the actual behavior before
+changing the prospective schedule. No paid/cohort retry or new runtime API.
+
+## Nonclaims
+
+This is retained-observation consistency, not a new algorithm, semantic score,
+whole-transcript authentication, official LongMemEval/Mem0 parity, natural
+long-history success, measured lightweight fit, D12/Stage2/Stage3 or launch.
+The purpose is to obtain a trustworthy first comparison; keep this correction
+bounded and proceed to the already planned new experiment after delivery.
+
+## SC-C5 author trace, public evidence and handoff
+
+Sole author: actual assigned GPT-6.1 Sol/high; worktree workflow and narrow
+diagnosing-bugs loop. Correction base fb8407a2c7c95bbb8478f38ccf44dc5fc33a27d4;
+full-review base6abed0ccdfe3815d42b25db04adb159483ded156. Full C5 contract:
+9,046 bytes/SHA2563e98a3d4389397c9a95a32d2c92e14589d643a1604202b38d762fe014a2ffc1a.
+All earlier prefixes/evidence remain intact. No inherited runtime, judging,
+corpus/rubric, policy, schema, caps, dependency, deadline or firstness change;
+no operational data/config/key, provider, closed cohort, commit or push.
+Author token/service cost remains unmeasured.
+
+### Pinned layer trace and correction
+
+Source truth: runner126–145/473–490, ordinary transport send and adapter post,
+core model-call75–87/recall118–119/contract143–148, all at BR pin6abed0c.
+
+| Actual observed path | Raw | Port / core | Slot relationship |
+| --- | --- | --- | --- |
+| HTTP503 count | failed provider_failure | provider_failed / recall_failed,false | provider_failed unless terminal known fatal override |
+| Actual local30s select timeout | dispatched unknown model_timeout + settled delta | provider_failed / model_timeout,false | model_timeout unless terminal known fatal override |
+| Parsed duplicated visible refs | successful HTTP200, literal selected output | no port failure / invalid_model_output,false | invalid_model_output, no rank |
+| Final BQ04 closed-checkpoint abort after503 | unchanged provider_failure | unchanged provider_failed / recall_failed,false | cancelled; matching stop, later slots not-run |
+
+The corrected scalar port uses the pinned closed projection. Observed failed
+ordinary finals bind generic core recall_failed, except the narrow raw-timeout
+shape with healthy closed owner and matching delta, in BOTH run statuses.
+Core retryable is true exactly for storage_busy. Slot follows fatal port,
+otherwise core timeout priority, otherwise port; only an exact known stop
+override is allowed. Fatal probes must have no later executed cases or physical
+intents. Stage presence remains conditional; empty/invalid selection and stopped
+settlement paths are not turned into success or required to invent observations.
+This is ordinal/data consistency, not reconstructed timestamps/authenticity.
+
+### Actual public red/green evidence
+
+Root: /tmp/cairn-scoring-c5-author.t9TmAutQ. Logs are unique and retained.
+Both public exports were exercised. The earlier shallow diagnostic's generic
+invalid_model_output was not treated as a legitimate positive: actual failed503
+core is recall_failed/retryable=false.
+
+| Log | Held scorer/test prefix | Actual exit/count | Observation |
+| --- | --- | --- | --- |
+| red22.log | fd193097/02a6b630 | 1,0/2 | Genuine accounted87/78 and stopped14/12 ready/assessed;9/12 accounted and17/18 stopped corruptions wrongly admitted |
+| green22.log | a27aa5ad/02a6b630 | 0,2/2 | Actual baselines preserved; all30 new cause controls denied |
+| override-red22.log | a27aa5ad/d81c99df | 1,0/1 | Four earlier fatal-cancel substitutions admitted despite later work; prior18 controls denied |
+| override-green22.log | c990e207/d81c99df | 0,1/1 | Actual final BQ04 override preserved; all22 stopped and raw-timeout contradictions denied |
+| focused22-final.log | c990e207/d81c99df | 0,23/23 | Complete final suite,440398.44636ms |
+| focused24-final.log | c990e207/d81c99df | 0,23/23 | Complete final suite,385366.890244ms |
+
+Every invocation had zero skipped/cancelled tests. Hypothesis1 is confirmed,
+public-rescue hypothesis3 refuted; hypothesis2's real normalizations preserved.
+The primary requested the C5.3 ordinal control before freeze; no new schedule,
+runtime instrumentation or extra campaign was introduced. The first green is
+explicitly intermediate, not final-byte evidence.
+
+Red SHA2567dec4c7945e2321a4a9263d37d3127b21cfec09464117477e843ed31e29e7cc4;
+override red9ae71ef979be6a8ad7197fa576badfacbf32a089b74a625b07f8c898d830ddc3.
+Final22 log3a3a2b7f3c502d4ad22109e13bdb8079f28a5cf2049646bab430c12584746764;
+final24 log89dbf5a47208357cdacde15c7abd2ebc588810fdb7466201985c6f220433bfe9.
+All intermediate log hashes also remain in final-inventory.json.
+
+One new genuine all24-cold stopped fixture follows the frozen ordinal schedule:
+QA counts503, probe count503/actual30s timeout/duplicate visible refs/count503,
+then caller abort only at BQ04's closed healthy checkpoint. Callback returns
+undefined synchronously; exact first-four owner identities/order and timeout
+raw/core/port/slot/delta are asserted before readiness. Actual returned/persisted
+reports match;14 intents/12 healthy closed owners and all48 QA/all24 probes stay
+retained. Later slots honestly not-run/cancelled. Metadata/literal refs, never
+question/rubric/gold, drive fake outcomes. The existing C4 accounted87/78 and
+original192/C1/C2/C3 fixtures, all67 anchors,47 first answers and judgment/harm/
+unknown/arithmetic/lifecycle controls remain unchanged. Labels are synthetic
+parser/arithmetic controls, not measured model quality.
+
+### Final author commands and boundary
+
+Final scorer SHA256c990e207170803b5324c62d18145e5ed64e62c37afa3cedd40021a59f0f6334a;
+test SHA256d81c99df06f05a12a6ffbccc503f2cb15324103aa2a6a18adf7a5035cf910046.
+Full suites sequentially used each absolute pinned Node22.16.0/24.15.0 binary:
+node tools/testing/run.mjs evaluation/algorithm-development/test/source-bundle-scoring.test.mjs.
+Environment: env-i, version PATH, owned TMPDIR, NODE_DISABLE_COMPILE_CACHE=1,
+CAIRN_SOURCE_BUNDLE_OFFLINE=1, CAIRN_BUNDLE_TRANSPORT_OFFLINE=1. Source/test
+bytes were held; no concurrent heavy suite or cap/tolerance change.
+
+Both node --version, node --check scorer, node --check test and npm run validate
+each exited0, with separate logs. npm uses /dev/null userconfig and a distinct
+owned comment-only globalconfig; no ambient config/install/network. The ignored
+tokenizer link remains unchanged locked1.0.22. Closing final-inventory.json
+cross-checks Git against recursive filesystem/blob/mode, exactly four paths,
+append-only docs, original21,844-byte/final C4/full C5 contract bytes and empty
+owned TMPDIRs. All owned children close before STOP; git diff --check is required.
+
+Primary owns frozen affected gates, scoped commit, both full-base nonauthor
+reviews and exact-head CI. Old broad matrices are old-head evidence; combined
+algorithm count206 (=BR183+SC23) is prospective, not an author broad pass.
+Further failure of this same binding requirement triggers narrow primary
+takeover. No semantic efficacy, authenticity, independent clock/firstness,
+natural long-history/Mem0 parity, measured lightweight fit, D12/Stage2/3,
+launch or spending claim follows.

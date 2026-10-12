@@ -756,6 +756,144 @@ test('C4 actual empty, invalid selection and settled ordinary timeout preserve c
   }
   console.log('SC_C4_TIMEOUT_WITNESSES=' + JSON.stringify(witnessObservations));
   assert.ok(witnessObservations.every(row => row.prepare === 'denied' && row.score === 'denied'), JSON.stringify(witnessObservations));
+  const generic = result.cases[3].probe;
+  assert.deepEqual(generic.artifacts.selectFailure, { code: 'provider_failed' });
+  assert.deepEqual(generic.artifacts.recall, { ok: false, error: { code: 'recall_failed', retryable: false } });
+  const genericIntent = result.intents.find(intent => intent.slotId === 'BQ04_probe');
+  assert.equal(genericIntent.final.failure, 'provider_failure'); assert.equal(genericIntent.final.outcome, 'failed');
+  assert.equal(genericIntent.final.httpStatus, 503);
+  const causeControls = [
+    ['provider-port-invalid-output', probe => { probe.artifacts.selectFailure.code = 'invalid_model_output'; }],
+    ['provider-port-invented', probe => { probe.artifacts.selectFailure.code = 'invented_failure'; }],
+    ['provider-equal-invalid-output', probe => { probe.artifacts.selectFailure.code = probe.failure = 'invalid_model_output'; }],
+    ['provider-equal-invented', probe => { probe.artifacts.selectFailure.code = probe.failure = 'invented_failure'; }],
+    ['provider-equal-timeout', probe => { probe.artifacts.selectFailure.code = probe.failure = 'model_timeout'; }],
+    ['provider-core-invalid-output', probe => { probe.artifacts.recall.error.code = 'invalid_model_output'; }],
+    ['provider-core-port-code', probe => { probe.artifacts.recall.error.code = 'provider_failed'; }],
+    ['provider-core-invented', probe => { probe.artifacts.recall.error.code = 'invented_failure'; }],
+    ['provider-core-retryable', probe => { probe.artifacts.recall.error.retryable = true; }],
+    ['provider-core-storage-busy-false', probe => { probe.artifacts.recall.error.code = 'storage_busy'; }],
+    ['provider-core-storage-busy-true', probe => { probe.artifacts.recall.error = { code: 'storage_busy', retryable: true }; }],
+    ['provider-unwitnessed-fatal-slot', probe => { probe.failure = 'cancelled'; }],
+  ];
+  const causeObservations = [];
+  for (const [name, operation] of causeControls) {
+    const probe = clone(generic); operation(probe);
+    const mutated = { ...base, result: { ...result, cases: result.cases.map((row, i) => i === 3 ? { ...row, probe } : row) } };
+    causeObservations.push({ name, prepare: (await prepareSourceBundleScoring(mutated)).status,
+      score: (await assess(mutated, prepared)).status });
+  }
+  console.log('SC_C5_ACCOUNTED_CAUSES=' + JSON.stringify(causeObservations));
+  assert.ok(causeObservations.every(row => row.prepare === 'denied' && row.score === 'denied'), JSON.stringify(causeObservations));
+  await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
+});
+
+test('C5 actual stopped provider, settled timeout, invalid selection and checkpoint cancellation bind probe causes', { timeout: 180000 }, async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-scoring-c5-stopped-' });
+  const { prepareSourceBundleComparison } = await import('../source-bundle-store.mjs');
+  const { createSourceBundleComparisonManifest, runSourceBundleComparison } = await import('../source-bundle-runner.mjs');
+  const preparation = await prepareSourceBundleComparison({ outputRoot: workspace.path }), ledger = await newLedger(workspace);
+  const controller = new AbortController(); let caseOrdinal = 0, arm = null, cancelCheckpoints = 0;
+  const result = await runSourceBundleComparison({ preparation, ...ledger,
+    manifest: createSourceBundleComparisonManifest(preparation.observation), apiKey: 'synthetic_source_scoring_key', signal: controller.signal,
+    onRecord(record) { if (record.normalized?.phase === 'pre') { caseOrdinal = record.caseOrdinal; arm = record.arm; } },
+    onCheckpoint(owner) {
+      if (owner.phaseId === 'BQ04_probe_select') {
+        assert.equal(owner.closed, true); assert.equal(owner.healthy, true); cancelCheckpoints++; controller.abort();
+      }
+    }, fetchImpl(url, init) {
+      if (arm !== 'probe' || caseOrdinal === 1 || caseOrdinal === 4) {
+        assert.ok(url.endsWith('/input_tokens'), 'declared ordinary failures stop at first count');
+        return Response.json({ error: { type: 'synthetic_count_unavailable' } }, { status: 503 });
+      }
+      assert.ok(caseOrdinal === 2 || caseOrdinal === 3, 'no later provider dispatch');
+      if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 500 });
+      assert.ok(url.endsWith('/responses'));
+      if (caseOrdinal === 2) return new Promise(() => {}); // Actual unchanged30s ordinary/core timeout.
+      const input = JSON.parse(JSON.parse(init.body).input[0].content[0].text), visible = { namespaceIndex: 0, ...input.maps[0].items[0].ref };
+      return Response.json({ object: 'response', model: MODEL, status: 'completed', error: null, incomplete_details: null,
+        output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ refs: [visible, visible] }) }] }],
+        usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120 } });
+    } });
+  assert.equal(cancelCheckpoints, 1); assert.equal(result.status, 'stopped'); assert.equal(result.stopReason, 'cancelled');
+  assert.equal(result.cases.length, 24); assert.equal(result.cases.flatMap(row => Object.values(row.answers)).length, 48);
+  assert.equal(result.cases.map(row => row.probe).length, 24);
+  const [generic, timed, invalid, cancelled] = result.cases.map(row => row.probe);
+  for (const probe of [generic, timed, invalid, cancelled]) {
+    assert.equal(probe.execution, 'failed'); assert.equal(probe.artifacts.selectCalls, 1); assert.equal(probe.artifacts.rankCalls, 0);
+    assert.equal(Object.hasOwn(probe.artifacts, 'rankRequest'), false);
+  }
+  for (const [probe, failure] of [[generic, 'provider_failed'], [cancelled, 'cancelled']]) {
+    assert.equal(probe.failure, failure); assert.deepEqual(probe.artifacts.selectFailure, { code: 'provider_failed' });
+    assert.deepEqual(probe.artifacts.recall, { ok: false, error: { code: 'recall_failed', retryable: false } });
+  }
+  assert.equal(timed.failure, 'model_timeout'); assert.deepEqual(timed.artifacts.selectFailure, { code: 'provider_failed' });
+  assert.deepEqual(timed.artifacts.recall, { ok: false, error: { code: 'model_timeout', retryable: false } });
+  assert.equal(invalid.failure, 'invalid_model_output'); assert.equal(Object.hasOwn(invalid.artifacts, 'selectFailure'), false);
+  assert.deepEqual(invalid.artifacts.selected.refs[0], invalid.artifacts.selected.refs[1]);
+  assert.deepEqual(invalid.artifacts.recall, { ok: false, error: { code: 'invalid_model_output', retryable: false } });
+  const probeOwners = result.transitions.filter(row => row.arm === 'probe');
+  assert.deepEqual(probeOwners.map(row => [row.slotId, row.phaseId, row.method, row.kind]),
+    [1, 2, 3, 4].map(n => [`BQ0${n}_probe`, `BQ0${n}_probe_select`, 'select', 'ordinary']));
+  assert.ok(probeOwners.every(row => row.closed && row.healthy)); assert.ok(result.transitions.every(row => row.closed && row.healthy));
+  const timeoutIntent = result.intents.find(intent => intent.slotId === 'BQ02_probe' && intent.final?.endpoint === 'responses');
+  assert.equal(timeoutIntent.dispatched, true); assert.equal(timeoutIntent.final.failure, 'model_timeout'); assert.equal(timeoutIntent.final.outcome, 'unknown');
+  assert.equal(timeoutIntent.final.actualMicroUsd, null);
+  const timeoutDelta = probeOwners[1].state.appendedAttempts.find(row => row.attemptId === timeoutIntent.attemptId);
+  assert.deepEqual(timeoutDelta, { attemptId: timeoutIntent.attemptId, channel: 'cairn-generation', reservedMicroUsd: 5000,
+    outcome: 'unknown', actualMicroUsd: null });
+  for (const ordinal of [1, 4]) {
+    const intent = result.intents.find(row => row.slotId === `BQ0${ordinal}_probe`);
+    assert.equal(intent.final.endpoint, 'responses/input_tokens'); assert.equal(intent.final.httpStatus, 503);
+    assert.equal(intent.final.outcome, 'failed'); assert.equal(intent.final.failure, 'provider_failure');
+  }
+  const invalidIntent = result.intents.find(row => row.slotId === 'BQ03_probe' && row.final?.endpoint === 'responses');
+  assert.equal(invalidIntent.final.httpStatus, 200); assert.equal(invalidIntent.final.outcome, 'succeeded');
+  assert.ok(result.cases.slice(4).every(row => row.probe.execution === 'not-run' && row.probe.failure === 'cancelled'
+    && Object.values(row.answers).every(slot => slot.execution === 'not-run' && slot.failure === 'cancelled')));
+  assert.deepEqual(JSON.parse(readFileSync(join(workspace.path, 'comparison', 'result.json'), 'utf8')), result);
+  const base = fixtureInput(preparation.observation, result), prepared = await prepareSourceBundleScoring(base), report = await assess(base, prepared);
+  console.log('SC_C5_STOPPED=' + JSON.stringify({ runtime: result.status, stopReason: result.stopReason,
+    prepare: prepared.status, score: report.status, issues: prepared.issues, intents: result.intents.length, owners: result.transitions.length,
+    probes: [generic, timed, invalid, cancelled].map(probe => ({ slot: probe.failure, port: probe.artifacts.selectFailure?.code ?? null,
+      core: probe.artifacts.recall.error, selected: Object.hasOwn(probe.artifacts, 'selected') })) }));
+  assert.equal(prepared.status, 'ready', JSON.stringify(prepared.issues)); assert.equal(report.status, 'assessed');
+  assert.equal(report.denominators.qaSlots, 48); assert.equal(report.probes.length, 24); assert.equal(report.gate.promising, false);
+  const controls = [
+    ['stopped-provider-port', 0, probe => { probe.artifacts.selectFailure.code = 'invalid_model_output'; }],
+    ['stopped-provider-equal-invalid', 0, probe => { probe.artifacts.selectFailure.code = probe.failure = 'invalid_model_output'; }],
+    ['stopped-provider-equal-invented', 0, probe => { probe.artifacts.selectFailure.code = probe.failure = 'invented_failure'; }],
+    ['stopped-provider-slot-timeout', 0, probe => { probe.failure = 'model_timeout'; }],
+    ['stopped-provider-core', 0, probe => { probe.artifacts.recall.error.code = 'invalid_model_output'; }],
+    ['stopped-provider-retryable', 0, probe => { probe.artifacts.recall.error.retryable = true; }],
+    ['stopped-provider-other-fatal', 0, probe => { probe.failure = 'authentication_failed'; }],
+    ['earlier-provider-port-and-slot-cancelled', 0, probe => { probe.artifacts.selectFailure.code = probe.failure = 'cancelled'; }],
+    ['earlier-provider-slot-cancelled', 0, probe => { probe.failure = 'cancelled'; }],
+    ['stopped-timeout-port', 1, probe => { probe.artifacts.selectFailure.code = 'invalid_model_output'; }],
+    ['stopped-timeout-slot', 1, probe => { probe.failure = 'provider_failed'; }],
+    ['stopped-timeout-core', 1, probe => { probe.artifacts.recall.error.code = 'recall_failed'; }],
+    ['stopped-timeout-retryable', 1, probe => { probe.artifacts.recall.error.retryable = true; }],
+    ['earlier-timeout-slot-cancelled', 1, probe => { probe.failure = 'cancelled'; }],
+    ['stopped-invalid-core', 2, probe => { probe.artifacts.recall.error.code = 'recall_failed'; }],
+    ['stopped-invalid-retryable', 2, probe => { probe.artifacts.recall.error.retryable = true; }],
+    ['earlier-invalid-slot-cancelled', 2, probe => { probe.failure = 'cancelled'; }],
+    ['cancel-override-port', 3, probe => { probe.artifacts.selectFailure.code = 'invalid_model_output'; }],
+    ['cancel-override-core', 3, probe => { probe.artifacts.recall.error.code = 'invalid_model_output'; }],
+    ['cancel-override-retryable', 3, probe => { probe.artifacts.recall.error.retryable = true; }],
+    ['cancel-override-nonfatal', 3, probe => { probe.failure = 'model_timeout'; }],
+    ['cancel-override-other-fatal', 3, probe => { probe.failure = 'deadline_exceeded'; }],
+  ];
+  const observations = [];
+  for (const [name, index, operation] of controls) {
+    const probe = clone(result.cases[index].probe); operation(probe);
+    const mutated = { ...base, result: { ...result, cases: result.cases.map((row, i) => i === index ? { ...row, probe } : row) } };
+    observations.push({ name, prepare: (await prepareSourceBundleScoring(mutated)).status, score: (await assess(mutated, prepared)).status });
+  }
+  console.log('SC_C5_STOPPED_CAUSES=' + JSON.stringify(observations));
+  assert.ok(observations.every(row => row.prepare === 'denied' && row.score === 'denied'), JSON.stringify(observations));
+  const changedRaw = { ...base, result: { ...result, intents: result.intents.map(intent => intent === timeoutIntent
+    ? { ...intent, final: { ...intent.final, failure: 'provider_failure' } } : intent) } };
+  assert.equal((await prepareSourceBundleScoring(changedRaw)).status, 'denied'); assert.equal((await assess(changedRaw, prepared)).status, 'denied');
   await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
 });
 

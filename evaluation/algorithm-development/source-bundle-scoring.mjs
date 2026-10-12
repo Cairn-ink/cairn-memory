@@ -619,7 +619,10 @@ async function retained(input) {
     if (probe.execution === 'not-run') check(Object.keys(a).length === 0 && !probeIntents.length && probe.failure === result.stopReason, 'probe_mismatch');
     else {
       check(probe.execution === 'completed' ? probe.failure === null : probe.failure !== null, 'probe_mismatch');
-      if (FATAL.has(probe.failure)) check(result.status === 'stopped', 'probe_mismatch');
+      if (FATAL.has(probe.failure)) check(result.status === 'stopped' && probe.failure === result.stopReason
+        && result.cases.slice(index + 1).every(later => later.probe.execution === 'not-run'
+          && ARMS.every(arm => later.answers[arm].execution === 'not-run'))
+        && !result.intents.some(intent => schedule.find(later => later.id === intent.caseId).ordinal > row.ordinal), 'probe_mismatch');
       if (settled) check(['beforeStore', 'afterStore', 'selectCalls', 'rankCalls', 'recall'].every(has), 'probe_mismatch');
       for (const key of Object.keys(a)) check(a[key] !== null, 'probe_mismatch');
       for (const key of ['beforeStore', 'afterStore']) if (has(key))
@@ -664,20 +667,34 @@ async function retained(input) {
     if (has('selectFailure')) {
       fields(a.selectFailure, ['code'], 'probe_mismatch');
       check(has('selectRequest') && !has('selected') && !has('rankRequest') && probe.execution === 'failed'
-        && typeof a.selectFailure.code === 'string' && /^[a-z_]+$/u.test(a.selectFailure.code), 'probe_mismatch');
-      if (result.status === 'accounted' && a.selectFailure.code !== probe.failure) {
-        // Core can win its local timer race while the settled ordinary adapter
-        // reports AbortError as provider_failed. Bind this exact layer split;
-        // neither a free-standing slot label nor arbitrary cause mismatch fits.
-        const intent = probeIntents.at(-1), raw = intent?.final;
+        && (FATAL.has(a.selectFailure.code) || ['invalid_options', 'run_busy', 'invalid_model_output',
+          'provider_failed', 'model_timeout', 'invalid_answer_response', 'invalid_response'].includes(a.selectFailure.code)), 'probe_mismatch');
+      const port = a.selectFailure.code, intent = probeIntents.at(-1), raw = intent?.final;
+      const fatalPort = result.status === 'stopped' && FATAL.has(port) && port === result.stopReason;
+      if (raw && raw.outcome !== 'succeeded') {
+        // The ordinary adapter hides transport error codes behind its generic
+        // provider Error (or AbortError). Only the coordinator's already-known
+        // fatal cause can override that projection, never an invented label.
+        check(port === 'provider_failed' || fatalPort, 'probe_mismatch');
+        if (has('recall')) check(a.recall?.ok === false
+          && a.recall.error?.code === (raw.failure === 'model_timeout' ? 'model_timeout' : 'recall_failed'), 'probe_mismatch');
+      }
+      if (raw?.failure === 'model_timeout') {
+        // Bind the actual settled local timer shape in BOTH run statuses,
+        // including earlier healthy timeouts in a later honestly stopped run.
         const owner = result.transitions.find(transition => transition.phaseId === `${c.id}_probe_select`);
         const delta = owner?.state?.appendedAttempts?.find(attempt => attempt.attemptId === intent?.attemptId);
-        check(a.selectFailure.code === 'provider_failed' && probe.failure === 'model_timeout'
-          && a.recall?.ok === false && a.recall.error?.code === 'model_timeout'
-          && intent?.dispatched === true && raw?.failure === 'model_timeout' && raw.outcome === 'unknown'
+        check(intent.dispatched === true && raw.outcome === 'unknown'
           && owner?.closed === true && owner.healthy === true && delta?.outcome === raw.outcome
           && delta.actualMicroUsd === raw.actualMicroUsd, 'probe_mismatch');
       }
+      // Trusted adapter validation errors retain their core code; a failed
+      // transport instead reaches callModel's generic recall_failed envelope.
+      if (port === 'invalid_model_output' && has('recall'))
+        check(a.recall?.ok === false && a.recall.error?.code === 'invalid_model_output', 'probe_mismatch');
+      const slotCause = FATAL.has(port) ? port : a.recall?.error?.code === 'model_timeout' ? 'model_timeout' : port;
+      check(probe.failure === slotCause || result.status === 'stopped' && FATAL.has(probe.failure)
+        && probe.failure === result.stopReason, 'probe_mismatch');
     }
     if (has('rankRequest')) {
       check(selectedValid && selectedEntries.length > 0 && (!has('rankCalls') || a.rankCalls === 1), 'probe_mismatch');
@@ -693,7 +710,8 @@ async function retained(input) {
         check(probe.execution === 'completed' || result.status === 'stopped', 'probe_mismatch');
       } else {
         fields(a.recall, ['ok', 'error'], 'probe_mismatch'); fields(a.recall.error, ['code', 'retryable'], 'probe_mismatch');
-        check(a.recall.ok === false && typeof a.recall.error.code === 'string' && typeof a.recall.error.retryable === 'boolean'
+        check(a.recall.ok === false && typeof a.recall.error.code === 'string' && /^[a-z_]+$/u.test(a.recall.error.code)
+          && a.recall.error.retryable === (a.recall.error.code === 'storage_busy')
           && probe.execution === 'failed', 'probe_mismatch');
         if (result.status === 'accounted' && a.recall.error.code === 'model_timeout')
           check(probe.failure === 'model_timeout', 'probe_mismatch');

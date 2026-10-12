@@ -2139,3 +2139,18 @@ evidence, not semantic gains or independent transcript/clock/firstness proof.
 Primary frozen-byte gates, full-base dual reviews and exact-head CI remain
 separate delivery gates. No inherited runtime/cap change, provider call,
 measured lightweight claim, D12/Stage2/3 clearance or launch authority.
+
+SC C5 closes failed-probe cause/envelope shortcuts in accounted and stopped
+records: failed503 raw provider_failure binds provider_failed at the port and
+recall_failed/retryable=false at core. The real settled timeout layer split and
+HTTP-successful invalid selection remain distinct; known fatal overrides must
+match the terminal stop with no later executed cases or physical intents.
+One new genuine owned stopped14-intent/12-owner fixture retains the actual
+final checkpoint cancellation and later not-run slots. Public reds preserved
+the prior cause admissions and four earlier-fatal contradictions; final focused
+23/23 and syntax/validate pass on both pinned Nodes. All original fixtures,
+policies and limits are unchanged. This proves observable consistency only,
+not whole-transcript authenticity, independent timing/firstness, semantic gain,
+measured lightweight fit, D12/Stage2/3 clearance or launch authority. Primary
+fixed-byte acceptance, both full-base review axes and exact-head CI remain
+separate delivery gates; no paid/provider/operational-data action is authorized.
