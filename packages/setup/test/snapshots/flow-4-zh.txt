@@ -1,4 +1,4 @@
-Cairn.ink Memory 安裝程式 0.5.1
+Cairn.ink Memory 安裝程式 0.5.2
 在這台電腦找到 Claude Code 和 Codex。
 
 ✓ Claude Code 已連接（外掛會順便更新）
@@ -19,7 +19,8 @@ browser opened
   舊的登入不會自動撤銷；不再使用的話，到 cairn.ink/settings/tokens 撤銷。
   Codex 的登入資訊存在只有你能讀的檔案裡，沒有加密。
 ✓ Codex 自動記憶已更新
-Codex 用 exec 自動執行的工作不會記下。
+只會記下你自己在 Codex 裡的對話。
+程式自動跑的 Codex 工作不會記下，需要的話可以打開。
 
 ✓ 兩個工具共用同一份記憶
 接下來：重新開啟 Claude Code 和 Codex。

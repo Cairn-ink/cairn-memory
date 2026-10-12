@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased — @cairn-ink/memory installer 0.5.1
+## Unreleased — @cairn-ink/memory installer 0.5.2
+
+- Reword the two setup messages about Codex automation in plain words, without
+  "exec". Skipped (the default): "Only conversations you have yourself in Codex
+  are saved. Codex work that programs run on their own is not saved. You can turn
+  this on." Opted in: "Codex work that programs run on their own is also saved
+  and used when you ask." Same behavior. The skipped message is shown by `setup`
+  and `config --codex-capture-exec off`; the opted-in one by `setup`,
+  `config --codex-capture-exec on` and `status`.
+- Installer is 0.5.2; plugin remains 0.3.2. Publication is a separate step.
+
+## @cairn-ink/memory installer 0.5.1 — published 2026-10-13
 
 - Capture and recall interactive Codex TUI sessions again. Since Codex 0.160 the
   TUI runs on the shared app-server daemon, which records `source: vscode`; 0.5.0

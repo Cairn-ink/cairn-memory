@@ -15,7 +15,7 @@ With Node ≥22.16 and the Claude Code CLI:
 npx @cairn-ink/memory setup
 ```
 
-This checkout prepares installer **0.5.1**; publication is a separate step.
+This checkout prepares installer **0.5.2**; publication is a separate step.
 Try it with `node packages/setup/bin/memory.mjs setup`. The plugin stays 0.3.2.
 Setup asks about new tools, updates connected tools, and uses one browser sign-in
 when connecting both. The default server is cairn.ink. Conflicting servers or

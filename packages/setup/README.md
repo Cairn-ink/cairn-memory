@@ -2,7 +2,7 @@
 
 Set up Cairn automatic memory for Claude Code and qualified Codex hosts.
 Requires Node ≥22.16 and the selected CLI on PATH; no runtime dependencies.
-This checkout prepares **installer 0.5.1**. The Claude plugin stays **0.3.2**.
+This checkout prepares **installer 0.5.2**. The Claude plugin stays **0.3.2**.
 The release must be published before `npx` can use these new flows.
 
 ## Setup / 安裝
@@ -100,7 +100,8 @@ their header `originator` names one of those clients; any other app-server clien
 is treated like exec and needs the same opt-in. Older frozen runtimes need a setup
 update first; config prints the exact setup command before changing anything.
 
-Codex 用 exec 自動執行的工作預設不會記下，也不會注入提問回想。
+Codex 只會記下你自己的對話。`codex exec` 和其他由程式自動跑的
+Codex 工作預設不會記下，也不會注入提問回想。
 若需要，可用 `npx @cairn-ink/memory config --codex-capture-exec on` 開啟，
 或安裝時加上同名選項；改成 `off` 就能關閉。這個設定同時開啟保存與回想。
 重跑安裝會保留設定；只有開啟時，`status` 才會顯示。

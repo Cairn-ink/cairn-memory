@@ -1,4 +1,4 @@
-Cairn.ink Memory 安裝程式 0.5.1
+Cairn.ink Memory 安裝程式 0.5.2
 在這台電腦找到 Claude Code 和 Codex。
 
 ✓ Claude Code 已連接（外掛會順便更新）
@@ -16,7 +16,8 @@ Claude Code 連 staging.cairn.ink、Codex 連 cairn.ink，還不能共用記憶�
 ✓ Claude Code 外掛 0.3.1 已是最新版
 ✓ 沿用 Codex 的登入（有效到 <date>）
 ✓ Codex 自動記憶已更新
-Codex 用 exec 自動執行的工作不會記下。
+只會記下你自己在 Codex 裡的對話。
+程式自動跑的 Codex 工作不會記下，需要的話可以打開。
 
 ✓ 兩個工具共用同一份記憶
 接下來：重新開啟 Claude Code 和 Codex。
