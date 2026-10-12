@@ -291,4 +291,3 @@ counts. The prior table and all pre-clarification primary gates are historical
 evidence for their tested bytes only. Fresh focused results/measurements are
 retained in private acceptance evidence; primary owns the final corrected-wire
 gates and frozen candidate, without another post-freeze plan mutation.
-
