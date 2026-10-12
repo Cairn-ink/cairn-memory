@@ -261,7 +261,9 @@ test('cap changes stage the next daily limit without resetting existing usage',a
 for(const lang of ['zh','en'])test(`exec opt-in config, setup preservation, disclosure and status (${lang})`,async t=>{
   const f=await fixture(t,{claude:false});
   const setup=await f.run({args:['setup','--lang',lang]});assert.equal(setup.code,0,setup.stdout);checkScreen(setup,lang);
-  assert.match(setup.stdout,lang==='zh'?/Codex 用 exec 自動執行的工作不會記下。/:/Automated codex exec runs are not saved\./);
+  const skipped=lang==='zh'?/只會記下你自己在 Codex 裡的對話。\n程式自動跑的 Codex 工作不會記下，需要的話可以打開。/:
+    /Only conversations you have yourself in Codex are saved\.\nCodex work that programs run on their own is not saved\. You can turn this on\./;
+  assert.match(setup.stdout,skipped);
   assert.equal((await readInstallation(f.installation)).captureExec,false);
   const statusArgs=['status','--lang',lang];
   assert.doesNotMatch((await f.run({args:statusArgs})).stdout,/exec/);
@@ -271,7 +273,7 @@ for(const lang of ['zh','en'])test(`exec opt-in config, setup preservation, disc
   let installed=await readInstallation(f.installation);assert.equal(installed.captureExec,true);assert.equal(installed.dailyCap,200);
   const status=await f.run({args:statusArgs});assert.match(status.stdout,/exec/);checkScreen(status,lang);
   const rerun=await f.run({args:['setup','--lang',lang]});assert.equal(rerun.code,0,rerun.stdout);checkScreen(rerun,lang);
-  assert.doesNotMatch(rerun.stdout,lang==='zh'?/工作不會記下/:/runs are not saved/);
+  assert.doesNotMatch(rerun.stdout,lang==='zh'?/只會記下你自己/:/Only conversations you have yourself/);
   assert.equal((await readInstallation(f.installation)).captureExec,true);
   const cap=await f.run({args:['config','--codex-daily-cap','347','--lang',lang]});assert.equal(cap.code,0,cap.stdout);
   installed=await readInstallation(f.installation);assert.equal(installed.captureExec,true);assert.equal(installed.dailyCap,347);

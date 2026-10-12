@@ -83,7 +83,7 @@ Codex inspection 失敗會印出本地化原因與 `setup --client codex` 修復
 
 Opaque project ID 使用同一 root 的既有 HMAC key 與相同的 literal project path。配對安裝測試直接比較 Claude、Codex 的結果；不使用新 salt、client discriminator 或 realpath 重寫 project path。Codex-only 首次安裝使用既有 standalone identity transaction。
 
-Codex 用 exec 自動執行的工作預設不會記下，也不會注入提問回想。判斷依據是經 session ID 驗證的 `session_meta.payload.source`；原本互動建立、後來用 `exec resume` 的工作另查原生 Codex 父程序的 exec 參數。缺少或無法驗證 header 時也會略過。互動對話維持原有行為。
+Codex 只會記下你自己的對話。`codex exec` 和其他由程式自動跑的 Codex 工作預設不會記下，也不會注入提問回想。判斷依據是經 session ID 驗證的 `session_meta.payload.source`；原本互動建立、後來用 `exec resume` 的工作另查原生 Codex 父程序的 exec 參數。缺少或無法驗證 header 時也會略過。互動對話維持原有行為。
 
 Codex 0.160 起，互動 TUI 改由共用的 app-server daemon 建立 thread，header 一律寫 `source: vscode`；VS Code extension、桌面 app 與其他接 app-server 的程式也是如此，`originator` 則是用戶端自己報的名字。0.5.1 只把 `originator` 為 `codex-tui`（TUI）、`codex_vscode`（VS Code extension）、`Codex Desktop`（桌面 app）的 `vscode` thread 當成互動對話；其他名稱或沒有 `originator` 的一律視同 exec，預設不保存也不回想，開啟 `--codex-capture-exec` 後才會處理。
 

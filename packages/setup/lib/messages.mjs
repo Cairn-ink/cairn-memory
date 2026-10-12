@@ -1470,8 +1470,10 @@ export const messages = {
     "en": "Specify --codex-daily-cap N or --codex-capture-exec on|off."
   },
   "codex_exec_skipped": {
-    "zh": "Codex 用 exec 自動執行的工作不會記下。",
-    "en": "Automated codex exec runs are not saved."
+    "zh": "只會記下你自己在 Codex 裡的對話。\n" +
+      "程式自動跑的 Codex 工作不會記下，需要的話可以打開。",
+    "en": "Only conversations you have yourself in Codex are saved.\n" +
+      "Codex work that programs run on their own is not saved. You can turn this on."
   },
   "codex_exec_enabled": {
     "zh": "Codex 的 exec 自動工作也會納入記憶與提問回想。",

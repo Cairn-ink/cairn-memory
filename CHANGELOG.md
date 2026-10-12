@@ -14,6 +14,10 @@
   gated like `codex exec`: no capture or prompt recall unless
   `config --codex-capture-exec on`. The originator is reported by the client
   itself; see [limitations](docs/limitations.md#codex-app-server-client-scope-installer-051).
+- Reword the setup notice about skipped Codex automation so it no longer says
+  "exec": it now says only conversations you have yourself in Codex are saved,
+  and that work programs run on their own is not, with the opt-in still available.
+  Same behavior; the message is shown by `setup` and `config --codex-capture-exec off`.
 - Installer is 0.5.1; plugin remains 0.3.2. Publication is a separate step.
 
 ## @cairn-ink/memory installer 0.5.0 — published 2026-10-11

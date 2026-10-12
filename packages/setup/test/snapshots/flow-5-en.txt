@@ -18,7 +18,8 @@ Quit Claude Code and Codex completely, and wait for background work to finish.
 ✓ Claude Code plugin 0.3.1 is up to date
 ✓ Reusing Codex's sign-in (valid until <date>)
 ✓ Codex automatic memory updated
-Automated codex exec runs are not saved.
+Only conversations you have yourself in Codex are saved.
+Codex work that programs run on their own is not saved. You can turn this on.
 
 ✓ Both tools share one memory
 Next: reopen Claude Code and Codex.
