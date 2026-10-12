@@ -2198,3 +2198,20 @@ The prospective next checkpoint addresses planner budget structure and separatel
 tests selection versus answer-context grouping on independently frozen new
 source-only cases after offline/review/CI gates. No current-cohort replay or paid
 invocation is granted; original D12 and Stage 2/3 remain uncleared.
+
+The separately versioned offline card-budgeted source plan expresses at most
+six selected cards, six chains, three cards and six receipt endpoints per chain
+directly in its output structure. Shared prerequisite cards across chains remain
+expressible while flat answer evidence delivers each selected whole card once,
+with exact receipt text/roles and explicit card identity/revision. Genuine
+process-local ownership, one-use assembly and authoritative core rereads reject
+malformed, stale and altered evidence. Fresh synthetic SQLite tests exercise the
+new compiler through actual bounded source recall and the unchanged answer
+packer; they establish mechanical source fidelity, not planner truth or model
+compliance. Chain organization and terminal declarations stay outside factual
+answer evidence. This is not a repair, reanswer or rescore of the closed v1
+cohort. Provider wire/lifecycle/accounting integration and frozen new cases remain
+future gates. No semantic gain, natural MOC scale, measured resource fit, Hermes
+or product readiness, paid-run authority, source-retention expansion or clearance
+of Stage2/3/D12 follows. See docs/plans/card-budgeted-evidence-plan.md for the
+prospective contract, verification record and remaining limits.
