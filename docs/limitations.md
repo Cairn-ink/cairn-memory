@@ -2558,3 +2558,53 @@ hex digit. The retained record and independent raw-file digest agree; the
 corrected invocation obtains that argument directly from the verified record.
 This was an operator preflight error, not a test or runtime failure. Its failed
 invocation remains recorded; no receipt, source result or budget was reset.
+
+## Closed card-plan QA24 first result
+
+The [closed card-plan result](plans/card-plan-qa24-results.md) rejects the
+candidate in its independently authored synthetic complete-candidate cohort:
+24 fixed questions, 18 answerable / 6 qualified, 288 sources and 102 anchors,
+with scripted exact-window extraction and unfiled classification. This is not
+LongMemEval, competitor parity, natural MOC, Hermes or product acceptance.
+The evaluated model was `gpt-4.1-mini-2025-04-14`; four distinct actual
+GPT-6.1 Sol/high first judges returned valid first responses for 27/27/3/3
+eligible items, with no replacement, rejudge or rescore. C reused B selection
+with unverified grouping and is diagnostic only, not a third selection arm.
+
+A completed 24/24: 20 correct / 4 incorrect / 0 unresolved. B/C each completed
+3/24: 2 correct / 1 incorrect / 21 unresolved. All 21 B selection failures
+were `invalid_model_output`; their dependent B/C answers did not run.
+Unanswered remains unresolved in QA and fails supported-correct. Supported-
+correct counts are 20/2/2 and complete-required counts 22/2/2 out of 24:
+B−A gains -18 and -20; diagnostic C−B gain 0. B/C completed CQ05/CQ15/CQ24,
+with the first two correct and CQ24 incorrect. A was wrong on CQ03/CQ18/CQ22/CQ24.
+Zero observed B/C harms among three actual answers cannot prove safety across
+24. Actual run exit 0 records completed execution, not an infrastructure abort
+or a 24/24 answer-quality pass. Frozen failures are B completion <23,
+supported-correct gain <3, complete-required gain <1, qualified regression,
+and A/B safety unobserved. Stage 2/3, defaults and D12 remain uncleared.
+
+Detached zero-call compiler probes show that only candidate-to-selected-slot
+index correction clears CQ01 and only removal of uncovered selected cards
+clears CQ03; CQ02 duplicate correction alone leaves its invalid terminal.
+CQ05 remained an unchanged positive control. These concrete constraints do
+not establish model-internal causes, repair formal outputs or add QA credit.
+
+Accounting retains 126 physical requests, US$0.63 reservations and a known
+US$0.066248 subtotal with 48 unknown-cost calls, not full cost. The original
+prefix remains: 57,963 cumulative requests / US$334.152281 reserved /
+US$65.847719 remaining at closure, under the unchanged US$400 ceiling and
+US$30 protection. No refund/reset or new dispatch authority follows. Runtime
+latency is 523459.500516 ms; 24 stores occupy 14,057,472 bytes. Peak RSS,
+preparation latency and service cost are unknown; lightweight fit is unproven.
+The report publishes only source-free observations and provenance hashes,
+which identify bytes rather than prove semantic truth or judge independence.
+
+P4 now requires representation review after successive source-bundle and
+card-plan planning-format rejections; stop that paid sequence. Primary selects
+a separately versioned receipt-ID group design for prospective offline
+feasibility only, not an implemented or working successor. No old threshold,
+result, consumed CQ/BQ rerun or paid authority changes. The goal remains
+lightweight source-backed reliable memory; completion, QA, safety, a fresh
+paired comparator, installed Hermes new-session use and resource fit remain
+separate uncleared gates.
