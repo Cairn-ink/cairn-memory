@@ -1404,3 +1404,290 @@ The final PR records the completed command outcomes, exact candidate and both
 independent full-base review results. Previous candidate proofs retain their
 old-head identities. This diagnosis establishes retained consistency only,
 not algorithm quality, D12/Stage2/3 clearance or first-live authority.
+
+# SC-C4 — reconcile probe progress with retained observations
+
+Prospective correction to original SC/SJ1/SJ2; not a new scoring policy.
+Fixed full-PR base: 6abed0ccdfe3815d42b25db04adb159483ded156.
+Rejected prior candidate: c2a24f71c425c93dc69b6e5369dbf0e7e7ca54f2.
+Worktree: /home/chichieh/Github/cairn-memory-worktrees/source-bundle-scoring.
+Branch: experiment/source-bundle-scoring. No push, merge or provider call yet.
+
+## Ownership and scope
+
+This is a distinct probe-artifact consistency finding after C3 settlement was
+closed. Return bounded implementation to the original GPT-6.1 Sol/high worker;
+primary owns acceptance, not another undifferentiated ledger correction round.
+Only source-bundle-scoring.mjs and its test plus append-only entries in the
+existing docs/plans/source-bundle-scoring.md and docs/limitations.md may change.
+No runner, transport, corpus, rubric, model, resource, schema, source selection,
+answering, judgment or gate-policy change. No new evaluation campaign or paid
+calls. Keep original 21,844-byte contract, C1/C2/C3 contracts, old evidence and
+failure history intact. Original sources/anchors and actual first answers stay
+unchanged; integrity mutations are explicit corruptions, never claimed executions.
+
+## Ranked hypotheses, already disclosed to the user
+
+1. Optional-only artifact checks permit completed execution with missing reached
+   stages; the extracted real validator admits it. Explicit progress binding
+   should deny those corruptions without changing real completed probes.
+2. A later public validator already rejects it; mutate only probe artifacts in
+   the existing genuine 192-intent fixture to test that claim before fixing.
+3. Missing observations may be legitimate on failed/not-run paths. Inspect the
+   pinned coordinator and core, and preserve actual early-failure/empty-selection
+   semantics rather than indiscriminately requiring every stage for every slot.
+
+Primary source-only diagnostic source-bundle-scoring-c4-probe.mjs ran twice on
+the unchanged scorer hash 8ac47c8834944c5f8eec6612fcd50da40eed97e3ee6d4d17d73512fae29e01df;
+both actual exits 1, completed probe artifacts={} admitted as four not-reached
+stages. It uses a placeholder intent and is not complete public-pipeline proof.
+
+## Observable acceptance
+
+C4.1 The genuine completed 192-intent fixture remains ready/assessed under
+unchanged labels and source/answer data. Preserve its actual 24 completed probes,
+47 answers and uncertainty/harm/completeness controls. Before changing scorer,
+use this fixture to show omission/contradiction corruption is accepted.
+
+C4.2 Replacing a completed probe's artifacts with {}, or omitting its reached
+select request/output/recall/call observations, must deny assessment. Cross-check
+stage presence with execution, failure, call counts and slot intents; no completed
+probe can silently become four not-reached observations. Validate exact retained
+request/output bindings and recorded store snapshots where runtime provides them.
+Do not stop at checking that artifacts is merely nonempty.
+
+C4.3 Rank observation is conditional on actual rank invocation, not on desired
+evidence. Rank count/request/selected references/returned recall must be mutually
+consistent with the pinned runner's actual local empty-rank callback. Preserve
+empty valid selection and any legitimate no-rank return; do not promote missing
+evidence to a completed or selected stage. Contradictory omission and fabricated
+progress controls must deny through the public prepare and score seams.
+
+C4.4 Preserve genuine accounted failed probes and stopped/not-run controls in
+existing tests. A raw successful HTTP outcome is not proof of semantically valid
+selection: preserve invalid-model-output and timeout paths. Trace actual runner
+450–490 and dependent core paths before determining which artifacts are required
+at which reached stage; document boundaries, not a new state-machine policy.
+
+C4.5 Use named corruption controls sufficient to cover each implemented branch
+and regression risk. Test before fix, then green with positive and failure
+controls. Two supported Nodes: version, syntax, complete focused scorer suite,
+validate, actual exit codes, no skipped/cancelled tests or unexpected owned
+temporary residue. Keep required transport/tokenizer tests enabled. No live env.
+
+C4.6 Worker reports exact files/hashes and stops writes. Primary inspects full
+diff, personally reruns affected paths, independently cross-checks file inventory
+twice, commits scope, checks current gates, and obtains both nonauthor full-diff
+Standards/Spec reviews against the original base. Prior candidate proof is stale
+for new bytes. Push/PR and exact-head CI only after both axes pass.
+
+## Nonclaims
+
+This closes observable retained-record inconsistency, not transcript authenticity,
+model quality or correct source meaning. No accuracy number, Mem0 parity, natural
+long-history success, lightweight claim, D12/Stage2/Stage3 or launch is established.
+Primary C3 takeover remains historical; this packet's worker must not review it.
+
+## Prospective offline control addendum, before scorer implementation
+
+The unchanged 192-intent fixture has only nonempty successful probes; the C2
+fixture has only count-stage failures. Neither proves the empty/invalid-selection
+boundary. Primary authorizes one additional genuinely executed owned offline
+fixture using the same all24 cold preparation, corpus and runner, fake HTTP only.
+Use a predeclared ordinal schedule: first probe returns refs=[], second returns
+the duplicate first actually visible ref in a valid successful HTTP envelope.
+Stop through the existing caller signal at the first QA pre-record of BQ03, only
+after both earlier probes have returned and their owners closed. The callback
+must synchronously return undefined. Preserve any actually reached stop intent;
+never synthesize or remove records to obtain an expected count.
+
+Assert first probe completed with zero rank calls and empty recall; second probe
+failed invalid_model_output with its literal duplicated selection, no rank call,
+error recall and healthy closed owner. Later not-run slots retain the stop cause
+and fixed 48 QA / 24 probe denominator. No other fatal outcome may masquerade as
+this intended signal stop. The public prepare/score must assess those actual
+retained observations (not promote the stopped run to promising). Add named
+contradictions for these conditional branches. Existing192 and C2 fixtures remain
+unchanged. This is synthetic offline regression data, not an additional live
+campaign, new question cohort, retry, runtime change or spending authority.
+
+### Timeout boundary extension before final freeze
+
+Primary integration inspection identified a falsifiable C4.4 timeout risk:
+core's ordinary select deadline aborts at 30 seconds; the adapter may throw an
+AbortError recorded as selectFailure.provider_failed, while core returns
+recall.error.model_timeout and the runner records probe.failure.model_timeout.
+The ordinary transport can be healthy, closed and settled despite those distinct
+layers. Do not require unconditional equality of those recorded causes.
+
+Extend only the new conditional offline fixture with a third probe whose select
+generation stays pending until the unchanged core timeout. Move the prospective
+caller-stop point from BQ03 to BQ04 first QA pre-record, after all three probe
+owners have closed. Keep the first two cases and the original192/C2 fixtures
+unchanged. First demonstrate the actual retained positive state and public denial
+on the candidate validator. Then, if confirmed, allow only the actual normalized
+timeout shape bound to core error, raw timeout observation, and closed healthy
+settlement; contradictory witness/cause controls must still deny. Retain actual
+stop records and fixed denominators. No timer shortening, transport/runner fix,
+blanket failure-code relaxation, paid request or resumed cohort is authorized.
+
+### Precise accounted-timeout reproducer
+
+Before running the extension, the worker correctly noted that the questioned
+equality is conditional on result.status=accounted. A deliberate BQ04 caller stop
+cannot reproduce that branch. Supersede only the extension's stop schedule:
+execute the same single new all24 offline fixture to accounted closure. Keep
+first empty selection, second duplicated selection, third actual 30-second
+timeout. For every case after the third, use predeclared case ordinals from the
+runner's onRecord metadata to return short HTTP503 on each first count request;
+no question, answer, source family or rubric controls the schedule. Do not change
+timer lengths or falsify result.status/history. These later slots must be honest
+failed slots with healthy closed owners, not not-run slots. The older genuine
+pre-aborted/stopped fixtures continue to cover not-run preservation.
+
+Establish the actual accounted positive state, expected three early probe
+outcomes, recorded normalization and full closed ledger before asserting public
+readiness. On the intermediate validator the public readiness assertion must go
+red if the hypothesis is correct. Then add only the bounded timeout consistency
+exception supported by this genuine record and named witness contradictions.
+Keep both earlier red logs and their stopped17/11 positive evidence labelled as
+earlier controls, not the final accounted fixture. All other scope and gates
+remain unchanged. This refinement corrects the test seam before running it; it
+does not replace a paid question, retry a campaign or hide a failed test.
+
+## SC-C4 author evidence and fixed-byte handoff
+
+Author: actual GPT-6.1 Sol/high, sole implementer; primary owns acceptance and
+nonauthor reviews. Correction base c2a24f71c425c93dc69b6e5369dbf0e7e7ca54f2;
+full review base 6abed0ccdfe3815d42b25db04adb159483ded156. This appendix
+preserves all original and C1/C2/C3 evidence. The final prospective C4 contract
+above is 9,537 bytes, SHA256
+9b46d72e4677ed53cb75da6a37d5340148eb1f4d006ba3a5c4b27fb4fdfd2216.
+Earlier addendum hashes d63edc8c and 09b71607 were superseded before the final
+accounted-timeout reproducer; their stopped-control logs remain historical.
+
+The work used the shared worktree workflow and narrow diagnosing-bugs loop:
+ranked hypotheses, public retained-seam red, pinned runner/core inspection,
+minimal progress-binding fix and genuine conditional-path regression. No
+inherited runtime, transport, ledger, source, rubric, schema, scoring threshold,
+request/deadline cap, judgment or first-answer policy changed. No operational
+script, credential, provider, operational ledger or closed cohort was accessed.
+All HTTP and ledger execution used owned offline fixtures.
+
+### Actual red and intermediate history
+
+Evidence root: /tmp/cairn-scoring-c4-author.d7Z8Bn2t. Logs are separate,
+never replaced by green outcomes.
+
+- red22.log: Node22 actual exit1, 29 of 35 named probe corruptions wrongly
+  ready/assessed through both public exports; the other six already denied.
+  The unchanged genuine padded192 fixture remained ready, with192 intents,
+ 120 owners,47 actual answers and24 completed probes. Scorer stayed at
+  rejected-base hash8ac47c88. Log SHA256
+  3447b88b5b832a225c6f52b68c14bfef058186c875d514bdc20ad47b5334eedc.
+  This confirms missing progress binding and refutes later-public-validator rescue.
+- conditional-red22.log: actual exit1. The prospectively authorized earlier
+  stopped conditional fixture genuinely retained17 intents/11 owners, empty
+  selection and successful HTTP with duplicated visible refs, then caller stop.
+  Its actual record stayed ready/assessed; nine of ten contradictions were
+  wrongly admitted. Log SHA256
+  fabedd2ef17304750b06de44300cda53486a5358c7b8c8784b77f443a7df1fec.
+  It does not establish the later accounted timeout branch.
+- conditional-green22.log: actual exit0,1/1 on that historical stopped variant.
+  focused22.log: actual exit0,22/22 on the intermediate C4 implementation
+  before the timeout refinement. These are explicitly not final-byte proofs.
+- timeout-red22.log: actual exit1 on the prospectively amended accounted
+  fixture. Genuine87 intents/78 healthy closed owners were asserted before
+  public readiness: port selectFailure.provider_failed, core/slot model_timeout,
+  dispatched raw model_timeout/unknown and matching settled unknown ledger
+  delta. Both public exports denied probe_mismatch. Log SHA256
+  54fe98198f18e8cc0338a9a0d480747df1b4d043341792df52ed2295ba007a27.
+  This is a reproduced over-rejection in the initial C4 equality, not an
+  inherited runtime bug.
+- timeout-green22.log: actual exit0,1/1 after the narrowly bound exception.
+  This targeted green preceded the final five named witness tests.
+
+An early untested draft was restored byte-for-byte to the rejected scorer before
+the conditional red. A patch-construction boundary assertion failed before
+writing and was corrected; neither is claimed as executed model/test evidence.
+No timeout or fixture tolerance was increased, and no source was edited during
+an active invocation.
+
+### Implemented observable consistency
+
+Completed probes now bind reached snapshots, request/output, call counters,
+recall and actual slot intents instead of silently reporting omitted artifacts
+as not reached. Not-run probes require no artifacts/intents and the run stop
+cause; consumed failed paths remain conditional. Requests bind the literal
+original query, namespace map, selected-order candidates and fixed limits.
+Rank invocation requires valid nonempty selection and its exact retained request;
+successful local recall binds the runner's actual empty-rank result.
+
+A successful HTTP generation may still contain invalid refs. Such literal output
+is retained, while mechanically selected evidence is observed-empty, not granted
+support credit. Invalid refs require actual core invalid_model_output and no rank;
+a different slot cause is admitted only for the exact known fatal global-stop
+override. Valid empty selection remains completed, rank not reached and recall
+observed-empty. Neither probe outcome can improve QA scoring.
+
+The accounted ordinary timeout exception is only the genuine layer split above:
+provider_failed at the port, model_timeout at core/slot, dispatched raw
+model_timeout with unknown outcome, and exact healthy closed owner plus matching
+settled ledger delta. Wrong raw/core/port/slot cause, missing/unhealthy/unclosed
+owner and unwitnessed stopped overrides deny. It does not accept arbitrary cause
+differences or reconstruct independent timing/firstness from this transcript.
+
+The existing192 fixture's source-blind chronology policy, padded bodies,47
+answers and all67 anchors remain unchanged. Its new nested test covers35 named
+artifact/call/request/output/recall contradictions through both public exports.
+The one new actual conditional fixture uses first empty selection, second
+duplicate actually visible ref, third unchanged30-second select timeout, and
+short HTTP503 first counts for later case ordinals. It genuinely closes
+accounted87/78, retaining all48 QA/all24 probe slots; later slots are healthy
+consumed failures, not invented not-run observations. Exact first-three probe
+owner identities/counts are asserted before closed/healthy predicates.
+Its16 conditional corruption controls and five raw/closure/override controls
+all deny. Old genuine pre-aborted/stopped and C1/C2/C3 controls still cover
+their original paths. No synthetic label is model-quality evidence.
+
+### Final author commands and actual outcomes
+
+Final held scorer SHA256
+fd1930979300e109b36ebbbee8a81e192d9b71141169edc8d133c63f964958ea;
+test SHA256
+2bfaa58beb88d44785e3faf307a98ff88e13b12f5555cedae7bee84b5d4cc07e.
+Both final full focused commands used tools/testing/run.mjs with the literal
+evaluation/algorithm-development/test/source-bundle-scoring.test.mjs path,
+pinned Node22.16.0 then24.15.0, env-i, owned TMPDIR,
+NODE_DISABLE_COMPILE_CACHE=1, CAIRN_SOURCE_BUNDLE_OFFLINE=1 and
+CAIRN_BUNDLE_TRANSPORT_OFFLINE=1. No concurrent heavy suite ran.
+
+- focused22-final.log: actual exit0,22/22, zero failures/skips/cancellations,
+ 279803.205189ms; SHA256
+  d93b18f2d0b96b7d39b79fed0a6a3a4db343512997d74a93fa92b1b77e74bb84.
+- focused24-final.log: actual exit0,22/22, zero failures/skips/cancellations,
+ 333830.595992ms; SHA256
+  ab6b100357a66fdee542ef16a6c06b4c259a67ec7ae6ef60de6d6510a1c86f8d.
+- Both pinned node --version, node --check scorer, node --check test and
+  npm run validate: each actual exit0. Separate version22/24,
+  scorer-syntax22/24, test-syntax22/24 and validate22/24 logs are retained.
+  Validation uses userconfig=/dev/null and a distinct owned comment-only
+  global npm config, avoiding ambient configuration and the historical C2
+  duplicate-config setup failure; no install/network is involved.
+- git diff --check and independent four-path inventory are closing author
+  checks. Inventory cross-checks Git changes against recursively hashed
+  filesystem blobs/modes, append-only docs, both immutable contract prefixes,
+  unchanged inherited sources and empty owned workspace directories.
+
+All test sessions closed and all seven owned TMPDIRs were empty after the final
+runs. The primary separately verifies frozen bytes before committing, runs its
+affected gates on both Nodes, and obtains both full-base nonauthor review axes
+and exact-head CI. Expected combined algorithm count205 (=BR183+SC22) is a
+prospective inventory expectation, not an author full-algorithm pass claim.
+Old broader matrices remain pinned to old heads.
+
+This correction establishes observable retained consistency only. Transcript
+authenticity, caller/clock/firstness and fixed-runtime timing enforcement remain
+external execution provenance. No semantic efficacy, Mem0 parity, natural
+long-history success, measured lightweight fit, D12/Stage2/3 clearance, launch
+authority or paid spending approval follows.

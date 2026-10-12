@@ -2125,3 +2125,17 @@ write from a healthy provider failure. Fast C1/C2/C3 controls pass both pinned
 Nodes; final fixed-byte full-suite evidence and independent reviews remain
 separate gates recorded in the PR. No execution or data-policy change, paid
 call, semantic gain, D12/Stage2/3 clearance or measured lightweight claim.
+
+SC C4 binds probe progress to actual requests, outputs, call counters, store
+snapshots, recall and slot intents. Completed omissions and conditional-state
+contradictions deny; valid empty selection and HTTP-successful invalid refs stay
+distinct. One genuine owned conditional fixture also reproduced an accounted
+ordinary timeout layer split (port provider_failed, core/slot and settled raw
+model_timeout); only that healthy closed, delta-bound shape is accepted. Wrong
+causes or missing/unhealthy closure remain denied. The existing192 fixture and
+all original source/answer/scoring policies are unchanged. Final focused22/22
+passes on both pinned Nodes and syntax/validate exits0 are offline consistency
+evidence, not semantic gains or independent transcript/clock/firstness proof.
+Primary frozen-byte gates, full-base dual reviews and exact-head CI remain
+separate delivery gates. No inherited runtime/cap change, provider call,
+measured lightweight claim, D12/Stage2/3 clearance or launch authority.

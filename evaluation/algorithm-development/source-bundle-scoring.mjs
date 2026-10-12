@@ -612,20 +612,98 @@ async function retained(input) {
     fields(probe, ['execution', 'failure', 'artifacts']);
     check(Object.keys(a).every(key => ['beforeStore', 'selectRequest', 'selected', 'selectFailure', 'rankRequest', 'recall', 'selectCalls', 'rankCalls', 'afterStore'].includes(key)), 'probe_mismatch');
     check(['not-run', 'failed', 'completed'].includes(probe.execution), 'probe_mismatch');
+    check(probe.failure === null || typeof probe.failure === 'string' && /^[a-z_]+$/u.test(probe.failure), 'probe_mismatch');
+    const has = key => Object.hasOwn(a, key), probeIntents = result.intents.filter(intent => intent.slotId === row.slots.probe);
+    const settled = probe.execution === 'completed' || result.status === 'accounted';
     if (result.status === 'accounted') check(probe.execution !== 'not-run', 'probe_mismatch');
-    if (probe.execution === 'not-run') check(Object.keys(a).length === 0 && probe.failure === result.stopReason, 'probe_mismatch');
-    if (a.selectRequest) { check(a.selectRequest.input.query === c.plan.mem0Input.query
-      && a.selectRequest.input.maps?.length === 1 && a.selectRequest.input.maps[0].exhausted === true, 'probe_mismatch');
-      same(a.selectRequest.input.maps[0].items, c.recallMap.items, 'probe_mismatch'); }
-    const probeIntents = result.intents.filter(intent => intent.slotId === row.slots.probe);
-    if (a.selectRequest) attestPhase(probeIntents, sourceWires(a.selectRequest, 'select'));
-    if (a.selected) { const generated = probeIntents.find(intent => intent.final?.endpoint === 'responses');
-      same(a.selected, responseOutput(generated), 'probe_mismatch'); }
+    if (probe.execution === 'not-run') check(Object.keys(a).length === 0 && !probeIntents.length && probe.failure === result.stopReason, 'probe_mismatch');
+    else {
+      check(probe.execution === 'completed' ? probe.failure === null : probe.failure !== null, 'probe_mismatch');
+      if (FATAL.has(probe.failure)) check(result.status === 'stopped', 'probe_mismatch');
+      if (settled) check(['beforeStore', 'afterStore', 'selectCalls', 'rankCalls', 'recall'].every(has), 'probe_mismatch');
+      for (const key of Object.keys(a)) check(a[key] !== null, 'probe_mismatch');
+      for (const key of ['beforeStore', 'afterStore']) if (has(key))
+        same(a[key], { sha256: c.state.sha256, fileBytes: c.state.fileBytes }, 'store_snapshot_mismatch');
+      for (const key of ['selectCalls', 'rankCalls']) if (has(key)) check(integer(a[key], 1), 'probe_mismatch');
+      if (probe.execution === 'completed') check(a.selectCalls === 1 && has('selectRequest') && has('selected')
+        && !has('selectFailure') && a.recall?.ok === true, 'probe_mismatch');
+    }
+    check(probeIntents.length <= 2 && (!probeIntents.length || has('selectRequest'))
+      && probeIntents.every((intent, n) => intent.final === null || intent.final.endpoint === (n ? 'responses' : 'responses/input_tokens')), 'probe_mismatch');
+    if (has('selectRequest')) {
+      fields(a.selectRequest, ['system', 'input', 'maxOutputTokens'], 'probe_mismatch');
+      fields(a.selectRequest.input, ['query', 'maps', 'maxRefs'], 'probe_mismatch');
+      check(typeof a.selectRequest.system === 'string' && a.selectRequest.maxOutputTokens === 1024
+        && a.selectRequest.input.query === c.plan.mem0Input.query && a.selectRequest.input.maxRefs === 24, 'probe_mismatch');
+      same(a.selectRequest.input.maps, [{ namespaceIndex: 0, items: c.recallMap.items, exhausted: true }], 'probe_mismatch');
+      if (has('selectCalls')) check(a.selectCalls === 1, 'probe_mismatch');
+      attestPhase(probeIntents, sourceWires(a.selectRequest, 'select'));
+    } else check(!has('selected') && !has('selectFailure') && !has('rankRequest')
+      && (!settled || a.selectCalls === 0), 'probe_mismatch');
+    if (has('recall') && has('selectCalls') && a.selectCalls === 1)
+      check(has('selected') !== has('selectFailure'), 'probe_mismatch');
+    let selectedEntries = null, selectedValid = false;
+    if (has('selected')) {
+      const generated = probeIntents[1];
+      check(has('selectRequest') && generated?.dispatched && generated.final?.outcome === 'succeeded', 'probe_mismatch');
+      same(a.selected, responseOutput(generated), 'probe_mismatch');
+      const refs = a.selected.refs;
+      selectedValid = Object.keys(a.selected).length === 1 && Array.isArray(refs) && refs.length <= 12
+        && refs.every(ref => ref && Object.keys(ref).length === 3 && Object.hasOwn(ref, 'namespaceIndex')
+          && Object.hasOwn(ref, 'memoryId') && Object.hasOwn(ref, 'revision') && ref.namespaceIndex === 0
+          && c.mapping.some(entry => entry.memoryId === ref.memoryId && entry.revision === ref.revision))
+        && new Set(refs.map(refKey)).size === refs.length;
+      // A parsed HTTP success can still fail core's visible/unique-ref check.
+      // Retain that observed output without crediting invalid selection.
+      selectedEntries = selectedValid ? refs.map(ref => c.mapping.find(entry => entry.memoryId === ref.memoryId)) : [];
+      if (!selectedValid) check(probe.execution === 'failed' && a.recall?.ok === false
+        && a.recall.error?.code === 'invalid_model_output' && !has('rankRequest')
+        && (probe.failure === 'invalid_model_output' || result.status === 'stopped'
+          && FATAL.has(probe.failure) && probe.failure === result.stopReason), 'probe_mismatch');
+    }
+    if (has('selectFailure')) {
+      fields(a.selectFailure, ['code'], 'probe_mismatch');
+      check(has('selectRequest') && !has('selected') && !has('rankRequest') && probe.execution === 'failed'
+        && typeof a.selectFailure.code === 'string' && /^[a-z_]+$/u.test(a.selectFailure.code), 'probe_mismatch');
+      if (result.status === 'accounted' && a.selectFailure.code !== probe.failure) {
+        // Core can win its local timer race while the settled ordinary adapter
+        // reports AbortError as provider_failed. Bind this exact layer split;
+        // neither a free-standing slot label nor arbitrary cause mismatch fits.
+        const intent = probeIntents.at(-1), raw = intent?.final;
+        const owner = result.transitions.find(transition => transition.phaseId === `${c.id}_probe_select`);
+        const delta = owner?.state?.appendedAttempts?.find(attempt => attempt.attemptId === intent?.attemptId);
+        check(a.selectFailure.code === 'provider_failed' && probe.failure === 'model_timeout'
+          && a.recall?.ok === false && a.recall.error?.code === 'model_timeout'
+          && intent?.dispatched === true && raw?.failure === 'model_timeout' && raw.outcome === 'unknown'
+          && owner?.closed === true && owner.healthy === true && delta?.outcome === raw.outcome
+          && delta.actualMicroUsd === raw.actualMicroUsd, 'probe_mismatch');
+      }
+    }
+    if (has('rankRequest')) {
+      check(selectedValid && selectedEntries.length > 0 && (!has('rankCalls') || a.rankCalls === 1), 'probe_mismatch');
+      same(a.rankRequest, { ...c.rankRequest, input: { ...c.rankRequest.input,
+        candidates: a.selected.refs.map(selected => c.rankRequest.input.candidates.find(candidate => refKey(selected) === refKey(ref(candidate)))) } }, 'probe_mismatch');
+    }
+    if (has('rankCalls')) check(a.rankCalls === (has('rankRequest') ? 1 : 0), 'probe_mismatch');
+    if (has('recall')) {
+      if (a.recall?.ok === true) {
+        check(selectedValid && has('rankRequest') === (selectedEntries.length > 0), 'probe_mismatch');
+        same(a.recall, { ok: true, value: { memories: [], namespaces: [{ namespace: c.namespace,
+          mapExhausted: true, fetchExhausted: true }], coverage: 'complete' } }, 'probe_mismatch');
+        check(probe.execution === 'completed' || result.status === 'stopped', 'probe_mismatch');
+      } else {
+        fields(a.recall, ['ok', 'error'], 'probe_mismatch'); fields(a.recall.error, ['code', 'retryable'], 'probe_mismatch');
+        check(a.recall.ok === false && typeof a.recall.error.code === 'string' && typeof a.recall.error.retryable === 'boolean'
+          && probe.execution === 'failed', 'probe_mismatch');
+        if (result.status === 'accounted' && a.recall.error.code === 'model_timeout')
+          check(probe.failure === 'model_timeout', 'probe_mismatch');
+      }
+    }
     if (a.selectFailure?.code === 'context_budget_exceeded') check(result.status === 'stopped'
       && result.stopReason === 'context_budget_exceeded' && !a.rankRequest, 'probe_mismatch');
     probes.push({ caseId: c.id, execution: probe.execution, failure: probe.failure,
       map: observation(r, a.selectRequest ? c.mapping : null),
-      selected: observation(r, a.selected ? a.selected.refs.flatMap(selected => c.mapping.filter(m => m.memoryId === selected.memoryId)) : null),
+      selected: observation(r, selectedEntries),
       rank: observation(r, a.rankRequest ? mapPassages(c, a.rankRequest.input.candidates.flatMap(candidate => candidate.receipts.map(receipt => ({ recordedRole: receipt.role, text: receipt.excerpt })))) : null),
       recall: observation(r, a.recall?.ok === true ? mapPassages(c, a.recall.value.memories.flatMap(item => item.receipts.map(receipt => ({ recordedRole: receipt.role, text: receipt.excerpt })))) : null) });
   }

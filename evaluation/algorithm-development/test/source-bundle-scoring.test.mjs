@@ -504,6 +504,52 @@ test('actual24 padded chronology fixture validates integrity, all67 anchors and 
     console.log('SC_C1_ORDINARY=' + JSON.stringify(observations));
     assert.deepEqual(observations.map(row => row.status), ['denied', 'denied', 'denied', 'denied']);
   });
+  await t.test('completed probe progress binds each reached artifact, calls and actual intents', async () => {
+    const controls = [
+      ['all-artifacts-missing', probe => { probe.artifacts = {}; }],
+      ...['beforeStore', 'afterStore', 'selectRequest', 'selected', 'recall', 'selectCalls', 'rankCalls', 'rankRequest']
+        .map(key => ['missing-' + key, probe => { delete probe.artifacts[key]; }]),
+      ['selectCalls-zero', probe => { probe.artifacts.selectCalls = 0; }],
+      ['selectCalls-two', probe => { probe.artifacts.selectCalls = 2; }],
+      ['rankCalls-zero', probe => { probe.artifacts.rankCalls = 0; }],
+      ['rankCalls-two', probe => { probe.artifacts.rankCalls = 2; }],
+      ['completed-with-failure', probe => { probe.failure = 'invalid_model_output'; }],
+      ['completed-with-selectFailure', probe => { probe.artifacts.selectFailure = { code: 'provider_failed' }; }],
+      ['failed-with-successful-recall', probe => { probe.execution = 'failed'; probe.failure = 'invalid_model_output'; }],
+      ['not-run-with-reached-artifacts', probe => { probe.execution = 'not-run'; }],
+      ['before-store-hash', probe => { probe.artifacts.beforeStore.sha256 = '0'.repeat(64); }],
+      ['after-store-size', probe => { probe.artifacts.afterStore.fileBytes++; }],
+      ['select-query', probe => { probe.artifacts.selectRequest.input.query += 'x'; }],
+      ['select-system', probe => { probe.artifacts.selectRequest.system += 'x'; }],
+      ['select-limit', probe => { probe.artifacts.selectRequest.maxOutputTokens = 512; }],
+      ['select-namespace', probe => { probe.artifacts.selectRequest.input.maps[0].namespaceIndex = 1; }],
+      ['rank-system', probe => { probe.artifacts.rankRequest.system += 'x'; }],
+      ['rank-query', probe => { probe.artifacts.rankRequest.input.query += 'x'; }],
+      ['rank-limit', probe => { probe.artifacts.rankRequest.input.limit = 5; }],
+      ['rank-output-cap', probe => { probe.artifacts.rankRequest.maxOutputTokens = 512; }],
+      ['rank-candidate-omission', probe => { probe.artifacts.rankRequest.input.candidates.pop(); }],
+      ['rank-candidate-order', probe => { probe.artifacts.rankRequest.input.candidates.reverse(); }],
+      ['rank-receipt', probe => { probe.artifacts.rankRequest.input.candidates[0].receipts[0].excerpt += 'x'; }],
+      ['recall-must-be-empty', (probe, c) => { probe.artifacts.recall.value.memories = [clone(c.rankRequest.input.candidates[0])]; }],
+      ['recall-namespace', probe => { probe.artifacts.recall.value.namespaces[0].namespace.scopeId += 'x'; }],
+      ['recall-coverage', probe => { probe.artifacts.recall.value.coverage = 'budget_exhausted'; }],
+      ['completed-error-recall', probe => { probe.artifacts.recall = { ok: false, error: { code: 'invalid_model_output' } }; }],
+      ['selected-missing-refs', probe => { probe.artifacts.selected = {}; }],
+    ];
+    const observations = [];
+    for (const [name, operation] of controls) {
+      // Explicit artifact corruption of one genuine completed probe. The actual
+      // wires, history, immutable sources, QA answers and all other slots stay
+      // unchanged; this does not claim these alterations were executed.
+      const probe = clone(result.cases[0].probe); operation(probe, preparation.observation.cases[0]);
+      const mutated = { ...base, result: { ...result, cases: result.cases.map((row, i) => i ? row : { ...row, probe }) } };
+      const denied = await prepareSourceBundleScoring(mutated);
+      const score = await assess(mutated, prepared);
+      observations.push({ name, prepare: denied.status, score: score.status, issues: denied.issues });
+    }
+    console.log('SC_C4_CORRUPTION=' + JSON.stringify(observations));
+    assert.ok(observations.every(row => row.prepare === 'denied' && row.score === 'denied'), JSON.stringify(observations));
+  });
   await t.test('large raw allowance does not cover metadata; accessors/proxies never invoked', async () => {
     const oversized = { ...base, result: { ...result, intents: result.intents.map((row, index) => index ? row : { ...row, final: { ...row.final, requestBody: 'x'.repeat(32 * 1024 * 1024 + 1) } }) } };
     assert.deepEqual((await prepareSourceBundleScoring(oversized)).issues, ['metadata_limit']);
@@ -586,6 +632,130 @@ test('actual fresh pre-aborted24 preserves honest not-reached, zero dispatch and
   assert.equal(report.summaries.ordinary.all.notRun, 24); assert.equal(report.summaries['source-bundle'].all.notRun, 24);
   assert.equal(report.gate.promising, false); assert.ok(report.gate.reasons.includes('stopped-run'));
   assert.ok(report.stages.every(stage => stage.actualPacked.status === 'not-reached' && stage.rank.status === 'not-reached'));
+  await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
+});
+
+test('C4 actual empty, invalid selection and settled ordinary timeout preserve conditional probe progress', { timeout: 180000 }, async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-scoring-c4-conditional-' });
+  const { prepareSourceBundleComparison } = await import('../source-bundle-store.mjs');
+  const { createSourceBundleComparisonManifest, runSourceBundleComparison } = await import('../source-bundle-runner.mjs');
+  const preparation = await prepareSourceBundleComparison({ outputRoot: workspace.path }), ledger = await newLedger(workspace);
+  const answerCalls = { count: 0 }; let selects = 0, caseOrdinal = 0;
+  const result = await runSourceBundleComparison({ preparation, ...ledger,
+    manifest: createSourceBundleComparisonManifest(preparation.observation), apiKey: 'synthetic_source_scoring_key', signal: new AbortController().signal,
+    onCheckpoint() {}, onRecord(record) {
+      if (record.normalized?.phase === 'pre') caseOrdinal = record.caseOrdinal;
+    }, fetchImpl(url, init) {
+      if (caseOrdinal > 3) {
+        assert.ok(url.endsWith('/input_tokens'), 'later planned slots fail at their first count');
+        return Response.json({ error: { type: 'synthetic_count_unavailable' } }, { status: 503 });
+      }
+      if (url.endsWith('/responses') && JSON.parse(init.body).text.format.name === 'cairn_select') {
+        if (++selects === 3) return new Promise(() => {}); // Real unchanged30s ordinary/core timeout.
+        const input = JSON.parse(JSON.parse(init.body).input[0].content[0].text), visible = { namespaceIndex: 0, ...input.maps[0].items[0].ref };
+        const output = { refs: selects === 1 ? [] : [visible, visible] };
+        return Response.json({ object: 'response', model: MODEL, status: 'completed', error: null, incomplete_details: null,
+          output: [{ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
+          usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120 } });
+      }
+      return chronologicalProvider(url, init, answerCalls);
+    } });
+  assert.equal(selects, 3);
+  assert.equal(result.status, 'accounted'); assert.equal(result.stopReason, null);
+  assert.equal(result.cases.length, 24); assert.equal(result.cases.flatMap(c => Object.values(c.answers)).length, 48);
+  assert.equal(result.cases.map(c => c.probe).length, 24);
+  const empty = result.cases[0].probe, invalid = result.cases[1].probe, timed = result.cases[2].probe;
+  assert.equal(empty.execution, 'completed'); assert.equal(empty.failure, null);
+  assert.deepEqual(empty.artifacts.selected, { refs: [] }); assert.equal(empty.artifacts.selectCalls, 1);
+  assert.equal(empty.artifacts.rankCalls, 0); assert.equal(Object.hasOwn(empty.artifacts, 'rankRequest'), false);
+  assert.equal(empty.artifacts.recall.ok, true); assert.deepEqual(empty.artifacts.recall.value.memories, []);
+  assert.equal(invalid.execution, 'failed'); assert.equal(invalid.failure, 'invalid_model_output');
+  assert.equal(invalid.artifacts.selectCalls, 1); assert.equal(invalid.artifacts.rankCalls, 0);
+  assert.equal(Object.hasOwn(invalid.artifacts, 'rankRequest'), false); assert.equal(Object.hasOwn(invalid.artifacts, 'selectFailure'), false);
+  assert.deepEqual(invalid.artifacts.selected.refs[0], invalid.artifacts.selected.refs[1]);
+  assert.equal(invalid.artifacts.recall.ok, false); assert.equal(invalid.artifacts.recall.error.code, 'invalid_model_output');
+  const invalidIntent = result.intents.find(intent => intent.slotId === 'BQ02_probe' && intent.final?.endpoint === 'responses');
+  assert.equal(invalidIntent.final.outcome, 'succeeded'); assert.equal(invalidIntent.final.httpStatus, 200);
+  const probeOwners = result.transitions.filter(row => ['BQ01_probe', 'BQ02_probe', 'BQ03_probe'].includes(row.slotId));
+  assert.deepEqual(probeOwners.map(row => [row.slotId, row.phaseId, row.method, row.kind]),
+    [['BQ01_probe', 'BQ01_probe_select', 'select', 'ordinary'], ['BQ02_probe', 'BQ02_probe_select', 'select', 'ordinary'],
+      ['BQ03_probe', 'BQ03_probe_select', 'select', 'ordinary']]);
+  assert.ok(probeOwners.every(row => row.closed && row.healthy));
+  assert.equal(timed.execution, 'failed'); assert.equal(timed.failure, 'model_timeout');
+  assert.deepEqual(timed.artifacts.selectFailure, { code: 'provider_failed' });
+  assert.equal(timed.artifacts.recall.error.code, 'model_timeout');
+  assert.equal(timed.artifacts.selectCalls, 1); assert.equal(timed.artifacts.rankCalls, 0);
+  assert.equal(Object.hasOwn(timed.artifacts, 'selected'), false); assert.equal(Object.hasOwn(timed.artifacts, 'rankRequest'), false);
+  const timeoutIntent = result.intents.find(intent => intent.slotId === 'BQ03_probe' && intent.final?.endpoint === 'responses');
+  assert.equal(timeoutIntent.dispatched, true); assert.equal(timeoutIntent.final.failure, 'model_timeout');
+  assert.equal(timeoutIntent.final.outcome, 'unknown'); assert.equal(timeoutIntent.final.actualMicroUsd, null);
+  const timeoutDelta = probeOwners[2].state.appendedAttempts.find(row => row.attemptId === timeoutIntent.attemptId);
+  assert.deepEqual(timeoutDelta, { attemptId: timeoutIntent.attemptId, channel: 'cairn-generation', reservedMicroUsd: 5000,
+    outcome: 'unknown', actualMicroUsd: null });
+  assert.ok(result.transitions.every(row => row.closed && row.healthy));
+  assert.ok(result.cases.slice(3).every(row => row.probe.execution === 'failed' && row.probe.failure === 'provider_failed'
+    && Object.values(row.answers).every(slot => slot.execution === 'failed' && slot.failure === 'provider_failed')));
+  assert.deepEqual(JSON.parse(readFileSync(join(workspace.path, 'comparison', 'result.json'), 'utf8')), result);
+  const base = fixtureInput(preparation.observation, result), prepared = await prepareSourceBundleScoring(base), report = await assess(base, prepared);
+  console.log('SC_C4_CONDITIONAL=' + JSON.stringify({ prepare: prepared.status, score: report.status, issues: prepared.issues,
+    intents: result.intents.length, owners: result.transitions.length, empty: empty.execution, invalid: invalid.execution,
+    invalidHttpOutcome: invalidIntent.final.outcome, stopReason: result.stopReason, runtimeStatus: result.status,
+    timeout: { port: timed.artifacts.selectFailure.code, core: timed.artifacts.recall.error.code, slot: timed.failure,
+      raw: timeoutIntent.final.failure, outcome: timeoutIntent.final.outcome, delta: timeoutDelta.outcome } }));
+  assert.equal(prepared.status, 'ready', JSON.stringify(prepared.issues)); assert.equal(report.status, 'assessed');
+  assert.equal(report.denominators.qaSlots, 48); assert.equal(report.probes.length, 24); assert.equal(report.gate.promising, false);
+  assert.equal(report.probes[0].selected.status, 'observed'); assert.equal(report.probes[0].selected.complete, false);
+  assert.equal(report.probes[0].rank.status, 'not-reached'); assert.equal(report.probes[0].recall.status, 'observed');
+  assert.equal(report.probes[1].selected.status, 'observed'); assert.equal(report.probes[1].selected.complete, false);
+  assert.equal(report.probes[1].rank.status, 'not-reached'); assert.equal(report.probes[1].recall.status, 'not-reached');
+  const controls = [
+    ['empty-fabricated-rank-count', 0, probe => { probe.artifacts.rankCalls = 1; }],
+    ['empty-fabricated-rank-request', 0, probe => { probe.artifacts.rankRequest = clone(preparation.observation.cases[0].rankRequest); }],
+    ['empty-missing-selected', 0, probe => { delete probe.artifacts.selected; }],
+    ['empty-missing-recall', 0, probe => { delete probe.artifacts.recall; }],
+    ['invalid-fabricated-rank-count', 1, probe => { probe.artifacts.rankCalls = 1; }],
+    ['invalid-fabricated-rank-request', 1, probe => { probe.artifacts.rankRequest = clone(preparation.observation.cases[1].rankRequest); }],
+    ['invalid-promoted-completed', 1, probe => { probe.execution = 'completed'; probe.failure = null; }],
+    ['invalid-fabricated-success-recall', 1, probe => { probe.artifacts.recall = clone(empty.artifacts.recall); }],
+    ['invalid-missing-selected', 1, probe => { delete probe.artifacts.selected; }],
+    ['invalid-wrong-core-cause', 1, probe => { probe.artifacts.recall.error.code = 'provider_failed'; }],
+    ['invalid-unwitnessed-slot-failure', 1, probe => { probe.failure = 'provider_failed'; }],
+    ['timeout-wrong-core-cause', 2, probe => { probe.artifacts.recall.error.code = 'invalid_model_output'; }],
+    ['timeout-port-cause', 2, probe => { probe.artifacts.selectFailure.code = 'invalid_model_output'; }],
+    ['timeout-slot-cause', 2, probe => { probe.failure = 'provider_failed'; }],
+    ['timeout-missing-port-cause', 2, probe => { delete probe.artifacts.selectFailure; }],
+    ['failed-fabricated-rank-count', 3, probe => { probe.artifacts.rankCalls = 1; }],
+  ];
+  const observations = [];
+  for (const [name, index, operation] of controls) {
+    const probe = clone(result.cases[index].probe); operation(probe);
+    const mutated = { ...base, result: { ...result, cases: result.cases.map((row, i) => i === index ? { ...row, probe } : row) } };
+    observations.push({ name, prepare: (await prepareSourceBundleScoring(mutated)).status, score: (await assess(mutated, prepared)).status });
+  }
+  console.log('SC_C4_CONDITIONAL_CORRUPTION=' + JSON.stringify(observations));
+  assert.ok(observations.every(row => row.prepare === 'denied' && row.score === 'denied'), JSON.stringify(observations));
+  const witnesses = [
+    ['timeout-wrong-raw-cause', run => { run.intents = result.intents.map(intent => intent === timeoutIntent
+      ? { ...intent, final: { ...intent.final, failure: 'provider_failed' } } : intent); }],
+    ['timeout-unhealthy-owner', run => { run.transitions = result.transitions.map(row => row.slotId === 'BQ03_probe'
+      ? { ...row, healthy: false } : row); }],
+    ['timeout-unclosed-owner', run => { run.transitions = result.transitions.map(row => row.slotId === 'BQ03_probe'
+      ? { ...row, closed: false } : row); }],
+    ['timeout-missing-owner', run => { run.transitions = result.transitions.filter(row => row.slotId !== 'BQ03_probe'); }],
+    ['invalid-unwitnessed-stopped-failure', run => {
+      // Explicit status/cause corruption, not a claimed stopped execution.
+      run.status = 'stopped'; run.stopReason = 'cancelled';
+      run.cases = result.cases.map((row, i) => i === 1 ? { ...row, probe: { ...row.probe, failure: 'provider_failed' } } : row);
+    }],
+  ];
+  const witnessObservations = [];
+  for (const [name, operation] of witnesses) {
+    const mutated = { ...base, result: { ...result } }; operation(mutated.result);
+    witnessObservations.push({ name, prepare: (await prepareSourceBundleScoring(mutated)).status,
+      score: (await assess(mutated, prepared)).status });
+  }
+  console.log('SC_C4_TIMEOUT_WITNESSES=' + JSON.stringify(witnessObservations));
+  assert.ok(witnessObservations.every(row => row.prepare === 'denied' && row.score === 'denied'), JSON.stringify(witnessObservations));
   await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
 });
 
