@@ -2065,3 +2065,104 @@ slots and each literal raw response, with zero pending attempts and owned
 cleanup. The unchanged default callback limit still rejects excess observations.
 These offline regressions do not measure provider or model quality, whole-process
 RSS, file-size bounds or full execution cost, and do not clear semantic gates.
+
+The offline source-bundle scorer now checks explicit frozen sources and retained
+BR observations, recorded reads, original turn-body anchors, literal dispatched
+answer wires, first returned answers, bounded first judgments and conservative
+fixed-denominator gates. Its actual24 fake-HTTP fixture retains large raw bodies
+and an honest consumed missing answer; a separate pre-aborted fixture preserves
+all not-run slots. Scripted labels establish scoring arithmetic, not semantic
+quality, three-hop efficacy, provider parity or readiness. Original history
+prefix and absolute per-phase deadlines depend on the accepted pinned runtime
+and external execution provenance; token counts are bound recorded measurements,
+not independently retokenized. Entire-transcript fabrication and firstness are
+not proven by data consistency. RSS and agent service costs remain unmeasured;
+known model pricing remains partial and unknown usage/reservations explicit.
+Shared harm cannot clear D12, and original Stage2/3 gates remain unchanged.
+Primary's full two-runtime matrices, independent reviews and exact-head CI are
+still required before delivery or any separately authorized first live launch.
+
+### Source-bundle scorer C1 observable consistency correction
+
+The rejected scorer candidate allowed contradictory ordinary final failures
+and reported a genuine failed planner count7025 as resource-compliant. Retained
+public-seam REDs precede the narrow correction: succeeded ordinary records now
+require null failure, known globally fatal ordinary causes cannot coexist with
+accounted status, and known failed planner token overflow is not-satisfied.
+A fresh owned fake-HTTP run retains healthy failed/unknown ordinary continuation
+before the actual stopped QT count overflow, with all48 QA/all24 probe slots.
+Both pinned runtimes pass19 focused tests; earlier broad matrices cover only
+the rejected bytes. The newly observed overflow is the count path, not a new
+generation-overflow campaign. Scripted controls establish consistency and
+arithmetic only; external execution/firstness, semantic efficacy, measured
+lightweight fit and original D12/Stage2/3 gates remain unproven/uncleared.
+Primary fixed-candidate checks, independent reviews and exact-head CI remain
+required; no provider call or live spending was authorized by this correction.
+
+SC C2 retained-cause consistency boundary: failed/unknown planner finals now
+require existing closed QT causes and cannot hide a known globally fatal cause
+inside an accounted run, even when token counts are unknown. Ordinary failed
+or unknown finals require nonempty causes. Genuine healthy provider failures
+and the actual local QT timeout remain admissible; the latter requires its
+closed settled normalization witness bound to the phase and slot. Timing and
+caller provenance remain externally attested. One fresh owned all24 fake-HTTP
+campaign retains72 intents/owners, all48 QA/all24 probes and no answers;27
+retained-only corruption controls deny through both public exports. Both pinned
+Nodes pass20 focused tests on final source bytes. No runtime, corpus, policy,
+caps, deadlines or original192-intent fixture changed. Scripted evidence is
+not model quality or independent execution/firstness proof. Earlier broad
+matrices remain old-head evidence; primary fixed-byte gates, both reviews and
+exact-head CI are still required before live preparation. D12/Stage2/3 and
+measured lightweight-fit claims remain uncleared; no paid call was authorized.
+
+SC C3 primary correction reconciles the remaining planner settlement flag:
+it must be boolean; false requires a stopped ledger_failed observation and
+cannot coexist with a healthy confirming ledger delta. The existing genuine
+72-intent fixture admitted ten cause-preserving flag corruptions before the
+fix, while its earlier27 controls already denied. The unchanged actual QT
+settlement-failure suite passed64/64 offline, distinguishing a pending failed
+write from a healthy provider failure. Fast C1/C2/C3 controls pass both pinned
+Nodes; final fixed-byte full-suite evidence and independent reviews remain
+separate gates recorded in the PR. No execution or data-policy change, paid
+call, semantic gain, D12/Stage2/3 clearance or measured lightweight claim.
+
+SC C4 binds probe progress to actual requests, outputs, call counters, store
+snapshots, recall and slot intents. Completed omissions and conditional-state
+contradictions deny; valid empty selection and HTTP-successful invalid refs stay
+distinct. One genuine owned conditional fixture also reproduced an accounted
+ordinary timeout layer split (port provider_failed, core/slot and settled raw
+model_timeout); only that healthy closed, delta-bound shape is accepted. Wrong
+causes or missing/unhealthy closure remain denied. The existing192 fixture and
+all original source/answer/scoring policies are unchanged. Final focused22/22
+passes on both pinned Nodes and syntax/validate exits0 are offline consistency
+evidence, not semantic gains or independent transcript/clock/firstness proof.
+Primary frozen-byte gates, full-base dual reviews and exact-head CI remain
+separate delivery gates. No inherited runtime/cap change, provider call,
+measured lightweight claim, D12/Stage2/3 clearance or launch authority.
+
+SC C5 closes failed-probe cause/envelope shortcuts in accounted and stopped
+records: failed503 raw provider_failure binds provider_failed at the port and
+recall_failed/retryable=false at core. The real settled timeout layer split and
+HTTP-successful invalid selection remain distinct; known fatal overrides must
+match the terminal stop with no later executed cases or physical intents.
+One new genuine owned stopped14-intent/12-owner fixture retains the actual
+final checkpoint cancellation and later not-run slots. Public reds preserved
+the prior cause admissions and four earlier-fatal contradictions; final focused
+23/23 and syntax/validate pass on both pinned Nodes. All original fixtures,
+policies and limits are unchanged. This proves observable consistency only,
+not whole-transcript authenticity, independent timing/firstness, semantic gain,
+measured lightweight fit, D12/Stage2/3 clearance or launch authority. Primary
+fixed-byte acceptance, both full-base review axes and exact-head CI remain
+separate delivery gates; no paid/provider/operational-data action is authorized.
+
+The next full-base review rejected that candidate's QA path: failure causes
+and failed core envelopes were not reconciled, and deleting an actually reached
+rank request could incorrectly report an unreached stage. C6 is a bounded
+primary takeover, preserving the original experiment and all prior contracts.
+It binds both QA arms' failed observations, raw/port/core cause distinctions,
+retryability, planner normalization and actual QA-plus-probe terminal order.
+Real owned HTTP503/cancellation fixtures and corruption controls cover accounted
+and stopped runs; fake success remains neither semantic correctness nor proof
+against fabrication of an entire transcript. Final primary25-test checks,
+independent full-base reviews and exact-head CI remain required before launch.
+No new model score, default change, cost grant, replay, merge or release follows.
