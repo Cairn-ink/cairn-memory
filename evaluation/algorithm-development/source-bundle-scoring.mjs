@@ -332,6 +332,9 @@ function validateResources(preparation, result) {
         && (raw.responseBody === null ? raw.responseSha256 === null : raw.responseSha256 === digest(raw.responseBody)), 'resource_accounting_mismatch');
       check(raw.outcome === 'succeeded' ? raw.failureCode === null
         : typeof raw.failureCode === 'string' && PLANNER_FAILURES.has(raw.failureCode), 'resource_accounting_mismatch');
+      check(typeof raw.settlementPersisted === 'boolean'
+        && (raw.settlementPersisted || raw.failureCode === 'ledger_failed' && result.status === 'stopped'),
+      'resource_accounting_mismatch');
       let cause = raw.failureCode === 'request_mutated' ? 'rank_mismatch' : raw.failureCode;
       if (result.status === 'accounted' && ['cancelled', 'deadline_exceeded'].includes(cause)) {
         // Preserve only the existing coordinator's settled per-call timeout.
@@ -388,6 +391,7 @@ function validateResources(preparation, result) {
       fields(attempt, ['attemptId', 'channel', 'reservedMicroUsd', 'outcome', 'actualMicroUsd'], 'resource_accounting_mismatch');
       const intent = phase[index]; check(attempt.attemptId === intent.attemptId && attempt.reservedMicroUsd === 5000
         && attempt.channel === (intent.method === 'answer' ? 'host-completion' : index === 0 ? 'cairn-count' : 'cairn-generation')
+        && (intent.ownerKind !== 'planner' || intent.final?.settlementPersisted === true)
         && attempt.outcome === intent.final?.outcome && attempt.actualMicroUsd === intent.final?.actualMicroUsd, 'resource_accounting_mismatch'); appended.push(attempt);
     }
     check(state.header.requestCount === start + appended.length && state.header.reservedMicroUsd === result.history.base.header.reservedMicroUsd + appended.length * 5000

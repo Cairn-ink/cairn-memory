@@ -651,6 +651,12 @@ test('actual healthy planner failed/unknown counts and local timeout require coh
       // Cause-only corruption; actual raw wire/body/outcome/history stay fixed.
       await deniedMutation(outcome + ':' + JSON.stringify(failureCode), x => { x.result.intents[original.ordinal - 1].final.failureCode = failureCode; });
     }
+    for (const settlementPersisted of [false, null, 'false', 0, {}]) {
+      // Settlement-only corruption: retain the real provider failure and its
+      // confirmed healthy ledger delta, rather than inventing a failed write.
+      await deniedMutation(outcome + ':settlement:' + JSON.stringify(settlementPersisted),
+        x => { x.result.intents[original.ordinal - 1].final.settlementPersisted = settlementPersisted; });
+    }
   }
   const ordinary = result.intents.find(intent => intent.ownerKind === 'ordinary' && intent.final.outcome === 'failed');
   assert.ok(ordinary);

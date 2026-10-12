@@ -2114,3 +2114,14 @@ not model quality or independent execution/firstness proof. Earlier broad
 matrices remain old-head evidence; primary fixed-byte gates, both reviews and
 exact-head CI are still required before live preparation. D12/Stage2/3 and
 measured lightweight-fit claims remain uncleared; no paid call was authorized.
+
+SC C3 primary correction reconciles the remaining planner settlement flag:
+it must be boolean; false requires a stopped ledger_failed observation and
+cannot coexist with a healthy confirming ledger delta. The existing genuine
+72-intent fixture admitted ten cause-preserving flag corruptions before the
+fix, while its earlier27 controls already denied. The unchanged actual QT
+settlement-failure suite passed64/64 offline, distinguishing a pending failed
+write from a healthy provider failure. Fast C1/C2/C3 controls pass both pinned
+Nodes; final fixed-byte full-suite evidence and independent reviews remain
+separate gates recorded in the PR. No execution or data-policy change, paid
+call, semantic gain, D12/Stage2/3 clearance or measured lightweight claim.

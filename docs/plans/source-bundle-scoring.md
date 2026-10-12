@@ -1278,3 +1278,129 @@ and exact-head CI before live preparation. This packet establishes offline
 retained-record consistency only: no semantic efficacy, measured lightweight
 fit, independent execution/firstness, D12/Stage2/3 clearance or spending
 authority is claimed.
+
+
+## C3 prospective primary takeover contract (verbatim)
+
+# SC correction C3 — settlement observation consistency
+
+Prospective primary contract, 2026-10-12. Rejected candidate
+82b87d7efe9da76bd4517e88bb5d6014a2960e1b; unchanged full review base
+6abed0ccdfe3815d42b25db04adb159483ded156. No push or paid execution.
+
+## Narrow ownership escalation
+
+After two author correction rounds left another observable accounted-record
+consistency gap, primary takes over only this field-level integration correction
+under shared routing. Do not repeat the author assignment. The two nonauthor
+reviewers remain independent. Allowed four files: existing scorer, existing
+scoring test, append-only tracked scoring plan and limitations. Preserve all
+original contracts/evidence, judging, actual runtime, corpus, rubric, policy,
+thresholds, deadlines, limits, dependencies, CI and private operator.
+
+## Diagnosis and acceptance
+
+Primary's fast actual-extracted-validator loop ran twice, actual exit1 each:
+ten failed/unknown provider_failed flags (false/null/string/zero/object) were
+wrongly accepted. A true flag passed; stopped ledger-failure shapes remained
+representable. This is helper evidence only, not a public/runtime execution.
+
+Ranked hypotheses, disclosed before full public test:
+
+1. Checks apply only to success and timeout, allowing other unsuccessful flags
+   to contradict confirmed healthy settlement. Cause-preserving flag changes
+   on genuine public retained input will remain ready/assessed.
+2. Later retained validation already reconciles the flag; the same public
+   mutations will instead be denied without a scorer change.
+3. False could be a legitimate healthy-failure observation. Existing actual QT
+   transport and its settlement-failure regression must distinguish that case:
+   its flag is boolean, and false accompanies ledger_failed, not provider_failed.
+
+Use the existing genuine C2 all24/72-intent fixture, unchanged HTTP schedule,
+30s timeout and denominators. Add only cause-preserving settlement flag controls
+for one failed and one unknown provider_failed final. Capture public red before
+scorer edits. Preserve the genuine true-flag positive and all27 C2 controls;
+do not create another campaign or change the original192 fixture.
+
+The correction must validate the flag's boolean type and reconcile false with
+the accepted transport's ledger_failed/stopped semantics. Accounted planner
+finals require confirmed settlement. Healthy transition deltas may not claim
+settlement for a planner final marked false. Preserve representable honest
+stopped ledger failures; do not reinterpret them as successful settlement.
+This is observable consistency, not reconstruction of missing history or proof
+of source truth/execution. No new score policy or universal efficacy claim.
+
+## Verification and delivery
+
+Run same fast controls after correction. Keep a genuine QT settlement-write
+failure regression as evidence of flag semantics; use its existing offline
+test, not an operational ledger. Full focused20 on pinned22.16/24.15, syntax,
+root validation, owned cleanup and actual exit codes remain required. Primary
+owns implementation and verification; do not count self-review as either
+independent axis. Append the contract and raw outcomes before freezing full
+source snapshots. Two-route four-correction/five-full-path inventories and
+exact committed content required. Old broader matrices retain old-head labels.
+Both full five-path fixed-base reviews must pass on the new commit, then exact
+remote CI before first live preparation. No source/score edit, rejudge or retry
+after a live result. No closed-cohort, credential or operational data access
+in this correction. Temporary debug probes stay explicitly private diagnostic
+artifacts, never product code.
+
+## C3 diagnosis and source freeze
+
+Primary directly owns this narrow correction under the routing escalation after
+C1/C2 left another observable accounted-record consistency gap. The independent
+Standards and Spec reviewers did not implement it. C2's cause/timeout finding
+was closed; candidate82b87d7 was rejected for the newly reproduced settlement
+flag gap. No push, provider call or closed-cohort access occurred.
+
+The C3 contract SHA256 is
+`8d6824ac6c94ea4a66858e7adb6bf216360eebfc101aad89b2ee44d6de07b18d`.
+Only four existing paths change; original contracts, judging, runner, corpus,
+rubric, thresholds, budgets, deadlines, dependency/CI and operator stay fixed.
+
+The actual extracted-validator fast loop ran twice with actual exit1: all10
+cause-preserving failed/unknown false/null/string/zero/object flag controls
+were wrongly admitted. True-flag positives and two stopped-ledger-failure
+helper shapes were accepted. Those are synthetic helper observations, not
+claims of actual failed storage execution.
+
+The existing genuine C2 all24 fixture then ran through public prepare/score
+before source edits. Test command on Node22.16.0:
+`node tools/testing/run.mjs --test-name-pattern='actual healthy planner failed/unknown counts' evaluation/algorithm-development/test/source-bundle-scoring.test.mjs`.
+Actual exit1, 0/1, zero skips/cancellations/residue. Its real72-intent/72-owner
+healthy result stayed ready/assessed; the previous27 controls correctly denied,
+but all10 new settlement-only controls remained ready/assessed. This supports
+hypothesis1 and rejects the proposed downstream rescue in hypothesis2. Original
+scorer hash825e5b8366fd2e8bb5e3ad3af618deaa07e5e92938b01446a20cb316e8fec458
+was unchanged through that red. No additional campaign or paid data was used.
+
+Evidence remains in `/tmp/cairn-scoring-c3-primary.g0rcTW0X`. Original red.log
+SHA2564f9d45740b8837ecb364b02caeed703a12a73a64f9fc4c05107e6c948c417779;
+its test duration82,726.315823ms. The diagnostic wrapper also exited1 after
+recording that result because it omitted Node TAP diagnostic backslash decoding.
+A separate read-only `inspect-red.mjs` decoded the same immutable log, verified
+its hash and all37 observations, and exited0. The red was not rerun or relabelled.
+
+To check hypothesis3 against real transport behavior, the unchanged existing
+`node tools/testing/run.mjs evaluation/architecture/test/source-bundle-plan-rank-transport.test.mjs`
+passed64/64 on Node22.16.0, actual exit0, zero skips/cancellations/residue.
+Its actual synthetic SQLite settlement-write failure retains false, fatal
+ledger_failed and a pending reservation, confirming that false is not a healthy
+provider-failure observation. Transport log SHA256
+1974fe0466d5b4887cb1f6f7c8355efb1ce41ca91b92bd13c6e567cd4ec8e573.
+
+The source fix validates the boolean, allows false only with ledger_failed and
+stopped status, and disallows a healthy appended ledger delta for a false
+planner flag. It does not turn stopped failures into settled success. Existing
+success and healthy-timeout checks are unchanged. C1/C2/C3 fast helper probes
+all exit0 on Node22.16/24.15 after the fix, including the stopped helper shapes.
+
+At this documented freeze, full focused20 and the remaining fixed-byte primary
+gates are next, not yet claimed passed. Source hashes:
+scorer8ac47c8834944c5f8eec6612fcd50da40eed97e3ee6d4d17d73512fae29e01df;
+test9cf91336a498d7c682a63d5c1cfcf02280bbc6c998b18a577e4e81220c37f87c.
+The final PR records the completed command outcomes, exact candidate and both
+independent full-base review results. Previous candidate proofs retain their
+old-head identities. This diagnosis establishes retained consistency only,
+not algorithm quality, D12/Stage2/3 clearance or first-live authority.
