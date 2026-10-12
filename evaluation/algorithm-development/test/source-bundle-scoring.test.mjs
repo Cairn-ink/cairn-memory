@@ -313,6 +313,22 @@ function chronologicalProvider(url, init, answerCalls) {
     usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120 } }, 262144);
 }
 function fixtureInput(preparation, result) { return { frozenSources, preparation, result, rubric: frozenRubric, seedHex }; }
+function qaFailureCorruptions() {
+  return [
+    ['null-slot-cause', slot => { slot.failure = null; }],
+    ['invented-slot-cause', slot => { slot.failure = 'invented_cause'; }],
+    ['wrong-slot-invalid-output', slot => { slot.failure = 'invalid_model_output'; }],
+    ['wrong-slot-timeout', slot => { slot.failure = 'model_timeout'; }],
+    ['wrong-rank-port-cause', slot => { slot.artifacts.rankFailure.code = 'invalid_model_output'; }],
+    ['equal-invalid-causes', slot => { slot.artifacts.rankFailure.code = slot.failure = 'invalid_model_output'; }],
+    ['missing-rank-failure', slot => { slot.artifacts.rankFailure = null; }],
+    ['missing-core-result', slot => { slot.artifacts.recall = null; }],
+    ['wrong-core-cause', slot => { slot.artifacts.recall.error.code = 'invalid_model_output'; }],
+    ['wrong-core-retryable', slot => { slot.artifacts.recall.error.retryable = true; }],
+    ['missing-reached-rank-request', slot => { slot.artifacts.rankRequest = null; }],
+    ['missing-prior-store-observation', slot => { slot.artifacts.beforeStore = null; }],
+  ];
+}
 function scriptedRaw(prepared, operation = () => {}) {
   return prepared.packets.map(packet => {
     const mapping = new Map(prepared.privateMapping.filter(row => row.judgeId === packet.judgeId).map(row => [row.itemId, row.slotId]));
@@ -897,6 +913,62 @@ test('C5 actual stopped provider, settled timeout, invalid selection and checkpo
   await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
 });
 
+for (const stopPhase of ['BQ02_probe_select', 'BQ02_ordinary_rank'])
+test('failed QA progress and causes remain bound before a genuine later checkpoint stop: ' + stopPhase, { timeout: 120000 }, async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-scoring-c6-qa-' });
+  const { prepareSourceBundleComparison } = await import('../source-bundle-store.mjs');
+  const { createSourceBundleComparisonManifest, runSourceBundleComparison } = await import('../source-bundle-runner.mjs');
+  const preparation = await prepareSourceBundleComparison({ outputRoot: workspace.path }), ledger = await newLedger(workspace);
+  const controller = new AbortController(); let stopped = 0;
+  const result = await runSourceBundleComparison({ preparation, ...ledger,
+    manifest: createSourceBundleComparisonManifest(preparation.observation), apiKey: 'synthetic_c6_qa_key', signal: controller.signal,
+    fetchImpl(url) { assert.ok(url.endsWith('/input_tokens')); return Response.json({ error: { type: 'synthetic_count_unavailable' } }, { status: 503 }); },
+    onRecord() {}, onCheckpoint(owner) { if (owner.phaseId === stopPhase) {
+      assert.equal(owner.closed, true); assert.equal(owner.healthy, true); stopped++; controller.abort();
+    } } });
+  assert.equal(stopped, 1); assert.equal(result.status, 'stopped'); assert.equal(result.stopReason, 'cancelled');
+  const owners = stopPhase === 'BQ02_probe_select' ? 6 : 5;
+  assert.equal(result.intents.length, owners); assert.equal(result.transitions.length, owners);
+  assert.ok(result.transitions.every(owner => owner.closed && owner.healthy));
+  for (const arm of ['ordinary', 'source-bundle']) {
+    const slot = result.cases[0].answers[arm];
+    assert.equal(slot.execution, 'failed'); assert.equal(slot.failure, 'provider_failed');
+    assert.deepEqual(slot.artifacts.rankFailure, { code: 'provider_failed' });
+    assert.deepEqual(slot.artifacts.recall, { ok: false, error: { code: 'recall_failed', retryable: false } });
+    assert.notEqual(slot.artifacts.rankRequest, null); assert.notEqual(slot.artifacts.beforeStore, null);
+  }
+  if (stopPhase === 'BQ02_ordinary_rank') {
+    assert.equal(result.cases[1].answers.ordinary.failure, 'cancelled');
+    assert.equal(result.cases[1].answers.ordinary.artifacts.rankFailure.code, 'provider_failed');
+    assert.equal(result.cases[1].probe.execution, 'not-run');
+  }
+  assert.deepEqual(JSON.parse(readFileSync(join(workspace.path, 'comparison', 'result.json'), 'utf8')), result);
+  const base = fixtureInput(preparation.observation, result), prepared = await prepareSourceBundleScoring(base), report = await assess(base, prepared);
+  assert.equal(prepared.status, 'ready', JSON.stringify(prepared.issues)); assert.equal(report.status, 'assessed');
+  assert.equal(report.denominators.qaSlots, 48); assert.equal(report.gate.promising, false);
+  const controls = [...qaFailureCorruptions(),
+    ['earlier-fatal-slot', slot => { slot.failure = 'cancelled'; }],
+    ['earlier-equal-fatal-port-and-slot', slot => { slot.artifacts.rankFailure.code = slot.failure = 'cancelled'; }],
+    ['different-fatal-slot', slot => { slot.failure = 'authentication_failed'; }]];
+  const observations = [];
+  for (const arm of ['ordinary', 'source-bundle']) for (const [name, mutate] of controls) {
+    const corrupted = clone(base); mutate(corrupted.result.cases[0].answers[arm]);
+    observations.push({ arm, name, prepare: (await prepareSourceBundleScoring(corrupted)).status,
+      score: (await assess(corrupted, prepared)).status });
+  }
+  // BQ02 runs bundle before ordinary. No later case executes: the remaining
+  // physical work is in this same case, so a case-only order check is insufficient.
+  for (const portToo of [false, true]) {
+    const corrupted = clone(base), slot = corrupted.result.cases[1].answers['source-bundle'];
+    slot.failure = 'cancelled'; if (portToo) slot.artifacts.rankFailure.code = 'cancelled';
+    observations.push({ arm: 'source-bundle', name: 'same-case-earlier-cancelled-' + portToo,
+      prepare: (await prepareSourceBundleScoring(corrupted)).status, score: (await assess(corrupted, prepared)).status });
+  }
+  console.log('SC_C6_STOPPED_QA=' + JSON.stringify(observations));
+  assert.ok(observations.every(row => row.prepare === 'denied' && row.score === 'denied'), JSON.stringify(observations));
+  await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
+});
+
 test('actual healthy planner failed/unknown counts and local timeout require coherent closed causes', { timeout: 180000 }, async t => {
   const workspace = createTestWorkspace(t, { prefix: 'cairn-scoring-c2-count-failures-' });
   const { prepareSourceBundleComparison } = await import('../source-bundle-store.mjs');
@@ -985,6 +1057,12 @@ test('actual healthy planner failed/unknown counts and local timeout require coh
   for (const [index, mutate] of witnessMutations.entries()) await deniedMutation('timeout-witness:' + index,
     x => mutate(x.result.cases[0].answers['source-bundle'].artifacts));
   await deniedMutation('timeout-slot-cause', x => { x.result.cases[0].answers['source-bundle'].failure = 'provider_failed'; });
+  for (const arm of ['ordinary', 'source-bundle']) {
+    const slot = result.cases[1].answers[arm];
+    assert.equal(slot.failure, 'provider_failed'); assert.equal(slot.artifacts.recall.error.code, 'recall_failed');
+    for (const [name, mutate] of qaFailureCorruptions())
+      await deniedMutation('accounted-qa-' + arm + ':' + name, x => mutate(x.result.cases[1].answers[arm]));
+  }
   console.log('SC_C2_CORRUPTION=' + JSON.stringify(observations));
   assert.ok(observations.every(row => row.preparation === 'denied' && row.score === 'denied'));
   await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);

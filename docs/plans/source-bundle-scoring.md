@@ -1936,3 +1936,89 @@ Further failure of this same binding requirement triggers narrow primary
 takeover. No semantic efficacy, authenticity, independent clock/firstness,
 natural long-history/Mem0 parity, measured lightweight fit, D12/Stage2/3,
 launch or spending claim follows.
+
+
+# C6 — primary takeover: QA progress and failure consistency
+
+Prospective 2026-10-12. Candidate8ddbfe6 is rejected, not live-authorized.
+Original full review base6abed0ccdfe3815d42b25db04adb159483ded156 and original
+SJ1–SJ5/C1–C5 remain unchanged. This is one bounded primary takeover after
+repeated worker corrections on failure/progress binding, not another worker
+microfix packet. Existing independent reviewers remain nonauthors.
+
+Evidence: fresh independent Spec found two P2 defects at scorer552–606.
+Its genuine all24-cold, six-intent/six-owner HTTP503 fixture stopped at BQ02's
+healthy closed probe checkpoint. Both public exports accepted all nine
+contradictory ordinary-QA controls, including an erased reached rank request.
+Primary independently reproduced the same nine controls, actual exit1,
+session56634; the honest baseline remained ready/assessed, owned scratch gone.
+No paid/model/operational ledger or credential access occurred.
+
+Ranked hypotheses: H1 missing QA validation predicts arbitrary cause/progress
+mutations pass although raw evidence is unchanged; public reds support this.
+H2 incorrect transport-to-core projection would affect honest baseline causes;
+inspect pinned runner/core/ordinary/QT paths and preserve their distinctions.
+H3 fabricated fixture would lack executed matching wire/owner/retained result;
+the genuine baseline assertions and repeat falsify this explanation.
+
+Only four repository paths may change: source-bundle-scoring.mjs, its test,
+docs/plans/source-bundle-scoring.md and append-only docs/limitations.md. The
+judging module, runtime/transports/core/corpus/rubric/model/prompts/caps/defaults
+and original contracts do not change. No old cohort replay/rejudgment, paid
+invocation, merge, publication or deployment is authorized by this correction.
+
+1. A failed QA slot has a nonnull closed coordinator cause. Rank invocation
+   proven by retained physical intents or port output/failure requires its
+   actual rank request and prior store observation; it cannot become unreached.
+   Bind observed rank failures and failed recall envelopes to retained raw
+   evidence, including retryability. Apply to both arms and both run statuses.
+2. Preserve ordinary provider-failure projection, genuine core-local timeout,
+   planner raw/normalized timeout distinctions and successful HTTP with invalid
+   model output. Do not declare arbitrary error aliases equal or invent new
+   runtime causes. Preserve the real first answer even if later fatal cleanup
+   makes the run stopped, as allowed by SJ1; do not add retries or answers.
+3. A fatal QA override must match stopReason and be terminal in the actual
+   odd/even QA-plus-probe schedule: no later executed slot or physical intent.
+   Correct post-owner cancellation remains reportable; earlier cancellation
+   with later work and another fatal cause are rejected. Probes keep C4–C5.
+4. Turn the public red into a repository regression. Cover the nine reported
+   controls, both arms, genuinely accounted and stopped runs, equal-label
+   corruptions, erased reached rank/failure/core observations and same-case
+   terminal ordering. Use actual owned fake-HTTP runs, no edited positive
+   runtime fixture. Existing timeout/invalid-output/first-answer controls stay.
+5. Primary reruns original reproducer and affected focused/syntax/validation
+   gates on Node22.16/24.15, records actual exits/no skip/cancel/residue and
+   independently cross-checks four correction/five full paths. Freeze scoped
+   commit, then both independent axes inspect the same original full base.
+   Required exact-head CI follows only after both reviews pass. Prior rejected
+   candidate proofs remain history, never relabelled current or semantic scores.
+
+## C6 primary implementation and evidence boundary
+
+Primary reproduced the independent nine-control public red at unchanged8ddbfe6
+(actual exit1, session56634), then added the real stopped QA regression before
+source changes. Its initial30 corruption controls were all admitted: actual
+exit1, one failed test, no skip/cancel,39974.990412ms. The source correction
+binds closed QA causes, port/core projections and retryability, observed request
+and store progress, planner timeout witnesses and actual terminal slot order.
+
+At intermediate scorer724127d1464968043338b81caa192b1de059d68acd63fcf05ba30a15b0151129,
+the stopped30-control and accounted24-new-control suites passed through both
+public exports, along with unchanged planner failure/timeout controls: actual
+exit0,2/2, no skip/cancel,138634.446984ms. Genuine72-intent/72-owner accounted
+execution remains assessed. These are fake-HTTP consistency checks, not QA gain.
+
+The final regression additionally executes a real cancellation at BQ02's
+ordinary-rank closed checkpoint (five intents/owners) beside the original
+six-owner probe-checkpoint stop, and rejects a falsely earlier fatal inside
+that same second case. Each fixture preserves24 cases/48QA slots, actual raw
+HTTP503 evidence, healthy owner closure, unchanged stores, returned/persisted
+result equality, honest first outcomes and owned cleanup. Original successful,
+invalid-model-output, failed-answer and real local-timeout fixtures remain.
+
+Final acceptance requires25 focused tests on both pinned Nodes, syntax and
+validation, original reproducer green, four correction/five full file checks,
+scoped commit and both nonauthor full-base reviews. Exact-head CI is separate.
+Private primary proofs/PR record actual final exits and hashes; earlier candidate
+proofs remain explicitly historical. No model/provider/key/operational-ledger
+access or old-cohort replay is part of C6; current stage has no new model score.

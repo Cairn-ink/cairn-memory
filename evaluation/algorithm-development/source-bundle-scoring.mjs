@@ -20,6 +20,8 @@ const FATAL = new Set(['invalid_manifest', 'invalid_preparation', 'cancelled', '
   'request_denied', 'wire_mismatch', 'rank_mismatch', 'store_drift', 'provenance_mismatch', 'ledger_failed',
   'budget_blocked', 'record_persistence_failed', 'credential_echo', 'authentication_failed',
   'redirect_rejected', 'invalid_usage', 'usage_overrun', 'model_mismatch', 'context_budget_exceeded']);
+const SLOT_FAILURES = new Set([...FATAL, 'invalid_options', 'run_busy', 'invalid_model_output',
+  'provider_failed', 'model_timeout', 'invalid_answer_response', 'invalid_response']);
 // Scalar aliases from the pinned coordinator's closed sourceBundleFailureCode
 // projection. Healthy provider failures/timeouts are not globally fatal.
 const ORDINARY_FAILURE_ALIASES = {
@@ -126,6 +128,69 @@ function options(options, scoring) {
 function rankCandidates(c, request) {
   if (request === null) return null;
   same(request, c.rankRequest, 'rank_binding_mismatch'); return request.input.candidates;
+}
+// Reconcile the coordinator's QA observations; raw HTTP success is distinct
+// from adapter/core validation and from a returned first answer.
+function validateQaProgress(slot, arm, paid, result) {
+  const a = slot.artifacts, rank = paid.filter(intent => intent.method !== 'answer'), raw = rank.at(-1)?.final;
+  const terminal = result.status === 'stopped' && FATAL.has(slot.failure) && slot.failure === result.stopReason;
+  if (slot.execution === 'failed') check(slot.status === 'unresolved' && SLOT_FAILURES.has(slot.failure), 'qa_progress_mismatch');
+  if (rank.length || a.rankOutput !== null || a.rankFailure !== null || a.plannerRequest !== null)
+    check(a.rankRequest !== null && a.beforeStore !== null, 'qa_progress_mismatch');
+  if (rank.length && rank.every(intent => intent.final !== null)) check(a.recall !== null, 'qa_progress_mismatch');
+  if (a.recall !== null && a.recall.ok !== true) {
+    fields(a.recall, ['ok', 'error'], 'qa_progress_mismatch'); fields(a.recall.error, ['code', 'retryable'], 'qa_progress_mismatch');
+    check(a.recall.ok === false && typeof a.recall.error.code === 'string' && /^[a-z_]+$/u.test(a.recall.error.code)
+      && a.recall.error.retryable === (a.recall.error.code === 'storage_busy'), 'qa_progress_mismatch');
+  }
+  const failedIntent = rank.find(intent => intent.final !== null && intent.final.outcome !== 'succeeded');
+  if (failedIntent) check(failedIntent === rank.at(-1) && a.rankFailure !== null, 'qa_progress_mismatch');
+  if (a.plannerFailure !== null) {
+    check(arm === 'source-bundle' && a.plannerRequest !== null && a.plannerOutput === null && a.rankFailure !== null,
+      'qa_progress_mismatch');
+    const witness = fields(a.plannerFailure, ['rawCode', 'normalizedCode', 'health', 'callerAborted',
+      'absoluteDeadlineLive', 'normalization'], 'qa_progress_mismatch');
+    fields(witness.health, ['state', 'fatalCode'], 'qa_progress_mismatch');
+    check(SLOT_FAILURES.has(witness.rawCode) && typeof witness.callerAborted === 'boolean'
+      && typeof witness.absoluteDeadlineLive === 'boolean', 'qa_progress_mismatch');
+    if (raw && raw.outcome !== 'succeeded') {
+      const projected = SLOT_FAILURES.has(raw.failureCode) ? raw.failureCode
+        : ORDINARY_FAILURE_ALIASES[raw.failureCode] ?? 'provider_failed';
+      check(witness.rawCode === projected, 'qa_progress_mismatch');
+    }
+    if (witness.normalization === 'healthy-settled-per-call-timeout') {
+      check(['cancelled', 'deadline_exceeded', 'model_timeout'].includes(witness.rawCode)
+        && witness.normalizedCode === 'model_timeout' && witness.health.state === 'consumed'
+        && witness.health.fatalCode === null && !witness.callerAborted && witness.absoluteDeadlineLive
+        && raw?.outcome === 'unknown' && raw.settlementPersisted === true, 'qa_progress_mismatch');
+    } else check(witness.normalization === 'unchanged' && witness.normalizedCode === witness.rawCode, 'qa_progress_mismatch');
+    check(a.rankFailure.code === witness.normalizedCode || terminal && a.rankFailure.code === slot.failure, 'qa_progress_mismatch');
+  }
+  if (a.rankFailure !== null) {
+    fields(a.rankFailure, ['code'], 'qa_progress_mismatch'); const port = a.rankFailure.code;
+    check(SLOT_FAILURES.has(port) && a.rankOutput === null && a.recall?.ok === false
+      && !slot.answerInvoked && a.packed === null, 'qa_progress_mismatch');
+    if (failedIntent) {
+      if (arm === 'ordinary') check(port === 'provider_failed' || terminal && port === slot.failure, 'qa_progress_mismatch');
+      else check(a.plannerFailure !== null, 'qa_progress_mismatch');
+      const timed = arm === 'ordinary' ? raw.failure === 'model_timeout' : a.plannerFailure.normalizedCode === 'model_timeout';
+      check(a.recall.error.code === (timed ? 'model_timeout' : 'recall_failed'), 'qa_progress_mismatch');
+    } else if (port === 'invalid_model_output') check(a.recall.error.code === 'invalid_model_output', 'qa_progress_mismatch');
+    const cause = FATAL.has(port) ? port : a.recall.error.code === 'model_timeout' ? 'model_timeout' : port;
+    check(slot.failure === cause || terminal, 'qa_progress_mismatch');
+  } else if (a.recall?.ok === false) {
+    const cause = a.recall.error.code === 'model_timeout' ? 'model_timeout'
+      : a.recall.error.code === 'invalid_model_output' ? 'invalid_model_output' : 'provenance_mismatch';
+    check(slot.failure === cause || terminal, 'qa_progress_mismatch');
+  }
+  const answer = paid.find(intent => intent.method === 'answer');
+  if (answer?.final && a.answerResult === null) {
+    const raw = answer.final, cause = SLOT_FAILURES.has(raw.failure) ? raw.failure
+      : ORDINARY_FAILURE_ALIASES[raw.failure] ?? 'provider_failed';
+    check(slot.execution === 'failed' && (terminal || (raw.outcome === 'succeeded'
+      ? slot.failure === 'invalid_answer_response'
+      : slot.failure === cause || raw.failure === 'model_timeout' && slot.failure === 'provider_failed')), 'qa_progress_mismatch');
+  }
 }
 function sourceWires(request, method, bundle = false) {
   const payload = { model: MODEL, instructions: request.system,
@@ -533,6 +598,13 @@ async function retained(input) {
     slots: { ordinary: `${c.id}_ordinary_qa`, 'source-bundle': `${c.id}_source_bundle_qa`, probe: `${c.id}_probe` } }));
   same(result.manifest, { version: result.version, preparationManifestSha256: p.manifestSha256, preparationManifest: p.manifest,
     dependencies: { corpus: '51bf373de67680d1fcf5ac0a7b29de1ae0f7055b', planner: '21f4bf0a512fa22f54bec637f5ef5a70c478b1f5', integration: '4423cd2bf91e3c479767bd1bebac3a6510846f07' }, limits: LIMITS, schedule }, 'run_manifest_mismatch');
+  const orderedSlots = schedule.flatMap((row, index) => [...row.armOrder, 'probe'].map(arm => ({ id: row.slots[arm],
+    slot: arm === 'probe' ? result.cases[index].probe : result.cases[index].answers[arm] })));
+  const slotOrdinals = new Map(orderedSlots.map((row, index) => [row.id, index]));
+  for (const [index, { slot }] of orderedSlots.entries()) if (FATAL.has(slot.failure))
+    check(result.status === 'stopped' && slot.failure === result.stopReason
+      && orderedSlots.slice(index + 1).every(row => row.slot.execution === 'not-run')
+      && result.intents.every(intent => slotOrdinals.get(intent.slotId) <= index), 'terminal_order_mismatch');
   const resources = validateResources(p, result), items = [], stages = [], probes = [], excluded = [];
   for (const [index, report] of result.cases.entries()) {
     const c = p.cases[index], r = rubric.cases[index], row = schedule[index];
@@ -549,11 +621,12 @@ async function retained(input) {
       check(['not-run', 'failed', 'completed'].includes(slot.execution) && ['answered', 'unresolved'].includes(slot.status)
         && typeof slot.answerInvoked === 'boolean', 'slot_mismatch');
       if (result.status === 'accounted') check(slot.execution !== 'not-run', 'slot_mismatch');
-      if (slot.failure !== null) check(typeof slot.failure === 'string' && /^[a-z_]+$/u.test(slot.failure), 'slot_mismatch');
+      if (slot.failure !== null) check(SLOT_FAILURES.has(slot.failure), 'slot_mismatch');
       if (FATAL.has(slot.failure)) check(result.status === 'stopped', 'slot_mismatch');
       const a = slot.artifacts, slotId = row.slots[arm], paid = result.intents.filter(intent => intent.slotId === slotId);
       fields(a, ['rankRequest', 'rankOutput', 'rankFailure', 'plannerRequest', 'plannerOutput', 'plannerFailure', 'recall', 'sidecar',
         'authoritativeReads', 'evidence', 'packed', 'answerResult', 'beforeStore', 'afterRecallStore', 'beforeAnswerStore', 'afterStore']);
+      validateQaProgress(slot, arm, paid, result);
       attestPhase(paid.filter(intent => intent.method !== 'answer'), arm === 'ordinary' ? c.ordinaryWire : c.bundleWire);
       if (arm === 'ordinary') for (const [n, intent] of paid.filter(intent => intent.method === 'rank').entries())
         check(intent.final?.localInputTokens === c.tokenCounts[n ? 'ordinaryGeneration' : 'ordinaryCount'], 'token_binding_mismatch');

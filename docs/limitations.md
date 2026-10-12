@@ -2154,3 +2154,15 @@ not whole-transcript authenticity, independent timing/firstness, semantic gain,
 measured lightweight fit, D12/Stage2/3 clearance or launch authority. Primary
 fixed-byte acceptance, both full-base review axes and exact-head CI remain
 separate delivery gates; no paid/provider/operational-data action is authorized.
+
+The next full-base review rejected that candidate's QA path: failure causes
+and failed core envelopes were not reconciled, and deleting an actually reached
+rank request could incorrectly report an unreached stage. C6 is a bounded
+primary takeover, preserving the original experiment and all prior contracts.
+It binds both QA arms' failed observations, raw/port/core cause distinctions,
+retryability, planner normalization and actual QA-plus-probe terminal order.
+Real owned HTTP503/cancellation fixtures and corruption controls cover accounted
+and stopped runs; fake success remains neither semantic correctness nor proof
+against fabrication of an entire transcript. Final primary25-test checks,
+independent full-base reviews and exact-head CI remain required before launch.
+No new model score, default change, cost grant, replay, merge or release follows.
