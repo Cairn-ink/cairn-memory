@@ -2166,3 +2166,35 @@ and stopped runs; fake success remains neither semantic correctness nor proof
 against fabrication of an entire transcript. Final primary25-test checks,
 independent full-base reviews and exact-head CI remain required before launch.
 No new model score, default change, cost grant, replay, merge or release follows.
+
+### Closed source-bundle QA24 first result
+
+The [closed first-result report](plans/source-bundle-qa24-results.md) retains all
+24 paired cases: ordinary completed 24/24 and source-bundle 14/24, with ten
+`invalid_model_output` failures before answering. Supported-correct is 15/24
+versus 12/24; 3 wins / 6 losses / 15 ties give net -3. Qualified treatment success
+is 0/6, complete packed necessary sets decline 16/24 to 14/24, and BQ08 adds a
+predefined severe missing-association error. The accounted, integrity-valid run is not
+promising for the three frozen reasons: `paired-lower-below-three`,
+`no-complete-set-case-gain`, `new-severe-condition`. Ten absent answers do not
+become correct abstentions; fewer observed unsupported claims with ten fewer
+answers do not establish safer answering.
+
+Retained deterministic diagnosis finds nine proposals above three cards/bundle,
+BQ03 above six total, and BQ13 above both. All 24 planner outputs were strict
+JSON/schema/envelope valid; the compiler enforced its contract. Why the model
+ignored prompt limits is unknown. Edited offline proposals are not recovered
+answers or replacement scored slots. BQ08 and BQ18 retain missing-link/wrong
+attribution errors; grouping causality remains unestablished.
+
+This authored complete-map/scripted-capture diagnostic is not official
+LongMemEval/Mem0 parity, natural long-history reliability, measured lightweight
+fit or product/default acceptance. The closed snapshot has 182 physical intents,
+910000 microUSD reserved, 70610 microUSD PARTIAL known-only price, 72 unknown-usage
+calls and zero pending/missing finals; RSS and agent service cost are unknown.
+Two fresh first judges used actual GPT-6.1 Sol/high, fieldwise consensus without
+rejudging/adjudication; same-family agreement is not independent truth.
+The prospective next checkpoint addresses planner budget structure and separately
+tests selection versus answer-context grouping on independently frozen new
+source-only cases after offline/review/CI gates. No current-cohort replay or paid
+invocation is granted; original D12 and Stage 2/3 remain uncleared.
