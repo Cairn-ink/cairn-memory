@@ -882,3 +882,180 @@ for primary's fixed-byte handoff. These tests prove offline data consistency
 and conservative scoring controls only; no semantic efficacy, measured
 lightweight footprint, provider parity, Stage2/3 clearance or paid authority
 is claimed.
+
+## SC correction C1 prospective authorization (verbatim)
+
+# SC correction C1 — observable outcome and token-limit consistency
+
+Fixed rejected candidate a9ec8aa7dd9de1134ee7da40af4fa1f7ec424bd0, full review
+base 6abed0ccdfe3815d42b25db04adb159483ded156. Same isolated scoring worktree
+and sole existing author. This is a narrow correction under the original SC
+contract, not a new experiment or a change to its scoring threshold.
+
+## Ownership and boundaries
+
+The GPT-6.1 Sol/high author may edit only the scoring module, its test, and
+append evidence/correction notes to docs/plans/source-bundle-scoring.md and
+docs/limitations.md. Preserve the entire original plan/contract prefix and
+existing limitations. Do not change judging, source/rubric, runtime/transport,
+budgets, limits, dependencies, CI, schemas, product defaults or private operator.
+No operational data, credentials, provider, closed cohorts, commit or push.
+
+## Evidence and hypotheses
+
+Independent Spec report is retained in source-bundle-scoring-reviews-candidate1.md.
+Primary's source-bundle-scoring-review-probe.mjs executes the actual extracted
+validator with synthetic in-memory records. Two identical direct Node22 runs
+returned actual exit1 with all four expectations red. This proves the helper
+seam only, not the complete retained pipeline. No ledger/provider/files written
+by that probe. Ranked falsifiable hypotheses:
+
+1. Ordinary success permits non-null failure: changing only that field passes
+   the helper while the planner sibling rejects it; an explicit success
+   invariant should reject the contradictory record.
+2. Known planner limits are enforced only for success: a legitimate stopped
+   failed count at7025 passes resource compliance; outcome-independent known
+   token checks should report noncompliance without fabricating measurements.
+3. A later retained-input validator might already reject either case. Full
+   public prepare/score regressions must establish whether that is true; do not
+   count an extracted-function probe as end-to-end evidence.
+
+## Observable acceptance
+
+- Add regressions before source correction and retain their actual red result.
+  Reuse the genuine actual24 fixture where possible; mutate only the needed
+  retained fields and keep history/wire/source consistency explicit.
+- A succeeded ordinary final record with non-null failure must deny assessment.
+- An ordinary consumed failed/unknown record with an existing globally fatal
+  normalized cause cannot coexist with an accounted run. Use the accepted
+  runner's closed cause semantics; do not turn every healthy provider failure
+  or timeout into a global fatal error, or invent a new runtime cause.
+- A legitimate stopped planner overflow (count/input/output as observable)
+  remains an honest retained stopped result and must not claim compliance
+  satisfied. Preserve unknown values. Bind known numbers to the actual response;
+  contradictory numbers/body/outcome must not be silently trusted.
+- Keep valid successful, healthy consumed-failure and stopped observations
+  behaving correctly. Existing promising arithmetic, first-judgment semantics,
+  denominators, original source bindings and runtime caps must be unchanged.
+- Tests must reach the actual public retained-input seam. Prefer an early-stop
+  genuine synthetic run for planner overflow rather than a second full192-call
+  fixture. No new export merely to test a private helper.
+
+## Verification and delivery
+
+Use the owned temporary-workspace runner. Capture red before the fix; then run
+the full focused scoring suite sequentially on pinned Node22.16 and24.15 with
+required tokenizer/transport and no key, explicit actual exits and no skips,
+cancellations or residue. Run syntax/root validation on both versions. Do not
+rerun unrelated full matrices. Primary will inspect the patch, personally run
+affected gates, and record prior full matrices as evidence for a9ec8aa only;
+the correction needs new exact-candidate evidence and both review axes against
+the original base before any push. Report changed paths by two independent
+routes, final hashes, evidence and STOP WRITES for primary acceptance.
+
+## C1 implementation and author evidence
+
+The correction owner remained GPT-6.1 Sol/high, in the same isolated
+`experiment/source-bundle-scoring` worktree. Fixed rejected candidate:
+`a9ec8aa7dd9de1134ee7da40af4fa1f7ec424bd0`; original full-diff base:
+`6abed0ccdfe3815d42b25db04adb159483ded156`. The prospective correction
+contract above is retained verbatim, SHA256
+`4d147b85e5a8662fa891ddeecfb36bc8e4e8f222e2ac9112713cd5bb1a2659dc`.
+The original 21844-byte SC contract and every preceding plan byte are preserved.
+
+The primary's prior 18 broad and four exact-commit gates apply only to the
+rejected candidate. Standards passed; Spec identified ordinary outcome/failure
+inconsistency and failed planner token-overflow compliance. The diagnosing-bugs
+workflow used those ranked hypotheses and prior deterministic extracted-helper
+REDs, then added public retained-input regressions before changing source.
+
+Author evidence is retained in
+`/tmp/cairn-scoring-c1-author.vdd8sSov`; failed logs were not replaced.
+
+- `red22.log`: actual exit 1, six passes/three failures including the failed
+  nested-test parent, nine reported tests, no skips/cancellations. The real
+  192-intent fixture accepted all three succeeded/failed/unknown ordinary
+  authentication-failure corruptions as ready. The new early-stop fixture
+  reached eight intents/five owners, but its first assertion incorrectly
+  expected the thrown-fetch raw code `provider_failure`; the actual coordinator
+  guard retained `provider_failed`. The HTTP503 record did retain
+  `provider_failure`. This was an explained test expectation error, not a
+  runtime correction. Log SHA256:
+  `312152f6472b42bcf2c1b5defe3053403bd5d756f63aff7680233836993d3bea`.
+- Only that expectation was corrected, and an independently nonfatal failure
+  on a succeeded ordinary record was added before changing source.
+  `overflow-red22.log`: actual exit 1, zero/one passes, no skips/cancellations.
+  Public preparation was ready and scoring assessed the genuine stopped
+  planner count7025 as compliance satisfied. Its actual QT final retained
+  inputTokens7025/outputTokensnull, outcome failed, failureCode usage_overrun,
+  settlementPersistedtrue and literal body
+  `{"object":"response.input_tokens","input_tokens":7025}`, body SHA256
+  `cf110625a5f4202389546fd463900942d2a8c01fc1b8cb5a8f67d8dd1366bfc0`.
+  The genuine run stopped for usage_overrun after eight intents/five closed
+  owners, retained earlier failed HTTP503 and unknown thrown-fetch ordinary
+  slots, and completed the BQ01 probe. Log SHA256:
+  `ba0797e255c9be4af23e05339f40308b1d386faf08ef23ccdbf0f301af26ae62`.
+- Scorer SHA256 stayed
+  `95488ad656e44541118f21309c5ee4128d7db04b07731f632cbe850b5122196b`
+  throughout both RED runs. Both owned runner/workspace cleanups left their
+  parent TMPDIR empty.
+
+The narrow source change requires succeeded ordinary finals to have null
+failure. Existing closed coordinator aliases normalize only known causes;
+a globally fatal ordinary cause cannot accompany an accounted run. Healthy
+provider failures/timeouts are not blanket-classified as fatal. Known planner
+count/generation token values bind to their literal response regardless of
+outcome, null remains unknown, and an observed failed overflow produces
+resource compliance not-satisfied rather than pretending that a stopped run
+met its cap. Count output must remain null. No runtime cause, cap, public
+export, schema, judgment policy or scoring threshold changed.
+
+The ordinary mutations are explicitly corrupt data controls, not asserted
+executions: only the raw outcome/failure and directly bound delta outcome
+change; source, wires and answers stay fixed. The early-stop control instead
+uses a fresh genuine all24 preparation, the actual imported runner/transports,
+an owned schema2 synthetic ledger and source-chronology-only fake HTTP. It
+observes healthy failed/unknown continuation before the real QT overflow;
+all48 QA/all24 probe slots remain. Contradictory count input/output values are
+denied through public preparation. This packet's newly observed runtime
+overflow is the count path; no new observed generation-overflow run is claimed.
+
+Final full focused commands used `env -i`, version-specific Node bin PATH,
+fresh owned `TMPDIR`, `NODE_DISABLE_COMPILE_CACHE=1`,
+`CAIRN_SOURCE_BUNDLE_OFFLINE=1` and `CAIRN_BUNDLE_TRANSPORT_OFFLINE=1`:
+
+```text
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node tools/testing/run.mjs evaluation/algorithm-development/test/source-bundle-scoring.test.mjs
+/home/chichieh/.nvm/versions/node/v24.15.0/bin/node tools/testing/run.mjs evaluation/algorithm-development/test/source-bundle-scoring.test.mjs
+```
+
+Both actual exits were 0: 19/19 passes, zero failed/skipped/cancelled. Node22
+duration130590.975ms, Node24 duration147887.529ms. Final logs:
+`focused22.log` SHA256
+`df1bf7e8449f59c64dd89dac9bb51cbdc8cb45338c17db9b4aeeb6943a90568c`;
+`focused24.log` SHA256
+`d5eb323d19e9a08aea65c362a5df1ed88bcf29178984547b2a5f8706a160d5f2`.
+The original 192-intent/120-owner/47-answer fixture, all67 anchors, two versus
+ten complete cases, first-raw blinding, fixed denominators, paired lower-bound
+and harm controls remained green. The new stopped run remained ready/assessed
+with compliance not-satisfied. Both parent TMPDIRs were empty after completion.
+
+Both pinned `node --version` commands, both scorer/test `node --check`
+commands on each runtime, and credential-free `npm run validate` on each
+runtime returned actual exit 0. Source/test bytes were held across both focused
+runs: scorer SHA256
+`f278258dbace470cd02c492cdced26b1bea666ad858eb4b86d3fa3e8380890f5`;
+test SHA256
+`2d635cebf2e1767bc9e87059eb231317be6c14eae93ea821c2cb23172c6f1e2f`.
+No unrelated broad matrices were repeated. The full algorithm count is
+prospectively202 (accepted BR183 plus SC19), not a claimed author full-suite
+result. Primary owns new fixed-candidate acceptance, both independent review
+axes and exact-head CI.
+
+The final correction audit compares Git's changed paths with an independent
+recursive filesystem/blob/mode route against a9ec8aa, count4, and verifies
+append-only plan/limitations, the original contract prefix, unchanged judging
+and inherited source, unstaged status and owned cleanup. Exact audit/hashes are
+retained outside the worktree for STOP handoff. This is offline consistency
+evidence, not semantic efficacy, measured lightweight fit, D12/Stage2/3
+clearance, external execution/firstness proof or live spending authority.

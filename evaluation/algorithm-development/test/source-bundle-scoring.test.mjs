@@ -489,6 +489,21 @@ test('actual24 padded chronology fixture validates integrity, all67 anchors and 
     const score = await assess(base, prepared, ({ row, caseId }) => { if (caseId === 'BQ02') row.correctness.value = 'yes'; });
     assert.equal(score.cases[1].arms['source-bundle'].supportedCorrect, false);
   });
+  await t.test('ordinary success/fatal outcome contradictions deny the public retained seam', async () => {
+    const observations = [];
+    for (const [outcome, failure] of [['succeeded', 'provider_failure'], ['succeeded', 'algorithm_auth_transport_failure'],
+      ['failed', 'algorithm_auth_transport_failure'], ['unknown', 'algorithm_auth_transport_failure']]) {
+      // Explicit corruption controls, not claimed runtime executions. Keep the
+      // directly bound delta outcome consistent; wires/source/answer stay fixed.
+      const mutated = clone(base), intent = mutated.result.intents[0];
+      intent.final.outcome = outcome; intent.final.failure = failure;
+      mutated.result.transitions[0].state.appendedAttempts[0].outcome = outcome;
+      const denied = await prepareSourceBundleScoring(mutated);
+      observations.push({ outcome, failure, status: denied.status, issues: denied.issues });
+    }
+    console.log('SC_C1_ORDINARY=' + JSON.stringify(observations));
+    assert.deepEqual(observations.map(row => row.status), ['denied', 'denied', 'denied', 'denied']);
+  });
   await t.test('large raw allowance does not cover metadata; accessors/proxies never invoked', async () => {
     const oversized = { ...base, result: { ...result, intents: result.intents.map((row, index) => index ? row : { ...row, final: { ...row.final, requestBody: 'x'.repeat(32 * 1024 * 1024 + 1) } }) } };
     assert.deepEqual((await prepareSourceBundleScoring(oversized)).issues, ['metadata_limit']);
@@ -500,6 +515,58 @@ test('actual24 padded chronology fixture validates integrity, all67 anchors and 
     assert.equal(touched, 0);
   });
   await assert.rejects(runSourceBundleComparison({ preparation }), /invalid_source_bundle_preparation/u);
+  await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
+});
+
+test('actual stopped planner overflow retains healthy failed/unknown ordinary slots without claiming compliance', { timeout: 180000 }, async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-scoring-c1-overflow-' });
+  const { prepareSourceBundleComparison } = await import('../source-bundle-store.mjs');
+  const { createSourceBundleComparisonManifest, runSourceBundleComparison } = await import('../source-bundle-runner.mjs');
+  const preparation = await prepareSourceBundleComparison({ outputRoot: workspace.path }), ledger = await newLedger(workspace);
+  let counts = 0;
+  const result = await runSourceBundleComparison({ preparation, ...ledger,
+    manifest: createSourceBundleComparisonManifest(preparation.observation), apiKey: 'synthetic_source_scoring_key',
+    signal: new AbortController().signal, onRecord() {}, onCheckpoint() {},
+    fetchImpl(url, init) {
+      if (url.endsWith('/input_tokens') && ++counts === 4)
+        return new Response(JSON.stringify({ object: 'response.input_tokens', input_tokens: 7025 }));
+      if (url.endsWith('/chat/completions')) throw new Error('synthetic unavailable response');
+      if (!url.endsWith('/input_tokens') && JSON.parse(init.body).text.format.name === 'cairn_rank')
+        return new Response(JSON.stringify({ error: { type: 'synthetic_unavailable' } }), { status: 503 });
+      return chronologicalProvider(url, init, { count: 0 });
+    } });
+  assert.equal(result.status, 'stopped'); assert.equal(result.stopReason, 'usage_overrun');
+  assert.equal(result.intents.length, 8); assert.equal(result.transitions.length, 5);
+  assert.equal(result.cases.length, 24); assert.equal(result.cases.flatMap(c => Object.values(c.answers)).length, 48);
+  assert.equal(result.cases.map(c => c.probe).length, 24);
+  const failed = result.intents.find(i => i.final.httpStatus === 503), unknown = result.intents.find(i => i.method === 'answer');
+  assert.equal(failed.final.outcome, 'failed'); assert.equal(failed.final.failure, 'provider_failure');
+  assert.equal(unknown.final.outcome, 'unknown'); assert.equal(unknown.final.failure, 'provider_failed');
+  assert.equal(result.cases[0].answers.ordinary.execution, 'failed');
+  assert.equal(result.cases[0].answers['source-bundle'].execution, 'failed');
+  assert.equal(result.cases[0].probe.execution, 'completed');
+  const overflow = result.intents.at(-1);
+  assert.equal(overflow.caseId, 'BQ02'); assert.equal(overflow.ownerKind, 'planner'); assert.equal(overflow.final.kind, 'count');
+  assert.equal(overflow.final.inputTokens, 7025); assert.equal(overflow.final.outputTokens, null);
+  assert.equal(overflow.final.failureCode, 'usage_overrun'); assert.equal(overflow.final.outcome, 'failed');
+  assert.equal(overflow.final.settlementPersisted, true);
+  assert.equal(JSON.parse(overflow.final.responseBody).input_tokens, 7025);
+  assert.deepEqual(JSON.parse(readFileSync(join(workspace.path, 'comparison', 'result.json'), 'utf8')), result);
+  const base = fixtureInput(preparation.observation, result), prepared = await prepareSourceBundleScoring(base);
+  assert.equal(prepared.status, 'ready', JSON.stringify(prepared.issues));
+  const report = await assess(base, prepared);
+  console.log('SC_C1_STOPPED=' + JSON.stringify({ status: report.status, compliance: report.resources.compliance.status,
+    intents: result.intents.length, owners: result.transitions.length, ordinaryOutcomes: [failed.final.outcome, unknown.final.outcome],
+    planner: { inputTokens: overflow.final.inputTokens, outputTokens: overflow.final.outputTokens,
+      failureCode: overflow.final.failureCode, outcome: overflow.final.outcome, settlementPersisted: overflow.final.settlementPersisted,
+      responseBody: overflow.final.responseBody, responseSha256: overflow.final.responseSha256 } }));
+  assert.equal(report.status, 'assessed'); assert.equal(report.gate.promising, false);
+  assert.equal(report.denominators.qaSlots, 48); assert.equal(report.probes.length, 24);
+  assert.equal(report.resources.compliance.status, 'not-satisfied');
+  for (const tokenField of ['inputTokens', 'outputTokens']) {
+    const mutated = clone(base); mutated.result.intents.at(-1).final[tokenField] = 7026;
+    assert.equal((await prepareSourceBundleScoring(mutated)).status, 'denied', tokenField + ' must bind actual count body');
+  }
   await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
 });
 

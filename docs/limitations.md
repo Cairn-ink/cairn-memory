@@ -2081,3 +2081,20 @@ known model pricing remains partial and unknown usage/reservations explicit.
 Shared harm cannot clear D12, and original Stage2/3 gates remain unchanged.
 Primary's full two-runtime matrices, independent reviews and exact-head CI are
 still required before delivery or any separately authorized first live launch.
+
+### Source-bundle scorer C1 observable consistency correction
+
+The rejected scorer candidate allowed contradictory ordinary final failures
+and reported a genuine failed planner count7025 as resource-compliant. Retained
+public-seam REDs precede the narrow correction: succeeded ordinary records now
+require null failure, known globally fatal ordinary causes cannot coexist with
+accounted status, and known failed planner token overflow is not-satisfied.
+A fresh owned fake-HTTP run retains healthy failed/unknown ordinary continuation
+before the actual stopped QT count overflow, with all48 QA/all24 probe slots.
+Both pinned runtimes pass19 focused tests; earlier broad matrices cover only
+the rejected bytes. The newly observed overflow is the count path, not a new
+generation-overflow campaign. Scripted controls establish consistency and
+arithmetic only; external execution/firstness, semantic efficacy, measured
+lightweight fit and original D12/Stage2/3 gates remain unproven/uncleared.
+Primary fixed-candidate checks, independent reviews and exact-head CI remain
+required; no provider call or live spending was authorized by this correction.

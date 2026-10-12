@@ -20,6 +20,23 @@ const FATAL = new Set(['invalid_manifest', 'invalid_preparation', 'cancelled', '
   'request_denied', 'wire_mismatch', 'rank_mismatch', 'store_drift', 'provenance_mismatch', 'ledger_failed',
   'budget_blocked', 'record_persistence_failed', 'credential_echo', 'authentication_failed',
   'redirect_rejected', 'invalid_usage', 'usage_overrun', 'model_mismatch', 'context_budget_exceeded']);
+// Scalar aliases from the pinned coordinator's closed sourceBundleFailureCode
+// projection. Healthy provider failures/timeouts are not globally fatal.
+const ORDINARY_FAILURE_ALIASES = {
+  algorithm_accounting_failure: 'ledger_failed', algorithm_checkpoint_mismatch: 'ledger_failed',
+  algorithm_unaffordable: 'budget_blocked', algorithm_budget_exceeded: 'budget_blocked',
+  algorithm_usage_anomaly: 'invalid_usage', algorithm_usage_overrun: 'usage_overrun',
+  algorithm_auth_transport_failure: 'authentication_failed', algorithm_credential_echo: 'credential_echo',
+  algorithm_persistence_failure: 'record_persistence_failed', algorithm_request_denied: 'request_denied',
+  algorithm_method_denied: 'request_denied', algorithm_lifecycle: 'request_denied',
+  algorithm_case_call_cap: 'request_denied', algorithm_phase_call_cap: 'request_denied',
+  invalid_ledger: 'ledger_failed', ledger_closed: 'ledger_failed', ledger_missing: 'ledger_failed',
+  configuration_mismatch: 'ledger_failed', unsafe_database_file: 'ledger_failed',
+  invalid_input: 'rank_mismatch', request_mutated: 'rank_mismatch',
+  invalid_bundle_sidecar: 'provenance_mismatch', invalid_bundle_evidence: 'provenance_mismatch',
+  invalid_recall_provenance: 'provenance_mismatch', provenance_limit_exceeded: 'provenance_mismatch',
+  bundle_answer_incomplete: 'provenance_mismatch', bundle_invocation_conflict: 'request_denied',
+};
 const LIMITATIONS = [
   'Artifact consistency is not proof against fabrication of a complete transcript.',
   'Original history-prefix preservation and absolute per-phase deadlines rely on the pinned runtime and external execution provenance, not independently reconstructed old rows or dispatch times.',
@@ -279,6 +296,9 @@ function validateResources(preparation, result) {
         && (answer ? raw.endpoint === 'chat/completions' : raw.endpoint !== 'chat/completions')
         && integer(raw.localInputTokens, 6000) && raw.requestBytes === Buffer.byteLength(raw.requestBody), 'resource_accounting_mismatch');
       check(raw.responseBytes === null || raw.responseBytes === Buffer.byteLength(raw.responseBody), 'resource_accounting_mismatch');
+      check(raw.failure === null || typeof raw.failure === 'string', 'resource_accounting_mismatch');
+      const cause = Object.hasOwn(ORDINARY_FAILURE_ALIASES, raw.failure) ? ORDINARY_FAILURE_ALIASES[raw.failure] : raw.failure;
+      if (FATAL.has(cause)) check(result.status === 'stopped', 'resource_accounting_mismatch');
       if (counting && raw.providerInputTokens !== undefined) { check(integer(raw.providerInputTokens), 'resource_accounting_mismatch');
         check(body?.input_tokens === raw.providerInputTokens, 'resource_accounting_mismatch');
         if (raw.providerInputTokens > 7024) { check(raw.failure === 'context_budget_exceeded' && result.status === 'stopped'
@@ -291,7 +311,7 @@ function validateResources(preparation, result) {
           output_tokens: body?.usage?.[answer ? 'completion_tokens' : 'output_tokens'], total_tokens: body?.usage?.total_tokens }, 'resource_accounting_mismatch');
         check(raw.actualMicroUsd === Math.ceil(raw.usage.input_tokens * 0.4 + raw.usage.output_tokens * 1.6), 'resource_accounting_mismatch');
       }
-      if (raw.outcome === 'succeeded') check(body && raw.httpStatus >= 200 && raw.httpStatus < 300
+      if (raw.outcome === 'succeeded') check(raw.failure === null && body && raw.httpStatus >= 200 && raw.httpStatus < 300
         && (counting ? integer(raw.providerInputTokens, 7024) : raw.usage !== null && body.model === MODEL), 'resource_accounting_mismatch');
     } else {
       fields(raw, ['version', 'slotId', 'preparedRequestSha256', 'attemptId', 'endpoint', 'kind', 'requestBody', 'requestSha256',
@@ -303,6 +323,18 @@ function validateResources(preparation, result) {
         && raw.preparedRequestSha256 === preparation.cases[caseIndex].hashes.bundlePreparedSha256
         && raw.requestSha256 === digest(raw.requestBody)
         && (raw.responseBody === null ? raw.responseSha256 === null : raw.responseSha256 === digest(raw.responseBody)), 'resource_accounting_mismatch');
+      if (counting) {
+        check(raw.outputTokens === null, 'resource_accounting_mismatch');
+        if (raw.inputTokens !== null) check(integer(raw.inputTokens) && body?.input_tokens === raw.inputTokens, 'resource_accounting_mismatch');
+      } else if (raw.inputTokens !== null || raw.outputTokens !== null) {
+        check(integer(raw.inputTokens) && integer(raw.outputTokens) && body?.usage?.input_tokens === raw.inputTokens
+          && body?.usage?.output_tokens === raw.outputTokens && body?.usage?.total_tokens === raw.inputTokens + raw.outputTokens,
+        'resource_accounting_mismatch');
+      }
+      if (raw.inputTokens !== null && raw.inputTokens > 7024 || raw.outputTokens !== null && raw.outputTokens > 1024) {
+        check(raw.outcome !== 'succeeded' && FATAL.has(raw.failureCode) && result.status === 'stopped', 'resource_accounting_mismatch');
+        overflow = true;
+      }
       if (raw.outcome === 'succeeded') check(raw.settlementPersisted === true && raw.failureCode === null
         && integer(raw.inputTokens, 7024) && (counting ? body?.input_tokens === raw.inputTokens
           : integer(raw.outputTokens, 1024) && body?.model === MODEL && body?.usage?.input_tokens === raw.inputTokens
