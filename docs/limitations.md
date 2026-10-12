@@ -2098,3 +2098,19 @@ arithmetic only; external execution/firstness, semantic efficacy, measured
 lightweight fit and original D12/Stage2/3 gates remain unproven/uncleared.
 Primary fixed-candidate checks, independent reviews and exact-head CI remain
 required; no provider call or live spending was authorized by this correction.
+
+SC C2 retained-cause consistency boundary: failed/unknown planner finals now
+require existing closed QT causes and cannot hide a known globally fatal cause
+inside an accounted run, even when token counts are unknown. Ordinary failed
+or unknown finals require nonempty causes. Genuine healthy provider failures
+and the actual local QT timeout remain admissible; the latter requires its
+closed settled normalization witness bound to the phase and slot. Timing and
+caller provenance remain externally attested. One fresh owned all24 fake-HTTP
+campaign retains72 intents/owners, all48 QA/all24 probes and no answers;27
+retained-only corruption controls deny through both public exports. Both pinned
+Nodes pass20 focused tests on final source bytes. No runtime, corpus, policy,
+caps, deadlines or original192-intent fixture changed. Scripted evidence is
+not model quality or independent execution/firstness proof. Earlier broad
+matrices remain old-head evidence; primary fixed-byte gates, both reviews and
+exact-head CI are still required before live preparation. D12/Stage2/3 and
+measured lightweight-fit claims remain uncleared; no paid call was authorized.

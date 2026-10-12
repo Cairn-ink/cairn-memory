@@ -588,3 +588,90 @@ test('actual fresh pre-aborted24 preserves honest not-reached, zero dispatch and
   assert.ok(report.stages.every(stage => stage.actualPacked.status === 'not-reached' && stage.rank.status === 'not-reached'));
   await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
 });
+
+test('actual healthy planner failed/unknown counts and local timeout require coherent closed causes', { timeout: 180000 }, async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-scoring-c2-count-failures-' });
+  const { prepareSourceBundleComparison } = await import('../source-bundle-store.mjs');
+  const { createSourceBundleComparisonManifest, runSourceBundleComparison } = await import('../source-bundle-runner.mjs');
+  const preparation = await prepareSourceBundleComparison({ outputRoot: workspace.path }), ledger = await newLedger(workspace);
+  let plannerCalls = 0;
+  const result = await runSourceBundleComparison({ preparation, ...ledger,
+    manifest: createSourceBundleComparisonManifest(preparation.observation), apiKey: 'synthetic_source_scoring_key',
+    signal: new AbortController().signal, onRecord() {}, onCheckpoint() {},
+    fetchImpl(url, init) {
+      assert.ok(url.endsWith('/input_tokens'), 'no generation or answer is dispatched');
+      // Method identity and a predeclared ordinal only: no question, rubric,
+      // source-family or answer selection drives this failure schedule.
+      if (JSON.parse(init.body).text.format.name === 'cairn_source_bundle_plan_rank_v1') {
+        plannerCalls++;
+        if (plannerCalls === 1) return new Promise(() => {}); // Actual unchanged 30s core/QT settlement.
+        if (plannerCalls % 2) throw new Error('synthetic count unavailable');
+      }
+      return new Response(JSON.stringify({ error: { type: 'synthetic_count_unavailable' } }), { status: 503 });
+    } });
+  assert.equal(result.status, 'accounted'); assert.equal(result.stopReason, null);
+  assert.equal(result.intents.length, 72); assert.equal(result.transitions.length, 72);
+  assert.ok(result.transitions.every(row => row.closed && row.healthy));
+  assert.equal(result.cases.flatMap(c => Object.values(c.answers)).length, 48);
+  assert.ok(result.cases.flatMap(c => Object.values(c.answers)).every(slot => slot.execution === 'failed' && !slot.answerInvoked));
+  assert.equal(result.cases.map(c => c.probe).length, 24); assert.ok(result.cases.every(c => c.probe.execution === 'failed'));
+  assert.equal(result.resources.reservedMicroUsd, 360000); assert.equal(result.resources.unknownUsageIntents, 72);
+  assert.equal(result.resources.unknownUsageReservedMicroUsd, 360000); assert.equal(result.resources.missingFinalRecords, 0);
+  const planner = result.intents.filter(intent => intent.ownerKind === 'planner');
+  assert.equal(planner.length, 24); assert.equal(planner.filter(i => i.final.outcome === 'failed').length, 12);
+  assert.equal(planner.filter(i => i.final.outcome === 'unknown').length, 12);
+  assert.ok(planner.every(i => i.final.inputTokens === null && i.final.outputTokens === null && i.final.settlementPersisted));
+  const timed = planner[0], timedSlot = result.cases[0].answers['source-bundle'], witness = timedSlot.artifacts.plannerFailure;
+  assert.ok(['cancelled', 'deadline_exceeded'].includes(timed.final.failureCode));
+  assert.equal(witness.rawCode, timed.final.failureCode); assert.equal(witness.normalizedCode, 'model_timeout');
+  assert.equal(witness.normalization, 'healthy-settled-per-call-timeout');
+  assert.deepEqual(witness.health, { state: 'consumed', fatalCode: null });
+  assert.equal(witness.callerAborted, false); assert.equal(witness.absoluteDeadlineLive, true);
+  assert.equal(timedSlot.artifacts.rankFailure.code, 'model_timeout'); assert.equal(timedSlot.failure, 'model_timeout');
+  assert.deepEqual(JSON.parse(readFileSync(join(workspace.path, 'comparison', 'result.json'), 'utf8')), result);
+  const base = fixtureInput(preparation.observation, result), prepared = await prepareSourceBundleScoring(base), report = await assess(base, prepared);
+  assert.equal(prepared.status, 'ready', JSON.stringify(prepared.issues)); assert.equal(report.status, 'assessed');
+  assert.equal(report.denominators.qaSlots, 48); assert.equal(report.probes.length, 24);
+  assert.equal(report.resources.compliance.status, 'satisfied'); assert.equal(report.gate.promising, false);
+  assert.equal(prepared.excludedAnswers.length, 48); assert.equal(prepared.packets[0].payload.items.length, 0);
+  console.log('SC_C2_ACTUAL=' + JSON.stringify({ preparation: prepared.status, report: report.status, intents: result.intents.length,
+    owners: result.transitions.length, plannerFailed: 12, plannerUnknown: 12, rawTimeout: timed.final.failureCode,
+    normalization: witness, reservations: result.resources.reservedMicroUsd, missingFinals: result.resources.missingFinalRecords }));
+  const observations = [];
+  async function deniedMutation(label, mutate) {
+    const corrupted = clone(base); mutate(corrupted);
+    const candidate = await prepareSourceBundleScoring(corrupted);
+    const scored = await assess(corrupted, candidate.status === 'ready' ? candidate : prepared);
+    observations.push({ label, preparation: candidate.status, score: scored.status });
+  }
+  for (const outcome of ['failed', 'unknown']) {
+    const original = planner.find(i => i.final.outcome === outcome && i.final.failureCode === 'provider_failed');
+    assert.ok(original);
+    for (const failureCode of ['authentication_failed', 'redirect_rejected', 'request_mutated', null, '', 'invented_cause', { code: 'provider_failed' }]) {
+      // Cause-only corruption; actual raw wire/body/outcome/history stay fixed.
+      await deniedMutation(outcome + ':' + JSON.stringify(failureCode), x => { x.result.intents[original.ordinal - 1].final.failureCode = failureCode; });
+    }
+  }
+  const ordinary = result.intents.find(intent => intent.ownerKind === 'ordinary' && intent.final.outcome === 'failed');
+  assert.ok(ordinary);
+  for (const failure of [null, '']) await deniedMutation('ordinary-failure:' + JSON.stringify(failure),
+    x => { x.result.intents[ordinary.ordinal - 1].final.failure = failure; });
+  const witnessMutations = [
+    x => { x.plannerFailure = null; },
+    x => { x.plannerFailure.rawCode = timed.final.failureCode === 'cancelled' ? 'deadline_exceeded' : 'cancelled'; },
+    x => { x.plannerFailure.normalizedCode = 'provider_failed'; },
+    x => { x.plannerFailure.normalization = 'unchanged'; },
+    x => { x.plannerFailure.health.state = 'ready'; },
+    x => { x.plannerFailure.health.fatalCode = 'authentication_failed'; },
+    x => { x.plannerFailure.callerAborted = true; },
+    x => { x.plannerFailure.absoluteDeadlineLive = false; },
+    x => { x.rankFailure.code = 'provider_failed'; },
+    x => { x.plannerFailure.extra = true; },
+  ];
+  for (const [index, mutate] of witnessMutations.entries()) await deniedMutation('timeout-witness:' + index,
+    x => mutate(x.result.cases[0].answers['source-bundle'].artifacts));
+  await deniedMutation('timeout-slot-cause', x => { x.result.cases[0].answers['source-bundle'].failure = 'provider_failed'; });
+  console.log('SC_C2_CORRUPTION=' + JSON.stringify(observations));
+  assert.ok(observations.every(row => row.preparation === 'denied' && row.score === 'denied'));
+  await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
+});

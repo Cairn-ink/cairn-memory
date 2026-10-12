@@ -1059,3 +1059,222 @@ and inherited source, unstaged status and owned cleanup. Exact audit/hashes are
 retained outside the worktree for STOP handoff. This is offline consistency
 evidence, not semantic efficacy, measured lightweight fit, D12/Stage2/3
 clearance, external execution/firstness proof or live spending authority.
+
+
+## C2 final prospective correction contract (verbatim)
+
+# SC correction C2 — planner failure/global-stop symmetry
+
+Prospective primary correction contract, 2026-10-12. Fixed candidate
+`a9b3d887dc7cc20e678c493f9b5f89465d62aab9`, original full review base
+`6abed0ccdfe3815d42b25db04adb159483ded156`. No paid execution occurred.
+
+## Finding and causal hypotheses
+
+C1 fixed ordinary failure consistency and outcome-independent planner token
+limits. Independent Spec review found that a failed/unknown planner final
+without numeric overflow still lacks the same known-fatal/global-stop check.
+The extracted actual validator admits a known-fatal planner cause in an
+accounted result. This probe establishes the helper gap only, not the full
+public retained-input path.
+
+Ranked hypotheses: (1) the fatal check is nested under numeric overflow, so
+non-overflow failed/unknown planners escape it; (2) later retained validation
+may already reject the same record. Establish which is true with a genuine
+retained public-seam red before fixing source. A synthetic corruption control
+must be labelled corruption, not claimed to have been executed by the runtime.
+
+## Bounded assignment
+
+One existing GPT-6.1 Sol/high author, same scoring worktree and branch. Only
+`evaluation/algorithm-development/source-bundle-scoring.mjs`, its existing test,
+and append-only notes in `docs/plans/source-bundle-scoring.md` and
+`docs/limitations.md`. Preserve original full contract and all prior evidence.
+Do not modify judging, corpus/rubric, runner/transport, schemas, thresholds,
+budgets/caps, dependencies/CI, product defaults or private operator. No key,
+operational ledger/configuration, provider, closed cohort, commit or push.
+
+## Observable acceptance
+
+- A known globally fatal planner failureCode cannot coexist with an accounted
+  run, for failed or unknown outcomes, whether or not any token count is known.
+- A succeeded planner final still requires null failureCode. A failed/unknown
+  final requires a recognized non-null code from the existing frozen QT error
+  taxonomy; null, empty, unknown and non-scalar unsuccessful causes are not
+  honest observations. Preserve the accepted coordinator normalization,
+  including `request_mutated -> rank_mismatch`, before fatality checking.
+  This validates existing closed causes; it does not invent runtime causes.
+- Healthy consumed planner failure/unknown observations remain accepted;
+  genuine stopped observations remain retained without claiming advancement.
+  Do not classify all provider errors as globally fatal.
+- Preserve the coordinator's existing healthy per-call timeout normalization
+  (runner389-400). A raw QT cancelled/deadline_exceeded may normalize to
+  model_timeout only using the retained closed plannerFailure witness: matching
+  rawCode, normalizedCode=model_timeout, normalization label, consumed health
+  with null fatalCode, callerAborted=false and absoluteDeadlineLive=true. Bind
+  the phase's settled final and rankFailure/slot failure to that same cause;
+  do not trust a free-standing label. Absolute timing/caller provenance remain
+  externally attested, as in the original contract. An actual single 30s core
+  timeout in the same synthetic fixture is permitted and required to prevent
+  over-rejection; no runtime deadline/cap change. Missing or contradictory
+  normalization evidence cannot excuse an accounted fatal final. Do not demand
+  this exception witness for ordinary nonfatal provider errors or stopped runs.
+- Reach public prepare/score with an actual fresh synthetic runtime fixture.
+  Prefer a small-output healthy-failure campaign or reuse a suitable fixture;
+  do not expand or rewrite the existing 192-intent fixture merely for this.
+  Hold all24 cases / 48QA / 24probe denominators fixed. Mutate only relevant
+  final cause fields for corruption controls, preserving other evidence.
+- Capture red before scorer edits, then the same assertions green. Preserve
+  existing C1 stopped-overflow, healthy ordinary failure and successful cases.
+  This changes assessment consistency, not algorithm, scorer policy or efficacy.
+- Same-path completeness check: the accepted ordinary transport130-195 sets a
+  nonempty failure string for every unsuccessful final. Reuse this same new
+  fixture's actual ordinary503 observation to test null/empty-cause corruption
+  through the public seam. If accepted, require a nonempty string on ordinary
+  unsuccessful finals too; do not invent a closed ordinary-code taxonomy or
+  change its accepted healthy normalization. If later validation already denies,
+  retain that control without unnecessary source changes. No extra preparation.
+
+## Verification
+
+Run owned focused tests sequentially on pinned Node22.16 and24.15, syntax and
+root validation; record actual exits, no skips/cancellations/residue, exact
+hashes and four-path inventory through two independent routes. Do not rerun
+unrelated matrices. STOP WRITES before primary verifies. Primary will rerun
+affected gates, commit only scoped paths, and obtain both independent full5
+fixed-base reviews before any push. Old full matrices retain old-head labels;
+exact-head remote CI remains mandatory before live preparation.
+
+## C2 author implementation and retained evidence
+
+This append preserves all previous plan evidence and the original 21,844-byte
+contract. The final prospective C2 contract above is 5,138 bytes, SHA256
+`3133973182d5c591cce200f0a99ad8f539b1d1d3f8072c613e198d9f003beaf1`.
+Earlier C2 hashes were superseded prospectively before the source correction:
+the release clarified the accepted 23-code taxonomy, the next amendment
+preserved the actual healthy local-timeout normalization, and the final
+amendment added ordinary unsuccessful null/empty-cause checks. None changed
+the corpus, score policy, thresholds, runtime, budgets or deadline caps.
+
+The correction remains on experiment/source-bundle-scoring at rejected
+candidate a9b3d887dc7cc20e678c493f9b5f89465d62aab9; full review base remains
+6abed0ccdfe3815d42b25db04adb159483ded156. The same GPT-6.1 Sol/high author owns
+only scorer, its test and append-only plan/limitations. Judging, inherited
+sources and private operator are unchanged. No commit, staging, provider,
+credential, operational ledger/configuration or closed-cohort access occurred.
+
+### Public-seam diagnosis and minimal correction
+
+One fresh genuine all24 preparation/run uses the unchanged real coordinator,
+ordinary/QT transports and an owned initialized synthetic schema2 ledger.
+The fixed fake-HTTP policy examines only the format name and predeclared
+planner-count ordinal, never question, rubric, family, anchors or gold.
+Ordinary counts return HTTP503. The first planner count never responds and
+reaches the actual unchanged 30s local timeout; subsequent even planner counts
+return HTTP503 and odd counts throw a synthetic error. No generation or answer
+dispatch occurs. The original 192-intent padded fixture is unchanged.
+
+The actual report is accounted with 72 intents, 72 settled healthy closed
+owners, 48 consumed failed QA slots, 24 consumed failed probes and zero first
+answers. All24 planner finals retain null token counts and persisted
+settlement: 12 failed and 12 unknown, including the first raw cancelled timeout.
+Reserved amount is 360,000 microUSD; all72 intents have unknown usage and the
+same full reservation, with zero missing final records. Persisted result
+equals returned result. Public preparation is ready and scoring assessed,
+resource compliance satisfied and promising false. All48 answers are excluded;
+the two honest judge packets contain zero items.
+
+The timeout's actual plannerFailure records rawCode=cancelled,
+normalizedCode=model_timeout, normalization=healthy-settled-per-call-timeout,
+health={state:consumed,fatalCode:null}, callerAborted=false and
+absoluteDeadlineLive=true. Actual rankFailure and slot failure are model_timeout.
+These observations prevent blanket rejection of honest healthy timeout or
+provider outcomes. Absolute timing and caller provenance remain externally
+attested, not independently measured by the pure scorer.
+
+Before modifying the scorer, retained-only corruption controls reached both
+public prepare and score. One-field failureCode controls target an actual
+failed and an actual unknown planner final: authentication_failed,
+redirect_rejected, request_mutated, null, empty, invented code and object.
+Eleven controls remove or contradict the timeout witness, its closed keyset,
+health, normalized/raw codes, label, caller/deadline flags, rankFailure or
+slot failure. Two more change an actual ordinary503 failure to null or empty.
+These 27 controls are deliberately corrupted data, not claimed executions.
+
+The first red had 25 wrongly ready/assessed controls. The final prospective
+ordinary completeness addition produced a second red with all27 wrongly
+ready/assessed controls, while the genuine healthy report stayed ready/assessed.
+This confirms the missing outcome-independent fatal check and refutes the
+hypothesis that later public validation already rescued these records.
+
+The minimal source correction checks unsuccessful planner causes against the
+literal existing 23-code QT taxonomy, projects request_mutated to rank_mismatch,
+and checks known fatality independently of numeric overflow. Accounted raw
+cancelled/deadline_exceeded is excused only by the exact closed, phase-bound
+settled healthy-timeout witness plus matching rankFailure and slot failure.
+Genuine stopped observations are not forced through this accounted exception.
+Ordinary unsuccessful causes require a nonempty string without a new closed
+ordinary taxonomy. Succeeded causes remain null. Existing C1 overflow checks,
+healthy provider outcomes and all frozen gates remain unchanged.
+
+### Commands, exits and immutable logs
+
+All evidence is retained under
+`/tmp/cairn-scoring-c2-author.Zw8Q4IDg`; red logs were not overwritten.
+
+The focused command used credential-free `env -i`, version-specific PATH
+before /usr/bin:/bin, owned TMPDIR, NODE_DISABLE_COMPILE_CACHE=1 and both
+CAIRN_SOURCE_BUNDLE_OFFLINE=1 / CAIRN_BUNDLE_TRANSPORT_OFFLINE=1, then the pinned
+Node executable, `tools/testing/run.mjs` and
+`evaluation/algorithm-development/test/source-bundle-scoring.test.mjs`.
+The red commands additionally used
+`--test-name-pattern=actual healthy planner failed/unknown counts`.
+
+| Observation | Actual exit | Tests | Log / SHA256 |
+| --- | --- | --- | --- |
+| Node22 first public red, original scorer | 1 | 0/1; 25 wrong admissions | red22.log / 9cf397ac803e251c581c052c913d5bf852fab423b05a7bd6c34544ce7d9946f6 |
+| Node22 second public red, original scorer | 1 | 0/1; 27 wrong admissions | red22-ordinary.log / d037c8f557e4276db6cbc446786ceda78f4e48e7e664bdbabd493c2507e31c5c |
+| Node22.16.0 full focused final bytes | 0 | 20/20 | focused22.log / 8c72e38fead9a952fea2d4ea662c8117681a9c7f9b29d2897b94b52a0b376a4a |
+| Node24.15.0 full focused same bytes | 0 | 20/20 | focused24.log / 6bf3c61ad83c090c6b5dd04033789b9c8ac969b1da094837de0ece82cc3a15a9 |
+
+Both full focused suites have zero failed, skipped or cancelled tests and owned
+cleanup. Durations are 204,861.202565ms / 263,551.154925ms; the C2 subtest took
+81,404.909533ms / 138,973.302599ms under its unchanged180s cap. All27 corruption
+controls deny through both public exports, while the genuine72-intent report
+remains ready/assessed. The original actual192-intent/120-owner/47-answer
+fixture, all67 anchor checks, C1 stopped overflow and genuine pre-aborted run
+remain green. Scripted labels establish consistency/arithmetic, not quality.
+
+Version checks and `node --check` for scorer and test each exit0 on both
+pinned Nodes (six commands). The first Node22 npm invocation exits1 before
+validation because setting user and global npm configs to the same /dev/null
+causes npm's double-loading-config rejection. Its `validate-22.16.0.log` is
+retained as setup failure, not scorer/test/validator failure. The corrected
+credential-free commands use NPM_CONFIG_USERCONFIG=/dev/null and a distinct
+owned `empty-global.npmrc` containing only a comment; `npm run validate`
+then exits0 on both Nodes, recorded in `validate-22.16.0-corrected.log` and
+`validate-24.15.0-corrected.log`. No ambient operational config was needed.
+
+Final source-held hashes during both focused runs:
+scorer `825e5b8366fd2e8bb5e3ad3af618deaa07e5e92938b01446a20cb316e8fec458`;
+test `19327aa7c692e699d681ee115adb4d8354d066c99e21f12527bfe20293b294cf`.
+Both reds used original scorer
+`f278258dbace470cd02c492cdced26b1bea666ad858eb4b86d3fa3e8380890f5`.
+No unsuccessful source-fix round occurred; the second red added the prospective
+ordinary control before the single source correction.
+
+The final audit derives exactly four paths independently by Git and recursive
+filesystem/blob/mode comparison against a9b3d887, checks preserved plan and
+limitations prefixes, the original contract, verbatim final C2 contract,
+unchanged judging/inherited sources, unstaged status and empty owned TMPDIRs.
+Exact audit and final document hashes are retained outside the worktree for
+STOP handoff. All owned test children have settled; no runtime writes occur
+after STOP. No unrelated broad matrix was repeated. Full algorithm203
+(accepted BR183 plus SC20) is a prospective primary/CI expectation, not an
+author full-suite result. Prior broad matrices retain their old-head labels.
+
+Primary owns fixed-byte acceptance, both full-five-path independent reviews
+and exact-head CI before live preparation. This packet establishes offline
+retained-record consistency only: no semantic efficacy, measured lightweight
+fit, independent execution/firstness, D12/Stage2/3 clearance or spending
+authority is claimed.

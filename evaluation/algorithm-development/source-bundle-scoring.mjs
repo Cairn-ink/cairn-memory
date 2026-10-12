@@ -37,6 +37,12 @@ const ORDINARY_FAILURE_ALIASES = {
   invalid_recall_provenance: 'provenance_mismatch', provenance_limit_exceeded: 'provenance_mismatch',
   bundle_answer_incomplete: 'provenance_mismatch', bundle_invocation_conflict: 'request_denied',
 };
+// Exact closed error taxonomy of the pinned QT transport, not new causes.
+const PLANNER_FAILURES = new Set(['invalid_configuration', 'prerequisite_unavailable', 'invalid_request',
+  'request_mutated', 'context_budget_exceeded', 'slot_consumed', 'transport_busy', 'transport_closed',
+  'cancelled', 'deadline_exceeded', 'ledger_failed', 'budget_blocked', 'record_persistence_failed',
+  'credential_echo', 'provider_failed', 'authentication_failed', 'redirect_rejected',
+  'invalid_response', 'response_too_large', 'invalid_usage', 'usage_overrun', 'model_mismatch', 'invalid_model_output']);
 const LIMITATIONS = [
   'Artifact consistency is not proof against fabrication of a complete transcript.',
   'Original history-prefix preservation and absolute per-phase deadlines rely on the pinned runtime and external execution provenance, not independently reconstructed old rows or dispatch times.',
@@ -296,7 +302,8 @@ function validateResources(preparation, result) {
         && (answer ? raw.endpoint === 'chat/completions' : raw.endpoint !== 'chat/completions')
         && integer(raw.localInputTokens, 6000) && raw.requestBytes === Buffer.byteLength(raw.requestBody), 'resource_accounting_mismatch');
       check(raw.responseBytes === null || raw.responseBytes === Buffer.byteLength(raw.responseBody), 'resource_accounting_mismatch');
-      check(raw.failure === null || typeof raw.failure === 'string', 'resource_accounting_mismatch');
+      check(raw.outcome === 'succeeded' ? raw.failure === null : typeof raw.failure === 'string' && raw.failure.length > 0,
+        'resource_accounting_mismatch');
       const cause = Object.hasOwn(ORDINARY_FAILURE_ALIASES, raw.failure) ? ORDINARY_FAILURE_ALIASES[raw.failure] : raw.failure;
       if (FATAL.has(cause)) check(result.status === 'stopped', 'resource_accounting_mismatch');
       if (counting && raw.providerInputTokens !== undefined) { check(integer(raw.providerInputTokens), 'resource_accounting_mismatch');
@@ -323,6 +330,24 @@ function validateResources(preparation, result) {
         && raw.preparedRequestSha256 === preparation.cases[caseIndex].hashes.bundlePreparedSha256
         && raw.requestSha256 === digest(raw.requestBody)
         && (raw.responseBody === null ? raw.responseSha256 === null : raw.responseSha256 === digest(raw.responseBody)), 'resource_accounting_mismatch');
+      check(raw.outcome === 'succeeded' ? raw.failureCode === null
+        : typeof raw.failureCode === 'string' && PLANNER_FAILURES.has(raw.failureCode), 'resource_accounting_mismatch');
+      let cause = raw.failureCode === 'request_mutated' ? 'rank_mismatch' : raw.failureCode;
+      if (result.status === 'accounted' && ['cancelled', 'deadline_exceeded'].includes(cause)) {
+        // Preserve only the existing coordinator's settled per-call timeout.
+        // Timing/caller truth still requires external execution provenance.
+        const slot = result.cases[caseIndex].answers['source-bundle'], a = slot.artifacts;
+        const witness = fields(a.plannerFailure, ['rawCode', 'normalizedCode', 'health', 'callerAborted',
+          'absoluteDeadlineLive', 'normalization'], 'resource_accounting_mismatch');
+        fields(witness.health, ['state', 'fatalCode'], 'resource_accounting_mismatch');
+        fields(a.rankFailure, ['code'], 'resource_accounting_mismatch');
+        check(raw.settlementPersisted === true && witness.rawCode === raw.failureCode && witness.normalizedCode === 'model_timeout'
+          && witness.normalization === 'healthy-settled-per-call-timeout' && witness.health.state === 'consumed'
+          && witness.health.fatalCode === null && witness.callerAborted === false && witness.absoluteDeadlineLive === true
+          && a.rankFailure.code === 'model_timeout' && slot.failure === 'model_timeout', 'resource_accounting_mismatch');
+        cause = 'model_timeout';
+      }
+      if (FATAL.has(cause)) check(result.status === 'stopped', 'resource_accounting_mismatch');
       if (counting) {
         check(raw.outputTokens === null, 'resource_accounting_mismatch');
         if (raw.inputTokens !== null) check(integer(raw.inputTokens) && body?.input_tokens === raw.inputTokens, 'resource_accounting_mismatch');
