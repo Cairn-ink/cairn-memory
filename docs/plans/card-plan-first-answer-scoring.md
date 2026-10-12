@@ -1000,3 +1000,391 @@ experiment/card-plan-runtime; all applicable CI must match its exact head.
 These prospective checks are not claimed completed by this note. No merge,
 release, deployment, operational read, formal preparation or paid call follows
 from this offline acceptance schedule.
+
+### Independent review corrections: original-wire proof and ordinary decoding
+
+Independent Spec review of candidate
+`b7f61004381fc4a44f1c62f31e7062290384b0b2` found two blocking parity defects:
+successful CW envelopes/proposals used ordinary JSON parsing instead of the
+pinned strict grammar, and successful ordinary responses were not constrained
+to their endpoint-specific limits or exact recorded responseBytes. Standards
+review reported no findings. The review is retained at
+`/tmp/cairn-complementary-qa-acceptance.7sG2vXdH/card-scoring-reviews-b7f6100.md`.
+
+The public R1 diagnostic used one genuinely fresh owned synthetic runtime
+prefix, real core/stores and fake HTTP. Its unchanged runtime control was
+ready:120 total slots,5 retained/115 later unrun;72 answer slots,69 later unrun,
+two eligible completed A/B answers and a genuine C failure after extraction.
+The halted report was not rewritten into success. Only copied retained
+artifacts and their affected references/index were changed for eight negative
+controls. All eight incorrectly returned ready:four decoded-key duplicates
+in B envelope/proposal/usage/count, ordinary count65537, generation262145,
+answer262145 and wrong responseBytes. Ordinary duplicate JSON remained a valid
+positive. Original inputs/report were unchanged. Diagnostic child/outer exits
+were1, without setup failure; its owned parent was removed after empty-residue
+checks. Immutable script SHA-256 is
+`f9417b4a18135b78c83d86006c9e048b096dc1becd299be637b3570f806ae46f`;
+original raw `card-scoring-r1-red-node22.tILcP2.log` SHA-256 is
+`c08031e35d8112dbebd635a26d6b0c47253756bd595ed15a8329f87a0deb8a1d`.
+All log basenames below are under the same retained acceptance directory.
+
+The bounded correction requires successful CW post.responseSha256 to be valid
+lowercase64-hex and equal the literal retained text SHA before claiming
+original-body proof. Unequal hashes produce the existing denied schema with
+`insufficient_original_cw_proof`:insufficient proof, not a tampering claim.
+Runtime completion, literals and hashes remain intact; no raw reconstruction
+or selective redacted-key repair is attempted. The direct-identity path uses
+the exact pinned decoded-duplicate-key grammar,100000 value nodes/depth32,
+endpoint limits and count fields. Ordinary duplicate JSON behavior is unchanged.
+Failed CW responses retain conservative failure handling without a blanket
+successful-body limit on their replacement/redacted artifacts.
+
+Permanent public controls were added before implementation:15 targeted denial
+and7 acceptance boundary controls, plus two economical genuine prefixes. One
+has a completed B selection whose successful response is genuinely redacted
+and lacks original-wire identity; it is denied for insufficient proof. The
+other has an actual B count HTTP failure with redacted retained text and remains
+a valid failure, without source or successful-answer credit. Observed failure
+was provider_failed/settled-model-failure, not invented metadata.
+
+First corrected Node22 sequence session25545 actually exited0:two syntax
+checks, unchanged public R1 reproduction and focused suite92/92 passing with
+zero failures/cancellations/skips. Scorer/test hashes were respectively
+`d22614965d04df5157c766a3294c54b0877026f98c2d877802bc2a5cceb61acd`
+and `63ce06af20f70048d85f84617a212c6b722333f85bd134d736f79638a9322e45`.
+Raw hashes:syntax `card-scoring-r1-syntax.SXWrr1.log` =
+`86048a2d8aad92c83abb435892c9df7c451e39e6ead16b282e0cd933b4f5d777`;
+public `card-scoring-r1-public-green.u57GiX.log` =
+`fa2a2f673004b2dca7199566d2b6a5da9caf1f17c89c02f8278530560dc533fb`;
+focused `card-scoring-r1-focused-node22.vHepKu.log` =
+`3d5bb7e3a997c6f357de8b48a404596c98ff596b900b986d51ecb23588168160`.
+Parent `/tmp/card-scoring-r1-fix-parent.avDypW` empty-find/rmdir/absence
+checks each actually exited0. These greens did not cover the next observation.
+
+Primary independently found a legitimate ordinary BOM boundary using a fresh
+public runtime prefix:selection completed/post succeeded, literal retained
+body56 bytes with leading U+FEFF, but responseBytes53 because pinned fatal
+TextDecoder consumes exactly one leading BOM. Public scorer incorrectly
+denied successful_response_bytes_mismatch; child/outer1, no setup failure.
+Immutable primary script `card-scoring-ordinary-bom-repro.mjs` SHA-256
+`7601b0e6a1ab2b67faee00e7a458d923679afb09b7745144e61d001c168df022`;
+original raw `card-scoring-ordinary-bom-red.log` SHA-256
+`cc6cd7ad9cefa735ac445fb734c5a335eac5275b031b0ec1f106697eaad38aef`.
+
+The additional bounded correction derives ordinary decoded text by consuming
+exactly one leading U+FEFF at count/generation/answer parsing seams. It keeps
+endpoint limits on literal retained physical bytes, checks responseBytes on
+derived decoded bytes, and preserves artifacts/hashes. No trim, repair or CW
+change is introduced. A genuine prefix exercises count65536 and generation/
+all three answers262144 physical bytes, including BOM; all five ordinary
+posts succeeded with decoded bytes65533/262141. A/B completed answers remain
+eligible; C failed after extraction through the actual checkpoint halt.
+Five wrong-byte and five oversize copied controls are denied specifically;
+double BOM is not repaired beyond the single pinned decode operation.
+
+Final focused correction sequence session41929 used exact Node22.16.0,
+credential-free nine-key environment, all four required flags1, cache disabled
+and1800-second command watchdog. Both syntax checks and both immutable public
+reproductions actually exited0; focused child/outer0 ended
+2026-10-12T13:42:19.843Z with93/93 passing, zero failures/cancellations/skips.
+Public R1 again recorded all eight targeted denials and the unchanged ordinary
+duplicate positive; genuine BOM control returned ready. The scripts' embedded
+b7 provenance is the historical pre-correction candidate; current source
+hashes were separately captured, not mislabeled as clean b7 code.
+
+Frozen corrected scorer SHA-256:
+`ce3de16356de916c169d6d22670e10d695e608bc4acb59720c0002f195edfa23`;
+test SHA-256:
+`be9a12c1e5c7f5f4a949a9c8f1484d79560f84eb97ebf212b05ac00dd693bde0`.
+Final raw hashes:syntax `card-scoring-bom-syntax.nbnV7m.log` =
+`089a8dd384e87a0e0da79b9cc9b25444eb66232e29e69a574a0c6ff945138fc9`;
+R1 `card-scoring-bom-r1-public-green.J8lZLO.log` =
+`35397fc95bbb0a63d6f77d2593b6a6754f236a5b809da3fa6c79ae92f6d924fe`;
+BOM `card-scoring-bom-public-green.KClMSb.log` =
+`25b6b1c8469bf080d0d3004f700fd3afca8ec5444d09a1230d5f0a1d20b9cd2e`;
+focused `card-scoring-bom-focused-node22.FCx1uK.log` =
+`418f423b6817008d665b83367c4c01311b35db293068efd498eeb96f08c81fbb`.
+
+All13 full sorted artifact indexes/reference inventories were printed before
+cleanup and independently reconciled by primary:4137 artifact names,
+129843375 metadata bytes and136759555 total literal artifact bytes, excluding
+SQLite stores and old history. New prefix inventories were65/49/65 files,
+with metadata9163522/9123063/9163712 bytes and total literal
+9207374/9152644/10319991 bytes. Original24/72 denominators remain fixed.
+Parent `/tmp/card-scoring-bom-fix-parent.O6GWHw` empty-find/rmdir/absence
+checks each actually exited0; retained logs are outside the removed parent.
+Original RED evidence and previous failures remain immutable.
+
+These changes are evaluator-only parity corrections, not runtime/parser/model/
+prompt/corpus/rubric/profile/gate modifications or evidence of semantic gain,
+paid-provider quality, product latency/RSS fit or restored blinding. Existing
+source-inspected but unreached partial-read limitation remains. Full snapshot
+consistency remains tied to external runtime provenance, not independent
+authentication of a wholly self-consistent fabricated transcript. Successful
+CW redaction can conservatively deny proof even for legitimate runtime success.
+Primary accepted this checkpoint and authorized a fresh corrected two-runtime
+ST2b matrix; its outcomes will be appended after completion, not presumed here.
+
+### Corrected ST2b worker results and retained setup failure
+
+The first matrix wrapper failed during file discovery, before any version,
+test or validation command. Both setup invocations actually exited1 because
+the wrapper assumed `/usr/bin/rg`; the inspected executable was under the
+Codex package's absolute codex-path directory. This is infrastructure setup
+failure, not a behavioral RED or a native-suite retry. The original wrapper
+`card-scoring-review-st2b-driver.mjs` remains unchanged, SHA-256
+`eced3f497d6fa6b30f0f8d9d38c4853bb05f457184cec94dbaa37e8e11f9d49a`.
+Its originally opened `card-scoring-review-st2b-node22.log` and
+`card-scoring-review-st2b-node24.log` remain empty, each SHA-256
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+The actual tool stderr/exit observations were copied verbatim and explicitly
+labeled, not rerun or presented as independently captured raw stderr, in
+`card-scoring-review-st2b-wrapper-failure.txt`, SHA-256
+`1d25b75ede1334897ad55b9ccecc12bedef2f201207cb44597c032c1ec659250`.
+Both owned parents were empty after this setup failure; sources were unchanged.
+
+Primary explicitly authorized a new wrapper only. The retained replacement
+`card-scoring-review-st2b-driver-fixed.mjs`, SHA-256
+`93a74b9c8d309c65f81a48e63b4259ada195ecae95a417ea668b414494e5064b`,
+uses the inspected absolute rg, discovers28 algorithm/13 plugin/22 architecture
+test files, and independently compares each list with directory enumeration.
+Generic arguments preserve sorted plugin-then-sorted-architecture order.
+The complete command/file lists, nine environment keys and their exact values,
+driver/source hashes, prospective1800000ms per-command watchdog and actual
+child/final exits are recorded in each raw header/result. Source mismatch also
+sets the final reported sequence exit nonzero. Syntax on both exact runtimes
+and discovery preflight on both actually exited0, retained in
+`card-scoring-review-st2b-driver-preflight.log`, SHA-256
+`097a3c1265a84084caf868e3d342f8012742b407ad0fef17fbdadfd24a02dfc2`.
+No implementation or test changes accompanied this setup correction.
+
+Author then ran two concurrent credential-free owned sequences, root owning
+zero heavy sequences. PATH was the exact runtime bin plus `/usr/bin:/bin`;
+TMPDIR/TMP/TEMP were each sequence's fresh owned parent. The four required
+tokenizer/transport flags were1 and NODE_DISABLE_COMPILE_CACHE was1. No
+credential, HOME, install or paid/operational input was introduced.
+
+| Exact runtime / native session | Version | Focused | Full algorithm | Generic | Validate | Owned comparison demo | Outer exit |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Node22.16.0 /63001 | 0 | 0:93/93 | 0:337/337 | 0:784/784 | 0 | 0 | 0 |
+| Node24.15.0 /55591 | 0 | 0:93/93 | 0:337/337 | 0:784/784 | 0 | 0 | 0 |
+
+All twelve child exits were actually0, with no signal/error. Every test suite
+had zero failures/cancellations/skips. Node22 ran13:54:35.250Z–14:26:58.422Z;
+Node24 ran13:54:36.424Z–14:26:54.085Z on2026-10-12. The watchdog was per command,
+not per total sequence; all commands completed within it. Complete literal
+stdout/stderr, including different Node reporter framing, is preserved:
+
+- `card-scoring-review-st2b-fixed-node22.log`, SHA-256
+  `ba51431e7fd2086df383448eb6efbdaae13ad1c6c36fafd2c4313960d57d74a8`.
+- `card-scoring-review-st2b-fixed-node24.log`, SHA-256
+  `e0ed0ea2aed65bb12564de520db5b2fa2e4db904a76bae4407502f4aa3021e3a`.
+
+Every focused/full-algorithm invocation freshly prepared all13 real synthetic
+fixtures:52 executions across four groups. Every full literal sorted index,
+independently reconstructed reference inventory, execution record and envelope
+was printed before cleanup. Per-group file counts in fixture order were
+939,939,939,26,27,53,37,27,939,32,65,49,65:4137 artifact names, excluding SQLite
+stores and original history. Each group had697 actual fake HTTP calls,
+1396 retained records and193 AB/94 C eligible items. These are aggregate
+fixture counts, not a replacement for fixed24/72 case/answer denominators.
+
+| Fresh fixture group | Metadata bytes, all13 | Literal artifact bytes, all13 |
+| --- | --- | --- |
+| Node22 focused | 129906762 | 136822942 |
+| Node22 full algorithm scorer integration | 129906625 | 136822805 |
+| Node24 focused | 129906786 | 136822966 |
+| Node24 full algorithm scorer integration | 129906675 | 136822855 |
+
+Both raw finals confirm unchanged ce3de163… scorer and be9a12c1… test hashes.
+After actual outer0, parents
+`/tmp/card-scoring-review-st2b-node22-parent.wok7aT` and
+`/tmp/card-scoring-review-st2b-node24-parent.PrTEAW` each had zero entries;
+individual find/rmdir/absence checks all actually exited0. Only these exact
+owned parents were removed. Logs, both original REDs, all previous failures,
+the setup failure and original wrapper remain intact outside the parents.
+
+Precision on CW proof:post.responseSha256 hashes the unredacted parser-input
+text **after** the pinned fatal TextDecoder, not an independently retained
+physical wire buffer. The direct-identity check establishes that text's
+identity within retained-data consistency. It does not authenticate physical
+wire bytes or externally attest execution. Historical diagnostic fields named
+rawSha256 refer to that recorded parser-input hash; no stronger network-byte
+equality is claimed. Unequal successful CW hashes remain insufficient proof,
+not proof of tampering/redaction, with no score or invented runtime transition.
+
+Git diff since b7 and independent owned-file Git-blob comparisons agree on
+exactly3 author correction paths:module, test and this plan append. Primary's
+independent complete filesystem/base audit separately reported4 delivery paths
+(including primary-owned limitations),1608 source files and122 relative links;
+limitations were neither restored nor edited by this author. The original
+33544-byte contract prefix remains exact. During the corrected matrix, no
+source/config/dependency changes, commits, pushes, merges or semantic-gain/
+product-fit claims were introduced.
+The author stops here for serialized primary limitations/integration, direct
+acceptance and fresh candidate review. Completed worker matrices do not imply
+that those later primary gates, CI, release or deployment have occurred.
+
+Handoff concurrency note:the3-path author inventory above was measured before
+primary's serialized new limitations integration. At final shared-worktree
+handoff, Git diff since b7 has4 paths because primary has now appended its
+review corrections to limitations. Independent author-owned file/blob
+comparison still identifies exactly module/test/plan as the3 author paths;
+the fourth is explicitly primary-owned, not an undisclosed author edit.
+Primary's corrected-worker collector actually exited0 and independently
+verified all12 outcomes,28/13/22 inventories, unchanged before/after module/test
+hashes and both absent parents. Its wx-retained evidence
+`card-scoring-corrected-worker-evidence.json` SHA-256 is
+`2d9ee8289e01481e55389c2ec5780420b59b255ab6a6c28af8516168843d810c`;
+it was not rerun or rewritten by the author.
+
+### Primary corrected-candidate acceptance schedule
+
+Primary read the complete correction diff and worker result appendix, accepted
+the retained RED-to-GREEN evidence, and independently reconciled all twelve
+worker command outcomes, exact command inventories, raw hashes, before/after
+scorer/test hashes and absent owned parents. The collector above is immutable.
+The original b7 primary evidence and reviews remain historical, not acceptance
+of the corrected code. Primary now owns the narrow documentation integration:
+label earlier matrices as pre-review and record the parser, byte-boundary,
+redaction and setup-failure limitations without changing the frozen contract.
+No evaluator implementation or test edits are part of that integration.
+
+Before launching the following checks, all four delivery files will be frozen.
+Fixed review base remains `4309ff396834f60c237910493c2dc837e11de4dc`;
+precommit HEAD is `b7f61004381fc4a44f1c62f31e7062290384b0b2`, with corrected
+content identified by full before/after source snapshots rather than claimed
+as clean b7 code. Each exact Node22.16.0 and24.15.0 will run version, focused
+scorer tests, existing core-source integration, LongMemEval source/answer
+integration, full algorithm tests, owned comparison demo, generic tests,
+repository validation and both Claude validators. The primary driver retains
+actual exit/signal/error, raw output/hash and owned-scratch absence for every
+command. Both sequences use scrubbed child environments, the existing four
+required flags, compile-cache disabling and the existing1800-second watchdog;
+at most two heavy sequences run concurrently.
+
+Only after those twenty commands pass will primary commit the scoped
+correction, inspect current contributor/package/CI gates, and rerun version
+and validation on both runtimes. Four snapshots must match the final committed
+candidate; Git inventory and independent full-filesystem/base-blob comparison
+must agree on four paths. The24-command final evidence uses the explicit b7
+precommit HEAD, without overwriting historical evidence. Fresh nonauthor
+GPT-6.1 Sol/high Standards and Spec reviewers then inspect the same fixed base
+and corrected final HEAD. Any new finding follows the existing correction
+policy; neither old review nor primary self-review substitutes for either axis.
+
+After both axes pass, a dependent scorer PR may be pushed against runtime
+PR408. Exact-head applicable CI and mergeability remain required. This schedule
+records prospective acceptance, not results that have not happened. It grants
+no main merge, release, deployment, operational access, formal preparation,
+paid request or operation on the closed source-bundle cohort. A later fresh
+algorithm comparison remains separately frozen and budget-preflighted.
+
+### Prospective offline maintainer scheduling amendment
+
+Status: accepted by the primary DRI before any new full-suite attempt, after
+independent GPT-6.1 Sol/high procedural Spec review reported zero blockers.
+That review is not final scorer acceptance or new execution authority. Root
+owns this narrow acceptance-plan correction. No paid work is authorized.
+
+## Scope and reason
+
+Fixed scorer review base4309ff396834f60c237910493c2dc837e11de4dc; current
+precommitHEADb7f61004381fc4a44f1c62f31e7062290384b0b2. Module ce3de16356de916c169d6d22670e10d695e608bc4acb59720c0002f195edfa23
+and test be9a12c1e5c7f5f4a949a9c8f1484d79560f84eb97ebf212b05ac00dd693bde0
+remain unchanged. No runtime, core, prompt, corpus, rubric, parser, package,
+CI, dependency or product deadline change is proposed.
+
+The primary's original Node22 full algorithm invocation failed with337tests,
+336pass,0fail,1cancel: existing C5 exceeded180000ms at187213.546706ms.
+Node24's ten-command primary sequence passed. Independent primary reconciliation
+is retained in card-scoring-primary-timeout-evidence.json, SHA256
+8c7312cc92c560eccb4e9d773e40bc5de992a88fca971a943f365874e7f3e237.
+The selected original C5 diagnostic passed at62321.302487ms, but this does not
+resolve the original timeout. Exact cause remains unknown.
+
+Read-only Node22/24 embedded scheduler inspection establishes that the default
+allows availableParallelism()-1 direct file workers, currently15 on this16-core
+host. Both original full suites had28files and overlapped, permitting30 direct
+file workers plus supervisors/nested children. This is a demonstrated scheduling
+exposure, not measured original CPU pressure or proof of causation. CI's runtime
+matrix uses separate job runners, not two full suites on this same host.
+
+## Explicit plan revision
+
+The frozen33544-byte original contract remains intact as historical acceptance
+scope. Its unconditional sentence "No timeout retry is authorized" and original
+requirement for twenty green commands followed by four identical full-source
+snapshots are NOT silently treated as satisfied. After independent review and
+primary acceptance of this amendment, it permits ONE new offline primary
+Node22 full algorithm invocation under changed maintainer scheduling, then the
+five previously unrun Node22 commands if it succeeds. The old failed invocation
+remains failed and visible. There is no automatic retry and no restoration of
+the original acceptance attempt. This narrow DRI engineering-plan revision is
+within the user's standing continue/fix/verify request; it grants no new
+financial authority, external mutation or formal evaluation operation.
+
+The new algorithm invocation uses the existing owned runner with explicit
+--test-concurrency=4 before ALL28 mechanically discovered test-file arguments.
+The two independent lists (rg and filesystem) must agree and match package
+glob discovery. No name filter, subset, skipped test or changed assertion is
+allowed. Four is fixed prospectively, not tuned after outcomes. It caps file
+parallelism while keeping the full workload feasible within the unchanged
+1800-second subprocess watchdog. One heavy native sequence at a time globally;
+no simultaneous reviewer/worker native suite. Inner30s/180s C5 limits, every
+other existing test deadline, evaluated30s/200s/20m/8h limits, gates, model,
+tokens, request/cost ceilings and all four required flags are unchanged.
+
+Use exact Node22.16.0, inspected tiktoken1.0.22, scrubbed environment, disabled
+compile cache, fresh owned scratch, literal stdout/stderr, actual child/outer
+exit/signal/error, command times and source snapshots. Observe descendant CPU/RSS
+only within the launched owned process tree if feasible, without reading
+environment variables, keys or arbitrary host process arguments. Telemetry is
+diagnostic and may not replace assertions or certify original causality.
+
+All337tests must pass,0fail/cancel/skip, and scratch must be empty/removed.
+If anything fails, stop this sequence without retry or a new concurrency value.
+Do not widen the watchdog or deadlines to finish. A pass means the amended
+bounded-scheduling gate passed; it does NOT mean the unexplained original
+failure is diagnosed/fixed or the uncapped local parallel policy is reliable.
+
+Only following that pass, run the previously unrun owned comparison demo,
+generic784tests, repository validation and both Claude validators. These five
+are first executions for primaryNode22 on this corrected code, not retries.
+All must exit0 with expected counts/cleanup; stop on any failure.
+
+## Evidence and final review
+
+Existing valid primary Node22 version/focused93/core53/LME51 and complete
+Node24ten-command evidence remain valid for IDENTICAL functional source.
+Before the new invocation, primary may append only this plan revision and
+original failure/limitations to the two existing documentation files, then
+freeze all four delivery files. Independently compare all1608 source hashes:
+only those two documentation hashes may differ from the original Node24 proof;
+the other1606 must be identical. This is explicit documentation-only provenance
+reconciliation, not a claim all original full snapshots match the final tree.
+No extra source path or functional byte can be excluded from this comparison.
+
+After the new six commands pass, primary may commit the four scoped paths,
+inspect contributor/package/CI configuration, and run postcommit version plus
+validation on both exact runtimes, sequentially. The new six-command snapshot
+and both postcommit snapshots must match the committed tree exactly. The final
+evidence must show24successful command observations AND the retained failed
+25th observation, separate from the one selected diagnosis. It must label which
+commands used original versus bounded scheduling, and reproduce exact argv,
+raw hashes, original failure cause/unknown causality and cleanup results.
+Never pool the selected diagnosis into the full-suite denominator.
+
+Fresh independent nonauthor GPT-6.1Sol/high Standards and Spec review of the
+same fixedbase/finalHEAD remain mandatory, including this revision and all
+original failure evidence. A reviewer may reject the revision; no primary
+self-review or old b7 review substitutes. Only a candidate passing those axes
+may be pushed as a dependent scorer PR. All applicable exact-head CI must then
+pass with the unchanged repository commands and mergeability confirmed. CI
+failure remains failure, not automatically rerun. No main merge/release/deploy.
+
+Remaining limitations: initial uncapped concurrent local failure unresolved;
+no measured reliability guarantee under arbitrary host load; synthetic tests
+are not real algorithm accuracy, semantic gain or lightweight product proof.
+Operational keys/config/ledger, formal preparation, paid calls, closed-cohort
+rerun/reprepare/resume/retry/rescore/rejudge are excluded throughout.

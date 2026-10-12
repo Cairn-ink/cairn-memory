@@ -43,6 +43,10 @@ const LIMITATIONS = [
   'Scripted complete-map arithmetic is not measured algorithm efficacy, natural-history MOC, lightweight product fit or readiness; D12 and Stage2/3 remain uncleared.',
 ];
 const sha = value => createHash('sha256').update(value).digest('hex'), hash = value => sha(JSON.stringify(value));
+// Ordinary boundedBody retains Buffer UTF-8 text, then its fatal TextDecoder
+// consumes exactly one leading UTF-8 BOM. Keep literal identity separate from
+// the derived decoded body; this is not whitespace trimming or JSON repair.
+const ordinaryDecodedText = text => text.startsWith('\uFEFF') ? text.slice(1) : text;
 const denialReasons = new WeakMap();
 const fail = code => { const error = new TypeError(code); denialReasons.set(error, code); throw error; };
 const check = (condition, code) => { if (!condition) fail(code); };
@@ -311,8 +315,46 @@ function progress(slot, c, answer) {
   if (slot.stateFailure) check(slot.status === 'failed' && slot.stateFailure.code === 'card_plan_store_drift'
     && !phases.includes('after'), 'state_witness_mismatch');
 }
+// Mirror the pinned CW parser, including decoded duplicate-key rejection and
+// its exact value-node/depth limits. Ordinary transport keeps JSON.parse.
+function cwJson(text, code = 'cw_response_json_mismatch') {
+  let at = 0, nodes = 0;
+  const whitespace = () => { while (/[ \t\r\n]/u.test(text[at] ?? '') && at < text.length) at++; };
+  function string() {
+    const start = at++;
+    while (at < text.length) {
+      if (text[at++] === '"') return JSON.parse(text.slice(start, at));
+      if (text[at - 1] === '\\') at++;
+    }
+    fail(code);
+  }
+  function value(depth) {
+    if (++nodes > 100000 || depth > 32) fail(code);
+    whitespace(); const c = text[at];
+    if (c === '"') return string();
+    if (c === '{' || c === '[') {
+      const object = c === '{', result = object ? Object.create(null) : [], seen = new Set();
+      at++; whitespace(); if (text[at] === (object ? '}' : ']')) { at++; return result; }
+      while (at < text.length) {
+        whitespace(); let key;
+        if (object) { if (text[at] !== '"') fail(code); key = string();
+          if (seen.has(key)) fail(code); seen.add(key); whitespace(); if (text[at++] !== ':') fail(code); }
+        const child = value(depth + 1); if (object) result[key] = child; else result.push(child);
+        whitespace(); const end = text[at++]; if (end === (object ? '}' : ']')) return result;
+        if (end !== ',') fail(code);
+      }
+      fail(code);
+    }
+    const match = /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/u.exec(text.slice(at));
+    if (!match) fail(code); at += match[0].length; return JSON.parse(match[0]);
+  }
+  try { const result = value(0); whitespace(); if (at !== text.length) fail(code); return result; }
+  catch { fail(code); }
+}
 function rankOutput(text, ordinary) {
-  let body; try { body = JSON.parse(text); } catch { fail('rank_response_mismatch'); }
+  let body;
+  if (ordinary) { try { body = JSON.parse(text); } catch { fail('rank_response_mismatch'); } }
+  else body = cwJson(text);
   check(body.model === MODEL && body.status === 'completed' && body.error == null && body.incomplete_details == null
     && (ordinary ? body.object === 'response' && body.error === null && body.incomplete_details === null : true)
     && Array.isArray(body.output) && body.output.length > 0 && (ordinary || body.output.length === 1), 'rank_response_mismatch');
@@ -326,6 +368,7 @@ function rankOutput(text, ordinary) {
     }
   }
   check(output.length > 0 && output.length <= 40000 && countOpenAITokens(output) <= 1024, 'rank_response_mismatch');
+  if (!ordinary) return cwJson(output);
   try { return JSON.parse(output); } catch { fail('rank_response_mismatch'); }
 }
 function validateSelection(slot, c, intents, response) {
@@ -528,11 +571,30 @@ function accounting(input, preparation, report, slots, get, resolve) {
     literal(post.requestArtifact, intent.requestArtifact, 'post_request_mismatch');
     transportLatency += post.latencyMs;
     let response = null, body = null;
+    const card = slot.kind === 'card-plan', counting = card ? post.kind === 'count' : post.endpoint === 'responses/input_tokens';
     if (post.responseArtifact) {
       response = resolve(post.responseArtifact, `${intent.attemptId}-response.txt`).text;
-      try { body = JSON.parse(response); } catch { /* Failed transport text is retained, not repaired. */ }
     }
-    const card = slot.kind === 'card-plan', counting = card ? post.kind === 'count' : post.endpoint === 'responses/input_tokens';
+    if (post.outcome === 'succeeded') {
+      if (card) {
+        // CW hashes original raw bytes but retains generic-redacted text. A
+        // transformed successful envelope lacks original grammar/size proof;
+        // deny assessment, not the actual runtime completion or its literals.
+        check(response !== null && typeof post.responseSha256 === 'string' && HEX.test(post.responseSha256)
+          && post.responseSha256 === sha(response), 'insufficient_original_cw_proof');
+      }
+      if (response !== null) {
+        const bytes = Buffer.byteLength(response);
+        check(bytes <= (counting ? 65536 : 262144), 'successful_response_bounds_mismatch');
+        if (!card) check(integer(post.responseBytes) && post.responseBytes === Buffer.byteLength(ordinaryDecodedText(response)),
+          'successful_response_bytes_mismatch');
+      }
+    }
+    if (response !== null) {
+      if (card && post.outcome === 'succeeded') body = cwJson(response);
+      else try { body = JSON.parse(card ? response : ordinaryDecodedText(response)); }
+      catch { /* Failed transport text is retained, not repaired. */ }
+    }
     const endpoint = counting ? 'responses/input_tokens' : slot.slotId.includes('-selection-') ? 'responses' : 'chat/completions';
     if (card) {
       check(post.version === 'card-budgeted-plan-rank-v1' && post.endpoint === `https://api.openai.com/v1/${endpoint}`
@@ -579,6 +641,7 @@ function accounting(input, preparation, report, slots, get, resolve) {
     if (post.outcome === 'succeeded') {
       check(intent.dispatched && response !== null && body && (card || integer(post.httpStatus, 299) && post.httpStatus >= 200), 'successful_transport_mismatch');
       if (counting) {
+        if (card) fields(body, ['object', 'input_tokens'], 'count_response_mismatch');
         check(body.object === 'response.input_tokens' && integer(body.input_tokens, 7024)
           && (card ? post.inputTokens : post.providerInputTokens) === body.input_tokens
           && post.actualMicroUsd === null, 'count_response_mismatch');
@@ -769,7 +832,8 @@ async function retained(input) {
   const resources = accounting(input, preparation, report, slots, get, resolve);
   const response = intent => {
     const descriptor = intent.post?.responseArtifact; check(descriptor, 'missing_response_artifact');
-    return resolve(descriptor, `${intent.attemptId}-response.txt`).text;
+    const text = resolve(descriptor, `${intent.attemptId}-response.txt`).text;
+    return slots.get(intent.slotId).kind === 'card-plan' ? text : ordinaryDecodedText(text);
   };
   const mechanical = { selections: [], answers: [] }, items = { AB: [], C: [] }, answerTexts = new Map();
   for (const [i, c] of preparation.cases.entries()) {

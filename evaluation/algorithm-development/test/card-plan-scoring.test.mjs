@@ -13,6 +13,7 @@ import { prepareCardPlanComparison } from '../card-plan-store.mjs';
 import { createCardPlanComparisonManifest, runCardPlanComparison } from '../card-plan-runner.mjs';
 import { createSourceBundleJudgePackets } from '../source-bundle-judging.mjs';
 import { prepareCardPlanScoring, scoreCardPlanComparison } from '../card-plan-scoring.mjs';
+import { redactSecrets } from '../../../plugins/cairn-memory/lib/redact.mjs';
 
 const RUNTIME = '4309ff396834f60c237910493c2dc837e11de4dc';
 const MODEL = 'gpt-4.1-mini-2025-04-14';
@@ -170,7 +171,7 @@ before(async () => {
   workspace = createTestWorkspace(null, { prefix: 'card-plan-scoring-shared-' });
   try {
     fixtures = {};
-    for (const mode of ['complete', 'C-unjudgeable', 'edges', 'before-start', 'checkpoint-mismatch', 'replacement', 'read-state-drift', 'unaffordable', 'net-loss', 'pre-dispatch-failure']) {
+    for (const mode of ['complete', 'C-unjudgeable', 'edges', 'before-start', 'checkpoint-mismatch', 'replacement', 'read-state-drift', 'unaffordable', 'net-loss', 'pre-dispatch-failure', 'CW-transformed-success', 'CW-redacted-failure', 'ordinary-BOM-boundaries']) {
       const preparation = await prepareCardPlanComparison({ outputRoot: join(workspace.path, mode) });
       const configuration = { directory: join(workspace.path, `${mode}-ledger`), runId: randomUUID(),
         limitMicroUsd: mode === 'unaffordable' ? 39000000 : 400000000, requestCap: 100000 };
@@ -191,12 +192,23 @@ before(async () => {
         },
         onCheckpoint(row) {
           if (mode === 'edges' && row.slotId === 'CQ24-answer-A') throw Error('synthetic-after-extraction-close-failure');
+          if (mode === 'CW-transformed-success' && row.slotId === 'CQ01-answer-C'
+            || mode === 'ordinary-BOM-boundaries' && row.slotId === 'CQ01-answer-C'
+            || mode === 'CW-redacted-failure' && row.slotId === 'CQ01-answer-A') throw Error('synthetic-review-prefix-stop');
         },
         async fetchImpl(url, init) {
           assert.equal(init.redirect, 'error');
           const slotId = active.slotId, caseId = slotId.slice(0, 4), arm = slotId.at(-1);
           calls.push({ url, slotId, requestSha256: sha(init.body) });
-          if (url.endsWith('/input_tokens')) return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
+          if (url.endsWith('/input_tokens')) {
+            if (mode === 'CW-redacted-failure' && slotId === 'CQ01-selection-B') return Response.json({
+              object: 'response.input_tokens', input_tokens: 100, diagnostic: 'sk-' + 'x'.repeat(20) }, { status: 500 });
+            if (mode === 'ordinary-BOM-boundaries' && arm === 'A') {
+              const text = JSON.stringify({ object: 'response.input_tokens', input_tokens: 100 });
+              return new Response('\uFEFF' + text + ' '.repeat(65536 - 3 - Buffer.byteLength(text)));
+            }
+            return Response.json({ object: 'response.input_tokens', input_tokens: 100 });
+          }
           if (url.endsWith('/responses')) {
             const proposal = proposalFor(preparation, caseId, arm, mode === 'edges' && slotId === 'CQ01-selection-B');
             if (mode === 'net-loss' && arm === 'B' && ['CQ04', 'CQ05', 'CQ06'].includes(caseId)) {
@@ -207,7 +219,13 @@ before(async () => {
               try { db.prepare("UPDATE receipts SET excerpt = excerpt || ' synthetic changed' WHERE memory_id = ?")
                 .run(proposal.refs[0].memoryId); } finally { db.close(); }
             }
-            return Response.json(rankBody(proposal));
+            const body = rankBody(proposal);
+            if (mode === 'CW-transformed-success' && slotId === 'CQ01-selection-B') body.diagnostic = 'sk-' + 'x'.repeat(20);
+            if (mode === 'ordinary-BOM-boundaries' && arm === 'A') {
+              const text = JSON.stringify(body);
+              return new Response('\uFEFF' + text + ' '.repeat(262144 - 3 - Buffer.byteLength(text)));
+            }
+            return Response.json(body);
           }
           let text = rubric.cases.find(row => row.id === caseId).acceptableQualifiedAnswer;
           if (mode === 'edges') {
@@ -221,6 +239,10 @@ before(async () => {
             maximumRaw = replacementBody(answerBody(text)); return new Response(maximumRaw);
           }
           const body = answerBody(text);
+          if (mode === 'ordinary-BOM-boundaries') {
+            const encoded = JSON.stringify(body);
+            return new Response('\uFEFF' + encoded + ' '.repeat(262144 - 3 - Buffer.byteLength(encoded)));
+          }
           if (mode === 'complete' && slotId === 'CQ08-answer-A') body.usage = { prompt_tokens: 3, completion_tokens: 3, total_tokens: 6 };
           return mode === 'complete' && slotId === 'CQ24-answer-A' ? padded(body, 262144) : Response.json(body);
         } });
@@ -564,6 +586,140 @@ function tampered(fixture, changes) {
   input.execution.artifactIndexSha256 = sha(JSON.stringify(indexOf(input.artifacts)));
   return input;
 }
+
+// Public response controls alter only retained copies, preserving all derived
+// post/descriptor identities. They never represent genuine provider outputs.
+function responseTampered(fixture, intent, text, { wrongBytes = false, responseSha256, responseBytes } = {}) {
+  const name = basename(intent.post.responseArtifact.path);
+  const changes = [[name, text]];
+  for (const artifact of fixture.input.artifacts.filter(a => a.name.endsWith('.json'))) {
+    changes.push([artifact.name, value => {
+      const walk = row => {
+        if (!row || typeof row !== 'object') return;
+        if (row.attemptId === intent.attemptId && row.phase === 'post') {
+          if (Object.hasOwn(row, 'responseSha256')) row.responseSha256 = responseSha256 ?? sha(text);
+          if (Object.hasOwn(row, 'responseBytes')) row.responseBytes = responseBytes ?? Buffer.byteLength(text) + Number(wrongBytes);
+        }
+        Object.values(row).forEach(walk);
+      };
+      walk(value);
+    }]);
+  }
+  return tampered(fixture, changes);
+}
+
+test('R1/SC4–SC5: public strict CW grammar and successful body proof, without widening ordinary grammar', async t => {
+  const f = fixtures.complete, before = sha(JSON.stringify(f.input));
+  valid(await prepareCardPlanScoring(f.input), true);
+  const find = (slotId, count = false) => f.report.attempts.find(r => r.slotId === slotId
+    && (!slotId.includes('selection') || (r.post.kind === 'count' || r.post.endpoint === 'responses/input_tokens') === count));
+  const bc = find('CQ01-selection-B', true), bg = find('CQ01-selection-B'),
+    ac = find('CQ01-selection-A', true), ag = find('CQ01-selection-A'), aa = find('CQ01-answer-A');
+  const textOf = intent => f.input.artifacts.find(a => a.name === basename(intent.post.responseArtifact.path)).text;
+  const btext = textOf(bg), proposal = JSON.parse(btext);
+  proposal.output[0].content[0].text = proposal.output[0].content[0].text.replace('{"selectedCards":', '{"selectedCards":[],"selectedCards":');
+  const pad = (intent, bytes) => textOf(intent) + ' '.repeat(bytes - Buffer.byteLength(textOf(intent)));
+  const withField = (value, child) => JSON.stringify({ ...value, unused: child });
+  const nodes = value => 1 + (value && typeof value === 'object' ? Object.values(value).reduce((n, v) => n + nodes(v), 0) : 0);
+  const body = JSON.parse(btext), nodeBoundary = withField(body, Array(100000 - nodes(body) - 1).fill(0));
+  let depth32 = 0; for (let i = 0; i < 31; i++) depth32 = [depth32];
+  const negatives = [
+    ['decoded-envelope-duplicate', bg, btext.replace('"status":"completed"', '"status":"completed","\\u0073tatus":"completed"'), 'cw_response_json_mismatch'],
+    ['proposal-duplicate', bg, JSON.stringify(proposal), 'cw_response_json_mismatch'],
+    ['usage-duplicate', bg, btext.replace('"input_tokens":100', '"input_tokens":100,"input_tokens":100'), 'cw_response_json_mismatch'],
+    ['count-duplicate', bc, textOf(bc).replace('"input_tokens":100', '"input_tokens":100,"input_tokens":100'), 'cw_response_json_mismatch'],
+    ['count-extra-field', bc, withField(JSON.parse(textOf(bc)), 0), 'count_response_mismatch'],
+    ['nodes-100001', bg, withField(body, Array(100001 - nodes(body) - 1).fill(0)), 'cw_response_json_mismatch'],
+    ['depth-33', bg, withField(body, [depth32]), 'cw_response_json_mismatch'],
+    ['CW-count-65537', bc, pad(bc, 65537), 'successful_response_bounds_mismatch'],
+    ['CW-generation-262145', bg, pad(bg, 262145), 'successful_response_bounds_mismatch'],
+    ['ordinary-count-65537', ac, pad(ac, 65537), 'successful_response_bounds_mismatch'],
+    ['ordinary-generation-262145', ag, pad(ag, 262145), 'successful_response_bounds_mismatch'],
+    ['ordinary-answer-262145', aa, pad(aa, 262145), 'successful_response_bounds_mismatch'],
+    ['ordinary-wrong-responseBytes', aa, textOf(aa), 'successful_response_bytes_mismatch', { wrongBytes: true }],
+    ['CW-missing-original-hash', bg, btext, 'insufficient_original_cw_proof', { responseSha256: 'not-a-hash' }],
+    ['CW-different-original-hash', bg, btext, 'insufficient_original_cw_proof', { responseSha256: '0'.repeat(64) }],
+  ];
+  for (const [name, intent, text, reason, options] of negatives) await t.test(name, async () => {
+    if (intent.post.kind) assert.equal(redactSecrets(text), text, 'direct CW identity, not transformed raw invention');
+    denied(await prepareCardPlanScoring(responseTampered(f, intent, text, options)), reason);
+  });
+  const positives = [
+    ['ordinary-duplicate', ac, textOf(ac).replace('"input_tokens":100', '"input_tokens":100,"input_tokens":100')],
+    ['CW-count-65536', bc, pad(bc, 65536)], ['CW-generation-262144', bg, pad(bg, 262144)],
+    ['ordinary-count-65536', ac, pad(ac, 65536)], ['ordinary-answer-262144', aa, pad(aa, 262144)],
+    ['CW-nodes-100000', bg, nodeBoundary], ['CW-depth-32', bg, withField(body, depth32)],
+  ];
+  for (const [name, intent, text] of positives) await t.test(name, async () => {
+    if (intent.post.kind) assert.equal(redactSecrets(text), text);
+    valid(await prepareCardPlanScoring(responseTampered(f, intent, text)), true);
+  });
+  assert.equal(sha(JSON.stringify(f.input)), before);
+});
+
+test('R1/SC4: genuine successful CW redaction lacks original proof; genuine failed redaction remains failure', async () => {
+  const success = fixtures['CW-transformed-success'], failed = fixtures['CW-redacted-failure'];
+  for (const f of [success, failed]) {
+    assert.equal(f.report.status, 'halted'); assert.equal(f.report.failure.code, 'card_plan_persistence_failure');
+    assert.equal(f.report.cases.length, 24); assert.equal(f.report.cases.flatMap(c => c.answers).length, 72);
+  }
+  const successfulSlot = success.report.cases[0].selections[1];
+  assert.equal(successfulSlot.status, 'completed');
+  const post = success.report.attempts.find(r => r.slotId === successfulSlot.slotId && r.post.kind === 'generation').post;
+  const text = success.input.artifacts.find(a => a.name === basename(post.responseArtifact.path)).text;
+  assert.equal(post.outcome, 'succeeded'); assert.match(post.responseSha256, /^[a-f0-9]{64}$/u);
+  assert.notEqual(post.responseSha256, sha(text)); assert(text.includes('[REDACTED]'));
+  const reportHash = sha(JSON.stringify(success.report)), inputHash = sha(JSON.stringify(success.input));
+  denied(await prepareCardPlanScoring(success.input), 'insufficient_original_cw_proof');
+  denied(await assess(success), 'insufficient_original_cw_proof');
+  assert.equal(sha(JSON.stringify(success.report)), reportHash); assert.equal(sha(JSON.stringify(success.input)), inputHash);
+  const failedSlot = failed.report.cases[0].selections[1];
+  assert.equal(failedSlot.status, 'failed');
+  const failedPost = failed.report.attempts.find(r => r.slotId === failedSlot.slotId).post;
+  assert.notEqual(failedPost.outcome, 'succeeded');
+  const failedText = failed.input.artifacts.find(a => a.name === basename(failedPost.responseArtifact.path)).text;
+  assert.notEqual(failedPost.responseSha256, sha(failedText)); assert(failedText.includes('[REDACTED]'));
+  const prepared = await prepareCardPlanScoring(failed.input); valid(prepared, true);
+  const selection = prepared.mechanical.selections.find(s => s.slotId === failedSlot.slotId);
+  assert.equal(selection.evidence.status, 'unobserved'); assert.equal(selection.evidence.completeRequired, false);
+  assert.equal(prepared.mechanical.answers.find(s => s.slotId === 'CQ01-answer-B').judgeEligibility.status, 'excluded');
+  console.log('CARD_SCORING_R1_REDACTION=' + JSON.stringify({ success: { slot: successfulSlot.status, post: post.outcome,
+    rawSha256: post.responseSha256, retainedSha256: sha(text), physicalCalls: success.calls.length },
+    failed: { slot: failedSlot.status, failure: failedSlot.failure, post: failedPost.outcome, failureCode: failedPost.failureCode,
+      rawSha256: failedPost.responseSha256, retainedSha256: sha(failedText), physicalCalls: failed.calls.length } }));
+});
+
+test('BOM/SC5: genuine ordinary physical byte limits retain BOM while decoded responseBytes excludes exactly one', async () => {
+  const f = fixtures['ordinary-BOM-boundaries'], before = sha(JSON.stringify(f.input));
+  assert.equal(f.calls.length, 7); assert.equal(f.records.length, 14); assert.equal(f.report.status, 'halted');
+  assert.deepEqual(f.report.cases[0].selections.map(s => s.status), ['completed', 'completed']);
+  assert.deepEqual(f.report.cases[0].answers.map(s => s.status), ['completed', 'completed', 'failed']);
+  valid(await prepareCardPlanScoring(f.input), true); const assessed = await assess(f); valid(assessed);
+  const ordinary = f.report.attempts.filter(r => !Object.hasOwn(r.post, 'kind'));
+  assert.equal(ordinary.length, 5, 'A count/generation and all three ordinary answer transports');
+  for (const intent of ordinary) {
+    const text = f.input.artifacts.find(a => a.name === basename(intent.post.responseArtifact.path)).text;
+    const maximum = intent.post.endpoint === 'responses/input_tokens' ? 65536 : 262144;
+    assert.equal(intent.post.outcome, 'succeeded'); assert.equal(text.codePointAt(0), 0xfeff);
+    assert.equal(Buffer.byteLength(text), maximum); assert.equal(intent.post.responseBytes, maximum - 3);
+    assert.equal(intent.post.responseArtifact.sha256, sha(text), 'literal retained BOM remains bound');
+    assert.equal(Buffer.byteLength(new TextDecoder('utf8', { fatal: true }).decode(Buffer.from(text))), maximum - 3);
+    denied(await prepareCardPlanScoring(responseTampered(f, intent, text)), 'successful_response_bytes_mismatch');
+    const oversized = text + ' ';
+    denied(await prepareCardPlanScoring(responseTampered(f, intent, oversized,
+      { responseBytes: Buffer.byteLength(oversized) - 3 })), 'successful_response_bounds_mismatch');
+  }
+  const count = ordinary.find(r => r.post.endpoint === 'responses/input_tokens');
+  const countText = f.input.artifacts.find(a => a.name === basename(count.post.responseArtifact.path)).text;
+  const doubleBOM = '\uFEFF\uFEFF' + JSON.stringify(JSON.parse(countText.slice(1)));
+  denied(await prepareCardPlanScoring(responseTampered(f, count, doubleBOM,
+    { responseBytes: Buffer.byteLength(doubleBOM) - 3 })), 'successful_transport_mismatch');
+  assert.equal(sha(JSON.stringify(f.input)), before);
+  console.log('CARD_SCORING_BOM=' + JSON.stringify({ actualRuntimeOutput: true,
+    ordinaryPosts: ordinary.map(r => ({ slotId: r.slotId, endpoint: r.post.endpoint,
+      outcome: r.post.outcome, retainedBytes: r.post.responseArtifact.bytes, decodedResponseBytes: r.post.responseBytes })),
+    eligible: assessed.mechanical.answers.filter(r => r.judgeEligibility.status === 'eligible').map(r => r.slotId) }));
+});
 
 test('SC1–SC6: literal tamper classes deny integrity with no scores, gains or repairs', async t => {
   const f = fixtures.complete;

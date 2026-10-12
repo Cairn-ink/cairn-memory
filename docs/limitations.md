@@ -2362,11 +2362,41 @@ the verifier's provenance. Two additional fixture/assertion mistakes and one
 latent contradictory scripted judgment were corrected separately. The original
 failed execution remains recorded, not replaced by a green rerun.
 
-The author's exact Node 22.16.0 and 24.15.0 matrices completed twelve commands
-with actual exit 0. Each runtime passed 68 focused, 312 algorithm and 784
-generic tests, with no failures, skipped or cancelled tests and no unexpected
-owned scratch. Primary direct acceptance, independent final reviews and CI are
-separate gates whose exact-candidate evidence is retained with the PR.
+The initial pre-review author matrices on exact Node 22.16.0 and 24.15.0
+completed twelve commands with actual exit 0. Each runtime passed 68 focused,
+312 algorithm and 784 generic tests, with no failures, skipped or cancelled
+tests and no unexpected owned scratch. Primary direct acceptance, independent
+final reviews and CI are separate gates whose exact-candidate evidence is
+retained with the PR.
+
+Independent review nevertheless found two scoring defects: successful card-plan
+responses did not replay the pinned strict JSON grammar, and successful ordinary
+responses lacked their endpoint-specific size and exact responseBytes checks.
+Primary also reproduced a legitimate ordinary response being rejected because
+its retained leading UTF-8 BOM differs from the transport's decoded text. All
+original failing reproductions remain retained. The corrections preserve
+ordinary duplicate-key behavior, consume exactly one leading BOM only for its
+derived decoded text, and retain literal artifacts and hashes unchanged.
+
+Successful card-plan response proof now requires the retained text hash to match
+the transport's unredacted parser-input text hash. That input is after fatal
+TextDecoder, not an independent physical-wire capture. On direct identity the
+scorer applies the pinned strict grammar and endpoint bounds. Unequal hashes
+deny scoring for insufficient original proof, not alleged tampering; legitimate
+redacted successes may therefore be unassessable. Failed/redacted responses keep
+their conservative failure handling, without inventing a replacement raw body
+or changing actual runtime completion.
+
+The corrected author matrices passed 93 focused, 337 algorithm and 784 generic
+tests on each exact runtime, plus validation and the owned synthetic comparison
+demo: twelve actual command exits 0, with zero failures/cancellations/skips and
+both owned scratch parents removed. Primary independently checked command
+inventories, raw outcomes/hashes, unchanged module/test hashes and cleanup. Two
+earlier wrapper setup attempts exited 1 before any native suite because of an
+incorrect tool path; their original empty logs and copied stderr are retained,
+separate from product-test results. A bounded driver-only correction preceded
+these matrices. Final corrected-candidate primary checks, independent review
+and exact-head CI remain separate delivery gates.
 
 These checks are not measured model accuracy or a retrieval gain. Even a
 positive synthetic mechanism signal cannot clear Stage2, D12, product defaults,
@@ -2389,3 +2419,30 @@ read, retention expansion, publication or deployment. A fresh live comparison
 still requires exact-candidate acceptance, frozen preparation and original-budget
 preflight under the cumulative 400 USD ceiling and protected 30 USD reserve.
 See [the frozen contract and verification record](plans/card-plan-first-answer-scoring.md).
+
+The corrected primary matrix has a retained failure: Node22's full337-test
+algorithm invocation passed336 and cancelled one existing source-bundle C5
+test after187213.546706ms against its180000ms deadline (actual exit1).
+The driver stopped; its remaining five commands were not run. Node24's ten
+commands all exited0, including337/337 algorithm tests. A separate unchanged
+selected C5 diagnostic passed in62321.302487ms, but does not clear the original
+full-suite failure. Its exact cause remains unknown; all owned scratch was
+empty and removed, including after the failed command.
+
+On the observed16-core host, the two default Node test schedulers can each
+allow15 direct file workers; two overlapping28-file suites permit30, excluding
+nested children. This identifies scheduling exposure, not measured original
+CPU pressure or proof that contention caused the failure. The primary accepted
+an independently reviewed, explicit prospective maintainer-plan amendment:
+one new full Node22 invocation, all28files, fixed file concurrency4, only one
+heavy sequence globally, unchanged assertions/deadlines/watchdog, no automatic
+retry. Only its success permits the five previously unrun commands. The
+original no-timeout-retry acceptance attempt is not retroactively passed.
+
+Existing green evidence may be reused only after proving that all1606
+non-documentation source hashes remain identical; just the two documentation
+files may differ. The new and postcommit snapshots must match the final tree,
+and final independent dual review plus unchanged-command exact-head CI remain
+required. These are prospective requirements, not a claim that the amended
+run, final reviews or CI have passed. No model-accuracy result, paid run,
+operational read or closed-cohort operation follows from this amendment.
