@@ -1388,3 +1388,273 @@ no measured reliability guarantee under arbitrary host load; synthetic tests
 are not real algorithm accuracy, semantic gain or lightweight product proof.
 Operational keys/config/ledger, formal preparation, paid calls, closed-cohort
 rerun/reprepare/resume/retry/rescore/rejudge are excluded throughout.
+
+## Numeric response parity correction — N1–N4
+
+Parent candidate610751ed3ab6cd3fc3eebeff95445bc79ad967c0; fixed delivery review
+base4309ff396834f60c237910493c2dc837e11de4dc. The parent's Standards0/Spec1
+blockingP2 review remains historical, and the original C5 timeout remains
+unresolved. No prior logs, snapshots, reviews or consumed receipts are replaced.
+This append leaves the original33544-byte contract prefix intact.
+
+The following acceptance scope is retained from the primary's prospective
+card-scoring-numeric-parity-contract.md:
+
+N1. Before an implementation change, reproduce with actual fresh pinned runtime,
+real local tokenizer/core, synthetic ledgers and fake HTTP only. Inject literal
+negative zero in an ordinary count response and a CW count response in separate
+fresh fixtures. Preserve actual runtime failure/status and literal artifacts;
+do not fabricate a completed slot or mutate the report to construct the case.
+Prepare/score should assess valid retained halted evidence, keep all24 cases,
+unknown/unrun answers, failed original status, no semantic/default promotion.
+An integrity denial instead is the intended RED, not import/setup failure.
+
+N2. Before deciding the patch, inventory raw provider numeric predicates for
+ordinary count, rank usage, answer usage, CW count, CW generation usage, and
+ordinary floating versus CW rational pricing. Separate them from strict
+canonical metadata/identity/accounting input predicates. Include -0, -0.0,
+-0e0, negative underflow, positive zero, negative integers, fractions, nonfinite
+JSON numeric results, unsafe integers and applicable endpoint/token bounds.
+Pure differential checks may cover spellings; genuine runtime fixtures must
+cover the affected halted paths, not just a copied acceptance predicate.
+
+N3. Root must inspect original RED evidence and actual artifacts before author
+changes implementation. Preserve root cause distinctions: the scorer must not
+relax the runtime's persistence failure or report such a run as completed.
+Only raw-provider numeric replay and derived-price validation may be corrected;
+metadata's negative-zero/prototype/Unicode/canonical rules remain strict.
+No runtime/transport/core/prompt/model/corpus/rubric/helper/package/CI edits.
+
+N4. After RED acceptance, implement the minimal correction and permanent
+regressions within the existing module/test/plan paths; primary owns the
+limitations append. Preserve the original33544-byte contract prefix. Every
+new genuine fixture independently verifies source inventory, runtime status,
+retained first bytes/hash, accounting consistency and owned cleanup. Keep
+negative invalid-count/usage controls; do not make all numeric values valid.
+All first-answer denominators, judgment/gain/safety/resource predicates stay.
+
+### Accepted RED and numeric inventory
+
+Actual primary D1 session34827 exited1 at a faulty reproduction precondition:
+it compared a canonical receipt session with the original corpus session ID.
+No runtime comparison or scorer verdict was reached. Its raw log remains
+card-scoring-negative-zero-red.log; it is a setup failure, not behavioral RED.
+Only the external setup assertions were corrected, preserving full canonical
+batch/window/original-source binding rather than dropping source verification.
+
+Primary corrected-setup D1 session51305 exited1 at the final N1 acceptance
+assertion after both real fresh runtimes, scorer verdicts and owned cleanup.
+Raw card-scoring-negative-zero-red-corrected-setup.log SHA256
+66bccf643fb977d8d5be1bda8b1f0fe374f2a1152579afde6c7204c0edd2311b.
+Primary's independent literal artifact audit exited0: filesystem/reference
+inventories33/33 ordinary and43/43 CW; actual fake calls1/3; raw response -0,
+canonical post0; original card_plan_persistence_failure retained. Both prepare
+and score denied both fixtures as count_response_mismatch. Primary inspected
+these artifacts before releasing D2. The setup failure and original timeout
+remain failures; neither is counted as the accepted behavioral RED.
+
+Primary showed three ranked hypotheses before correction: overstrict raw
+numeric replay, JSON normalization inconsistency, or missing accounting.
+Literal identity/inventory and settled-ledger evidence excluded the latter two
+at this boundary. The raw scorer predicate alone rejected the transports'
+accepted signed zero; runtime observation copying correctly remained strict.
+
+| Endpoint | Raw numeric rule | Successful token bounds |
+| --- | --- | --- |
+| Ordinary count | Safe integer >=0, including signed zero | input<=7024 |
+| Ordinary rank usage | input/output/total safe integers >=0; total=input+output | input<=7024, output<=1024 |
+| Ordinary answer usage | prompt/completion/total use the same rule | input<=7024, output<=512 |
+| CW count | Same rule; exact two-field count envelope | input<=7024 |
+| CW generation usage | Same three-value rule and sum | input<=7024, output<=1024 |
+
+Successful generation cost remains<=5000. Ordinary pricing remains exactly
+Math.ceil(input*0.4+output*1.6), including derived -0; CW's bigint rational
+estimator remains unchanged. Safe-integer checks accept parsed -0, -0.0, -0e0
+and negative underflow such as -1e-999, plus positive zero. Negative integers,
+nonzero fractions, nonfinite JSON numeric results such as1e309, and unsafe
+integers fail. Bounds reject safe over-limit values separately. Canonical
+metadata/identity/accounting predicates still reject signed zero.
+
+### Bounded implementation and permanent cases
+
+Author: /root/scoring_numeric_parity61, actual GPT-6.1Sol/high. Owned paths are
+the scorer, its existing test and this plan append; primary owns limitations.
+The separate providerInteger predicate changes only raw usage, raw count and
+derived-price replay. integer(), canonical JSON, prototypes, Unicode and all
+identity/header/checkpoint/accounting checks retain their original rules.
+Both public entrypoints prepareCardPlanScoring and scoreCardPlanComparison use
+this same replay boundary; no runtime/provider/corpus/rubric entrypoint changes.
+Existing all-denominator, first-response, judgment/gain/safety/resource checks
+remain. Genuine runs keep their failed/not-run states and do not gain semantic
+or default-advancement credit.
+
+Five new fresh runtime fixture modes cover ordinary count, CW count, ordinary
+rank usage, CW generation usage and ordinary answer usage. Literal Response
+strings preserve signed zero. The three usage fixtures contain all signed-zero
+usage fields; ordinary rank/answer independently assert derived -0 and canonical
+durable/SQLite +0. Each mode verifies24stores/288captures, canonical receipt and
+original-source mapping, unique memories/receipts, exact retained first bytes and
+hash, callback/durable-record distinction, genuine halt, reservations/costs,
+fixed24/48/72denominators, first-answer exclusion, and owned-root removal.
+Shared preparation teardown remains immediately registered and all five roots'
+removal is individually checked after the shared owner cleans up.
+
+There are43 explicitly synthetic retained-copy controls:11fields each receive
+one accepted zero spelling and one invalid-number class (22),16endpoint-bound
+cases, three inconsistent totals and two strict metadata signed-zero controls.
+All six zero spellings and all five invalid classes occur in this orthogonal
+table. This new prospective test design avoids repeating full24-case retained
+validation for a Cartesian product; no existing test or assertion is removed.
+
+| Endpoint/field | Accepted spelling | Invalid class |
+| --- | --- | --- |
+| Ordinary count input_tokens | -0.0 | -1 |
+| CW count input_tokens | -0e0 | 0.5 |
+| Ordinary rank input_tokens | -1e-999 | -5e-324 |
+| Ordinary rank output_tokens | 0 | 1e309 |
+| Ordinary rank total_tokens | 0.0 | 9007199254740992 |
+| CW generation input_tokens | -0 | -1 |
+| CW generation output_tokens | -0.0 | 0.5 |
+| CW generation total_tokens | -0e0 | 1e309 |
+| Ordinary answer prompt_tokens | -1e-999 | 9007199254740992 |
+| Ordinary answer completion_tokens | 0 | -1 |
+| Ordinary answer total_tokens | 0.0 | -5e-324 |
+
+Finite count controls, negative usage input/output pairs and endpoint maxima
+carry coherent canonical post/usage/cost/ledger/resource observations so their
+intended numeric rule can be isolated. Other invalids are labelled raw-consistency
+or type controls, not independent runtime or isolated-predicate evidence.
+Copies never alter original literal runtime artifacts or promote completion.
+
+Prospective test increment:50 Node tests, consisting of two parent tests,
+five genuine subtests and43copied controls. Focused scorer therefore expects
+143tests (previous93); all28algorithm files expect387tests (previous337).
+These counts are frozen before the first new full-suite result and require
+primary independent reconciliation. The shared fixture set grows13to18; native
+deadlines and the1800-second command watchdog are not enlarged.
+
+### Accepted prospective verification schedule
+
+The following schedule is retained from the independently reviewed and primary-
+accepted card-scoring-numeric-verification-amendment.md, accepted before any
+corrected-suite outcome (2026-10-12 UTC). This is an engineering verification
+plan, not a financial or live-run grant.
+
+The610751e candidate passed its amended native gates but has one blockingP2
+Spec finding. Those results remain true for those exact bytes, not the next
+candidate. Its independentStandards0/Spec1 reports and original C5timeout stay
+retained. The previous single-use scheduling receipt is consumed and must not
+be reused, deleted or reset. This is a newly scoped code correction, not a
+retry of the earlier unchanged candidate or a formal benchmark operation.
+
+The numeric-parity contract N1–N4 remains the behavioral scope. First establish
+genuine halted-artifact RED in two count paths; then inspect adjacent numeric
+usage/pricing boundaries before patching. Extend permanent regression coverage
+to every affected endpoint family using actual fake-HTTP runtime observations,
+with raw negative-zero spelling tests and invalid-number controls as applicable.
+Keep the strict metadata predicate and runtime persistence failure unchanged.
+
+To avoid redundant whole-suite execution, the worker runs only the bounded
+reproduction/targeted correction checks, not another complete native matrix.
+Primary directly owns the complete final integrated native matrix. Every test
+in the focused scorer file runs inside the unfiltered full algorithm suite;
+there is no second standalone invocation that rebuilds its entire fixture set.
+This explicitly revises the original contract's duplicate worker+primary full
+matrices and separate full-fixture focused invocation for this correction.
+It does not reduce assertions, omit a test file, skip a required supported
+runtime or substitute code inspection for behavior.
+
+Before launching the corrected full matrix, freeze all four delivery files
+and the exact expected test counts. Independently reconcile all28 algorithm
+files through Git/rg and filesystem enumeration. Both exactNode22.16.0 and
+24.15.0 run sequentially, one heavy sequence globally, using these commands:
+
+1. node --version
+2. node tools/testing/run.mjs --test-concurrency=4 <all28algorithmtestfiles>
+3. node tools/testing/run.mjs <the same4core-source integration files,53tests>
+4. node tools/testing/run.mjs <the same5LongMemEval source/answer files,51tests>
+5. node tools/testing/run.mjs --script evaluation/longmemeval/comparison-demo.mjs
+6. npm test (all784generic tests)
+7. npm run validate
+8. claude plugin validate .
+9. claude plugin validate ./plugins/cairn-memory --strict
+
+Node24 also uses the prospectively fixed file-concurrency4 for this new local
+matrix. Repository package/CI commands remain unchanged; exact-headCI on both
+runtime versions is separate and still required. Every original inner deadline,
+evaluated limit and1800-second command-work watchdog remains unchanged. Use the
+already reviewed bounded owned-command helper; no hidden timeout retry or cap
+tuning. Any failed command stops that sequence and requires a new diagnosis,
+not automatic repetition. Preserve original exits and raw output before acting.
+
+Both full matrices require all expected tests pass,0fail/cancel/skip, no watchdog
+or termination intervention, verified ended children, and empty/removed owned
+scratch. Scrub inherited credentials/config, disable compilecache, retain all4
+required flags and inspected tiktoken1.0.22; no package install/cleanup.
+Bind full1608-file before/after hashes. Git and independent filesystem/base-blob
+inventories must agree on exactly4scoped paths; original33544-byte prefix stays.
+
+After both9-command matrices pass, commit the scoped correction, inspect current
+contributor/package/CI gates, then version+validation on22and24 sequentially.
+All four new snapshots must match the final committed tree;22new actual exits0
+are required. Earlier evidence is historical, never pooled into these22. Retain
+originalfailedobservations alongside it. Two fresh independentnonauthor6.1Sol
+Standards/Spec reviewers inspect samebase4309andfinalHEAD. Push a dependentPR
+only after both pass; then all27applicableexactheadCI and mergeability.
+
+No mainmerge/release/deploy, formalprepare, providercall, operationalkey/config/
+ledgerread or closed-cohort operation. No semanticgain claim from this matrix.
+
+Procedural review: /root/card_scoring_spec61, actual GPT-6.1 Sol/high,
+read-only on610751e,0 findings. Reviewer independently reconciled28algorithm
+files and3workflow files, inspection commands actual0. No native/paid calls.
+Primary accepts this explicit scheduling revision, not any corrected bytes.
+CI floating Node24 is not claimed to be the local pinned24.15.0. New full
+matrix remains blocked until genuine RED, correction inspection, fixed counts
+and source freeze. Existing single-use receipts stay consumed and immutable.
+
+Author's D2 native authority is exactly one corrected external two-fixture GREEN
+using the original inspected reproduction, scrubbed Node22.16.0, the owned runner
+and unchanged1800-second watchdog. No entire scorer suite or other heavy command
+is authorized to the author. Primary owns the subsequent full matrices, commit,
+independent reviews and delivery; no worker commit/push is authorized here.
+
+### D2 author bounded GREEN evidence
+
+Exactly one author native invocation ran, session80501. Actual outer exit0,
+owned child exit0/nullsignal; elapsed47757.863955ms. The reviewed owned-command
+helper SHA2566d0ec3dcf25528c3237e10621f90b6fb245bb9b40d8d5b701500466391a14548
+ran exact Node22.16.0 tools/testing/run.mjs --script against the unchanged
+external card-scoring-negative-zero-repro.mjs, SHA256
+ae2c040132bc81da549d25747b5ac4698d3fb6b9673300fcd3561cc5110a3c0f.
+The literal launch argv, scrubbed fixed environment, all four required flags,
+disabled compilecache, original1800000ms watchdog, raw artifacts and process
+ownership/result evidence are retained in
+card-scoring-negative-zero-green-author-f75d20d2-08e6-455c-b0f0-0e500fb6fa98.log,
+SHA2565f94ad01e69e013e1d02d310b89550891af923c2c5f0e41a3d3860103a4ae7e4.
+
+Both genuine cases retain halted/card_plan_persistence_failure with no first
+answer. Both prepare and score return valid evidence. Filesystem/runtime-reference
+inventories agree33/33 ordinary and43/43 CW; actual fakecalls remain1/3.
+Artifact index SHA256 values are respectively
+7303ed35bce6875448db00f8524fad9f144650bdde3cba68bfaf12d6726b6e30 and
+4f13f108ad70ac1f565565e0c048a966a25a0c73fd9c57a93c236c3a5952bd4e.
+No watchdog, signal, termination, observer error or surviving owned process was
+observed. Verified ended children, empty fresh parent and owned-root removal
+passed; the newly owned outer parent was also removed. No old scratch was swept.
+
+Module/test source hashes before and after that invocation agree:
+c7517199b74aeb3cde8eadb5d31744043e8080f5fcced3a57a95cb0418f4de7d and
+9f24f1bc5117520aad945b5231addf774de6bd83f82565f91fed2810a595b123.
+The plan hash likewise matched during execution; only this result append follows
+it. Both module/test syntax checks, git diff --check and original33544-prefix
+comparison separately exited0. Primary independently inspected the complete
+module/test changes and reconciled the original21parent tests plus the new
+two parents/five genuine subtests/43controls, yielding143scorer/387algorithm.
+
+This bounded GREEN verifies the original two count paths, not the new full
+permanent suite. The author did not execute its five-fixture test group, the
+entire scorer file or a full matrix. Those newly authored assertions remain
+pending primary integrated verification under the accepted schedule; no native
+acceptance, independent review, commit or push is claimed here. Earlier failed
+observations remain retained and are not pooled into this one GREEN.

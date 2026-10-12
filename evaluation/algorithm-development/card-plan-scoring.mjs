@@ -53,6 +53,9 @@ const check = (condition, code) => { if (!condition) fail(code); };
 const same = (a, b, code) => check(isDeepStrictEqual(a, b), code);
 const literal = (a, b, code) => check(JSON.stringify(a) === JSON.stringify(b), code);
 const integer = (n, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(n) && !Object.is(n, -0) && n >= 0 && n <= max;
+// Provider transports accept signed zero. Retained canonical metadata still
+// uses integer(); this replay rule does not relax runtime observation copying.
+const providerInteger = (n, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(n) && n >= 0 && n <= max;
 const duration = n => typeof n === 'number' && Number.isFinite(n) && n >= 0;
 const freeze = value => {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -625,13 +628,13 @@ function accounting(input, preparation, report, slots, get, resolve) {
       check(integer(post.actualMicroUsd), 'known_cost_mismatch');
       const usage = body?.usage, answer = endpoint === 'chat/completions';
       const inTokens = usage?.[answer ? 'prompt_tokens' : 'input_tokens'], outTokens = usage?.[answer ? 'completion_tokens' : 'output_tokens'];
-      check(!counting && integer(inTokens) && integer(outTokens) && integer(usage.total_tokens)
+      check(!counting && providerInteger(inTokens) && providerInteger(outTokens) && providerInteger(usage.total_tokens)
         && usage.total_tokens === inTokens + outTokens, 'usage_response_mismatch');
       const rational = (BigInt(inTokens) * 4n + BigInt(outTokens) * 16n + 9n) / 10n;
       // Preserve both pinned estimators exactly. Ordinary floating-point ceil
       // can differ by one from CW's rational arithmetic; neither is an invoice.
       const price = card ? Number(rational) : Math.ceil(inTokens * 0.4 + outTokens * 1.6);
-      check(rational <= BigInt(Number.MAX_SAFE_INTEGER) && integer(price) && post.actualMicroUsd === price, 'known_cost_mismatch');
+      check(rational <= BigInt(Number.MAX_SAFE_INTEGER) && providerInteger(price) && post.actualMicroUsd === price, 'known_cost_mismatch');
       if (card) check(post.inputTokens === inTokens && post.outputTokens === outTokens, 'usage_response_mismatch');
       else literal(post.usage, { input_tokens: inTokens, output_tokens: outTokens, total_tokens: usage.total_tokens }, 'usage_response_mismatch');
       partialKnown += post.actualMicroUsd;
@@ -642,7 +645,7 @@ function accounting(input, preparation, report, slots, get, resolve) {
       check(intent.dispatched && response !== null && body && (card || integer(post.httpStatus, 299) && post.httpStatus >= 200), 'successful_transport_mismatch');
       if (counting) {
         if (card) fields(body, ['object', 'input_tokens'], 'count_response_mismatch');
-        check(body.object === 'response.input_tokens' && integer(body.input_tokens, 7024)
+        check(body.object === 'response.input_tokens' && providerInteger(body.input_tokens, 7024)
           && (card ? post.inputTokens : post.providerInputTokens) === body.input_tokens
           && post.actualMicroUsd === null, 'count_response_mismatch');
       } else check(post.actualMicroUsd !== null, 'successful_usage_mismatch');

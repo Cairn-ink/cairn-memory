@@ -2446,3 +2446,41 @@ and final independent dual review plus unchanged-command exact-head CI remain
 required. These are prospective requirements, not a claim that the amended
 run, final reviews or CI have passed. No model-accuracy result, paid run,
 operational read or closed-cohort operation follows from this amendment.
+
+The amended native gate subsequently passed on candidate `610751e`, but a new
+independent Spec review found another scoring boundary defect. The pinned
+transports accept JSON numeric negative zero in token counts and usage. Their
+observation callback can then reject the live negative-zero value after the
+literal response and canonical zero-valued post record have already been
+persisted. This is a genuine runtime persistence halt, not a completed answer.
+The scorer incorrectly rejected the retained evidence because it applied the
+stricter metadata-number rule to the original provider response.
+
+Two fresh fake-HTTP reproductions reached this exact boundary, one ordinary
+count and one card-plan count. Both retained the persistence failure and all
+24 cases; preparation and scoring each denied the otherwise consistent
+evidence with `count_response_mismatch`. Primary independently reconciled
+33 and 43 literal artifacts against runtime references and hashes. The intended
+regression command exited 1 after both cases and successful owned cleanup.
+An earlier reproduction setup also exited 1 because its test expected an
+original session ID instead of the canonical capture ID. That setup failure
+is retained separately and is not evidence of the scoring defect.
+
+The follow-up correction is limited to replaying raw provider numeric values
+and the two unchanged price estimators. Canonical metadata, accounting inputs,
+source identity, endpoint bounds, actual runtime failure and first-answer
+denominators stay strict. A valid assessment of a halted run must not grant
+completion, semantic success, Stage2 clearance or product-default advancement.
+Signed-zero spelling and malformed-number controls supplement genuine runtime
+regressions; altered retained-data controls are not new runtime observations.
+
+For this corrected candidate, an independently reviewed prospective schedule
+replaces duplicate author/primary full matrices with one primary-owned complete
+matrix per supported local runtime. Every scorer assertion remains in the
+unfiltered algorithm suite. Node 22.16.0 and 24.15.0 run sequentially at fixed
+file concurrency 4, with unchanged deadlines, the remaining contributor gates
+and four postcommit checks. All 22 new command exits must be 0; historical
+greens cannot substitute. Old failures and consumed receipts remain intact.
+Fresh final Standards/Spec review and all applicable exact-head CI are still
+required. This is an offline evidence correction, not a new accuracy score,
+proof of improved retrieval or permission to operate the closed cohort.

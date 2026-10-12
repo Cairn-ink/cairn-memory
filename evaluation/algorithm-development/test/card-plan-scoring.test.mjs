@@ -28,6 +28,16 @@ const PREPARATION_KEYS = ['version', 'status', 'integrity', 'bindings', 'provena
 const REPORT_KEYS = PREPARATION_KEYS.filter(key => key !== 'judgeDomains').concat(
   ['cases', 'judgments', 'summaries', 'paired', 'harms', 'gate']);
 const orders = ['ABC', 'ACB', 'BAC', 'BCA', 'CAB', 'CBA'];
+const NUMERIC_MODES = ['ordinary-count-negative-zero', 'CW-count-negative-zero',
+  'ordinary-rank-negative-zero', 'CW-generation-negative-zero', 'ordinary-answer-negative-zero'];
+const numericEndpoint = mode => mode.includes('count') ? 'responses/input_tokens'
+  : mode.includes('answer') ? 'chat/completions' : 'responses';
+const numericSlot = mode => `CQ01-${mode.includes('answer') ? 'answer' : 'selection'}-${mode.startsWith('CW') ? 'B' : 'A'}`;
+function signedUsageBody(body, answer = false) {
+  const input = answer ? 'prompt_tokens' : 'input_tokens', output = answer ? 'completion_tokens' : 'output_tokens';
+  return JSON.stringify(body).replace(`"${input}":100,"${output}":20,"total_tokens":120`,
+    `"${input}":-0,"${output}":-0,"total_tokens":-0`);
+}
 const sha = value => createHash('sha256').update(value).digest('hex');
 const clone = value => structuredClone(value);
 const keys = (value, expected) => assert.deepEqual(Object.keys(value).sort(), [...expected].sort());
@@ -171,7 +181,7 @@ before(async () => {
   workspace = createTestWorkspace(null, { prefix: 'card-plan-scoring-shared-' });
   try {
     fixtures = {};
-    for (const mode of ['complete', 'C-unjudgeable', 'edges', 'before-start', 'checkpoint-mismatch', 'replacement', 'read-state-drift', 'unaffordable', 'net-loss', 'pre-dispatch-failure', 'CW-transformed-success', 'CW-redacted-failure', 'ordinary-BOM-boundaries']) {
+    for (const mode of ['complete', 'C-unjudgeable', 'edges', 'before-start', 'checkpoint-mismatch', 'replacement', 'read-state-drift', 'unaffordable', 'net-loss', 'pre-dispatch-failure', 'CW-transformed-success', 'CW-redacted-failure', 'ordinary-BOM-boundaries', ...NUMERIC_MODES]) {
       const preparation = await prepareCardPlanComparison({ outputRoot: join(workspace.path, mode) });
       const configuration = { directory: join(workspace.path, `${mode}-ledger`), runId: randomUUID(),
         limitMicroUsd: mode === 'unaffordable' ? 39000000 : 400000000, requestCap: 100000 };
@@ -201,6 +211,8 @@ before(async () => {
           const slotId = active.slotId, caseId = slotId.slice(0, 4), arm = slotId.at(-1);
           calls.push({ url, slotId, requestSha256: sha(init.body) });
           if (url.endsWith('/input_tokens')) {
+            if (NUMERIC_MODES.includes(mode) && numericEndpoint(mode) === 'responses/input_tokens'
+              && slotId === numericSlot(mode)) return new Response('{"object":"response.input_tokens","input_tokens":-0}');
             if (mode === 'CW-redacted-failure' && slotId === 'CQ01-selection-B') return Response.json({
               object: 'response.input_tokens', input_tokens: 100, diagnostic: 'sk-' + 'x'.repeat(20) }, { status: 500 });
             if (mode === 'ordinary-BOM-boundaries' && arm === 'A') {
@@ -220,6 +232,8 @@ before(async () => {
                 .run(proposal.refs[0].memoryId); } finally { db.close(); }
             }
             const body = rankBody(proposal);
+            if (NUMERIC_MODES.includes(mode) && numericEndpoint(mode) === 'responses'
+              && slotId === numericSlot(mode)) return new Response(signedUsageBody(body));
             if (mode === 'CW-transformed-success' && slotId === 'CQ01-selection-B') body.diagnostic = 'sk-' + 'x'.repeat(20);
             if (mode === 'ordinary-BOM-boundaries' && arm === 'A') {
               const text = JSON.stringify(body);
@@ -239,6 +253,8 @@ before(async () => {
             maximumRaw = replacementBody(answerBody(text)); return new Response(maximumRaw);
           }
           const body = answerBody(text);
+          if (mode === 'ordinary-answer-negative-zero' && slotId === numericSlot(mode))
+            return new Response(signedUsageBody(body, true));
           if (mode === 'ordinary-BOM-boundaries') {
             const encoded = JSON.stringify(body);
             return new Response('\uFEFF' + encoded + ' '.repeat(262144 - 3 - Buffer.byteLength(encoded)));
@@ -280,6 +296,10 @@ before(async () => {
 after(async () => {
   if (workspace) {
     await workspace.cleanup(); await assert.rejects(access(workspace.path), { code: 'ENOENT' });
+    for (const mode of NUMERIC_MODES) {
+      await assert.rejects(access(join(workspace.path, mode)), { code: 'ENOENT' });
+      console.log('CARD_SCORING_NUMERIC_CLEANUP=' + JSON.stringify({ mode, ownedRootRemoved: true }));
+    }
     console.log('CARD_SCORING_SHARED_CLEANUP=removed-owned-workspace');
   }
 });
@@ -305,6 +325,142 @@ function denied(report, reason) {
     assert.equal(report.gate.mechanismPromising, false);
   }
 }
+
+function numericSources(fixture, memoryIds, receiptIds) {
+  const cases = fixture.preparation.observation.cases;
+  assert.deepEqual(cases.map(c => c.id), sources.map(c => c.id)); assert.equal(cases.length, 24);
+  let count = 0;
+  for (const [i, c] of cases.entries()) {
+    assert.equal(c.captures.length, 12); assert.equal(c.rankRequest.input.candidates.length, 12);
+    assert.deepEqual(c.stateBefore, c.stateAfter);
+    for (const [j, capture] of c.captures.entries()) {
+      count++;
+      const source = sources[i].sessions[j], batch = c.plan.cairnPlan.batches[j], provenance = c.sourceProvenance[j];
+      assert.deepEqual(capture.batch, batch); assert.equal(capture.result.ok, true);
+      assert.equal(capture.receipts.length, 1); assert.equal(batch.indexedWindows.length, 1);
+      assert.equal(batch.captureInput.messages.length, 1);
+      const receipt = capture.receipts[0], message = batch.captureInput.messages[0], window = batch.indexedWindows[0];
+      const rendered = c.plan.renderedHistory.sessions[j];
+      const origin = c.plan.originMap.turns.find(row => row.renderedTurnId === provenance.renderedTurnId);
+      assert(origin);
+      assert.equal(provenance.originalSessionId, source.id); assert.equal(provenance.eventTime, source.eventTime);
+      assert.equal(provenance.originalMessageIndex, 0); assert.equal(provenance.role, source.messages[0].role);
+      assert.equal(provenance.renderedSessionId, `lme-session-${sha(source.id)}`);
+      assert.equal(rendered.session_id, provenance.renderedSessionId); assert.equal(rendered.turns.length, 1);
+      assert.equal(rendered.turns[0].turn_id, provenance.renderedTurnId);
+      assert.equal(batch.source.sourceSessionId, provenance.renderedSessionId); assert.equal(batch.source.sessionIndex, j);
+      assert.equal(batch.sourceMap.length, 1); assert.equal(batch.sourceMap[0].turnId, provenance.renderedTurnId);
+      assert.equal(batch.sourceMap[0].messageId, message.id);
+      assert.equal(origin.originalSessionIndex, j); assert.equal(origin.originalTurnIndex, 0);
+      assert.equal(origin.originalSessionId, provenance.renderedSessionId);
+      assert.equal(origin.originalTurnId, `lme-turn-${sha(`${source.id}:0`)}`);
+      assert.equal(message.content, rendered.turns[0].content); assert.equal(message.role, source.messages[0].role);
+      assert.equal(window.id, message.id); assert.equal(window.messageIndex, 0); assert.equal(window.role, message.role);
+      assert.equal(window.content, message.content.slice(window.start, window.end));
+      const original = source.messages[0].content;
+      const normalized = redactSecrets(original.normalize('NFKC')).replace(/\s+/gu, ' ').trim();
+      assert.equal(origin.normalizationChanged, normalized !== original);
+      assert.equal(origin.normalizedStart, 0); assert.equal(origin.normalizedEnd, normalized.length);
+      assert(window.start <= origin.bodyStart && window.end >= origin.bodyEnd);
+      assert.equal(message.content.slice(origin.bodyStart, origin.bodyEnd), normalized);
+      assert.equal(receipt.sessionId, batch.captureInput.sessionId); assert.equal(receipt.eventId, message.id);
+      assert.equal(receipt.role, window.role); assert.equal(receipt.excerpt, window.content);
+      const stored = c.stateAfter.logical.tables.receipts.find(row => row.id === receipt.id);
+      assert(stored); assert.equal(stored.memory_id, capture.memory.id);
+      assert.equal(stored.session_id, receipt.sessionId); assert.equal(stored.event_id, receipt.eventId);
+      assert.equal(stored.role, receipt.role); assert.equal(stored.excerpt, receipt.excerpt);
+      assert(!memoryIds.has(capture.memory.id)); assert(!receiptIds.has(receipt.id));
+      memoryIds.add(capture.memory.id); receiptIds.add(receipt.id);
+    }
+  }
+  assert.equal(count, 288); return count;
+}
+
+test('N1–N4: five genuine signed-zero endpoints preserve halted evidence, accounting and all denominators', async t => {
+  const memoryIds = new Set(), receiptIds = new Set(), roots = new Set();
+  const expectedCalls = [1, 3, 2, 4, 5], expectedKnown = [0, 72, 0, 72, 144], expectedUnknown = [1, 2, 1, 2, 2];
+  for (const [i, mode] of NUMERIC_MODES.entries()) await t.test(mode, async () => {
+    const f = fixtures[mode], count = numericSources(f, memoryIds, receiptIds);
+    const root = f.preparation.observation.outputRoot; assert(!roots.has(root)); roots.add(root);
+    assert.equal(f.initial.requestCount, 0); assert.equal(f.initial.reservedMicroUsd, 0);
+    assert.deepEqual(f.initial.attempts, []);
+    assert.equal(f.report.status, 'halted'); assert.equal(f.report.failure.code, 'card_plan_persistence_failure');
+    assert.equal(f.report.cases.length, 24); assert.equal(f.report.cases.flatMap(c => c.selections).length, 48);
+    assert.equal(f.report.cases.flatMap(c => c.answers).length, 72);
+    assert.equal(f.calls.length, expectedCalls[i]); assert.equal(f.report.attempts.length, expectedCalls[i]);
+    assert.equal(f.records.length, expectedCalls[i] * 2 - 1);
+    assert.equal(f.input.artifacts.filter(row => /^record-/u.test(row.name)).length, expectedCalls[i] * 2);
+    const intent = f.report.attempts.at(-1), post = intent.post;
+    assert.equal(intent.slotId, numericSlot(mode)); assert.equal(post.outcome, 'succeeded');
+    const slot = f.report.cases[0][mode.includes('answer') ? 'answers' : 'selections']
+      .find(row => row.slotId === numericSlot(mode));
+    assert.equal(slot.status, 'failed'); assert.equal(slot.failure.code, 'card_plan_persistence_failure');
+    const ordinaryDone = f.report.cases[0].selections[0].status === 'completed';
+    assert.equal(ordinaryDone, mode.startsWith('CW') || mode.includes('answer'));
+    assert(f.report.cases.flatMap(c => c.answers).every(row => row.answer === null && row.status !== 'completed'));
+    assert.equal(f.report.resources.physicalCalls, expectedCalls[i]);
+    assert.equal(f.report.resources.reservedIntents, expectedCalls[i]);
+    assert.equal(f.report.resources.reservedMicroUsd, expectedCalls[i] * 5000);
+    assert.equal(f.report.resources.partialKnownMicroUsd, expectedKnown[i]);
+    assert.equal(f.report.resources.unknownCostCalls, expectedUnknown[i]);
+    assert.equal(f.report.resources.missingFinalCalls, 0); assert.equal(f.report.resources.answersCompleted, 0);
+    const final = f.report.ledgerReconciliation;
+    assert.equal(final.prefixUnchanged, true); assert.equal(final.requestCount, expectedCalls[i]);
+    assert.equal(final.reservedMicroUsd, expectedCalls[i] * 5000); assert.equal(final.state, 'open');
+    assert.deepEqual(final.unobservedAttemptIds, []);
+    assert.deepEqual(final.appendedAttempts.map(row => row.attemptId), f.report.attempts.map(row => row.attemptId));
+    for (const [j, delta] of final.appendedAttempts.entries()) {
+      assert.equal(delta.outcome, 'succeeded'); assert.equal(delta.reservedMicroUsd, 5000);
+      assert.equal(JSON.stringify(delta.actualMicroUsd), JSON.stringify(f.report.attempts[j].post.actualMicroUsd));
+      assert.equal(Object.is(delta.actualMicroUsd, -0), false, 'SQLite ledger cost is canonical');
+    }
+    const text = f.input.artifacts.find(row => row.name === basename(post.responseArtifact.path)).text;
+    assert.equal(post.responseArtifact.bytes, Buffer.byteLength(text)); assert.equal(post.responseArtifact.sha256, sha(text));
+    assert.equal(text.slice(0, 10), '{"object":');
+    const body = JSON.parse(text), countEndpoint = mode.includes('count'), cw = mode.startsWith('CW');
+    if (countEndpoint) {
+      assert.equal(text, '{"object":"response.input_tokens","input_tokens":-0}');
+      assert(Object.is(body.input_tokens, -0)); assert(Object.is(cw ? post.inputTokens : post.providerInputTokens, -0));
+      assert.equal(post.actualMicroUsd, null);
+    } else {
+      assert(Object.values(body.usage).every(value => Object.is(value, -0)));
+      assert(post.actualMicroUsd === 0);
+      assert.equal(Object.is(post.actualMicroUsd, -0), !cw);
+      if (!cw) assert(Object.is(Math.ceil(body.usage[mode.includes('answer') ? 'prompt_tokens' : 'input_tokens'] * 0.4
+        + body.usage[mode.includes('answer') ? 'completion_tokens' : 'output_tokens'] * 1.6), -0));
+    }
+    const durable = JSON.parse(f.input.artifacts.find(row => row.name ===
+      `record-${String(post.sequence).padStart(4, '0')}.json`).text);
+    assert.equal(JSON.stringify(durable), JSON.stringify(post));
+    assert.equal(Object.is(durable.actualMicroUsd, -0), false);
+    if (countEndpoint) assert.equal(Object.is(cw ? durable.inputTokens : durable.providerInputTokens, -0), false);
+    else if (cw) {
+      assert.equal(Object.is(durable.inputTokens, -0), false); assert.equal(Object.is(durable.outputTokens, -0), false);
+    } else assert(Object.values(durable.usage).every(value => value === 0 && !Object.is(value, -0)));
+    const before = sha(JSON.stringify(f.input));
+    const prepared = await prepareCardPlanScoring(f.input); valid(prepared, true);
+    const report = await assess(f); valid(report);
+    for (const output of [prepared, report]) {
+      assert.equal(output.runtime.status, 'halted'); assert.equal(output.runtime.failure.code, 'card_plan_persistence_failure');
+      assert.equal(output.mechanical.answers.length, 72);
+      assert(output.mechanical.answers.every(row => !row.actualAnswer && row.judgeEligibility.status === 'excluded'));
+    }
+    assert.equal(report.cases.length, 24);
+    for (const arm of ['A', 'B', 'C']) {
+      const summary = report.summaries[arm].all;
+      assert.equal(summary.completed, 0); assert.equal(summary.notRun, mode.includes('answer') && arm === 'A' ? 23 : 24);
+      assert.deepEqual(summary.correctness, { correct: 0, incorrect: 0, unresolved: 24 });
+      assert.equal(summary.unsupported.unobservedQuestions, 24);
+    }
+    assert.equal(report.gate.mechanismPromising, false); assert.equal(report.gate.Stage2Passed, false);
+    assert.equal(report.gate.productDefaultAdvancement, false); assert.equal(sha(JSON.stringify(f.input)), before);
+    console.log('CARD_SCORING_NUMERIC_GENUINE=' + JSON.stringify({ mode, sourceStores: 24, captures: count,
+      status: f.report.status, failure: f.report.failure, physicalCalls: f.calls.length,
+      retainedFirst32BytesHex: Buffer.from(text).subarray(0, 32).toString('hex'), retainedSha256: sha(text),
+      artifactIndexSha256: f.input.execution.artifactIndexSha256, prepared: prepared.integrity, assessed: report.integrity }));
+  });
+  assert.equal(roots.size, 5); assert.equal(memoryIds.size, 1440); assert.equal(receiptIds.size, 1440);
+});
 
 test('ST1 fixture preconditions: fresh actual runtime, complete 24/48/72, first HTTP and honest edge transitions', () => {
   assert.equal(Buffer.byteLength(sourceRaw), 90785); assert.equal(Buffer.byteLength(rubricRaw), 76804);
@@ -607,6 +763,150 @@ function responseTampered(fixture, intent, text, { wrongBytes = false, responseS
   }
   return tampered(fixture, changes);
 }
+
+// Synthetic retained-copy boundary controls, never claimed as runtime runs.
+// Update the affected canonical numeric observations and costs consistently so
+// valid endpoint maxima can reach the actual replay rule rather than fail an
+// unrelated stale post/ledger/resource check. Status/failure stay untouched.
+function numericResponseCopied(fixture, values, actualMicroUsd = null) {
+  const intent = fixture.report.attempts.at(-1), post = intent.post;
+  const count = post.kind === 'count' || post.endpoint === 'responses/input_tokens';
+  const cw = Object.hasOwn(post, 'kind'), answer = intent.slotId.includes('answer');
+  const name = basename(post.responseArtifact.path);
+  const body = JSON.parse(fixture.input.artifacts.find(row => row.name === name).text);
+  if (count) body.input_tokens = values.input;
+  else body.usage = answer ? { prompt_tokens: values.input, completion_tokens: values.output, total_tokens: values.total }
+    : { input_tokens: values.input, output_tokens: values.output, total_tokens: values.total };
+  const text = JSON.stringify(body), changes = [[name, text]];
+  for (const artifact of fixture.input.artifacts.filter(row => row.name.endsWith('.json'))) {
+    changes.push([artifact.name, value => {
+      const walk = row => {
+        if (!row || typeof row !== 'object') return;
+        if (row.attemptId === intent.attemptId && row.phase === 'post') {
+          if (cw) row.responseSha256 = sha(text);
+          else row.responseBytes = Buffer.byteLength(text);
+          if (count) row[cw ? 'inputTokens' : 'providerInputTokens'] = values.input;
+          else {
+            row.actualMicroUsd = actualMicroUsd;
+            if (cw) { row.inputTokens = values.input; row.outputTokens = values.output; }
+            else row.usage = { input_tokens: values.input, output_tokens: values.output, total_tokens: values.total };
+          }
+        } else if (!count && row.attemptId === intent.attemptId && typeof row.channel === 'string')
+          row.actualMicroUsd = actualMicroUsd;
+        Object.values(row).forEach(walk);
+      };
+      walk(value);
+      if (!count && artifact.name === 'comparison-report.json')
+        value.resources.partialKnownMicroUsd += actualMicroUsd - post.actualMicroUsd;
+    }]);
+  }
+  return tampered(fixture, changes);
+}
+
+test('N2–N3: copied response spellings and invalid/bound controls preserve strict metadata', async t => {
+  // Orthogonal coverage: every field gets an accepted spelling and an invalid
+  // numeric class. Every class/spelling occurs, without repeating a Cartesian
+  // matrix that would revalidate all24 preparations for every cross-product.
+  const variants = {
+    'ordinary-count-negative-zero': [['input_tokens', '-0.0', '-1']],
+    'CW-count-negative-zero': [['input_tokens', '-0e0', '0.5']],
+    'ordinary-rank-negative-zero': [['input_tokens', '-1e-999', '-5e-324'],
+      ['output_tokens', '0', '1e309'], ['total_tokens', '0.0', '9007199254740992']],
+    'CW-generation-negative-zero': [['input_tokens', '-0', '-1'],
+      ['output_tokens', '-0.0', '0.5'], ['total_tokens', '-0e0', '1e309']],
+    'ordinary-answer-negative-zero': [['prompt_tokens', '-1e-999', '9007199254740992'],
+      ['completion_tokens', '0', '-1'], ['total_tokens', '0.0', '-5e-324']],
+  };
+  assert.equal(Object.values(variants).flat().length, 11);
+  assert.deepEqual([...new Set(Object.values(variants).flat().map(row => row[1]))].sort(),
+    ['-0', '-0.0', '-0e0', '-1e-999', '0', '0.0'].sort());
+  assert.deepEqual([...new Set(Object.values(variants).flat().map(row => row[2]))].sort(),
+    ['-1', '0.5', '-5e-324', '1e309', '9007199254740992'].sort());
+  let controls = 0;
+  for (const mode of NUMERIC_MODES) {
+    const f = fixtures[mode], before = sha(JSON.stringify(f.input)), intent = f.report.attempts.at(-1);
+    const text = f.input.artifacts.find(row => row.name === basename(intent.post.responseArtifact.path)).text;
+    const count = mode.includes('count'), answer = mode.includes('answer');
+    const fields = count ? ['input_tokens'] : [answer ? 'prompt_tokens' : 'input_tokens',
+      answer ? 'completion_tokens' : 'output_tokens', 'total_tokens'];
+    assert.deepEqual(variants[mode].map(row => row[0]), fields);
+    for (const [name, acceptedSpelling, invalidSpelling] of variants[mode])
+      for (const [spelling, accepted] of [[acceptedSpelling, true], [invalidSpelling, false]]) {
+      controls++;
+      await t.test(`${mode}/${name}/${spelling}`, async () => {
+        const replacement = text.replace(`"${name}":-0`, `"${name}":${spelling}`);
+        assert(replacement.includes(`"${name}":${spelling}`));
+        let input = responseTampered(f, intent, replacement);
+        // Coherent finite count observations isolate the raw integer/lower
+        // bound check. Coherent negative usage pairs isolate input/output's
+        // lower bound without a stale total, cost or recorded-usage mismatch.
+        // Other invalid spellings are raw-consistency/type controls; nonfinite
+        // values cannot be represented in valid canonical post metadata.
+        if (count && !accepted && Number.isFinite(JSON.parse(spelling)))
+          input = numericResponseCopied(f, { input: JSON.parse(spelling) });
+        else if (!count && spelling === '-1' && name !== 'total_tokens') {
+          const values = name === (answer ? 'prompt_tokens' : 'input_tokens')
+            ? { input: -1, output: 0, total: -1 } : { input: 4, output: -1, total: 3 };
+          input = numericResponseCopied(f, values, 0);
+        }
+        const prepared = await prepareCardPlanScoring(input);
+        if (accepted) valid(prepared, true);
+        else denied(prepared, count ? 'count_response_mismatch' : 'usage_response_mismatch');
+      });
+    }
+    if (count) {
+      for (const input of [7024, 7025]) {
+        controls++;
+        await t.test(`${mode}/input-bound/${input}`, async () => {
+          const prepared = await prepareCardPlanScoring(numericResponseCopied(f, { input }));
+          if (input === 7024) valid(prepared, true); else denied(prepared, 'count_response_mismatch');
+        });
+      }
+    } else {
+      const outputCap = answer ? 512 : 1024;
+      const bounds = [
+        ['input-at-bound', { input: 7024, output: 0, total: 7024 }, 2810, true],
+        ['input-over-bound', { input: 7025, output: 0, total: 7025 }, 2810, false],
+        ['output-at-bound', { input: 0, output: outputCap, total: outputCap }, answer ? 820 : 1639, true],
+        ['output-over-bound', { input: 0, output: outputCap + 1, total: outputCap + 1 }, answer ? 821 : 1640, false],
+      ];
+      for (const [name, values, price, accepted] of bounds) {
+        controls++;
+        await t.test(`${mode}/${name}`, async () => {
+          const prepared = await prepareCardPlanScoring(numericResponseCopied(f, values, price));
+          if (accepted) valid(prepared, true); else denied(prepared, 'successful_usage_mismatch');
+        });
+      }
+      controls++;
+      await t.test(`${mode}/inconsistent-total`, async () => {
+        const replacement = text.replace('"total_tokens":-0', '"total_tokens":1');
+        denied(await prepareCardPlanScoring(responseTampered(f, intent, replacement)), 'usage_response_mismatch');
+      });
+    }
+    assert.equal(sha(JSON.stringify(f.input)), before, 'copied controls cannot rewrite original runtime evidence');
+  }
+  for (const location of ['external-header', 'canonical-metadata']) {
+    controls++;
+    await t.test(`negative-zero/${location}`, async () => {
+      const input = clone(fixtures[NUMERIC_MODES[0]].input);
+      if (location === 'external-header') input.execution.originalHistoryHeader.requestCount = -0;
+      else {
+        const artifact = input.artifacts.find(row => row.name === 'comparison-report.json');
+        artifact.text = artifact.text.replace('"initialRequestCount":0', '"initialRequestCount":-0');
+        assert(artifact.text.includes('"initialRequestCount":-0'));
+        input.execution.artifactIndexSha256 = sha(JSON.stringify(indexOf(input.artifacts)));
+      }
+      denied(await prepareCardPlanScoring(input), location === 'external-header'
+        ? 'history_affordability_mismatch' : 'noncanonical_metadata_json');
+    });
+  }
+  assert.equal(controls, 43, '11 fields × 2 orthogonal cases + 16 bounds + 3 sums + 2 strict metadata controls');
+  console.log('CARD_SCORING_NUMERIC_COPIED_CONTROLS=' + JSON.stringify({ count: controls,
+    orthogonalVariants: variants,
+    boundary: 'synthetic-retained-copies-not-runtime-observations',
+    isolated: 'finite count integers/lower bound; negative usage input/output; endpoint maxima',
+    otherInvalids: 'raw-consistency/type controls, not isolated predicate claims' }));
+});
 
 test('R1/SC4–SC5: public strict CW grammar and successful body proof, without widening ordinary grammar', async t => {
   const f = fixtures.complete, before = sha(JSON.stringify(f.input));
