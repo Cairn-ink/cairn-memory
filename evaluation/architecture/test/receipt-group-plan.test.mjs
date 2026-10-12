@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
-import { prepareCardPlanRankRequest, consumeCardPlan } from '../card-plan-rank.mjs';
+import { prepareCardPlanRankRequest, compileCardPlan, consumeCardPlan } from '../card-plan-rank.mjs';
 import { prepareReceiptGroupPlan, compileReceiptGroupPlan,
   createReceiptGroupInvocation, assembleReceiptGroupPlan,
   RECEIPT_GROUP_RANK_INSTRUCTION } from '../receipt-group-plan.mjs';
@@ -26,6 +26,10 @@ const proposal = { groups: [
 const expectedRefs = [5, 1, 0].map(i => ({ namespaceIndex: 0, memoryId: `parcel-${i}`, revision: 3 }));
 const code = expected => error => error?.code === expected;
 const singleton = id => ({ contextReceiptIds: [], terminalReceiptId: id });
+const mutateSignal = (signal, mode, trap) => {
+  if (mode === 'accessor') Object.defineProperty(signal, 'aborted', { get: trap });
+  else Object.setPrototypeOf(signal, Object.create(AbortSignal.prototype));
+};
 
 test('RG1 prospective wire preserves exact cards and supplies only receipt-ID group fields', () => {
   const input = request(), prepared = prepareReceiptGroupPlan(input, counter);
@@ -250,6 +254,71 @@ test('RG4/5 cancellation at every count and generation phase exhausts one invoca
   const options = { compiled: cancelled, recall: {}, core: {}, plan: {}, namespace: {}, question: {} };
   assert.throws(() => assembleReceiptGroupPlan(options), { name: 'AbortError' });
   assert.throws(() => assembleReceiptGroupPlan(options), code('invalid_receipt_group_plan'));
+});
+
+test('RG1 signal mutation during request counting rejects before generation like genuine CP', async () => {
+  for (const mode of ['accessor', 'prototype']) {
+    let hooks = 0;
+    const trap = () => { hooks++; throw new Error('Untrusted signal hook'); };
+    const baseline = request();
+    assert.throws(() => prepareCardPlanRankRequest(baseline, () => {
+      mutateSignal(baseline.signal, mode, trap); return 1;
+    }), code('invalid_input'), `Genuine CP rejects ${mode} mutation after its request count`);
+    for (const phase of ['old-request', 'successor-request']) {
+      const input = request(); let calls = 0;
+      const invocation = createReceiptGroupInvocation({ contextWindow: 8192, countTokens(text) {
+        const properties = JSON.parse(text).outputSchema?.properties;
+        if (phase === 'old-request' && properties?.selectedCards
+          || phase === 'successor-request' && properties?.groups) mutateSignal(input.signal, mode, trap);
+        return 1;
+      } }, { planRank() { calls++; return structuredClone(proposal); } });
+      await assert.rejects(invocation.model.rank(input), code('invalid_input'));
+      assert.equal(calls, 0, `${phase}/${mode} must fail before the generation callback`);
+      assert.equal(hooks, 0);
+      assert.throws(invocation.takePlan, code('invalid_receipt_group_plan'));
+      await assert.rejects(invocation.model.rank(request()), code('receipt_group_invocation_conflict'));
+    }
+  }
+});
+
+test('RG1 signal mutation after generation rejects before reading output like genuine CP', async () => {
+  for (const mode of ['accessor', 'prototype']) {
+    let hooks = 0, calls = 0;
+    const trap = () => { hooks++; throw new Error('Untrusted signal or output hook'); };
+    const raw = Object.defineProperty({}, 'groups', { enumerable: true, get: trap });
+    const baseline = request(), prepared = prepareCardPlanRankRequest(baseline, counter);
+    mutateSignal(baseline.signal, mode, trap);
+    assert.throws(() => compileCardPlan(prepared, raw), code('invalid_input'),
+      'Genuine CP validates the signal before snapshotting model output');
+    const input = request();
+    const invocation = createReceiptGroupInvocation({ contextWindow: 8192, countTokens: counter },
+      { planRank() { calls++; mutateSignal(input.signal, mode, trap); return raw; } });
+    await assert.rejects(invocation.model.rank(input), code('invalid_input'));
+    assert.equal(calls, 1); assert.equal(hooks, 0);
+    assert.throws(invocation.takePlan, code('invalid_receipt_group_plan'));
+    await assert.rejects(invocation.model.rank(request()), code('receipt_group_invocation_conflict'));
+  }
+});
+
+test('RG1 signal mutation at later proposal and refs counts rejects and exhausts invocation', async () => {
+  for (const mode of ['accessor', 'prototype']) {
+    for (const phase of ['groups', 'selectedCards', 'refs']) {
+      const input = request(); let hooks = 0, calls = 0, mutations = 0;
+      const trap = () => { hooks++; throw new Error('Untrusted signal hook'); };
+      const invocation = createReceiptGroupInvocation({ contextWindow: 8192, countTokens(text) {
+        const value = JSON.parse(text);
+        if (!Object.hasOwn(value, 'outputSchema') && Object.hasOwn(value, phase)) {
+          mutations++; mutateSignal(input.signal, mode, trap);
+        }
+        return 1;
+      } }, { planRank() { calls++; return structuredClone(proposal); } });
+      await assert.rejects(invocation.model.rank(input), code('invalid_input'));
+      assert.equal(mutations, 1, `${phase}/${mode} reached its intended count boundary`);
+      assert.equal(calls, 1); assert.equal(hooks, 0);
+      assert.throws(invocation.takePlan, code('invalid_receipt_group_plan'));
+      await assert.rejects(invocation.model.rank(request()), code('receipt_group_invocation_conflict'));
+    }
+  }
 });
 
 test('RG5 concurrent generation, callback failures, options and configured-model controls', async () => {

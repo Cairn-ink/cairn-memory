@@ -23,8 +23,15 @@ const origin = 'receipt-group-derived-card-assembly-v1';
 const outputError = 'invalid_model_output', planError = 'invalid_receipt_group_plan';
 const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
 function check(signal) {
-  // Genuine CP preparation already validated the native descriptor and signal.
-  if (aborted.call(signal)) throw new DOMException('Receipt group planning cancelled', 'AbortError');
+  // Counters and generation callbacks can mutate a previously validated signal.
+  // Match genuine CP's native/proxy/descriptor boundary at every new check.
+  if (!signal || typeof signal !== 'object' || types.isProxy(signal)
+    || Object.getPrototypeOf(signal) !== AbortSignal.prototype
+    || Reflect.ownKeys(Object.getOwnPropertyDescriptors(signal)).some(key =>
+      !Object.hasOwn(Object.getOwnPropertyDescriptor(signal, key), 'value'))) fail('invalid_input');
+  let cancelled;
+  try { cancelled = aborted.call(signal); } catch { fail('invalid_input'); }
+  if (cancelled) throw new DOMException('Receipt group planning cancelled', 'AbortError');
 }
 function fields(value, code) {
   if (!value || typeof value !== 'object' || types.isProxy(value) || Array.isArray(value)

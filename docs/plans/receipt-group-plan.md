@@ -291,3 +291,53 @@ counts. The prior table and all pre-clarification primary gates are historical
 evidence for their tested bytes only. Fresh focused results/measurements are
 retained in private acceptance evidence; primary owns the final corrected-wire
 gates and frozen candidate, without another post-freeze plan mutation.
+
+## Independent Spec correction round 1: mutated signal boundary
+
+Independent Spec review failed P2 against frozen candidate
+101e482790a5bac871ee8d0316bfb9ab46ab7115: RG1 requires signal/descriptor/proxy
+protection no weaker than genuine CP. The successor's captured native getter
+did not revalidate a signal changed during a token-count callback. Primary's
+minimal reproduction exited 1: an own accessor installed during successor
+request counting reached generation once, though genuine CP rejects before
+dispatch. Earlier green acceptance is historical evidence for its tested
+coverage, not approval of this previously untested gap.
+
+Three prospective pure regressions were added before the fix. They compare
+genuine CP request preparation and compilation boundaries, then mutate the
+native signal with an own `aborted` accessor or a changed prototype during old
+or successor request counting, after generation, and during groups, derived CP
+proposal and refs counts. Rejection must be `invalid_input`, execute zero
+signal/output hooks, avoid generation when mutation precedes dispatch, and
+exhaust rank/take ownership. The unchanged ordinary cancellation cases still
+require genuine `AbortError` at every phase.
+
+Pinned Node 22.16.0 prospective RED used the owned runner and scrubbed environment:
+actual exit 1, 12 tests, 9 passed, 3 failed, no skips. The retained log is
+`/tmp/cairn-complementary-qa-acceptance.7sG2vXdH/receipt-group-signal-red-node22.log`.
+Failures were respectively generation callback 1 instead of 0 after successor
+request mutation, `invalid_model_output` instead of `invalid_input` after model
+mutation, and no rejection after refs-count mutation. This is a boundary
+regression, not an import error or replay of historical model reasoning.
+
+Only the local successor `check()` changed: at every check it now matches
+genuine CP's native prototype, proxy, own-data-descriptor and native getter
+validation before cancellation. No CP/core/transport change, generic port,
+callback retry, schema/wire modification, cap increase or provider call follows.
+The adapter SHA256 is
+0554653d758ca41fd5cd098c98e886cc3aa838e3bd77c462fd9d825b5686cce6;
+the pure suite SHA256 is
+f27d29ac452f78896ba1fedfddf77bab2de0e99ac21a225c22d1cac0eee40f68.
+
+After the narrow fix, serial owned pure probes on Node 22.16.0 and 24.15.0 each
+exited 0: 12/12 passed, no skips. Logs use the same private evidence directory
+and names `receipt-group-signal-fix-probe-node22.log` and
+`receipt-group-signal-fix-probe-node24.log`. Both runs used `env -i`, pinned Node
+PATH, `NODE_DISABLE_COMPILE_CACHE=1` and
+`CAIRN_CARD_PLAN_TOKENIZER_REQUIRED=1`; no native sequence was run. This append
+preserves the original 8355-byte contract and all earlier plan records. Final
+pure runs after documentation closure retain their actual exits in
+`receipt-group-signal-green-node22.log` and
+`receipt-group-signal-green-node24.log`; source edits stop before those gates.
+Primary owns affected full gates and fresh independent Standards and Spec
+reviews. Prior Standards approval does not approve this changed candidate.
