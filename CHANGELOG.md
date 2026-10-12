@@ -17,6 +17,11 @@
   Verify the session-bound transcript source and native exec ancestry for resumed
   interactive threads. Opt in with `config --codex-capture-exec on`; show this
   setting in status only when enabled.
+- Capture and recall interactive Codex TUI sessions again. Since Codex 0.160 the
+  TUI runs on the shared app-server daemon, which records `source: vscode`; the
+  runtime accepted only `cli` and `exec`, so every TUI session was latched as
+  `unsupported_format`. Latched sessions stay excluded without backfill; new
+  sessions are captured once the updated hooks are allowed in `/hooks`.
 - Restore the prompt-recall kill switch in help, READMEs and enabled status:
   `npx @cairn-ink/memory prompt-recall-off --client codex`.
 - Report Claude-only controls truthfully, keep printed commands copyable, localize

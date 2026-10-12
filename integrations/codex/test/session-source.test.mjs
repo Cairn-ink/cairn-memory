@@ -8,7 +8,7 @@ import { withSourceReadObserver } from '../source.mjs';
 import { MAX_LINE } from '../parser.mjs';
 
 const session = '11111111-1111-4111-8111-111111111111';
-test('source gate binds the native header to its session and retains cli/exec distinction',async t=>{
+test('source gate binds the native header to its session and retains cli/vscode/exec distinction',async t=>{
   const ws=createTestWorkspace(t,{prefix:'cx-source-'}),path=join(ws.path,'session.jsonl');
   const text=await readFile(new URL('./fixtures/primary-0.160.1.jsonl',import.meta.url),'utf8');
   await writeFile(path,text);
@@ -16,6 +16,8 @@ test('source gate binds the native header to its session and retains cli/exec di
   assert.equal(await sessionSource(path,'another-session'),null);
   await writeFile(path,text.replace('"source":"exec"','"source":"cli"'));
   assert.equal(await sessionSource(path,session),'cli');
+  await writeFile(path,text.replace('"source":"exec"','"source":"vscode"'));
+  assert.equal(await sessionSource(path,session),'vscode');
   await writeFile(path,text.replace('"cli_version":"0.160.1"','"cli_version":"0.999.0"'));
   assert.equal(await sessionSource(path,session),null);
   assert.equal(await sessionSource(path,session,{qualifyCreator:async version=>version==='0.999.0'}),'exec');

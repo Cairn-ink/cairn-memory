@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { verifyHeader,parseLine,FORMAT,CODEX_COMMIT,QUALIFIED_CREATORS } from '../parser.mjs';
+import { verifyHeader,parseLine,FORMAT,CODEX_COMMIT,QUALIFIED_CREATORS,SOURCES } from '../parser.mjs';
 import { planBatches,preflight,normalizeBlocks } from '../../client/common-profile.mjs';
 
 const fixture=await readFile(new URL('./fixtures/primary-paginated.jsonl',import.meta.url),'utf8');
@@ -45,7 +45,13 @@ test('primary synthetic host fixture selects one canonical representation',()=>{
   assert.equal(records.filter(x=>x.message).length,2);
 });
 
-for(const patch of [{history_mode:'legacy'},{source:'vscode'},
+test('app-server threads (Codex 0.160+ TUI on the shared daemon) record source vscode in the same layout',()=>{
+  assert.deepEqual(SOURCES,['cli','vscode','exec']);
+  const row=JSON.parse(lines[0]);Object.assign(row.payload,{source:'vscode',originator:'codex-tui'});
+  assert.equal(verifyHeader(Buffer.from(JSON.stringify(row)),sessionId),FORMAT);
+});
+
+for(const patch of [{history_mode:'legacy'},{source:'mcp'},{source:'unknown'},{source:{subagent:'review'}},
   {forked_from_id:'fork'},{history_base:{ordinal:1}},{parent_thread_id:'parent'},
   {subagent_history_start_ordinal:0},{thread_source:'subagent'}]) test(`unsupported metadata ${JSON.stringify(patch)}`,()=>{
     const row=JSON.parse(lines[0]);Object.assign(row.payload,patch);

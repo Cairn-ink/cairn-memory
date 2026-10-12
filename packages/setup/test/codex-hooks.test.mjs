@@ -268,8 +268,10 @@ async function memoryRuntime(t,options={}) {
   const f=await fixture(t,options);assert.equal(f.code,0,f.stdout);
   const path=join(f.ws.path,'synthetic.jsonl');
   const text=await readFile(new URL('../../../integrations/codex/test/fixtures/primary-0.160.1.jsonl',import.meta.url),'utf8');
+  // Codex 0.160+ TUI threads run on the shared app-server daemon, which records source "vscode".
+  const [source,originator]=options.sessionSource==='vscode'?['vscode','codex-tui']:['cli','codex_cli'];
   const transcript = options.sessionSource === 'exec' ? text :
-    text.replace('"source":"exec"','"source":"cli"').replace('"originator":"codex_exec"','"originator":"codex_cli"');
+    text.replace('"source":"exec"',`"source":"${source}"`).replace('"originator":"codex_exec"',`"originator":"${originator}"`);
   await writeFile(path,transcript);
   const project='/synthetic/project',requests=[];
   const projectId=await clientProjectId({client:'codex',home:f.home,root:f.installed.root,
@@ -317,6 +319,22 @@ test('CX-5 fake host lifecycle: Stop/PreCompact capture canonical redacted text,
   await f.invoke('PreCompact');await f.invoke('worker');
   assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,2);
   assert.ok(!JSON.stringify(f.requests).includes('sk-'+ 'x'.repeat(36)));
+});
+
+test('Codex TUI threads on the shared app-server daemon (source vscode) capture and recall by default',async t=>{
+  const f=await memoryRuntime(t,{sessionSource:'vscode'});
+  f.host.kind='app-server';
+  // A native exec ancestor still narrows the same thread to the exec opt-in.
+  f.host.execSession=true;
+  for(const event of ['Stop','UserPromptSubmit'])assert.equal(await f.invoke(event,{prompt:'Preferences?'}),'');
+  assert.equal(f.requests.length,0);assert.equal(f.handoff(),undefined);
+  delete f.host.execSession;
+  assert.equal(await f.invoke('Stop'),'{}');assert.ok(f.handoff());await f.invoke('worker');
+  const captures=f.requests.filter(r=>r.route.endsWith('/capture'));assert.equal(captures.length,1);
+  assert.deepEqual(captures[0].body.messages.map(m=>m.content),['Prefer diagrams.','Understood.']);
+  assert.ok(!(await f.cursor()).pending);
+  await f.invoke('UserPromptSubmit',{prompt:'Preferences?'});
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
 });
 
 test('CX-5 prompt recall injects receipt framing and shares project identity after verifying the session header',async t=>{
