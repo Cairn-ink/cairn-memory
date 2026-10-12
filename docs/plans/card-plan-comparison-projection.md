@@ -209,3 +209,46 @@ prospective contract remains the exact document prefix; the named stash is
 retained, not dropped. Final-base primary verification and both independent
 review axes are required before push and exact-head CI delivery.
 
+## Prospective review disposition: disclosed PX7 author-exposure exception
+
+Primary DRI decision on 2026-10-12, before any evaluated-model call on CQ24.
+The original PX1–PX7 contract remains verbatim above. Independent Spec review
+of candidate `3a689ff3120c06b0f14c0bce5e3aecab6fac920c` correctly found one
+P2 procedural deviation: the projection author read old closed-result prose
+after the primary-approved implementation/checkpoint2. The original no-read
+requirement was not met. This exception neither erases that finding nor claims
+retroactive compliance, a pre-read cryptographic snapshot, or proof that all
+unobserved influence is absent.
+
+This bounded projection is accepted for continued prospective evaluation as
+a **nonblind engineering control**, not as blindly authored algorithm evidence.
+It deterministically projects already selected whole-card sources; it neither
+selects answers using gold nor supplies the new dataset, model prompt or scoring
+rules. Independent review found no implementation defect or result-dependent
+test correction. Rewriting the same mechanical projection would not undo the
+historical read. The relevant controls are explicit disclosure, source-fidelity
+tests and separate prospective evaluation, not claiming the read did not occur.
+
+This decision is limited to that already recorded incident:
+
+- The independently authored CQ24 source and rubric remain byte-identical to
+  `9a1434f0984093f3a44ac37a3fcfd979c653c677`; no question, anchor, minimal set,
+  expected claim, severe condition or sample is altered.
+- Projection source, tests and CI remain byte-identical to the original reviewed
+  candidate. Only this plan and limitations gain the decision record. Both
+  independent axes must review the new exact candidate and this exception.
+- All PX1–PX6 functionality, real token bounds, source/capability checks and
+  failure behavior remain unchanged. No evidence or safety gate is waived.
+- B-v-A remains the sole prospective promotion comparison with identical flat
+  source context; C remains diagnostic only. Pinned model, budgets, denominators,
+  orders, first-response rules and future frozen judging/scoring stay unchanged.
+- New evaluated-model calls and independent first judges remain separate later
+  gates. No new results were used to make this decision, and it grants no paid
+  call, old-cohort repair/rerun/rejudge/rescore or product-quality claim.
+
+Reports and the PR must say that the original Spec review had one disclosed,
+primary-accepted procedural exception. A later pass against this amended
+prospective scope must not be reported as zero historical deviations or original
+PX7 compliance. Author exposure is a limitation of this engineering process;
+the separate CQ author and future judges must not be represented as exposed by
+it without evidence, or as independent merely because a helper test passes.

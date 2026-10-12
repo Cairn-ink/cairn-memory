@@ -2280,3 +2280,14 @@ first-judgment/scorer bindings, prepared-artifact review and budget preflight
 remain separate gates. No provider calls, old-cohort reruns/rescoring, retention
 expansion, paid authority or change to the cumulative 400USD/protected 30USD
 limits follows. See [the projection contract](plans/card-plan-comparison-projection.md).
+
+The original projection Spec review also found one disclosed PX7 procedural
+breach: after implementation and primary checkpoint review, its author read old
+closed-result prose while obtaining append context. Later hashes are not
+cryptographic proof of pre-read bytes. Before any new CQ24 evaluated-model call,
+the primary accepted that recorded incident as a narrow author-exposure exception
+for a nonblind engineering control; it is not retroactive compliance or zero
+historical deviations. Projection code/tests/CI and the independent new source/
+rubric remain unchanged. No model, sample, score, source-integrity check or other
+evaluation gate is relaxed. Future reports retain this limitation and the
+independent first-judgment requirement; see the plan's prospective disposition.
