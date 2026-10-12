@@ -2341,3 +2341,220 @@ fidelity review. Replacement does not erase either incident or prove absence
 of influence. Neither original no-read compliance nor blind algorithm
 authorship is claimed, and the projection's separate PX7 exception remains.
 See [the complete runtime contract and recovery record](plans/card-plan-first-answer-runtime.md).
+
+## Card-plan retained-artifact scoring
+
+The new evaluator accepts explicitly supplied literal runtime artifacts and
+checks their source identities, first selection/answer observations, ordered
+accounting and separate A/B versus C first-judgment bindings. It does not open
+a memory store, discover files, load historical ledger rows or call a provider.
+All 24 pairs remain in the denominator. Missing or failed answers are not
+correct; unjudgeable text and unknown judgments remain explicit. Grouping arm C
+shares B's factual selection and cannot replace B as the promotion comparison.
+
+Synthetic complete, partial and interrupted runs exercise this arithmetic with
+the real local core, fake HTTP and scripted first judgments. One implementation
+defect initially failed six assertions: a verified window containing both date
+metadata and source text was incorrectly treated as having no source coverage.
+The correction maps only its exact original-body intersection, with source
+identity and literal-byte checks; it neither credits wrapper text nor changes
+the verifier's provenance. Two additional fixture/assertion mistakes and one
+latent contradictory scripted judgment were corrected separately. The original
+failed execution remains recorded, not replaced by a green rerun.
+
+The initial pre-review author matrices on exact Node 22.16.0 and 24.15.0
+completed twelve commands with actual exit 0. Each runtime passed 68 focused,
+312 algorithm and 784 generic tests, with no failures, skipped or cancelled
+tests and no unexpected owned scratch. Primary direct acceptance, independent
+final reviews and CI are separate gates whose exact-candidate evidence is
+retained with the PR.
+
+Independent review nevertheless found two scoring defects: successful card-plan
+responses did not replay the pinned strict JSON grammar, and successful ordinary
+responses lacked their endpoint-specific size and exact responseBytes checks.
+Primary also reproduced a legitimate ordinary response being rejected because
+its retained leading UTF-8 BOM differs from the transport's decoded text. All
+original failing reproductions remain retained. The corrections preserve
+ordinary duplicate-key behavior, consume exactly one leading BOM only for its
+derived decoded text, and retain literal artifacts and hashes unchanged.
+
+Successful card-plan response proof now requires the retained text hash to match
+the transport's unredacted parser-input text hash. That input is after fatal
+TextDecoder, not an independent physical-wire capture. On direct identity the
+scorer applies the pinned strict grammar and endpoint bounds. Unequal hashes
+deny scoring for insufficient original proof, not alleged tampering; legitimate
+redacted successes may therefore be unassessable. Failed/redacted responses keep
+their conservative failure handling, without inventing a replacement raw body
+or changing actual runtime completion.
+
+The corrected author matrices passed 93 focused, 337 algorithm and 784 generic
+tests on each exact runtime, plus validation and the owned synthetic comparison
+demo: twelve actual command exits 0, with zero failures/cancellations/skips and
+both owned scratch parents removed. Primary independently checked command
+inventories, raw outcomes/hashes, unchanged module/test hashes and cleanup. Two
+earlier wrapper setup attempts exited 1 before any native suite because of an
+incorrect tool path; their original empty logs and copied stderr are retained,
+separate from product-test results. A bounded driver-only correction preceded
+these matrices. Final corrected-candidate primary checks, independent review
+and exact-head CI remain separate delivery gates.
+
+These checks are not measured model accuracy or a retrieval gain. Even a
+positive synthetic mechanism signal cannot clear Stage2, D12, product defaults,
+natural long-history MOC quality, official benchmark parity, lightweight fit or
+installed Hermes readiness. Common preparation latency, peak RSS and service
+cost are unmeasured; retained artifact bytes exclude the SQLite stores. The two
+pinned transport cost estimators are preserved, not treated as provider invoices.
+
+Artifact consistency cannot prove first execution, independent judges,
+historical-prefix preservation or resistance to a wholly fabricated transcript.
+Those require separately reviewed runtime and primary provenance. Genuine
+pre-assembly state drift is covered; the partial-read and both-records-missing
+reservation branches remain source-inspected rather than separately exercised.
+The two historical runtime-author read deviations and separate PX7 exception
+remain disclosed; evaluator acceptance does not restore original blinding.
+
+The existing closed cohorts are untouched: no rerun, resume, rescore, rejudge or
+pooling. This offline implementation adds no live grant, operational key/ledger
+read, retention expansion, publication or deployment. A fresh live comparison
+still requires exact-candidate acceptance, frozen preparation and original-budget
+preflight under the cumulative 400 USD ceiling and protected 30 USD reserve.
+See [the frozen contract and verification record](plans/card-plan-first-answer-scoring.md).
+
+The corrected primary matrix has a retained failure: Node22's full337-test
+algorithm invocation passed336 and cancelled one existing source-bundle C5
+test after187213.546706ms against its180000ms deadline (actual exit1).
+The driver stopped; its remaining five commands were not run. Node24's ten
+commands all exited0, including337/337 algorithm tests. A separate unchanged
+selected C5 diagnostic passed in62321.302487ms, but does not clear the original
+full-suite failure. Its exact cause remains unknown; all owned scratch was
+empty and removed, including after the failed command.
+
+On the observed16-core host, the two default Node test schedulers can each
+allow15 direct file workers; two overlapping28-file suites permit30, excluding
+nested children. This identifies scheduling exposure, not measured original
+CPU pressure or proof that contention caused the failure. The primary accepted
+an independently reviewed, explicit prospective maintainer-plan amendment:
+one new full Node22 invocation, all28files, fixed file concurrency4, only one
+heavy sequence globally, unchanged assertions/deadlines/watchdog, no automatic
+retry. Only its success permits the five previously unrun commands. The
+original no-timeout-retry acceptance attempt is not retroactively passed.
+
+Existing green evidence may be reused only after proving that all1606
+non-documentation source hashes remain identical; just the two documentation
+files may differ. The new and postcommit snapshots must match the final tree,
+and final independent dual review plus unchanged-command exact-head CI remain
+required. These are prospective requirements, not a claim that the amended
+run, final reviews or CI have passed. No model-accuracy result, paid run,
+operational read or closed-cohort operation follows from this amendment.
+
+The amended native gate subsequently passed on candidate `610751e`, but a new
+independent Spec review found another scoring boundary defect. The pinned
+transports accept JSON numeric negative zero in token counts and usage. Their
+observation callback can then reject the live negative-zero value after the
+literal response and canonical zero-valued post record have already been
+persisted. This is a genuine runtime persistence halt, not a completed answer.
+The scorer incorrectly rejected the retained evidence because it applied the
+stricter metadata-number rule to the original provider response.
+
+Two fresh fake-HTTP reproductions reached this exact boundary, one ordinary
+count and one card-plan count. Both retained the persistence failure and all
+24 cases; preparation and scoring each denied the otherwise consistent
+evidence with `count_response_mismatch`. Primary independently reconciled
+33 and 43 literal artifacts against runtime references and hashes. The intended
+regression command exited 1 after both cases and successful owned cleanup.
+An earlier reproduction setup also exited 1 because its test expected an
+original session ID instead of the canonical capture ID. That setup failure
+is retained separately and is not evidence of the scoring defect.
+
+The follow-up correction is limited to replaying raw provider numeric values
+and the two unchanged price estimators. Canonical metadata, accounting inputs,
+source identity, endpoint bounds, actual runtime failure and first-answer
+denominators stay strict. A valid assessment of a halted run must not grant
+completion, semantic success, Stage2 clearance or product-default advancement.
+Signed-zero spelling and malformed-number controls supplement genuine runtime
+regressions; altered retained-data controls are not new runtime observations.
+
+For this corrected candidate, an independently reviewed prospective schedule
+replaces duplicate author/primary full matrices with one primary-owned complete
+matrix per supported local runtime. Every scorer assertion remains in the
+unfiltered algorithm suite. Node 22.16.0 and 24.15.0 run sequentially at fixed
+file concurrency 4, with unchanged deadlines, the remaining contributor gates
+and four postcommit checks. All 22 new command exits must be 0; historical
+greens cannot substitute. Old failures and consumed receipts remain intact.
+Fresh final Standards/Spec review and all applicable exact-head CI are still
+required. This is an offline evidence correction, not a new accuracy score,
+proof of improved retrieval or permission to operate the closed cohort.
+
+The numeric-corrected candidate `fdba481` passed all 22 new local commands on
+both pinned runtimes, including 387 algorithm and 784 generic tests per
+runtime, but independent Spec review found a further partial-output gap. A
+card-plan generation can succeed before a later observation-persistence halt
+leaves no retained assembly. The scorer checked the outer response and usage,
+then returned before checking its embedded proposal and plan compilation.
+Copied invalid proposals could therefore pass integrity validation, although
+the run still remained halted and could not earn completion or advancement.
+
+A fresh fake-HTTP prefix reproduced this through both public scorer APIs:
+47 literal artifacts, 288 source captures and four calls; two copied invalid
+proposals each bypassed the expected denial. The unchanged genuine evidence
+remained valid and halted. The first diagnostic exited 1 at the intended
+assertion, but its large console artifact stream was truncated; that log is
+retained as incomplete evidence. A logger-only correction and separately
+recorded invocation also exited 1 at the intended four denials, with complete
+literal records, unchanged source files and verified owned cleanup.
+
+The next correction must replay successful card-plan output before returning
+for missing assembly, without requiring failed transport output to be valid
+or extending that guarantee to ordinary transport's different stage ordering.
+Its new verification and independent review remain required; the earlier
+green matrix is historical, not acceptance of changed bytes. Neither these
+reproductions nor their correction measure real-model answer accuracy.
+
+The partial-generation correction at `f4c1aca` passed 22 new local commands,
+including 393 algorithm and 784 generic tests on each pinned runtime. Its
+Standards review passed, but independent Spec review found a separate failed-
+response accounting boundary. CW can retain a parsed usage estimate before
+withholding a credential-bearing response, or before retaining generic-
+redacted failed text that no longer parses. The scorer required response usage
+for every non-null cost and therefore rejected the whole legitimate halted
+record. Ordinary transport rejects credential echo before pricing and has a
+different retained shape.
+
+Primary reproduced both paths with fresh fake HTTP through the pinned runtime:
+46 and 47 literal artifacts, 288 captures and four calls per case. Each retained
+144 microUSD of recorded estimates, including the failed CW generation's 72,
+and 20,000 microUSD reserved; no answer completed. Both public APIs wrongly
+denied the genuine records with `usage_response_mismatch`. A copied inconsistent-
+cost control also failed at that earlier reason instead of its estimator check.
+The original reproduction exited 1 at all six intended final assertions after
+verified owned cleanup. Primary's separate artifact/source/ledger audit exited
+0. These are offline synthetic records, not paid requests or provider invoices.
+
+The bounded correction must preserve recorded costs while separately reporting
+which known-cost estimates lack retained response proof. Withheld or unparseable
+transformed failed CW text cannot earn verified-resource, successful-answer,
+clean-safety or promotion credit. Successful response identity, parseable usage
+contradictions, missing referenced artifacts and canonical accounting mismatches
+must still reject. This does not authorize recovering or storing withheld text,
+changing the transport or reclassifying a failed run as completed. A normally
+completed run may still contain a settled failed selection and dependent
+unanswered slots; unavailable usage proof must remain explicit there too,
+without rejecting the whole result or erasing those failed slots. New integrated
+verification, independent review and exact-head CI remain separate requirements;
+the prior green matrix is not acceptance of changed bytes or an accuracy score.
+
+The unchanged two-prefix reproduction subsequently exited 0 through both public
+scoring APIs. Primary's independent literal/source/accounting audit also exited
+0: all 93 safe artifacts reconcile, each prefix retains 144 microUSD recorded
+estimate with 72 verified and 72 explicitly unverified, and the inconsistent-
+cost control remains denied. All 1,608 source hashes stayed unchanged during
+execution; owned scratch was removed with no intervention or surviving owned
+process. This focused GREEN is not execution evidence for the new full-completed
+fixture or acceptance of the pending integrated matrices, final reviews or CI.
+
+Primary's first source-freeze invocation exited 1 before writing any freeze
+or starting a native gate: its manually supplied RED-log hash had one mistyped
+hex digit. The retained record and independent raw-file digest agree; the
+corrected invocation obtains that argument directly from the verified record.
+This was an operator preflight error, not a test or runtime failure. Its failed
+invocation remains recorded; no receipt, source result or budget was reset.
