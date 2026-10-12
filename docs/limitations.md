@@ -2341,3 +2341,51 @@ fidelity review. Replacement does not erase either incident or prove absence
 of influence. Neither original no-read compliance nor blind algorithm
 authorship is claimed, and the projection's separate PX7 exception remains.
 See [the complete runtime contract and recovery record](plans/card-plan-first-answer-runtime.md).
+
+## Card-plan retained-artifact scoring
+
+The new evaluator accepts explicitly supplied literal runtime artifacts and
+checks their source identities, first selection/answer observations, ordered
+accounting and separate A/B versus C first-judgment bindings. It does not open
+a memory store, discover files, load historical ledger rows or call a provider.
+All 24 pairs remain in the denominator. Missing or failed answers are not
+correct; unjudgeable text and unknown judgments remain explicit. Grouping arm C
+shares B's factual selection and cannot replace B as the promotion comparison.
+
+Synthetic complete, partial and interrupted runs exercise this arithmetic with
+the real local core, fake HTTP and scripted first judgments. One implementation
+defect initially failed six assertions: a verified window containing both date
+metadata and source text was incorrectly treated as having no source coverage.
+The correction maps only its exact original-body intersection, with source
+identity and literal-byte checks; it neither credits wrapper text nor changes
+the verifier's provenance. Two additional fixture/assertion mistakes and one
+latent contradictory scripted judgment were corrected separately. The original
+failed execution remains recorded, not replaced by a green rerun.
+
+The author's exact Node 22.16.0 and 24.15.0 matrices completed twelve commands
+with actual exit 0. Each runtime passed 68 focused, 312 algorithm and 784
+generic tests, with no failures, skipped or cancelled tests and no unexpected
+owned scratch. Primary direct acceptance, independent final reviews and CI are
+separate gates whose exact-candidate evidence is retained with the PR.
+
+These checks are not measured model accuracy or a retrieval gain. Even a
+positive synthetic mechanism signal cannot clear Stage2, D12, product defaults,
+natural long-history MOC quality, official benchmark parity, lightweight fit or
+installed Hermes readiness. Common preparation latency, peak RSS and service
+cost are unmeasured; retained artifact bytes exclude the SQLite stores. The two
+pinned transport cost estimators are preserved, not treated as provider invoices.
+
+Artifact consistency cannot prove first execution, independent judges,
+historical-prefix preservation or resistance to a wholly fabricated transcript.
+Those require separately reviewed runtime and primary provenance. Genuine
+pre-assembly state drift is covered; the partial-read and both-records-missing
+reservation branches remain source-inspected rather than separately exercised.
+The two historical runtime-author read deviations and separate PX7 exception
+remain disclosed; evaluator acceptance does not restore original blinding.
+
+The existing closed cohorts are untouched: no rerun, resume, rescore, rejudge or
+pooling. This offline implementation adds no live grant, operational key/ledger
+read, retention expansion, publication or deployment. A fresh live comparison
+still requires exact-candidate acceptance, frozen preparation and original-budget
+preflight under the cumulative 400 USD ceiling and protected 30 USD reserve.
+See [the frozen contract and verification record](plans/card-plan-first-answer-scoring.md).
