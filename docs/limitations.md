@@ -2608,3 +2608,47 @@ result, consumed CQ/BQ rerun or paid authority changes. The goal remains
 lightweight source-backed reliable memory; completion, QA, safety, a fresh
 paired comparator, installed Hermes new-session use and resource fit remain
 separate uncleared gates.
+
+## Receipt-ID groups: offline successor only
+
+The [receipt-group contract](plans/receipt-group-plan.md) now has a separately
+versioned offline adapter using exact supplied receipt IDs. It derives card
+first-occurrence order and endpoint positions deterministically, then uses the
+unchanged genuine card-plan compiler, authoritative evidence assembler and flat
+whole-card answer packer. Its private one-use capability is distinct from its
+frozen diagnostic data. Actual successor request/proposal hashes and derived CP
+assembly hashes remain separate; neither proves a group relationship or gives
+execution authority. Group organization does not enter the flat answer request.
+
+Fresh source-only scripted fixtures passed the focused pure/SQLite pair on
+Node 22.16.0 and 24.15.0: actual exit 0, 14/14 tests, no skips on each. They use
+normal bounded capture/dedup, actual receipt IDs, cold bounded-source-scan recall,
+one generation callback, authoritative rereads and the real local tokenizer.
+Exact source identities, roles, complete card bytes/order, stale/deleted/altered/
+foreign/query rejection, cancellation and failed-consumption controls are
+covered. Owned success, deliberate assertion failure and setup failure cleanup
+also passed. The first native run exited 1 before rank because its fixture oracle
+omitted the documented source date wrapper and a six-source extraction item
+exceeded core's unchanged four-source cap. The corrected raw-literal oracle
+and ordinary bounded extraction/dedup retain that failed run in the plan.
+
+Measured actual successor requests in the retained focused runs fit 6000 tokens;
+actual outputs, derived proposals and refs fit 1024. Dense repeated exact-ID
+groups approached that output cap, and other IDs may overflow. Overflow remains
+visible rejection; no cap, identifier, source/card limit or budget was raised.
+These scripted tests establish offline mapping and lifecycle plumbing, not
+model compliance, semantic grouping quality, better supported-correct first
+answers, lightweight resource fit or Hermes readiness. Final broad acceptance,
+independent candidate review and CI remain separate gates. Closed results and
+the original US$400 ceiling/US$30 protection stay unchanged. No paid dispatch,
+closed-cohort retry, default change or Stage 2/3/D12 advancement follows. Any
+future paid work needs a separately frozen reviewed new wire and fresh cases.
+
+The [official Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses)
+lists `minItems` and `maxItems` for array constraints without listing `uniqueItems`.
+The emitted receipt-group schema now omits that keyword under a conservative
+documented-subset inference, while exact local duplicate-ID rejection and all
+caps remain unchanged. This is an offline portability clarification, not an
+observed provider error or proof of API acceptance; no provider call was made.
+Earlier token measurements and gates apply to the pre-clarification wire.
+Fresh focused results are retained separately for primary corrected-wire review.
