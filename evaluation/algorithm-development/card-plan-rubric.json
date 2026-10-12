@@ -1,0 +1,1706 @@
+{
+  "version": "card-plan-qa24-rubric-v1",
+  "cases": [
+    {
+      "id": "CQ01",
+      "answerability": "answerable",
+      "expectedProposition": "Mount the bracket before stamping the badge. Stamp the badge before claiming the tray. Claim the viewing tray before lens release.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Mount the bracket before stamping the badge.",
+        "Stamp the badge before claiming the tray.",
+        "Claim the viewing tray before lens release."
+      ],
+      "anchors": [
+        {
+          "id": "CQ01-A01",
+          "sessionId": "CQ01-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 95,
+          "text": "At Orin's paper exhibit, the bracket must be mounted before the desk can stamp a visitor badge."
+        },
+        {
+          "id": "CQ01-A02",
+          "sessionId": "CQ01-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 106,
+          "text": "For Orin's paper exhibit, a stamped visitor badge is needed before the visitor can claim the viewing tray."
+        },
+        {
+          "id": "CQ01-A03",
+          "sessionId": "CQ01-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 106,
+          "text": "Orin's viewing lens is released only after the visitor has claimed the viewing tray for the paper exhibit."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ01-A01",
+            "CQ01-A02",
+            "CQ01-A03"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Skipping the badge-to-tray step or transferring the clay exhibit's lens-release procedure to Orin."
+      ],
+      "staleUse": "Do not replace this target's recorded prerequisites with another stand's procedure.",
+      "severeConditions": [
+        "Inventing a completed prerequisite or skipping an explicitly requested prerequisite edge."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ02",
+      "answerability": "answerable",
+      "expectedProposition": "The original adopted material was copper. Cedar replaced the previous adopted material. The recorded revision reason was a lighter stairway carrying load. The confirmed pickup time is 14:20.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "The original adopted material was copper.",
+        "Cedar replaced the previous adopted material.",
+        "The recorded revision reason was a lighter stairway carrying load.",
+        "The confirmed pickup time is 14:20."
+      ],
+      "anchors": [
+        {
+          "id": "CQ02-A01",
+          "sessionId": "CQ02-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 99,
+          "text": "Luma adopted copper for the material choice in her archive pickup plan at the start of this review."
+        },
+        {
+          "id": "CQ02-A02",
+          "sessionId": "CQ02-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 116,
+          "text": "Luma revised the archive pickup material choice: cedar is now adopted and replaces the previously selected material."
+        },
+        {
+          "id": "CQ02-A03",
+          "sessionId": "CQ02-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 109,
+          "text": "Luma recorded the reason for the archive pickup material revision as a lighter carrying load on the stairway."
+        },
+        {
+          "id": "CQ02-A04",
+          "sessionId": "CQ02-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 98,
+          "text": "Luma's archive pickup appointment is confirmed for 14:20, using the visitor desk's local schedule."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ02-A01",
+            "CQ02-A02",
+            "CQ02-A03",
+            "CQ02-A04"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Reporting copper as current, or supplying cedar as the original choice solely from the replacement note.",
+        "Treating a proposed carrying strap as adopted."
+      ],
+      "staleUse": "Keep the original adoption historical when the explicit replacement applies; proposals alone cannot replace it.",
+      "severeConditions": [
+        "Promoting an unadopted proposal to a replacement or inventing a revision reason."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ03",
+      "answerability": "answerable",
+      "expectedProposition": "A closed latch remains mandatory. Use an insulated sleeve rather than the baseline cloth wrap. The insulated sleeve handling requires a cobalt badge. Chilled crates use the south lane. Tavi is chilled in the applicable cycle.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "A closed latch remains mandatory.",
+        "Use an insulated sleeve rather than the baseline cloth wrap.",
+        "The insulated sleeve handling requires a cobalt badge.",
+        "Chilled crates use the south lane.",
+        "Tavi is chilled in the applicable cycle."
+      ],
+      "anchors": [
+        {
+          "id": "CQ03-A01",
+          "sessionId": "CQ03-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 113,
+          "text": "Workshop handling baseline: every crate uses a closed latch and a cloth wrap unless a wrapping exception applies."
+        },
+        {
+          "id": "CQ03-A02",
+          "sessionId": "CQ03-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 129,
+          "text": "The workshop's chilled-crate exception substitutes an insulated sleeve for the cloth wrap, leaving other baseline steps in force."
+        },
+        {
+          "id": "CQ03-A03",
+          "sessionId": "CQ03-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 91,
+          "text": "Using the workshop's insulated sleeve for a chilled crate requires a cobalt handling badge."
+        },
+        {
+          "id": "CQ03-A04",
+          "sessionId": "CQ03-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 104,
+          "text": "The workshop sends chilled crates through the south handling lane, irrespective of their wrapping color."
+        },
+        {
+          "id": "CQ03-A05",
+          "sessionId": "CQ03-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 93,
+          "text": "The workshop manifest classifies crate Tavi as chilled; its entry is for this handling cycle."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ03-A01",
+            "CQ03-A02",
+            "CQ03-A03",
+            "CQ03-A04",
+            "CQ03-A05"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Using a cloth wrap for chilled Tavi, omitting the closed latch, or claiming that a trial silver badge is current."
+      ],
+      "staleUse": "Do not transfer another cycle, class or room's handling rule to this target.",
+      "severeConditions": [
+        "Applying an exception without its target scope or treating uncertainty as universal permission."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ04",
+      "answerability": "answerable",
+      "expectedProposition": "Ivo initially adopted green. Rhea's quoted preference was amber for her own ribbon. The assistant proposed violet. Ivo considered amber without adopting it. Ivo rejected his considered option because it blended into the backdrop. Ivo's current adopted color is teal.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Ivo initially adopted green.",
+        "Rhea's quoted preference was amber for her own ribbon.",
+        "The assistant proposed violet.",
+        "Ivo considered amber without adopting it.",
+        "Ivo rejected his considered option because it blended into the backdrop.",
+        "Ivo's current adopted color is teal."
+      ],
+      "anchors": [
+        {
+          "id": "CQ04-A01",
+          "sessionId": "CQ04-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 96,
+          "text": "Ivo initially adopted green for his display ribbon in the gallery installation under discussion."
+        },
+        {
+          "id": "CQ04-A02",
+          "sessionId": "CQ04-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 87,
+          "text": "Ivo reported Rhea's words about her own display ribbon: 'I prefer amber for my ribbon.'"
+        },
+        {
+          "id": "CQ04-A03",
+          "sessionId": "CQ04-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 100,
+          "text": "For Ivo's gallery display ribbon, I suggest violet as an option to test under the overhead lighting."
+        },
+        {
+          "id": "CQ04-A04",
+          "sessionId": "CQ04-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 97,
+          "text": "Ivo says he is considering amber for his gallery display ribbon, and has not adopted that option."
+        },
+        {
+          "id": "CQ04-A05",
+          "sessionId": "CQ04-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 108,
+          "text": "Ivo rejected the option he had been considering for the gallery ribbon because it blended into the backdrop."
+        },
+        {
+          "id": "CQ04-A06",
+          "sessionId": "CQ04-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 89,
+          "text": "Ivo now adopts teal for the gallery display ribbon, replacing his earlier adopted choice."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ04-A01",
+            "CQ04-A02",
+            "CQ04-A03",
+            "CQ04-A04",
+            "CQ04-A05",
+            "CQ04-A06"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Reporting Rhea's amber preference or the assistant's violet suggestion as Ivo's adoption.",
+        "Reporting amber as adopted when it was only considered and rejected."
+      ],
+      "staleUse": "A historical choice or another claimant's stance is not the target's current adoption.",
+      "severeConditions": [
+        "Attributing a quoted person's preference or assistant proposal as the target person's adoption."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ05",
+      "answerability": "answerable",
+      "expectedProposition": "Wisp maps to routing tag fern. Routing tag fern identifies carton Beryl. Carton Beryl is assigned shelf Juniper.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Wisp maps to routing tag fern.",
+        "Routing tag fern identifies carton Beryl.",
+        "Carton Beryl is assigned shelf Juniper."
+      ],
+      "anchors": [
+        {
+          "id": "CQ05-A01",
+          "sessionId": "CQ05-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 89,
+          "text": "The atelier's parcel nickname Wisp maps to routing tag fern in the current parcel ledger."
+        },
+        {
+          "id": "CQ05-A02",
+          "sessionId": "CQ05-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 97,
+          "text": "In the current atelier parcel ledger, routing tag fern identifies carton Beryl, not a shelf name."
+        },
+        {
+          "id": "CQ05-A03",
+          "sessionId": "CQ05-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 87,
+          "text": "The atelier assigns carton Beryl to shelf Juniper for the current parcel sorting cycle."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ05-A01",
+            "CQ05-A02",
+            "CQ05-A03"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Giving Sable's Alder shelf to Wisp or applying the neighboring studio's fern tag to atelier parcels."
+      ],
+      "staleUse": "Use only the current register; old mappings and other rooms cannot complete a current entity path.",
+      "severeConditions": [
+        "Joining an unrelated entity's property across an unsupported identity link."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ06",
+      "answerability": "answerable",
+      "expectedProposition": "The roster is Vela, Nook, Pavo and Daro. The blue-seal list is Vela, Nook, Pavo and Zeno. Nook alone is withdrawn. The adopted rule is roster intersect blue seals minus withdrawals; Vela and Pavo qualify.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "The roster is Vela, Nook, Pavo and Daro.",
+        "The blue-seal list is Vela, Nook, Pavo and Zeno.",
+        "Nook alone is withdrawn.",
+        "The adopted rule is roster intersect blue seals minus withdrawals; Vela and Pavo qualify."
+      ],
+      "anchors": [
+        {
+          "id": "CQ06-A01",
+          "sessionId": "CQ06-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 86,
+          "text": "The afternoon desk-token roster is exactly Vela, Nook, Pavo and Daro for this display."
+        },
+        {
+          "id": "CQ06-A02",
+          "sessionId": "CQ06-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 90,
+          "text": "The blue-seal list for the display includes exactly Vela, Nook, Pavo and spare token Zeno."
+        },
+        {
+          "id": "CQ06-A03",
+          "sessionId": "CQ06-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 95,
+          "text": "Nook is the only token withdrawn from the afternoon display; its blue seal remains on the list."
+        },
+        {
+          "id": "CQ06-A04",
+          "sessionId": "CQ06-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 116,
+          "text": "The adopted afternoon rule selects tokens in both the desk roster and blue-seal list, then removes withdrawn tokens."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ06-A01",
+            "CQ06-A02",
+            "CQ06-A03",
+            "CQ06-A04"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Including Daro without a blue seal, retaining withdrawn Nook, or including spare Zeno outside the roster."
+      ],
+      "staleUse": "Do not apply another display's roster or combination rule to the specified display.",
+      "severeConditions": [
+        "Reporting a definitive member despite an explicitly pending membership check, or inventing an adopted set rule."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ07",
+      "answerability": "answerable",
+      "expectedProposition": "Fasten the foot before inserting the rod. Insert the rod before fitting the shade ring. Fit the shade ring before attaching the lantern. Attach the lantern before entering the display bay.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Fasten the foot before inserting the rod.",
+        "Insert the rod before fitting the shade ring.",
+        "Fit the shade ring before attaching the lantern.",
+        "Attach the lantern before entering the display bay."
+      ],
+      "anchors": [
+        {
+          "id": "CQ07-A01",
+          "sessionId": "CQ07-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 91,
+          "text": "At Soren's lantern stand, the foot must be fastened before the upright rod can be inserted."
+        },
+        {
+          "id": "CQ07-A02",
+          "sessionId": "CQ07-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 90,
+          "text": "Soren's stand permits fitting the shade ring only after the upright rod has been inserted."
+        },
+        {
+          "id": "CQ07-A03",
+          "sessionId": "CQ07-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 89,
+          "text": "For Soren's stand, the lantern may be attached only after its shade ring has been fitted."
+        },
+        {
+          "id": "CQ07-A04",
+          "sessionId": "CQ07-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 89,
+          "text": "Soren's lantern stand can enter the display bay only after the lantern has been attached."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ07-A01",
+            "CQ07-A02",
+            "CQ07-A03",
+            "CQ07-A04"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Opening Soren's display bay before lantern attachment or using the practice stand's reversed foot-and-rod sequence."
+      ],
+      "staleUse": "Do not replace this target's recorded prerequisites with another stand's procedure.",
+      "severeConditions": [
+        "Inventing a completed prerequisite or skipping an explicitly requested prerequisite edge."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ08",
+      "answerability": "answerable",
+      "expectedProposition": "Emina initially adopted a bench. Emina now adopts a stool. The recorded reason was easier lower-shelf access. The opening time is 09:35. The adopted lamp setting is diffuse.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Emina initially adopted a bench.",
+        "Emina now adopts a stool.",
+        "The recorded reason was easier lower-shelf access.",
+        "The opening time is 09:35.",
+        "The adopted lamp setting is diffuse."
+      ],
+      "anchors": [
+        {
+          "id": "CQ08-A01",
+          "sessionId": "CQ08-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 77,
+          "text": "Emina initially adopted a bench for the seating choice in her reading alcove."
+        },
+        {
+          "id": "CQ08-A02",
+          "sessionId": "CQ08-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 84,
+          "text": "Emina has replaced her previous reading-alcove seating choice with an adopted stool."
+        },
+        {
+          "id": "CQ08-A03",
+          "sessionId": "CQ08-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 93,
+          "text": "Emina records easier access to the lower shelf as the reason for her alcove seating revision."
+        },
+        {
+          "id": "CQ08-A04",
+          "sessionId": "CQ08-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 88,
+          "text": "Emina's reading alcove is scheduled to open at 09:35 on the current daily room schedule."
+        },
+        {
+          "id": "CQ08-A05",
+          "sessionId": "CQ08-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 95,
+          "text": "Emina has adopted the lamp's diffuse setting for her reading alcove in the current arrangement."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ08-A01",
+            "CQ08-A02",
+            "CQ08-A03",
+            "CQ08-A04",
+            "CQ08-A05"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Reporting the former bench as current, the proposed focused beam as adopted, or the neighboring alcove's opening time."
+      ],
+      "staleUse": "Keep the original adoption historical when the explicit replacement applies; proposals alone cannot replace it.",
+      "severeConditions": [
+        "Promoting an unadopted proposal to a replacement or inventing a revision reason."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ09",
+      "answerability": "answerable",
+      "expectedProposition": "Mira still requires a closed cap. Chalk under the exception uses a soft pouch instead of plain wrap. The pouch exception is limited to the east room. The exception requires an ivory label. Mira uses the inner lane. Mira is chalk and in the east room.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Mira still requires a closed cap.",
+        "Chalk under the exception uses a soft pouch instead of plain wrap.",
+        "The pouch exception is limited to the east room.",
+        "The exception requires an ivory label.",
+        "Mira uses the inner lane.",
+        "Mira is chalk and in the east room."
+      ],
+      "anchors": [
+        {
+          "id": "CQ09-A01",
+          "sessionId": "CQ09-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 113,
+          "text": "The sample-room baseline requires a closed cap on every sample and a plain wrap unless a pouch exception applies."
+        },
+        {
+          "id": "CQ09-A02",
+          "sessionId": "CQ09-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 137,
+          "text": "For chalk samples, the sample-room pouch exception replaces the plain wrap with a soft pouch; the remaining baseline steps stay in force."
+        },
+        {
+          "id": "CQ09-A03",
+          "sessionId": "CQ09-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 109,
+          "text": "The chalk pouch exception applies only in the east room; other rooms retain their own ordinary wrapping rule."
+        },
+        {
+          "id": "CQ09-A04",
+          "sessionId": "CQ09-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 83,
+          "text": "A sample handled under the chalk pouch exception needs an ivory label on the pouch."
+        },
+        {
+          "id": "CQ09-A05",
+          "sessionId": "CQ09-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 83,
+          "text": "All east-room chalk samples use the inner lane for the current room handling cycle."
+        },
+        {
+          "id": "CQ09-A06",
+          "sessionId": "CQ09-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 83,
+          "text": "Mira is recorded as a chalk sample in the east room for the current handling cycle."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ09-A01",
+            "CQ09-A02",
+            "CQ09-A03",
+            "CQ09-A04",
+            "CQ09-A05",
+            "CQ09-A06"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Dropping the closed cap, extending the pouch exception beyond the east room, or substituting a clay-sample lane for chalk Mira."
+      ],
+      "staleUse": "Do not transfer another cycle, class or room's handling rule to this target.",
+      "severeConditions": [
+        "Applying an exception without its target scope or treating uncertainty as universal permission."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ10",
+      "answerability": "answerable",
+      "expectedProposition": "Nalia adopted rust. Oren's quoted personal preference was lilac. The assistant suggested jade as an alternative.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Nalia adopted rust.",
+        "Oren's quoted personal preference was lilac.",
+        "The assistant suggested jade as an alternative."
+      ],
+      "anchors": [
+        {
+          "id": "CQ10-A01",
+          "sessionId": "CQ10-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 88,
+          "text": "Nalia adopted rust for the color of her keepsake folder in the current desk arrangement."
+        },
+        {
+          "id": "CQ10-A02",
+          "sessionId": "CQ10-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 79,
+          "text": "Nalia quoted Oren about his own folder: 'My preference for my folder is lilac.'"
+        },
+        {
+          "id": "CQ10-A03",
+          "sessionId": "CQ10-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 90,
+          "text": "For Nalia's keepsake folder, I suggest testing jade as a possible alternative on the desk."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ10-A01",
+            "CQ10-A02",
+            "CQ10-A03"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Reporting Oren's lilac preference or the assistant's jade suggestion as Nalia's adopted folder color."
+      ],
+      "staleUse": "A historical choice or another claimant's stance is not the target's current adoption.",
+      "severeConditions": [
+        "Attributing a quoted person's preference or assistant proposal as the target person's adoption."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ11",
+      "answerability": "answerable",
+      "expectedProposition": "Drift maps to label sorrel. Label sorrel maps to ticket Bellfin. Ticket Bellfin identifies bundle Corin. Bundle Corin is assigned cabinet Linden.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Drift maps to label sorrel.",
+        "Label sorrel maps to ticket Bellfin.",
+        "Ticket Bellfin identifies bundle Corin.",
+        "Bundle Corin is assigned cabinet Linden."
+      ],
+      "anchors": [
+        {
+          "id": "CQ11-A01",
+          "sessionId": "CQ11-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 79,
+          "text": "In the workshop's current bundle register, nickname Drift maps to label sorrel."
+        },
+        {
+          "id": "CQ11-A02",
+          "sessionId": "CQ11-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 86,
+          "text": "The workshop bundle register maps label sorrel to ticket Bellfin in the current cycle."
+        },
+        {
+          "id": "CQ11-A03",
+          "sessionId": "CQ11-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 79,
+          "text": "Ticket Bellfin identifies bundle Corin in the workshop's current sorting cycle."
+        },
+        {
+          "id": "CQ11-A04",
+          "sessionId": "CQ11-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 82,
+          "text": "The workshop assigns bundle Corin to cabinet Linden for the current sorting cycle."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ11-A01",
+            "CQ11-A02",
+            "CQ11-A03",
+            "CQ11-A04"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Giving Meris's Rowan cabinet to Drift or completing the current route through an obsolete thyme label."
+      ],
+      "staleUse": "Use only the current register; old mappings and other rooms cannot complete a current entity path.",
+      "severeConditions": [
+        "Joining an unrelated entity's property across an unsupported identity link."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ12",
+      "answerability": "answerable",
+      "expectedProposition": "The roster is Aster, Bina, Cero, Dune and Evi. The round-edge list is Aster, Bina, Cero, Dune and Fenn. The stamped list is Aster, Bina, Cero, Evi and Fenn. Cero alone is withdrawn. The rule intersects roster, round-edge and stamped sets, then subtracts Cero; Aster and Bina qualify.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "The roster is Aster, Bina, Cero, Dune and Evi.",
+        "The round-edge list is Aster, Bina, Cero, Dune and Fenn.",
+        "The stamped list is Aster, Bina, Cero, Evi and Fenn.",
+        "Cero alone is withdrawn.",
+        "The rule intersects roster, round-edge and stamped sets, then subtracts Cero; Aster and Bina qualify."
+      ],
+      "anchors": [
+        {
+          "id": "CQ12-A01",
+          "sessionId": "CQ12-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 91,
+          "text": "The evening tray-marker roster is exactly Aster, Bina, Cero, Dune and Evi for this display."
+        },
+        {
+          "id": "CQ12-A02",
+          "sessionId": "CQ12-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 99,
+          "text": "The round-edge list is exactly Aster, Bina, Cero, Dune and spare Fenn for the evening marker check."
+        },
+        {
+          "id": "CQ12-A03",
+          "sessionId": "CQ12-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 95,
+          "text": "The stamped-marker list is exactly Aster, Bina, Cero, Evi and spare Fenn for the evening check."
+        },
+        {
+          "id": "CQ12-A04",
+          "sessionId": "CQ12-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 106,
+          "text": "Cero is the only tray marker withdrawn from the evening display, despite appearing on both positive lists."
+        },
+        {
+          "id": "CQ12-A05",
+          "sessionId": "CQ12-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 127,
+          "text": "The adopted evening rule takes roster markers present in both the round-edge and stamped lists, then removes withdrawn markers."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ12-A01",
+            "CQ12-A02",
+            "CQ12-A03",
+            "CQ12-A04",
+            "CQ12-A05"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Including unstamped Dune, non-round Evi, withdrawn Cero or out-of-roster Fenn among the evening eligible markers."
+      ],
+      "staleUse": "Do not apply another display's roster or combination rule to the specified display.",
+      "severeConditions": [
+        "Reporting a definitive member despite an explicitly pending membership check, or inventing an adopted set rule."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ13",
+      "answerability": "answerable",
+      "expectedProposition": "Set the keel block before fitting the support rail. Fit the support rail before placing the hull. Place the hull before inserting the mast pin. Insert the mast pin before hanging the sail card. Hang the sail card before opening the visitor barrier.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Set the keel block before fitting the support rail.",
+        "Fit the support rail before placing the hull.",
+        "Place the hull before inserting the mast pin.",
+        "Insert the mast pin before hanging the sail card.",
+        "Hang the sail card before opening the visitor barrier."
+      ],
+      "anchors": [
+        {
+          "id": "CQ13-A01",
+          "sessionId": "CQ13-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 88,
+          "text": "For Vero's model boat exhibit, set the keel block before fitting the small support rail."
+        },
+        {
+          "id": "CQ13-A02",
+          "sessionId": "CQ13-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 89,
+          "text": "Vero's model boat support rail must be fitted before the hull can be placed on the stand."
+        },
+        {
+          "id": "CQ13-A03",
+          "sessionId": "CQ13-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 84,
+          "text": "At Vero's boat stand, the hull must be in place before the mast pin can be inserted."
+        },
+        {
+          "id": "CQ13-A04",
+          "sessionId": "CQ13-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 86,
+          "text": "Vero's boat exhibit permits hanging the sail card only after the mast pin is inserted."
+        },
+        {
+          "id": "CQ13-A05",
+          "sessionId": "CQ13-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 89,
+          "text": "The visitor barrier for Vero's boat exhibit opens only after the sail card has been hung."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ13-A01",
+            "CQ13-A02",
+            "CQ13-A03",
+            "CQ13-A04",
+            "CQ13-A05"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Opening Vero's visitor barrier before sail-card hanging or substituting the neighboring glider's procedure."
+      ],
+      "staleUse": "Do not replace this target's recorded prerequisites with another stand's procedure.",
+      "severeConditions": [
+        "Inventing a completed prerequisite or skipping an explicitly requested prerequisite edge."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ14",
+      "answerability": "answerable",
+      "expectedProposition": "Saela initially adopted slate. Saela now adopts cork instead of the previous selection. The recorded revision reason was reduced reflected glare. The opening time is 11:15. The adopted stool height is middle. The chosen shade position is half-lowered.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Saela initially adopted slate.",
+        "Saela now adopts cork instead of the previous selection.",
+        "The recorded revision reason was reduced reflected glare.",
+        "The opening time is 11:15.",
+        "The adopted stool height is middle.",
+        "The chosen shade position is half-lowered."
+      ],
+      "anchors": [
+        {
+          "id": "CQ14-A01",
+          "sessionId": "CQ14-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 88,
+          "text": "Saela initially adopted a slate surface for the sketching station in this studio review."
+        },
+        {
+          "id": "CQ14-A02",
+          "sessionId": "CQ14-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 104,
+          "text": "Saela has revised the sketching station surface: cork is now adopted in place of the previous selection."
+        },
+        {
+          "id": "CQ14-A03",
+          "sessionId": "CQ14-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 96,
+          "text": "Saela recorded reduced reflected glare as the reason for the sketching station surface revision."
+        },
+        {
+          "id": "CQ14-A04",
+          "sessionId": "CQ14-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 94,
+          "text": "The current studio schedule opens Saela's sketching station at 11:15 for the morning visitors."
+        },
+        {
+          "id": "CQ14-A05",
+          "sessionId": "CQ14-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 94,
+          "text": "Saela adopted the stool's middle height setting for the current sketching station arrangement."
+        },
+        {
+          "id": "CQ14-A06",
+          "sessionId": "CQ14-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 97,
+          "text": "Saela chose the half-lowered window shade position for the current sketching station arrangement."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ14-A01",
+            "CQ14-A02",
+            "CQ14-A03",
+            "CQ14-A04",
+            "CQ14-A05",
+            "CQ14-A06"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Reporting historical slate as current, the tallest stool suggestion as adopted, or the neighboring station's time."
+      ],
+      "staleUse": "Keep the original adoption historical when the explicit replacement applies; proposals alone cannot replace it.",
+      "severeConditions": [
+        "Promoting an unadopted proposal to a replacement or inventing a revision reason."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ15",
+      "answerability": "answerable",
+      "expectedProposition": "Keslo requires a closed lid. Overnight parcels also require a cloth buffer. Keslo is on the overnight route.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Keslo requires a closed lid.",
+        "Overnight parcels also require a cloth buffer.",
+        "Keslo is on the overnight route."
+      ],
+      "anchors": [
+        {
+          "id": "CQ15-A01",
+          "sessionId": "CQ15-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 93,
+          "text": "The parcel-room baseline requires every parcel case to have a closed lid throughout handling."
+        },
+        {
+          "id": "CQ15-A02",
+          "sessionId": "CQ15-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 97,
+          "text": "Parcels on the overnight route need a cloth buffer in addition to the parcel-room baseline steps."
+        },
+        {
+          "id": "CQ15-A03",
+          "sessionId": "CQ15-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 92,
+          "text": "The current parcel-room manifest assigns parcel Keslo to the overnight route for this cycle."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ15-A01",
+            "CQ15-A02",
+            "CQ15-A03"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Dropping Keslo's baseline closed lid or asserting that the proposed future buffer removal already applies."
+      ],
+      "staleUse": "Do not transfer another cycle, class or room's handling rule to this target.",
+      "severeConditions": [
+        "Applying an exception without its target scope or treating uncertainty as universal permission."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ16",
+      "answerability": "answerable",
+      "expectedProposition": "Bram adopted hexagonal. Leto's quoted preference was oval for his own lantern. The assistant proposed square. Bram considered triangular without adopting it.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Bram adopted hexagonal.",
+        "Leto's quoted preference was oval for his own lantern.",
+        "The assistant proposed square.",
+        "Bram considered triangular without adopting it."
+      ],
+      "anchors": [
+        {
+          "id": "CQ16-A01",
+          "sessionId": "CQ16-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 86,
+          "text": "Bram adopted a hexagonal shape for his paper lantern in the current room installation."
+        },
+        {
+          "id": "CQ16-A02",
+          "sessionId": "CQ16-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 84,
+          "text": "Bram quoted Leto about Leto's own lantern: 'For my lantern, I prefer an oval shape.'"
+        },
+        {
+          "id": "CQ16-A03",
+          "sessionId": "CQ16-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 91,
+          "text": "For Bram's paper lantern, I suggest testing a square shape under the current room lighting."
+        },
+        {
+          "id": "CQ16-A04",
+          "sessionId": "CQ16-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 88,
+          "text": "Bram is considering a triangular alternative for his paper lantern, without adopting it."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ16-A01",
+            "CQ16-A02",
+            "CQ16-A03",
+            "CQ16-A04"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Reporting Leto's oval preference, the assistant's square proposal or Bram's unadopted triangular consideration as Bram's adopted shape."
+      ],
+      "staleUse": "A historical choice or another claimant's stance is not the target's current adoption.",
+      "severeConditions": [
+        "Attributing a quoted person's preference or assistant proposal as the target person's adoption."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ17",
+      "answerability": "answerable",
+      "expectedProposition": "Quill maps to label heather. Label heather maps to ticket Solin. Ticket Solin maps to bundle Neris. Bundle Neris maps to storage case Halvo. Case Halvo is assigned drawer Mallow.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "Quill maps to label heather.",
+        "Label heather maps to ticket Solin.",
+        "Ticket Solin maps to bundle Neris.",
+        "Bundle Neris maps to storage case Halvo.",
+        "Case Halvo is assigned drawer Mallow."
+      ],
+      "anchors": [
+        {
+          "id": "CQ17-A01",
+          "sessionId": "CQ17-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 85,
+          "text": "In the archive's current cabinet-note register, nickname Quill maps to label heather."
+        },
+        {
+          "id": "CQ17-A02",
+          "sessionId": "CQ17-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 77,
+          "text": "The current archive register maps cabinet-note label heather to ticket Solin."
+        },
+        {
+          "id": "CQ17-A03",
+          "sessionId": "CQ17-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 77,
+          "text": "Archive ticket Solin maps to bundle Neris for the current cabinet-note cycle."
+        },
+        {
+          "id": "CQ17-A04",
+          "sessionId": "CQ17-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 85,
+          "text": "Bundle Neris maps to storage case Halvo in the current archive cabinet-note register."
+        },
+        {
+          "id": "CQ17-A05",
+          "sessionId": "CQ17-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 89,
+          "text": "Storage case Halvo is assigned drawer Mallow in the archive's current cabinet-note cycle."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ17-A01",
+            "CQ17-A02",
+            "CQ17-A03",
+            "CQ17-A04",
+            "CQ17-A05"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Giving Rovik's Fern drawer to Quill, or treating the reading-room heather label as an archive identity link."
+      ],
+      "staleUse": "Use only the current register; old mappings and other rooms cannot complete a current entity path.",
+      "severeConditions": [
+        "Joining an unrelated entity's property across an unsupported identity link."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ18",
+      "answerability": "answerable",
+      "expectedProposition": "The roster is Arlo, Bex, Cadi, Dema, Eno and Fira. The smooth list excludes Fira. The stamped list excludes Eno. Cadi alone is withdrawn. The narrow-fit list excludes Bex and Dema. The adopted four-way intersection minus withdrawals leaves Arlo alone.",
+      "acceptableQualifiedAnswer": "State every explicitly requested fact with its source qualification. If a necessary card is unavailable, identify the missing fact rather than inventing it.",
+      "unanswerabilityReason": null,
+      "factualClaims": [
+        "The roster is Arlo, Bex, Cadi, Dema, Eno and Fira.",
+        "The smooth list excludes Fira.",
+        "The stamped list excludes Eno.",
+        "Cadi alone is withdrawn.",
+        "The narrow-fit list excludes Bex and Dema.",
+        "The adopted four-way intersection minus withdrawals leaves Arlo alone."
+      ],
+      "anchors": [
+        {
+          "id": "CQ18-A01",
+          "sessionId": "CQ18-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 82,
+          "text": "The closing gallery-counter roster is exactly Arlo, Bex, Cadi, Dema, Eno and Fira."
+        },
+        {
+          "id": "CQ18-A02",
+          "sessionId": "CQ18-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 85,
+          "text": "The closing smooth-counter list is exactly Arlo, Bex, Cadi, Dema, Eno and spare Gavo."
+        },
+        {
+          "id": "CQ18-A03",
+          "sessionId": "CQ18-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 87,
+          "text": "The closing stamped-counter list is exactly Arlo, Bex, Cadi, Dema, Fira and spare Gavo."
+        },
+        {
+          "id": "CQ18-A04",
+          "sessionId": "CQ18-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 100,
+          "text": "Cadi is the only gallery counter withdrawn from the closing display; its other checks are unchanged."
+        },
+        {
+          "id": "CQ18-A05",
+          "sessionId": "CQ18-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 76,
+          "text": "The closing narrow-fit list is exactly Arlo, Cadi, Eno, Fira and spare Gavo."
+        },
+        {
+          "id": "CQ18-A06",
+          "sessionId": "CQ18-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 126,
+          "text": "The adopted closing rule intersects the roster with the smooth, stamped and narrow-fit lists, then removes withdrawn counters."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "complete-requested-proposition",
+          "anchorIds": [
+            "CQ18-A01",
+            "CQ18-A02",
+            "CQ18-A03",
+            "CQ18-A04",
+            "CQ18-A05",
+            "CQ18-A06"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Including Gavo outside the roster, Cadi despite withdrawal, or any counter failing a positive list under the closing rule."
+      ],
+      "staleUse": "Do not apply another display's roster or combination rule to the specified display.",
+      "severeConditions": [
+        "Reporting a definitive member despite an explicitly pending membership check, or inventing an adopted set rule."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The question explicitly requests the facts named here; all necessary relations are directly recorded. Background details do not supply an independent complete shortcut.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ19",
+      "answerability": "qualified",
+      "expectedProposition": "Seal validation is the release prerequisite; its completion is unconfirmed.",
+      "acceptableQualifiedAnswer": "Seal validation is the release prerequisite; its completion is unconfirmed. The note explicitly leaves the seal validation status unconfirmed; it does not establish completion or failure.",
+      "unanswerabilityReason": "The note explicitly leaves the seal validation status unconfirmed; it does not establish completion or failure.",
+      "factualClaims": [
+        "Seal validation is the release prerequisite; its completion is unconfirmed."
+      ],
+      "anchors": [
+        {
+          "id": "CQ19-A01",
+          "sessionId": "CQ19-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 110,
+          "text": "Elvo's viewing prism can be released only after seal validation; this note leaves that validation unconfirmed."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "minimal-known-facts-and-explicit-gap",
+          "anchorIds": [
+            "CQ19-A01"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Asserting that Elvo's seal validation is complete or failed when its status is explicitly unconfirmed.",
+        "Treating the pending prerequisite as a permanent prohibition on prism release."
+      ],
+      "staleUse": "Do not replace this target's recorded prerequisites with another stand's procedure.",
+      "severeConditions": [
+        "Inventing a completed prerequisite or skipping an explicitly requested prerequisite edge."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The note explicitly leaves the seal validation status unconfirmed; it does not establish completion or failure. Honest qualification must preserve the known facts and the precise unknown.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ20",
+      "answerability": "qualified",
+      "expectedProposition": "The last committed finish is matte. Gloss is proposed with adoption confirmation pending; replacement is not established.",
+      "acceptableQualifiedAnswer": "The last committed finish is matte. Gloss is proposed with adoption confirmation pending; replacement is not established. The later statement is explicitly a proposal with adoption confirmation pending; no replacement commitment is established.",
+      "unanswerabilityReason": "The later statement is explicitly a proposal with adoption confirmation pending; no replacement commitment is established.",
+      "factualClaims": [
+        "The last committed finish is matte.",
+        "Gloss is proposed with adoption confirmation pending; replacement is not established."
+      ],
+      "anchors": [
+        {
+          "id": "CQ20-A01",
+          "sessionId": "CQ20-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 84,
+          "text": "Ruvan adopted a matte finish for his poster board in the current studio arrangement."
+        },
+        {
+          "id": "CQ20-A02",
+          "sessionId": "CQ20-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 108,
+          "text": "Ruvan later proposed a gloss finish for the same poster board; confirmation of adopting it is still pending."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "minimal-known-facts-and-explicit-gap",
+          "anchorIds": [
+            "CQ20-A01",
+            "CQ20-A02"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Reporting the proposed gloss finish as Ruvan's current committed replacement without adoption confirmation.",
+        "Cancelling the matte commitment merely because a new proposal exists."
+      ],
+      "staleUse": "Keep the original adoption historical when the explicit replacement applies; proposals alone cannot replace it.",
+      "severeConditions": [
+        "Promoting an unadopted proposal to a replacement or inventing a revision reason."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The later statement is explicitly a proposal with adoption confirmation pending; no replacement commitment is established. Honest qualification must preserve the known facts and the precise unknown.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ21",
+      "answerability": "qualified",
+      "expectedProposition": "Nelo requires a closed latch under the baseline. The chilled exception adds an insulated sleeve. Nelo's chilled-or-dry classification is unconfirmed; sleeve applicability is unresolved.",
+      "acceptableQualifiedAnswer": "Nelo requires a closed latch under the baseline. The chilled exception adds an insulated sleeve. Nelo's chilled-or-dry classification is unconfirmed; sleeve applicability is unresolved. Nelo's classification is explicitly awaiting confirmation, so the chilled-specific wrapping exception cannot be assigned or ruled out.",
+      "unanswerabilityReason": "Nelo's classification is explicitly awaiting confirmation, so the chilled-specific wrapping exception cannot be assigned or ruled out.",
+      "factualClaims": [
+        "Nelo requires a closed latch under the baseline.",
+        "The chilled exception adds an insulated sleeve.",
+        "Nelo's chilled-or-dry classification is unconfirmed; sleeve applicability is unresolved."
+      ],
+      "anchors": [
+        {
+          "id": "CQ21-A01",
+          "sessionId": "CQ21-S07",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 103,
+          "text": "The packing-room baseline requires a closed latch on every crate throughout the current handling cycle."
+        },
+        {
+          "id": "CQ21-A02",
+          "sessionId": "CQ21-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 109,
+          "text": "The packing-room chilled-crate exception requires an insulated sleeve in addition to the baseline latch rule."
+        },
+        {
+          "id": "CQ21-A03",
+          "sessionId": "CQ21-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 118,
+          "text": "Crate Nelo's current entry awaits confirmation of whether it is chilled or dry; neither classification is established."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "minimal-known-facts-and-explicit-gap",
+          "anchorIds": [
+            "CQ21-A01",
+            "CQ21-A02",
+            "CQ21-A03"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Asserting that Nelo is chilled or dry from another crate's classification or an old cycle.",
+        "Treating unresolved sleeve applicability as either universal permission or universal prohibition."
+      ],
+      "staleUse": "Do not transfer another cycle, class or room's handling rule to this target.",
+      "severeConditions": [
+        "Applying an exception without its target scope or treating uncertainty as universal permission."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "Nelo's classification is explicitly awaiting confirmation, so the chilled-specific wrapping exception cannot be assigned or ruled out. Honest qualification must preserve the known facts and the precise unknown.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ22",
+      "answerability": "qualified",
+      "expectedProposition": "Dalen's quoted preference is peach for his own tile. The assistant proposes indigo. Yara considers pearl without adoption. Yara remains undecided; no committed color is established.",
+      "acceptableQualifiedAnswer": "Dalen's quoted preference is peach for his own tile. The assistant proposes indigo. Yara considers pearl without adoption. Yara remains undecided; no committed color is established. Yara explicitly remains undecided; neither another person's quote, assistant advice nor her own considered option supplies adoption evidence.",
+      "unanswerabilityReason": "Yara explicitly remains undecided; neither another person's quote, assistant advice nor her own considered option supplies adoption evidence.",
+      "factualClaims": [
+        "Dalen's quoted preference is peach for his own tile.",
+        "The assistant proposes indigo.",
+        "Yara considers pearl without adoption.",
+        "Yara remains undecided; no committed color is established."
+      ],
+      "anchors": [
+        {
+          "id": "CQ22-A01",
+          "sessionId": "CQ22-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 76,
+          "text": "Yara quoted Dalen about his own display tile: 'For my tile, I prefer peach.'"
+        },
+        {
+          "id": "CQ22-A02",
+          "sessionId": "CQ22-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 83,
+          "text": "For Yara's display tile, I suggest trying an indigo color under the gallery lights."
+        },
+        {
+          "id": "CQ22-A03",
+          "sessionId": "CQ22-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 85,
+          "text": "Yara says she is considering pearl for her display tile, without adopting that color."
+        },
+        {
+          "id": "CQ22-A04",
+          "sessionId": "CQ22-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 100,
+          "text": "Yara says her display-tile color remains undecided and no color has yet been adopted in this review."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "minimal-known-facts-and-explicit-gap",
+          "anchorIds": [
+            "CQ22-A01",
+            "CQ22-A02",
+            "CQ22-A03",
+            "CQ22-A04"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Reporting peach, indigo or pearl as Yara's committed color despite her explicit undecided status.",
+        "Treating Dalen's quote or assistant advice as Yara's adoption."
+      ],
+      "staleUse": "A historical choice or another claimant's stance is not the target's current adoption.",
+      "severeConditions": [
+        "Attributing a quoted person's preference or assistant proposal as the target person's adoption."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "Yara explicitly remains undecided; neither another person's quote, assistant advice nor her own considered option supplies adoption evidence. Honest qualification must preserve the known facts and the precise unknown.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ23",
+      "answerability": "qualified",
+      "expectedProposition": "Fable maps to routing label violet. Routing label violet maps to ticket Nerlo. Ticket Nerlo identifies bundle Orva. Bundle Orva maps to carton Selin. Selin's shelf assignment is pending; the final shelf is unknown.",
+      "acceptableQualifiedAnswer": "Fable maps to routing label violet. Routing label violet maps to ticket Nerlo. Ticket Nerlo identifies bundle Orva. Bundle Orva maps to carton Selin. Selin's shelf assignment is pending; the final shelf is unknown. The terminal carton is identified, but its shelf assignment is explicitly still pending; another carton's shelf cannot close that link.",
+      "unanswerabilityReason": "The terminal carton is identified, but its shelf assignment is explicitly still pending; another carton's shelf cannot close that link.",
+      "factualClaims": [
+        "Fable maps to routing label violet.",
+        "Routing label violet maps to ticket Nerlo.",
+        "Ticket Nerlo identifies bundle Orva.",
+        "Bundle Orva maps to carton Selin.",
+        "Selin's shelf assignment is pending; the final shelf is unknown."
+      ],
+      "anchors": [
+        {
+          "id": "CQ23-A01",
+          "sessionId": "CQ23-S06",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 81,
+          "text": "The studio's current packet register maps nickname Fable to routing label violet."
+        },
+        {
+          "id": "CQ23-A02",
+          "sessionId": "CQ23-S02",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 81,
+          "text": "In the current studio packet register, routing label violet maps to ticket Nerlo."
+        },
+        {
+          "id": "CQ23-A03",
+          "sessionId": "CQ23-S11",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 80,
+          "text": "Studio packet ticket Nerlo identifies bundle Orva for the current sorting cycle."
+        },
+        {
+          "id": "CQ23-A04",
+          "sessionId": "CQ23-S04",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 71,
+          "text": "Bundle Orva maps to carton Selin in the current studio packet register."
+        },
+        {
+          "id": "CQ23-A05",
+          "sessionId": "CQ23-S09",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 84,
+          "text": "Carton Selin's shelf assignment is still pending in the current studio packet cycle."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "minimal-known-facts-and-explicit-gap",
+          "anchorIds": [
+            "CQ23-A01",
+            "CQ23-A02",
+            "CQ23-A03",
+            "CQ23-A04",
+            "CQ23-A05"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Assigning Tero's Alder shelf to Fable or inventing Selin's pending shelf assignment.",
+        "Claiming no shelf can ever be assigned merely because this assignment is pending."
+      ],
+      "staleUse": "Use only the current register; old mappings and other rooms cannot complete a current entity path.",
+      "severeConditions": [
+        "Joining an unrelated entity's property across an unsupported identity link."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "The terminal carton is identified, but its shelf assignment is explicitly still pending; another carton's shelf cannot close that link. Honest qualification must preserve the known facts and the precise unknown.",
+      "optionalContextClaims": []
+    },
+    {
+      "id": "CQ24",
+      "answerability": "qualified",
+      "expectedProposition": "The initial roster is Aven, Boro, Celi, Dovi and Ema. The initial smooth list excludes Ema. The stamped list includes Aven, Boro, Celi, Ema and Faro, and excludes Dovi. Celi alone is withdrawn. The adopted rule is roster intersect smooth intersect stamped minus withdrawn. Aven and Boro are established eligible; Nira's stamped membership and eligibility remain unresolved.",
+      "acceptableQualifiedAnswer": "The initial roster is Aven, Boro, Celi, Dovi and Ema. The initial smooth list excludes Ema. The stamped list includes Aven, Boro, Celi, Ema and Faro, and excludes Dovi. Celi alone is withdrawn. The adopted rule is roster intersect smooth intersect stamped minus withdrawn. Aven and Boro are established eligible; Nira's stamped membership and eligibility remain unresolved. Nira has joined the roster and smooth list, but its stamped membership explicitly remains unchecked; that missing membership prevents a definitive eligibility decision for Nira.",
+      "unanswerabilityReason": "Nira has joined the roster and smooth list, but its stamped membership explicitly remains unchecked; that missing membership prevents a definitive eligibility decision for Nira.",
+      "factualClaims": [
+        "The initial roster is Aven, Boro, Celi, Dovi and Ema.",
+        "The initial smooth list excludes Ema.",
+        "The stamped list includes Aven, Boro, Celi, Ema and Faro, and excludes Dovi.",
+        "Celi alone is withdrawn.",
+        "The adopted rule is roster intersect smooth intersect stamped minus withdrawn.",
+        "Aven and Boro are established eligible; Nira's stamped membership and eligibility remain unresolved."
+      ],
+      "anchors": [
+        {
+          "id": "CQ24-A01",
+          "sessionId": "CQ24-S10",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 99,
+          "text": "The noon counter roster initially contains exactly Aven, Boro, Celi, Dovi and Ema for this display."
+        },
+        {
+          "id": "CQ24-A02",
+          "sessionId": "CQ24-S03",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 94,
+          "text": "The noon smooth-counter list initially contains exactly Aven, Boro, Celi, Dovi and spare Faro."
+        },
+        {
+          "id": "CQ24-A03",
+          "sessionId": "CQ24-S12",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 113,
+          "text": "The noon stamped-counter list establishes membership for Aven, Boro, Celi, Ema and spare Faro, and excludes Dovi."
+        },
+        {
+          "id": "CQ24-A04",
+          "sessionId": "CQ24-S05",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 99,
+          "text": "Celi is the only noon counter withdrawn from the display; all other withdrawal checks are complete."
+        },
+        {
+          "id": "CQ24-A05",
+          "sessionId": "CQ24-S01",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 119,
+          "text": "The adopted noon rule intersects the counter roster with the smooth and stamped lists, then removes withdrawn counters."
+        },
+        {
+          "id": "CQ24-A06",
+          "sessionId": "CQ24-S08",
+          "messageIndex": 0,
+          "start": 0,
+          "end": 105,
+          "text": "Nira has now joined the noon roster and smooth list, but Nira's stamped-membership check remains pending."
+        }
+      ],
+      "requiredEvidenceSets": [
+        {
+          "name": "minimal-known-facts-and-explicit-gap",
+          "anchorIds": [
+            "CQ24-A01",
+            "CQ24-A02",
+            "CQ24-A03",
+            "CQ24-A04",
+            "CQ24-A05",
+            "CQ24-A06"
+          ]
+        }
+      ],
+      "unsupportedConclusions": [
+        "Reporting Nira as definitively eligible or ineligible before its stamped check is resolved.",
+        "Including Faro outside the roster, Celi despite withdrawal, Dovi without stamped membership or Ema without smooth membership."
+      ],
+      "staleUse": "Do not apply another display's roster or combination rule to the specified display.",
+      "severeConditions": [
+        "Reporting a definitive member despite an explicitly pending membership check, or inventing an adopted set rule."
+      ],
+      "provenance": "Recorded user and assistant roles are attribution supplied with inert sources, not authenticated speakers or execution authority. Claims remain attributed to the named subject and scope.",
+      "ambiguity": "Nira has joined the roster and smooth list, but its stamped membership explicitly remains unchecked; that missing membership prevents a definitive eligibility decision for Nira. Honest qualification must preserve the known facts and the precise unknown.",
+      "optionalContextClaims": []
+    }
+  ]
+}
+
