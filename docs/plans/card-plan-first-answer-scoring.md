@@ -1816,3 +1816,219 @@ have not yet run in the full suite; this GREEN is the original external seam,
 not acceptance of every new fixture. Author stops before full native matrices,
 commit/push or delivery. Primary freeze/integrated verification and both fresh
 independent final review axes remain required. No accuracy or semantic gain.
+
+## Failed CW generation with unavailable usage proof — WU1–WU5
+
+Prospective correction contract: external
+card-scoring-withheld-usage-contract.md in the same acceptance directory.
+Fixed base/runtime remains4309ff396834f60c237910493c2dc837e11de4dc; starting
+candidate remainsf4c1aca795bc330ed90913447e48bf3e177f645c. Existing failures,
+reviews and successful gates remain historical; none accept this correction.
+The original33544-byte contract prefix, all149 scorer tests and19 genuine
+shared fixtures are preserved. Worker owns only scorer, existing test file and
+this append; primary separately owns docs/limitations.md and acceptance.
+Actual bounded implementation owner is GPT-6.1 Sol/high, as requested.
+
+CW generation parses usage and settles its rational estimate before rejecting
+credential echo. Its exact/decoded-key check intentionally withholds original
+response text, response hash and request ID. Generic redaction instead retains
+safe text and the original hash; an assignment such as password=abcdefgh can
+consume a JSON string delimiter and make that safe text unparseable. Ordinary
+transport checks exact and decoded credential echo before usage, so its echo
+failures remain null-cost. CW count calls and failed generation with absent or
+invalid usage remain conservative null-cost records. These differences follow
+the pinned transports; no runtime, source, prompt, pricing or ledger is changed.
+
+The prior scorer required body.usage for every non-null estimate and therefore
+denied both genuine failed-generation boundaries as usage_response_mismatch.
+The correction permits canonical numeric/estimator reconciliation only for a
+failed, dispatched, settled CW generation with a failed owning slot
+and matching planner/failure-evidence code. Credential withholding additionally
+requires credential_echo, no responseArtifact, null response hash and request ID.
+Malformed generic retention requires actual parse failure, an existing original
+SHA256 and its mismatch with retained safe text. A parse-success flag distinguishes
+unparseable text from parseable null, primitives, missing usage or contradictions.
+These remain denials; missing referenced files, invalid canonical numbers/costs,
+record/descriptor/ledger tampering and successful missing response proof remain
+strict. No withheld text is reconstructed, recovered or stored.
+
+Both public APIs use the same retained/accounting path. Read-only caller tracing
+found only evaluation/algorithm-development/test/card-plan-scoring.test.mjs as
+an external .mjs caller. The fixed source/record descriptors, checkpoint/ledger
+deltas, physical-call and reservation totals, partialKnownMicroUsd, unknownCostCalls
+and24/48/72 denominators remain unchanged. A settled model failure can occur in
+a globally completed run; a global halted status is not required. Existing
+fatal-stop validation still rejects a completed credential-echo run. Pinned ordinary floating-point ceil,
+CW rational pricing and raw-provider versus canonical signed-zero rules remain.
+
+### Explicit proof coverage, separate from estimates
+
+resources.usageProof is prospectively frozen with these fields:
+
+- scope: recorded-known-costs-only;
+- status: verified or unverified, for known-cost proof coverage only;
+- knownCostAttempts and verifiedAttempts;
+- verifiedKnownMicroUsd and unverifiedRecordedMicroUsd;
+- unverifiedAttempts: attemptId, slotId, exact canonical endpoint, reason
+  (response-withheld or response-unparseable), and recordedMicroUsd.
+
+These values are recorded estimates, not invoices. Null-cost count requests and
+other unknown costs retain unknownCostCalls and are outside this coverage scope;
+a verified status cannot establish all billing. Both genuine prefixes retain144
+partialKnownMicroUsd, of which72 has retained usage proof and72 remains explicitly
+unverified. Their known-cost coverage is1/2. No estimate is erased, refunded or
+treated as zero. Compliance adds usage-proof-incomplete and stays unverified.
+In the external halted prefixes, failed evidence and all72 unrun answers remain
+unobserved/excluded. In a continuing completed run, the affected dependent answers
+remain unobserved/excluded while other actual answers retain their recorded state.
+The failed attempt gains no answer, clean-safety, completion, verified-resource
+or promotion credit from the missing-proof exception.
+
+### Primary accepted genuine RED
+
+Primary inspected the complete new D0 script and one-use wrapper, then ran RED
+exactly once, session77178. Outer/child/close exits were all1, elapsed122843ms:
+six intended final assertion failures after all evidence and cleanup, with no
+setup failure. Script SHA256 remains
+146d5e2cba6afb3c268fe3f72bb9a05ce66e4b820b873e5d080729a051bcb96f.
+Retained record: card-scoring-withheld-usage-red-record.json in the external
+acceptance directory. Raw stdout SHA256 is
+1a62f46932b71fe948dbb526dcab6e8c2eb90c7407b21531e79250b472b3aa32;
+stderr63477433bb81a977b2132df4c2b06c76c3b1a426431369df67ac89641d2de581;
+telemetry71aa794866ef9614e2afcc4b66d9844d3330c610a9d2d1b27a3f4c8601dee9d0.
+
+Primary's independent literal/source/ownership audit exited0. Each genuinely
+fresh prefix used24 source stores/288 exact captures,4 fake HTTP calls,8 canonical
+pre/post records and2 checkpoints. Safe literal inventories reconciled46/46
+for exact credential echo and47/47 for malformed generic retention. Both ledgers
+retained144 known estimate and20000 reservation; source snapshots agreed on all
+1608 hashes. Echo naturally halted as credential_echo. Malformed retention
+genuinely failed as invalid_model_output, then an explicit synthetic checkpoint
+callback ended that fresh prefix as card_plan_persistence_failure. This injected
+stop is not a provider/runtime outcome. Raw synthetic key-bearing and malformed
+provider envelopes stayed in memory; only safe retained literals were emitted.
+All six API denials were usage_response_mismatch, including the labelled copied
+canonical cost+1 control. Owned scratch removal was confirmed; no watchdog,
+intervention, ownership error or surviving owned process occurred. Worker did
+not rerun RED or change the reproduction.
+
+### Bounded implementation and permanent tests
+
+Exactly two new genuine shared modes extend the old19 to21 fixtures:
+CW-generation-credential-echo and CW-generation-redacted-malformed. Echo uses
+the same four-call fatal prefix as the accepted external reproduction. The
+permanent malformed fixture deliberately continues naturally after its settled
+invalid_model_output: no injected checkpoint stop, all24 cases, completed run,
+166 fake HTTP calls,332 records,118 checkpoints,47 completed selections and70
+actual scripted answers. CQ01 B selection is failed; CQ01 B/C answers are
+dependent not-run/excluded. This complements the unchanged external malformed
+halted prefix and covers failed OR halting semantics. It includes the pinned
+ordinary CQ08-A7micro estimator variation. Tests derive recorded and verified
+subtotals directly from canonical posts rather than reuse the prefix's144; the
+one unavailable-proof attempt retains72 and118 known-cost attempts have117
+verified responses. Copies target CQ01-selection-B generation explicitly, never
+the completed run's final answer attempt. This expected fixture behavior was
+reviewed prospectively by primary before GREEN, not claimed as executed evidence.
+No old parent test body is changed.
+One new WU parent with five children adds6 tests: scorer149→155 and full28-file
+algorithm393→399, subject to primary's independent mechanical freeze audit.
+
+The five children check both public APIs for genuine source/accounting/proof
+coverage/no credit; copied invalid canonical numeric shapes and reconciled cost
+mismatch; copied parseable null/primitive/missing/contradictory usage versus valid
+parseable failed usage; copied missing provenance/referenced artifacts; and
+copied successful ordinary/CW response omissions. Controls use in-memory copies
+and rebind literal identities. They are never claimed as runtime evidence.
+All fixed denominators, source/canonical records, immutable inputs/literal files,
+unobserved safety and excluded answers are explicit. Existing ordinary/failed-CW
+controls preserve their prior semantics. No optional helper refactor is included.
+
+### Accepted unchanged verification schedule; execution held
+
+Read completely: card-scoring-withheld-usage-verification-amendment.md, accepted
+by primary after independent procedural review0. Driver SHA256 remains
+0ac4e7e81524f6e478aeef6f067223cf6c47a43d8ec62c17bba814be8b2af72d; owned
+helper remains6d0ec3dcf25528c3237e10621f90b6fb245bb9b40d8d5b701500466391a14548.
+No GREEN or full matrix is released by this append. Worker stops after source
+inspection for primary's quick diff acceptance, then may run exactly one
+unchanged external GREEN through run-card-scoring-withheld-usage-repro.mjs green
+with the accepted146d5e2c... script hash, scrubbedNode22.16.0 and owned cleanup.
+
+Primary freezes all4 scoped files,1608 source hashes, exact old-plus-new counts
+and all28 algorithm files independently via Git/rg/filesystem. Fresh withheld-
+usage receipts only; no old invocation/evidence reset. Primary then runs the
+same9 commands on22.16.0 and24.15.0 sequentially: version, all28 algorithm files
+at concurrency4, same4 core integration files/53tests, same5 LME integration
+files/51tests, owned comparison demo, generic784tests, repository validation,
+and both Claude validators. Preserve all inner deadlines,1800000ms watchdog,
+tiktoken1.0.22 and four required flags. Require actual exit/close0, exact counts,
+zero fail/cancel/skip, immutable source and no owned residue/intervention/survivor.
+No installs, wider timeout, author full-suite duplication or automatic retry.
+
+After both precommit matrices pass, scoped commit, current contributor/CI gate
+inspection and version+validation on each pinned Node follow:22 new actual-zero
+commands and4 matching source snapshots. Fresh independent nonauthor Standards
+and Spec reviews inspect the same fixed base/new candidate. Only then push and
+dependent PR against experiment/card-plan-runtime, all27 exact-head CI/current
+mergeability. Original C5 timeout cause remains unknown. No paid call, operational
+config/key/ledger, formal preparation, closed-cohort operation, main merge,
+release/deploy or semantic-gain claim is authorized by this correction.
+
+### D2 unchanged author GREEN — complete, stop for primary freeze
+
+Primary inspected the complete module/test/plan/limitations diff and released
+one unchanged external GREEN only. It independently confirmed all24 previous
+parent bodies byte-identical, all118168 previous plan bytes retained, +1parent/
++5children for expected155scorer/399algorithm tests, exactly4 scoped paths and
+1608-source inventory/122 links. Preliminary nonauthor Spec inspection found no
+further WU blocker; it is not the final independent review or full acceptance.
+
+Worker ran the exact approved command once, session11839:
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node followed by external
+run-card-scoring-withheld-usage-repro.mjs green and accepted script SHA256
+146d5e2cba6afb3c268fe3f72bb9a05ce66e4b820b873e5d080729a051bcb96f.
+Wrapper tied that same script to accepted RED and used the unchanged owned
+helper6d0ec3dc..., tools/testing/run.mjs --script, scrubbed10-key environment,
+four required flags1, disabled compile cache and1800000ms watchdog. No source
+edits or other native work overlapped the invocation; no retry occurred.
+
+Actual outer/child/close exits were all0; child close elapsed112663.788738ms,
+signals/error/failure null. cleanupVerified=true, watchdog=false, reason=null,
+pipesForced=false; signals, termination, survivors, remaining/stopped identities
+and ownershipErrors were empty. Before/after snapshots matched all1608 source
+hashes. Owned outer parent /tmp/card-withheld-usage-repro-parent-7ikv7x was empty
+and removed after inner owned cleanup; removed=true. The native slot was
+released after close/cleanup before this factual append.
+
+Create-only retained evidence in the external acceptance directory:
+card-scoring-withheld-usage-green-record.json and its separate stdout/stderr/
+process files. stdout card-scoring-withheld-usage-green.log contains20439076bytes,
+SHA2564fe68dcb1463774ebd3cc31736c08e9ae87da07563a385d42dc694f9a1076705;
+stderr168bytes, SHA256
+327521188277fd13bae9637e8a31c0cce870a34e87b765c44061bdb9696d7e44;
+process telemetry37657bytes, SHA256
+ee8303bb5fd96da6b44d9eb22a5c746754822c2021d05e6d783702b6d3370413.
+No previous receipt, failed result, log or historical evidence was replaced.
+
+Both fresh genuine halted-prefix runtime fixtures passed through prepare and
+score. Safe literal inventories were46/46 and47/47; each preparation retained
+24 stores/288 captures,4 calls,8 records and2 checkpoints, unchanged recorded
+144 estimate/20000 reserve,48/72 selection/answer denominators. Both explicitly
+reported known-cost coverage1/2, verifiedKnownMicroUsd72, unverifiedRecorded72
+and one unavailable-proof failed CW generation, with unverified compliance,
+excluded unrun answers and no promotion. The copied canonical cost+1 control
+denied as known_cost_mismatch through both APIs. All6 verdicts preceded owned
+cleanup and final zero-failure aggregate (2 runtime fixtures,1 copied control).
+Input/literal immutability remained explicit: echo46 files, malformed47 files.
+Read-only retained-log/record extraction exited0 after close; no extra fixture
+invocation or permanent-suite author run occurred.
+
+GREEN source hashes: module
+01ce6ab8e0fd2612ee3f8307974aad450a029abc5504b800a9b82c2715c70e03;
+test4084fd003eac2ac6d3f403a0a7d53b8811d0ede502bfdd6016076b99c87656a7;
+plan during invocation7db2492a4eb1f741cfd3a5ecdcc890e83d463e26cda22ae850f1c1e12acded0c;
+primary-owned limitations37c42ef139a0969a5cb904ce3febf29c2d099180de7e6c8e36ee0ed8c150e830.
+Only this factual plan append follows GREEN. The new permanent completed-run
+malformed fixture and all permanent negative controls await primary's complete
+unfiltered algorithm gates on both pinned Nodes. Worker stops before freeze,
+full native matrices, commit/push or delivery. No new accuracy or semantic claim.

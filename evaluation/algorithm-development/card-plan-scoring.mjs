@@ -550,6 +550,8 @@ function accounting(input, preparation, report, slots, get, resolve) {
     pair[row.phase] = row; recordById.set(row.attemptId, pair);
   }
   let partialKnown = 0, transportLatency = 0, unknownCost = 0, missing = 0, physicalCalls = 0;
+  const usageProof = { scope: 'recorded-known-costs-only', status: 'verified', knownCostAttempts: 0,
+    verifiedAttempts: 0, verifiedKnownMicroUsd: 0, unverifiedRecordedMicroUsd: 0, unverifiedAttempts: [] };
   let expectedRecordSequence = 0;
   for (const intent of report.attempts) {
     fields(intent, ['attemptId', 'slotId', 'reservedMicroUsd', 'requestArtifact', 'post', 'dispatched'], 'intent_shape');
@@ -579,7 +581,7 @@ function accounting(input, preparation, report, slots, get, resolve) {
       && duration(post.latencyMs), 'post_accounting_mismatch');
     literal(post.requestArtifact, intent.requestArtifact, 'post_request_mismatch');
     transportLatency += post.latencyMs;
-    let response = null, body = null;
+    let response = null, body = null, responseParsed = false;
     const card = slot.kind === 'card-plan', counting = card ? post.kind === 'count' : post.endpoint === 'responses/input_tokens';
     if (post.responseArtifact) {
       response = resolve(post.responseArtifact, `${intent.attemptId}-response.txt`).text;
@@ -600,8 +602,8 @@ function accounting(input, preparation, report, slots, get, resolve) {
       }
     }
     if (response !== null) {
-      if (card && post.outcome === 'succeeded') body = cwJson(response);
-      else try { body = JSON.parse(card ? response : ordinaryDecodedText(response)); }
+      if (card && post.outcome === 'succeeded') { body = cwJson(response); responseParsed = true; }
+      else try { body = JSON.parse(card ? response : ordinaryDecodedText(response)); responseParsed = true; }
       catch { /* Failed transport text is retained, not repaired. */ }
     }
     const endpoint = counting ? 'responses/input_tokens' : slot.slotId.includes('-selection-') ? 'responses' : 'chat/completions';
@@ -633,8 +635,24 @@ function accounting(input, preparation, report, slots, get, resolve) {
     else {
       check(integer(post.actualMicroUsd), 'known_cost_mismatch');
       const usage = body?.usage, answer = endpoint === 'chat/completions';
-      const inTokens = usage?.[answer ? 'prompt_tokens' : 'input_tokens'], outTokens = usage?.[answer ? 'completion_tokens' : 'output_tokens'];
-      check(!counting && providerInteger(inTokens) && providerInteger(outTokens) && providerInteger(usage.total_tokens)
+      // CW settles valid parsed usage before rejecting a credential echo or
+      // model failure. Echo text is withheld; generic redaction may destroy
+      // retained JSON grammar. Only these failed-generation proof boundaries
+      // can use canonical estimates, never a parseable contradictory envelope.
+      const failedCard = card && post.kind === 'generation' && post.outcome === 'failed'
+        && slot.status === 'failed' && post.dispatched && post.settlementPersisted === true
+        && typeof post.failureCode === 'string'
+        && slot.plannerFailure?.code === post.failureCode && slot.failureEvidence?.rawCode === post.failureCode;
+      const proofReason = failedCard && response === null && !Object.hasOwn(post, 'responseArtifact')
+        && post.responseSha256 === null && post.requestId === null && post.failureCode === 'credential_echo'
+        ? 'response-withheld' : failedCard && response !== null && !responseParsed
+          && typeof post.responseSha256 === 'string' && HEX.test(post.responseSha256)
+          && post.responseSha256 !== sha(response) && post.failureCode !== 'credential_echo'
+          ? 'response-unparseable' : null;
+      const inTokens = proofReason ? post.inputTokens : usage?.[answer ? 'prompt_tokens' : 'input_tokens'];
+      const outTokens = proofReason ? post.outputTokens : usage?.[answer ? 'completion_tokens' : 'output_tokens'];
+      if (proofReason) check(integer(inTokens) && integer(outTokens) && integer(inTokens + outTokens), 'usage_response_mismatch');
+      else check(!counting && providerInteger(inTokens) && providerInteger(outTokens) && providerInteger(usage?.total_tokens)
         && usage.total_tokens === inTokens + outTokens, 'usage_response_mismatch');
       const rational = (BigInt(inTokens) * 4n + BigInt(outTokens) * 16n + 9n) / 10n;
       // Preserve both pinned estimators exactly. Ordinary floating-point ceil
@@ -644,6 +662,12 @@ function accounting(input, preparation, report, slots, get, resolve) {
       if (card) check(post.inputTokens === inTokens && post.outputTokens === outTokens, 'usage_response_mismatch');
       else literal(post.usage, { input_tokens: inTokens, output_tokens: outTokens, total_tokens: usage.total_tokens }, 'usage_response_mismatch');
       partialKnown += post.actualMicroUsd;
+      usageProof.knownCostAttempts++;
+      if (proofReason) {
+        usageProof.status = 'unverified'; usageProof.unverifiedRecordedMicroUsd += post.actualMicroUsd;
+        usageProof.unverifiedAttempts.push({ attemptId: intent.attemptId, slotId: intent.slotId,
+          endpoint: post.endpoint, reason: proofReason, recordedMicroUsd: post.actualMicroUsd });
+      } else { usageProof.verifiedAttempts++; usageProof.verifiedKnownMicroUsd += post.actualMicroUsd; }
       if (post.outcome === 'succeeded') check(body.model === MODEL && inTokens <= 7024 && outTokens <= (answer ? 512 : 1024)
         && post.actualMicroUsd <= 5000, 'successful_usage_mismatch');
     }
@@ -749,13 +773,14 @@ function accounting(input, preparation, report, slots, get, resolve) {
   if (report.status !== 'completed') reasons.push('runtime-halted');
   if (!header) reasons.push('initial-accounting-unretained');
   if (missing || !report.ledgerReconciliation) reasons.push('accounting-coverage-incomplete');
+  if (usageProof.status === 'unverified') reasons.push('usage-proof-incomplete');
   if (physicalCalls > 168 || reservedIntents > 168 || reservedIntents * 5000 > 840000) reasons.push('reservation-bound-exceeded');
   if (resource.latencyMs > LIMITS.runMs || [...attempts.values()].some(r => r.post?.latencyMs > LIMITS.physicalMs)
     || [...slots.values()].some(s => s.latencyMs > LIMITS.physicalMs)) reasons.push('recorded-deadline-exceeded');
   return { physicalCalls, reservedIntents, reservedMicroUsd: reservedIntents * 5000, partialKnownMicroUsd: partialKnown,
     unknownCostCalls: unknownCost, missingFinalCalls: missing, initialRequestCount: resource.initialRequestCount,
     initialReservedMicroUsd: header?.reservedMicroUsd ?? null, latencyMs: resource.latencyMs, transportLatencyMs: transportLatency,
-    storeBytes, rssBytes: null, serviceCostMicroUsd: null, byArm,
+    storeBytes, rssBytes: null, serviceCostMicroUsd: null, usageProof, byArm,
     sharedBSelection: { calls: byArm.B.selectionCalls, latencyMs: selections.filter(s => s.arm === 'B').reduce((n, s) => n + (s.latencyMs ?? 0), 0) },
     commonPreparation: { latencyMs: null, storeBytes }, compliance: { status: reasons.length ? 'unverified' : 'satisfied',
       reasons, runtimeAttestationRequired: true } };

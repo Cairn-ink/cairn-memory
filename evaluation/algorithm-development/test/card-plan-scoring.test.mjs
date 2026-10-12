@@ -30,6 +30,7 @@ const REPORT_KEYS = PREPARATION_KEYS.filter(key => key !== 'judgeDomains').conca
 const orders = ['ABC', 'ACB', 'BAC', 'BCA', 'CAB', 'CBA'];
 const NUMERIC_MODES = ['ordinary-count-negative-zero', 'CW-count-negative-zero',
   'ordinary-rank-negative-zero', 'CW-generation-negative-zero', 'ordinary-answer-negative-zero'];
+const WITHHELD_USAGE_MODES = ['CW-generation-credential-echo', 'CW-generation-redacted-malformed'];
 const numericEndpoint = mode => mode.includes('count') ? 'responses/input_tokens'
   : mode.includes('answer') ? 'chat/completions' : 'responses';
 const numericSlot = mode => `CQ01-${mode.includes('answer') ? 'answer' : 'selection'}-${mode.startsWith('CW') ? 'B' : 'A'}`;
@@ -181,7 +182,7 @@ before(async () => {
   workspace = createTestWorkspace(null, { prefix: 'card-plan-scoring-shared-' });
   try {
     fixtures = {};
-    for (const mode of ['complete', 'C-unjudgeable', 'edges', 'before-start', 'checkpoint-mismatch', 'replacement', 'read-state-drift', 'unaffordable', 'net-loss', 'pre-dispatch-failure', 'CW-transformed-success', 'CW-redacted-failure', 'ordinary-BOM-boundaries', ...NUMERIC_MODES, 'CW-generation-failure']) {
+    for (const mode of ['complete', 'C-unjudgeable', 'edges', 'before-start', 'checkpoint-mismatch', 'replacement', 'read-state-drift', 'unaffordable', 'net-loss', 'pre-dispatch-failure', 'CW-transformed-success', 'CW-redacted-failure', 'ordinary-BOM-boundaries', ...NUMERIC_MODES, 'CW-generation-failure', ...WITHHELD_USAGE_MODES]) {
       const preparation = await prepareCardPlanComparison({ outputRoot: join(workspace.path, mode) });
       const configuration = { directory: join(workspace.path, `${mode}-ledger`), runId: randomUUID(),
         limitMicroUsd: mode === 'unaffordable' ? 39000000 : 400000000, requestCap: 100000 };
@@ -236,6 +237,14 @@ before(async () => {
             const body = rankBody(proposal);
             if (mode === 'CW-generation-failure' && slotId === 'CQ01-selection-B')
               body.output[0].content[0].text = '{"selectedCards":';
+            if (WITHHELD_USAGE_MODES.includes(mode) && slotId === 'CQ01-selection-B') {
+              body.diagnostic = mode === 'CW-generation-credential-echo' ? 'synthetic_scoring_key' : 'password=abcdefgh';
+              if (mode === 'CW-generation-redacted-malformed') body.output[0].content[0].text = '{"selectedCards":';
+              const raw = JSON.stringify(body);
+              if (mode === 'CW-generation-redacted-malformed') assert.throws(() => JSON.parse(redactSecrets(raw)), SyntaxError);
+              // Synthetic raw key-bearing text stays in memory only.
+              return new Response(raw);
+            }
             if (NUMERIC_MODES.includes(mode) && numericEndpoint(mode) === 'responses'
               && slotId === numericSlot(mode)) return new Response(signedUsageBody(body));
             if (mode === 'CW-transformed-success' && slotId === 'CQ01-selection-B') body.diagnostic = 'sk-' + 'x'.repeat(20);
@@ -263,7 +272,8 @@ before(async () => {
             const encoded = JSON.stringify(body);
             return new Response('\uFEFF' + encoded + ' '.repeat(262144 - 3 - Buffer.byteLength(encoded)));
           }
-          if (mode === 'complete' && slotId === 'CQ08-answer-A') body.usage = { prompt_tokens: 3, completion_tokens: 3, total_tokens: 6 };
+          if (['complete', 'CW-generation-redacted-malformed'].includes(mode) && slotId === 'CQ08-answer-A')
+            body.usage = { prompt_tokens: 3, completion_tokens: 3, total_tokens: 6 };
           return mode === 'complete' && slotId === 'CQ24-answer-A' ? padded(body, 262144) : Response.json(body);
         } });
       assert.deepEqual(report.cases.map(c => c.id), sources.map(c => c.id));
@@ -1338,5 +1348,170 @@ test('ST2: explicit owned cleanup runs after setup/assertion failure and is idem
     catch { caught = true; }
     finally { await owner.cleanup(); await owner.cleanup(); }
     assert.equal(caught, true); await assert.rejects(access(owner.path), { code: 'ENOENT' });
+  }
+});
+
+test('WU1–WU5: failed CW withheld usage proof preserves estimates without verified-resource or answer credit', async t => {
+  const echo = fixtures['CW-generation-credential-echo'], malformed = fixtures['CW-generation-redacted-malformed'];
+  const originals = WITHHELD_USAGE_MODES.map(mode => [fixtures[mode], sha(JSON.stringify(fixtures[mode].input))]);
+  const both = async (input, reason) => {
+    const before = sha(JSON.stringify(input));
+    const prepared = await prepareCardPlanScoring(input);
+    const assessed = await scoreCardPlanComparison({ ...input, firstResponses: {
+      AB: [{ judgeId: 'A', rawResponse: null }, { judgeId: 'B', rawResponse: null }],
+      C: [{ judgeId: 'A', rawResponse: null }, { judgeId: 'B', rawResponse: null }] } });
+    assert.equal(sha(JSON.stringify(input)), before);
+    if (reason) { denied(prepared, reason); denied(assessed, reason); }
+    else { valid(prepared, true); valid(assessed); }
+    return [prepared, assessed];
+  };
+  // Labelled canonical copies alter every affected retained identity, including
+  // ledger deltas/resource sums for cost controls. They are not runtime outcomes.
+  const copiedPost = (f, change, costDelta = 0) => {
+    const intent = WITHHELD_USAGE_MODES.includes(f.record.mode)
+      ? f.report.attempts.find(row => row.slotId === 'CQ01-selection-B' && row.post.kind === 'generation') : f.report.attempts.at(-1);
+    return tampered(f, f.input.artifacts.filter(a => a.name.endsWith('.json')).map(artifact => [artifact.name, value => {
+      const walk = row => {
+        if (!row || typeof row !== 'object') return;
+        if (row.attemptId === intent.attemptId) {
+          if (row.phase === 'post') change(row);
+          if (costDelta && Object.hasOwn(row, 'actualMicroUsd') && row.actualMicroUsd !== null) row.actualMicroUsd += costDelta;
+        }
+        if (costDelta && row.resources) row.resources.partialKnownMicroUsd += costDelta;
+        Object.values(row).forEach(walk);
+      };
+      walk(value);
+    }]));
+  };
+
+  await t.test('two genuine fresh runtime fixtures reconcile source, ledger, missing proof and all fixed denominators', async () => {
+    const memoryIds = new Set(), receiptIds = new Set();
+    for (const [mode, reason] of [['CW-generation-credential-echo', 'response-withheld'],
+      ['CW-generation-redacted-malformed', 'response-unparseable']]) {
+      const f = fixtures[mode], echoed = mode.endsWith('echo');
+      const intent = f.report.attempts.find(row => row.slotId === 'CQ01-selection-B' && row.post.kind === 'generation'), post = intent.post;
+      const knownPosts = f.report.attempts.map(row => row.post).filter(row => row.actualMicroUsd !== null);
+      const recordedTotal = knownPosts.reduce((sum, row) => sum + row.actualMicroUsd, 0);
+      const verifiedTotal = knownPosts.filter(row => row.attemptId !== intent.attemptId).reduce((sum, row) => sum + row.actualMicroUsd, 0);
+      assert.equal(numericSources(f, memoryIds, receiptIds), 288);
+      assert.equal(f.report.status, echoed ? 'halted' : 'completed');
+      if (echoed) assert.equal(f.report.failure.code, 'credential_echo'); else assert.equal(f.report.failure, null);
+      assert.equal(f.initial.requestCount, 0); assert.deepEqual(f.initial.attempts, []);
+      assert.equal(f.calls.length, echoed ? 4 : 166); assert.equal(f.records.length, f.calls.length * 2);
+      assert.equal(f.report.checkpoints.length, echoed ? 2 : 118);
+      assert.deepEqual(f.calls.slice(0, 4).map(row => row.slotId), ['CQ01-selection-A', 'CQ01-selection-A', 'CQ01-selection-B', 'CQ01-selection-B']);
+      assert.equal(post.outcome, 'failed'); assert.equal(post.kind, 'generation'); assert.equal(post.dispatched, true);
+      assert.equal(post.inputTokens, 100); assert.equal(post.outputTokens, 20); assert.equal(post.actualMicroUsd, 72);
+      assert.equal(post.settlementPersisted, true);
+      assert.equal(post.failureCode, echoed ? 'credential_echo' : 'invalid_model_output');
+      assert(f.input.artifacts.every(row => !row.text.includes('synthetic_scoring_key')));
+      if (echoed) {
+        assert.equal(post.responseArtifact, undefined); assert.equal(post.responseSha256, null);
+        assert.equal(f.input.artifacts.length, 46);
+      } else {
+        const retained = f.input.artifacts.find(row => row.name === basename(post.responseArtifact.path)).text;
+        assert.throws(() => JSON.parse(retained), SyntaxError); assert(retained.includes('[REDACTED]'));
+        assert.notEqual(post.responseSha256, sha(retained));
+        assert.equal(f.report.cases[0].selections[1].cleanupFailure, undefined);
+        assert.equal(f.report.resources.answersCompleted, 70);
+        assert.equal(f.report.attempts.find(row => row.slotId === 'CQ08-answer-A').post.actualMicroUsd, 7);
+        assert(!f.calls.some(row => ['CQ01-answer-B', 'CQ01-answer-C'].includes(row.slotId)));
+      }
+      const ledger = f.report.ledgerReconciliation;
+      assert.equal(ledger.requestCount, f.calls.length); assert.equal(ledger.reservedMicroUsd, f.calls.length * 5000); assert.equal(ledger.prefixUnchanged, true);
+      assert.equal(ledger.appendedAttempts.filter(row => row.outcome === 'failed').length, 1);
+      assert.equal(ledger.appendedAttempts.find(row => row.attemptId === intent.attemptId).actualMicroUsd, 72);
+      assert.deepEqual(f.report.checkpoints.flatMap(row => row.deltas), ledger.appendedAttempts);
+      const [prepared, assessed] = await both(f.input);
+      for (const output of [prepared, assessed]) {
+        assert.equal(output.resources.partialKnownMicroUsd, recordedTotal);
+        assert.equal(output.resources.partialKnownMicroUsd, f.report.resources.partialKnownMicroUsd);
+        assert.equal(output.resources.reservedMicroUsd, f.calls.length * 5000);
+        assert.equal(output.resources.unknownCostCalls, echoed ? 2 : 48); assert.equal(output.resources.missingFinalCalls, 0);
+        assert.deepEqual(output.resources.usageProof, { scope: 'recorded-known-costs-only', status: 'unverified',
+          knownCostAttempts: knownPosts.length, verifiedAttempts: knownPosts.length - 1, verifiedKnownMicroUsd: verifiedTotal, unverifiedRecordedMicroUsd: 72,
+          unverifiedAttempts: [{ attemptId: intent.attemptId, slotId: intent.slotId, endpoint: post.endpoint,
+            reason, recordedMicroUsd: 72 }] });
+        assert.equal(output.resources.compliance.status, 'unverified');
+        assert(output.resources.compliance.reasons.includes('usage-proof-incomplete'));
+        assert.equal(output.mechanical.selections.length, 48); assert.equal(output.mechanical.answers.length, 72);
+        const failed = output.mechanical.selections.find(row => row.slotId === 'CQ01-selection-B');
+        assert.equal(failed.execution, 'failed'); assert.equal(failed.evidence.status, 'unobserved');
+        assert.equal(failed.evidence.completeRequired, false);
+        const excluded = output.mechanical.answers.filter(row => echoed || ['CQ01-answer-B', 'CQ01-answer-C'].includes(row.slotId));
+        assert.equal(excluded.length, echoed ? 72 : 2);
+        assert(excluded.every(row => !row.actualAnswer && row.execution === 'not-run' && row.judgeEligibility.status === 'excluded'));
+        assert.equal(output.mechanical.answers.filter(row => row.actualAnswer).length, echoed ? 0 : 70);
+      }
+      for (const domain of ['AB', 'C']) assert.equal(prepared.judgeDomains[domain].packets[0].payload.items.length,
+        echoed ? 0 : domain === 'AB' ? 47 : 23);
+      for (const arm of ['A', 'B', 'C']) {
+        const all = assessed.summaries[arm].all;
+        assert.equal(all.notRun, echoed ? 24 : arm === 'A' ? 0 : 1);
+        assert.equal(all.actualAnswers, echoed ? 0 : arm === 'A' ? 24 : 23);
+        assert.deepEqual(all.correctness, { correct: 0, incorrect: 0, unresolved: 24 });
+        assert.equal(all.unsupported.coverage, 'incomplete'); assert.equal(all.severe.coverage, 'incomplete');
+        if (echoed || arm !== 'A') assert.equal(armOf(assessed, 'CQ01', arm).safety.status, 'unobserved');
+      }
+      assert.equal(assessed.harms.D12Cleared, false);
+      assert.equal(assessed.gate.mechanismPromising, false); assert.equal(assessed.gate.Stage2Passed, false);
+      assert.equal(assessed.gate.productDefaultAdvancement, false);
+    }
+    assert.equal(memoryIds.size, 576); assert.equal(receiptIds.size, 576);
+  });
+
+  await t.test('copied invalid canonical numbers and internally inconsistent costs remain denials', async () => {
+    for (const f of [echo, malformed]) {
+      for (const tokens of [{ inputTokens: -1 }, { inputTokens: 0.5 }, { inputTokens: Number.MAX_SAFE_INTEGER + 1 },
+        { outputTokens: null }, { inputTokens: Number.MAX_SAFE_INTEGER, outputTokens: 1 }])
+        await both(copiedPost(f, row => Object.assign(row, tokens)), 'usage_response_mismatch');
+      await both(copiedPost(f, () => {}, 1), 'known_cost_mismatch');
+    }
+  });
+
+  await t.test('copied parseable null, primitives, missing or contradictory usage cannot become unavailable proof', async () => {
+    const intent = malformed.report.attempts.find(row => row.slotId === 'CQ01-selection-B' && row.post.kind === 'generation');
+    for (const body of [null, false, 1, {}, { usage: { input_tokens: 99, output_tokens: 20, total_tokens: 119 } }]) {
+      const text = JSON.stringify(body); assert.notEqual(sha(text), intent.post.responseSha256);
+      await both(responseTampered(malformed, intent, text, { responseSha256: intent.post.responseSha256 }), 'usage_response_mismatch');
+    }
+    // A parseable transformed failed envelope still proves its valid usage;
+    // this copied control does not claim a new runtime/provider response.
+    const text = JSON.stringify({ usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120 }, diagnostic: '[REDACTED]' });
+    const outputs = await both(responseTampered(malformed, intent, text, { responseSha256: intent.post.responseSha256 }));
+    for (const output of outputs) assert.deepEqual(output.resources.usageProof, {
+      scope: 'recorded-known-costs-only', status: 'verified', knownCostAttempts: 118, verifiedAttempts: 118,
+      verifiedKnownMicroUsd: malformed.report.attempts.reduce((sum, row) => sum + (row.post.actualMicroUsd ?? 0), 0),
+      unverifiedRecordedMicroUsd: 0, unverifiedAttempts: [] });
+    for (const f of [fixtures['CW-generation-failure'], fixtures['ordinary-rank-negative-zero']])
+      for (const output of await both(f.input)) assert.equal(output.resources.usageProof.status, 'verified');
+  });
+
+  await t.test('copied missing provenance and referenced files remain integrity denials', async () => {
+    await both(copiedPost(echo, row => { row.failureCode = 'provider_failed'; }), 'usage_response_mismatch');
+    await both(copiedPost(echo, row => { row.responseSha256 = '1'.repeat(64); }), 'usage_response_mismatch');
+    const intent = malformed.report.attempts.find(row => row.slotId === 'CQ01-selection-B' && row.post.kind === 'generation');
+    const retained = malformed.input.artifacts.find(row => row.name === basename(intent.post.responseArtifact.path)).text;
+    for (const hash of [null, sha(retained)]) await both(copiedPost(malformed, row => { row.responseSha256 = hash; }), 'usage_response_mismatch');
+    const missing = clone(malformed.input);
+    missing.artifacts = missing.artifacts.filter(row => row.name !== basename(intent.post.responseArtifact.path));
+    missing.execution.artifactIndexSha256 = sha(JSON.stringify(indexOf(missing.artifacts)));
+    await both(missing, 'missing_referenced_artifact');
+  });
+
+  await t.test('copied successful body omissions remain strict for CW and ordinary transports', async () => {
+    for (const [mode, reason] of [['CW-generation-negative-zero', 'insufficient_original_cw_proof'],
+      ['ordinary-rank-negative-zero', 'usage_response_mismatch']]) {
+      const f = fixtures[mode], intent = f.report.attempts.at(-1);
+      assert.equal(intent.post.outcome, 'succeeded');
+      const omitted = copiedPost(f, row => { delete row.responseArtifact; });
+      omitted.artifacts = omitted.artifacts.filter(row => row.name !== basename(intent.post.responseArtifact.path));
+      omitted.execution.artifactIndexSha256 = sha(JSON.stringify(indexOf(omitted.artifacts)));
+      await both(omitted, reason);
+    }
+  });
+  for (const [f, before] of originals) {
+    assert.equal(sha(JSON.stringify(f.input)), before);
+    for (const artifact of f.input.artifacts) assert.equal(readFileSync(join(f.preparation.observation.outputRoot, artifact.name), 'utf8'), artifact.text);
   }
 });

@@ -2509,3 +2509,52 @@ or extending that guarantee to ordinary transport's different stage ordering.
 Its new verification and independent review remain required; the earlier
 green matrix is historical, not acceptance of changed bytes. Neither these
 reproductions nor their correction measure real-model answer accuracy.
+
+The partial-generation correction at `f4c1aca` passed 22 new local commands,
+including 393 algorithm and 784 generic tests on each pinned runtime. Its
+Standards review passed, but independent Spec review found a separate failed-
+response accounting boundary. CW can retain a parsed usage estimate before
+withholding a credential-bearing response, or before retaining generic-
+redacted failed text that no longer parses. The scorer required response usage
+for every non-null cost and therefore rejected the whole legitimate halted
+record. Ordinary transport rejects credential echo before pricing and has a
+different retained shape.
+
+Primary reproduced both paths with fresh fake HTTP through the pinned runtime:
+46 and 47 literal artifacts, 288 captures and four calls per case. Each retained
+144 microUSD of recorded estimates, including the failed CW generation's 72,
+and 20,000 microUSD reserved; no answer completed. Both public APIs wrongly
+denied the genuine records with `usage_response_mismatch`. A copied inconsistent-
+cost control also failed at that earlier reason instead of its estimator check.
+The original reproduction exited 1 at all six intended final assertions after
+verified owned cleanup. Primary's separate artifact/source/ledger audit exited
+0. These are offline synthetic records, not paid requests or provider invoices.
+
+The bounded correction must preserve recorded costs while separately reporting
+which known-cost estimates lack retained response proof. Withheld or unparseable
+transformed failed CW text cannot earn verified-resource, successful-answer,
+clean-safety or promotion credit. Successful response identity, parseable usage
+contradictions, missing referenced artifacts and canonical accounting mismatches
+must still reject. This does not authorize recovering or storing withheld text,
+changing the transport or reclassifying a failed run as completed. A normally
+completed run may still contain a settled failed selection and dependent
+unanswered slots; unavailable usage proof must remain explicit there too,
+without rejecting the whole result or erasing those failed slots. New integrated
+verification, independent review and exact-head CI remain separate requirements;
+the prior green matrix is not acceptance of changed bytes or an accuracy score.
+
+The unchanged two-prefix reproduction subsequently exited 0 through both public
+scoring APIs. Primary's independent literal/source/accounting audit also exited
+0: all 93 safe artifacts reconcile, each prefix retains 144 microUSD recorded
+estimate with 72 verified and 72 explicitly unverified, and the inconsistent-
+cost control remains denied. All 1,608 source hashes stayed unchanged during
+execution; owned scratch was removed with no intervention or surviving owned
+process. This focused GREEN is not execution evidence for the new full-completed
+fixture or acceptance of the pending integrated matrices, final reviews or CI.
+
+Primary's first source-freeze invocation exited 1 before writing any freeze
+or starting a native gate: its manually supplied RED-log hash had one mistyped
+hex digit. The retained record and independent raw-file digest agree; the
+corrected invocation obtains that argument directly from the verified record.
+This was an operator preflight error, not a test or runtime failure. Its failed
+invocation remains recorded; no receipt, source result or budget was reset.
