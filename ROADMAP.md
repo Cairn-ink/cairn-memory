@@ -163,13 +163,21 @@ reader/architecture change or release-readiness claim; historical blocks remain.
 The [closed source-bundle QA24 first result](docs/plans/source-bundle-qa24-results.md)
 is not promising: 15/24 ordinary versus 12/24 treatment supported-correct,
 3 wins / 6 losses / 15 ties (net -3), ten before-answer failures, qualified 0/6
-and a new severe BQ08 error. Original Stage 2/3 and D12 remain uncleared. The next
-checkpoint is a frozen prospective algorithm design: encode selected-card budgets
-in planner output while rejecting invalid refs without silent dropping, and separately test
-retrieval selection versus answer-context grouping for missing-link/qualification
-errors. Offline gates, independent review and exact-head CI precede any separately
-authorized new source-only cohort and first judgments. No solution, old-cohort
-rerun/reanswer/rescore, raised cap, paid invocation, main merge or release follows.
+and a new severe BQ08 error. The subsequent
+[closed card-plan QA24 result](docs/plans/card-plan-qa24-results.md) is rejected:
+A 20 correct / 4 incorrect / 0 unresolved; B/C each 2 / 1 / 21, with 24/3/3
+completed answers. B−A supported-correct gain is -18 and complete-required
+gain is -20; C−B diagnostic gain is 0. All 21 B selection failures are
+`invalid_model_output`; their dependent B/C answers did not run. The frozen
+completion, gain, qualified nonregression and observed-safety gates fail.
+Under P4, two successive planning-format rejections stop this paid sequence
+for representation review. Primary selects a separately versioned receipt-ID
+group design for prospective offline feasibility only; no implementation or
+quality claim follows. Original Stage 2/3, default advancement and D12 remain
+uncleared. Completion, QA, safety, a fresh paired comparator, installed Hermes
+new-session use and resource fit remain separate gates. No old threshold/result
+change, consumed CQ/BQ rerun, new paid authority, raised cap, main merge or release
+follows; the original US$400 ceiling and US$30 protection remain unchanged.
 
 The next reliability design slice is the
 [memory reliability contract](docs/plans/memory-reliability-contract.md): qualified

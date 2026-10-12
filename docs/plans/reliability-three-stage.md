@@ -1,7 +1,21 @@
 # Reliability and answer quality development plan
 
-Status: accepted development direction; Stage 2 candidates completed but not
-accepted. The latest [closed six-case larger-pool result](large-pool-six-results.md)
+Status: accepted development direction; latest card-plan candidate rejected.
+The [closed card-plan QA24 result](card-plan-qa24-results.md) retains A
+20 correct / 4 incorrect / 0 unresolved and B/C each 2 / 1 / 21, with
+24/3/3 completed answers. B−A supported-correct gain is -18 and
+complete-required gain is -20; C−B diagnostic gain is 0. Its frozen gates fail
+on B completion <23, supported-correct gain <3, complete-required gain <1,
+qualified regression and A/B safety unobserved. Original Stage 2/3, defaults
+and D12 remain uncleared. Under P4, the successive source-bundle and card-plan
+planning-format rejections stop this paid sequence for representation review.
+Primary's next checkpoint is a separately versioned receipt-ID group design
+for offline feasibility only, not an implemented successor or quality claim.
+No old threshold/result change, consumed CQ/BQ rerun or new paid authority
+follows. Completion, QA, safety, a fresh paired comparator, installed Hermes
+new-session use and resource fit remain separate gates.
+
+Historical status retained: the [closed six-case larger-pool result](large-pool-six-results.md)
 is INCONCLUSIVE: linked B and complementary C each score 6/6, with zero QA gain.
 Four cases exercise the lexical branch, but its +1 packed-anchor gain does not
 satisfy the positive-QA gate. This separate authored development cohort does
@@ -435,7 +449,7 @@ All declared resources passed (512 HTTP; $2.56 reservation; $0.110216 known
 model-profile estimate, not invoice), but C's unsupported severe D12 is new
 against A. `advances` and `incrementalSuperiority` are false, not promotion.
 
-Current bounded checkpoint: primary's offline sealed D12 replay reconstructs
+Historical bounded checkpoint: primary's offline sealed D12 replay reconstructs
 the full evidence/request with the existing preparation, role verifier and real
 packer from recorded authoritative snapshots (not a new SQLite read). Integrity
 and controls exited 0 on both pinned Nodes; symptom mode exited 1 with expected
@@ -559,7 +573,36 @@ source-support judgment and host/resource observations. Scripted AIAgent/tool
 dispatch establishes plumbing only. These gates remain distinct from pilot QA;
 product acceptance waits for reliability, natural host and resource evidence.
 
-## First packet, ownership and stop conditions
+## Current P4 review checkpoint
+
+The [closed card-plan report](card-plan-qa24-results.md) closes the first and
+only run with actual exit 0, not an answer-quality pass. B's 21
+`invalid_model_output` selections left dependent B/C answers unrun. Detached
+CQ01–CQ03 compiler probes do not repair formal responses or establish
+model-internal causes. After two successive planning-format rejections,
+primary selects a separately versioned receipt-ID group design for prospective
+offline feasibility. Stop the paid sequence; no successor implementation,
+semantic improvement, new paid grant or consumed-cohort replay is claimed.
+The original US$400 ceiling/US$30 protection and every older result remain.
+
+This documentation packet uses base
+`c7a487abc2471ac997ed44dc6a7e41d49cc59640`, one bounded GPT-6.1 Sol/high
+worker and the fixed R1–R7 result-delivery contract. Worker scope is the result
+report, this plan, append-only limitations and ROADMAP disposition. Primary
+owns factual cross-check, integrated gates, fixed candidate commit, separate
+nonauthor Standards/Spec reviews and delivery. Documentation entrypoints are
+README → limitations/ROADMAP → this plan/result report; affected checks are
+local relative links and the exact four-path inventory (worker), then final
+review and exact-head CI (primary). Existing historical URLs stay valid;
+there is no browser replay or runtime caller change.
+
+Worker checkpoint: `git diff --check` and `npm run validate` each exited 0.
+Git diff/untracked paths and independent filesystem/base-blob hashes agree on
+exactly four changed paths; all 24 report rows match the literal closed record.
+All 187 local Markdown targets in the four files exist; the 171,143-byte
+limitations prefix and P1–P10 are unchanged. Broad gates/review remain primary-owned.
+
+## First packet, ownership and stop conditions (historical)
 
 The first executable packet is offline Stage 1 only: the four-row boundary trace,
 separate seven-failure accounting, and ≤4 minimized synthetic probes reusing the
