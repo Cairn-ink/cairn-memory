@@ -72,14 +72,16 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   if(event==='UserPromptSubmit' && !await promptRecallEnabled(configPath))return '';
   input??=await readHookInput(stream,{deadlineMs:300});
   const qualifyCreator = version => hasQualifiedCreator(configPath,version,{signal});
-  const source = await sessionSource(event === 'worker' ? input?.path : input?.transcript_path,
+  const session = await sessionSource(event === 'worker' ? input?.path : input?.transcript_path,
     event === 'worker' ? input?.sessionId : input?.session_id,
     { qualifiedCreatorVersion: qualification.version, qualifyCreator });
   // Apply the same gate in the launcher and detached worker; old installations
   // without captureExec inherit the safe default. Never trust hook extras.
-  // Resume appends to the old rollout without replacing its source header.
-  // The trusted native ancestor's exec marker also denies exec resume of cli.
-  if (!source || ((source === 'exec' || qualification.host.execSession === true) &&
+  // Exec sources and app-server threads without an interactive originator are
+  // automation. Resume appends to the old rollout without replacing its source
+  // header; the trusted native ancestor's exec marker denies exec resume of an
+  // interactive thread.
+  if (!session || ((!session.interactive || qualification.host.execSession === true) &&
       config.captureExec !== true) || signal.aborted) return '';
   const options = clientOptions(config);
   const resolved = await resolveClient(options);

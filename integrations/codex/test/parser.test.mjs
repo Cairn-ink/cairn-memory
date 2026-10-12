@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { verifyHeader,parseLine,FORMAT,CODEX_COMMIT,QUALIFIED_CREATORS,SOURCES } from '../parser.mjs';
+import { verifyHeader,parseLine,FORMAT,CODEX_COMMIT,QUALIFIED_CREATORS,SOURCES,INTERACTIVE_ORIGINATORS,interactiveSession } from '../parser.mjs';
 import { planBatches,preflight,normalizeBlocks } from '../../client/common-profile.mjs';
 
 const fixture=await readFile(new URL('./fixtures/primary-paginated.jsonl',import.meta.url),'utf8');
@@ -47,8 +47,24 @@ test('primary synthetic host fixture selects one canonical representation',()=>{
 
 test('app-server threads (Codex 0.160+ TUI on the shared daemon) record source vscode in the same layout',()=>{
   assert.deepEqual(SOURCES,['cli','vscode','exec']);
-  const row=JSON.parse(lines[0]);Object.assign(row.payload,{source:'vscode',originator:'codex-tui'});
-  assert.equal(verifyHeader(Buffer.from(JSON.stringify(row)),sessionId),FORMAT);
+  for(const originator of ['codex-tui','codex_vscode','Codex Desktop','codex_exec',undefined]) {
+    const row=JSON.parse(lines[0]);Object.assign(row.payload,{source:'vscode',originator});
+    assert.equal(verifyHeader(Buffer.from(JSON.stringify(row)),sessionId),FORMAT,String(originator));
+  }
+});
+
+test('only allowlisted interactive originators make an app-server thread interactive',()=>{
+  assert.deepEqual(INTERACTIVE_ORIGINATORS,['codex-tui','codex_vscode','Codex Desktop']);
+  for(const originator of INTERACTIVE_ORIGINATORS)assert.equal(interactiveSession({source:'vscode',originator}),true,originator);
+  // Automation on the daemon has no exec source or exec ancestor; only its
+  // self-declared name differs, so unknown, near-miss and missing names fail closed.
+  for(const originator of ['codex_exec','codex_cli_rs','vibe-codex-executor','codex_sdk_ts','codex-app-server-sdk',
+    'codex_desktop','Codex','Codex Desktop Automation','codex-tui ','CODEX-TUI','',undefined,null,['codex-tui']])
+    assert.equal(interactiveSession({source:'vscode',originator}),false,JSON.stringify(originator));
+  assert.equal(interactiveSession({source:'cli',originator:'codex_cli_rs'}),true);
+  for(const originator of ['codex-tui','codex_exec'])assert.equal(interactiveSession({source:'exec',originator}),false);
+  for(const source of ['mcp',undefined,{subagent:'review'}])assert.equal(interactiveSession({source,originator:'codex-tui'}),false);
+  assert.equal(interactiveSession(),false);
 });
 
 for(const patch of [{history_mode:'legacy'},{source:'mcp'},{source:'unknown'},{source:{subagent:'review'}},

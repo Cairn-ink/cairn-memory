@@ -26,6 +26,13 @@ const unsupported = () => { throw new Error('unsupported_format'); };
 // Codex 0.160+ runs TUI threads on the shared app-server daemon, which records
 // every thread it starts as source "vscode" in the same paginated layout.
 export const SOURCES = Object.freeze(['cli', 'vscode', 'exec']);
+// The app-server stores each connecting client's self-declared name as the
+// originator, so automation also records "vscode". Only these known interactive
+// clients (TUI, VS Code extension, desktop app) make that source interactive;
+// any other or missing originator is gated like exec.
+export const INTERACTIVE_ORIGINATORS = Object.freeze(['codex-tui', 'codex_vscode', 'Codex Desktop']);
+export const interactiveSession = ({ source, originator } = {}) => source === 'cli' ||
+  (source === 'vscode' && INTERACTIVE_ORIGINATORS.includes(originator));
 export function verifyHeader(line, sessionId, { qualifiedCreatorVersion } = {}) {
   let row;
   try { row = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(line)); }

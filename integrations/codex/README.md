@@ -23,7 +23,10 @@ tokens. Npx cache paths are never installed as commands.
 The frozen creator qualification accepts 0.157.1, 0.160.1, 0.161.0 and 0.162.0 flat paginated
 `cli`, `vscode` and `exec` JSONL. `vscode` is the source the app-server records for every thread
 it starts; since 0.160 the interactive TUI runs on the shared app-server daemon, so TUI sessions
-carry it. The 0.160.1 fixture is derived from the installed binary’s schemas, embedded hook
+carry it. The app-server writes each client's self-declared name as `originator`, so automation
+also records `vscode`. Capture and recall treat a `vscode` thread as interactive only for the
+originators `codex-tui` (TUI), `codex_vscode` (VS Code extension) and `Codex Desktop` (desktop
+app); any other or missing originator is gated like `exec` and needs the exec opt-in. The 0.160.1 fixture is derived from the installed binary’s schemas, embedded hook
 wire schemas, native synthetic UserMessage transcript and serde/type evidence;
 no successful model assistant response was observed. 0.161.0 has schema-only synthetic evidence. Unqualified versions/layouts,
 fork/subagent metadata and other sources fail closed. Binary and fixture hashes are frozen

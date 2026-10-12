@@ -86,6 +86,9 @@ caller. CX-5 installs qualified Codex hooks. Prompt-recall injection passed the
 A7 pinned-host evaluation for codex-cli 0.160.1 and is on by default there,
 with the same redacted query, untrusted framing and receipts. `memory
 prompt-recall-off --client codex` turns it off without stopping capture.
+Codex capture and recall cover interactive Codex conversations only: the CLI/TUI,
+the VS Code extension and the desktop app. Automation is off by default; see
+[automated Codex sessions](#automated-codex-sessions-and-app-server-clients).
 
 The exact old strict recall schema rejection permits one retry without the id,
 with the same query/scope/limit and cancellation. Its two-second deadline starts
@@ -587,13 +590,29 @@ mechanisms, not a change enabled by this documentation. Neither forgetting nor
 redaction guarantees physical erasure of journals, free pages, backups or prior
 provider/caller copies. Hosted schemas/defaults and paid-pilot boundaries are unchanged.
 
-### Automated Codex exec sessions
+### Automated Codex sessions and app-server clients
+
+Automatic Codex capture and prompt recall cover interactive conversations only:
+the Codex CLI/TUI (including the TUI on the shared app-server daemon since Codex
+0.160), the Codex VS Code extension and the Codex desktop app. Automated sessions
+are not captured or given recall unless you opt in: `codex exec` runs, and any
+other program that drives the Codex app-server. Installer 0.5.1 decides this from
+the verified transcript header. `source: "cli"` is interactive. `source: "vscode"`,
+which the app-server records for every thread, is interactive only when its
+`originator` is `codex-tui`, `codex_vscode` or `Codex Desktop`. `source: "exec"`,
+and a `vscode` thread with any other or no originator, is automated. The
+originator is the name the client reports to Codex, so it is evidence, not proof:
+a program that deliberately reports one of those names is treated as interactive.
+Updating the hooks for TUI capture therefore also enables capture and recall for
+VS Code extension and desktop app conversations whose hooks run on a qualified
+host. Only the bounded first header line is read for this decision.
 
 Installer 0.5.0 skips automated `codex exec` sessions by default, for both
 conversation capture and prompt recall. No recall request or context injection
 is made for a skipped session. The installed launcher and detached worker use
-the authorized transcript's first `session_meta.payload.source` record, verified
-against the hook session ID and qualified format; hook extras cannot override it.
+the authorized transcript's first `session_meta` record (`source`, plus
+`originator` for app-server threads), verified against the hook session ID and
+qualified format; hook extras cannot override it.
 Native Codex process ancestry also supplies a trusted exec marker, including the
 `e` alias and exec parents of app-server children. This prevents `exec resume`
 of an originally interactive thread from evading the default: Codex's

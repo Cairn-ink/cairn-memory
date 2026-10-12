@@ -1,5 +1,5 @@
 import { openSource, readBytes } from './source.mjs';
-import { MAX_LINE, verifyHeader } from './parser.mjs';
+import { MAX_LINE, verifyHeader, interactiveSession } from './parser.mjs';
 
 // Hook input has no reliable cli/exec discriminator. Read only the bounded
 // session_meta header at its authorized path, and bind it to this session.
@@ -21,7 +21,8 @@ export async function sessionSource(path, sessionId, options = {}) {
         if (error.message !== 'creator_unqualified' || await options.qualifyCreator?.(error.version) !== true) return null;
         verifyHeader(header, sessionId, { qualifiedCreatorVersion: error.version });
       }
-      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(header)).payload.source;
+      const meta = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(header)).payload;
+      return { source: meta.source, interactive: interactiveSession(meta) };
     }
   } catch { /* Refuse capture and injection without verified source evidence. */ }
   finally { await file?.close(); }
