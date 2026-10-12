@@ -2484,3 +2484,28 @@ greens cannot substitute. Old failures and consumed receipts remain intact.
 Fresh final Standards/Spec review and all applicable exact-head CI are still
 required. This is an offline evidence correction, not a new accuracy score,
 proof of improved retrieval or permission to operate the closed cohort.
+
+The numeric-corrected candidate `fdba481` passed all 22 new local commands on
+both pinned runtimes, including 387 algorithm and 784 generic tests per
+runtime, but independent Spec review found a further partial-output gap. A
+card-plan generation can succeed before a later observation-persistence halt
+leaves no retained assembly. The scorer checked the outer response and usage,
+then returned before checking its embedded proposal and plan compilation.
+Copied invalid proposals could therefore pass integrity validation, although
+the run still remained halted and could not earn completion or advancement.
+
+A fresh fake-HTTP prefix reproduced this through both public scorer APIs:
+47 literal artifacts, 288 source captures and four calls; two copied invalid
+proposals each bypassed the expected denial. The unchanged genuine evidence
+remained valid and halted. The first diagnostic exited 1 at the intended
+assertion, but its large console artifact stream was truncated; that log is
+retained as incomplete evidence. A logger-only correction and separately
+recorded invocation also exited 1 at the intended four denials, with complete
+literal records, unchanged source files and verified owned cleanup.
+
+The next correction must replay successful card-plan output before returning
+for missing assembly, without requiring failed transport output to be valid
+or extending that guarantee to ordinary transport's different stage ordering.
+Its new verification and independent review remain required; the earlier
+green matrix is historical, not acceptance of changed bytes. Neither these
+reproductions nor their correction measure real-model answer accuracy.

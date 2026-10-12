@@ -181,7 +181,7 @@ before(async () => {
   workspace = createTestWorkspace(null, { prefix: 'card-plan-scoring-shared-' });
   try {
     fixtures = {};
-    for (const mode of ['complete', 'C-unjudgeable', 'edges', 'before-start', 'checkpoint-mismatch', 'replacement', 'read-state-drift', 'unaffordable', 'net-loss', 'pre-dispatch-failure', 'CW-transformed-success', 'CW-redacted-failure', 'ordinary-BOM-boundaries', ...NUMERIC_MODES]) {
+    for (const mode of ['complete', 'C-unjudgeable', 'edges', 'before-start', 'checkpoint-mismatch', 'replacement', 'read-state-drift', 'unaffordable', 'net-loss', 'pre-dispatch-failure', 'CW-transformed-success', 'CW-redacted-failure', 'ordinary-BOM-boundaries', ...NUMERIC_MODES, 'CW-generation-failure']) {
       const preparation = await prepareCardPlanComparison({ outputRoot: join(workspace.path, mode) });
       const configuration = { directory: join(workspace.path, `${mode}-ledger`), runId: randomUUID(),
         limitMicroUsd: mode === 'unaffordable' ? 39000000 : 400000000, requestCap: 100000 };
@@ -202,6 +202,8 @@ before(async () => {
         },
         onCheckpoint(row) {
           if (mode === 'edges' && row.slotId === 'CQ24-answer-A') throw Error('synthetic-after-extraction-close-failure');
+          if (mode === 'CW-generation-failure' && row.slotId === 'CQ01-selection-B')
+            throw Error('synthetic-after-failed-generation-observation-stop');
           if (mode === 'CW-transformed-success' && row.slotId === 'CQ01-answer-C'
             || mode === 'ordinary-BOM-boundaries' && row.slotId === 'CQ01-answer-C'
             || mode === 'CW-redacted-failure' && row.slotId === 'CQ01-answer-A') throw Error('synthetic-review-prefix-stop');
@@ -232,6 +234,8 @@ before(async () => {
                 .run(proposal.refs[0].memoryId); } finally { db.close(); }
             }
             const body = rankBody(proposal);
+            if (mode === 'CW-generation-failure' && slotId === 'CQ01-selection-B')
+              body.output[0].content[0].text = '{"selectedCards":';
             if (NUMERIC_MODES.includes(mode) && numericEndpoint(mode) === 'responses'
               && slotId === numericSlot(mode)) return new Response(signedUsageBody(body));
             if (mode === 'CW-transformed-success' && slotId === 'CQ01-selection-B') body.diagnostic = 'sk-' + 'x'.repeat(20);
@@ -300,6 +304,8 @@ after(async () => {
       await assert.rejects(access(join(workspace.path, mode)), { code: 'ENOENT' });
       console.log('CARD_SCORING_NUMERIC_CLEANUP=' + JSON.stringify({ mode, ownedRootRemoved: true }));
     }
+    await assert.rejects(access(join(workspace.path, 'CW-generation-failure')), { code: 'ENOENT' });
+    console.log('CARD_SCORING_PARTIAL_GENERATION_CLEANUP=removed-owned-failed-generation-root');
     console.log('CARD_SCORING_SHARED_CLEANUP=removed-owned-workspace');
   }
 });
@@ -763,6 +769,102 @@ function responseTampered(fixture, intent, text, { wrongBytes = false, responseS
   }
   return tampered(fixture, changes);
 }
+
+test('PG1–PG4: null assembly preserves CW successful compilation and failed/ordinary transport asymmetry', async t => {
+  const successful = fixtures['CW-generation-negative-zero'], failed = fixtures['CW-generation-failure'];
+  const unchanged = sha(JSON.stringify(successful.input));
+  const intent = successful.report.attempts.at(-1), post = intent.post;
+  const retained = successful.input.artifacts.find(row => row.name === basename(post.responseArtifact.path)).text;
+  const body = JSON.parse(retained), proposal = body.output[0].content[0].text;
+  assert.equal(intent.slotId, 'CQ01-selection-B'); assert.equal(post.kind, 'generation');
+  assert.equal(post.outcome, 'succeeded'); assert.equal(post.responseSha256, sha(retained));
+  assert.equal(successful.report.cases[0].selections[1].assembly, null);
+  assert.equal(successful.report.cases[0].selections[1].evidence, null);
+  assert.equal(successful.report.cases[0].selections[1].status, 'failed');
+  assert.equal(successful.report.failure.code, 'card_plan_persistence_failure');
+
+  await t.test('genuine successful CW post remains halted without assembled evidence or answers', async () => {
+    const prepared = await prepareCardPlanScoring(successful.input); valid(prepared, true);
+    const scored = await assess(successful); valid(scored);
+    for (const result of [prepared, scored]) {
+      assert.equal(result.runtime.status, 'halted'); assert.equal(result.runtime.failure.code, 'card_plan_persistence_failure');
+      const selection = result.mechanical.selections.find(row => row.slotId === 'CQ01-selection-B');
+      assert.equal(selection.execution, 'failed'); assert.equal(selection.selectionOrigin, null);
+      assert.equal(selection.selectionSha256, null); assert.equal(selection.evidence.status, 'unobserved');
+      assert.equal(selection.evidence.completeRequired, false);
+      assert(result.mechanical.answers.every(row => !row.actualAnswer && row.execution === 'not-run'
+        && row.judgeEligibility.status === 'excluded'));
+    }
+    assert.equal(prepared.judgeDomains.AB.packets[0].payload.items.length, 0);
+    assert.equal(prepared.judgeDomains.C.packets[0].payload.items.length, 0);
+    assert.equal(scored.gate.mechanismPromising, false); assert.equal(scored.gate.Stage2Passed, false);
+    assert.equal(scored.gate.productDefaultAdvancement, false);
+    for (const arm of ['A', 'B', 'C']) assert.deepEqual(scored.summaries[arm].all.correctness,
+      { correct: 0, incorrect: 0, unresolved: 24 });
+  });
+
+  // Copied responses only: post hashes, literal descriptors and artifact index
+  // change coherently. Genuine source artifacts/status/usage are untouched.
+  const duplicate = proposal.replace('"selectedCards":', '"selected\\u0043ards":[],"selectedCards":');
+  assert.notEqual(duplicate, proposal); assert.deepEqual(JSON.parse(duplicate), JSON.parse(proposal));
+  const invalid = JSON.stringify({ ...JSON.parse(proposal), selectedCards: [12] });
+  for (const [name, embedded, reason] of [
+    ['copied decoded duplicate proposal key', duplicate, 'cw_response_json_mismatch'],
+    ['copied parseable out-of-range proposal', invalid, 'derived_validation_failure'],
+  ]) await t.test(name, async () => {
+    const text = retained.replace(JSON.stringify(proposal), JSON.stringify(embedded));
+    assert.notEqual(text, retained); assert.deepEqual(JSON.parse(text).usage, body.usage);
+    const input = responseTampered(successful, intent, text), before = sha(JSON.stringify(input));
+    denied(await prepareCardPlanScoring(input), reason);
+    denied(await scoreCardPlanComparison({ ...input, firstResponses: scriptedResponses(successful) }), reason);
+    assert.equal(sha(JSON.stringify(input)), before);
+  });
+
+  await t.test('genuine failed CW generation retains malformed proposal without successful-output replay', async () => {
+    assert.equal(numericSources(failed, new Set(), new Set()), 288);
+    const slot = failed.report.cases[0].selections[1], last = failed.report.attempts.at(-1).post;
+    assert.equal(failed.report.status, 'halted'); assert.equal(failed.report.failure.code, 'card_plan_persistence_failure');
+    assert.equal(slot.status, 'failed'); assert.equal(slot.failure.code, 'invalid_model_output');
+    assert.equal(slot.cleanupFailure.code, 'card_plan_persistence_failure');
+    assert.equal(slot.assembly, null); assert.equal(slot.evidence, null); assert.deepEqual(slot.authoritativeReads, []);
+    assert.equal(last.kind, 'generation'); assert.equal(last.outcome, 'failed'); assert.equal(last.failureCode, 'invalid_model_output');
+    assert.equal(failed.calls.length, 4); assert.equal(failed.records.length, 8);
+    assert.equal(failed.input.artifacts.length, 47);
+    assert.equal(failed.input.artifacts.filter(row => /^record-/u.test(row.name)).length, 8);
+    const text = failed.input.artifacts.find(row => row.name === basename(last.responseArtifact.path)).text;
+    assert.equal(last.responseArtifact.sha256, sha(text)); assert.equal(last.responseArtifact.bytes, Buffer.byteLength(text));
+    assert.equal(JSON.parse(text).output[0].content[0].text, '{"selectedCards":');
+    assert.equal(last.actualMicroUsd, 72); assert.equal(last.inputTokens, 100); assert.equal(last.outputTokens, 20);
+    assert.equal(failed.report.resources.physicalCalls, 4); assert.equal(failed.report.resources.reservedMicroUsd, 20000);
+    assert.equal(failed.report.resources.partialKnownMicroUsd, 144); assert.equal(failed.report.resources.unknownCostCalls, 2);
+    assert.equal(failed.report.resources.missingFinalCalls, 0);
+    const before = sha(JSON.stringify(failed.input));
+    const prepared = await prepareCardPlanScoring(failed.input); valid(prepared, true);
+    const scored = await assess(failed); valid(scored);
+    for (const result of [prepared, scored]) {
+      assert.equal(result.runtime.status, 'halted');
+      assert.equal(result.mechanical.selections.find(row => row.slotId === 'CQ01-selection-B').execution, 'failed');
+      assert(result.mechanical.answers.every(row => !row.actualAnswer && row.judgeEligibility.status === 'excluded'));
+    }
+    assert.equal(scored.gate.mechanismPromising, false); assert.equal(sha(JSON.stringify(failed.input)), before);
+  });
+
+  await t.test('copied ordinary successful post with null assembly need not contain a valid proposal', async () => {
+    const ordinary = fixtures['ordinary-rank-negative-zero'], attempt = ordinary.report.attempts.at(-1);
+    assert.equal(attempt.slotId, 'CQ01-selection-A'); assert.equal(attempt.post.outcome, 'succeeded');
+    assert.equal(ordinary.report.cases[0].selections[0].assembly, null);
+    const text = ordinary.input.artifacts.find(row => row.name === basename(attempt.post.responseArtifact.path)).text;
+    const embedded = JSON.parse(text).output[0].content[0].text;
+    const copied = text.replace(JSON.stringify(embedded), JSON.stringify('{"refs":'));
+    assert.notEqual(copied, text);
+    const input = responseTampered(ordinary, attempt, copied), before = sha(JSON.stringify(input));
+    valid(await prepareCardPlanScoring(input), true);
+    const scored = await scoreCardPlanComparison({ ...input, firstResponses: scriptedResponses(ordinary) }); valid(scored);
+    assert.equal(scored.runtime.status, 'halted'); assert.equal(scored.gate.mechanismPromising, false);
+    assert.equal(scored.mechanical.selections[0].execution, 'failed'); assert.equal(sha(JSON.stringify(input)), before);
+  });
+  assert.equal(sha(JSON.stringify(successful.input)), unchanged);
+});
 
 // Synthetic retained-copy boundary controls, never claimed as runtime runs.
 // Update the affected canonical numeric observations and costs consistently so

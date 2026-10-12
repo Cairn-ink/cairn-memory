@@ -377,14 +377,22 @@ function rankOutput(text, ordinary) {
 function validateSelection(slot, c, intents, response) {
   if (slot.rankRequest !== null) literal(slot.rankRequest, c.rankRequest, 'rank_request_mismatch');
   if (slot.recallMapText !== null) check(slot.recallMapText === JSON.stringify(c.actualRecallMap), 'recall_map_text_mismatch');
+  const request = { ...c.rankRequest, signal: new AbortController().signal };
+  let compiled, prepared, output, expectedAssembly;
+  // CW compiles before recording generation success. Replay that guarantee
+  // even when a later observation failure prevented assembly retention.
+  // Ordinary transport records success before its adapter parses/compiles.
+  if (slot.arm === 'B' && intents[1]?.dispatched && intents[1].post?.outcome === 'succeeded') {
+    prepared = prepareCardPlanRankRequest(request, countOpenAITokens);
+    output = rankOutput(response(intents[1]), false);
+    compiled = compileCardPlan(prepared, output);
+  }
   if (slot.assembly === null) {
     check(slot.status !== 'completed' && slot.evidence === null && slot.authoritativeReads.length === 0, 'selection_evidence_mismatch'); return null;
   }
   check(slot.rankRequest && slot.recallMapText && slot.recall?.ok === true && slot.recall.value.coverage === 'complete'
     && slot.recall.value.selection.strategy === 'complete-map' && !slot.recall.value.recallTruncated
     && intents.length === 2 && intents.every(row => row.dispatched && row.post?.outcome === 'succeeded'), 'selection_evidence_mismatch');
-  const request = { ...c.rankRequest, signal: new AbortController().signal };
-  let compiled, expectedAssembly;
   if (slot.arm === 'A') {
     const output = rankOutput(response(intents[1]), true); literal(slot.rankOutput, output, 'rank_output_mismatch');
     const result = compileOrdinaryCardSelection(request, output, countOpenAITokens); compiled = result.compiled;
@@ -393,9 +401,7 @@ function validateSelection(slot, c, intents, response) {
       actualOrdinaryRequestArtifact: intents[0].requestArtifact, proposal: compiled.proposal, refs: compiled.refs };
     check(slot.plannerRequest === null && slot.plannerOutput === null && slot.plannerFailure === null, 'ordinary_planner_mismatch');
   } else {
-    const prepared = prepareCardPlanRankRequest(request, countOpenAITokens), output = rankOutput(response(intents[1]), false);
     literal(slot.plannerRequest, prepared.request, 'planner_request_mismatch'); literal(slot.plannerOutput, output, 'planner_output_mismatch');
-    compiled = compileCardPlan(prepared, output);
     literal(slot.rankOutput, { refs: compiled.refs }, 'rank_output_mismatch');
     expectedAssembly = { origin: 'genuine-card-plan-v1', requestSha256: compiled.requestSha256,
       proposal: compiled.proposal, refs: compiled.refs };

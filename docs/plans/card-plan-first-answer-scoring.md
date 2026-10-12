@@ -1658,3 +1658,161 @@ entire scorer file or a full matrix. Those newly authored assertions remain
 pending primary integrated verification under the accepted schedule; no native
 acceptance, independent review, commit or push is claimed here. Earlier failed
 observations remain retained and are not pooled into this one GREEN.
+
+## Partial successful CW generation replay correction — PG1–PG4
+
+Starting candidate fdba4815cebee3fe6295962465d25ec2e609bdca; fixed review and
+runtime base4309ff396834f60c237910493c2dc837e11de4dc. This append preserves the
+original33544-byte contract prefix and all earlier results, including the
+unresolved original C5 timeout and the fdba481 blockingP2 Spec finding.
+Author: /root/scoring_partial_generation61, actual GPT-6.1 Sol/high. Owned scope
+is the evaluator module, existing test and this append; primary owns limitations,
+acceptance, verification freeze, commits, independent review and delivery.
+
+The prospective acceptance source is the complete external
+card-scoring-partial-generation-contract.md in
+/tmp/cairn-complementary-qa-acceptance.7sG2vXdH. PG1 requires both public scorer
+entrypoints to assess fresh genuine successful CW generation followed by an
+observation persistence halt, retaining null assembly, literal bytes, failed/
+unrun states and all24/48/72 denominators. PG2 requires copied embedded decoded-
+duplicate-key and parseable invalid-compilation proposals to deny at those exact
+seams after affected hashes/descriptors/index are rebound; copies are never new
+runtime outcomes. PG3 requires the same pinned successful CW envelope/proposal/
+compilation replay with or without retained assembly, while failed CW posts and
+ordinary transport keep their different stage guarantees. PG4 preserves numeric
+raw/canonical distinctions, CW original-text proof/redaction, body bounds,
+pricing, immutable inputs, all old tests and every judgment/safety/resource gate.
+
+Primary's initial external RED session82085 actually exited1 at the four intended
+missing-denial assertions, after setup and cleanup. Console-based diagnostic
+output was not fully retained; literal diagnostics were truncated and the
+internal cause was not separately instrumented. This behavioral RED has
+incomplete retained output. Preserve its
+card-scoring-partial-generation-red.log SHA256
+893295c18420cabedd15d626d4edcf58a8b7df33e8f5607cfa9f6d53404fde72 and record.
+Only external emit was corrected to synchronous writeSync. No acceptance
+assertion or runtime setup was changed. The original is not overwritten.
+
+Retention-corrected script SHA256
+e9ffb14773d8e589e1cfcb39e9da83d81938f09eac223b7c4722ed445f1bee97 ran once in
+primary session21903. Actual outer/child/close1 again reached the four intended
+missing-denial assertions. The corrected raw log SHA256 is
+a79f57e01c60127e90d56a8f15495e49aee3a79211022461897d1068de6ae158. Primary
+independently audited47/47 filesystem/runtime-reference artifacts, literal
+descriptors/hashes/index,288 source captures,4 fake calls,7 caller callbacks/
+8 durable records, unchanged source and removed owned scratch; audit exit0.
+The genuine preparation/score were valid, but both copied proposal controls
+were also valid through both APIs. Pure parser rejection and coherent copied
+identities isolate the null-assembly early return as the missing replay.
+
+Both prepareCardPlanScoring and scoreCardPlanComparison use validateSelection
+after accounting. Successful CW transport compiles before recording success;
+the scorer now repeats its pure preparation, strict embedded parsing and card
+compilation before returning for a null assembly. Complete CW paths reuse that
+same compiled result. It does not reconstruct assembly, authoritative reads,
+answers or completion. Ordinary transport records HTTP success before adapter
+parsing/compilation, so it keeps its existing null-assembly behavior. No runtime,
+transport, core, prompt, model, judging helper, source/rubric, dependency or CI
+file changes are part of this correction; there is no product/browser flow.
+
+Permanent tests reuse CW-generation-negative-zero for genuine successful-post
+halt and the two copied denial controls. One new narrow CW-generation-failure
+fixture retains a valid-usage response with malformed embedded proposal, the
+genuine failed generation post, then an observation halt on owner checkpoint.
+It must stay assessable without demanding successful-output grammar. A copied
+ordinary successful-post/null-assembly malformed proposal explicitly locks the
+ordinary stage asymmetry; it is not represented as a genuine new runtime run.
+Both public APIs are checked in all five subtests. Genuine/copy input immutability,
+failed/unrun states, source/accounting identities, no promotion and owned removal
+remain explicit. The existing source verifier and independently reconstructed
+filesystem/reference inventory cover the new fixture, not fabricated snapshots.
+
+Prospective test increment is6: one parent and five subtests. All original143
+scorer tests and18 shared fixtures remain; scorer149/full28-file algorithm393
+are expected, with19 total fixtures. The author's bounded GREEN covers the
+unchanged focused external reproduction, not the new entire permanent suite.
+Primary must run all permanent tests through each unfiltered full algorithm gate.
+
+### Accepted verification schedule for this new correction
+
+Read in full: external card-scoring-partial-generation-verification-amendment.md
+in the same acceptance directory, accepted by primary2026-10-12 18:03UTC after
+independent procedural review (0 findings/0 blockers). It revises only offline
+maintainer scheduling; no full matrix is released by this append alone.
+Before full gates, freeze all4 delivery files,1608 source hashes, exact counts
+and28-file Git/rg/filesystem inventory. New partial-generation receipts only;
+prior consumed receipts/results remain immutable. The reviewed driver SHA256
+is1b4f07126477882ea016a8a70fae326793e6fce27adb2f1e69e398cc8ee33b54; owned
+helper remains6d0ec3dcf25528c3237e10621f90b6fb245bb9b40d8d5b701500466391a14548.
+
+Author may run exactly one unchanged external GREEN on scrubbedNode22.16.0,
+all4 required flags, compilecache disabled, existing owned runner and unchanged
+1800000ms watchdog. Retain stdout/stderr separately with exclusive names; no
+source edits during execution and no separate full scorer/author matrix.
+Primary personally runs9 commands on22.16.0 then24.15.0 sequentially, one heavy
+sequence globally: version; all28 algorithm files at unchanged concurrency4;
+same4 core-source files/53tests; same5 LME source/answer files/51tests; owned
+comparison demo; generic784tests; repository validation; both Claude validators.
+Require actual child/close0, exact test counts,0fail/cancel/skip, no watchdog/
+intervention/survivors, unchanged source, empty/removed owned scratch. Preserve
+all deadlines and tiktoken1.0.22; no installs, automatic retry, skip or rollback.
+
+After both full matrices pass, primary commits only scoped paths, inspects current
+gates, and runs version+validation on each pinned runtime sequentially. Require22
+new actual-zero commands and4 snapshots matching the new committed candidate.
+Fresh independent nonauthor Standards/Spec review must inspect the same fixed
+base/new candidate; only then dependentPR against experiment/card-plan-runtime,
+all27 exact-head CI and mergeability. CI floating24 is not local24.15.0.
+No provider, operational config/key/ledger, formal preparation, closed-cohort
+operation, main merge, release, deployment, spending authority or semantic-gain
+claim follows. All historical failure causes/unknowns remain disclosed.
+
+### D2 bounded author GREEN — complete, stop for primary freeze
+
+Exactly one author native invocation ran, session49803. Outer/child/close exits
+were all0, signals/error null, elapsed36367.065811ms. The unchanged synchronous
+external reproduction e9ffb14773d8e589e1cfcb39e9da83d81938f09eac223b7c4722ed445f1bee97
+ran on exactNode22.16.0 through tools/testing/run.mjs --script and the unchanged
+reviewed owned helper6d0ec3dc..., scrubbed10-key environment, all4 flags1,
+compilecache disabled and1800000ms watchdog. No source edit occurred during it.
+All1608 source hashes before/after agreed. No watchdog, intervention, signal,
+observer/ownership error, forced pipe close or surviving owned process occurred;
+cleanupVerified was true. Fresh outer parent
+/tmp/card-partial-generation-author-parent-Iq8Tls was empty and removed.
+
+Exclusive retained evidence basename under the acceptance directory:
+card-scoring-partial-generation-green-author-d78afded-23bc-4170-a6fe-3ada8d83ae15.
+Its .log stdout has10224680bytes, SHA256
+1a9bbd83097472c75f49939dfe25123ade625d18bec84cee5f5aa38aec673fbb.
+Separate -stderr.log has169bytes, SHA256
+9d8545943f4466f8158031e0fc626bece9af4b159a29362b2b3674414e1073dd.
+The -processes.jsonl SHA256 is
+37a1333309d5e1bf4a4f3f0bc381176188dd20d7401c66177c258ba2c61e8ecb;
+-record.json retains exact argv/environment, source snapshots, actual owned
+process outcomes and all evidence hashes. The new
+card-scoring-partial-generation-author-green.consumed.json receipt was create-
+only; no old artifact, failed result or consumed receipt was replaced.
+
+One genuinely fresh preparation retained24stores/288captures,4 fake calls,
+7 caller callbacks/8 durable records and47 literal artifacts. Filesystem and
+independent runtime-reference inventories agreed47/47. Genuine successful CW
+post/null-assembly/card_plan_persistence_failure remains valid in both APIs.
+Copied decoded duplicate proposal keys deny as cw_response_json_mismatch;
+copied parseable out-of-range card proposal denies as derived_validation_failure,
+each through both public APIs. All6 verdicts and the zero-failure aggregate were
+retained before cleanup. Genuine literal files stayed unchanged. A bounded
+post-run literal-log/record audit separately exited0 and verified inventory,
+all six exact verdicts, unchanged1608-source snapshots and removed outer parent.
+
+Executed module SHA2561769282ddff09e353604d586e7d4760a0b84ab2114abdd0be949d97993ed5363;
+test SHA256bac5953bcc274daa9b8e11382e34a8761b541bdf2d5463048591e26bd864fc3e;
+plan during GREEN SHA2569d254d28a23c74263e2459eca3fc2501b9bb28ac4d73aee1878b41a9d42596e1.
+Only this result append follows the run. Module/test syntax checks and standalone
+git diff --check each exited0. Primary separately inspected module/test diff,
+ordinary/CW stage ordering and the failed-generation owner-close path; its
+source audit confirmed all23 old parent bodies retained and +1parent/+5children,
+expected149scorer/393algorithm tests,19fixtures. Those permanent test additions
+have not yet run in the full suite; this GREEN is the original external seam,
+not acceptance of every new fixture. Author stops before full native matrices,
+commit/push or delivery. Primary freeze/integrated verification and both fresh
+independent final review axes remain required. No accuracy or semantic gain.
