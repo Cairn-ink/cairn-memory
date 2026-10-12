@@ -2232,3 +2232,23 @@ separate gates before new quality results. Source retention and product defaults
 remain unchanged; no Stage2/3/D12 promotion or paid-run authority follows from
 test success. The cumulative 400USD ceiling and protected 30USD remain unchanged.
 See [the prospective wire contract](plans/card-plan-live-integration.md).
+
+## Fresh card-plan QA24 prospective corpus
+
+The independently authored `card-plan-qa24-v1` source-only corpus contains 24
+inert cases with twelve one-message cards each: 18 answerable and 6 qualified.
+Its separate source-anchored rubric requests honest minimal supports; author
+necessity rationales and distractor inspection are not independent judgments.
+Offline tests prepare complete source candidates and scripted capture inputs.
+They establish schema, binding, provenance and preparation plumbing only.
+There are no paid calls, measured model scores or evidence of natural
+extraction, long-history navigation, official LongMemEval/Mem0 performance,
+lightweight fit or product reliability. Retention and defaults do not change.
+
+The future sole promotion comparison remains new card-plan selection versus
+ordinary selection with identical identity-bearing flat whole-card answer
+context. Matched grouping is diagnostic only; grouped projection, coordinator,
+scorer/store setup, prepared-artifact review and budget preflight remain
+separate future gates. The cumulative 400 USD ceiling and protected 30 USD reserve
+are unchanged. This offline corpus grants no operational or provider authority.
+See [the prospective contract and author audit](plans/card-plan-qa24.md).

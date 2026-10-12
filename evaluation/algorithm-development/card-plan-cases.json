@@ -1,0 +1,3123 @@
+[
+  {
+    "id": "CQ01",
+    "family": "prerequisite-chain",
+    "question": {
+      "text": "For Orin's paper exhibit, what are the ordered prerequisites leading to release of the viewing lens?",
+      "date": "2026-02-01"
+    },
+    "sessions": [
+      {
+        "id": "CQ01-S01",
+        "eventTime": "2026-02-01T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The clay exhibit next door stamps its visitor badges before mounting a display bracket."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S02",
+        "eventTime": "2026-02-01T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "At Orin's paper exhibit, the bracket must be mounted before the desk can stamp a visitor badge."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S03",
+        "eventTime": "2026-02-01T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Orin's paper exhibit keeps spare visitor badges in the narrow drawer beneath the desk."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S04",
+        "eventTime": "2026-02-01T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The paper exhibit's closing inventory counts each viewing lens in a separate padded sleeve."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S05",
+        "eventTime": "2026-02-01T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Visitors at the paper exhibit may look at the wall map while waiting for a badge stamp."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S06",
+        "eventTime": "2026-02-01T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Orin's practice tray is for the rehearsal desk and does not enter the visitor lens queue."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S07",
+        "eventTime": "2026-02-01T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For Orin's paper exhibit, a stamped visitor badge is needed before the visitor can claim the viewing tray."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S08",
+        "eventTime": "2026-02-01T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The clay exhibit releases its large lens when the display cloth has been folded away."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S09",
+        "eventTime": "2026-02-01T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The paper exhibit desk prints replacement badge cards on cream stock each Wednesday."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S10",
+        "eventTime": "2026-02-01T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Orin's tray transport box has four shallow slots for moving trays between rehearsal rooms."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S11",
+        "eventTime": "2026-02-01T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Orin's viewing lens is released only after the visitor has claimed the viewing tray for the paper exhibit."
+          }
+        ]
+      },
+      {
+        "id": "CQ01-S12",
+        "eventTime": "2026-02-01T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The paper exhibit lends a reading mirror through a separate queue after the visitor signs a slip."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ02",
+    "family": "evolving-decision",
+    "question": {
+      "text": "For Luma's archive pickup, what were the original and replacement material choices, the recorded reason for that revision, and the pickup time?",
+      "date": "2026-02-02"
+    },
+    "sessions": [
+      {
+        "id": "CQ02-S01",
+        "eventTime": "2026-02-02T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Luma adopted copper for the material choice in her archive pickup plan at the start of this review."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S02",
+        "eventTime": "2026-02-02T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Luma's archive return uses birch packing, which was chosen independently of the pickup material."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S03",
+        "eventTime": "2026-02-02T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The archive visitor desk opens its afternoon waiting room at 13:40 on this review day."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S04",
+        "eventTime": "2026-02-02T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Luma revised the archive pickup material choice: cedar is now adopted and replaces the previously selected material."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S05",
+        "eventTime": "2026-02-02T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Luma considered adding a second carrying strap to the archive pickup bag but has not adopted it."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S06",
+        "eventTime": "2026-02-02T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Neris adopted copper for her map-room pickup, whose route has no stairway."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S07",
+        "eventTime": "2026-02-02T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Luma recorded the reason for the archive pickup material revision as a lighter carrying load on the stairway."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S08",
+        "eventTime": "2026-02-02T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The archive's stairway sign recommends keeping the right hand free when carrying a parcel."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S09",
+        "eventTime": "2026-02-02T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Luma's archive pickup appointment is confirmed for 14:20, using the visitor desk's local schedule."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S10",
+        "eventTime": "2026-02-02T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Luma's spring archive pickup used an oak box and was completed several months ago."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S11",
+        "eventTime": "2026-02-02T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The archive librarian proposed a later visitor-desk closing time for next month's schedule."
+          }
+        ]
+      },
+      {
+        "id": "CQ02-S12",
+        "eventTime": "2026-02-02T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The visitor desk stores spare cedar samples in a labeled drawer for material demonstrations."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ03",
+    "family": "scope-exception",
+    "question": {
+      "text": "For crate Tavi in the current workshop handling cycle, what classification and latch, wrapping, badge and lane requirements follow from the notes?",
+      "date": "2026-02-03"
+    },
+    "sessions": [
+      {
+        "id": "CQ03-S01",
+        "eventTime": "2026-02-03T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The workshop sends chilled crates through the south handling lane, irrespective of their wrapping color."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S02",
+        "eventTime": "2026-02-03T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The workshop sends dry crates through the north handling lane during the same handling cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S03",
+        "eventTime": "2026-02-03T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The workshop's chilled-crate exception substitutes an insulated sleeve for the cloth wrap, leaving other baseline steps in force."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S04",
+        "eventTime": "2026-02-03T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Crate Selvo is classified as dry in the workshop manifest and carries a violet desk sticker."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S05",
+        "eventTime": "2026-02-03T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The cloth wrapping shelf contains amber rolls for the workshop's ordinary dry-crate work."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S06",
+        "eventTime": "2026-02-03T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The workshop manifest classifies crate Tavi as chilled; its entry is for this handling cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S07",
+        "eventTime": "2026-02-03T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The repair annex uses open latches for empty crates awaiting hinge inspection."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S08",
+        "eventTime": "2026-02-03T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Using the workshop's insulated sleeve for a chilled crate requires a cobalt handling badge."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S09",
+        "eventTime": "2026-02-03T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Yesterday's manifest listed crate Tavi as dry before the current handling cycle began."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S10",
+        "eventTime": "2026-02-03T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Workshop handling baseline: every crate uses a closed latch and a cloth wrap unless a wrapping exception applies."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S11",
+        "eventTime": "2026-02-03T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The workshop's cobalt badge storage rack is beside the south wall, away from the lane gate."
+          }
+        ]
+      },
+      {
+        "id": "CQ03-S12",
+        "eventTime": "2026-02-03T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A trial note proposes a silver handling badge for next season's insulated sleeves."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ04",
+    "family": "proposal-quotation",
+    "question": {
+      "text": "For Ivo's display ribbon, give the original and current adopted colors, Rhea's quoted preference, the assistant's proposal, Ivo's considered option, and his recorded rejection reason.",
+      "date": "2026-02-04"
+    },
+    "sessions": [
+      {
+        "id": "CQ04-S01",
+        "eventTime": "2026-02-04T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Rhea's earlier stage ribbon was navy during the winter installation at another gallery."
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S02",
+        "eventTime": "2026-02-04T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Ivo initially adopted green for his display ribbon in the gallery installation under discussion."
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S03",
+        "eventTime": "2026-02-04T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ivo's gallery lighting plan uses warm white bulbs in the small display alcove."
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S04",
+        "eventTime": "2026-02-04T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ivo reported Rhea's words about her own display ribbon: 'I prefer amber for my ribbon.'"
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S05",
+        "eventTime": "2026-02-04T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The gallery shop stocks amber sample cards for visitors choosing their own ribbon colors."
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S06",
+        "eventTime": "2026-02-04T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "For Ivo's gallery display ribbon, I suggest violet as an option to test under the overhead lighting."
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S07",
+        "eventTime": "2026-02-04T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A separate rehearsal uses violet flags, chosen by the rehearsal coordinator instead of Ivo."
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S08",
+        "eventTime": "2026-02-04T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Ivo says he is considering amber for his gallery display ribbon, and has not adopted that option."
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S09",
+        "eventTime": "2026-02-04T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ivo's ribbon spool for the travel case remains cream and is outside the gallery installation."
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S10",
+        "eventTime": "2026-02-04T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ivo rejected the option he had been considering for the gallery ribbon because it blended into the backdrop."
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S11",
+        "eventTime": "2026-02-04T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The gallery backdrop was cleaned before the ribbon review and kept its existing texture."
+          }
+        ]
+      },
+      {
+        "id": "CQ04-S12",
+        "eventTime": "2026-02-04T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ivo now adopts teal for the gallery display ribbon, replacing his earlier adopted choice."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ05",
+    "family": "entity-link",
+    "question": {
+      "text": "For the atelier parcel marked Wisp, give the current nickname-to-tag-to-carton mapping path and its assigned shelf.",
+      "date": "2026-02-05"
+    },
+    "sessions": [
+      {
+        "id": "CQ05-S01",
+        "eventTime": "2026-02-05T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The atelier parcel nickname Flicker maps to routing tag willow in the same parcel ledger."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S02",
+        "eventTime": "2026-02-05T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Routing tag willow identifies carton Sable for the atelier's current parcel sorting cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S03",
+        "eventTime": "2026-02-05T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "In the current atelier parcel ledger, routing tag fern identifies carton Beryl, not a shelf name."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S04",
+        "eventTime": "2026-02-05T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The atelier assigns carton Sable to shelf Alder during the current sorting cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S05",
+        "eventTime": "2026-02-05T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The neighboring studio uses routing tag fern for its paint trolley, separate from atelier parcels."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S06",
+        "eventTime": "2026-02-05T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The atelier's Juniper shelf has a felt liner to protect the carton bases during sorting."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S07",
+        "eventTime": "2026-02-05T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The atelier assigns carton Beryl to shelf Juniper for the current parcel sorting cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S08",
+        "eventTime": "2026-02-05T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Last month's ledger mapped Wisp to routing tag moss before the current parcel ledger took effect."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S09",
+        "eventTime": "2026-02-05T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The atelier's parcel nickname Wisp maps to routing tag fern in the current parcel ledger."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S10",
+        "eventTime": "2026-02-05T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The atelier assigns carton Opal to shelf Birch for today's packing supplies."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S11",
+        "eventTime": "2026-02-05T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Carton Beryl carries a blue transport handle, which is not a routing tag."
+          }
+        ]
+      },
+      {
+        "id": "CQ05-S12",
+        "eventTime": "2026-02-05T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The atelier parcel nickname Glint maps to routing tag reed for the label-printing queue."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ06",
+    "family": "compositional-set",
+    "question": {
+      "text": "Under the adopted afternoon display rule, which desk tokens are eligible? Show how the roster, seal list and withdrawal list combine.",
+      "date": "2026-02-06"
+    },
+    "sessions": [
+      {
+        "id": "CQ06-S01",
+        "eventTime": "2026-02-06T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The morning display selected Daro and Nook under a rule that used yellow seals."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S02",
+        "eventTime": "2026-02-06T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Nook is the only token withdrawn from the afternoon display; its blue seal remains on the list."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S03",
+        "eventTime": "2026-02-06T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The spare cabinet holds Zeno with the other overflow tokens outside the afternoon desk roster."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S04",
+        "eventTime": "2026-02-06T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Pavo's token has a shallow round rim for easier lifting from the display tray."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S05",
+        "eventTime": "2026-02-06T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The blue-seal list for the display includes exactly Vela, Nook, Pavo and spare token Zeno."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S06",
+        "eventTime": "2026-02-06T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The desk coordinator proposed keeping withdrawn tokens visible on a separate demonstration board."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S07",
+        "eventTime": "2026-02-06T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The yellow-seal list for the afternoon desk contains Vela and Daro for a different activity."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S08",
+        "eventTime": "2026-02-06T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The evening desk roster will be decided after the afternoon display has ended."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S09",
+        "eventTime": "2026-02-06T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The adopted afternoon rule selects tokens in both the desk roster and blue-seal list, then removes withdrawn tokens."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S10",
+        "eventTime": "2026-02-06T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A replacement blue seal for Nook is stored in the lower desk drawer."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S11",
+        "eventTime": "2026-02-06T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The afternoon display tray has six recesses, including two kept empty for handling space."
+          }
+        ]
+      },
+      {
+        "id": "CQ06-S12",
+        "eventTime": "2026-02-06T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The afternoon desk-token roster is exactly Vela, Nook, Pavo and Daro for this display."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ07",
+    "family": "prerequisite-chain",
+    "question": {
+      "text": "For Soren's lantern stand, what is the full ordered prerequisite route from fastening the foot to displaying the lantern?",
+      "date": "2026-02-07"
+    },
+    "sessions": [
+      {
+        "id": "CQ07-S01",
+        "eventTime": "2026-02-07T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Soren's lantern stand can enter the display bay only after the lantern has been attached."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S02",
+        "eventTime": "2026-02-07T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The practice lantern stand inserts its rod before fastening its detachable foot."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S03",
+        "eventTime": "2026-02-07T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "At Soren's lantern stand, the foot must be fastened before the upright rod can be inserted."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S04",
+        "eventTime": "2026-02-07T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Soren's lantern shade is stored in a square sleeve when the stand is not on display."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S05",
+        "eventTime": "2026-02-07T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The display bay's afternoon inspection checks for loose floor tiles along the entrance."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S06",
+        "eventTime": "2026-02-07T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For Soren's stand, the lantern may be attached only after its shade ring has been fitted."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S07",
+        "eventTime": "2026-02-07T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Soren's spare foot has a padded base for demonstrations on the rehearsal table."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S08",
+        "eventTime": "2026-02-07T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The lantern transport trolley is parked beside the storage curtain before setup begins."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S09",
+        "eventTime": "2026-02-07T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The canopy stand may enter the display bay before its fabric has been attached."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S10",
+        "eventTime": "2026-02-07T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Soren's lantern uses a paper shade with an unprinted rim for this installation."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S11",
+        "eventTime": "2026-02-07T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Soren's stand permits fitting the shade ring only after the upright rod has been inserted."
+          }
+        ]
+      },
+      {
+        "id": "CQ07-S12",
+        "eventTime": "2026-02-07T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The display bay clerk records each stand's exit time on a separate inventory slip."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ08",
+    "family": "evolving-decision",
+    "question": {
+      "text": "For Emina's reading alcove, give her initial and replacement seating choices, the recorded change reason, the opening time and the chosen lamp setting.",
+      "date": "2026-02-08"
+    },
+    "sessions": [
+      {
+        "id": "CQ08-S01",
+        "eventTime": "2026-02-08T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The neighboring writing alcove opens at 10:10 and uses a high-backed chair."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S02",
+        "eventTime": "2026-02-08T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Emina initially adopted a bench for the seating choice in her reading alcove."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S03",
+        "eventTime": "2026-02-08T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Emina's travel reading kit includes a folding bench for outdoor breaks."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S04",
+        "eventTime": "2026-02-08T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Emina has replaced her previous reading-alcove seating choice with an adopted stool."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S05",
+        "eventTime": "2026-02-08T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The alcove librarian proposed a focused lamp beam but Emina did not adopt the proposal."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S06",
+        "eventTime": "2026-02-08T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The lower shelf in the writing alcove was moved upward after a separate review."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S07",
+        "eventTime": "2026-02-08T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Emina records easier access to the lower shelf as the reason for her alcove seating revision."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S08",
+        "eventTime": "2026-02-08T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Emina's reading alcove is scheduled to open at 09:35 on the current daily room schedule."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S09",
+        "eventTime": "2026-02-08T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Emina's reading-alcove window shade remains rolled halfway for the current arrangement."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S10",
+        "eventTime": "2026-02-08T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The diffuse lamp setting in the map room was selected by Halden, not Emina."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S11",
+        "eventTime": "2026-02-08T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The daily room schedule lists the main corridor opening before any alcove opens."
+          }
+        ]
+      },
+      {
+        "id": "CQ08-S12",
+        "eventTime": "2026-02-08T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Emina has adopted the lamp's diffuse setting for her reading alcove in the current arrangement."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ09",
+    "family": "scope-exception",
+    "question": {
+      "text": "For sample Mira in the current sample-room handling cycle, what classification, room, cap, wrapping, label and lane requirements follow from the notes, and what limits the wrapping exception's scope?",
+      "date": "2026-02-09"
+    },
+    "sessions": [
+      {
+        "id": "CQ09-S01",
+        "eventTime": "2026-02-09T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The chalk pouch exception applies only in the east room; other rooms retain their own ordinary wrapping rule."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S02",
+        "eventTime": "2026-02-09T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Chalk sample Ero is in the west room, which uses its ordinary wrapping rule."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S03",
+        "eventTime": "2026-02-09T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "All east-room chalk samples use the inner lane for the current room handling cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S04",
+        "eventTime": "2026-02-09T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The east room's clay samples use the outer lane during the same handling cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S05",
+        "eventTime": "2026-02-09T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The sample-room baseline requires a closed cap on every sample and a plain wrap unless a pouch exception applies."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S06",
+        "eventTime": "2026-02-09T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The sample-room ivory label stock is counted every Friday before restocking."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S07",
+        "eventTime": "2026-02-09T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A sample handled under the chalk pouch exception needs an ivory label on the pouch."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S08",
+        "eventTime": "2026-02-09T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "A draft proposal would extend the chalk pouch exception to the west room next season."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S09",
+        "eventTime": "2026-02-09T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Last cycle, sample Mira was assigned to the north room before this cycle's reassignment."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S10",
+        "eventTime": "2026-02-09T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For chalk samples, the sample-room pouch exception replaces the plain wrap with a soft pouch; the remaining baseline steps stay in force."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S11",
+        "eventTime": "2026-02-09T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The repair desk leaves empty display tubes uncapped while their hinges are being cleaned."
+          }
+        ]
+      },
+      {
+        "id": "CQ09-S12",
+        "eventTime": "2026-02-09T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Mira is recorded as a chalk sample in the east room for the current handling cycle."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ10",
+    "family": "proposal-quotation",
+    "question": {
+      "text": "For Nalia's keepsake folder, what color did she adopt, whose preference was quoted and what was its value, and what did the assistant merely suggest?",
+      "date": "2026-02-10"
+    },
+    "sessions": [
+      {
+        "id": "CQ10-S01",
+        "eventTime": "2026-02-10T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Nalia's old travel folder was tan during last year's keepsake sorting trip."
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S02",
+        "eventTime": "2026-02-10T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Nalia adopted rust for the color of her keepsake folder in the current desk arrangement."
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S03",
+        "eventTime": "2026-02-10T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Oren adopted a navy envelope for a separate letters project on another desk."
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S04",
+        "eventTime": "2026-02-10T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The desk shop stocks lilac card samples for people considering keepsake folders."
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S05",
+        "eventTime": "2026-02-10T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Nalia's folder divider tabs carry month names in black pencil lettering."
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S06",
+        "eventTime": "2026-02-10T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The rehearsal desk uses a jade cover for a demonstration folder owned by the coordinator."
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S07",
+        "eventTime": "2026-02-10T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A catalog lists rust folders in two sizes without recording Nalia's chosen size."
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S08",
+        "eventTime": "2026-02-10T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Nalia quoted Oren about his own folder: 'My preference for my folder is lilac.'"
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S09",
+        "eventTime": "2026-02-10T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The assistant suggested a wider desk lamp for Oren's separate letters project."
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S10",
+        "eventTime": "2026-02-10T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The keepsake room's cabinet contains unused white folders for future visitors."
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S11",
+        "eventTime": "2026-02-10T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "For Nalia's keepsake folder, I suggest testing jade as a possible alternative on the desk."
+          }
+        ]
+      },
+      {
+        "id": "CQ10-S12",
+        "eventTime": "2026-02-10T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Nalia's drawer label is orange and serves a storage task separate from the folder color."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ11",
+    "family": "entity-link",
+    "question": {
+      "text": "Resolve the workshop bundle nickname Drift through the current mappings and identify the final assigned cabinet.",
+      "date": "2026-02-11"
+    },
+    "sessions": [
+      {
+        "id": "CQ11-S01",
+        "eventTime": "2026-02-11T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Workshop bundle nickname Eddy maps to label tansy for the current sorting cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S02",
+        "eventTime": "2026-02-11T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Ticket Bellfin identifies bundle Corin in the workshop's current sorting cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S03",
+        "eventTime": "2026-02-11T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Label tansy maps to ticket Wrenlet in the workshop's current bundle register."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S04",
+        "eventTime": "2026-02-11T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "In the workshop's current bundle register, nickname Drift maps to label sorrel."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S05",
+        "eventTime": "2026-02-11T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Ticket Wrenlet identifies bundle Meris in the current workshop sorting cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S06",
+        "eventTime": "2026-02-11T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The workshop assigns bundle Meris to cabinet Rowan during the current cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S07",
+        "eventTime": "2026-02-11T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The neighboring tool room uses label sorrel for its cleaning cart, outside the bundle register."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S08",
+        "eventTime": "2026-02-11T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Last cycle, Drift mapped to label thyme before the current register replaced that mapping."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S09",
+        "eventTime": "2026-02-11T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The workshop bundle register maps label sorrel to ticket Bellfin in the current cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S10",
+        "eventTime": "2026-02-11T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Cabinet Linden has two deep shelves for bundles and a shallow shelf for empty tags."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S11",
+        "eventTime": "2026-02-11T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Bundle Corin's transport sleeve is gray and bears a separate handling pictogram."
+          }
+        ]
+      },
+      {
+        "id": "CQ11-S12",
+        "eventTime": "2026-02-11T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The workshop assigns bundle Corin to cabinet Linden for the current sorting cycle."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ12",
+    "family": "compositional-set",
+    "question": {
+      "text": "Which tray markers qualify under the adopted evening rule, and how do the roster, round-edge list, stamped list and withdrawal list determine that set?",
+      "date": "2026-02-12"
+    },
+    "sessions": [
+      {
+        "id": "CQ12-S01",
+        "eventTime": "2026-02-12T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The round-edge list is exactly Aster, Bina, Cero, Dune and spare Fenn for the evening marker check."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S02",
+        "eventTime": "2026-02-12T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The morning tray display used Evi and Dune under a different edge-only rule."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S03",
+        "eventTime": "2026-02-12T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The spare marker Fenn stays in the side cabinet outside the evening tray roster."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S04",
+        "eventTime": "2026-02-12T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Cero is the only tray marker withdrawn from the evening display, despite appearing on both positive lists."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S05",
+        "eventTime": "2026-02-12T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Bina's marker has a dark center dot for visitors handling it during demonstrations."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S06",
+        "eventTime": "2026-02-12T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The coordinator proposed displaying withdrawn Cero on a separate explanatory board."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S07",
+        "eventTime": "2026-02-12T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The evening tray-marker roster is exactly Aster, Bina, Cero, Dune and Evi for this display."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S08",
+        "eventTime": "2026-02-12T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The square-edge list includes Cero and Evi for the evening packing exercise."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S09",
+        "eventTime": "2026-02-12T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The tray has seven marker recesses, two of which are used only during cleaning."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S10",
+        "eventTime": "2026-02-12T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The stamped-marker list is exactly Aster, Bina, Cero, Evi and spare Fenn for the evening check."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S11",
+        "eventTime": "2026-02-12T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Tomorrow's marker roster will be posted after the evening display closes."
+          }
+        ]
+      },
+      {
+        "id": "CQ12-S12",
+        "eventTime": "2026-02-12T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The adopted evening rule takes roster markers present in both the round-edge and stamped lists, then removes withdrawn markers."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ13",
+    "family": "prerequisite-chain",
+    "question": {
+      "text": "For Vero's model boat exhibit, give the full ordered prerequisite route from setting the keel block to opening the visitor barrier.",
+      "date": "2026-02-13"
+    },
+    "sessions": [
+      {
+        "id": "CQ13-S01",
+        "eventTime": "2026-02-13T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The visitor barrier for Vero's boat exhibit opens only after the sail card has been hung."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S02",
+        "eventTime": "2026-02-13T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The rehearsal boat stand places its hull before fitting a detachable support rail."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S03",
+        "eventTime": "2026-02-13T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "At Vero's boat stand, the hull must be in place before the mast pin can be inserted."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S04",
+        "eventTime": "2026-02-13T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Vero's spare keel block is kept in a felt pouch beside the supply drawer."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S05",
+        "eventTime": "2026-02-13T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The exhibit's exit barrier is closed separately when the floor is being cleaned."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S06",
+        "eventTime": "2026-02-13T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "For Vero's model boat exhibit, set the keel block before fitting the small support rail."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S07",
+        "eventTime": "2026-02-13T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The model boat cabin card hangs on a different display peg from the sail card."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S08",
+        "eventTime": "2026-02-13T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Vero's boat transport box contains a spare mast pin in a padded corner slot."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S09",
+        "eventTime": "2026-02-13T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Vero's boat exhibit permits hanging the sail card only after the mast pin is inserted."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S10",
+        "eventTime": "2026-02-13T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The neighboring glider exhibit opens its visitor barrier after the wing card is placed."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S11",
+        "eventTime": "2026-02-13T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The boat exhibit's sail card is printed on cream stock with a blue border."
+          }
+        ]
+      },
+      {
+        "id": "CQ13-S12",
+        "eventTime": "2026-02-13T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Vero's model boat support rail must be fitted before the hull can be placed on the stand."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ14",
+    "family": "evolving-decision",
+    "question": {
+      "text": "For Saela's sketching station, state the original and replacement surface choices, the recorded reason, the opening time, the adopted stool height and the chosen shade position.",
+      "date": "2026-02-14"
+    },
+    "sessions": [
+      {
+        "id": "CQ14-S01",
+        "eventTime": "2026-02-14T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Saela initially adopted a slate surface for the sketching station in this studio review."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S02",
+        "eventTime": "2026-02-14T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The neighboring tracing station opens at 10:45 and uses a polished timber surface."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S03",
+        "eventTime": "2026-02-14T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Saela has revised the sketching station surface: cork is now adopted in place of the previous selection."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S04",
+        "eventTime": "2026-02-14T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Saela's outdoor travel kit still uses a slate board for drawing away from the studio."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S05",
+        "eventTime": "2026-02-14T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Saela recorded reduced reflected glare as the reason for the sketching station surface revision."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S06",
+        "eventTime": "2026-02-14T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The studio coordinator suggested the tallest stool setting but Saela did not adopt it."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S07",
+        "eventTime": "2026-02-14T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The west studio's window shade is fully lowered for a separate tracing activity."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S08",
+        "eventTime": "2026-02-14T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The current studio schedule opens Saela's sketching station at 11:15 for the morning visitors."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S09",
+        "eventTime": "2026-02-14T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The cork sample drawer contains two unused thicknesses for later demonstrations."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S10",
+        "eventTime": "2026-02-14T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Saela adopted the stool's middle height setting for the current sketching station arrangement."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S11",
+        "eventTime": "2026-02-14T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Saela's sketching-station paper tray remains square and sits on the lower shelf."
+          }
+        ]
+      },
+      {
+        "id": "CQ14-S12",
+        "eventTime": "2026-02-14T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Saela chose the half-lowered window shade position for the current sketching station arrangement."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ15",
+    "family": "scope-exception",
+    "question": {
+      "text": "For parcel Keslo in the current handling cycle, what route, lid and buffer requirements follow from the parcel-room notes?",
+      "date": "2026-02-15"
+    },
+    "sessions": [
+      {
+        "id": "CQ15-S01",
+        "eventTime": "2026-02-15T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Parcel Vesna is on the daytime route and uses the ordinary handling sequence."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S02",
+        "eventTime": "2026-02-15T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Parcels on the overnight route need a cloth buffer in addition to the parcel-room baseline steps."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S03",
+        "eventTime": "2026-02-15T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The repair desk leaves empty parcel cases open while replacing their small hinges."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S04",
+        "eventTime": "2026-02-15T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Keslo used the daytime route last month before its current route assignment."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S05",
+        "eventTime": "2026-02-15T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The cloth buffer shelf holds unprinted white sheets beside the parcel-room door."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S06",
+        "eventTime": "2026-02-15T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The parcel-room team proposed removing buffers from next year's overnight procedure."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S07",
+        "eventTime": "2026-02-15T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The daytime-route trolley has a blue handle to distinguish it from the overnight trolley."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S08",
+        "eventTime": "2026-02-15T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The parcel-room baseline requires every parcel case to have a closed lid throughout handling."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S09",
+        "eventTime": "2026-02-15T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Parcel Noro is on the overnight route but has its own separate manifest entry."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S10",
+        "eventTime": "2026-02-15T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The parcel-room west cabinet stores spare lids in descending size order."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S11",
+        "eventTime": "2026-02-15T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The current parcel-room manifest assigns parcel Keslo to the overnight route for this cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ15-S12",
+        "eventTime": "2026-02-15T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A transport label for Keslo gives a red corner mark rather than a handling instruction."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ16",
+    "family": "proposal-quotation",
+    "question": {
+      "text": "For Bram's paper lantern, state his adopted shape, Leto's quoted preference, the assistant's proposal and Bram's unadopted considered alternative.",
+      "date": "2026-02-16"
+    },
+    "sessions": [
+      {
+        "id": "CQ16-S01",
+        "eventTime": "2026-02-16T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Bram adopted a hexagonal shape for his paper lantern in the current room installation."
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S02",
+        "eventTime": "2026-02-16T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Bram's travel lantern from last year was round and is stored outside this installation."
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S03",
+        "eventTime": "2026-02-16T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Bram quoted Leto about Leto's own lantern: 'For my lantern, I prefer an oval shape.'"
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S04",
+        "eventTime": "2026-02-16T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Leto adopted a rectangular cover for a separate shade project in another room."
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S05",
+        "eventTime": "2026-02-16T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The room shop stocks oval frame samples for visitors making their own lanterns."
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S06",
+        "eventTime": "2026-02-16T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The rehearsal room uses square placards chosen by a different installation coordinator."
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S07",
+        "eventTime": "2026-02-16T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "For Bram's paper lantern, I suggest testing a square shape under the current room lighting."
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S08",
+        "eventTime": "2026-02-16T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Bram's lantern hook remains brass under the current room arrangement."
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S09",
+        "eventTime": "2026-02-16T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Bram is considering a triangular alternative for his paper lantern, without adopting it."
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S10",
+        "eventTime": "2026-02-16T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The assistant suggested a wider wall hook for Leto's separate shade project."
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S11",
+        "eventTime": "2026-02-16T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The triangular frame sample drawer is labeled in pencil to avoid ink transfer."
+          }
+        ]
+      },
+      {
+        "id": "CQ16-S12",
+        "eventTime": "2026-02-16T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The room lighting schedule alternates warm and neutral lamps at fixed visiting times."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ17",
+    "family": "entity-link",
+    "question": {
+      "text": "Resolve the cabinet-note nickname Quill through the current archive mappings and give the final assigned drawer.",
+      "date": "2026-02-17"
+    },
+    "sessions": [
+      {
+        "id": "CQ17-S01",
+        "eventTime": "2026-02-17T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Archive cabinet-note nickname Plume maps to label clover in the current register."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S02",
+        "eventTime": "2026-02-17T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Bundle Neris maps to storage case Halvo in the current archive cabinet-note register."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S03",
+        "eventTime": "2026-02-17T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Label clover maps to ticket Edrin in the archive's current cabinet-note cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S04",
+        "eventTime": "2026-02-17T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The current archive register maps cabinet-note label heather to ticket Solin."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S05",
+        "eventTime": "2026-02-17T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Ticket Edrin maps to bundle Tovin, which has its own separate sorting path."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S06",
+        "eventTime": "2026-02-17T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Bundle Tovin maps to storage case Rovik in the current archive register."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S07",
+        "eventTime": "2026-02-17T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Storage case Rovik is assigned drawer Fern in the archive's cabinet-note cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S08",
+        "eventTime": "2026-02-17T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Archive ticket Solin maps to bundle Neris for the current cabinet-note cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S09",
+        "eventTime": "2026-02-17T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The neighboring reading room uses label heather for a lamp cart, not an archive bundle."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S10",
+        "eventTime": "2026-02-17T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Storage case Halvo is assigned drawer Mallow in the archive's current cabinet-note cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S11",
+        "eventTime": "2026-02-17T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Last cycle, Quill mapped to label nettle before the current cabinet-note register took effect."
+          }
+        ]
+      },
+      {
+        "id": "CQ17-S12",
+        "eventTime": "2026-02-17T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "In the archive's current cabinet-note register, nickname Quill maps to label heather."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ18",
+    "family": "compositional-set",
+    "question": {
+      "text": "Which gallery counters qualify under the adopted closing display rule? Explain the roster, smooth list, stamped list, withdrawal list and narrow-fit list used in that calculation.",
+      "date": "2026-02-18"
+    },
+    "sessions": [
+      {
+        "id": "CQ18-S01",
+        "eventTime": "2026-02-18T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The closing narrow-fit list is exactly Arlo, Cadi, Eno, Fira and spare Gavo."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S02",
+        "eventTime": "2026-02-18T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The closing gallery-counter roster is exactly Arlo, Bex, Cadi, Dema, Eno and Fira."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S03",
+        "eventTime": "2026-02-18T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The opening gallery display used Dema and Fira under a different stamped-only rule."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S04",
+        "eventTime": "2026-02-18T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Spare counter Gavo stays in a side cabinet outside the closing gallery roster."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S05",
+        "eventTime": "2026-02-18T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The closing stamped-counter list is exactly Arlo, Bex, Cadi, Dema, Fira and spare Gavo."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S06",
+        "eventTime": "2026-02-18T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The coordinator proposed placing withdrawn Cadi on a separate explanation board."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S07",
+        "eventTime": "2026-02-18T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The adopted closing rule intersects the roster with the smooth, stamped and narrow-fit lists, then removes withdrawn counters."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S08",
+        "eventTime": "2026-02-18T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Bex's gallery counter has a deep center mark for the packing team's inventory work."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S09",
+        "eventTime": "2026-02-18T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Cadi is the only gallery counter withdrawn from the closing display; its other checks are unchanged."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S10",
+        "eventTime": "2026-02-18T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The closing display tray has eight recesses, including two kept clear for visitors."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S11",
+        "eventTime": "2026-02-18T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The closing smooth-counter list is exactly Arlo, Bex, Cadi, Dema, Eno and spare Gavo."
+          }
+        ]
+      },
+      {
+        "id": "CQ18-S12",
+        "eventTime": "2026-02-18T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Tomorrow's gallery-counter roster will be posted after the closing display ends."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ19",
+    "family": "prerequisite-chain",
+    "question": {
+      "text": "For Elvo's viewing prism, what release prerequisite is known, and has that prerequisite been established as completed?",
+      "date": "2026-02-19"
+    },
+    "sessions": [
+      {
+        "id": "CQ19-S01",
+        "eventTime": "2026-02-19T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Elvo's prism transport pouch is padded to avoid scratches when the stand is being moved."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S02",
+        "eventTime": "2026-02-19T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The neighboring display validates its stamp before releasing a different viewing prism."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S03",
+        "eventTime": "2026-02-19T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The viewing stand uses a narrow base so visitors can approach from either side."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S04",
+        "eventTime": "2026-02-19T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Elvo's spare prism remains in the supply cupboard and is outside this release note."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S05",
+        "eventTime": "2026-02-19T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The afternoon stand supervisor proposed using a ribbon check for next season's prism release."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S06",
+        "eventTime": "2026-02-19T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Yesterday's practice display completed a seal check for a rehearsal lens, not Elvo's prism."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S07",
+        "eventTime": "2026-02-19T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The seal inspection desk opens its queue at 08:30 on the current room schedule."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S08",
+        "eventTime": "2026-02-19T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Elvo's viewing prism can be released only after seal validation; this note leaves that validation unconfirmed."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S09",
+        "eventTime": "2026-02-19T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The room's red stamp is used for storage inventory rather than prism release."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S10",
+        "eventTime": "2026-02-19T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The display coordinator keeps blank seal slips in the upper inspection drawer."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S11",
+        "eventTime": "2026-02-19T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Elvo's prism has a clear square base recorded on its separate equipment card."
+          }
+        ]
+      },
+      {
+        "id": "CQ19-S12",
+        "eventTime": "2026-02-19T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The viewing stand closes its visitor queue before the room's final floor inspection."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ20",
+    "family": "evolving-decision",
+    "question": {
+      "text": "For Ruvan's poster board, what is the last committed finish and what later proposal remains unresolved? Has the proposal replaced the commitment?",
+      "date": "2026-02-20"
+    },
+    "sessions": [
+      {
+        "id": "CQ20-S01",
+        "eventTime": "2026-02-20T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ruvan's travel poster board used a satin finish in last year's outdoor show."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S02",
+        "eventTime": "2026-02-20T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The neighboring studio adopted gloss for its visitor notice board after a separate review."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S03",
+        "eventTime": "2026-02-20T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The studio coordinator stocks matte sample sheets in the tall supply drawer."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S04",
+        "eventTime": "2026-02-20T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ruvan adopted a matte finish for his poster board in the current studio arrangement."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S05",
+        "eventTime": "2026-02-20T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The poster board's current frame is cedar and does not determine its finish."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S06",
+        "eventTime": "2026-02-20T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ruvan proposed a wider wall hook for the board under a separate mounting discussion."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S07",
+        "eventTime": "2026-02-20T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The rehearsal board uses gloss for testing the overhead studio lighting."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S08",
+        "eventTime": "2026-02-20T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The supply desk opens its finish-sample cabinet at 09:10 on the daily schedule."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S09",
+        "eventTime": "2026-02-20T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ruvan's spare poster board is unmounted and stored outside the current arrangement."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S10",
+        "eventTime": "2026-02-20T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The studio cleaner recommends a soft cloth for all display-board frames."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S11",
+        "eventTime": "2026-02-20T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Ruvan later proposed a gloss finish for the same poster board; confirmation of adopting it is still pending."
+          }
+        ]
+      },
+      {
+        "id": "CQ20-S12",
+        "eventTime": "2026-02-20T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A satin sample card is marked for next month's materials demonstration."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ21",
+    "family": "scope-exception",
+    "question": {
+      "text": "For crate Nelo, state the baseline latch rule and chilled-crate wrapping exception, and say whether the recorded classification establishes that the exception applies.",
+      "date": "2026-02-21"
+    },
+    "sessions": [
+      {
+        "id": "CQ21-S01",
+        "eventTime": "2026-02-21T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Crate Varo is confirmed chilled in its separate entry for the same packing-room cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S02",
+        "eventTime": "2026-02-21T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The packing-room chilled-crate exception requires an insulated sleeve in addition to the baseline latch rule."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S03",
+        "eventTime": "2026-02-21T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The repair desk leaves empty crates unlatched while replacing damaged hinge pins."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S04",
+        "eventTime": "2026-02-21T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Last month's packing entry classified Nelo as dry before the current review began."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S05",
+        "eventTime": "2026-02-21T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The packing-room insulated sleeves are stacked by size beside the supply cabinet."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S06",
+        "eventTime": "2026-02-21T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The dry-crate transport trolley has a pale wooden handle for easy recognition."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S07",
+        "eventTime": "2026-02-21T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The packing-room baseline requires a closed latch on every crate throughout the current handling cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S08",
+        "eventTime": "2026-02-21T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The team proposed a cotton sleeve for future dry-crate handling but has not adopted it."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S09",
+        "eventTime": "2026-02-21T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The packing-room latch inspection queue starts at 08:45 on the daily schedule."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S10",
+        "eventTime": "2026-02-21T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Crate Nelo's current entry awaits confirmation of whether it is chilled or dry; neither classification is established."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S11",
+        "eventTime": "2026-02-21T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Crate Semo is confirmed dry in a separate entry during the current handling cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ21-S12",
+        "eventTime": "2026-02-21T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Nelo's transport sticker has a circle mark used for parcel counting, not temperature class."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ22",
+    "family": "proposal-quotation",
+    "question": {
+      "text": "For Yara's display tile, distinguish Dalen's quoted preference, the assistant's proposal, Yara's considered option and her adoption status. Can any color be reported as her committed choice?",
+      "date": "2026-02-22"
+    },
+    "sessions": [
+      {
+        "id": "CQ22-S01",
+        "eventTime": "2026-02-22T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Yara quoted Dalen about his own display tile: 'For my tile, I prefer peach.'"
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S02",
+        "eventTime": "2026-02-22T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Dalen's older travel tile was brown during a show in another town last year."
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S03",
+        "eventTime": "2026-02-22T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The gallery shop stocks peach sample tiles for visitors choosing their own colors."
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S04",
+        "eventTime": "2026-02-22T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "For Yara's display tile, I suggest trying an indigo color under the gallery lights."
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S05",
+        "eventTime": "2026-02-22T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Yara's display tile uses a square backing that is independent of its color choice."
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S06",
+        "eventTime": "2026-02-22T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The rehearsal gallery adopted indigo for a different coordinator's direction placards."
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S07",
+        "eventTime": "2026-02-22T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The pearl sample drawer has a removable felt liner for protecting unused tiles."
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S08",
+        "eventTime": "2026-02-22T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The assistant suggested a larger mounting bracket for Dalen's separate display."
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S09",
+        "eventTime": "2026-02-22T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Yara says she is considering pearl for her display tile, without adopting that color."
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S10",
+        "eventTime": "2026-02-22T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Yara's spare tile remains in the storage cupboard outside this gallery review."
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S11",
+        "eventTime": "2026-02-22T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The gallery lighting schedule alternates warm and neutral bulbs at visiting intervals."
+          }
+        ]
+      },
+      {
+        "id": "CQ22-S12",
+        "eventTime": "2026-02-22T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Yara says her display-tile color remains undecided and no color has yet been adopted in this review."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ23",
+    "family": "entity-link",
+    "question": {
+      "text": "For the studio packet nicknamed Fable, give the known label-to-ticket-to-bundle-to-carton chain and say whether its final shelf can be determined.",
+      "date": "2026-02-23"
+    },
+    "sessions": [
+      {
+        "id": "CQ23-S01",
+        "eventTime": "2026-02-23T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Studio packet nickname Gleam maps to routing label saffron in the current register."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S02",
+        "eventTime": "2026-02-23T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "In the current studio packet register, routing label violet maps to ticket Nerlo."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S03",
+        "eventTime": "2026-02-23T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Routing label saffron maps to ticket Belin for the current studio sorting cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S04",
+        "eventTime": "2026-02-23T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Bundle Orva maps to carton Selin in the current studio packet register."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S05",
+        "eventTime": "2026-02-23T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Ticket Belin identifies bundle Havo in the studio's current packet register."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S06",
+        "eventTime": "2026-02-23T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The studio's current packet register maps nickname Fable to routing label violet."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S07",
+        "eventTime": "2026-02-23T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Bundle Havo maps to carton Tero in the current studio packet cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S08",
+        "eventTime": "2026-02-23T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Carton Tero is assigned shelf Alder during the current studio sorting cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S09",
+        "eventTime": "2026-02-23T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Carton Selin's shelf assignment is still pending in the current studio packet cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S10",
+        "eventTime": "2026-02-23T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The neighboring paint room uses routing label violet for a brush cart, not a packet."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S11",
+        "eventTime": "2026-02-23T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Studio packet ticket Nerlo identifies bundle Orva for the current sorting cycle."
+          }
+        ]
+      },
+      {
+        "id": "CQ23-S12",
+        "eventTime": "2026-02-23T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Last cycle, Fable mapped to label flax before the current packet register replaced it."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "CQ24",
+    "family": "compositional-set",
+    "question": {
+      "text": "Under the adopted noon counter rule, which counters are established as eligible, and why is Nira's eligibility unresolved? Explain the recorded sets and the pending check.",
+      "date": "2026-02-24"
+    },
+    "sessions": [
+      {
+        "id": "CQ24-S01",
+        "eventTime": "2026-02-24T08:01:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The adopted noon rule intersects the counter roster with the smooth and stamped lists, then removes withdrawn counters."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S02",
+        "eventTime": "2026-02-24T08:02:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "The morning counter display used Dovi and Ema under a different smooth-only rule."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S03",
+        "eventTime": "2026-02-24T08:03:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The noon smooth-counter list initially contains exactly Aven, Boro, Celi, Dovi and spare Faro."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S04",
+        "eventTime": "2026-02-24T08:04:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Spare counter Faro stays in the side cabinet outside the noon counter roster."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S05",
+        "eventTime": "2026-02-24T08:05:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Celi is the only noon counter withdrawn from the display; all other withdrawal checks are complete."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S06",
+        "eventTime": "2026-02-24T08:06:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The coordinator proposed displaying withdrawn Celi on a separate explanation board."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S07",
+        "eventTime": "2026-02-24T08:07:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Boro's counter has a deep center mark for the packing team's inventory work."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S08",
+        "eventTime": "2026-02-24T08:08:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Nira has now joined the noon roster and smooth list, but Nira's stamped-membership check remains pending."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S09",
+        "eventTime": "2026-02-24T08:09:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The noon counter tray has eight recesses, including two kept clear for handling."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S10",
+        "eventTime": "2026-02-24T08:10:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The noon counter roster initially contains exactly Aven, Boro, Celi, Dovi and Ema for this display."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S11",
+        "eventTime": "2026-02-24T08:11:00.000Z",
+        "messages": [
+          {
+            "role": "assistant",
+            "content": "Tomorrow's counter roster will be posted after the noon display has ended."
+          }
+        ]
+      },
+      {
+        "id": "CQ24-S12",
+        "eventTime": "2026-02-24T08:12:00.000Z",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The noon stamped-counter list establishes membership for Aven, Boro, Celi, Ema and spare Faro, and excludes Dovi."
+          }
+        ]
+      }
+    ]
+  }
+]
+
