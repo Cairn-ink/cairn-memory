@@ -160,6 +160,17 @@ formatting root cause is established. Long-history expansion is still planned,
 not executed. This status authorizes no paid run, old rerun/rescore, broader
 reader/architecture change or release-readiness claim; historical blocks remain.
 
+The [closed source-bundle QA24 first result](docs/plans/source-bundle-qa24-results.md)
+is not promising: 15/24 ordinary versus 12/24 treatment supported-correct,
+3 wins / 6 losses / 15 ties (net -3), ten before-answer failures, qualified 0/6
+and a new severe BQ08 error. Original Stage 2/3 and D12 remain uncleared. The next
+checkpoint is a frozen prospective algorithm design: encode selected-card budgets
+in planner output while rejecting invalid refs without silent dropping, and separately test
+retrieval selection versus answer-context grouping for missing-link/qualification
+errors. Offline gates, independent review and exact-head CI precede any separately
+authorized new source-only cohort and first judgments. No solution, old-cohort
+rerun/reanswer/rescore, raised cap, paid invocation, main merge or release follows.
+
 The next reliability design slice is the
 [memory reliability contract](docs/plans/memory-reliability-contract.md): qualified
 updates, current/history/change evidence, and explicit acceptance gates. It
