@@ -115,7 +115,7 @@ test('CX-5 browser credential is saved before ACK; OAuth MCP, private stable run
   const f=await fixture(t,{config:'# preserved\nmodel = "synthetic"\n',hooks:unrelated});
   assert.equal(f.code,0,f.stdout);assert.equal(f.server.grant.state,'delivered');
   assert.equal(f.installed.enabled,true);
-  assert.match(f.installed.runtime,/custom-codex\/cairn\/runtime\/0\.5\.0-/);
+  assert.match(f.installed.runtime,/custom-codex\/cairn\/runtime\/0\.5\.1-/);
   const config=await readFile(join(f.codexHome,'config.toml'),'utf8');
   assert.match(config,/^# preserved/);assert.match(config,/\[mcp_servers.cairn\]/);assert.ok(!config.includes(secret));
   assert.ok(!config.includes('Authorization'));assert.match(f.stdout,/codex mcp login cairn/);
@@ -268,8 +268,11 @@ async function memoryRuntime(t,options={}) {
   const f=await fixture(t,options);assert.equal(f.code,0,f.stdout);
   const path=join(f.ws.path,'synthetic.jsonl');
   const text=await readFile(new URL('../../../integrations/codex/test/fixtures/primary-0.160.1.jsonl',import.meta.url),'utf8');
+  // Codex 0.160+ TUI threads run on the shared app-server daemon, which records source "vscode"
+  // and the connecting client's declared name as originator; null omits the originator.
+  const [source,originator]=options.sessionSource==='vscode'?['vscode',options.originator===undefined?'codex-tui':options.originator]:['cli','codex_cli'];
   const transcript = options.sessionSource === 'exec' ? text :
-    text.replace('"source":"exec"','"source":"cli"').replace('"originator":"codex_exec"','"originator":"codex_cli"');
+    text.replace('"source":"exec"',`"source":"${source}"`).replace('"originator":"codex_exec",',originator===null?'':`"originator":${JSON.stringify(originator)},`);
   await writeFile(path,transcript);
   const project='/synthetic/project',requests=[];
   const projectId=await clientProjectId({client:'codex',home:f.home,root:f.installed.root,
@@ -317,6 +320,52 @@ test('CX-5 fake host lifecycle: Stop/PreCompact capture canonical redacted text,
   await f.invoke('PreCompact');await f.invoke('worker');
   assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,2);
   assert.ok(!JSON.stringify(f.requests).includes('sk-'+ 'x'.repeat(36)));
+});
+
+test('Codex TUI threads on the shared app-server daemon (source vscode) capture and recall by default',async t=>{
+  const f=await memoryRuntime(t,{sessionSource:'vscode'});
+  f.host.kind='app-server';
+  // A native exec ancestor still narrows the same thread to the exec opt-in.
+  f.host.execSession=true;
+  for(const event of ['Stop','UserPromptSubmit'])assert.equal(await f.invoke(event,{prompt:'Preferences?'}),'');
+  assert.equal(f.requests.length,0);assert.equal(f.handoff(),undefined);
+  delete f.host.execSession;
+  assert.equal(await f.invoke('Stop'),'{}');assert.ok(f.handoff());await f.invoke('worker');
+  const captures=f.requests.filter(r=>r.route.endsWith('/capture'));assert.equal(captures.length,1);
+  assert.deepEqual(captures[0].body.messages.map(m=>m.content),['Prefer diagrams.','Understood.']);
+  assert.ok(!(await f.cursor()).pending);
+  await f.invoke('UserPromptSubmit',{prompt:'Preferences?'});
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
+});
+
+for(const originator of ['codex_vscode','Codex Desktop'])test(`interactive app-server client ${originator} captures and recalls by default`,async t=>{
+  const f=await memoryRuntime(t,{sessionSource:'vscode',originator});
+  f.host.kind='app-server';
+  assert.equal(await f.invoke('Stop'),'{}');assert.ok(f.handoff());await f.invoke('worker');
+  const captures=f.requests.filter(r=>r.route.endsWith('/capture'));assert.equal(captures.length,1);
+  assert.deepEqual(captures[0].body.messages.map(m=>m.content),['Prefer diagrams.','Understood.']);
+  await f.invoke('UserPromptSubmit',{prompt:'Preferences?'});
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
+});
+
+// Automation that talks to a separately running daemon has neither an exec
+// source nor a native exec ancestor; only its declared originator differs.
+for(const originator of ['codex_exec','vibe-codex-executor',null])test(`app-server automation (${originator}) outside exec ancestry needs the exec opt-in`,async t=>{
+  const f=await memoryRuntime(t,{sessionSource:'vscode',originator});
+  f.host.kind='app-server';assert.equal(f.host.execSession,undefined);
+  for(const event of ['SessionStart','Stop','PreCompact','SessionEnd','UserPromptSubmit']) {
+    assert.equal(await f.invoke(event,{prompt:'Automation preferences?'}),'');assert.equal(f.handoff(),undefined);
+  }
+  assert.equal(f.requests.length,0);assert.equal(await f.cursor(),null);
+  const on=await f.run(['config','--codex-capture-exec','on']);assert.equal(on.code,0,on.stdout);
+  await f.invoke('SessionStart');assert.equal((await f.cursor()).status,'pause_boundary');
+  await appendFile(f.path,JSON.stringify({type:'event_msg',payload:{type:'item_completed',thread_id:session,turn_id:'opt-in-turn',
+    item:{type:'UserMessage',id:'opt-in-user',content:[{type:'text',text:'Capture this opted-in automation.',text_elements:[]}]}}})+'\n');
+  assert.equal(await f.invoke('Stop'),'{}');assert.ok(f.handoff());await f.invoke('worker');
+  const captures=f.requests.filter(r=>r.route.endsWith('/capture'));assert.equal(captures.length,1);
+  assert.deepEqual(captures[0].body.messages.map(m=>m.content),['Capture this opted-in automation.']);
+  await f.invoke('UserPromptSubmit',{prompt:'Automation preferences?'});
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,1);
 });
 
 test('CX-5 prompt recall injects receipt framing and shares project identity after verifying the session header',async t=>{

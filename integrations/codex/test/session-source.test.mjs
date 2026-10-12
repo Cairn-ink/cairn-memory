@@ -8,17 +8,29 @@ import { withSourceReadObserver } from '../source.mjs';
 import { MAX_LINE } from '../parser.mjs';
 
 const session = '11111111-1111-4111-8111-111111111111';
-test('source gate binds the native header to its session and retains cli/exec distinction',async t=>{
+test('source gate binds the native header to its session and retains cli/vscode/exec distinction',async t=>{
   const ws=createTestWorkspace(t,{prefix:'cx-source-'}),path=join(ws.path,'session.jsonl');
   const text=await readFile(new URL('./fixtures/primary-0.160.1.jsonl',import.meta.url),'utf8');
+  const exec={source:'exec',interactive:false};
   await writeFile(path,text);
-  assert.equal(await sessionSource(path,session),'exec');
+  assert.deepEqual(await sessionSource(path,session),exec);
   assert.equal(await sessionSource(path,'another-session'),null);
   await writeFile(path,text.replace('"source":"exec"','"source":"cli"'));
-  assert.equal(await sessionSource(path,session),'cli');
+  assert.deepEqual(await sessionSource(path,session),{source:'cli',interactive:true});
   await writeFile(path,text.replace('"cli_version":"0.160.1"','"cli_version":"0.999.0"'));
   assert.equal(await sessionSource(path,session),null);
-  assert.equal(await sessionSource(path,session,{qualifyCreator:async version=>version==='0.999.0'}),'exec');
+  assert.deepEqual(await sessionSource(path,session,{qualifyCreator:async version=>version==='0.999.0'}),exec);
+});
+test('app-server (vscode) headers are interactive only with an allowlisted originator',async t=>{
+  const ws=createTestWorkspace(t,{prefix:'cx-source-'}),path=join(ws.path,'session.jsonl');
+  const text=(await readFile(new URL('./fixtures/primary-0.160.1.jsonl',import.meta.url),'utf8')).replace('"source":"exec"','"source":"vscode"');
+  for(const [originator,interactive] of [['codex-tui',true],['codex_vscode',true],['Codex Desktop',true],
+    ['codex_exec',false],['vibe-codex-executor',false],['codex_cli_rs',false]]) {
+    await writeFile(path,text.replace('"originator":"codex_exec"','"originator":'+JSON.stringify(originator)));
+    assert.deepEqual(await sessionSource(path,session),{source:'vscode',interactive},originator);
+  }
+  await writeFile(path,text.replace('"originator":"codex_exec",',''));
+  assert.deepEqual(await sessionSource(path,session),{source:'vscode',interactive:false});
 });
 test('source gate rejects absent, partial, oversized and unsafe files with bounded reads',async t=>{
   const ws=createTestWorkspace(t,{prefix:'cx-source-'}),path=join(ws.path,'session.jsonl');

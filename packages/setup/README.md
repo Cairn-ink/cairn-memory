@@ -2,7 +2,7 @@
 
 Set up Cairn automatic memory for Claude Code and qualified Codex hosts.
 Requires Node ≥22.16 and the selected CLI on PATH; no runtime dependencies.
-This checkout prepares **installer 0.5.0**. The Claude plugin stays **0.3.2**.
+This checkout prepares **installer 0.5.1**. The Claude plugin stays **0.3.2**.
 The release must be published before `npx` can use these new flows.
 
 ## Setup / 安裝
@@ -94,7 +94,10 @@ The setting enables both capture and recall for exec. Setup preserves it and
 `session_meta.payload.source` in the transcript header, plus a native exec
 ancestor for `exec resume` of a thread originally created interactively. Missing, partial or
 unverifiable headers skip capture and recall. Interactive CLI sessions continue
-normally once their header is available. Older frozen runtimes need a setup
+normally once their header is available. App-server threads (the TUI since Codex
+0.160, the VS Code extension and the desktop app) count as interactive only when
+their header `originator` names one of those clients; any other app-server client
+is treated like exec and needs the same opt-in. Older frozen runtimes need a setup
 update first; config prints the exact setup command before changing anything.
 
 Codex 用 exec 自動執行的工作預設不會記下，也不會注入提問回想。
@@ -104,6 +107,9 @@ Codex 用 exec 自動執行的工作預設不會記下，也不會注入提問�
 來源以 transcript 首筆經驗證、符合本次 session ID 的
 `session_meta.payload.source` 判斷；也檢查原生程序的 exec 指令，
 避免自動續跑互動對話時漏判。無法確認 transcript 時，略過保存與回想。
+走 app-server 的對話（Codex 0.160 起的 TUI、VS Code extension、桌面 app）
+只有 header 的 `originator` 是這三種用戶端之一時才算互動；
+其他 app-server 用戶端視同 exec，同樣要先開啟上面的設定。
 
 Codex defaults to 200 automatic captures per day. Existing installs keep their
 stored cap. Use `setup --codex-daily-cap N` or `config --codex-daily-cap N` to change

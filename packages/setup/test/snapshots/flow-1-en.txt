@@ -1,4 +1,4 @@
-Cairn.ink Memory setup 0.5.0
+Cairn.ink Memory setup 0.5.1
 Found Claude Code and Codex on this computer.
 
 Once connected, your conversations with the AI are saved to your Cairn.

@@ -1,6 +1,6 @@
 # Codex 安裝與自動記憶：CX-5
 
-2026-10-11 更新。這份原始碼準備 **installer 0.5.0，尚未發布**。配套 plugin 維持 0.3.2、protocol 維持 0.3.0。本次更新安裝流程、預設每日上限與 exec 自動工作的保存設定；A7 framing 與 certificate inputs 保持原樣。
+2026-10-12 更新。這份原始碼準備 **installer 0.5.1，尚未發布**；npm 上的最新版是 0.5.0。配套 plugin 維持 0.3.2、protocol 維持 0.3.0。0.5.1 修正互動 TUI 對話沒有被記下的問題，並只納入互動的 app-server 用戶端；0.5.0 更新了安裝流程、預設每日上限與 exec 自動工作的保存設定。A7 framing 與 certificate inputs 保持原樣。
 
 本機是 **codex-cli 0.160.1**。CX-5 已接上 browser credential、私有 runtime、四個 user hooks、Stop／PreCompact capture，以及 SessionStart pause EOF boundary。UserPromptSubmit recall 注入已通過 [A7 pinned-host adversarial evaluation](../evaluation/codex-a7/RESULTS.md)，**在格式合格的 host 預設開啟**，可用 kill switch 關閉。MCP recall 仍可使用。
 
@@ -33,20 +33,20 @@
 
 每次 hook 由 Linux `/proc` 沿 shell／env 父程序尋找最近的 native Codex，從 argv 分辨 CLI 與 app-server，不以 install-time `codex --version` 代表 daemon。只 stat binary identity 並讀 owner-private verdict，不生成 schema、不讀整個 binary；缺 verdict 時排入獨立背景 qualification，當次 hook 關閉。快取 key 包含 device／inode／size／mtime／ctime，verdict 另綁定已知 evidence policy；binary 更新或已知 evidence policy 更新都不能沿用舊資格。Detached capture worker 帶入 launcher 選定的 host，重查 identity／verdict 後才執行。Status 分別顯示 CLI 與最後觀察的 app-server 資格；同時有合格與未合格 host 時會顯示 recall 依 host 開關，不把合格 CLI 也報成關閉；多個不同 daemon 同時存在時，每個 hook 仍獨立判定，但 status 只保存最近觀察的同類 host。
 
-Capture creator 接受已凍結的 `0.157.1`、`0.160.1`、`0.161.0`、`0.162.0`；其他 creator 可用本次已合格 host 的版本，或 owner-private cache 中任一 current-policy qualified verdict 的版本證據。Creator 的舊 binary 被更新或移除，不會抹掉已驗證的格式證據；stale policy、changed fingerprint、unsafe／corrupt cache 不授權。版本缺證據回傳可重試的 `creator_unqualified`，不保存永久 `unsupported_format`；已保存的 `unsupported_format` 沒有拒絕原因可供區分，因此保留 latch，不能靠 creator 資格自動清除。未知 phase／結構不符等真正格式 latch 在 pause、resume 與 SessionStart 後仍永久關閉；後續 Stop 在開啟 transcript 前返回，不反覆 rescan。需依既有 stopped-worker／confirm 流程明確 reset 才能清除。因此 daemon 0.163.0 → 0.164.0 → 0.163.0 或 CLI 0.160.1 resume 都能持續 capture，前提是 creator 0.163.0 已有合格證據。保留舊 cursor/profile ID，避免改變 frozen retry identity。Fork、subagent、非 CLI/exec source、未知 discriminator 同樣拒絕，沒有擴充 source scope。Schema qualification 不代表所有 resumed writer 或真實 compaction 已完成 host 驗收。
+Capture creator 接受已凍結的 `0.157.1`、`0.160.1`、`0.161.0`、`0.162.0`；其他 creator 可用本次已合格 host 的版本，或 owner-private cache 中任一 current-policy qualified verdict 的版本證據。Creator 的舊 binary 被更新或移除，不會抹掉已驗證的格式證據；stale policy、changed fingerprint、unsafe／corrupt cache 不授權。版本缺證據回傳可重試的 `creator_unqualified`，不保存永久 `unsupported_format`；已保存的 `unsupported_format` 沒有拒絕原因可供區分，因此保留 latch，不能靠 creator 資格自動清除。未知 phase／結構不符等真正格式 latch 在 pause、resume 與 SessionStart 後仍永久關閉；後續 Stop 在開啟 transcript 前返回，不反覆 rescan。需依既有 stopped-worker／confirm 流程明確 reset 才能清除。因此 daemon 0.163.0 → 0.164.0 → 0.163.0 或 CLI 0.160.1 resume 都能持續 capture，前提是 creator 0.163.0 已有合格證據。保留舊 cursor/profile ID，避免改變 frozen retry identity。Source 接受 `cli`、`vscode`、`exec`：`vscode` 是 app-server 建立 thread 時記錄的 source，Codex 0.160 起互動 TUI 改由共用 app-server daemon 執行，TUI session 因此記為 `vscode`，版面與 CLI 相同。格式合格不代表會擷取：`vscode` thread 是否算互動，依「使用方式」exec 段落的 `originator` 白名單判斷。Fork、subagent、其他 source、未知 discriminator 同樣拒絕。在此之前已被標為 `unsupported_format` 的 TUI session 依上述 latch 保持關閉，不補擷取舊內容；新開的 session 才會 capture。Schema qualification 不代表所有 resumed writer 或真實 compaction 已完成 host 驗收。
 
 
 ## 使用方式
 
 ```sh
-# 0.5.0 未發布，先從 source 執行
+# 0.5.1 未發布，先從 source 執行
 node packages/setup/bin/memory.mjs setup
 node packages/setup/bin/memory.mjs status
 node packages/setup/bin/memory.mjs setup --client codex
 node packages/setup/bin/memory.mjs status --client codex
 node packages/setup/bin/memory.mjs setup --client codex --dry-run
 
-# 發布後使用 0.5.0；發布前請用上面的原始碼指令
+# 發布後使用 0.5.1；發布前請用上面的原始碼指令
 npx @cairn-ink/memory@latest setup --client codex
 ```
 
@@ -85,6 +85,8 @@ Opaque project ID 使用同一 root 的既有 HMAC key 與相同的 literal proj
 
 Codex 用 exec 自動執行的工作預設不會記下，也不會注入提問回想。判斷依據是經 session ID 驗證的 `session_meta.payload.source`；原本互動建立、後來用 `exec resume` 的工作另查原生 Codex 父程序的 exec 參數。缺少或無法驗證 header 時也會略過。互動對話維持原有行為。
 
+Codex 0.160 起，互動 TUI 改由共用的 app-server daemon 建立 thread，header 一律寫 `source: vscode`；VS Code extension、桌面 app 與其他接 app-server 的程式也是如此，`originator` 則是用戶端自己報的名字。0.5.1 只把 `originator` 為 `codex-tui`（TUI）、`codex_vscode`（VS Code extension）、`Codex Desktop`（桌面 app）的 `vscode` thread 當成互動對話；其他名稱或沒有 `originator` 的一律視同 exec，預設不保存也不回想，開啟 `--codex-capture-exec` 後才會處理。
+
 ```sh
 npx @cairn-ink/memory config --codex-capture-exec on
 npx @cairn-ink/memory config --codex-capture-exec off
@@ -102,7 +104,7 @@ exec 設定同時控制保存與提問回想，重跑會保留；只有開啟時
 | `$CODEX_HOME/hooks.json` | 四個 user command hooks；只含固定 node/runtime/config 路徑與事件名，不含 token；重跑與卸載辨識自己的 command 形狀／installation 路徑，清除所有舊 node／digest handlers |
 | `$CODEX_HOME/cairn/installation.json` | 0600，固定 endpoint／binding／cap／runtime metadata |
 | `$CODEX_HOME/cairn/credential.json` | 0600，memory-scoped browser credential；所在目錄 0700，明文私有檔，非 keyring |
-| `$CODEX_HOME/cairn/runtime/0.5.0-<manifest-hash>/` | runtime 目錄 0700、檔案 0600；從 npm 包的 frozen hash manifest 複製，不依賴 npx cache，不在原路徑覆寫不同程式 |
+| `$CODEX_HOME/cairn/runtime/0.5.1-<manifest-hash>/` | runtime 目錄 0700、檔案 0600；從 npm 包的 frozen hash manifest 複製，不依賴 npx cache，不在原路徑覆寫不同程式 |
 | `$CODEX_HOME/cairn/qualification/` | 0700；binary identity verdict、pending lock 與最後觀察的 CLI／app-server descriptor 為 0600，不含 token／transcript |
 | 共享 private root | identity、control generation、endpoint quota、usage、Codex-only daily cap policy 與 hosted-pause 最後觀察／availability；Codex cursor 與 Claude cursor 分開 |
 
@@ -141,7 +143,8 @@ UserPromptSubmit port 有同一 2 s budget、redacted 4,000-unit query、project
 | SessionStart context | Pause boundary 完成，context **關閉** | 本機 qualified o200k counter、sibling context authority／lifecycle acceptance，以及對 session context 重跑 A7 |
 | Hosted H5／U-6 | Codex worker 要求 enforced pause-state；Claude 保留既有行為，不受未驗收 gate 阻擋；沒有 endpoint 驗收 | 指定部署 SHA／endpoint 的 authenticated capture、pause、quota 與 context conformance；本次禁止網路與 production |
 | LAC／HMA | 不在此次 hosted runtime scope | 原設計契約的 model isolation／usage／latency gates；沒有宣稱 local adapter 已完成 |
-| 發布 | 0.3.0 已發布；Installer 0.5.0 尚未發布 | chichi 審核 patch groups、更新 Claude bundle 與 release gates 後發布 |
+| App-server 用戶端範圍 | 0.5.1 只把 `codex-tui`、`codex_vscode`、`Codex Desktop` 的 `vscode` thread 當互動，其他 originator 需 exec opt-in。TUI 經 daemon 由合成 native header probe 與 installed-hook 測試驗證；`codex_vscode` 另有 extension 原始碼與實際 header metadata 佐證 | `Codex Desktop` 只來自 binary 字串與合成 probe，尚未觀察到實際 session；VS Code extension 與桌面 app 的實際 hook delivery 未驗證；originator 由用戶端自報，冒用互動名稱的自動化無法區分。詳見 [limitations](limitations.md#codex-app-server-client-scope-installer-051) |
+| 發布 | Installer 0.5.0 已發布；0.5.1 尚未發布 | chichi 審核 patch groups、更新 Claude bundle 與 release gates 後發布 |
 
 ## 驗證與剩餘限制
 

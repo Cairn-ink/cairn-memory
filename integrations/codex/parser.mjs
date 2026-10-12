@@ -23,6 +23,16 @@ const keys = (value, allowed) => value && typeof value === 'object' && !Array.is
 const unsupported = () => { throw new Error('unsupported_format'); };
 
 // Header evidence selects one layout. No fallback to user-role response_item.
+// Codex 0.160+ runs TUI threads on the shared app-server daemon, which records
+// every thread it starts as source "vscode" in the same paginated layout.
+export const SOURCES = Object.freeze(['cli', 'vscode', 'exec']);
+// The app-server stores each connecting client's self-declared name as the
+// originator, so automation also records "vscode". Only these known interactive
+// clients (TUI, VS Code extension, desktop app) make that source interactive;
+// any other or missing originator is gated like exec.
+export const INTERACTIVE_ORIGINATORS = Object.freeze(['codex-tui', 'codex_vscode', 'Codex Desktop']);
+export const interactiveSession = ({ source, originator } = {}) => source === 'cli' ||
+  (source === 'vscode' && INTERACTIVE_ORIGINATORS.includes(originator));
 export function verifyHeader(line, sessionId, { qualifiedCreatorVersion } = {}) {
   let row;
   try { row = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(line)); }
@@ -31,7 +41,7 @@ export function verifyHeader(line, sessionId, { qualifiedCreatorVersion } = {}) 
   if (row.type !== 'session_meta' || typeof meta?.cli_version !== 'string' ||
       !/^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?$/u.test(meta.cli_version) || meta.cli_version.length > 100 ||
       meta.history_mode !== 'paginated' || meta.id !== sessionId ||
-      !['cli','exec'].includes(meta.source) || meta.history_base != null ||
+      !SOURCES.includes(meta.source) || meta.history_base != null ||
       meta.forked_from_id != null || meta.parent_thread_id != null ||
       meta.subagent_history_start_ordinal != null ||
       (meta.thread_source != null && meta.thread_source !== 'user')) unsupported();

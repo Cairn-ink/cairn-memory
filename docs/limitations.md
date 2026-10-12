@@ -1401,3 +1401,48 @@ validation, no-install CLI exit status, dry-run MCP queries, non-TTY setup, and
 release/readme wording. This follow-up retains those reviewed behaviors: the
 explicit authorization brief still governs endpoint/TTY/network safety and
 publication is still reserved for chichi.
+
+## Codex app-server client scope (installer 0.5.1)
+
+Since Codex 0.160 the interactive TUI starts its threads on the shared app-server
+daemon. The app-server records every thread as `source: "vscode"` and stores the
+connecting client's self-declared name as `originator`. Installer 0.5.1 counts a
+`vscode` thread as interactive only for `codex-tui`, `codex_vscode` and
+`Codex Desktop`; any other or missing originator is gated like `exec` and needs
+`--codex-capture-exec on`. The 0.5.1 evidence is header metadata and synthetic
+fixtures; no conversation body is part of it.
+
+Demonstrated:
+
+- TUI on the daemon, header only. A synthetic probe started the installed native
+  0.162.1 app-server with hooks disabled, in a throwaway `CODEX_HOME`, with no
+  model call. Every client got `source: "vscode"` and its own name as
+  `originator`: `codex-tui`, `codex_vscode` (through the extension's originator
+  override), `Codex Desktop`, `codex_exec` and an arbitrary automation name.
+- Installed-hook tests with a fake endpoint and synthetic transcripts capture and
+  recall for the three interactive originators. Automation on the daemon, with
+  no exec source and no native exec ancestor, is skipped by default and captured
+  only after the opt-in.
+- `codex_vscode` matches the installed VS Code extension, which launches its
+  app-server with `CODEX_INTERNAL_ORIGINATOR_OVERRIDE=codex_vscode`. The
+  maintainer's own rollout headers contain `codex-tui` and `codex_vscode`
+  `vscode` threads. They also contain an automation client
+  (`vibe-codex-executor`) and the default `codex_cli_rs` name on `vscode`
+  threads, both of which the allowlist now excludes.
+
+Unverified:
+
+- `Codex Desktop` comes from strings in the 0.162.1 native binary (its
+  first-party originator check and telemetry mapping) and the synthetic probe.
+  No desktop-app session was observed. If the app reports a different name, its
+  threads are skipped until the user opts in or the allowlist changes.
+- End-to-end hook delivery from the VS Code extension or desktop app. The
+  extension runs its own bundled Codex binary; that binary's format
+  qualification, hook trust and transcript delivery were not exercised. Only the
+  header gate is tested.
+- The originator is self-declared. An automation client that names itself
+  `codex-tui` cannot be told apart and is captured; the gate excludes only
+  clients that identify themselves differently.
+- Classification is per thread, from the creating client's header. Resuming an
+  interactive thread through another app-server client keeps that header; only a
+  native `codex exec` ancestor is detected.

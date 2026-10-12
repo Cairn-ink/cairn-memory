@@ -1,6 +1,22 @@
 # Changelog
 
-## Unreleased — @cairn-ink/memory installer 0.5.0
+## Unreleased — @cairn-ink/memory installer 0.5.1
+
+- Capture and recall interactive Codex TUI sessions again. Since Codex 0.160 the
+  TUI runs on the shared app-server daemon, which records `source: vscode`; 0.5.0
+  accepted only `cli` and `exec`, so every TUI session was latched as
+  `unsupported_format`. Latched sessions stay excluded without backfill; new
+  sessions are captured once the updated hooks are allowed in `/hooks`.
+- Include the other interactive app-server clients: the Codex VS Code extension
+  and desktop app. A `vscode` thread counts as interactive only when its header
+  `originator` is `codex-tui`, `codex_vscode` or `Codex Desktop`.
+- Keep automation off. Any other or missing originator on a `vscode` thread is
+  gated like `codex exec`: no capture or prompt recall unless
+  `config --codex-capture-exec on`. The originator is reported by the client
+  itself; see [limitations](docs/limitations.md#codex-app-server-client-scope-installer-051).
+- Installer is 0.5.1; plugin remains 0.3.2. Publication is a separate step.
+
+## @cairn-ink/memory installer 0.5.0 — published 2026-10-11
 
 - Use the approved Chinese and English installer copy. Ask only about new
   connections, update connected tools, and confirm stopped hosts once. Explain

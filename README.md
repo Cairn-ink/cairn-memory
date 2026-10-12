@@ -122,7 +122,7 @@ For **Claude Code and Codex automatic memory**, run the one-command installer:
 npx @cairn-ink/memory setup
 ```
 
-This checkout prepares installer **0.5.0**; publication is a separate step.
+This checkout prepares installer **0.5.1**; publication is a separate step.
 Try it with `node packages/setup/bin/memory.mjs setup`. The plugin stays 0.3.2.
 Requires Node ≥22.16 and at least one CLI on PATH. Setup asks about new tools,
 updates connected tools, and uses one browser sign-in when connecting both.
@@ -244,7 +244,7 @@ Run the published installer from your terminal:
 npx @cairn-ink/memory setup
 ```
 
-This checkout prepares installer **0.5.0** (plugin **0.3.2**); publish the
+This checkout prepares installer **0.5.1** (plugin **0.3.2**); publish the
 release before using these flows through npx. To run this checkout, use
 `node packages/setup/bin/memory.mjs setup`.
 
@@ -274,7 +274,10 @@ for exec. `status` shows it only when enabled; rerunning setup preserves it.
 The hooks read the transcript's session-bound `session_meta.payload.source`,
 and also detect a native exec ancestor for `exec resume` of an older CLI thread.
 If the header is missing or cannot be verified, they skip capture and injection.
-Interactive sessions with verified CLI headers continue normally. Older frozen
+Interactive sessions with verified CLI headers continue normally. Threads on the
+Codex app-server (the TUI since 0.160, the VS Code extension and the desktop app)
+count as interactive only when their `originator` is one of those three clients;
+other app-server clients are treated like exec and need the same opt-in. Older frozen
 runtimes must first be updated with setup; config prints the exact command.
 
 To stop prompt recall while keeping automatic capture, run

@@ -105,6 +105,14 @@ service must use the same public core, not separate engines.
   No paid model, natural tool selection or semantic reliability follows from
   that gate.
 
+- Installer 0.5.1 restores Codex TUI capture on the shared app-server daemon
+  and limits app-server threads to the TUI, VS Code extension and desktop app
+  originators; other app-server clients stay behind the exec opt-in. The gate
+  rests on a synthetic native header probe and installed-hook tests with a fake
+  endpoint. Real extension and desktop-app hook delivery, the unobserved desktop
+  originator and self-declared originators remain open; see
+  [limitations](docs/limitations.md#codex-app-server-client-scope-installer-051).
+
 These are development candidates, not a claim that every PR has merged or a new
 package has been published. The released v0.1 hosted plugin remains available;
 its past hosted tests do not establish local-preview quality.
