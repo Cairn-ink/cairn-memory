@@ -1476,8 +1476,8 @@ export const messages = {
       "Codex work that programs run on their own is not saved. You can turn this on."
   },
   "codex_exec_enabled": {
-    "zh": "Codex 的 exec 自動工作也會納入記憶與提問回想。",
-    "en": "Codex exec automation is included in memory and prompt recall."
+    "zh": "程式自動跑的 Codex 工作也會記下，並在提問時參考。",
+    "en": "Codex work that programs run on their own is also saved and used when you ask."
   },
   "list_joiner": {
     "zh": "、",

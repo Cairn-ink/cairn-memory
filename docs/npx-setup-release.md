@@ -10,7 +10,7 @@ chichi 核准這次 release。合併進 repo 就是 release，npm publish 是對
 - [ ] Review delivered patches and recorded checks; approve the release before
   merging or publishing. Confirm npm scope access and `@cairn-ink/memory`.
   Unscoped `cairn-memory` is owned by someone else.
-- [ ] Confirm installer version **0.5.1** (0.5.0 was published on 2026-10-11) in
+- [ ] Confirm installer version **0.5.2** (0.5.1 was published on 2026-10-13) in
   `packages/setup/package.json`. Future releases explicitly bump this version.
   It is independent of plugin versions. Plugin 0.3.2 includes the required
   hook credential-state fix. If plugin changes ship too, bump plugin,

@@ -266,12 +266,15 @@ for(const lang of ['zh','en'])test(`exec opt-in config, setup preservation, disc
   assert.match(setup.stdout,skipped);
   assert.equal((await readInstallation(f.installation)).captureExec,false);
   const statusArgs=['status','--lang',lang];
-  assert.doesNotMatch((await f.run({args:statusArgs})).stdout,/exec/);
+  const enabled=translator(lang)('codex_exec_enabled');assert.notEqual(enabled,'codex_exec_enabled');
+  assert.equal((await f.run({args:statusArgs})).stdout.includes(enabled),false);
   // A non-interactive config command has an explicit choice and needs no prompt.
   const on=await f.run({args:['config','--codex-capture-exec','on','--lang',lang],interactive:false});
   assert.equal(on.code,0,on.stdout);checkScreen(on,lang);assert.equal(on.prompts.length,0);
+  assert.match(on.stdout,lang==='zh'?/程式自動跑的 Codex 工作也會記下，並在提問時參考。/:
+    /Codex work that programs run on their own is also saved and used when you ask\./);
   let installed=await readInstallation(f.installation);assert.equal(installed.captureExec,true);assert.equal(installed.dailyCap,200);
-  const status=await f.run({args:statusArgs});assert.match(status.stdout,/exec/);checkScreen(status,lang);
+  const status=await f.run({args:statusArgs});assert.ok(status.stdout.includes(enabled),status.stdout);checkScreen(status,lang);
   const rerun=await f.run({args:['setup','--lang',lang]});assert.equal(rerun.code,0,rerun.stdout);checkScreen(rerun,lang);
   assert.doesNotMatch(rerun.stdout,lang==='zh'?/只會記下你自己/:/Only conversations you have yourself/);
   assert.equal((await readInstallation(f.installation)).captureExec,true);
@@ -279,7 +282,7 @@ for(const lang of ['zh','en'])test(`exec opt-in config, setup preservation, disc
   installed=await readInstallation(f.installation);assert.equal(installed.captureExec,true);assert.equal(installed.dailyCap,347);
   const off=await f.run({args:['config','--codex-capture-exec','off','--lang',lang]});assert.equal(off.code,0,off.stdout);checkScreen(off,lang);
   installed=await readInstallation(f.installation);assert.equal(installed.captureExec,false);assert.equal(installed.dailyCap,347);
-  assert.doesNotMatch((await f.run({args:statusArgs})).stdout,/exec/);
+  assert.equal((await f.run({args:statusArgs})).stdout.includes(enabled),false);
 });
 
 test('exec option validates on/off, command and client; setup can opt in without a new question',async t=>{
@@ -290,7 +293,8 @@ test('exec option validates on/off, command and client; setup can opt in without
   const f=await fixture(t);
   const setup=await f.run({args:['setup','--codex-capture-exec','on','--codex-daily-cap','347']});assert.equal(setup.code,0,setup.stdout);
   assert.equal((await readInstallation(f.installation)).captureExec,true);assert.equal((await readInstallation(f.installation)).dailyCap,347);
-  assert.equal(setup.prompts.some(p=>/exec/.test(p.prompt)),false);
+  const baseline=await (await fixture(t)).run({args:['setup']});assert.equal(baseline.code,0,baseline.stdout);
+  assert.deepEqual(setup.prompts.map(p=>p.prompt),baseline.prompts.map(p=>p.prompt));
   assert.equal((await f.run({args:['config','--client','claude','--codex-capture-exec','on']})).code,2);
   assert.equal((await f.run({args:['config']})).code,2);
 });

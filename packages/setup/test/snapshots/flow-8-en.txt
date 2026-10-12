@@ -1,4 +1,4 @@
-Cairn.ink Memory 0.5.1
+Cairn.ink Memory 0.5.2
 
 Claude Code
   ✓ Plugin 0.3.1 installed and enabled
