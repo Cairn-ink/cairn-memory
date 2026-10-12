@@ -2252,3 +2252,42 @@ scorer/store setup, prepared-artifact review and budget preflight remain
 separate future gates. The cumulative 400 USD ceiling and protected 30 USD reserve
 are unchanged. This offline corpus grants no operational or provider authority.
 See [the prospective contract and author audit](plans/card-plan-qa24.md).
+
+## Matched card-plan source projection
+
+The separate prospective matched card-plan projection assembles the literal
+first ordinary refs with the genuine card compiler and full authoritative source
+cards, preserving selection order and source identity. This new A serialization
+differs from the old closed baseline; historical results cannot be pooled with
+it. B versus A remains the sole promotion test. C reuses B's already assembled
+sources and adds one explicitly unverified chain-organization object to its first
+card; removing only that object recovers every literal B unit. C is a grouping
+diagnostic, not another selection policy or a claim that relations are true.
+
+The synthetic ordinary assembly request is never an ordinary provider request.
+Its genuine preparer's additional conservative 6000-token schema boundary
+requires prospective preflight across every frozen candidate request without
+altering the ordinary wire or excluding cases. Synthetic assembly hashes cannot
+stand in for ordinary request/output wire observations; a future coordinator
+owns once-only actual invocations. Complete answer requests retain the original
+instruction, model, question/date and 512 output reservation with a local
+6000-token bound and no omissions, duplicates or changed source order.
+
+These offline controls establish mechanical source fidelity only. Correct
+reasoning, reliability, natural MOC scale, lightweight fit and Hermes readiness
+remain unassessed. A new corpus, actual store/runner, retained observations,
+first-judgment/scorer bindings, prepared-artifact review and budget preflight
+remain separate gates. No provider calls, old-cohort reruns/rescoring, retention
+expansion, paid authority or change to the cumulative 400USD/protected 30USD
+limits follows. See [the projection contract](plans/card-plan-comparison-projection.md).
+
+The original projection Spec review also found one disclosed PX7 procedural
+breach: after implementation and primary checkpoint review, its author read old
+closed-result prose while obtaining append context. Later hashes are not
+cryptographic proof of pre-read bytes. Before any new CQ24 evaluated-model call,
+the primary accepted that recorded incident as a narrow author-exposure exception
+for a nonblind engineering control; it is not retroactive compliance or zero
+historical deviations. Projection code/tests/CI and the independent new source/
+rubric remain unchanged. No model, sample, score, source-integrity check or other
+evaluation gate is relaxed. Future reports retain this limitation and the
+independent first-judgment requirement; see the plan's prospective disposition.
