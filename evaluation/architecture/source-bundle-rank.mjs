@@ -43,7 +43,7 @@ function abort(signal) {
   if (!(signal instanceof AbortSignal)) fail('invalid_input');
   if (signal.aborted) throw new DOMException('Bundle planning cancelled', 'AbortError');
 }
-function rankInput(value) {
+export function rankInput(value) {
   const input = detached(value);
   exact(input, ['query', 'limit', 'candidates']);
   if (typeof input.query !== 'string' || !input.query.trim() || input.query.length > 4000
