@@ -2291,3 +2291,53 @@ historical deviations. Projection code/tests/CI and the independent new source/
 rubric remain unchanged. No model, sample, score, source-integrity check or other
 evaluation gate is relaxed. Future reports retain this limitation and the
 independent first-judgment requirement; see the plan's prospective disposition.
+
+## Card-plan first-answer runtime boundary
+
+The new offline coordinator prepares 24 fresh real SQLite stores with 288
+scripted, exact-window captures, closes and reopens each store, and checks
+complete bounded-source recall plus all logical tables. It compares ordinary
+selection A and card-plan selection B before separately generating flat A/B
+answers; C reuses B's same source evidence and only adds unverified grouping.
+This is an evaluation-only complete-candidate diagnostic, not natural memory
+extraction, long-history MOC navigation or a public/default engine change.
+
+The fixed schedule contains 48 selections and 72 answer slots, with at most
+168 physical request intents and 840,000 microUSD of conservative reservations.
+Failure, dependent unanswered and unrun slots stay in the frozen denominators.
+Literal request/response bodies and complete per-case/per-slot observations
+are separately retained with exact byte/hash references; a bounded summary
+file alone is not sufficient evidence for scoring. Original historical ledger
+rows are streamed once and retained, not replayed, refunded or reset. The
+original cumulative 400 USD ceiling and protected 30 USD reserve remain.
+
+Offline integration completed the 24/48/72/168 path with fake HTTP. The expanded
+27 runtime/store controls cover settled failures, fatal interruption, capability
+reuse, source-state drift, artifact persistence, timeout isolation, large response
+bodies, a 60,000-row synthetic history and owned cleanup. The worker's complete
+Node 22.16.0 and 24.15.0 matrices passed: 115 architecture checks, 244 algorithm
+checks and 784 generic checks per runtime, plus version, validation and the
+synthetic comparison demo; all twelve commands exited 0 without skipped or
+cancelled tests or unexpected owned scratch. Initial failures and their causes
+remain in the plan, including the corrected failure-artifact cleanup defect.
+
+These scripted answers establish plumbing, not answer accuracy, semantic
+reliability or an algorithm gain. Primary direct acceptance, independent final
+review, retained-data scoring and any fresh live execution remain separate gates
+until their exact-candidate evidence is recorded. Existing
+closed cohorts are not rerun, resumed, rescored or pooled with this profile.
+No provider calls, operational ledger/key reads, retention expansion, main merge,
+publication or deployment occurred in this offline implementation scope.
+
+Two runtime-author read deviations also remain explicit. The original author
+first followed a conflicting broad README instruction and saw historical result
+prose; later it read a corpus-test excerpt containing evaluator-only imports
+and gold-derived coverage metadata after the boundary had been narrowed. The
+second read is not covered by the first exception. The author stopped and was
+replaced by a fresh, narrowly scoped integration worker. The primary accepts
+responsibility for the first dispatch conflict and prospectively retains the
+inherited work only as a nonblind mechanical coordinator subject to source-
+fidelity review. Replacement does not erase either incident or prove absence
+of influence. Neither original no-read compliance nor blind algorithm
+authorship is claimed, and the projection's separate PX7 exception remains.
+See [the complete runtime contract and recovery record](plans/card-plan-first-answer-runtime.md).
