@@ -2215,3 +2215,20 @@ future gates. No semantic gain, natural MOC scale, measured resource fit, Hermes
 or product readiness, paid-run authority, source-retention expansion or clearance
 of Stage2/3/D12 follows. See docs/plans/card-budgeted-evidence-plan.md for the
 prospective contract, verification record and remaining limits.
+
+The separate card-plan invocation and closed provider-wire profile now enable
+an offline-verified new planner call, with one-shot plan ownership and the same
+count/generation reservation, accounting, cancellation and persistence machinery
+as the preserved v1 transport. Fresh synthetic capture and cold SQLite recall,
+fake HTTP, exact serialized wire oracles, authoritative reads and flat answer
+packing test source membership, complete receipts and budgets; these are not
+semantic truth or model-quality results. No provider call, operational ledger,
+closed-cohort repair/rerun or paid execution belongs to this verification.
+The pinned evaluation model remains `gpt-4.1-mini-2025-04-14`.
+
+A new case roster/rubric, store preparation, paired coordinator, scorer bindings,
+actual prepared artifacts, blind first judgments and spend preflight remain
+separate gates before new quality results. Source retention and product defaults
+remain unchanged; no Stage2/3/D12 promotion or paid-run authority follows from
+test success. The cumulative 400USD ceiling and protected 30USD remain unchanged.
+See [the prospective wire contract](plans/card-plan-live-integration.md).

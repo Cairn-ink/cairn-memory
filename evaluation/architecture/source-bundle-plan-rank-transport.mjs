@@ -4,6 +4,7 @@ import { freeze, sha256, snapshotJson } from '../longmemeval/mixed-validation.mj
 import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 import { modelProfile } from '../../adapters/openai/profiles.mjs';
 import { BUNDLE_RANK_INSTRUCTION, prepareBundleRankRequest, compileBundlePlan } from './source-bundle-rank.mjs';
+import { CARD_PLAN_RANK_INSTRUCTION, prepareCardPlanRankRequest, compileCardPlan } from './card-plan-rank.mjs';
 
 const VERSION = 'source-bundle-plan-rank-v1';
 const MODEL = 'gpt-4.1-mini-2025-04-14';
@@ -128,8 +129,67 @@ function reprepare(request, counter) {
   return { prepared, signal: shell.signal, encoded: JSON.stringify(payload) };
 }
 
+// Card-profile JSON must be descriptor-only before the shared copier reflects
+// on it. Never execute a nested proxy/getter/toJSON while reconstructing cards.
+function cardData(value, code, active = new WeakSet(), bounds = { nodes: 0 }, depth = 0) {
+  if (++bounds.nodes > 100000 || depth > 16) fail(code);
+  if (!value || typeof value !== 'object') return;
+  if (types.isProxy(value) || active.has(value)) fail(code);
+  const prototype = Object.getPrototypeOf(value);
+  if (Array.isArray(value) ? prototype !== Array.prototype
+    : prototype !== Object.prototype && prototype !== null) fail(code);
+  active.add(value);
+  for (const key of Reflect.ownKeys(Object.getOwnPropertyDescriptors(value))) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (typeof key !== 'string' || !Object.hasOwn(descriptor, 'value')) fail(code);
+    cardData(descriptor.value, code, active, bounds, depth + 1);
+  }
+  active.delete(value);
+}
+function cardShell(request, code) {
+  if (types.isProxy(request)) fail(code);
+  return own(request, ['system', 'input', 'outputSchema', 'maxOutputTokens', 'signal'], code);
+}
+function reprepareCard(request, counter) {
+  const shell = cardShell(request, 'invalid_request');
+  const values = { system: shell.system, input: shell.input,
+    outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens };
+  cardData(values, 'invalid_request');
+  const payload = copy(values, 'invalid_request');
+  own(payload.input, ['query', 'limit', 'cards'], 'invalid_request');
+  if (payload.system !== CARD_PLAN_RANK_INSTRUCTION || payload.maxOutputTokens !== 1024
+    || !Array.isArray(payload.input.cards)) fail('invalid_request');
+  const candidates = payload.input.cards.map((card, index) => {
+    own(card, ['candidateIndex', 'namespaceIndex', 'memory', 'receipts', 'receiptCount',
+      'interpretationStatus', 'sourceSelectionCoverage'], 'invalid_request');
+    if (card.candidateIndex !== index) fail('invalid_request');
+    const { candidateIndex, ...candidate } = card;
+    return candidate;
+  });
+  let prepared;
+  try { prepared = prepareCardPlanRankRequest({ system: CARD_PLAN_RANK_INSTRUCTION,
+    input: { query: payload.input.query, limit: payload.input.limit, candidates },
+    maxOutputTokens: 1024, signal: shell.signal }, counter); }
+  catch (error) { fail(error?.code === 'context_budget_exceeded' ? error.code
+    : error?.name === 'AbortError' ? 'cancelled' : 'invalid_request'); }
+  if (JSON.stringify(payload) !== JSON.stringify(prepared.request)) fail('invalid_request');
+  return { prepared, signal: shell.signal, encoded: JSON.stringify(payload) };
+}
+// Only these two private profiles can select policy; callers have no profile port.
+const SOURCE_PROFILE = Object.freeze({ version: VERSION, format: 'cairn_source_bundle_plan_rank_v1',
+  reprepare, compile: compileBundlePlan });
+const CARD_PROFILE = Object.freeze({ version: 'card-budgeted-plan-rank-v1', format: 'cairn_card_budgeted_plan_rank_v1',
+  reprepare: reprepareCard, compile: compileCardPlan });
+
 /** Explicit offline-capable one-slot transport, never an experiment grant. */
-export async function createSourceBundlePlanRankTransport(options) {
+export function createSourceBundlePlanRankTransport(options) {
+  return createTransport(options, SOURCE_PROFILE);
+}
+export function createCardPlanRankTransport(options) {
+  return createTransport(options, CARD_PROFILE);
+}
+async function createTransport(options, profile) {
+  if (profile === CARD_PROFILE) cardData(options, 'invalid_configuration');
   const opts = own(options, ['configuration', 'checkpoint', 'historySha256', 'manifest',
     'apiKey', 'fetchImpl', 'onRecord'], 'invalid_configuration');
   const configuration = copy(own(opts.configuration, ['directory', 'runId', 'limitMicroUsd', 'requestCap'], 'invalid_configuration'), 'invalid_configuration');
@@ -138,7 +198,7 @@ export async function createSourceBundlePlanRankTransport(options) {
   const key = opts.apiKey, fetchImpl = opts.fetchImpl, onRecord = opts.onRecord;
   if (typeof key !== 'string' || !/^[A-Za-z0-9_-]{12,200}$/u.test(key)
     || typeof fetchImpl !== 'function' || typeof onRecord !== 'function'
-    || manifest.version !== VERSION || typeof manifest.slotId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(manifest.slotId)
+    || manifest.version !== profile.version || typeof manifest.slotId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(manifest.slotId)
     || typeof manifest.preparedRequestSha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(manifest.preparedRequestSha256)
     || typeof opts.historySha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(opts.historySha256)
     || ![manifest.runDeadline, manifest.caseDeadline].every(n => Number.isFinite(n) && n > 0)
@@ -175,13 +235,13 @@ export async function createSourceBundlePlanRankTransport(options) {
     const cancelled = () => { if (controller.signal.aborted) fail(cancellation); };
     let source, deadline;
     try {
-      source = reprepare(request, countTokens); signal = source.signal;
+      source = profile.reprepare(request, countTokens); signal = source.signal;
       if (echo(source.encoded, key)) fail('credential_echo');
       if (source.prepared.requestSha256 !== manifest.preparedRequestSha256) fail('invalid_request');
       const prepared = source.prepared.request;
       const body = { model: MODEL, instructions: prepared.system,
         input: [{ role: 'user', content: [{ type: 'input_text', text: JSON.stringify(prepared.input) }] }],
-        text: { format: { type: 'json_schema', name: 'cairn_source_bundle_plan_rank_v1', strict: true, schema: prepared.outputSchema } }, truncation: 'disabled' };
+        text: { format: { type: 'json_schema', name: profile.format, strict: true, schema: prepared.outputSchema } }, truncation: 'disabled' };
       const countBody = JSON.stringify(body), generationBody = JSON.stringify({ ...body, max_output_tokens: 1024, store: false, stream: false });
       if ([source.encoded, countBody, generationBody].some(text => countTokens(text) > 6000)) fail('context_budget_exceeded');
       deadline = Math.min(performance.now() + 30000, manifest.runDeadline, manifest.caseDeadline);
@@ -193,8 +253,11 @@ export async function createSourceBundlePlanRankTransport(options) {
       const check = () => {
         if (performance.now() >= deadline && !controller.signal.aborted) abort('deadline_exceeded');
         cancelled();
-        let now; try { const shell = own(request, ['system', 'input', 'outputSchema', 'maxOutputTokens', 'signal'], 'request_mutated');
+        let now; try { const shell = profile === CARD_PROFILE ? cardShell(request, 'request_mutated')
+          : own(request, ['system', 'input', 'outputSchema', 'maxOutputTokens', 'signal'], 'request_mutated');
           if (shell.signal !== signal) fail('request_mutated');
+          if (profile === CARD_PROFILE) cardData({ system: shell.system, input: shell.input,
+            outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated');
           now = JSON.stringify(copy({ system: shell.system, input: shell.input,
             outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated')); }
         catch { fail('request_mutated'); }
@@ -231,7 +294,7 @@ export async function createSourceBundlePlanRankTransport(options) {
         accounting(() => ledger.reserve({ attemptId, channel: kind === 'count' ? 'cairn-count' : 'cairn-generation', reservedMicroUsd: RESERVATION }));
         let dispatched = false, responseBody = null, responseSha256 = null, requestId = null,
           inputTokens = null, outputTokens = null, actualMicroUsd = null, outcome = 'failed', failureCode = null, result;
-        const identity = { version: VERSION, slotId: manifest.slotId, preparedRequestSha256: manifest.preparedRequestSha256,
+        const identity = { version: profile.version, slotId: manifest.slotId, preparedRequestSha256: manifest.preparedRequestSha256,
           attemptId, endpoint, kind, requestBody: redactSecrets(encoded), requestSha256: sha256(encoded), reservedMicroUsd: RESERVATION };
         try {
           observe({ ...identity, phase: 'pre', dispatched: false, inputTokens, outputTokens, actualMicroUsd,
@@ -292,7 +355,7 @@ export async function createSourceBundlePlanRankTransport(options) {
             if (part.type !== 'output_text' || typeof part.text !== 'string' || !part.text.isWellFormed()
               || part.text.length > 40000 || countTokens(part.text) > 1024) fail('invalid_model_output');
             const proposal = json(part.text, 'invalid_model_output');
-            try { result = compileBundlePlan(source.prepared, proposal).proposal; }
+            try { result = profile.compile(source.prepared, proposal).proposal; }
             catch { fail('invalid_model_output'); }
           }
           check(); outcome = 'succeeded';
