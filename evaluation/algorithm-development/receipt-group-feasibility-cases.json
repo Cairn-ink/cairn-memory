@@ -1,0 +1,228 @@
+{
+  "version": "receipt-group-feasibility-cases-v1",
+  "status": "FROZEN_SOURCE_ONLY_NOT_RUNTIME_PREPARATION",
+  "runtimeIdentityPolicy": "Dataset-local case/session/source/card labels are not runtime IDs. All memory and receipt IDs must come from normal future capture; never substitute these labels on the wire.",
+  "caseOrder": ["rgf-fresh-01", "rgf-fresh-02", "rgf-fresh-03", "rgf-fresh-04", "rgf-fresh-05", "rgf-fresh-06"],
+  "cases": [
+    {
+      "id": "rgf-fresh-01",
+      "shape": "single-card-evidence",
+      "namespace": {"ownerId": "rgf-fresh-owner-01", "scope": "personal", "projectId": null},
+      "query": {"text": "What inspection interval is recorded for the cobalt hygrometer in the synthetic Reed laboratory?", "date": "2026/10/13 (Tue) 18:00"},
+      "history": {"sessions": [
+        {"sessionLabel": "f01.session01", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f01.source01", "role": "user", "content": "Synthetic Reed laboratory record: the cobalt hygrometer has a confirmed inspection interval of eight days. This interval belongs to that instrument only, not the nearby copper thermometer."}
+        ]}
+      ]},
+      "scriptedExtraction": {"cards": [
+        {"cardLabel": "f01.card01", "content": "Synthetic Reed laboratory cobalt hygrometer inspection record.", "kind": "context", "confidence": 1, "sourcePartitions": [["f01.source01"]]}
+      ]}
+    },
+    {
+      "id": "rgf-fresh-02",
+      "shape": "six-card-interleaved-distractors",
+      "namespace": {"ownerId": "rgf-fresh-owner-02", "scope": "personal", "projectId": null},
+      "query": {"text": "For the synthetic Fern conservatory seed cabinets, which humidity target is confirmed, rather than merely proposed?", "date": "2026/10/13 (Tue) 18:00"},
+      "history": {"sessions": [
+        {"sessionLabel": "f02.session04", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f02.source04", "role": "user", "content": "Synthetic Fern conservatory visitors' cloakroom record: umbrella sleeves are hung on white hooks. This record has no instructions for the seed cabinets."}
+        ]},
+        {"sessionLabel": "f02.session01", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f02.source01", "role": "assistant", "content": "Tentative synthetic Fern conservatory suggestion: the seed cabinets could use a 46 percent humidity target. This is a proposal for discussion, with no confirmation recorded here."}
+        ]},
+        {"sessionLabel": "f02.session06", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f02.source06", "role": "user", "content": "Synthetic Fern conservatory workbench record: the blue ruler is stored in drawer C. Its storage location says nothing about humidity targets."}
+        ]},
+        {"sessionLabel": "f02.session02", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f02.source02", "role": "user", "content": "Confirmed synthetic Fern conservatory seed-cabinet setting: use 39 percent humidity. The earlier 46 percent suggestion was not adopted. This confirmation is limited to the seed cabinets."}
+        ]},
+        {"sessionLabel": "f02.session05", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f02.source05", "role": "assistant", "content": "Synthetic Fern conservatory sketch: a future fern display might use a misting bell. No display change has been approved, and this sketch is not a seed-cabinet setting."}
+        ]},
+        {"sessionLabel": "f02.session03", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f02.source03", "role": "user", "content": "Synthetic Pine conservatory seed-cabinet setting is 52 percent humidity. Pine and Fern are separate invented facilities; this record is not a Fern confirmation."}
+        ]}
+      ]},
+      "scriptedExtraction": {"cards": [
+        {"cardLabel": "f02.card04", "content": "Synthetic Fern cloakroom umbrella storage record.", "kind": "context", "confidence": 1, "sourcePartitions": [["f02.source04"]]},
+        {"cardLabel": "f02.card01", "content": "Synthetic Fern seed-cabinet humidity proposal.", "kind": "context", "confidence": 1, "sourcePartitions": [["f02.source01"]]},
+        {"cardLabel": "f02.card06", "content": "Synthetic Fern workbench ruler storage record.", "kind": "context", "confidence": 1, "sourcePartitions": [["f02.source06"]]},
+        {"cardLabel": "f02.card02", "content": "Synthetic Fern seed-cabinet humidity confirmation.", "kind": "context", "confidence": 1, "sourcePartitions": [["f02.source02"]]},
+        {"cardLabel": "f02.card05", "content": "Synthetic Fern display misting proposal.", "kind": "context", "confidence": 1, "sourcePartitions": [["f02.source05"]]},
+        {"cardLabel": "f02.card03", "content": "Synthetic Pine seed-cabinet humidity record.", "kind": "context", "confidence": 1, "sourcePartitions": [["f02.source03"]]}
+      ]}
+    },
+    {
+      "id": "rgf-fresh-03",
+      "shape": "same-card-mixed-roles-tentative-confirmed",
+      "namespace": {"ownerId": "rgf-fresh-owner-03", "scope": "personal", "projectId": null},
+      "query": {"text": "In the synthetic Sable studio record, distinguish the proposed drying temperature from the confirmed temperature for the lacquer samples.", "date": "2026/10/13 (Tue) 18:00"},
+      "history": {"sessions": [
+        {"sessionLabel": "f03.session01", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f03.source01", "role": "assistant", "content": "Tentative synthetic Sable studio proposal: try drying the lacquer samples at 31 degrees. This is only a proposed trial; no one has confirmed it."},
+          {"sourceLabel": "f03.source02", "role": "user", "content": "Synthetic Sable studio confirmation: do not adopt the proposed 31-degree trial. The confirmed drying temperature for these lacquer samples is 24 degrees."},
+          {"sourceLabel": "f03.source03", "role": "assistant", "content": "Synthetic Sable studio note quoting the user's confirmation: 24 degrees is confirmed, while 31 degrees remains an unadopted proposal. This note records the distinction rather than authorizing another change."}
+        ]}
+      ]},
+      "scriptedExtraction": {"cards": [
+        {"cardLabel": "f03.card01", "content": "Synthetic Sable lacquer drying discussion and confirmation.", "kind": "context", "confidence": 1, "sourcePartitions": [["f03.source01", "f03.source02", "f03.source03"]]}
+      ]}
+    },
+    {
+      "id": "rgf-fresh-04",
+      "shape": "shared-context-two-independent-facts",
+      "namespace": {"ownerId": "rgf-fresh-owner-04", "scope": "personal", "projectId": null},
+      "query": {"text": "For Aster shelf and Bracken cabinet in the synthetic Lantern archive, where does the curator-signed sticker belong? Keep the two locations separate and apply the archive's shared terminology.", "date": "2026/10/13 (Tue) 18:00"},
+      "history": {"sessions": [
+        {"sessionLabel": "f04.session01", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f04.source01", "role": "user", "content": "Synthetic Lantern archive terminology: a day stamp means the curator-signed amber sticker, not the unsigned blue visitor sticker. This same term is used by both the Aster shelf checklist and the Bracken cabinet intake sheet."}
+        ]},
+        {"sessionLabel": "f04.session02", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f04.source02", "role": "user", "content": "Synthetic Lantern archive Aster shelf checklist: attach the day stamp to the index sleeve. The shelf checklist does not specify the Bracken cabinet's location."}
+        ]},
+        {"sessionLabel": "f04.session03", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f04.source03", "role": "user", "content": "Synthetic Lantern archive Bracken cabinet intake sheet: attach the day stamp to the outer pouch. This cabinet instruction does not replace the separate Aster shelf checklist."}
+        ]}
+      ]},
+      "scriptedExtraction": {"cards": [
+        {"cardLabel": "f04.card01", "content": "Synthetic Lantern archive shared day-stamp terminology.", "kind": "context", "confidence": 1, "sourcePartitions": [["f04.source01"]]},
+        {"cardLabel": "f04.card02", "content": "Synthetic Lantern archive Aster shelf checklist.", "kind": "context", "confidence": 1, "sourcePartitions": [["f04.source02"]]},
+        {"cardLabel": "f04.card03", "content": "Synthetic Lantern archive Bracken cabinet intake sheet.", "kind": "context", "confidence": 1, "sourcePartitions": [["f04.source03"]]}
+      ]}
+    },
+    {
+      "id": "rgf-fresh-05",
+      "shape": "one-card-six-receipts-normal-dedup",
+      "namespace": {"ownerId": "rgf-fresh-owner-05", "scope": "personal", "projectId": null},
+      "query": {"text": "Describe the recorded sequence of confirmed handling checkpoints for the synthetic Clay kiln trial, and keep the unadopted handling suggestion distinct. Preserve the sequence rather than blending the entries.", "date": "2026/10/13 (Tue) 18:00"},
+      "history": {"sessions": [
+        {"sessionLabel": "f05.session01", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f05.source01", "role": "user", "content": "Synthetic Clay kiln trial, checkpoint one: the confirmed opening step is to place the blank tile on the felt pad before inspection."},
+          {"sourceLabel": "f05.source02", "role": "assistant", "content": "Synthetic Clay kiln trial suggestion: perhaps rotate the blank tile on a steel plate. This is tentative and has not been adopted as a checkpoint."},
+          {"sourceLabel": "f05.source03", "role": "user", "content": "Synthetic Clay kiln trial, checkpoint two: keep the felt pad; reject the steel-plate suggestion. The confirmed next step is to mark the tile edge with green chalk."},
+          {"sourceLabel": "f05.source04", "role": "user", "content": "Synthetic Clay kiln trial, checkpoint three: after the green edge mark, the confirmed instruction is to set the tile in the shallow basket."},
+          {"sourceLabel": "f05.source05", "role": "assistant", "content": "Synthetic Clay kiln trial note quoting checkpoint four: after the shallow basket, record the tile's serial label on the paper inspection sheet. The note records an already confirmed instruction."},
+          {"sourceLabel": "f05.source06", "role": "user", "content": "Synthetic Clay kiln trial, checkpoint five: after the paper serial entry, the confirmed closing step is to cover the basket with the loose cotton cloth. No steel-plate step was adopted."}
+        ]}
+      ]},
+      "scriptedExtraction": {"cards": [
+        {"cardLabel": "f05.card01", "content": "Synthetic Clay kiln trial handling sequence and unadopted suggestion.", "kind": "context", "confidence": 1, "sourcePartitions": [["f05.source01", "f05.source02", "f05.source03", "f05.source04"], ["f05.source05", "f05.source06"]]}
+      ]}
+    },
+    {
+      "id": "rgf-fresh-06",
+      "shape": "twelve-card-source-rich-pressure",
+      "namespace": {"ownerId": "rgf-fresh-owner-06", "scope": "personal", "projectId": null},
+      "query": {"text": "For the amber census bundle in the synthetic Pier archive, identify the confirmed storage position, handling marker and review interval. Exclude nearby bundles and unadopted proposals, and keep the three requested facts distinct.", "date": "2026/10/13 (Tue) 18:00"},
+      "history": {"sessions": [
+        {"sessionLabel": "f06.session01", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source01", "role": "assistant", "content": "Synthetic Pier archive planning memo: someone suggested moving the amber census bundle to cabinet twelve during a future room rearrangement. The rearrangement has not been authorized, so the cabinet-twelve suggestion is not a confirmed storage instruction. This memo describes an alternative for discussion, not the placement of the bundle now."}
+        ]},
+        {"sessionLabel": "f06.session02", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source02", "role": "user", "content": "Synthetic Pier archive confirmed placement register: the amber census bundle stays in cabinet four, upper tray. The register concerns the census bundle, not the amber cartography bundle. The proposed cabinet-twelve move was not adopted. Staff should use the placement register when naming the current storage position rather than treat the planning memo as confirmation."}
+        ]},
+        {"sessionLabel": "f06.session03", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source03", "role": "user", "content": "Synthetic Pier archive map register: the amber cartography bundle uses cabinet nine, lower tray. Cartography and census are different bundle types even though their covers share the amber color. This register does not revise the census placement register, supply a census handling marker, or set a review interval for census materials."}
+        ]},
+        {"sessionLabel": "f06.session04", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source04", "role": "assistant", "content": "Synthetic Pier archive handling sketch: a triangular violet marker might make the amber census bundle easier to find. This is an unapproved visual proposal. The sketch does not say that the staff accepted violet markers, and the proposed triangle is not a replacement for the confirmed handling marker recorded on the census handling sheet."}
+        ]},
+        {"sessionLabel": "f06.session05", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source05", "role": "user", "content": "Synthetic Pier archive reading-desk inventory: the brass page weights are kept in a padded wooden box beside the desk. The box belongs to general reading equipment rather than a census or cartography bundle. Its location and material do not identify a bundle's storage position, handling marker, or the interval for reviewing stored records."}
+        ]},
+        {"sessionLabel": "f06.session06", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source06", "role": "user", "content": "Synthetic Cove archive confirmed census note: its amber census bundle uses an oval red marker and is reviewed every eleven days. Cove and Pier are separate invented archives with separate registers. A matching bundle color and type do not transfer Cove's marker or review interval into the Pier records, and this note does not authorize such a transfer."}
+        ]},
+        {"sessionLabel": "f06.session07", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source07", "role": "user", "content": "Synthetic Pier archive confirmed census handling sheet: attach a square teal marker to the amber census bundle's outer tie. The triangular violet sketch was discussed but not adopted. This sheet covers the census bundle only; matching cover colors on nearby materials do not make their markers interchangeable. The sheet records a handling marker, not a storage move."}
+        ]},
+        {"sessionLabel": "f06.session08", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source08", "role": "assistant", "content": "Synthetic Pier archive review proposal: a monthly census review could be convenient after the room rearrangement. Neither the monthly interval nor the rearrangement is approved in this proposal. A convenience argument does not establish the confirmed interval, and this proposal should remain distinct from the signed census review schedule."}
+        ]},
+        {"sessionLabel": "f06.session09", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source09", "role": "user", "content": "Synthetic Pier archive cartography handling sheet: the amber cartography bundle has a round ivory marker on its folder. The cartography folder and the census bundle's outer tie are not the same container. This cartography-only instruction does not confirm a marker for census materials and does not alter the census handling sheet."}
+        ]},
+        {"sessionLabel": "f06.session10", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source10", "role": "user", "content": "Synthetic Pier archive access-log convention: write the visitor initials in the desk ledger when someone opens a reading folder. The convention applies to reading-room access logs, not to storage placement or bundle inspection schedules. An entry in that ledger is not confirmation of a census marker change and is not a new review interval."}
+        ]},
+        {"sessionLabel": "f06.session11", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source11", "role": "user", "content": "Synthetic Pier archive signed census review schedule: review the amber census bundle every seventeen days. The proposed monthly review was not adopted. This interval belongs to Pier's census materials, not Cove's materials or Pier's cartography folders. The schedule confirms timing only; use the separate confirmed registers for placement and handling markers."}
+        ]},
+        {"sessionLabel": "f06.session12", "date": "2026/10/09 (Fri) 14:00", "turns": [
+          {"sourceLabel": "f06.source12", "role": "assistant", "content": "Synthetic Pier archive drawer-label draft: the label names census and cartography as separate categories. It is a draft of category wording, not a signed placement register, handling sheet, or review schedule. The draft contains no approval to combine the two amber bundles, use their markers interchangeably, or replace either bundle's independently recorded instructions."}
+        ]}
+      ]},
+      "scriptedExtraction": {"cards": [
+        {"cardLabel": "f06.card01", "content": "Synthetic Pier census placement proposal.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source01"]]},
+        {"cardLabel": "f06.card02", "content": "Synthetic Pier confirmed census placement register.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source02"]]},
+        {"cardLabel": "f06.card03", "content": "Synthetic Pier cartography placement register.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source03"]]},
+        {"cardLabel": "f06.card04", "content": "Synthetic Pier census marker proposal.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source04"]]},
+        {"cardLabel": "f06.card05", "content": "Synthetic Pier reading-desk equipment inventory.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source05"]]},
+        {"cardLabel": "f06.card06", "content": "Synthetic Cove census handling and review record.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source06"]]},
+        {"cardLabel": "f06.card07", "content": "Synthetic Pier confirmed census handling sheet.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source07"]]},
+        {"cardLabel": "f06.card08", "content": "Synthetic Pier census review proposal.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source08"]]},
+        {"cardLabel": "f06.card09", "content": "Synthetic Pier cartography handling sheet.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source09"]]},
+        {"cardLabel": "f06.card10", "content": "Synthetic Pier reading-room access-log convention.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source10"]]},
+        {"cardLabel": "f06.card11", "content": "Synthetic Pier signed census review schedule.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source11"]]},
+        {"cardLabel": "f06.card12", "content": "Synthetic Pier separate bundle-category wording draft.", "kind": "context", "confidence": 1, "sourcePartitions": [["f06.source12"]]}
+      ]}
+    }
+  ],
+  "diagnosticsNotForWire": {
+    "anchorPolicy": "Each expected anchor is the complete role-tagged source literal identified by sourceLabel, not an answer string or expected model group. Correlate future captured receipts independently by complete normalized role/excerpt. Never dispatch these diagnostics, labels, hashes or intended exercise metadata.",
+    "sourceHashPolicy": "SHA256 of the exact UTF-8 content string, without a trailing newline; role remains a separate source field. These raw-literal hashes are not captured receipt IDs, normalized-excerpt hashes, prepared request hashes or provider raw-output hashes.",
+    "expectedSourceAnchors": {
+      "rgf-fresh-01": ["f01.source01"],
+      "rgf-fresh-02": ["f02.source01", "f02.source02"],
+      "rgf-fresh-03": ["f03.source01", "f03.source02", "f03.source03"],
+      "rgf-fresh-04": ["f04.source01", "f04.source02", "f04.source03"],
+      "rgf-fresh-05": ["f05.source01", "f05.source02", "f05.source03", "f05.source04", "f05.source05", "f05.source06"],
+      "rgf-fresh-06": ["f06.source02", "f06.source07", "f06.source11"]
+    },
+    "plannedInventory": [
+      {"id": "rgf-fresh-01", "cards": 1, "receipts": 1},
+      {"id": "rgf-fresh-02", "cards": 6, "receipts": 6},
+      {"id": "rgf-fresh-03", "cards": 1, "receipts": 3},
+      {"id": "rgf-fresh-04", "cards": 3, "receipts": 3},
+      {"id": "rgf-fresh-05", "cards": 1, "receipts": 6},
+      {"id": "rgf-fresh-06", "cards": 12, "receipts": 12}
+    ],
+    "sourceLiteralHashes": {
+      "f01.source01": "3757c6fe229e010ac9f1a92b79dc97215db1d460019b0aa53812cf6c8542b341",
+      "f02.source04": "151f13120c6ebb6f0c4e6fd6d896525ba42b9efdb201ace593f75b5342100b7b",
+      "f02.source01": "c3750d68c0514aacf9374741b23b71d097a73e002d95e22069c8b1a29a8817de",
+      "f02.source06": "2509e87b63068b85c2ed7ce1ac8d3747a60b86ac39c44e2b4d0a1cb71822c08b",
+      "f02.source02": "8808e378969f5790b178cdb9f0ce57e41c61f2edcee2b52f12e4d312e0d51a87",
+      "f02.source05": "c0a1577f152feae9ad0a7745274b725357834a6530f9b11bbc9a09166baf371a",
+      "f02.source03": "c9731b94efa4bcebbbd887e23ceca84b5eddf6ff3aecbf748c5baae322a0e30b",
+      "f03.source01": "2c2df2b850e3555f5af7163cbd8d87f271da692a10a37b84f9866a515857ba1c",
+      "f03.source02": "4f551ccfe03dd12d594a62dc0249e0eda09960aea79e0cf5e13e49f88b860968",
+      "f03.source03": "877072afa093c4625f230d627471df9e9ac8edb564acbc190982c7edf07e412b",
+      "f04.source01": "350163fc9dd12b7cd5fb67699c1a222c4fc29ace408164fb58c17cc0ea21748c",
+      "f04.source02": "2c0031b8878768c18713f0788b6982d894a8073caf856d974a3d15eee37a8604",
+      "f04.source03": "4355d40a02f5a32b5802598283e5b52d35661c7f0d56510a6e20b869a86cbb4c",
+      "f05.source01": "97d20f42fc7645a846b5762bbabc47670e7225884a28261b5e3803ac95aefaad",
+      "f05.source02": "1ff4da9950f2dde9e81ed3e6b1425ef59d454fecfb7640a43d56e1baa5f1905a",
+      "f05.source03": "bd50f2f72306514bf38f7ba88a8a8b15cfff35c35f00a306efe7fe2fe5fc9a93",
+      "f05.source04": "0cecaab348858b686e83dc8a3b7b7df9c8571afa464b9c4e9e389f1336a0dea6",
+      "f05.source05": "0c4c7dd317ade58aaa83051cd88d82bf9905fb4af92287c41be0c07f481f4395",
+      "f05.source06": "b8324a63c8c33b704b523d56717ec15a839d467b43c5c5349a17b482c5ccb9bd",
+      "f06.source01": "dcf353cdba6ffdf0c08decf393bedaa7178517f7a042aebbcd7a4a80b25a06e6",
+      "f06.source02": "de3cd0ed35e153b1568ced02c7387910cee09bf441202e10f54a9ef4183475bd",
+      "f06.source03": "3b0e633c9472eabda2ea2ac64b7957c66bac665796a5731ea09b4cdfea90187d",
+      "f06.source04": "d9f41e5b270a4503b926ce511e379b6d790f043c0ef3e2b2675bf76ae24120a6",
+      "f06.source05": "294d50f3a7950ecaad0921a926260fffb8f2d68698e8e21af054e48ad1a86f0f",
+      "f06.source06": "ab0d6ce87d0fd322498dbb3bd0892fd03d899047bdc4ea50b0417d66f0d1a49c",
+      "f06.source07": "838ce42cfe0e0b272cfcb0e6ffa08a6abf46dfb4ef0370f60605cc8766e509ed",
+      "f06.source08": "399c1401fb0ea34e76e309a5c6eefdb5701acd4af59135495cdcf18ef73d3ed2",
+      "f06.source09": "a56d77b7fe0de4ac8dd36ac137c6e30503a9eca4f88ded5886eed714c6ac0f61",
+      "f06.source10": "b1ff35a37019cc49201e743431d288d77d0d8f4983bdff56069a675edec685f6",
+      "f06.source11": "712ada88a7fe843ec51c30e34514def737c8a08ad8a2d846ed0367e24c4e7e5e",
+      "f06.source12": "bd98af31996d510bbcedaeb07394cd998dad9a21448da237d74dc2526f87af23"
+    },
+    "tokenFit": "UNVERIFIED: no preparation, tokenizer or HTTP serialization has run. Stop and retain a frozen preparation failure; any redesign needs a separately accepted fixture freeze before model output.",
+    "orderingPolicy": "Case order and literal capture/session order are fixed. The six-card literal order is 4,1,6,2,5,3. Genuine bounded scan order uses actual runtime identities and must be observed/frozen, never manually reordered to resemble these labels.",
+    "coveragePolicy": "Selected endpoint coverage counts only proposal-mentioned actual receipt IDs. Chosen-card source availability uses the authoritative unchanged complete inventory on selected whole cards. Neither is delivered answer context; no answer model runs.",
+    "healthPolicy": "Inspect transport health on every terminal outcome. A retained ordinary public/record failure can coexist with fatal request_mutated health; any fatalCode stops the cohort. Existing safety precedence and exact conservative accounting remain unchanged."
+  }
+}
