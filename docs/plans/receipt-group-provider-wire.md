@@ -320,3 +320,63 @@ new files yields 1615 current files. Contract prefix remains 7645 bytes and prio
 limitations prefix 177461 bytes. Primary owns full old-profile/regression gates,
 fresh independent Standards/Spec reviews, commit/PR and latest-head CI delivery.
 No worker commit, push, real provider, operational ledger or closed-cohort work.
+
+## RW2 native signal review correction — prospective RED
+
+Independent Spec found a P2 at candidate 040a9ab9185cbf213a855dc27f88911a49ec670d:
+identity-only signal checks missed native prototype/own accessor mutation during
+fake count/generation and dynamically accessed cleanup methods. This bounded
+correction retains base 129c4c539ef0315df7b534d28b55f6bccc6f3f31 and the original
+contract/history. Actual worker remains GPT 6.1 Sol/high; primary owns acceptance.
+
+Tests were added at the actual new factory before production changes. Pinned
+Node 22 owned-runner RED with env -i and both required flags exited 1, 0/2 passed,
+no skips. `receipt-group-wire-signal-regression-red-node22.log` retains count
+mutation dispatching generation, nonfatal invalid_model_output, and a throwing
+cleanup getter masking the error and leaving active/transport_busy. Test-owned
+cleanup failed; the outer owned runner completed with actual exit 1. No historical
+directory cleanup was attempted. A second RED, with nonthrowing getter controls,
+also exited 1, 0/2, no skips; all fifteen signal/record boundary observations are
+retained in `receipt-group-wire-signal-regression-red2-node22.log` in the private
+acceptance directory. Six original HTTP mutation modes reproduced the review.
+
+The minimal correction revalidates the RG signal's native prototype, brand and
+own data descriptors at mutation checks and before output compilation. RG setup
+and cleanup use captured native listener operations; cleanup transitions the
+slot to consumed even on cleanup failure. Source/card branches retain their
+original listener operations and wire policies. Tests retain throwing-getter
+controls rather than erasing the additional failed observation, and check count
+versus generation dispatch, zero hooks, fatal request_mutated, exact accounting,
+reuse rejection, original prefix and owned cleanup. Genuine cancellation remains
+covered by the existing suite. No generic port/helper or core change is added.
+
+Standards' nonblocking P3 standalone test-ledger duplication is intentionally
+deferred by primary: preserve the original standalone RED and literal oracle
+while scoping this correctness correction. No cleanup refactor is included.
+
+The first corrected focused pair completed with actual exit 0 on both pinned
+Node 22.16.0 and 24.15.0: 13/13 tests each, no skips. Logs are
+`receipt-group-wire-signal-focused-node22.log` and
+`receipt-group-wire-signal-focused-node24.log` in the same private directory.
+All twenty accessor/prototype/nonthrowing-or-throwing cleanup getter controls at
+count/generation and pre/post record boundaries observed zero hooks, fatal
+request_mutated, consumed state and slot_consumed reuse. Detected count mutation
+prevented generation. Existing reservations each retained one pre/post record
+and exactly one settlement; post-record mutation preserved the already-written
+disposition. Native cancellation and own data listener-function controls passed.
+Every corrected test-owned workspace explicitly cleaned; no real network ran.
+
+Initial corrected actual-core measurements (request/groups/derived CP request/
+derived CP proposal/refs/count HTTP/generation HTTP) were Node 22:
+2177/167/1748/92/109/2292/2307 and Node 24:
+2131/156/1736/92/106/2246/2261. These are fresh opaque-ID diagnostics, not fixed
+wire hashes or semantic observations. The stricter budget witnesses remain
+5840/5990/6005; enum boundary cases still fail the earlier genuine input cap.
+
+Documentation closes here before final frozen-byte focused runs named
+`receipt-group-wire-signal-final-node22.log` and
+`receipt-group-wire-signal-final-node24.log`. Final exits/hashes are handed off
+privately without post-gate repository edits. Exact correction inventory is four
+paths against 040a9ab, within the existing original five-path PR scope. Primary
+owns the unchanged independent probe, affected full matrices, fresh dual review
+and delivery. No worker commit/push or paid/model authorization is implied.

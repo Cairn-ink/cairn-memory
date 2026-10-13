@@ -12,6 +12,18 @@ const MODEL = 'gpt-4.1-mini-2025-04-14';
 const COUNT = 'https://api.openai.com/v1/responses/input_tokens';
 const GENERATE = 'https://api.openai.com/v1/responses';
 const RESERVATION = 5000;
+const nativeSignalAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
+const nativeSignalAdd = AbortSignal.prototype.addEventListener;
+const nativeSignalRemove = AbortSignal.prototype.removeEventListener;
+function receiptGroupSignal(signal) {
+  try {
+    if (!signal || typeof signal !== 'object' || types.isProxy(signal)
+      || Object.getPrototypeOf(signal) !== AbortSignal.prototype
+      || Reflect.ownKeys(Object.getOwnPropertyDescriptors(signal)).some(key =>
+        !Object.hasOwn(Object.getOwnPropertyDescriptor(signal, key), 'value'))) fail('request_mutated');
+    return nativeSignalAborted.call(signal);
+  } catch { fail('request_mutated'); }
+}
 const codes = new Set(['invalid_configuration', 'prerequisite_unavailable', 'invalid_request',
   'request_mutated', 'context_budget_exceeded', 'slot_consumed', 'transport_busy', 'transport_closed',
   'cancelled', 'deadline_exceeded', 'ledger_failed', 'budget_blocked', 'record_persistence_failed',
@@ -277,8 +289,10 @@ async function createTransport(options, profile) {
       if ([source.encoded, countBody, generationBody].some(text => countTokens(text) > 6000)) fail('context_budget_exceeded');
       deadline = Math.min(performance.now() + 30000, manifest.runDeadline, manifest.caseDeadline);
       const abort = code => { cancellation = code; controller.abort(); };
-      abortListener = () => abort('cancelled'); signal.addEventListener('abort', abortListener, { once: true });
-      if (signal.aborted) abort('cancelled');
+      abortListener = () => abort('cancelled');
+      if (profile === RECEIPT_GROUP_PROFILE) nativeSignalAdd.call(signal, 'abort', abortListener, { once: true });
+      else signal.addEventListener('abort', abortListener, { once: true });
+      if (profile === RECEIPT_GROUP_PROFILE ? receiptGroupSignal(signal) : signal.aborted) abort('cancelled');
       if (performance.now() >= deadline) abort('deadline_exceeded');
       timer = setTimeout(() => abort('deadline_exceeded'), Math.max(0, deadline - performance.now()));
       const check = () => {
@@ -287,6 +301,7 @@ async function createTransport(options, profile) {
         let now; try { const shell = profile === CARD_PROFILE || profile === RECEIPT_GROUP_PROFILE ? cardShell(request, 'request_mutated')
           : own(request, ['system', 'input', 'outputSchema', 'maxOutputTokens', 'signal'], 'request_mutated');
           if (shell.signal !== signal) fail('request_mutated');
+          if (profile === RECEIPT_GROUP_PROFILE && receiptGroupSignal(signal)) { abort('cancelled'); cancelled(); }
           if (profile === CARD_PROFILE || profile === RECEIPT_GROUP_PROFILE) cardData({ system: shell.system, input: shell.input,
             outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated');
           now = JSON.stringify(copy({ system: shell.system, input: shell.input,
@@ -386,6 +401,7 @@ async function createTransport(options, profile) {
             if (part.type !== 'output_text' || typeof part.text !== 'string' || !part.text.isWellFormed()
               || part.text.length > 40000 || countTokens(part.text) > 1024) fail('invalid_model_output');
             const proposal = json(part.text, 'invalid_model_output');
+            if (profile === RECEIPT_GROUP_PROFILE) check();
             try { result = profile.compile(source.prepared, proposal).proposal; }
             catch { fail('invalid_model_output'); }
           }
@@ -405,7 +421,12 @@ async function createTransport(options, profile) {
       }
       await send('count', countBody); return await send('generation', generationBody);
     } catch (error) { const code = error instanceof SourceBundleTransportError ? error.code : 'invalid_request'; mark(code); fail(code); }
-    finally { clearTimeout(timer); if (signal && abortListener) signal.removeEventListener('abort', abortListener); state = 'consumed'; }
+    finally {
+      if (profile === RECEIPT_GROUP_PROFILE) {
+        try { clearTimeout(timer); if (signal && abortListener) nativeSignalRemove.call(signal, 'abort', abortListener); }
+        finally { state = 'consumed'; }
+      } else { clearTimeout(timer); if (signal && abortListener) signal.removeEventListener('abort', abortListener); state = 'consumed'; }
+    }
   }
   return Object.freeze({ planRank, getRecords: () => Object.freeze([...records]),
     getState() { if (state === 'closed') fail('transport_closed'); return accounting(() => ledger.getState()); },

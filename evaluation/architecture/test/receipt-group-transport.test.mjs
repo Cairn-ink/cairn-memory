@@ -250,6 +250,67 @@ offline('RW2 exact instruction/schema/source/order/descriptor drift never dispat
   assert.equal(hooks, 0);
 });
 
+offline('RW2 native signal mutation stays fatal before further dispatch without executing hooks', async (t, counter) => {
+  const failures = [];
+  const modes = ['aborted-accessor', 'prototype', 'cleanup-getter', 'throwing-cleanup-getter'];
+  const boundaries = ['count', 'generation', 'pre-count-record', 'post-count-record', 'post-generation-record'];
+  for (const mode of modes) for (const boundary of boundaries) {
+    let hooks = 0, mutations = 0, f;
+    const mutate = () => {
+      mutations++;
+      const signal = f.controller.signal;
+      if (mode === 'prototype') Object.setPrototypeOf(signal, Object.create(AbortSignal.prototype));
+      else Object.defineProperty(signal, mode === 'aborted-accessor' ? 'aborted' : 'removeEventListener',
+        { configurable: true, get() { hooks++; if (mode === 'throwing-cleanup-getter') throw new Error('Cleanup hook must never execute');
+          return mode === 'aborted-accessor' ? false
+          : AbortSignal.prototype.removeEventListener.bind(signal); } });
+    };
+    f = await fixture(t, counter, {
+      fetch(_, __, n) {
+        if (boundary === (n === 1 ? 'count' : 'generation')) mutate();
+        return reply(n === 1 ? { object: 'response.input_tokens', input_tokens: 500 } : envelope());
+      },
+      observe(record) {
+        if (boundary === `${record.phase}-${record.kind}-record`) mutate();
+      },
+    });
+    let failure, retry;
+    try { await f.transport.planRank(f.request); } catch (error) { failure = error.code; }
+    try { await f.transport.planRank(f.request); } catch (error) { retry = error.code; }
+    const expectedCalls = boundary === 'pre-count-record' ? 0 : boundary.includes('generation') ? 2 : 1;
+    const state = f.transport.getState(), settlements = state.attempts.slice(1);
+    const observations = { mode, boundary, mutations, hooks, failure, retry, calls: f.calls.length,
+      health: f.transport.health(), settlements: settlements.map(row => [row.channel, row.outcome, row.actualMicroUsd]) };
+    t.diagnostic(JSON.stringify(observations));
+    for (const [field, actual, expected] of [['mutations', mutations, 1], ['hooks', hooks, 0],
+      ['failure', failure, 'request_mutated'], ['fatalCode', f.transport.health().fatalCode, 'request_mutated'],
+      ['state', f.transport.health().state, 'consumed'], ['retry', retry, 'slot_consumed'],
+      ['calls', f.calls.length, expectedCalls], ['settlements', settlements.length, Math.max(1, expectedCalls)]]) {
+      if (actual !== expected) failures.push({ mode, boundary, field, actual, expected });
+    }
+    const expectedRows = boundary === 'post-count-record' ? [['cairn-count', 'succeeded', null]]
+      : boundary === 'post-generation-record' ? [['cairn-count', 'succeeded', null], ['cairn-generation', 'succeeded', 72]]
+      : expectedCalls === 2 ? [['cairn-count', 'succeeded', null], ['cairn-generation', 'failed', 72]]
+      : [['cairn-count', 'failed', null]];
+    if (JSON.stringify(observations.settlements) !== JSON.stringify(expectedRows))
+      failures.push({ mode, boundary, field: 'settlement disposition', actual: observations.settlements, expected: expectedRows });
+    assert.equal(state.reservedMicroUsd, 30 + settlements.length * 5000);
+    assert.equal(f.records.length, settlements.length * 2, 'Every reservation retains exactly one pre/post pair');
+    assert.equal(new Set(f.records.filter(record => record.phase === 'post').map(record => record.attemptId)).size, settlements.length);
+    f.checkPrefix(); await f.cleanup();
+  }
+  assert.deepEqual(failures, [], 'Signal mutation must be fatal, hook-free, consumed and correctly settled');
+});
+
+offline('RW2 genuine signal uses captured listener operations rather than input methods', async (t, counter) => {
+  const f = await fixture(t, counter); let hooks = 0;
+  for (const method of ['addEventListener', 'removeEventListener']) Object.defineProperty(f.controller.signal, method,
+    { configurable: true, value() { hooks++; throw new Error('Input signal function must never execute'); } });
+  assert.deepEqual(await f.transport.planRank(f.request), proposal);
+  assert.equal(hooks, 0); assert.equal(f.calls.length, 2); assert.equal(f.transport.health().state, 'consumed');
+  assert.equal(f.records.length, 4); f.checkPrefix(); await f.cleanup();
+});
+
 offline('RW4/5 invalid literal groups/raw duplicate keys/usage/refusal settle once without repair', async (t, counter) => {
   const tooMany = { groups: Array.from({ length: 7 }, () => literal('fresh-wire-receipt-alder')) };
   const bad = [

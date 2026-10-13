@@ -2709,3 +2709,24 @@ accounting settlement, failed assembly consumption and owned failure cleanup
 were observed. Primary final gates, independent frozen-candidate review and
 latest-head CI are still separate acceptance; fake HTTP remains no evidence of
 provider acceptance, semantic gain or paid authorization.
+
+### Receipt-group wire native signal correction (2026-10-13)
+
+Independent Spec review of 040a9ab found that RG signal identity checks did not
+detect in-flight prototype/own accessor mutation. Count mutation could dispatch
+generation before later compilation rejected as nonfatal invalid_model_output;
+a dynamic cleanup getter could execute, mask the original failure and leave an
+active slot. These failed observations remain in the private review/RED logs;
+the earlier passing offline gates did not cover this boundary.
+
+The scoped correction adds RG-only native signal revalidation at mutation checks
+and before compilation, and captured native listener setup/cleanup. Source/card
+policies, caps, wire schemas and accounting implementation remain unchanged.
+The initial corrected focused runs on pinned Node 22.16.0 and 24.15.0 each exited
+0 with 13/13 tests, no skips. Twenty HTTP/record mutation controls, including
+throwing cleanup getters, observed zero hooks, fatal request_mutated, consumed
+slots and unchanged exact-once settlement. Detected count mutation stopped before
+generation; post-record mutation preserved prior settlement. Genuine cancellation
+and owned cleanup also passed. Primary final frozen-byte gates and renewed dual
+review remain separate; no provider acceptance, semantic gain or paid execution
+is established by these fake-HTTP controls.
