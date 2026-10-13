@@ -2757,3 +2757,52 @@ source/card policy, successful checks/cancellation ordering, caps and accounting
 implementation were not changed. Primary final-byte full gates and renewed dual
 review remain separate acceptance; fake HTTP establishes no provider acceptance,
 semantic gain or authority to run the held feasibility experiment.
+
+### Fresh-six receipt-group first-response feasibility (offline implementation)
+
+The new fixed feasibility preparation/runner uses six separately frozen synthetic
+histories, 24 planned cards and 31 source literals. Scripted source-mapped capture
+uses the normal indexed-evidence contract, including ordinary four-plus-two
+same-content dedup for a single card with six actual receipts. Dataset-local
+labels and diagnostic source anchors are not wire receipt IDs or gold answers.
+Preparation retains the entire six-case roster before capture, fresh genuine IDs,
+cold bounded scan order, exact request/source/store/dependency hashes and actual
+token witnesses. Preparation is a process-local one-use capability, not a cloned
+manifest, resumable batch or authority supplied by serialized observations.
+
+The runner has no answer/judge/repair/fallback port, model or prompt override,
+case filter, operational key discovery or new ledger. It reuses the accepted RG
+transport and existing source-bundle guard with unchanged 6000-input/1024-output
+caps, at most six generations/twelve intents/60000 micro-USD reservations and
+the original cumulative US$400/protected US$30 policy. All terminal transport
+health is inspected, including ordinary public failures that coexist with fatal
+request_mutated health. Ordinary continuation requires settled/reconciled
+accounting and native deadline/caller/integrity controls; unknown dispatch retains
+its complete reservation and null actual usage. Fatal outcomes stop the remaining
+frozen cases without dropping their not-run dispositions.
+
+Literal permitted response provenance, actual RG proposals, derived CP proposals
+and refs remain distinct. Credential-withheld response bodies/hashes are never
+recovered. Endpoint-anchor coverage and authoritative chosen-card source
+availability are separate diagnostics; neither is delivered answer context.
+Empty groups can compile but do not establish nonempty structural feasibility.
+At least 5/6 compiled nonempty first responses is only a prospective engineering
+gate, not semantic correctness, reliability, answer quality or a benchmark score.
+
+The implementation and its fresh fake-HTTP controls are under offline acceptance.
+No model response or paid/provider request has been observed for these six cases.
+Their token-fit witnesses must be measured on each genuinely prepared frozen run;
+fixed literal sizes or earlier independent captures are not a live preparation.
+No old cohort/result is replaced, and offline tests do not authorize model execution.
+
+Worker focused offline verification subsequently passed on pinned Node 22.16.0
+and 24.15.0: each command actually exited 0 with 14/14 tests and no skips.
+Six genuine fresh preparations retained 24 cards / 31 receipts, including the
+ordinary deduplicated one-card/six-receipt case. Complete generation bodies fit
+the unchanged 6000-token cap, with case 06 strictly largest (3280 and 3309 tokens
+in the two independent fresh captures). These are actual fake-HTTP preparation
+witnesses, not provider/model observations or reusable future input identities.
+Both initial fixture-precondition failures remain recorded separately from the
+green results. Exact log-derived owned cleanup checks found no residual paths.
+Primary final-byte full gates and independent reviews remain separate acceptance;
+the held six-case model experiment has not been run or authorized by these tests.
