@@ -1,5 +1,16 @@
 # Reliability and answer quality development plan
 
+Status: STOP CURRENT CANONICAL CANDIDATE; Stage 3 remains blocked.
+The [closed canonical QA24 result](receipt-group-canonical-comparison-results.md)
+records ordinary A 21 correct / 3 incorrect / 0 unresolved / 0 unanswered
+versus canonical B 19 / 3 / 0 / 2, over the fixed 24. Actual-sent anchors rose
+from 25/31 to 29/31, but net correct gain is −2/24; higher unsupported use,
+a new severe RQ19 regression and A safety unknowns fail unchanged gates.
+Operator exit 0 and accepted accounting are not semantic success. No promotion,
+default change, Stage 3 or product acceptance follows. P1–P10, all older results,
+thresholds, original-budget protection and Hermes/resource milestones remain.
+
+Historical receipt-ID feasibility status retained:
 Status: accepted development direction; receipt-ID feasibility rejected.
 The [closed receipt-ID six-case result](receipt-group-feasibility-results.md)
 has 2/6 compiled nonempty first responses, below the required 5/6. Operator
@@ -588,6 +599,42 @@ dispatch establishes plumbing only. These gates remain distinct from pilot QA;
 product acceptance waits for reliability, natural host and resource evidence.
 
 ## Current P4 review checkpoint
+
+Primary's decision is STOP for the
+[closed canonical QA24 candidate](receipt-group-canonical-comparison-results.md),
+not repair or continuation of that consumed operation. The two B selection
+refusals coexist with semantic losses RQ12/RQ19 and shared failure RQ22;
+three-card cap compliance alone cannot establish QA improvement.
+
+Next is a bounded design-review checkpoint: trace RQ12/RQ19/RQ22 through the
+retained selected/sent evidence and existing first verdicts without new labels.
+Then prospectively freeze one fresh non-scored controlled evidence-use probe
+with explicit falsifiable alternatives and red-capable negative controls before
+selecting a successor. No model-internal cause or intervention success is yet
+established; do not automatically launch another paid canonical trial.
+Any later paid validation needs separately frozen/reviewed scope and a fresh
+original US$400 / protected US$30 affordability check. The unchanged Stage 3
+paired pilot, independent reliability challenge, installed Hermes new-session
+use and measured resource fit remain unmet destinations, not achievements.
+
+This source-free documentation packet uses runtime/base
+`fa5e6d1b4f8e56ad89c7fcc0c63426d3a867a070`, branch
+`docs/receipt-group-canonical-results`, and one bounded actual GPT 6.1 Sol/high
+worker. Only result report, this current-status/checkpoint update and append-only
+limitations change. Primary owns arithmetic acceptance, generic/validation
+gates, fixed-candidate nonauthor Standards/Spec reviews and PR delivery.
+No new model calls, scorer invocation, cohort changes or release authority.
+
+Worker read-only verification exited 0: Git diff/untracked inventory and an
+independent filesystem/base-blob comparison agree on exactly three changed
+paths, with 1,639 current files. All 24 paired verdict rows, six family counts,
+transitions and sent-anchor counts match the unchanged first score; all 148 local
+Markdown links in the three documents resolve. The complete 201,575-byte base
+limitations prefix, every historical master-plan paragraph and P1–P10 remain
+unchanged. Generic tests, validation and fixed-head reviews remain primary gates;
+no worker test, runtime/evaluator import or live operation ran for these docs.
+
+## Historical card-plan P4 review checkpoint
 
 The [closed card-plan report](card-plan-qa24-results.md) closes the first and
 only run with actual exit 0, not an answer-quality pass. B's 21

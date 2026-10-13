@@ -3008,3 +3008,39 @@ the cause or resolution of the earlier Node 24 full-matrix failure; later
 selected passes alone are not that proof. Primary full matrices, fixed-candidate
 reviews and any spending authority remain prerequisites. No live QA gain is
 claimed.
+
+## Closed canonical selection-policy QA24: stop, not promotion
+
+The [frozen canonical QA24 result](plans/receipt-group-canonical-comparison-results.md)
+retains ordinary A 21 correct / 3 incorrect / 0 unresolved / 0 unanswered and
+canonical B 19 / 3 / 0 / 2 over the fixed 24; completion is 24/22. Sent required
+anchors improved 25/31 → 29/31, but net correct is −2/24 rather than the required
+at least +3/24. Known unsupported questions rose 2 → 3; stale counts are 0/0,
+severe-rule questions 2/2, with a new severe B RQ19 regression. A RQ12/RQ17
+safety remains unknown/disagreed, not clean; RQ17 still has an agreed severe
+rule flag. B's two absent answers are safety N/A, not safe observations.
+
+RQ01/RQ02's B selections failed: static first-artifact inspection finds four
+distinct cards in each raw group against cap three, with supplied IDs/schema
+otherwise valid and completed provider envelopes. Overlap is allowed and is not
+the cause claimed; no replayed stack, truncation explanation, repair, retry or
+hypothetical score is presented. Semantic losses RQ12/RQ19 and shared RQ22
+failure remain separate: delivered anchors and complete packing did not ensure
+correct source use. The read-only boundary check found zero packing omissions
+in all six corresponding answers; it establishes no model-internal mechanism.
+
+Operator exit 0 / closed accounting acceptance covers 142 requests/intents
+(48 count + 48 selection + 46 answer), 94 generations, zero unknown/pending
+usage and US$0.71 new reservations. US$0.055196 is a provider-reported generation
+estimate, not invoiced or independently billed cost. Cumulative reserved cost
+at closure was US$334.982281, leaving US$35.017719 beyond protected US$30 under
+the original US$400 ceiling; this historical checkpoint grants no dispatch.
+All 815 files / 2 directories and 54 prepared files remain preserved.
+
+DRI disposition: STOP CURRENT CANONICAL CANDIDATE. No default, Stage 3, product
+acceptance, official score, Mem0/Supermemory parity or resource-lightness claim
+follows. The hand-authored synthetic/scripted literal capture and two same-family
+blind judgments remain limitations; natural installed Hermes new-session use is
+unproven. All sources, first artifacts, scores, older cohorts and gates stay
+immutable. Next is bounded evidence-use design review followed by one fresh
+non-scored controlled probe, not automatic paid retry or a selected successor.
