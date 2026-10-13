@@ -3008,3 +3008,33 @@ the cause or resolution of the earlier Node 24 full-matrix failure; later
 selected passes alone are not that proof. Primary full matrices, fixed-candidate
 reviews and any spending authority remain prerequisites. No live QA gain is
 claimed.
+
+## Prospective opt-in readable exact-source view
+
+The [readable-source-view probe](plans/readable-source-view.md) adds only an
+evaluation opt-in presentation after genuine whole-card assembly validation.
+Length-framed recorded-role/source blocks must recover the original flat fields
+and bytes exactly; they do not infer truth, adoption, applicability or identity.
+The data-only decoder grants no assembly or execution authority. Existing
+selection, source order, answer instruction/model, output and context caps and
+defaults remain unchanged; overflow must refuse rather than trim.
+
+At this authoring checkpoint, source/wire token fit and integration outcomes
+remain unmeasured pending the primary's serialized test-lane grant. Preservation
+controls cannot establish model understanding, formatting causation, QA gain,
+cost/latency/lightness, installed Hermes use or product acceptance. No closed
+cohort is replayed or repaired and the older zero-gain relation-instruction
+experiment is not retuned. Future diagnostics need wholly new frozen cases and
+separate review/accounting authority under the original US$400 / protected US$30;
+P4 and Stage 3/Hermes/resource gates remain unchanged.
+
+Subsequent authorized offline verification passed the ten preservation/capability/
+framing/fit controls on Node 22.16.0 and 24.15.0, actual exits 0, no skips or
+cancellations and verified owned cleanup. A qualifier-loss rendering mutant
+first made the selected test fail with actual exit 1; restoring the exact module
+bytes restored GREEN. This demonstrates data-loss rejection, not improved model
+understanding or an old failure's cause. On three small synthetic stores the
+complete readable request added 24/26/24 tokens and 94/100/94 bytes versus flat
+packing; both views fit 6000. No token-saving, lightness or quality claim follows.
+The initial unmeasured authoring status above is retained history; actual-source
+preservation tests do not authorize paid validation or default promotion.
