@@ -2844,3 +2844,31 @@ feasibility requires new frozen cases, reviewed
 exact implementation and fresh original-budget checks. All prior failures,
 Stage 2/3, unsupported/stale/severe safety, resource and installed Hermes gates
 remain unchanged; no default promotion, merge, release or deployment follows.
+
+## Prospective exact-membership canonical receipt groups
+
+A separately versioned offline experiment accepts bounded exact repeated
+membership while preserving its immutable raw annotation and a distinct
+canonical proposal. It validates every raw occurrence and original caps before
+stable per-group context deduplication and removal of the unchanged terminal
+from context. Canonical endpoint order is surviving contexts followed by
+terminal; selected cards follow first occurrence in that sequence. All groups
+and cross-group sharing remain. This transformation is not lossless and adds
+no semantic authority; the terminal is an unverified focus receipt.
+
+The wrapper retains genuine private v1 compilation and authoritative assembly
+capabilities, existing complete flat source packing and a single new fixed
+transport profile using the existing HTTP implementation. Raw, canonical,
+derived v1 and derived CP identities remain separate; original provider
+response provenance remains transport evidence. Public core/defaults and old
+wire protocols are unchanged. Fresh synthetic pure/fake-HTTP/native-capture
+controls test prospective plumbing only, subject to final acceptance.
+
+The original feasibility is closed at 2/6 against required 5 (gate FAIL).
+Neither this experiment nor offline tests change, replay, recompile or rescore
+that result or any earlier cohort. There is no established accuracy lift,
+semantic reliability, lower inference cost or QA24 readiness. Future feasibility
+requires wholly new frozen cases, reviewed runtime and fresh checks against
+the original cumulative budget. No paid request or operational key/ledger
+access is authorized by this work. See
+[the prospective contract](plans/receipt-group-canonicalization.md).
