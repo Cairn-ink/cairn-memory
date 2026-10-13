@@ -2903,3 +2903,108 @@ tokens. These scripted controls do not measure provider behavior or establish
 the new six's real structural result. Primary broad gates and independent review
 remain required; the closed original 2/6 result and all live authority limits
 are unchanged.
+
+## Prospective canonical selection-policy matched QA24
+
+The new offline comparison isolates two compound selection policies: unchanged
+ordinary rank and unchanged canonical receipt-ID groups. Both use identical
+complete source-evidence candidates and the same whole-card flat answer packer,
+answer instruction, model and caps; selection order remains part of treatment.
+Capture extraction/classification is scripted bookkeeping, not measured memory
+formation. The 24 stratified synthetic questions are a fresh development cohort,
+not random natural-history sampling, official LongMemEval or competitor parity.
+
+The runner's fixed 144-intent/96-generation maximum retains 720,000 microUSD in
+reservations. It does not relax the unchanged generic opening floor of 1,968
+intents/US$10 beyond protected US$30: serialized reopening requires an initial
+2,111 intents/US$10.715 floor, within the cumulative US$400 authority. Unknown
+usage retains its full reservation and blocks resource acceptance. No live
+preparation, key access, provider execution or judge API budget is authorized by
+the offline implementation.
+
+The evaluator checks literal actually sent answer requests and retained first
+response linkage before positive-anchor presence. Stored, selected, available
+and sent are distinct; presence does not establish semantic support or utility.
+Unsupported claims are judged against delivered sources plus the question;
+full truth determines requested correctness and stale/severe observations.
+Two distinct nonauthor first judgments are agreement-only, with no rejudge or
+adjudication. Their same-family agreement can still share bias. Produced answers
+with unknown/disagreed safety block advancement; proven absent accepted answers
+are separately `not-observed-no-answer`, not fabricated clean observations or
+hypothetical correct credit. External firstness, author identity, record
+authenticity and judge independence require separate acceptance.
+
+At least a 3/24 net correct gain, strictly improved actually sent positive-anchor
+count and unchanged-or-better unsupported/stale question counts with no new
+predefined severe failure are prospective pilot gates, not promised results.
+The fixed paired bootstrap is exploratory on hand-authored development cases.
+Offline verification and independent acceptance are pending; future prepared
+artifact reviews, current budget inspection, private one-shot operator review
+and explicit release remain separate. All closed historical cases and outputs
+remain immutable. See [the prospective comparison plan](plans/receipt-group-canonical-comparison.md).
+
+The worker subsequently observed full offline 29/29 focused passes on Node
+22.16.0 and 24.15.0, each actual exit 0, no skips, with genuine 216-card/240-turn
+capture, 144 intents/96 generations, identical decoded selector inputs and
+authoritative complete flat packing. Original failures were retained: a missing
+fake ordinary-response envelope field and a new native-Promise rejection
+observation defect, corrected without changing source literals or old machinery.
+Two later precision regressions also went RED before correction: explicit
+dependent-answer disposition on fatal selection failure, and an undeclared
+reviewed-total equality veto. Each judge's total is now independently known and
+retained, while unknown/disagreed unsupported/stale/severe observations still
+block. All ten pure evaluator controls and the affected genuine-core control
+passed 11/11 on each pinned Node, actual exit 0, no skips. The full 29-test pair
+is pre-precision evidence; primary final-byte 30-test/broader acceptance and
+independent review are still required. No live first answer, semantic judge
+result, measured QA gain or new authority is delivered by these offline passes.
+
+The canonical QA24 integration also exposed an old static source-exclusion test
+that equated completeness with a historic total of seven corpora. After the new
+source file was tracked without changing bytes, both inventory routes agreed
+on eight but that count assertion failed. The narrow prospective scope amendment
+changes only that test to require each original corpus plus full two-route
+equality and source/query freshness checks over every discovered corpus. The
+author retained a selected RED before correction; the selected static test then
+passed 1/1 on both pinned Nodes, actual exits 0, no skips and owned cleanup.
+No old source fixture, runtime behavior, model output, score or gate changed.
+Final eleven-path full-matrix and independent acceptance remain primary work;
+this inventory correction provides no live QA result or improvement claim.
+
+A second static compatibility check compared current indexed evaluation JSON
+files with HEAD alone and failed during pre-commit validation of the two staged
+QA24 JSON additions. The scoped old corpus test now independently reconstructs
+the index from HEAD plus staged NUL-delimited changes, preserving full inventory
+equality and every duplicate-question/user-source check. An owned temporary-Git
+RED preceded the correction; add/delete/rename-equivalent/edit, tab/newline and
+unmerged controls then passed, with all historical source/rubric hashes intact.
+Full affected tests passed 9/9 on both pinned Nodes, actual exits 0 and no skips;
+57 files/8128 strings/152 user sources were checked without duplicate findings.
+No source data, runtime, score or acceptance threshold changed. The prospective
+scope is twelve public paths; final matrices/reviews and any live authority are
+still primary prerequisites, not delivered by this static inventory repair.
+
+The prospective canonical QA24 coordinator's terminal deadline guard needed a
+separate offline correction. Fresh genuine full24 child controls reached all
+144 settled calls and the final checkpoint yet recorded an expired deadline
+while returning completed execution/accounting acceptance. Both the original
+private probe and new tracked regression retained actual RED exits 1 (0/2).
+The corrected coordinator synchronously vetoes expiry after callback, integrity
+and persistence work, preserves the first fatal and settled ledger, and cannot
+revive or retroactively change finalized phase deadline verdicts. A failed
+post-report-write gate retains the original literal and returns conservative
+failure with accounting acceptance false; inconsistent artifacts cannot be
+accepted or silently repaired.
+
+Affected worker controls passed on both pinned Nodes: 6+8 on Node 22.16.0 and
+14/14 on Node 24.15.0, all actual exits 0 with no skips/cancellations and verified
+owned cleanup. A behavior-identical candidate-bound copy of the original probe
+passed 2/2 on Node 22, actual exit 0. These are synthetic lifecycle/accounting
+checks, not full-matrix acceptance or semantic QA evidence. Original failures
+remain retained; source/rubric, denominator, caps and product deadlines did not
+change. The thirteenth scoped path caps algorithm-development test-file
+concurrency at two before the glob. This preventive scheduling does not prove
+the cause or resolution of the earlier Node 24 full-matrix failure; later
+selected passes alone are not that proof. Primary full matrices, fixed-candidate
+reviews and any spending authority remain prerequisites. No live QA gain is
+claimed.

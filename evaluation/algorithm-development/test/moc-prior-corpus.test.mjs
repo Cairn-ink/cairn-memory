@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { prepareAlgorithmDevelopmentCase } from '../runner.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { createOwnedGitFixture } from '../../../tools/testing/owned-git-fixture.mjs';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const sourcePath = 'evaluation/algorithm-development/moc-prior-cases.json';
@@ -327,16 +328,73 @@ test('existing local indexed-evidence preparation yields exactly nineteen unmodi
   assert.equal(batches, 76);
   assert.equal(turns, 228);
 });
+function currentEvaluationJsonInventory(repository, selected) {
+  const git = args => execFileSync('/usr/bin/git', args, { cwd: repository, encoding: 'utf8',
+    env: { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_OPTIONAL_LOCKS: '0' } });
+  assert.equal(git(['ls-files', '-u', '-z', '--', 'evaluation']), '', 'unmerged evaluation index cannot prove corpus inventory');
+  const files = git(['ls-files', '-z', '--', 'evaluation']).split('\0').filter(selected).sort();
+  const current = new Set(git(['ls-tree', '-r', '--name-only', '-z', 'HEAD', '--', 'evaluation']).split('\0').filter(Boolean));
+  const staged = git(['diff', '--cached', '--no-ext-diff', '--no-renames', '--name-status', '-z', 'HEAD', '--', 'evaluation']);
+  if (staged) {
+    const changes = staged.split('\0');
+    assert.equal(changes.pop(), '', 'staged inventory is NUL terminated');
+    assert.equal(changes.length % 2, 0, 'staged inventory has status/path pairs');
+    for (let index = 0; index < changes.length; index += 2) {
+      const status = changes[index], path = changes[index + 1];
+      assert(['A', 'M', 'D', 'T'].includes(status) && path, 'unexpected staged inventory status/path');
+      if (status === 'A') { assert(!current.has(path), 'staged addition already in HEAD'); current.add(path); }
+      else if (status === 'D') assert(current.delete(path), 'staged deletion absent from HEAD');
+      else assert(current.has(path), 'staged edit/type change absent from HEAD');
+    }
+  }
+  const independent = [...current].filter(selected).sort();
+  assert.equal(new Set(files).size, files.length, 'duplicate indexed paths');
+  assert.deepEqual(files, independent, 'tracked corpus inventory disagreement');
+  return files;
+}
+test('current indexed JSON inventory includes staged add delete rename-equivalent and NUL paths', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-moc-index-inventory-' });
+  t.after(async () => { await workspace.cleanup(); assert.equal(existsSync(workspace.path), false);
+    t.diagnostic('Owned corpus inventory workspace absent ' + workspace.path); });
+  const fixture = createOwnedGitFixture(workspace), dir = fixture.path;
+  const git = (args, input) => execFileSync('/usr/bin/git', ['-C', dir, ...args], { encoding: 'utf8', input,
+    env: { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_OPTIONAL_LOCKS: '0',
+      GIT_AUTHOR_NAME: 'Synthetic fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
+      GIT_COMMITTER_NAME: 'Synthetic fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' } });
+  mkdirSync(join(dir, 'evaluation'), { mode: 0o700 });
+  const historical = '{"source":"Wholly new synthetic inventory baseline."}\n';
+  const unusual = 'evaluation/unchanged\trow\n.json';
+  for (const path of ['evaluation/historical.json', 'evaluation/deleted.json', 'evaluation/rename old.json', 'evaluation/edit.json', unusual]) {
+    writeFileSync(join(dir, path), historical, { mode: 0o600, flag: 'wx' });
+  }
+  writeFileSync(join(dir, 'outside.json'), historical, { mode: 0o600, flag: 'wx' });
+  fixture.commit('Synthetic inventory baseline only');
+  git(['config', '--local', 'diff.renames', 'true']);
+  const renamed = 'evaluation/name\tnew\n.json';
+  renameSync(join(dir, 'evaluation/rename old.json'), join(dir, renamed));
+  // Preserve deleted bytes outside selection instead of destructively erasing.
+  renameSync(join(dir, 'evaluation/deleted.json'), join(dir, 'deleted-retained.json'));
+  writeFileSync(join(dir, 'evaluation/new.json'), '{"source":"Fresh staged-only synthetic inventory."}\n', { mode: 0o600, flag: 'wx' });
+  writeFileSync(join(dir, 'evaluation/edit.json'), '{"source":"Synthetic staged edit."}\n');
+  git(['add', '--all']);
+  writeFileSync(join(dir, 'evaluation/untracked.json'), '{}\n', { mode: 0o600, flag: 'wx' });
+  const selected = path => path.startsWith('evaluation/') && path.endsWith('.json');
+  assert.deepEqual(currentEvaluationJsonInventory(dir, selected), ['evaluation/historical.json', 'evaluation/edit.json',
+    unusual, renamed, 'evaluation/new.json'].sort());
+  assert.equal(hash(readFileSync(join(dir, 'evaluation/historical.json'))), hash(historical));
+  assert.equal(git(['show', 'HEAD:evaluation/historical.json']), historical);
+  assert.equal(hash(sourceBytes), sourceHash); assert.equal(hash(rubricBytes), rubricHash);
+  const oid = git(['rev-parse', 'HEAD:evaluation/historical.json']).trim();
+  git(['update-index', '-z', '--index-info'], [1, 2, 3].map(stage => `100644 ${oid} ${stage}\tevaluation/conflict.json\0`).join(''));
+  assert(git(['ls-files', '-u', '-z', '--', 'evaluation']).includes('evaluation/conflict.json'));
+  assert.throws(() => currentEvaluationJsonInventory(dir, selected), /unmerged evaluation index/);
+});
 test('exact questions and user source messages are checked against every tracked prior evaluation JSON string', () => {
   // Broad JSON scan includes corpus, fixture, rubric and frozen result files.
   // This is an exact duplicate check within this checkout, not global novelty.
   const skip = new Set([sourcePath, rubricPath]);
   const selected = path => path.startsWith('evaluation/') && path.endsWith('.json') && !skip.has(path);
-  const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
-    .split('\0').filter(selected).sort();
-  const independent = execFileSync('git', ['ls-tree', '-r', '--name-only', 'HEAD'], { cwd: root, encoding: 'utf8' })
-    .trim().split('\n').filter(selected).sort();
-  assert.deepEqual(files, independent, 'tracked corpus inventory disagreement');
+  const files = currentEvaluationJsonInventory(root, selected);
   const prior = new Set();
   const strings = value => {
     if (typeof value === 'string') prior.add(value);
@@ -354,7 +412,7 @@ test('exact questions and user source messages are checked against every tracked
     }
   }
   assert.equal(userCount, 152);
-  console.log('Cross-checked prior inventory by git ls-files and git ls-tree: ' + files.length +
+  console.log('Cross-checked prior inventory by git ls-files and HEAD tree plus staged delta: ' + files.length +
     ' JSON files, ' + prior.size + ' unique strings; zero duplicate questions/user messages; ' +
     acknowledgmentMatches + ' neutral acknowledgment matches.');
 });

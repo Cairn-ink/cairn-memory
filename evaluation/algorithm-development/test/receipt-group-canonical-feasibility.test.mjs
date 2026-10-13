@@ -466,7 +466,11 @@ test('N3 two-route tracked source-corpus exclusion inventory has no reused liter
     if (stat.isDirectory()) visit(child);
     else { const name = child.slice(repo.length); if (isCorpus(name)) fs.push(name.replace(/^\//u, '')); }
   } }; visit(directory);
-  assert.deepEqual(fs.sort(), git); assert.equal(git.length, 7);
+  assert.deepEqual(fs.sort(), git);
+  const originalCorpora = ['card-plan-cases.json', 'cases.json', 'large-pool-cases.json', 'moc-prior-cases.json',
+    'receipt-group-feasibility-cases.json', 'relation-binding-cases.json', 'source-bundle-cases.json'];
+  for (const name of originalCorpora) assert(git.includes('evaluation/algorithm-development/' + name),
+    'Original exclusion corpus remains inventoried: ' + name);
   const oldHashes = new Set();
   const sourceOnly = value => {
     if (typeof value === 'string') { oldHashes.add(sha(value.normalize('NFKC').replace(/\s+/gu, ' ').trim())); return; }
