@@ -2652,3 +2652,60 @@ caps remain unchanged. This is an offline portability clarification, not an
 observed provider error or proof of API acceptance; no provider call was made.
 Earlier token measurements and gates apply to the pre-clarification wire.
 Fresh focused results are retained separately for primary corrected-wire review.
+
+### Receipt-ID provider wire remains an offline integration
+
+The separately versioned `receipt-group-plan-rank-v1` interface uses exact supplied
+receipt IDs and genuine receipt-group preparation/compilation through the existing
+one-slot source-plan transport engine. Existing source/card profiles, model,
+endpoints, accounting, rates and caps are unchanged; no runtime runner or scorer
+adopts this new interface. The actual RG prepared request is the manifest identity,
+not the derived CP assembly. HTTP request bodies, raw first-response envelope,
+canonical literal groups and derived assembly have separate hash meanings.
+Raw whitespace and invalid/duplicate JSON output are not repaired into success.
+
+Empty card requests reject before dispatch/reservation; a genuine empty core
+recall must not invoke ranking. Exact receipt enums are not shortened or clipped.
+The [official Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses)
+documents total enum and per-large-enum string constraints. Conservative local
+preflight rejects over 500 distinct IDs in this twice-embedded enum, and over
+15000 summed ID characters when there are more than 250 IDs. Genuine preparation
+and its stricter real-token input budget run first. A budget rejection before an
+enum boundary is not evidence that the enum branch was exercised or that a
+provider accepts the emitted schema. These are documented-subset constraints,
+not an observed provider error or API acceptance result.
+
+Checkpoint 1 retained an actual exit-1 prospective test: the minimal new factory
+scaffold still used old card reconstruction and rejected a valid receipt-ID
+request before any HTTP. Genuine lowering and real-token HTTP-body preconditions
+passed; original synthetic ledger rows and owned cleanup were preserved. The
+new fake-HTTP and cold-core suite is prospective until explicitly run and accepted.
+It uses only new synthetic stores/ledgers and injected responses, with a test-owned
+real-network sentinel; static checks are not behavioral acceptance. Primary owns
+focused/broad gates, independent review and latest-head CI. Even green fake HTTP
+would establish wire/accounting plumbing only, not model compliance, semantic
+grouping quality, supported-correct first-answer gain, resource fit or Hermes
+readiness. Original US$400/US$30 boundaries and closed cohorts remain untouched;
+no provider call, new paid authority, default change or Stage 2/3/D12 advancement
+follows from this packet.
+
+Subsequent focused native execution passed on pinned Node 22.16.0 and 24.15.0:
+each actual exit 0, 11/11 tests, no skips, with the real local tokenizer, fresh
+SQLite and fake HTTP only. The two initial Node 22 exit-1 runs remain retained:
+the empty-core fixture first omitted required `projectId: null`, then lacked the
+configured select function required before empty-map handling. The corrected
+fixture asserts zero select, rank and generation calls. No adapter/core/model/cap
+change was needed for those preconditions. Thus the preceding prospective wording
+records the earlier native-hold snapshot, not the latest focused test state.
+
+Observed complete-body pressure was 5840 prepared tokens, 5990 count HTTP and
+6005 generation HTTP: the latter rejected before reservation without changing
+the 6000 cap. The tested 501-ID and 251-long-ID enum shapes measured 10628 and
+13011 actual-request tokens and hit genuine earlier input-budget rejection.
+These passing negative cases do not exercise the later enum guards. Actual
+captured-ID source requests and both HTTP bodies fit their unchanged caps in
+the successful core controls; raw response provenance, exact literal output,
+accounting settlement, failed assembly consumption and owned failure cleanup
+were observed. Primary final gates, independent frozen-candidate review and
+latest-head CI are still separate acceptance; fake HTTP remains no evidence of
+provider acceptance, semantic gain or paid authorization.
