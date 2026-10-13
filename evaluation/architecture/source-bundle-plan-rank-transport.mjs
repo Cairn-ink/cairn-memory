@@ -6,6 +6,8 @@ import { modelProfile } from '../../adapters/openai/profiles.mjs';
 import { BUNDLE_RANK_INSTRUCTION, prepareBundleRankRequest, compileBundlePlan } from './source-bundle-rank.mjs';
 import { CARD_PLAN_RANK_INSTRUCTION, prepareCardPlanRankRequest, compileCardPlan } from './card-plan-rank.mjs';
 import { RECEIPT_GROUP_RANK_INSTRUCTION, prepareReceiptGroupPlan, compileReceiptGroupPlan } from './receipt-group-plan.mjs';
+import { CANONICAL_RECEIPT_GROUP_RANK_INSTRUCTION, prepareCanonicalReceiptGroupPlan,
+  compileCanonicalReceiptGroupPlan } from './receipt-group-canonical-plan.mjs';
 
 const VERSION = 'source-bundle-plan-rank-v1';
 const MODEL = 'gpt-4.1-mini-2025-04-14';
@@ -188,19 +190,21 @@ function reprepareCard(request, counter) {
   if (JSON.stringify(payload) !== JSON.stringify(prepared.request)) fail('invalid_request');
   return { prepared, signal: shell.signal, encoded: JSON.stringify(payload) };
 }
-function reprepareReceiptGroup(request, counter) {
+function reprepareReceiptGroup(request, counter, canonical = false) {
+  const instruction = canonical ? CANONICAL_RECEIPT_GROUP_RANK_INSTRUCTION : RECEIPT_GROUP_RANK_INSTRUCTION;
+  const prepare = canonical ? prepareCanonicalReceiptGroupPlan : prepareReceiptGroupPlan;
   const shell = cardShell(request, 'invalid_request');
   const values = { system: shell.system, input: shell.input,
     outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens };
   cardData(values, 'invalid_request');
   const payload = copy(values, 'invalid_request');
   own(payload.input, ['query', 'limit', 'cards'], 'invalid_request');
-  if (payload.system !== RECEIPT_GROUP_RANK_INSTRUCTION || payload.maxOutputTokens !== 1024
+  if (payload.system !== instruction || payload.maxOutputTokens !== 1024
     || !Array.isArray(payload.input.cards)) fail('invalid_request');
   const candidates = payload.input.cards.map(card => own(card,
     ['namespaceIndex', 'memory', 'receipts', 'receiptCount', 'interpretationStatus', 'sourceSelectionCoverage'], 'invalid_request'));
   let prepared;
-  try { prepared = prepareReceiptGroupPlan({ system: RECEIPT_GROUP_RANK_INSTRUCTION,
+  try { prepared = prepare({ system: instruction,
     input: { query: payload.input.query, limit: payload.input.limit, candidates },
     maxOutputTokens: 1024, signal: shell.signal }, counter); }
   catch (error) { fail(error?.code === 'context_budget_exceeded' ? error.code
@@ -220,6 +224,9 @@ const CARD_PROFILE = Object.freeze({ version: 'card-budgeted-plan-rank-v1', form
   reprepare: reprepareCard, compile: compileCardPlan });
 const RECEIPT_GROUP_PROFILE = Object.freeze({ version: 'receipt-group-plan-rank-v1', format: 'cairn_receipt_group_plan_rank_v1',
   reprepare: reprepareReceiptGroup, compile: compileReceiptGroupPlan });
+const CANONICAL_RECEIPT_GROUP_PROFILE = Object.freeze({ version: 'receipt-group-canonical-plan-rank-v1',
+  format: 'cairn_receipt_group_canonical_plan_rank_v1',
+  reprepare: (request, counter) => reprepareReceiptGroup(request, counter, true), compile: compileCanonicalReceiptGroupPlan });
 
 /** Explicit offline-capable one-slot transport, never an experiment grant. */
 export function createSourceBundlePlanRankTransport(options) {
@@ -231,8 +238,13 @@ export function createCardPlanRankTransport(options) {
 export function createReceiptGroupPlanRankTransport(options) {
   return createTransport(options, RECEIPT_GROUP_PROFILE);
 }
+export function createCanonicalReceiptGroupPlanRankTransport(options) {
+  return createTransport(options, CANONICAL_RECEIPT_GROUP_PROFILE);
+}
 async function createTransport(options, profile) {
-  if (profile === CARD_PROFILE || profile === RECEIPT_GROUP_PROFILE) cardData(options, 'invalid_configuration');
+  const receiptGroup = profile === RECEIPT_GROUP_PROFILE || profile === CANONICAL_RECEIPT_GROUP_PROFILE;
+  const strictCard = profile === CARD_PROFILE || receiptGroup;
+  if (strictCard) cardData(options, 'invalid_configuration');
   const opts = own(options, ['configuration', 'checkpoint', 'historySha256', 'manifest',
     'apiKey', 'fetchImpl', 'onRecord'], 'invalid_configuration');
   const configuration = copy(own(opts.configuration, ['directory', 'runId', 'limitMicroUsd', 'requestCap'], 'invalid_configuration'), 'invalid_configuration');
@@ -290,19 +302,19 @@ async function createTransport(options, profile) {
       deadline = Math.min(performance.now() + 30000, manifest.runDeadline, manifest.caseDeadline);
       const abort = code => { cancellation = code; controller.abort(); };
       abortListener = () => abort('cancelled');
-      if (profile === RECEIPT_GROUP_PROFILE) nativeSignalAdd.call(signal, 'abort', abortListener, { once: true });
+      if (receiptGroup) nativeSignalAdd.call(signal, 'abort', abortListener, { once: true });
       else signal.addEventListener('abort', abortListener, { once: true });
-      if (profile === RECEIPT_GROUP_PROFILE ? receiptGroupSignal(signal) : signal.aborted) abort('cancelled');
+      if (receiptGroup ? receiptGroupSignal(signal) : signal.aborted) abort('cancelled');
       if (performance.now() >= deadline) abort('deadline_exceeded');
       timer = setTimeout(() => abort('deadline_exceeded'), Math.max(0, deadline - performance.now()));
       const check = () => {
         if (performance.now() >= deadline && !controller.signal.aborted) abort('deadline_exceeded');
         cancelled();
-        let now; try { const shell = profile === CARD_PROFILE || profile === RECEIPT_GROUP_PROFILE ? cardShell(request, 'request_mutated')
+        let now; try { const shell = strictCard ? cardShell(request, 'request_mutated')
           : own(request, ['system', 'input', 'outputSchema', 'maxOutputTokens', 'signal'], 'request_mutated');
           if (shell.signal !== signal) fail('request_mutated');
-          if (profile === RECEIPT_GROUP_PROFILE && receiptGroupSignal(signal)) { abort('cancelled'); cancelled(); }
-          if (profile === CARD_PROFILE || profile === RECEIPT_GROUP_PROFILE) cardData({ system: shell.system, input: shell.input,
+          if (receiptGroup && receiptGroupSignal(signal)) { abort('cancelled'); cancelled(); }
+          if (strictCard) cardData({ system: shell.system, input: shell.input,
             outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated');
           now = JSON.stringify(copy({ system: shell.system, input: shell.input,
             outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated')); }
@@ -401,7 +413,7 @@ async function createTransport(options, profile) {
             if (part.type !== 'output_text' || typeof part.text !== 'string' || !part.text.isWellFormed()
               || part.text.length > 40000 || countTokens(part.text) > 1024) fail('invalid_model_output');
             const proposal = json(part.text, 'invalid_model_output');
-            if (profile === RECEIPT_GROUP_PROFILE) check();
+            if (receiptGroup) check();
             try { result = profile.compile(source.prepared, proposal).proposal; }
             catch { fail('invalid_model_output'); }
           }
@@ -422,7 +434,7 @@ async function createTransport(options, profile) {
       await send('count', countBody); return await send('generation', generationBody);
     } catch (error) {
       const code = error instanceof SourceBundleTransportError ? error.code : 'invalid_request'; mark(code);
-      if (profile === RECEIPT_GROUP_PROFILE && source) {
+      if (receiptGroup && source) {
         // Audit integrity even when cancellation or an ordinary response failure
         // bypassed check(). Keep the original error/records and known fatal cause.
         try {
@@ -439,7 +451,7 @@ async function createTransport(options, profile) {
       fail(code);
     }
     finally {
-      if (profile === RECEIPT_GROUP_PROFILE) {
+      if (receiptGroup) {
         try { clearTimeout(timer); if (signal && abortListener) nativeSignalRemove.call(signal, 'abort', abortListener); }
         finally { state = 'consumed'; }
       } else { clearTimeout(timer); if (signal && abortListener) signal.removeEventListener('abort', abortListener); state = 'consumed'; }
