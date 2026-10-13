@@ -311,6 +311,78 @@ offline('RW2 genuine signal uses captured listener operations rather than input 
   assert.equal(f.records.length, 4); f.checkPrefix(); await f.cleanup();
 });
 
+offline('RW2 mixed failed terminal paths retain ordinary errors but mutation cannot leave nonfatal health', async (t, counter) => {
+  const scenarios = [
+    { name: 'incomplete-generation', phase: 2, kind: 'incomplete', error: 'invalid_model_output', outcome: 'failed', price: 72 },
+    { name: 'malformed-proposal', phase: 2, kind: 'proposal', error: 'invalid_model_output', outcome: 'failed', price: 72 },
+    { name: 'invalid-count', phase: 1, kind: 'count', error: 'invalid_response', outcome: 'failed', price: null },
+    { name: 'rejected-count', phase: 1, kind: 'reject', error: 'provider_failed', outcome: 'unknown', price: null },
+    { name: 'rejected-generation', phase: 2, kind: 'reject', error: 'provider_failed', outcome: 'unknown', price: null },
+    { name: 'post-record-incomplete', phase: 2, kind: 'incomplete', boundary: 'post', error: 'invalid_model_output', outcome: 'failed', price: 72 },
+    { name: 'post-record-rejected-count', phase: 1, kind: 'reject', boundary: 'post', error: 'provider_failed', outcome: 'unknown', price: null },
+    { name: 'cancelled-generation', phase: 2, kind: 'cancel', error: 'cancelled', outcome: 'unknown', price: null },
+    { name: 'pre-record-cancel', phase: 1, kind: 'cancel', boundary: 'pre', error: 'cancelled', outcome: 'failed', price: null },
+    { name: 'post-record-cancel', phase: 2, kind: 'cancel', boundary: 'post', error: 'cancelled', outcome: 'succeeded', price: 72 },
+    { name: 'invalid-usage', phase: 2, kind: 'usage', error: 'invalid_usage', fatal: 'invalid_usage', outcome: 'failed', price: null },
+    { name: 'authentication', phase: 2, kind: 'auth', error: 'authentication_failed', fatal: 'authentication_failed', outcome: 'failed', price: 72 },
+    { name: 'redirect', phase: 2, kind: 'redirect', error: 'redirect_rejected', fatal: 'redirect_rejected', outcome: 'failed', price: 72 },
+    { name: 'credential', phase: 2, kind: 'credential', error: 'credential_echo', fatal: 'credential_echo', outcome: 'failed', price: 72 },
+    { name: 'record-persistence', phase: 2, kind: 'persist', boundary: 'post', error: 'record_persistence_failed', fatal: 'record_persistence_failed', outcome: 'succeeded', price: 72 },
+  ];
+  const failures = [];
+  for (const scenario of scenarios) for (const mutation of ['none', 'signal', 'request-data']) {
+    let f, hooks = 0, mutations = 0;
+    const mutate = () => {
+      if (mutation === 'signal') { mutations++; Object.defineProperty(f.controller.signal, 'aborted',
+        { configurable: true, get() { hooks++; throw new Error('Signal hook forbidden'); } }); }
+      if (mutation === 'request-data') { mutations++; f.request.input.cards[0].receipts[0].excerpt += ' Mutated after dispatch'; }
+    };
+    f = await fixture(t, counter, {
+      fetch(_, __, n) {
+        if (n === scenario.phase && !scenario.boundary) { mutate(); if (scenario.kind === 'cancel') f.controller.abort(); }
+        if (n === scenario.phase && scenario.kind === 'reject') return Promise.reject(new Error('Synthetic failed dispatch'));
+        const response = n === 1 ? { object: 'response.input_tokens', input_tokens: 500 } : envelope();
+        if (n === scenario.phase) {
+          if (scenario.kind === 'incomplete') response.status = 'incomplete';
+          if (scenario.kind === 'proposal') response.output[0].content[0].text = '{not-json';
+          if (scenario.kind === 'count') response.input_tokens = 'invalid';
+          if (scenario.kind === 'usage') response.usage.total_tokens = 999;
+          if (scenario.kind === 'credential') response.output[0].content[0].text = KEY;
+        }
+        return new Response(JSON.stringify(response), { status: n === scenario.phase && scenario.kind === 'auth' ? 401
+          : n === scenario.phase && scenario.kind === 'redirect' ? 302 : 200 });
+      },
+      observe(record) {
+        if (record.phase === scenario.boundary && record.kind === (scenario.phase === 1 ? 'count' : 'generation')) {
+          mutate(); if (scenario.kind === 'cancel') f.controller.abort();
+          if (scenario.kind === 'persist') throw new Error('Synthetic persistence failure');
+        }
+      },
+    });
+    f.request = { ...structuredClone(f.prepared.request), signal: f.controller.signal };
+    let error, reuse;
+    try { await f.transport.planRank(f.request); } catch (failure) { error = failure.code; }
+    try { await f.transport.planRank(f.request); } catch (failure) { reuse = failure.code; }
+    const state = f.transport.getState(), health = f.transport.health(), rows = state.attempts.slice(1);
+    const expectedFatal = scenario.fatal ?? (mutation === 'none' ? null : 'request_mutated');
+    const expectedCalls = scenario.boundary === 'pre' ? 0 : scenario.phase;
+    t.diagnostic(JSON.stringify({ case: scenario.name, mutation, error, health, hooks, calls: f.calls.length,
+      settlements: rows.map(row => [row.channel, row.outcome, row.actualMicroUsd]), cleanupPath: f.workspace.path }));
+    for (const [field, actual, expected] of [['fatalCode', health.fatalCode, expectedFatal], ['error', error, scenario.error],
+      ['hooks', hooks, 0], ['mutations', mutations, Number(mutation !== 'none')], ['calls', f.calls.length, expectedCalls],
+      ['state', health.state, 'consumed'], ['reuse', reuse, 'slot_consumed'], ['rows', rows.length, scenario.phase]]) {
+      if (actual !== expected) failures.push({ case: scenario.name, mutation, field, actual, expected });
+    }
+    assert.equal(rows.at(-1).outcome, scenario.outcome); assert.equal(rows.at(-1).actualMicroUsd, scenario.price);
+    if (rows.length === 2) assert.deepEqual([rows[0].channel, rows[0].outcome, rows[0].actualMicroUsd], ['cairn-count', 'succeeded', null]);
+    assert.equal(state.reservedMicroUsd, 30 + rows.length * 5000, 'Unknown dispatch stays fully reserved');
+    assert.equal(f.records.length, rows.length * 2); assert.equal(new Set(rows.map(row => row.attemptId)).size, rows.length);
+    assert.equal(new Set(f.records.filter(record => record.phase === 'post').map(record => record.attemptId)).size, rows.length);
+    f.checkPrefix(); await f.cleanup(); assert.equal(existsSync(f.workspace.path), false);
+  }
+  assert.deepEqual(failures, [], 'Ordinary failures/cancellation must not bypass complete RG integrity or safety precedence');
+});
+
 offline('RW4/5 invalid literal groups/raw duplicate keys/usage/refusal settle once without repair', async (t, counter) => {
   const tooMany = { groups: Array.from({ length: 7 }, () => literal('fresh-wire-receipt-alder')) };
   const bad = [

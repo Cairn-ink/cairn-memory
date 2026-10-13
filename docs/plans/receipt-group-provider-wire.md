@@ -380,3 +380,65 @@ privately without post-gate repository edits. Exact correction inventory is four
 paths against 040a9ab, within the existing original five-path PR scope. Primary
 owns the unchanged independent probe, affected full matrices, fresh dual review
 and delivery. No worker commit/push or paid/model authorization is implied.
+
+## RW2 mixed-failure correction — checkpoint 1
+
+Primary retained independent mixed-failure probe actual exit 1 against fixed
+881e154c9309ef6a5e12019a563fc0daa569c274 after its full gates. Prior signal
+success-path correction did not classify simultaneous ordinary response/fetch
+failure plus mutation as fatal. Original base remains 129c4c5. All prior records
+and the original contract remain intact; future feasibility stays HOLD.
+
+A prospective actual-factory test was added before production changes, with
+ordinary no-mutation baselines, signal and complete-request data mutation,
+count/generation malformed/rejected responses, post-record failure/cancellation,
+abort-first controls and existing fatal safety precedence. First selected Node22
+owned/env-i RED exited 1, 0/1, no skips. The incomplete-generation signal control
+reproduced nonfatal invalid_model_output with actual usage 72 microUSD. The next
+request-data control hit a test precondition: it attempted to mutate the frozen
+prepared payload and threw in fake fetch, retaining unknown/reserved accounting
+rather than the intended malformed-response boundary. This failure remains in
+`receipt-group-wire-mixed-failure-regression-red-node22.log`; it is not a claim
+of full control coverage. Test-only correction now uses the same detached mutable
+request pattern as the earlier genuine in-flight data controls. Production is
+unchanged pending primary inspection and checkpoint release.
+
+Primary inspected the test/precondition and authorized one corrected selected
+RED. With detached mutable payload, all 45 controls reached their intended
+boundaries; actual exit 1, 0/1, no skips, about 5.5 seconds. Log
+`receipt-group-wire-mixed-failure-regression-red2-node22.log` preserves the
+complete observations. Both signal and request-data drift bypassed fatal health
+on ordinary failure, including post-record and cancellation early exits. The
+no-mutation ordinary controls stayed nonfatal, and invalid_usage/auth/redirect/
+credential/persistence controls retained their existing fatal precedence.
+
+The accepted correction adds only an RG terminal-catch audit after marking the
+original caught code. It compares the entire descriptor-safe actual request to
+the prepared encoding and revalidates native signal identity/prototype/brand/own
+data descriptors, independent of cancellation. Mutation marks fatal health only
+when no prior fatal cause exists. Existing successful checks, cancellation
+ordering, native cleanup, source/card helpers, caps and accounting are unchanged.
+This is an explicit error contract: a mixed ordinary failure keeps its original
+public and record error, usage and settlement, while health is fatal. A future
+runner MUST inspect transport health on every terminal outcome, not classify by
+the public code alone. Unknown dispatch stays fully reserved; no repair/retry.
+
+The corrected new focused suite passed on pinned Node 22.16.0 and 24.15.0:
+actual exit 0, 14/14 each, no skips. Retained logs are
+`receipt-group-wire-terminal-focused-node22.log` and
+`receipt-group-wire-terminal-focused-node24.log` in the private acceptance
+directory. All 45 mixed-failure controls retain original errors/accounting and
+known fatal precedence, detect mutation with zero hooks, consume once, reject
+reuse and explicitly clean owned workspaces. Existing signal/cancellation and
+actual cold-core controls passed. No unsuccessful production correction round
+occurred in this mixed-failure packet; the earlier fixture-precondition RED and
+independent probe remain.
+
+Documentation now closes for primary acceptance on final bytes. Primary owns
+the independent mixed probe, full affected matrices, fresh independent dual
+review and delivery; per explicit release, no duplicate post-document worker
+focused runs are required. Final hashes, exact four-path independent inventory
+and cleanup observations are retained privately in
+`receipt-group-wire-terminal-focused-evidence.md`, without later source edits.
+No broad worker suite, provider/key/operational ledger, commit or push occurred;
+the future feasibility package remains HOLD.

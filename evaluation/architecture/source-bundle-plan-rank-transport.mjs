@@ -420,7 +420,24 @@ async function createTransport(options, profile) {
         if (failureCode) fail(failureCode); check(); return result;
       }
       await send('count', countBody); return await send('generation', generationBody);
-    } catch (error) { const code = error instanceof SourceBundleTransportError ? error.code : 'invalid_request'; mark(code); fail(code); }
+    } catch (error) {
+      const code = error instanceof SourceBundleTransportError ? error.code : 'invalid_request'; mark(code);
+      if (profile === RECEIPT_GROUP_PROFILE && source) {
+        // Audit integrity even when cancellation or an ordinary response failure
+        // bypassed check(). Keep the original error/records and known fatal cause.
+        try {
+          const shell = cardShell(request, 'request_mutated');
+          if (shell.signal !== signal) fail('request_mutated');
+          receiptGroupSignal(signal);
+          cardData({ system: shell.system, input: shell.input,
+            outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated');
+          if (JSON.stringify(copy({ system: shell.system, input: shell.input,
+            outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated')) !== source.encoded)
+            fail('request_mutated');
+        } catch { mark('request_mutated'); }
+      }
+      fail(code);
+    }
     finally {
       if (profile === RECEIPT_GROUP_PROFILE) {
         try { clearTimeout(timer); if (signal && abortListener) nativeSignalRemove.call(signal, 'abort', abortListener); }

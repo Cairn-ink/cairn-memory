@@ -2730,3 +2730,30 @@ generation; post-record mutation preserved prior settlement. Genuine cancellatio
 and owned cleanup also passed. Primary final frozen-byte gates and renewed dual
 review remain separate; no provider acceptance, semantic gain or paid execution
 is established by these fake-HTTP controls.
+
+### Receipt-group wire mixed-failure terminal classification (2026-10-13)
+
+The first native signal correction still missed simultaneous ordinary response
+or rejected-fetch failure plus integrity mutation. The independent Spec probe
+against 881e154c reproduced four nonfatal health outcomes despite mutation. The
+new prospective RED also covers whole request-data drift, post-record mutation
+and cancellation-first exits. Both REDs remain retained: the first includes a
+frozen-fixture precondition failure, the corrected one reaches all 45 controls.
+
+The bounded RG-only terminal-catch audit now runs independently of cancellation,
+after recording the original caught code. It validates complete actual request
+integrity and native signal descriptors without executing hooks, and marks
+request_mutated fatal health only if no known fatal safety cause already exists.
+Original ordinary public/record failures and usage/accounting stay unchanged;
+auth/redirect/credential/invalid_usage/ledger/persistence precedence is preserved.
+Consumers MUST inspect health on every terminal outcome: public error code alone
+does not distinguish ordinary failure from mixed failure with fatal mutation.
+Unknown dispatch retains its full reservation; no retry or output repair follows.
+
+Pinned Node 22.16.0 and 24.15.0 new focused suites each exited 0 with 14/14 tests,
+no skips. Both mutation types and no-mutation controls passed with zero hooks,
+exact-once settlement, consumed slots and explicit owned cleanup. Existing
+source/card policy, successful checks/cancellation ordering, caps and accounting
+implementation were not changed. Primary final-byte full gates and renewed dual
+review remain separate acceptance; fake HTTP establishes no provider acceptance,
+semantic gain or authority to run the held feasibility experiment.
