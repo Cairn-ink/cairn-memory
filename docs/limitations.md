@@ -2872,3 +2872,34 @@ requires wholly new frozen cases, reviewed runtime and fresh checks against
 the original cumulative budget. No paid request or operational key/ledger
 access is authorized by this work. See
 [the prospective contract](plans/receipt-group-canonicalization.md).
+
+## Canonical receipt-group fresh feasibility is prospective
+
+The separately versioned canonical first-response coordinator shares a bounded
+internal engine with the original fixed v1 profile. This refactoring changes
+dependency identities, not the old profile's fixture, rules or closed result.
+The wholly new source-only six is not a retry of the closed 2/6 cohort. Its
+project-scoped normal indexed capture supplies genuine source-plan/client
+witnesses for offline assembly controls; extraction remains scripted and is not
+a measured model capability. Canonicalization removes only repeated context
+membership and terminal/context overlap after validating every raw occurrence.
+Raw responses and proposals remain distinct from canonical and derived plans.
+
+Offline tests can establish authoritative full source/role/date packing, but the
+feasibility runner makes no answer or judge call. Runtime chosen-card availability
+reports `deliveredAnswerContext:false`, with semantic sufficiency unassessed.
+At least 5/6 compiled nonempty, complete accounted dispositions and nonfatal
+health are a prospective structural gate, not QA success or default promotion.
+Fresh operator review, current cumulative US$400/protected US$30 affordability,
+prepared-artifact review and explicit release remain separate prerequisites to
+any new provider run. No paid authority or matched QA24 advancement is supplied
+by this offline implementation. See [the prospective plan](plans/receipt-group-canonical-feasibility.md).
+
+The worker's offline focused suite subsequently passed 17/17 on Node 22.16.0
+and Node 24.15.0, each actual exit 0 with no skips. Real normal capture, canonical
+fake-HTTP provenance and authoritative source/role/date flat packing passed;
+the pressure case was strictly largest and complete inputs stayed below 6,000
+tokens. These scripted controls do not measure provider behavior or establish
+the new six's real structural result. Primary broad gates and independent review
+remain required; the closed original 2/6 result and all live authority limits
+are unchanged.
