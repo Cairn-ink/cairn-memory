@@ -310,3 +310,41 @@ above is historical. Primary final-byte full matrices, independent Standards and
 Spec reviews and this candidate's delivery remain pending. Worker writes stop
 after documentation/evidence closure; no broad suite, provider request, commit,
 push or merge was performed by the worker.
+
+## Closed first-response model outcome (2026-10-13)
+
+The [original six-case result](receipt-group-feasibility-results.md) is closed
+and rejected: **2/6** first responses compiled and selected nonempty cards,
+below the frozen requirement of **5/6**. Operator exit 0 and reconciled accounting
+do not imply a passed structural gate. All six provider generations completed;
+02/03 compiled, while 01/04/05/06 retain `invalid_model_output` and no accepted
+selection. Their raw outputs contain terminal-in-context overlaps in 1/2/6/1
+groups; v1 enforced its original distinctness rule. Nothing was repaired,
+recompiled, retried or rescored, and no answer or judge was called.
+
+Twelve physical intents added 60000 conservative micro-USD; pending and unknown
+counts are zero and the original prefix remains intact. The result separates
+generation-only pricing from conservative reservations and source availability
+from delivered answer context. The fresh synthetic overlap probe is separate
+prospective-contract evidence, not a changed closed outcome or a shipped fix.
+
+Runtime acceptance at 3aecc220d30a6c6efabae4a29decea60f054753d included full
+two-Node gates, separate nonauthor reviews and 27 latest-head successful checks.
+The earlier offline/pending status above is historical, not the present model
+result. A newly matched QA24 comparison remains blocked. A separately versioned,
+source-preserving representation requires its own offline implementation and
+review; this result delivers no successor or improvement. Later paid work
+requires a fresh reviewed freeze and original-budget preflight; all Stage 2/3,
+safety/resource and installed-host gates remain.
+
+Results-documentation checkpoint: one bounded actual GPT-6.1 Sol/high worker
+used fixed base 3aecc220d30a6c6efabae4a29decea60f054753d and only the four
+scoped documents. Read-only JSON/version validation and `git diff --check`
+each exited 0. Six outcome rows agree with the original retained reports;
+144 local Markdown targets exist. Git paths and an independent filesystem/
+base-blob inventory agree on four changes (1619 base / 1620 current files).
+The full 188039-byte limitations prefix, full prior feasibility plan and all
+three-stage historical content/gates are preserved. No private paths, receipt
+IDs, response bodies or ledger dump were added. Primary owns this delivery's
+required gates, candidate freeze, independent final reviews and CI; these
+worker checks do not promote the rejected result or release prospective work.

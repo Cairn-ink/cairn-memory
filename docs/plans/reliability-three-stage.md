@@ -1,6 +1,20 @@
 # Reliability and answer quality development plan
 
-Status: accepted development direction; latest card-plan candidate rejected.
+Status: accepted development direction; receipt-ID feasibility rejected.
+The [closed receipt-ID six-case result](receipt-group-feasibility-results.md)
+has 2/6 compiled nonempty first responses, below the required 5/6. Operator
+exit 0 / reconciled accounting and six completed provider generations are not
+a passed engineering gate. Four `invalid_model_output` responses contain
+terminal-in-context overlaps; v1 enforced its original distinctness rule.
+No answer/judge, repair or rescore occurred. A newly matched QA24 is blocked.
+A separately versioned, source-preserving representation requires its own offline
+implementation and review; this result delivers no successor or improvement.
+Any later paid feasibility needs new frozen cases, an exact reviewed artifact
+and fresh original-budget
+checks. Historical acceptance-time statuses below remain retained history;
+P1–P10, Stage 2/3, safety/resource and Hermes gates are unchanged.
+
+Historical card-plan status retained:
 The [closed card-plan QA24 result](card-plan-qa24-results.md) retains A
 20 correct / 4 incorrect / 0 unresolved and B/C each 2 / 1 / 21, with
 24/3/3 completed answers. B−A supported-correct gain is -18 and
