@@ -3044,3 +3044,47 @@ blind judgments remain limitations; natural installed Hermes new-session use is
 unproven. All sources, first artifacts, scores, older cohorts and gates stay
 immutable. Next is bounded evidence-use design review followed by one fresh
 non-scored controlled probe, not automatic paid retry or a selected successor.
+
+## Closed readable-source presentation probe: zero QA signal, stop
+
+The [frozen first-answer result](plans/readable-source-probe-results.md) records
+12/12 completed and required-conclusion-correct answers in both flat and
+lossless-readable arms; incorrect, unresolved and unanswered counts are all 0.
+One baseline question has an agreed unsupported-certainty and predefined-severe
+extra assertion; readable has none. Required-conclusion correctness does not
+certify all added assertions. There are no new readable harms, correctness
+losses or safety unknowns, but net correct gain 0 and zero baseline agreed-wrong
+opportunity mandate STOP. The single safety observation establishes no reliable
+or general benefit, and the consumed cases cannot be tuned or retried.
+
+Only presentation changed on the same genuine card-plan capability and complete
+sources/recorded roles/order, with unchanged ordinary answer model/instruction/
+temperature/n/output. Twelve hand-authored worlds in six matched pairs across
+three families contain 60 scripted whole cards and 84 passages; six worlds are
+known, six explicitly unestablished. Genuine indexed capture/cold reads coexist
+with scripted extraction/classification/ranking and an explicitly retained
+author-order array permutation, not learned retrieval or unmodified native
+recall. The common synthetic capture clock is not event truth. Two same-family
+new nonauthor first judges used shuffled opaque items; repeated questions limit
+blinding and per-item independence. No reply repair/rejudgment occurred. A
+truncated unsubmitted transfer was rebuilt to exact intended bytes before any
+judge received it, with its malformed copy preserved, not a model retry.
+
+Readable complete-wire inputs cost 15,817 versus 15,109 local tokens: +59 per
+question, not token saving. Provider input/output totals were 12,745/376 versus
+11,953/390. Accounting accepted all 24 physical requests, US$0.12 reservations
+and US$0.011116 configured provider-usage estimate, not invoice. Cumulative
+reservations reached US$335.102281 at request 58,153; original US$400/protected
+US$30 and the unchanged ordinary preflight floor remain. Recorded 76.741987314
+seconds includes coordination and is not product latency or a causal arm-speed
+comparison. Completion/accounting does not replace semantic or lightweight gates.
+
+No default, P4/Stage 3, official LongMemEval, Mem0/Supermemory parity, reliability,
+installed Hermes new-session or resource acceptance follows. Do not revive
+literal source-context basis generation: ordinary indexed-evidence capture
+rejects qualification configuration and produces none; source-only projection
+omits interpretations. Earlier context/addressed trials retain copy/role and
+semantic failures without established final-answer gains. A downstream
+source-bound proposal bridge is distinct but unproved, not an implementation
+chosen here. Fresh mechanism/opportunity evidence must precede another candidate;
+all closed sources, answers, judgments, budgets and historical gates stay intact.

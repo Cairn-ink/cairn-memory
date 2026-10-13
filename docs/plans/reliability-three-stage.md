@@ -1,5 +1,17 @@
 # Reliability and answer quality development plan
 
+Latest checkpoint: STOP the
+[closed readable-source presentation probe](readable-source-probe-results.md).
+Flat and lossless-readable evidence each reached 12/12 required-conclusion-correct
+first answers: net gain 0 and no baseline agreed-incorrect opportunity. One
+baseline added assertion was agreed unsupported/severe; readable had none, but
+that single safety observation does not establish QA or reliable safety gain.
+Readable framing added 59 local full-wire tokens per question. No format-case
+tuning/retry or revival of literal source-context basis generation follows;
+fresh mechanism/opportunity evidence is needed before any next candidate.
+P1–P10, all older results and P4/Stage 3/Hermes/resource gates remain unchanged.
+
+Historical canonical QA24 status retained:
 Status: STOP CURRENT CANONICAL CANDIDATE; Stage 3 remains blocked.
 The [closed canonical QA24 result](receipt-group-canonical-comparison-results.md)
 records ordinary A 21 correct / 3 incorrect / 0 unresolved / 0 unanswered
