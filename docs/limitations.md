@@ -2806,3 +2806,41 @@ Both initial fixture-precondition failures remain recorded separately from the
 green results. Exact log-derived owned cleanup checks found no residual paths.
 Primary final-byte full gates and independent reviews remain separate acceptance;
 the held six-case model experiment has not been run or authorized by these tests.
+
+### Closed receipt-ID first-response model feasibility
+
+The [closed six-case result](plans/receipt-group-feasibility-results.md) rejects
+advancement: only 2/6 first responses compiled and selected nonempty cards,
+below the frozen 5/6 threshold. All six provider generations completed, and
+operator exit 0 with reconciled accounting is execution success, not model
+feasibility or answer quality. Cases 02/03 compiled; 01/04/05/06 retain
+`invalid_model_output`, with no accepted selection/coverage. Their originally
+permitted raw outputs contain terminal-in-context overlap in 1/2/6/1 groups.
+The original v1 distinctness rule was enforced; this is not a claimed compiler
+bug or proof of model-internal reasoning. No closed case was retried, repaired,
+recompiled, rejudged or rescored.
+
+The two accepted selections retain 2/2 and 3/3 diagnostic anchors respectively,
+both selected and available on chosen whole cards. Neither measure is delivered
+answer context or semantic correctness. No answer or judge was called, and
+normal scripted indexed capture is not measured extraction quality. A separate
+entirely fresh synthetic compiler probe supplies a prospective overlap-acceptance
+RED while preserving current-rule and unknown-ID controls; it changes no score
+and implements no fix or future schema.
+
+Twelve physical intents (six count / six generation) added 60000 conservative
+micro-USD, from 334152281 to 334212281; pending/unknown are zero and the original
+prefix is intact. The 4617-micro-USD known generation estimate uses 8166 input /
+843 output tokens; count priced usage remains null. It is not an invoice/full
+spend or grounds to refund reservations. Cumulative US$400/protected US$30 stay
+fixed. Prior full two-Node gates, independent reviews and 27 latest-head checks
+accepted execution, not the failed model gate. Earlier offline status above is
+historical; this result delivery has its own validation and review requirements.
+
+The conditional fresh matched QA24 comparison remains blocked by 2/6. A separately
+versioned, source-preserving representation requires its own offline implementation
+and review; this result delivers no successor or improvement. Any later paid
+feasibility requires new frozen cases, reviewed
+exact implementation and fresh original-budget checks. All prior failures,
+Stage 2/3, unsupported/stale/severe safety, resource and installed Hermes gates
+remain unchanged; no default promotion, merge, release or deployment follows.
