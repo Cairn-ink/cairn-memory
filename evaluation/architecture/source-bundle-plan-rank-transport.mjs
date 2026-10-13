@@ -5,12 +5,25 @@ import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 import { modelProfile } from '../../adapters/openai/profiles.mjs';
 import { BUNDLE_RANK_INSTRUCTION, prepareBundleRankRequest, compileBundlePlan } from './source-bundle-rank.mjs';
 import { CARD_PLAN_RANK_INSTRUCTION, prepareCardPlanRankRequest, compileCardPlan } from './card-plan-rank.mjs';
+import { RECEIPT_GROUP_RANK_INSTRUCTION, prepareReceiptGroupPlan, compileReceiptGroupPlan } from './receipt-group-plan.mjs';
 
 const VERSION = 'source-bundle-plan-rank-v1';
 const MODEL = 'gpt-4.1-mini-2025-04-14';
 const COUNT = 'https://api.openai.com/v1/responses/input_tokens';
 const GENERATE = 'https://api.openai.com/v1/responses';
 const RESERVATION = 5000;
+const nativeSignalAborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get;
+const nativeSignalAdd = AbortSignal.prototype.addEventListener;
+const nativeSignalRemove = AbortSignal.prototype.removeEventListener;
+function receiptGroupSignal(signal) {
+  try {
+    if (!signal || typeof signal !== 'object' || types.isProxy(signal)
+      || Object.getPrototypeOf(signal) !== AbortSignal.prototype
+      || Reflect.ownKeys(Object.getOwnPropertyDescriptors(signal)).some(key =>
+        !Object.hasOwn(Object.getOwnPropertyDescriptor(signal, key), 'value'))) fail('request_mutated');
+    return nativeSignalAborted.call(signal);
+  } catch { fail('request_mutated'); }
+}
 const codes = new Set(['invalid_configuration', 'prerequisite_unavailable', 'invalid_request',
   'request_mutated', 'context_budget_exceeded', 'slot_consumed', 'transport_busy', 'transport_closed',
   'cancelled', 'deadline_exceeded', 'ledger_failed', 'budget_blocked', 'record_persistence_failed',
@@ -175,11 +188,38 @@ function reprepareCard(request, counter) {
   if (JSON.stringify(payload) !== JSON.stringify(prepared.request)) fail('invalid_request');
   return { prepared, signal: shell.signal, encoded: JSON.stringify(payload) };
 }
-// Only these two private profiles can select policy; callers have no profile port.
+function reprepareReceiptGroup(request, counter) {
+  const shell = cardShell(request, 'invalid_request');
+  const values = { system: shell.system, input: shell.input,
+    outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens };
+  cardData(values, 'invalid_request');
+  const payload = copy(values, 'invalid_request');
+  own(payload.input, ['query', 'limit', 'cards'], 'invalid_request');
+  if (payload.system !== RECEIPT_GROUP_RANK_INSTRUCTION || payload.maxOutputTokens !== 1024
+    || !Array.isArray(payload.input.cards)) fail('invalid_request');
+  const candidates = payload.input.cards.map(card => own(card,
+    ['namespaceIndex', 'memory', 'receipts', 'receiptCount', 'interpretationStatus', 'sourceSelectionCoverage'], 'invalid_request'));
+  let prepared;
+  try { prepared = prepareReceiptGroupPlan({ system: RECEIPT_GROUP_RANK_INSTRUCTION,
+    input: { query: payload.input.query, limit: payload.input.limit, candidates },
+    maxOutputTokens: 1024, signal: shell.signal }, counter); }
+  catch (error) { fail(error?.code === 'context_budget_exceeded' ? error.code
+    : error?.name === 'AbortError' ? 'cancelled' : 'invalid_request'); }
+  if (JSON.stringify(payload) !== JSON.stringify(prepared.request)) fail('invalid_request');
+  const ids = prepared.request.outputSchema.properties.groups.items.properties.terminalReceiptId.enum;
+  // The exact same enum appears twice. Keep the documented-subset checks local
+  // and after genuine preparation so stricter input-budget failures retain priority.
+  if (!candidates.length || ids.length > 500
+    || ids.length > 250 && ids.reduce((size, id) => size + id.length, 0) > 15000) fail('invalid_request');
+  return { prepared, signal: shell.signal, encoded: JSON.stringify(payload) };
+}
+// Only these private closed profiles can select policy; callers have no profile port.
 const SOURCE_PROFILE = Object.freeze({ version: VERSION, format: 'cairn_source_bundle_plan_rank_v1',
   reprepare, compile: compileBundlePlan });
 const CARD_PROFILE = Object.freeze({ version: 'card-budgeted-plan-rank-v1', format: 'cairn_card_budgeted_plan_rank_v1',
   reprepare: reprepareCard, compile: compileCardPlan });
+const RECEIPT_GROUP_PROFILE = Object.freeze({ version: 'receipt-group-plan-rank-v1', format: 'cairn_receipt_group_plan_rank_v1',
+  reprepare: reprepareReceiptGroup, compile: compileReceiptGroupPlan });
 
 /** Explicit offline-capable one-slot transport, never an experiment grant. */
 export function createSourceBundlePlanRankTransport(options) {
@@ -188,8 +228,11 @@ export function createSourceBundlePlanRankTransport(options) {
 export function createCardPlanRankTransport(options) {
   return createTransport(options, CARD_PROFILE);
 }
+export function createReceiptGroupPlanRankTransport(options) {
+  return createTransport(options, RECEIPT_GROUP_PROFILE);
+}
 async function createTransport(options, profile) {
-  if (profile === CARD_PROFILE) cardData(options, 'invalid_configuration');
+  if (profile === CARD_PROFILE || profile === RECEIPT_GROUP_PROFILE) cardData(options, 'invalid_configuration');
   const opts = own(options, ['configuration', 'checkpoint', 'historySha256', 'manifest',
     'apiKey', 'fetchImpl', 'onRecord'], 'invalid_configuration');
   const configuration = copy(own(opts.configuration, ['directory', 'runId', 'limitMicroUsd', 'requestCap'], 'invalid_configuration'), 'invalid_configuration');
@@ -246,17 +289,20 @@ async function createTransport(options, profile) {
       if ([source.encoded, countBody, generationBody].some(text => countTokens(text) > 6000)) fail('context_budget_exceeded');
       deadline = Math.min(performance.now() + 30000, manifest.runDeadline, manifest.caseDeadline);
       const abort = code => { cancellation = code; controller.abort(); };
-      abortListener = () => abort('cancelled'); signal.addEventListener('abort', abortListener, { once: true });
-      if (signal.aborted) abort('cancelled');
+      abortListener = () => abort('cancelled');
+      if (profile === RECEIPT_GROUP_PROFILE) nativeSignalAdd.call(signal, 'abort', abortListener, { once: true });
+      else signal.addEventListener('abort', abortListener, { once: true });
+      if (profile === RECEIPT_GROUP_PROFILE ? receiptGroupSignal(signal) : signal.aborted) abort('cancelled');
       if (performance.now() >= deadline) abort('deadline_exceeded');
       timer = setTimeout(() => abort('deadline_exceeded'), Math.max(0, deadline - performance.now()));
       const check = () => {
         if (performance.now() >= deadline && !controller.signal.aborted) abort('deadline_exceeded');
         cancelled();
-        let now; try { const shell = profile === CARD_PROFILE ? cardShell(request, 'request_mutated')
+        let now; try { const shell = profile === CARD_PROFILE || profile === RECEIPT_GROUP_PROFILE ? cardShell(request, 'request_mutated')
           : own(request, ['system', 'input', 'outputSchema', 'maxOutputTokens', 'signal'], 'request_mutated');
           if (shell.signal !== signal) fail('request_mutated');
-          if (profile === CARD_PROFILE) cardData({ system: shell.system, input: shell.input,
+          if (profile === RECEIPT_GROUP_PROFILE && receiptGroupSignal(signal)) { abort('cancelled'); cancelled(); }
+          if (profile === CARD_PROFILE || profile === RECEIPT_GROUP_PROFILE) cardData({ system: shell.system, input: shell.input,
             outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated');
           now = JSON.stringify(copy({ system: shell.system, input: shell.input,
             outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated')); }
@@ -355,6 +401,7 @@ async function createTransport(options, profile) {
             if (part.type !== 'output_text' || typeof part.text !== 'string' || !part.text.isWellFormed()
               || part.text.length > 40000 || countTokens(part.text) > 1024) fail('invalid_model_output');
             const proposal = json(part.text, 'invalid_model_output');
+            if (profile === RECEIPT_GROUP_PROFILE) check();
             try { result = profile.compile(source.prepared, proposal).proposal; }
             catch { fail('invalid_model_output'); }
           }
@@ -373,8 +420,30 @@ async function createTransport(options, profile) {
         if (failureCode) fail(failureCode); check(); return result;
       }
       await send('count', countBody); return await send('generation', generationBody);
-    } catch (error) { const code = error instanceof SourceBundleTransportError ? error.code : 'invalid_request'; mark(code); fail(code); }
-    finally { clearTimeout(timer); if (signal && abortListener) signal.removeEventListener('abort', abortListener); state = 'consumed'; }
+    } catch (error) {
+      const code = error instanceof SourceBundleTransportError ? error.code : 'invalid_request'; mark(code);
+      if (profile === RECEIPT_GROUP_PROFILE && source) {
+        // Audit integrity even when cancellation or an ordinary response failure
+        // bypassed check(). Keep the original error/records and known fatal cause.
+        try {
+          const shell = cardShell(request, 'request_mutated');
+          if (shell.signal !== signal) fail('request_mutated');
+          receiptGroupSignal(signal);
+          cardData({ system: shell.system, input: shell.input,
+            outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated');
+          if (JSON.stringify(copy({ system: shell.system, input: shell.input,
+            outputSchema: shell.outputSchema, maxOutputTokens: shell.maxOutputTokens }, 'request_mutated')) !== source.encoded)
+            fail('request_mutated');
+        } catch { mark('request_mutated'); }
+      }
+      fail(code);
+    }
+    finally {
+      if (profile === RECEIPT_GROUP_PROFILE) {
+        try { clearTimeout(timer); if (signal && abortListener) nativeSignalRemove.call(signal, 'abort', abortListener); }
+        finally { state = 'consumed'; }
+      } else { clearTimeout(timer); if (signal && abortListener) signal.removeEventListener('abort', abortListener); state = 'consumed'; }
+    }
   }
   return Object.freeze({ planRank, getRecords: () => Object.freeze([...records]),
     getState() { if (state === 'closed') fail('transport_closed'); return accounting(() => ledger.getState()); },
