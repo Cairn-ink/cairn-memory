@@ -1,0 +1,777 @@
+{
+  "version": "receipt-group-canonical-feasibility-cases-v1",
+  "status": "frozen-prospective-source-only",
+  "caseOrder": [
+    "rgcf-fresh-01",
+    "rgcf-fresh-02",
+    "rgcf-fresh-03",
+    "rgcf-fresh-04",
+    "rgcf-fresh-05",
+    "rgcf-fresh-06"
+  ],
+  "cases": [
+    {
+      "id": "rgcf-fresh-01",
+      "shape": "singleton",
+      "namespace": {
+        "ownerId": "canonical-feasibility-source-only",
+        "scope": "project",
+        "projectId": "lme-case-a1f597dd1837aaf0862c46c93a215a0e7bcf1f29208f78a1c9c9bb6c1e2f9859"
+      },
+      "query": {
+        "text": "Which drawer holds the museum rubbing kit after the inventory move?",
+        "date": "2026/10/13 (Tue) 19:40"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "cf01.session01",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf01.literal01",
+                "role": "user",
+                "content": "Inventory check: the museum rubbing kit was moved from the floor basket into drawer M4. The brass stencil packet stayed in the basket."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "cf01.card01",
+            "content": "The museum rubbing kit is stored in drawer M4.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf01.literal01"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "rgcf-fresh-02",
+      "shape": "shuffled-distractors",
+      "namespace": {
+        "ownerId": "canonical-feasibility-source-only",
+        "scope": "project",
+        "projectId": "lme-case-35926b7d36701caf11fa65644d19b7b7136088180574cfed3ee037abc8ec33fa"
+      },
+      "query": {
+        "text": "For the river sampling visit, which pickup point and arrival time did the coordinator settle on?",
+        "date": "2026/10/13 (Tue) 19:40"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "cf02.session01",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf02.literal01",
+                "role": "user",
+                "content": "The kiln workshop offers a glazed tile demonstration at noon in the west courtyard; this is unrelated to river sampling."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf02.session02",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf02.literal02",
+                "role": "user",
+                "content": "For river sampling, the coordinator settled on the footbridge kiosk as the pickup point. The arrival time is 07:35, before the path closes."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf02.session03",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf02.literal03",
+                "role": "assistant",
+                "content": "A library cart can be collected at the reading-room desk after 16:00. It carries local maps, not sampling bottles."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf02.session04",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf02.literal04",
+                "role": "user",
+                "content": "The rehearsal group will meet in the blue annex at 19:20 for a lighting check, and no river equipment is needed."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf02.session05",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf02.literal05",
+                "role": "user",
+                "content": "A seed exchange table opens beside the bakery on Sunday. Visitors should bring envelopes, not water containers."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf02.session06",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf02.literal06",
+                "role": "assistant",
+                "content": "The ceramics sale will use the upstairs counter and begins at 10:10. Its staffing plan belongs to the kiln workshop."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "cf02.card01",
+            "content": "Kiln workshop tile demonstration in the west courtyard at noon.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf02.literal01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf02.card02",
+            "content": "River sampling pickup is the footbridge kiosk with arrival at 07:35.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf02.literal02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf02.card03",
+            "content": "Library cart collection is at the reading-room desk after 16:00.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf02.literal03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf02.card04",
+            "content": "Rehearsal lighting check is in the blue annex at 19:20.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf02.literal04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf02.card05",
+            "content": "Seed exchange beside the bakery opens Sunday.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf02.literal05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf02.card06",
+            "content": "Ceramics sale uses the upstairs counter at 10:10.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf02.literal06"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "rgcf-fresh-03",
+      "shape": "mixed-roles-proposal-confirmation",
+      "namespace": {
+        "ownerId": "canonical-feasibility-source-only",
+        "scope": "project",
+        "projectId": "lme-case-c523022b4e53cd94de7c0b29b5ce367310826fe25e2874f58bd98b2e903ef341"
+      },
+      "query": {
+        "text": "Which cover material was confirmed for the listening booth, and which earlier suggestion was superseded?",
+        "date": "2026/10/13 (Tue) 19:40"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "cf03.session01",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf03.literal01",
+                "role": "assistant",
+                "content": "For the listening booth cover, I suggest perforated felt because it can soften echoes. This is a proposal only; no order has been approved."
+              },
+              {
+                "sourceLabel": "cf03.literal02",
+                "role": "user",
+                "content": "I am considering cork panels for the listening booth instead, but have not confirmed them. Keep both samples available until the inspection."
+              },
+              {
+                "sourceLabel": "cf03.literal03",
+                "role": "user",
+                "content": "Inspection is complete. I confirm woven reed matting for the listening booth cover, not perforated felt or cork panels. Please label the felt idea as superseded, not ordered."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "cf03.card01",
+            "content": "Listening booth cover choices: felt proposed, cork considered, woven reed matting confirmed after inspection.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf03.literal01",
+                "cf03.literal02",
+                "cf03.literal03"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "rgcf-fresh-04",
+      "shape": "shared-context",
+      "namespace": {
+        "ownerId": "canonical-feasibility-source-only",
+        "scope": "project",
+        "projectId": "lme-case-b64b700661b7c8785cf57932df6edf82c769ffa7744123ab0c0cdf4c60998d54"
+      },
+      "query": {
+        "text": "For the mobile print stall, what operating arrangement links the power supply and paper restocking decisions?",
+        "date": "2026/10/13 (Tue) 19:40"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "cf04.session01",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf04.literal01",
+                "role": "user",
+                "content": "The mobile print stall is assigned to the orchard lane for the weekend. The same lane assignment applies to both the power setup and paper delivery."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf04.session02",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf04.literal02",
+                "role": "assistant",
+                "content": "For that orchard-lane assignment, the power supply is the portable battery pack, since the mains socket cannot reach the stall."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf04.session03",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf04.literal03",
+                "role": "user",
+                "content": "For the same orchard-lane assignment, restock paper from the locked tote under the north bench, not from the indoor reception cabinet."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "cf04.card01",
+            "content": "Mobile print stall is assigned to orchard lane for the weekend.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf04.literal01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf04.card02",
+            "content": "Orchard-lane print stall uses the portable battery pack.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf04.literal02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf04.card03",
+            "content": "Orchard-lane print stall paper comes from the tote under the north bench.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf04.literal03"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "rgcf-fresh-05",
+      "shape": "six-receipt-normal-dedup",
+      "namespace": {
+        "ownerId": "canonical-feasibility-source-only",
+        "scope": "project",
+        "projectId": "lme-case-70c3bcf0b4c57d8369d42919d5a8a9ca12232c58368557ace75ae972af24935f"
+      },
+      "query": {
+        "text": "What collection procedure and safeguards were recorded for the borrowed acoustic recorder?",
+        "date": "2026/10/13 (Tue) 19:40"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "cf05.session01",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf05.literal01",
+                "role": "user",
+                "content": "Borrowed acoustic recorder: collect its padded case at the tool-library side hatch after showing the loan slip."
+              },
+              {
+                "sourceLabel": "cf05.literal02",
+                "role": "assistant",
+                "content": "Before collection, check that the acoustic recorder case contains the short tripod and the foam windscreen."
+              },
+              {
+                "sourceLabel": "cf05.literal03",
+                "role": "user",
+                "content": "During use, keep the recorder gain knob at the pencil mark made by the technician; do not use the taped red mark."
+              },
+              {
+                "sourceLabel": "cf05.literal04",
+                "role": "assistant",
+                "content": "If rain starts, stop recording and close the padded case before walking back to the side hatch."
+              },
+              {
+                "sourceLabel": "cf05.literal05",
+                "role": "user",
+                "content": "After use, return the recorder with the battery drawer open and the memory card left inside its labelled sleeve."
+              },
+              {
+                "sourceLabel": "cf05.literal06",
+                "role": "user",
+                "content": "At return, ask the volunteer to initial the loan slip so the acoustic recorder checkout can be closed."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "cf05.card01",
+            "content": "Borrowed acoustic recorder procedure covers side-hatch collection, tripod and windscreen check, pencil-mark gain, rain protection, battery/card return and signed loan closure.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf05.literal01",
+                "cf05.literal02",
+                "cf05.literal03",
+                "cf05.literal04"
+              ],
+              [
+                "cf05.literal05",
+                "cf05.literal06"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "rgcf-fresh-06",
+      "shape": "source-rich-pressure",
+      "namespace": {
+        "ownerId": "canonical-feasibility-source-only",
+        "scope": "project",
+        "projectId": "lme-case-0d1c56203c13dca8400f0d2d118bc4f47ac08f9c47fdc33ee7fb980e51ca3323"
+      },
+      "query": {
+        "text": "For the roving observatory cart, identify the recorded requirements for its lens cover, cable routing and end-of-night handover.",
+        "date": "2026/10/13 (Tue) 19:40"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "cf06.session01",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal01",
+                "role": "user",
+                "content": "The roving observatory cart uses an amber fabric lens cover while parked. A note on the cart says the silver foil cover belongs to the stationary telescope and must not be swapped."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session02",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal02",
+                "role": "assistant",
+                "content": "Cable routing for the observatory cart follows the painted zigzag beside the fence. Keep both cable loops inside that route so the pedestrian path remains clear; the straight chalk line is obsolete."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session03",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal03",
+                "role": "user",
+                "content": "At end-of-night handover, roll the observatory cart into the south alcove and sign the small green logbook. Leaving it at the gate without a signature does not complete the handover."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session04",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal04",
+                "role": "assistant",
+                "content": "The insect survey tray uses a mesh lid during transport and returns to cabinet Q. Its lid instructions do not apply to the observatory cart or its optical equipment."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session05",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal05",
+                "role": "user",
+                "content": "The mural crew stores spare brushes in a ceramic jar near the east ladder. Those brushes are for pigment work only and should not be used to clean any lens."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session06",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal06",
+                "role": "assistant",
+                "content": "The pond monitor carries a red float marker and records readings at the stone step. The float is not part of the observatory cart and cannot serve as a wheel stop."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session07",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal07",
+                "role": "user",
+                "content": "The bread tasting stand needs a linen cloth and a tray of numbered samples. It closes before dusk and does not share the observatory cart handover schedule."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session08",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal08",
+                "role": "assistant",
+                "content": "The puppet booth packs string spools into labelled tins after the final show. String from those tins must not be substituted for the observatory cart cable ties."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session09",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal09",
+                "role": "user",
+                "content": "The plant mapping table receives a stack of grid sheets from the archive drawer. Its compass is marked for paper plotting, not for telescope alignment."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session10",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal10",
+                "role": "assistant",
+                "content": "The trail cleanup wagon takes the gravel ramp on its way to the shed. This wagon has no optical cover, and its route does not determine the observatory cart cable layout."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session11",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal11",
+                "role": "user",
+                "content": "The chime repair station keeps felt mallets on a hanging rail and counts them before closing. Its brass ledger is separate from the observatory cart green handover logbook."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "cf06.session12",
+            "date": "2026/10/08 (Thu) 09:15",
+            "turns": [
+              {
+                "sourceLabel": "cf06.literal12",
+                "role": "assistant",
+                "content": "The weather board crew wipes the board with a dry cotton square and locks its chalk box. This cleaning instruction does not authorize wiping the observatory cart lens."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "cf06.card01",
+            "content": "Observatory cart parks with its amber fabric lens cover; silver foil is for the stationary telescope.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card02",
+            "content": "Observatory cart cables follow the painted fence-side zigzag, not the obsolete chalk line.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card03",
+            "content": "Observatory cart handover requires the south alcove and signed green logbook.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card04",
+            "content": "Insect survey tray travels with a mesh lid and returns to cabinet Q.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card05",
+            "content": "Mural brushes are stored near the east ladder for pigment work only.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card06",
+            "content": "Pond monitor red float and stone-step readings are unrelated to cart wheel stops.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card07",
+            "content": "Bread tasting stand uses linen and numbered samples and closes before dusk.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card08",
+            "content": "Puppet booth packs string in labelled tins; these are not cart cable ties.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card09",
+            "content": "Plant mapping table uses archive grid sheets and a paper-plotting compass.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card10",
+            "content": "Trail cleanup wagon takes gravel ramp to shed, independently of cart cables.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card11",
+            "content": "Chime station counts hanging felt mallets and has a separate brass ledger.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal11"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "cf06.card12",
+            "content": "Weather board uses dry cotton and a locked chalk box, not optical cleaning.",
+            "kind": "fact",
+            "confidence": 0.9,
+            "sourcePartitions": [
+              [
+                "cf06.literal12"
+              ]
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "diagnosticsNotForWire": {
+    "sourceLiteralHashes": {
+      "cf01.literal01": "6e25d4a80f65257cefda64779cef86e62f26eaa19a8d8ac28275ac1c37ed1afa",
+      "cf02.literal01": "ed48419df077093fc5aa12259524f4de0cc85cf45ee0a788ee03d4ca757488b8",
+      "cf02.literal02": "72ea0f49f7b378ee28b8162adb30e9f117bfce3fe28f9ccd9aff565ab896973d",
+      "cf02.literal03": "4d3b70ad4b78e4bdccda149db3eceffc42d5172270baa2b38c146107ccecead4",
+      "cf02.literal04": "810939bf18ab1f002ed78f80c7e2396825d1ee9cb36cd7bbbc5081d2937b549f",
+      "cf02.literal05": "1f659b53bc4f9ccf01dda7bd610b8ee0d87ac48ea19b06664733af74e83b5799",
+      "cf02.literal06": "697b0f32c5abecab2e2d3158ef8eff3439279e1c294a9c3ee31859e1c2393d3e",
+      "cf03.literal01": "3061af19dd72b6bff0bb7997c4abb570ce64dd41c6f19d4fbc6b7ace09b00682",
+      "cf03.literal02": "143be0ab9a10d918774ac498318e1053b50c11e78c1160f9f31e529f57d41c2c",
+      "cf03.literal03": "996eaf9847bcce93f8af3468930a56710fbf723dbb38507cef5ee33b0b275b68",
+      "cf04.literal01": "3a7b15c159302be004e962d9eadeff9369bb58251a2e678c2ca01a9eadaa14d0",
+      "cf04.literal02": "5b9d69055ed144d65d671268213bd4fd5b164c265fbe3f242ae71dd2fa5c6f50",
+      "cf04.literal03": "2026f476ae9eb22c821d931b25bace2f9c7ec4722f9b5eb0dcdfaca0e3148662",
+      "cf05.literal01": "1a51f4e1ee83b9cca947cc6ee262e9e4ead4b81df7ca68e10b8d014800801419",
+      "cf05.literal02": "55172d737edbcc98048c70d6fb2f438ea8b910f9498b358eea3a1da8afe2fee0",
+      "cf05.literal03": "0cdc02894e105c7580e3d9cd56d0af18e4e24e90448cd7d2c782fd7eb03b2fbf",
+      "cf05.literal04": "488b8d6929914e81c4f58522e83de5bfd504e5b3e888275b3b2b9015d62c4395",
+      "cf05.literal05": "34906386c98fa2b9ef6fb8180c7ebf16e6721942d4499b7b63a3385d8d184d80",
+      "cf05.literal06": "01e3e270c5608bc18793437c47f934e1cc19e883cd222e96d2924aa86c2f18c6",
+      "cf06.literal01": "0a31224cdba0e30cf89815e9a9ed7854e824df1a1615b55ca44e579288dff3d5",
+      "cf06.literal02": "c40a25e76b1fdb6f1c8e5a2b04ce805d1a1de90383897885dbe90b61522f3ffd",
+      "cf06.literal03": "0f9211ba53341c6357d3bf4774b157d7b31491ea64084e4598551cdffe9791e9",
+      "cf06.literal04": "a4c4398d542f0451d2808271e9bfbbd25ff0802d758858dd0503e30a26030719",
+      "cf06.literal05": "670b35140b352ad93d290934187046bd43899d61a699a490b2abb987c91fb849",
+      "cf06.literal06": "1db247d84cecc4fb70037a1e84d7649f505da0abcf0dddb7eef32de6dbe02124",
+      "cf06.literal07": "752c6dc96100f5234ad0b876fb51552327031c29684ffcb89dcc577ae81237cc",
+      "cf06.literal08": "bd418b64b4fd170d06c0d3fdfc12d517e0c7c988a9c1aa4ca1ad085726f646b6",
+      "cf06.literal09": "a75a0b8c4fb4ca07855b8f46a6aac5f7cd898a98d34e3128cbb466cd7eb4aeb4",
+      "cf06.literal10": "2d2da8251aa86e7bee2ce48c92df84b27a473a7b431a59d8778e98ad782e9e7a",
+      "cf06.literal11": "1e9f09d55990fee5603178b8d0dc48fc3d4d1fe9fe1e9dbb8b046657cfe60930",
+      "cf06.literal12": "6390a612f4af4b1bd783b1a7c02f15b8b03d24a8429945a1807e84e4ee8c24a6"
+    },
+    "expectedSourceAnchors": {
+      "rgcf-fresh-01": [
+        "cf01.literal01"
+      ],
+      "rgcf-fresh-02": [
+        "cf02.literal02"
+      ],
+      "rgcf-fresh-03": [
+        "cf03.literal01",
+        "cf03.literal03"
+      ],
+      "rgcf-fresh-04": [
+        "cf04.literal01",
+        "cf04.literal02",
+        "cf04.literal03"
+      ],
+      "rgcf-fresh-05": [
+        "cf05.literal01",
+        "cf05.literal02",
+        "cf05.literal03",
+        "cf05.literal04",
+        "cf05.literal05",
+        "cf05.literal06"
+      ],
+      "rgcf-fresh-06": [
+        "cf06.literal01",
+        "cf06.literal02",
+        "cf06.literal03"
+      ]
+    }
+  }
+}
