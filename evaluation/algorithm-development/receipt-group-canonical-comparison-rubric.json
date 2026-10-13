@@ -1,0 +1,1090 @@
+{
+  "version": "receipt-group-canonical-comparison-rubric-v1",
+  "protocol": {
+    "population": {
+      "kind": "hand-authored stratified synthetic development population",
+      "caseCount": 24,
+      "familyCount": 6,
+      "casesPerFamily": 4,
+      "cardCountsPerFamily": [
+        6,
+        8,
+        10,
+        12
+      ],
+      "totalCards": 216,
+      "totalSourceTurns": 240,
+      "officialLongMemEval": false,
+      "naturalHistoryRandomSample": false
+    },
+    "comparison": {
+      "armA": "unchanged ordinary rank and ordinary whole-card selection",
+      "armB": "unchanged canonical receipt-group selection policy",
+      "answerPacking": "same complete flat whole-card answer builder and instruction; every chosen receipt once; selection order preserved",
+      "answerModel": "gpt-4.1-mini-2025-04-14",
+      "interpretation": "compound prompt/schema/constraint/order selection-policy comparison, not an isolated deduplication effect or model upgrade"
+    },
+    "binding": {
+      "sourceVersion": "receipt-group-canonical-comparison-cases-v1",
+      "rubricVersion": "receipt-group-canonical-comparison-rubric-v1",
+      "frozenBeforeModelOutput": true,
+      "required": "Bind exact frozen source/rubric bytes, first records, actual sent answer body and retained artifact linkage before evaluation.",
+      "sourceOnlyRuntime": "Store, runner and model ports do not import the rubric or expose source labels, families, variants, required anchors or gold."
+    },
+    "correctness": {
+      "basis": "Use the full frozen source truth to judge the requested propositions, with necessary entity, scope, time and uncertainty qualification. Correctness does not by itself establish support in the delivered answer context.",
+      "optionalBackground": "Omitting optional background, rationale, intermediate links or citations does not reduce correctness. Any extra claims that are included still undergo safety evaluation.",
+      "calibration": "conciseCorrect and explainedCorrect have equal correctness credit. nearMiss is incorrect. These are pre-model authored illustrative rubric examples, never actual produced answers.",
+      "knownFacts": "Abstention alone is incorrect when the requested fact is recorded; partial-support cases require both the supported fact and the stated unknown.",
+      "unknownFacts": "Do not invent missing links, resolve an unresolved conflict, promote an unadopted proposal, or carry a changed premise forward as current confirmation.",
+      "labels": [
+        "correct",
+        "incorrect",
+        "unresolved"
+      ],
+      "credit": "Correct credit requires both independent first judgments to agree correct. Missing or disagreed correctness is unresolved with no correct credit."
+    },
+    "judging": {
+      "judgeCount": 2,
+      "distinctJudges": true,
+      "nonauthorJudges": true,
+      "blindPacket": [
+        "randomized opaque answer label",
+        "question",
+        "full source truth",
+        "frozen rubric",
+        "actual first answer",
+        "actually delivered source evidence"
+      ],
+      "excluded": [
+        "arm identity",
+        "selection proposal",
+        "other judge's judgment",
+        "historical outputs"
+      ],
+      "firstJudgmentsOnly": true,
+      "noAdjudication": true,
+      "noRejudge": true,
+      "agreementOnly": true,
+      "sameFamilyLimitation": "Two blind judges from the same model family are not independent model-family replications; agreement does not eliminate shared bias."
+    },
+    "claimSafety": {
+      "unsupported": "A factual claim is unsupported when the actually delivered source evidence together with the question does not support it with the stated entity, scope, time and attribution. A fact true in the full frozen source truth but absent from the delivered context is not credited as supported.",
+      "stale": "Use the full frozen source truth to determine whether an older superseded state or premise is presented as applicable at the requested event time or current scope.",
+      "severe": "Apply each case's predefined severeErrorRules using the full frozen source truth and the actually delivered evidence, including unsupported adoption/current-state and wrong entity binding. Presence of a quote alone is not semantic support.",
+      "truthVsDelivered": "Full source truth is used for correctness, stale-state checks and severe-rule facts; unsupported-claim support is assessed against the actually delivered source evidence plus the question. Correctness and delivered support remain distinct observations.",
+      "allProducedAnswers": "Every produced/accepted answer requires known agreed unsupported, stale and severe safety observations; missing, unknown or disagreement on any of them blocks advancement.",
+      "claimCounts": "Retain each judge's affected-claim and total-claim counts separately for unsupported, stale and severe observations; do not combine disagreement by adjudication.",
+      "questionCounts": "Report unsupported/stale/severe question counts for each arm over the fixed 24 cases. Included optional background is subject to these safety rules."
+    },
+    "missingAnswers": {
+      "safetyDisposition": "not-observed-no-answer",
+      "meaning": "A proven absent/no-accepted-answer slot is semantic N/A, separately recorded from clean; no claims or correctness are fabricated.",
+      "countsAsClean": false,
+      "correctCredit": 0,
+      "all48CompletedGate": false,
+      "resourceAcceptance": "Fatal or unknown execution/accounting independently blocks resource/integrity acceptance.",
+      "bounds": "Known unanswered slots never receive hypothetical correct credit.",
+      "completion": "Completion per arm/24 and later Stage3/host acceptance remain separate; N/A does not establish safe or useful behavior."
+    },
+    "anchorPresence": {
+      "requiredAnchors": "Exact sourceLabel and quote bind each span to its source and actual role; multiple distinct spans for one source are allowed.",
+      "requiredSourceSets": "Each inner array is one diagnostic supporting source-label set; all labels bind real source truth. Sets measure source coverage and do not require an answer to repeat intermediate links, cite sources, or include optional rationale. An empty outer array denotes no positive source set, not universal abstention credit.",
+      "stages": [
+        "stored",
+        "selected",
+        "available",
+        "actually-sent"
+      ],
+      "metric": "Actual sent positive-anchor presence after sent-body/artifact validation, never whole-card availability alone.",
+      "notCorrectness": "Anchor presence is not support or correctness.",
+      "missingness": "Every frozen anchor remains in the denominator; failures, unrun and unknown presence stay explicit."
+    },
+    "reporting": {
+      "denominator": 24,
+      "familyDenominator": 4,
+      "perArm": [
+        "correct",
+        "incorrect",
+        "unresolved",
+        "completion"
+      ],
+      "pairedTransitions": true,
+      "pairedMissingness": true,
+      "failurePolicy": "Selection failures retain their case slots and leave dependent answers explicitly unanswered. No retry, replacement, reconstructed selection or repaired scoring."
+    },
+    "pairedDifferenceInterval": {
+      "method": "Deterministic paired percentile bootstrap with Mulberry32; reuse an existing implementation only if it exactly matches these frozen constants and indexing rules.",
+      "randomNumberGenerator": "Mulberry32 with the seed treated as an unsigned 32-bit integer",
+      "seed": 20261013,
+      "draws": 10000,
+      "sampling": "For each replicate, uniformly sample 24 paired case indices with replacement and average their B-minus-A deltas. Sampling is not stratified by family.",
+      "sortedPercentileIndicesZeroBased": [
+        249,
+        9749
+      ],
+      "percentileRule": "Nearest-rank 2.5% and 97.5% endpoints from the 10000 sorted replicate statistics.",
+      "confidenceLevel": 0.95,
+      "statistic": "B correct proportion minus A correct proportion over the fixed 24 matched cases.",
+      "coding": "correct=1; every other fixed-denominator outcome=0",
+      "unresolvedBounds": "Report best/worst paired bounds varying only produced answers with missing or disagreed correctness judgments; known unanswered slots remain 0.",
+      "interpretation": "Exploratory interval for this hand-authored development population, not a significance test or statistical-parity claim."
+    },
+    "advancement": {
+      "minimumNetCorrectGain": 3,
+      "denominator": 24,
+      "strictlyImprovedActuallySentAnchors": true,
+      "noHigherUnsupportedQuestionCount": true,
+      "noHigherStaleQuestionCount": true,
+      "noNewPredefinedSevereFailure": true,
+      "knownSafetyForEveryProducedAnswer": true,
+      "acceptedResourceAccounting": true,
+      "separateFreshNamespaceExpiryFencesRequired": true,
+      "interpretation": "P4 pilot threshold only; not statistical proof, comparator parity, product readiness or Stage3/host acceptance.",
+      "universalAbstention": "Does not satisfy known requested facts or partial-supported requested facts and cannot earn those correct cases."
+    },
+    "historicalClosure": {
+      "retry": false,
+      "resume": false,
+      "repair": false,
+      "reprepare": false,
+      "recompile": false,
+      "rescore": false,
+      "rejudge": false,
+      "scope": "All older cohorts, artifacts, answers, judgments and thresholds remain closed."
+    }
+  },
+  "caseOrder": [
+    "RQ01",
+    "RQ02",
+    "RQ03",
+    "RQ04",
+    "RQ05",
+    "RQ06",
+    "RQ07",
+    "RQ08",
+    "RQ09",
+    "RQ10",
+    "RQ11",
+    "RQ12",
+    "RQ13",
+    "RQ14",
+    "RQ15",
+    "RQ16",
+    "RQ17",
+    "RQ18",
+    "RQ19",
+    "RQ20",
+    "RQ21",
+    "RQ22",
+    "RQ23",
+    "RQ24"
+  ],
+  "cases": [
+    {
+      "id": "RQ01",
+      "requestedPropositions": [
+        "Bristle open house issues 3 guest passes per household."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "Pickup is at the foyer."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq01.source03",
+          "quote": "each household gets 3 guest passes"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq01.source03"
+        ]
+      ],
+      "unsupportedExamples": [
+        "Bristle households receive 5 passes.",
+        "Each Bristle guest receives 3 passes."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "3 guest passes per household.",
+        "explainedCorrect": "Each household gets 3 guest passes for the Bristle open house; pickup is at the foyer.",
+        "nearMiss": "5 passes per household."
+      }
+    },
+    {
+      "id": "RQ02",
+      "requestedPropositions": [
+        "The borrowed mixer may be used only after the supervisor signs the load check."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "The mixer sits beside the window; replace the cover afterward."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq02.source08",
+          "quote": "may be used only after the supervisor signs the load check"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq02.source08"
+        ]
+      ],
+      "unsupportedExamples": [
+        "A green ventilation light authorizes mixer use.",
+        "Any volunteer may approve the load check."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "Only after the supervisor signs the load check.",
+        "explainedCorrect": "At Aveline, use the borrowed mixer only after the supervisor signs the load check; it sits beside the window.",
+        "nearMiss": "After a volunteer checks the load."
+      }
+    },
+    {
+      "id": "RQ03",
+      "requestedPropositions": [
+        "Same-day Kalmia walking-tour bookings canceled within 15 minutes of purchase are exempt."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "The normal notice is 24 hours."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq03.source08",
+          "quote": "except same-day bookings canceled within 15 minutes of purchase"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq03.source08"
+        ]
+      ],
+      "unsupportedExamples": [
+        "All same-day bookings are exempt.",
+        "Any booking canceled within 15 minutes is exempt."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "Same-day bookings canceled within 15 minutes of purchase.",
+        "explainedCorrect": "The exception to the usual 24-hour notice is a same-day booking canceled within 15 minutes of purchase.",
+        "nearMiss": "Any same-day booking."
+      }
+    },
+    {
+      "id": "RQ04",
+      "requestedPropositions": [
+        "Lock the Pavo demo spare remote's buttons and put it in the gray mesh pouch before packing; attribution to the assistant may be implicit in the question."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "The exchange concerned the Pavo demo, not the lecture hall."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq04.source11",
+          "quote": "lock the buttons and tuck it into the gray mesh pouch"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq04.source11"
+        ]
+      ],
+      "unsupportedExamples": [
+        "The assistant told you to remove Pavo's batteries.",
+        "The user adopted a new permanent storage rule."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Promoting the assistant's instruction into a newly adopted user procedure without adoption evidence is severe unsupported adoption/current-state."
+      ],
+      "calibration": {
+        "conciseCorrect": "Lock its buttons and put the spare remote in the gray mesh pouch.",
+        "explainedCorrect": "For Pavo's spare remote, the assistant instructed you to lock the buttons, then tuck it into the gray mesh pouch before packing.",
+        "nearMiss": "The assistant said to remove the batteries."
+      }
+    },
+    {
+      "id": "RQ05",
+      "requestedPropositions": [
+        "The Eider bicycle shed's spoke gauge is in drawer H."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "Drawer H is beside the truing stand."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq05.source02",
+          "quote": "spoke gauge is kept in drawer H"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq05.source02"
+        ]
+      ],
+      "unsupportedExamples": [
+        "Eider's spoke gauge is in drawer F.",
+        "Eider's spoke gauge is on a hook."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "In drawer H.",
+        "explainedCorrect": "Eider's spoke gauge is kept in drawer H beside the truing stand.",
+        "nearMiss": "In drawer F."
+      }
+    },
+    {
+      "id": "RQ06",
+      "requestedPropositions": [
+        "Hold the flood monitor's amber button for four seconds to silence its alarm."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "Muting does not stop measurement."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq06.source08",
+          "quote": "maintain pressure on the amber button for four seconds to mute its alarm"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq06.source08"
+        ]
+      ],
+      "unsupportedExamples": [
+        "Press the blue reset knob.",
+        "A quick tap on the amber button is enough."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "Hold the amber button for four seconds.",
+        "explainedCorrect": "To silence the Haru flood monitor, hold its amber button for four seconds; it will keep measuring.",
+        "nearMiss": "Tap the amber button once."
+      }
+    },
+    {
+      "id": "RQ07",
+      "requestedPropositions": [
+        "Meadowline learners with wet hands should put their pieces on the cork mat by the rinse basin."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq07.source03",
+          "quote": "set their pieces on the cork mat by the rinse basin"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq07.source03"
+        ]
+      ],
+      "unsupportedExamples": [
+        "Put the pieces in cabinet 2.",
+        "Put the pieces on the kiln shelf."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "放在沖洗盆旁的軟木墊上。",
+        "explainedCorrect": "手還濕時，把作品放在沖洗盆旁的軟木墊上。",
+        "nearMiss": "放到窯爐層架上。"
+      }
+    },
+    {
+      "id": "RQ08",
+      "requestedPropositions": [
+        "Mira gives final confirmation for 小巢/Nido's kitchen roster."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "小巢 and Nido are the same volunteer kitchen."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq08.source03",
+          "quote": "小巢 is the same volunteer kitchen we call Nido"
+        },
+        {
+          "sourceLabel": "rq08.source07",
+          "quote": "final kitchen roster is confirmed by Mira"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq08.source03",
+          "rq08.source07"
+        ]
+      ],
+      "unsupportedExamples": [
+        "Omar gives final confirmation for 小巢's kitchen roster.",
+        "小巢 is Casita."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "由 Mira 最後確認。",
+        "explainedCorrect": "小巢就是 Nido；它的 kitchen roster 由 Mira 最後確認。",
+        "nearMiss": "由 Omar 最後確認。"
+      }
+    },
+    {
+      "id": "RQ09",
+      "requestedPropositions": [
+        "The Solaro survey's water-sampling kit is in rack G."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "The catalog number is WS-26."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq09.source02",
+          "quote": "kit loaned to the Solaro survey is catalog number WS-26"
+        },
+        {
+          "sourceLabel": "rq09.source06",
+          "quote": "kit WS-26 is stored in rack G"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq09.source02",
+          "rq09.source06"
+        ]
+      ],
+      "unsupportedExamples": [
+        "The Solaro kit is in rack C.",
+        "The survey clipboard rack holds the sampling kit."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "Rack G.",
+        "explainedCorrect": "Solaro borrowed kit WS-26, and the catalog places WS-26 in rack G.",
+        "nearMiss": "Rack C."
+      }
+    },
+    {
+      "id": "RQ10",
+      "requestedPropositions": [
+        "The Lirio rehearsal consent packet is in drawer 9."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "CR-17 is the signup batch and ocher is the packet color."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq10.source02",
+          "quote": "Lirio choir rehearsal uses signup batch CR-17"
+        },
+        {
+          "sourceLabel": "rq10.source06",
+          "quote": "batch CR-17 has the ocher consent packet"
+        },
+        {
+          "sourceLabel": "rq10.source09",
+          "quote": "ocher consent packet is filed in drawer 9"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq10.source02",
+          "rq10.source06",
+          "rq10.source09"
+        ]
+      ],
+      "unsupportedExamples": [
+        "Lirio's packet is in drawer 6.",
+        "CR-71 is Lirio's signup batch."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "Drawer 9.",
+        "explainedCorrect": "Lirio uses batch CR-17, that batch has the ocher packet, and the ocher packet is in drawer 9.",
+        "nearMiss": "Drawer 6."
+      }
+    },
+    {
+      "id": "RQ11",
+      "requestedPropositions": [
+        "The canal route for the Vesna dusk count has a copper marker."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "The route is Ibis."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq11.source02",
+          "quote": "Vesna dusk count uses route Ibis"
+        },
+        {
+          "sourceLabel": "rq11.source05",
+          "quote": "Route Ibis uses a copper marker"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq11.source02",
+          "rq11.source05"
+        ]
+      ],
+      "unsupportedExamples": [
+        "The Vesna dusk route has a cobalt marker.",
+        "Vesna dusk uses route Tern."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "Copper.",
+        "explainedCorrect": "Vesna's dusk count uses route Ibis, whose marker is copper.",
+        "nearMiss": "Cobalt."
+      }
+    },
+    {
+      "id": "RQ12",
+      "requestedPropositions": [
+        "The receiving bay for the Noctis exhibit crate cannot be determined from the recorded sources."
+      ],
+      "acceptableUncertainty": [
+        "State that the bay is not recorded; do not infer it from the trolley, similar reference numbers, or another exhibit."
+      ],
+      "optionalBackground": [
+        "Its receiving reference is NR-18."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq12.source01",
+          "quote": "Noctis exhibit crate was logged under receiving reference NR-18"
+        },
+        {
+          "sourceLabel": "rq12.source08",
+          "quote": "receiving sheet for NR-18 has no bay entered yet"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq12.source01",
+          "rq12.source08"
+        ]
+      ],
+      "unsupportedExamples": [
+        "The Noctis crate is in bay 4.",
+        "The Noctis crate is in bay 2.",
+        "The Noctis crate is in bay 7."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Assigning a bay to Noctis using another crate's receiving reference is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "The bay is not recorded in these notes.",
+        "explainedCorrect": "Noctis is NR-18, and NR-18 has no bay entered yet, so these notes do not establish a receiving bay.",
+        "nearMiss": "Go to bay 4."
+      }
+    },
+    {
+      "id": "RQ13",
+      "requestedPropositions": [
+        "As of April 14, 2026, Eolia practice-lane cone spacing was 2.6 meters."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "The March 12 note was imported April 10; the next change occurred April 20."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq13.source03",
+          "quote": "March 24 decision: Eolia's practice lane cone spacing was changed to 2.6 meters"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq13.source03"
+        ]
+      ],
+      "unsupportedExamples": [
+        "The April 20 spacing was already in force April 14.",
+        "The sprint-lane spacing applies to the practice lane."
+      ],
+      "staleExamples": [
+        "1.8 meters presented as the April 14 spacing because its note was imported later."
+      ],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "2.6 meters.",
+        "explainedCorrect": "It was 2.6 meters as of April 14: the March 24 decision applied then, while the 1.8-meter note was an older event imported later.",
+        "nearMiss": "1.8 meters, because that note was imported April 10."
+      }
+    },
+    {
+      "id": "RQ14",
+      "requestedPropositions": [
+        "Gannet print-room admission is currently 6 dollars."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "The 4-dollar entry is from January and was imported June 12."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq14.source02",
+          "quote": "Effective April 1, Gannet print-room admission is 6 dollars, replacing the 4-dollar rate"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq14.source02"
+        ]
+      ],
+      "unsupportedExamples": [
+        "The workshop price is the admission fee."
+      ],
+      "staleExamples": [
+        "4 dollars presented as the current fee because the January register was imported June 12."
+      ],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "6 dollars.",
+        "explainedCorrect": "Admission is 6 dollars under the rate effective April 1; the June import describes the old January rate.",
+        "nearMiss": "4 dollars."
+      }
+    },
+    {
+      "id": "RQ15",
+      "requestedPropositions": [
+        "Resolve the June 8 source's relative date: Tilia greenhouse's seed swap is June 13, 2026."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "It is on the covered patio."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq15.source09",
+          "quote": "Tilia greenhouse seed swap is this Saturday, five days from today"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq15.source09"
+        ]
+      ],
+      "unsupportedExamples": [
+        "Compute five days from the June 10 query date.",
+        "Use the other greenhouse's June 14 date."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Binding another named entity's fact to the requested entity is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "June 13, 2026.",
+        "explainedCorrect": "The June 8 note says Saturday, five days later, so the seed swap is June 13, 2026.",
+        "nearMiss": "June 15, 2026."
+      }
+    },
+    {
+      "id": "RQ16",
+      "requestedPropositions": [
+        "Valeo evening ceramics currently starts cleanup at 20:35."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "The April 7 update applies to ceramics day classes."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq16.source06",
+          "quote": "only Valeo's evening ceramics class moves cleanup to 20:35"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq16.source06"
+        ]
+      ],
+      "unsupportedExamples": [
+        "Apply the day-class or evening-drawing time to evening ceramics."
+      ],
+      "staleExamples": [
+        "20:10 presented as the current evening-ceramics cleanup time."
+      ],
+      "severeErrorRules": [
+        "Transferring a different class's cleanup rule to Valeo evening ceramics is a severe unsupported entity/scope binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "20:35.",
+        "explainedCorrect": "Evening ceramics starts cleanup at 20:35 under the April 5 change; the later 15:55 update is for day classes.",
+        "nearMiss": "15:55, following the April 7 update."
+      }
+    },
+    {
+      "id": "RQ17",
+      "requestedPropositions": [
+        "No new Rondo costume-room lockup procedure has been adopted; the decision is pending."
+      ],
+      "acceptableUncertainty": [
+        "Do not promote the assistant's suggestion into an adopted procedure."
+      ],
+      "optionalBackground": [
+        "The assistant suggested a tamper bag and two steward signatures.",
+        "The existing key location is the stage office."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq17.source05",
+          "quote": "I haven't adopted a new Rondo costume-room lockup procedure; that decision is still pending"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq17.source05"
+        ]
+      ],
+      "unsupportedExamples": [
+        "You adopted the tamper-bag and two-signature procedure.",
+        "You adopted Orfeo's coded-box procedure."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Presenting an unadopted assistant proposal as the user's adopted or current procedure is severe unsupported adoption/current-state."
+      ],
+      "calibration": {
+        "conciseCorrect": "None yet; the decision is still pending.",
+        "explainedCorrect": "No new procedure has been adopted. The tamper bag and two signatures were only a suggestion, and you said the decision was pending.",
+        "nearMiss": "You adopted a tamper bag with two steward signatures."
+      }
+    },
+    {
+      "id": "RQ18",
+      "requestedPropositions": [
+        "The adopted Seren pump-loan rule is to release the deposit only after the return slip is signed."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "A photo check was an alternative proposal."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq18.source08",
+          "quote": "I adopt the signed-return-slip option for the Seren pump loan: release the deposit only after that slip is signed"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq18.source08"
+        ]
+      ],
+      "unsupportedExamples": [
+        "The user adopted the photo-check option.",
+        "A phone call is enough to release the Seren deposit."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Calling an alternative proposal the adopted Seren return rule is severe unsupported adoption/current-state."
+      ],
+      "calibration": {
+        "conciseCorrect": "Release the deposit only after the return slip is signed.",
+        "explainedCorrect": "You adopted the signed-return-slip option, so the deposit is released only after the slip is signed.",
+        "nearMiss": "Release the deposit after a photo check."
+      }
+    },
+    {
+      "id": "RQ19",
+      "requestedPropositions": [
+        "No cover is confirmed for the Ilona percussion kit under the current damp conditions."
+      ],
+      "acceptableUncertainty": [
+        "Do not state cotton or a sealed plastic cover as the confirmed current choice."
+      ],
+      "optionalBackground": [
+        "The earlier breathable-cotton recommendation depended on a dry room and needs reconfirmation before being carried forward."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq19.source05",
+          "quote": "the rehearsal room is now damp. I have not reconfirmed a kit cover for these conditions"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq19.source05"
+        ]
+      ],
+      "unsupportedExamples": [
+        "A sealed plastic cover has now been adopted for this kit."
+      ],
+      "staleExamples": [
+        "Cotton is presented as confirmed for current conditions despite the changed dry-room premise."
+      ],
+      "severeErrorRules": [
+        "Carrying the premise-dependent old recommendation forward as confirmed current state, or inventing a newly adopted cover, is severe."
+      ],
+      "calibration": {
+        "conciseCorrect": "No cover is confirmed for the damp conditions; the dry-room recommendation needs reconfirmation.",
+        "explainedCorrect": "The cotton recommendation assumed a dry room. The room is now damp and no cover has been reconfirmed, so there is no confirmed current choice.",
+        "nearMiss": "The breathable cotton cover is still confirmed."
+      }
+    },
+    {
+      "id": "RQ20",
+      "requestedPropositions": [
+        "The standing Merula eyepiece-kit rule requires a named borrower and a next-day return."
+      ],
+      "acceptableUncertainty": [
+        "The requested fact is recorded; an answer that only abstains does not satisfy the requested proposition."
+      ],
+      "optionalBackground": [
+        "The later message reaffirmed the existing rule."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq20.source05",
+          "quote": "I adopt that Merula eyepiece-kit rule: a named borrower and a next-day return"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq20.source05"
+        ]
+      ],
+      "unsupportedExamples": [
+        "The later reminder removed the next-day return requirement.",
+        "Anonymous borrowing is now allowed."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Inventing a replacement or relaxing either adopted requirement as current state is severe unsupported adoption/current-state."
+      ],
+      "calibration": {
+        "conciseCorrect": "A named borrower and a next-day return.",
+        "explainedCorrect": "The adopted rule still requires a named borrower and a next-day return; the later reminder reaffirmed it without replacing any part.",
+        "nearMiss": "A named borrower, with no return deadline."
+      }
+    },
+    {
+      "id": "RQ21",
+      "requestedPropositions": [
+        "The replacement Oswin strobe's serial number is not recorded in the sources."
+      ],
+      "acceptableUncertainty": [
+        "Do not transfer the old strobe, replacement printer, or Rowan strobe serial to the replacement Oswin strobe."
+      ],
+      "optionalBackground": [
+        "OS-441 identifies the old strobe; OP-208 identifies a printer."
+      ],
+      "requiredAnchors": [],
+      "requiredSourceSets": [],
+      "unsupportedExamples": [
+        "The replacement Oswin strobe has serial OS-441.",
+        "The replacement Oswin strobe has serial OP-208.",
+        "The replacement Oswin strobe has serial RW-916."
+      ],
+      "staleExamples": [
+        "The old Oswin strobe serial is presented as the replacement's serial."
+      ],
+      "severeErrorRules": [
+        "Binding another device's serial number to the replacement strobe is a severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "The replacement strobe's serial number is not recorded.",
+        "explainedCorrect": "These notes give an old strobe serial and a replacement printer serial, but no serial for the replacement Oswin strobe.",
+        "nearMiss": "OS-441."
+      }
+    },
+    {
+      "id": "RQ22",
+      "requestedPropositions": [
+        "No single current Azura shuttle passenger capacity is confirmed; it remains unresolved."
+      ],
+      "acceptableUncertainty": [
+        "Do not resolve the conflict by choosing the later-mentioned source or the other shuttle's capacity."
+      ],
+      "optionalBackground": [
+        "The conflicting figures are 8 and 10 passengers."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq22.source09",
+          "quote": "We have not reconciled Azura's conflicting current seating sheet and operator checklist"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq22.source09"
+        ]
+      ],
+      "unsupportedExamples": [
+        "10 passengers is confirmed by recency.",
+        "8 passengers is definitively confirmed."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Stating one disputed capacity as definitively confirmed current state is severe unsupported current-state."
+      ],
+      "calibration": {
+        "conciseCorrect": "It is unresolved; the current capacity records conflict.",
+        "explainedCorrect": "No single capacity is confirmed: the seating sheet says 8, the operator checklist says 10, and you have not reconciled them.",
+        "nearMiss": "10 passengers is confirmed."
+      }
+    },
+    {
+      "id": "RQ23",
+      "requestedPropositions": [
+        "Elara recorder's ID label is violet.",
+        "The sources do not establish who holds Elara's backup battery."
+      ],
+      "acceptableUncertainty": [
+        "Answer the supported color and explicitly leave the battery holder unknown."
+      ],
+      "optionalBackground": [],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq23.source01",
+          "quote": "Elara field recorder's ID label is violet"
+        },
+        {
+          "sourceLabel": "rq23.source08",
+          "quote": "Elara recorder's backup-battery handoff line is still blank"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq23.source01",
+          "rq23.source08"
+        ]
+      ],
+      "unsupportedExamples": [
+        "Ren holds Elara's backup battery.",
+        "Jo holds Elara's backup battery.",
+        "The ID label is orange."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Transferring the other recorder's battery holder or the memory-card holder to Elara's backup battery is severe unsupported entity binding."
+      ],
+      "calibration": {
+        "conciseCorrect": "Violet; the backup-battery holder is not recorded.",
+        "explainedCorrect": "The ID label is violet. The backup-battery handoff is blank, so these notes do not identify its holder.",
+        "nearMiss": "Violet, and Ren holds the backup battery."
+      }
+    },
+    {
+      "id": "RQ24",
+      "requestedPropositions": [
+        "Installation of Fenwick's replacement filter has not been confirmed or verified by us."
+      ],
+      "acceptableUncertainty": [
+        "If mentioning the contractor's installation claim, preserve its third-party attribution and unverified status. Do not assert either verified installation or definite noninstallation."
+      ],
+      "optionalBackground": [
+        "The contractor emailed that the filter was installed.",
+        "The installation signoff is unsigned."
+      ],
+      "requiredAnchors": [
+        {
+          "sourceLabel": "rq24.source03",
+          "quote": "The contractor emailed, \"The replacement filter is installed in the Fenwick air unit.\""
+        },
+        {
+          "sourceLabel": "rq24.source04",
+          "quote": "I have not verified that contractor claim; our installation signoff is still unsigned"
+        }
+      ],
+      "requiredSourceSets": [
+        [
+          "rq24.source03",
+          "rq24.source04"
+        ]
+      ],
+      "unsupportedExamples": [
+        "We have confirmed that Fenwick's replacement filter is installed.",
+        "The filter is definitely not installed.",
+        "Payment of the invoice verifies installation."
+      ],
+      "staleExamples": [],
+      "severeErrorRules": [
+        "Promoting the unverified third-party claim into confirmed current installation is severe unsupported current-state."
+      ],
+      "calibration": {
+        "conciseCorrect": "No confirmation yet; the contractor reports installation, but the claim is unverified.",
+        "explainedCorrect": "The contractor says it is installed, but you have not verified the claim and the installation signoff is unsigned, so it is not confirmed by us.",
+        "nearMiss": "Yes, installation is confirmed because the contractor said it was installed."
+      }
+    }
+  ]
+}

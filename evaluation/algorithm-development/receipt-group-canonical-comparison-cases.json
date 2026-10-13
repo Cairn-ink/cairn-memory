@@ -1,0 +1,5455 @@
+{
+  "version": "receipt-group-canonical-comparison-cases-v1",
+  "caseOrder": [
+    "RQ01",
+    "RQ02",
+    "RQ03",
+    "RQ04",
+    "RQ05",
+    "RQ06",
+    "RQ07",
+    "RQ08",
+    "RQ09",
+    "RQ10",
+    "RQ11",
+    "RQ12",
+    "RQ13",
+    "RQ14",
+    "RQ15",
+    "RQ16",
+    "RQ17",
+    "RQ18",
+    "RQ19",
+    "RQ20",
+    "RQ21",
+    "RQ22",
+    "RQ23",
+    "RQ24"
+  ],
+  "cases": [
+    {
+      "id": "RQ01",
+      "family": "detail-retention",
+      "variant": "nonopening-number",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-0f872d6403a6f17a31815235db7c9dfd7c7ab4e3b6b62826cba83579c2368fe9"
+      },
+      "query": {
+        "text": "How many guest passes does the Bristle open house issue per household?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq01.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq01.source01",
+                "role": "user",
+                "content": "The Bristle foyer map is beside the lift."
+              },
+              {
+                "sourceLabel": "rq01.source02",
+                "role": "user",
+                "content": "Volunteers use the side door before opening."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq01.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq01.source03",
+                "role": "user",
+                "content": "The Bristle open house has blue signs; each household gets 3 guest passes; pickup is at the foyer."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq01.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq01.source04",
+                "role": "user",
+                "content": "The Bristle studio class offers 5 guest passes per instructor."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq01.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq01.source05",
+                "role": "user",
+                "content": "Bristle open house parking uses the rear lot."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq01.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq01.source06",
+                "role": "user",
+                "content": "Bristle staff lanyards come in packs of 12."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq01.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq01.source07",
+                "role": "user",
+                "content": "The nearby Nacre open house gives 2 guest passes per household."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq01.card01",
+            "content": "The Bristle foyer map is beside the lift.\nVolunteers use the side door before opening.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq01.source01",
+                "rq01.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq01.card02",
+            "content": "The Bristle open house has blue signs; each household gets 3 guest passes; pickup is at the foyer.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq01.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq01.card03",
+            "content": "The Bristle studio class offers 5 guest passes per instructor.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq01.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq01.card04",
+            "content": "Bristle open house parking uses the rear lot.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq01.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq01.card05",
+            "content": "Bristle staff lanyards come in packs of 12.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq01.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq01.card06",
+            "content": "The nearby Nacre open house gives 2 guest passes per household.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq01.source07"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ02",
+      "family": "detail-retention",
+      "variant": "middle-condition",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-9c5762feb65bd5f8f2f5d5119628d96e8feff6fd812a2d239b071d64da2144a6"
+      },
+      "query": {
+        "text": "When may the Aveline food booth use the borrowed mixer?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq02.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq02.source01",
+                "role": "user",
+                "content": "Aveline's hand whisk stays in the small drawer."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq02.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq02.source02",
+                "role": "user",
+                "content": "The Aveline mixer is borrowed from the cookery school."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq02.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq02.source03",
+                "role": "user",
+                "content": "Aveline's spare bowls are on the blue trolley."
+              },
+              {
+                "sourceLabel": "rq02.source04",
+                "role": "user",
+                "content": "The trolley must stay out of the entrance."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq02.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq02.source05",
+                "role": "user",
+                "content": "Aveline's oven may run once the ventilation light is green."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq02.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq02.source06",
+                "role": "user",
+                "content": "The Kestral booth may use its mixer after a socket check."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq02.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq02.source07",
+                "role": "user",
+                "content": "Aveline's mixer stays unplugged overnight."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq02.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq02.source08",
+                "role": "user",
+                "content": "At Aveline, the borrowed mixer sits beside the window and may be used only after the supervisor signs the load check; put the cover back afterward."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq02.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq02.source09",
+                "role": "user",
+                "content": "The Aveline load-check form is kept by the till."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq02.card01",
+            "content": "Aveline's hand whisk stays in the small drawer.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq02.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq02.card02",
+            "content": "The Aveline mixer is borrowed from the cookery school.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq02.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq02.card03",
+            "content": "Aveline's spare bowls are on the blue trolley.\nThe trolley must stay out of the entrance.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq02.source03",
+                "rq02.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq02.card04",
+            "content": "Aveline's oven may run once the ventilation light is green.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq02.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq02.card05",
+            "content": "The Kestral booth may use its mixer after a socket check.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq02.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq02.card06",
+            "content": "Aveline's mixer stays unplugged overnight.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq02.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq02.card07",
+            "content": "At Aveline, the borrowed mixer sits beside the window and may be used only after the supervisor signs the load check; put the cover back afterward.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq02.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq02.card08",
+            "content": "The Aveline load-check form is kept by the till.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq02.source09"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ03",
+      "family": "detail-retention",
+      "variant": "tail-exception",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-98ed954a08a338ed8162ae7610b2b8900748b89afc71de2cec8fc3a2be34b90f"
+      },
+      "query": {
+        "text": "Which Kalmia walking-tour bookings are exempt from the usual 24-hour cancellation notice?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq03.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq03.source01",
+                "role": "user",
+                "content": "Kalmia tour guides collect headsets before departure."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq03.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq03.source02",
+                "role": "user",
+                "content": "Kalmia private tours need 48 hours' cancellation notice."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq03.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq03.source03",
+                "role": "user",
+                "content": "Kalmia tickets can be printed at the kiosk."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq03.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq03.source04",
+                "role": "user",
+                "content": "The Kalmia kiosk closes at 18:00."
+              },
+              {
+                "sourceLabel": "rq03.source05",
+                "role": "user",
+                "content": "Digital tickets still scan after the kiosk closes."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq03.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq03.source06",
+                "role": "user",
+                "content": "Kalmia weekday tours leave from the west steps."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq03.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq03.source07",
+                "role": "user",
+                "content": "Kalmia school tours have separate invoicing."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq03.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq03.source08",
+                "role": "user",
+                "content": "All Kalmia walking-tour bookings need 24 hours' cancellation notice, except same-day bookings canceled within 15 minutes of purchase."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq03.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq03.source09",
+                "role": "user",
+                "content": "Kalmia headset deposits are returned at the end."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq03.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq03.source10",
+                "role": "user",
+                "content": "Nerine walking tours waive notice for heavy rain."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq03.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq03.source11",
+                "role": "user",
+                "content": "Kalmia guide shifts are posted on Fridays."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq03.card01",
+            "content": "Kalmia tour guides collect headsets before departure.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq03.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq03.card02",
+            "content": "Kalmia private tours need 48 hours' cancellation notice.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq03.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq03.card03",
+            "content": "Kalmia tickets can be printed at the kiosk.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq03.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq03.card04",
+            "content": "The Kalmia kiosk closes at 18:00.\nDigital tickets still scan after the kiosk closes.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq03.source04",
+                "rq03.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq03.card05",
+            "content": "Kalmia weekday tours leave from the west steps.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq03.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq03.card06",
+            "content": "Kalmia school tours have separate invoicing.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq03.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq03.card07",
+            "content": "All Kalmia walking-tour bookings need 24 hours' cancellation notice, except same-day bookings canceled within 15 minutes of purchase.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq03.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq03.card08",
+            "content": "Kalmia headset deposits are returned at the end.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq03.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq03.card09",
+            "content": "Nerine walking tours waive notice for heavy rain.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq03.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq03.card10",
+            "content": "Kalmia guide shifts are posted on Fridays.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq03.source11"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ04",
+      "family": "detail-retention",
+      "variant": "attributed-assistant-instruction",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-5619d15b29812c91c768704b4860126548126797691de2dac8acd035d1ae2d7a"
+      },
+      "query": {
+        "text": "What did the assistant instruct me to do with the Pavo demo's spare remote before packing?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq04.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source01",
+                "role": "user",
+                "content": "Pavo's demo screen uses HDMI input 2."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source02",
+                "role": "user",
+                "content": "Pavo's spare remote is not the lecture-hall remote."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source03",
+                "role": "user",
+                "content": "Pavo's packing list includes a soft screen sleeve."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source04",
+                "role": "user",
+                "content": "The lecture-hall assistant said to remove that remote's batteries."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source05",
+                "role": "user",
+                "content": "Pavo's main remote travels with the screen."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source06",
+                "role": "user",
+                "content": "Pavo's trolley key hangs by reception."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source07",
+                "role": "user",
+                "content": "Pavo's demo cable is tagged orange."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source08",
+                "role": "user",
+                "content": "Pavo's battery tester is in the repair drawer."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source09",
+                "role": "user",
+                "content": "Pavo's screen stand folds inward."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source10",
+                "role": "user",
+                "content": "For the Pavo demo, what should I do with the spare remote before packing?"
+              },
+              {
+                "sourceLabel": "rq04.source11",
+                "role": "assistant",
+                "content": "For Pavo's spare remote, lock the buttons and tuck it into the gray mesh pouch before packing."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session11",
+            "date": "2026/04/11 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source12",
+                "role": "user",
+                "content": "The Pavo demo room has a separate wall controller."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq04.session12",
+            "date": "2026/04/12 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq04.source13",
+                "role": "user",
+                "content": "Pavo's screen sleeve must be dry before packing."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq04.card01",
+            "content": "Pavo's demo screen uses HDMI input 2.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card02",
+            "content": "Pavo's spare remote is not the lecture-hall remote.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card03",
+            "content": "Pavo's packing list includes a soft screen sleeve.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card04",
+            "content": "The lecture-hall assistant said to remove that remote's batteries.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card05",
+            "content": "Pavo's main remote travels with the screen.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card06",
+            "content": "Pavo's trolley key hangs by reception.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card07",
+            "content": "Pavo's demo cable is tagged orange.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card08",
+            "content": "Pavo's battery tester is in the repair drawer.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card09",
+            "content": "Pavo's screen stand folds inward.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card10",
+            "content": "For the Pavo demo, what should I do with the spare remote before packing?\nFor Pavo's spare remote, lock the buttons and tuck it into the gray mesh pouch before packing.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source10",
+                "rq04.source11"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card11",
+            "content": "The Pavo demo room has a separate wall controller.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source12"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq04.card12",
+            "content": "Pavo's screen sleeve must be dry before packing.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq04.source13"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ05",
+      "family": "lexical-paraphrase-cjk",
+      "variant": "exact-lexical",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-d15eb13ba437538bae1de3a965de3a007a7871759d6479e69a6d4ffc36875746"
+      },
+      "query": {
+        "text": "Where is the Eider bicycle shed's spoke gauge kept?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq05.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq05.source01",
+                "role": "user",
+                "content": "The Eider bicycle shed has a stand for borrowed helmets."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq05.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq05.source02",
+                "role": "user",
+                "content": "Eider's spoke gauge is kept in drawer H beside the truing stand."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq05.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq05.source03",
+                "role": "user",
+                "content": "Eider's bench lamp has a foot switch."
+              },
+              {
+                "sourceLabel": "rq05.source04",
+                "role": "user",
+                "content": "The lamp cable runs behind the bench."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq05.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq05.source05",
+                "role": "user",
+                "content": "The Eider torque wrench is kept in drawer F."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq05.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq05.source06",
+                "role": "user",
+                "content": "The Alder bicycle shed keeps its spoke gauge on a hook."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq05.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq05.source07",
+                "role": "user",
+                "content": "Eider's tire levers travel in the roadside kit."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq05.card01",
+            "content": "The Eider bicycle shed has a stand for borrowed helmets.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq05.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq05.card02",
+            "content": "Eider's spoke gauge is kept in drawer H beside the truing stand.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq05.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq05.card03",
+            "content": "Eider's bench lamp has a foot switch.\nThe lamp cable runs behind the bench.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq05.source03",
+                "rq05.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq05.card04",
+            "content": "The Eider torque wrench is kept in drawer F.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq05.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq05.card05",
+            "content": "The Alder bicycle shed keeps its spoke gauge on a hook.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq05.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq05.card06",
+            "content": "Eider's tire levers travel in the roadside kit.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq05.source07"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ06",
+      "family": "lexical-paraphrase-cjk",
+      "variant": "paraphrase-without-shared-keyword",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-cd5a46d31dd36a8e42c2cc084119125796436175810f64aaa229b51123d3a6ac"
+      },
+      "query": {
+        "text": "How do I hush the device that warns me when the river rises?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq06.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq06.source01",
+                "role": "user",
+                "content": "Haru's flood monitor sends a phone notification as well."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq06.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq06.source02",
+                "role": "user",
+                "content": "Haru's pond thermometer beeps once when its battery is low."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq06.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq06.source03",
+                "role": "user",
+                "content": "Haru's flood monitor displays levels in centimeters."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq06.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq06.source04",
+                "role": "user",
+                "content": "The Haru flood monitor's amber button is above the display."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq06.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq06.source05",
+                "role": "user",
+                "content": "Haru's tide clock has a blue reset knob."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq06.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq06.source06",
+                "role": "user",
+                "content": "Haru's flood monitor has a wall bracket."
+              },
+              {
+                "sourceLabel": "rq06.source07",
+                "role": "user",
+                "content": "Its bracket should stay above the splash line."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq06.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq06.source08",
+                "role": "user",
+                "content": "On the Haru flood monitor, maintain pressure on the amber button for four seconds to mute its alarm."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq06.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq06.source09",
+                "role": "user",
+                "content": "The Haru flood monitor keeps measuring after its alarm is muted."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq06.card01",
+            "content": "Haru's flood monitor sends a phone notification as well.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq06.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq06.card02",
+            "content": "Haru's pond thermometer beeps once when its battery is low.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq06.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq06.card03",
+            "content": "Haru's flood monitor displays levels in centimeters.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq06.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq06.card04",
+            "content": "The Haru flood monitor's amber button is above the display.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq06.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq06.card05",
+            "content": "Haru's tide clock has a blue reset knob.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq06.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq06.card06",
+            "content": "Haru's flood monitor has a wall bracket.\nIts bracket should stay above the splash line.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq06.source06",
+                "rq06.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq06.card07",
+            "content": "On the Haru flood monitor, maintain pressure on the amber button for four seconds to mute its alarm.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq06.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq06.card08",
+            "content": "The Haru flood monitor keeps measuring after its alarm is muted.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq06.source09"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ07",
+      "family": "lexical-paraphrase-cjk",
+      "variant": "chinese-query",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-b8f4ec15ef03f2e57800237ed4b933f45c092da576c1faf43bd76c13c600f150"
+      },
+      "query": {
+        "text": "Meadowline 陶藝教室的學員，手還濕的時候要把作品放在哪裡？",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq07.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq07.source01",
+                "role": "user",
+                "content": "Meadowline pottery learners collect tools from the front bench."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq07.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq07.source02",
+                "role": "user",
+                "content": "Meadowline's finished glazed work goes in cabinet 2."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq07.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq07.source03",
+                "role": "user",
+                "content": "When Meadowline pottery learners have wet hands, set their pieces on the cork mat by the rinse basin."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq07.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq07.source04",
+                "role": "user",
+                "content": "Meadowline's clay scraps go in the reclaim bucket."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq07.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq07.source05",
+                "role": "user",
+                "content": "Meadowline's tutors can place dry samples on the wood shelf."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq07.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq07.source06",
+                "role": "user",
+                "content": "Brookline pottery puts wet work on a plastic tray."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq07.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq07.source07",
+                "role": "user",
+                "content": "Meadowline's aprons hang behind the door."
+              },
+              {
+                "sourceLabel": "rq07.source08",
+                "role": "user",
+                "content": "The door hook is for aprons, not bags."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq07.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq07.source09",
+                "role": "user",
+                "content": "Meadowline's rinse basin has a separate brush cup."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq07.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq07.source10",
+                "role": "user",
+                "content": "Meadowline's kiln shelf is reserved for fired work."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq07.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq07.source11",
+                "role": "user",
+                "content": "Meadowline's learners wash tools before returning them."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq07.card01",
+            "content": "Meadowline pottery learners collect tools from the front bench.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq07.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq07.card02",
+            "content": "Meadowline's finished glazed work goes in cabinet 2.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq07.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq07.card03",
+            "content": "When Meadowline pottery learners have wet hands, set their pieces on the cork mat by the rinse basin.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq07.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq07.card04",
+            "content": "Meadowline's clay scraps go in the reclaim bucket.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq07.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq07.card05",
+            "content": "Meadowline's tutors can place dry samples on the wood shelf.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq07.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq07.card06",
+            "content": "Brookline pottery puts wet work on a plastic tray.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq07.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq07.card07",
+            "content": "Meadowline's aprons hang behind the door.\nThe door hook is for aprons, not bags.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq07.source07",
+                "rq07.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq07.card08",
+            "content": "Meadowline's rinse basin has a separate brush cup.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq07.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq07.card09",
+            "content": "Meadowline's kiln shelf is reserved for fired work.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq07.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq07.card10",
+            "content": "Meadowline's learners wash tools before returning them.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq07.source11"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ08",
+      "family": "lexical-paraphrase-cjk",
+      "variant": "mixed-language-alias",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-ebfe5848012acb3ec3ca5270c30d7137932d1d24a460ecc58e8449d9d5677c9f"
+      },
+      "query": {
+        "text": "小巢的 kitchen roster 由誰最後確認？",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq08.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source01",
+                "role": "user",
+                "content": "The Nido kitchen roster draft goes to the evening volunteers."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source02",
+                "role": "user",
+                "content": "Nido's cleaning roster is confirmed by Omar."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source03",
+                "role": "user",
+                "content": "小巢 is the same volunteer kitchen we call Nido in the English notes."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source04",
+                "role": "user",
+                "content": "Nido's pantry stock list is checked by Lea."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source05",
+                "role": "user",
+                "content": "The Nido breakfast roster has a separate weekend sheet."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source06",
+                "role": "user",
+                "content": "另一個團隊叫小屋，英文是 Casita。"
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source07",
+                "role": "user",
+                "content": "Nido's final kitchen roster is confirmed by Mira."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source08",
+                "role": "user",
+                "content": "Nido's shift sheet uses a shared calendar."
+              },
+              {
+                "sourceLabel": "rq08.source09",
+                "role": "user",
+                "content": "The calendar reminders go out at noon."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source10",
+                "role": "user",
+                "content": "Nido's serving counter has three stations."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source11",
+                "role": "user",
+                "content": "Casita's kitchen roster is confirmed by Omar."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session11",
+            "date": "2026/04/11 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source12",
+                "role": "user",
+                "content": "Nido's volunteer onboarding is led by Lea."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq08.session12",
+            "date": "2026/04/12 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq08.source13",
+                "role": "user",
+                "content": "Nido's pantry order is sent on Tuesdays."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq08.card01",
+            "content": "The Nido kitchen roster draft goes to the evening volunteers.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card02",
+            "content": "Nido's cleaning roster is confirmed by Omar.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card03",
+            "content": "小巢 is the same volunteer kitchen we call Nido in the English notes.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card04",
+            "content": "Nido's pantry stock list is checked by Lea.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card05",
+            "content": "The Nido breakfast roster has a separate weekend sheet.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card06",
+            "content": "另一個團隊叫小屋，英文是 Casita。",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card07",
+            "content": "Nido's final kitchen roster is confirmed by Mira.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card08",
+            "content": "Nido's shift sheet uses a shared calendar.\nThe calendar reminders go out at noon.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source08",
+                "rq08.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card09",
+            "content": "Nido's serving counter has three stations.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card10",
+            "content": "Casita's kitchen roster is confirmed by Omar.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source11"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card11",
+            "content": "Nido's volunteer onboarding is led by Lea.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source12"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq08.card12",
+            "content": "Nido's pantry order is sent on Tuesdays.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq08.source13"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ09",
+      "family": "multi-session-links",
+      "variant": "two-session-dependency",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-7471bea95ed873bf32b228eaed3b46352d6b766154788bf28fd9878b4c5627bd"
+      },
+      "query": {
+        "text": "Which rack holds the water-sampling kit loaned to the Solaro survey?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq09.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq09.source01",
+                "role": "user",
+                "content": "Solaro's survey clipboards are stored in rack B."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq09.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq09.source02",
+                "role": "user",
+                "content": "The kit loaned to the Solaro survey is catalog number WS-26."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq09.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq09.source03",
+                "role": "user",
+                "content": "The Solaro survey meets at the canal gate."
+              },
+              {
+                "sourceLabel": "rq09.source04",
+                "role": "user",
+                "content": "Its return log stays with the field supervisor."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq09.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq09.source05",
+                "role": "user",
+                "content": "Catalog kit WS-62 is stored in rack C."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq09.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq09.source06",
+                "role": "user",
+                "content": "Catalog kit WS-26 is stored in rack G."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq09.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq09.source07",
+                "role": "user",
+                "content": "The Amato survey borrowed catalog kit WS-62."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq09.card01",
+            "content": "Solaro's survey clipboards are stored in rack B.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq09.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq09.card02",
+            "content": "The kit loaned to the Solaro survey is catalog number WS-26.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq09.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq09.card03",
+            "content": "The Solaro survey meets at the canal gate.\nIts return log stays with the field supervisor.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq09.source03",
+                "rq09.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq09.card04",
+            "content": "Catalog kit WS-62 is stored in rack C.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq09.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq09.card05",
+            "content": "Catalog kit WS-26 is stored in rack G.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq09.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq09.card06",
+            "content": "The Amato survey borrowed catalog kit WS-62.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq09.source07"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ10",
+      "family": "multi-session-links",
+      "variant": "three-session-chain",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-1b39851dcb09e21fbb45aab107fe4f8a20ca37d1179f7ee19cd6ae28d6016dca"
+      },
+      "query": {
+        "text": "Which drawer contains the consent packet for the Lirio choir rehearsal?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq10.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq10.source01",
+                "role": "user",
+                "content": "Lirio rehearsal attendance is on the wall chart."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq10.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq10.source02",
+                "role": "user",
+                "content": "The Lirio choir rehearsal uses signup batch CR-17."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq10.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq10.source03",
+                "role": "user",
+                "content": "Signup batch CR-71 has a green packet."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq10.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq10.source04",
+                "role": "user",
+                "content": "Lirio's rehearsal piano is tuned on Thursdays."
+              },
+              {
+                "sourceLabel": "rq10.source05",
+                "role": "user",
+                "content": "The spare score copies are on the piano bench."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq10.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq10.source06",
+                "role": "user",
+                "content": "Signup batch CR-17 has the ocher consent packet."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq10.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq10.source07",
+                "role": "user",
+                "content": "The green consent packet is in drawer 6."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq10.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq10.source08",
+                "role": "user",
+                "content": "Lirio's travel forms use a separate red packet."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq10.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq10.source09",
+                "role": "user",
+                "content": "The ocher consent packet is filed in drawer 9."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq10.card01",
+            "content": "Lirio rehearsal attendance is on the wall chart.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq10.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq10.card02",
+            "content": "The Lirio choir rehearsal uses signup batch CR-17.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq10.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq10.card03",
+            "content": "Signup batch CR-71 has a green packet.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq10.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq10.card04",
+            "content": "Lirio's rehearsal piano is tuned on Thursdays.\nThe spare score copies are on the piano bench.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq10.source04",
+                "rq10.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq10.card05",
+            "content": "Signup batch CR-17 has the ocher consent packet.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq10.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq10.card06",
+            "content": "The green consent packet is in drawer 6.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq10.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq10.card07",
+            "content": "Lirio's travel forms use a separate red packet.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq10.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq10.card08",
+            "content": "The ocher consent packet is filed in drawer 9.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq10.source09"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ11",
+      "family": "multi-session-links",
+      "variant": "distractor-link",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-61a3a8008839193cc4ec01333e9b68f49d46dde74394acef5328db13603dea95"
+      },
+      "query": {
+        "text": "What marker color is assigned to the canal route used by the Vesna dusk count?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq11.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq11.source01",
+                "role": "user",
+                "content": "The Vesna dawn count uses route Tern."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq11.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq11.source02",
+                "role": "user",
+                "content": "The Vesna dusk count uses route Ibis."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq11.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq11.source03",
+                "role": "user",
+                "content": "Route Tern uses a cobalt marker."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq11.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq11.source04",
+                "role": "user",
+                "content": "The Vesna dusk count starts at the boathouse."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq11.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq11.source05",
+                "role": "user",
+                "content": "Route Ibis uses a copper marker."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq11.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq11.source06",
+                "role": "user",
+                "content": "Vesna's bird hide has a copper door plate."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq11.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq11.source07",
+                "role": "user",
+                "content": "The Vesna night count has a separate tally sheet."
+              },
+              {
+                "sourceLabel": "rq11.source08",
+                "role": "user",
+                "content": "Its torches are checked before departure."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq11.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq11.source09",
+                "role": "user",
+                "content": "The Belden dusk count uses route Tern."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq11.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq11.source10",
+                "role": "user",
+                "content": "Route Heron uses a white marker."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq11.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq11.source11",
+                "role": "user",
+                "content": "Vesna's canal markers are checked each spring."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq11.card01",
+            "content": "The Vesna dawn count uses route Tern.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq11.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq11.card02",
+            "content": "The Vesna dusk count uses route Ibis.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq11.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq11.card03",
+            "content": "Route Tern uses a cobalt marker.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq11.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq11.card04",
+            "content": "The Vesna dusk count starts at the boathouse.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq11.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq11.card05",
+            "content": "Route Ibis uses a copper marker.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq11.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq11.card06",
+            "content": "Vesna's bird hide has a copper door plate.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq11.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq11.card07",
+            "content": "The Vesna night count has a separate tally sheet.\nIts torches are checked before departure.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq11.source07",
+                "rq11.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq11.card08",
+            "content": "The Belden dusk count uses route Tern.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq11.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq11.card09",
+            "content": "Route Heron uses a white marker.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq11.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq11.card10",
+            "content": "Vesna's canal markers are checked each spring.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq11.source11"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ12",
+      "family": "multi-session-links",
+      "variant": "missing-link-abstention",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-cd7529c5b00f6995de84bc6a8618a860c66c541091a36b733243b59495327985"
+      },
+      "query": {
+        "text": "Which receiving bay should I go to for the Noctis exhibit crate?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq12.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source01",
+                "role": "user",
+                "content": "The Noctis exhibit crate was logged under receiving reference NR-18."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source02",
+                "role": "user",
+                "content": "Receiving reference NR-19 is assigned to bay 4."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source03",
+                "role": "user",
+                "content": "Noctis's display labels are at the front desk."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source04",
+                "role": "user",
+                "content": "The Noctis exhibit's trolley is beside bay 2."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source05",
+                "role": "user",
+                "content": "Receiving reference NR-81 is assigned to bay 7."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source06",
+                "role": "user",
+                "content": "The Noctis crate needs two people to move it."
+              },
+              {
+                "sourceLabel": "rq12.source07",
+                "role": "user",
+                "content": "Its handling gloves are in the loading office."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source08",
+                "role": "user",
+                "content": "The receiving sheet for NR-18 has no bay entered yet."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source09",
+                "role": "user",
+                "content": "Bay 4 has a ramp for heavy crates."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source10",
+                "role": "user",
+                "content": "The Luma exhibit crate is logged under NR-19."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source11",
+                "role": "user",
+                "content": "Noctis's brochure cartons go straight to the shop."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session11",
+            "date": "2026/04/11 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source12",
+                "role": "user",
+                "content": "Bay 7 has a separate lift booking."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq12.session12",
+            "date": "2026/04/12 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq12.source13",
+                "role": "user",
+                "content": "Noctis's exhibit curtain is stored in the stage locker."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq12.card01",
+            "content": "The Noctis exhibit crate was logged under receiving reference NR-18.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card02",
+            "content": "Receiving reference NR-19 is assigned to bay 4.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card03",
+            "content": "Noctis's display labels are at the front desk.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card04",
+            "content": "The Noctis exhibit's trolley is beside bay 2.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card05",
+            "content": "Receiving reference NR-81 is assigned to bay 7.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card06",
+            "content": "The Noctis crate needs two people to move it.\nIts handling gloves are in the loading office.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source06",
+                "rq12.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card07",
+            "content": "The receiving sheet for NR-18 has no bay entered yet.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card08",
+            "content": "Bay 4 has a ramp for heavy crates.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card09",
+            "content": "The Luma exhibit crate is logged under NR-19.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card10",
+            "content": "Noctis's brochure cartons go straight to the shop.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source11"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card11",
+            "content": "Bay 7 has a separate lift booking.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source12"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq12.card12",
+            "content": "Noctis's exhibit curtain is stored in the stage locker.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq12.source13"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ13",
+      "family": "event-time-late-import",
+      "variant": "event-versus-ingestion-time",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-ca8b590954640776887e9be58977716bb7a297d2ebdf560277839296012d8477"
+      },
+      "query": {
+        "text": "As of April 14, 2026, what cone spacing was authorized for the Eolia practice lane?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq13.session01",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq13.source01",
+                "role": "user",
+                "content": "Eolia's practice lane opens after the morning inspection."
+              },
+              {
+                "sourceLabel": "rq13.source02",
+                "role": "user",
+                "content": "The cones are stored by the equipment cage."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq13.session02",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq13.source03",
+                "role": "user",
+                "content": "March 24 decision: Eolia's practice lane cone spacing was changed to 2.6 meters."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq13.session03",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq13.source04",
+                "role": "user",
+                "content": "Eolia's sprint lane uses a 3-meter marker spacing."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq13.session04",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq13.source05",
+                "role": "user",
+                "content": "Imported April 10: the March 12 Eolia decision had authorized 1.8-meter cone spacing for the practice lane."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq13.session05",
+            "date": "2026/04/12 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq13.source06",
+                "role": "user",
+                "content": "Eolia's lane barrier must be closed during setup."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq13.session06",
+            "date": "2026/04/20 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq13.source07",
+                "role": "user",
+                "content": "April 20 decision: Eolia's practice lane cone spacing changed to 3.2 meters."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq13.card01",
+            "content": "Eolia's practice lane opens after the morning inspection.\nThe cones are stored by the equipment cage.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq13.source01",
+                "rq13.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq13.card02",
+            "content": "March 24 decision: Eolia's practice lane cone spacing was changed to 2.6 meters.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq13.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq13.card03",
+            "content": "Eolia's sprint lane uses a 3-meter marker spacing.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq13.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq13.card04",
+            "content": "Imported April 10: the March 12 Eolia decision had authorized 1.8-meter cone spacing for the practice lane.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq13.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq13.card05",
+            "content": "Eolia's lane barrier must be closed during setup.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq13.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq13.card06",
+            "content": "April 20 decision: Eolia's practice lane cone spacing changed to 3.2 meters.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq13.source07"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ14",
+      "family": "event-time-late-import",
+      "variant": "late-old-import",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-8ca079c7342c7329588492cb90581bbc843dd5411a0ad0d0e42f901989f7001d"
+      },
+      "query": {
+        "text": "What admission fee is currently in effect for the Gannet print room?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq14.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq14.source01",
+                "role": "user",
+                "content": "Gannet's guided workshop costs 14 dollars."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq14.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq14.source02",
+                "role": "user",
+                "content": "Effective April 1, Gannet print-room admission is 6 dollars, replacing the 4-dollar rate."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq14.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq14.source03",
+                "role": "user",
+                "content": "Gannet print-room members may book a free orientation."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq14.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq14.source04",
+                "role": "user",
+                "content": "Gannet's print-room ticket roll is in the till."
+              },
+              {
+                "sourceLabel": "rq14.source05",
+                "role": "user",
+                "content": "The till float is checked before opening."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq14.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq14.source06",
+                "role": "user",
+                "content": "Gannet's private hire deposit is 30 dollars."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq14.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq14.source07",
+                "role": "user",
+                "content": "Nival print-room admission is 5 dollars."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq14.session07",
+            "date": "2026/06/12 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq14.source08",
+                "role": "user",
+                "content": "Imported June 12 from the January register: Gannet print-room admission was 4 dollars."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq14.session08",
+            "date": "2026/06/13 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq14.source09",
+                "role": "user",
+                "content": "Gannet's print-room opening hours stay 10:00 to 16:00."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq14.card01",
+            "content": "Gannet's guided workshop costs 14 dollars.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq14.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq14.card02",
+            "content": "Effective April 1, Gannet print-room admission is 6 dollars, replacing the 4-dollar rate.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq14.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq14.card03",
+            "content": "Gannet print-room members may book a free orientation.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq14.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq14.card04",
+            "content": "Gannet's print-room ticket roll is in the till.\nThe till float is checked before opening.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq14.source04",
+                "rq14.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq14.card05",
+            "content": "Gannet's private hire deposit is 30 dollars.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq14.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq14.card06",
+            "content": "Nival print-room admission is 5 dollars.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq14.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq14.card07",
+            "content": "Imported June 12 from the January register: Gannet print-room admission was 4 dollars.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq14.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq14.card08",
+            "content": "Gannet's print-room opening hours stay 10:00 to 16:00.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq14.source09"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ15",
+      "family": "event-time-late-import",
+      "variant": "relative-date",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-f144969a476754ed37345456fdee930f6dae133eec91a066246ea66e806739ae"
+      },
+      "query": {
+        "text": "On what date is the Tilia greenhouse's seed swap?",
+        "date": "2026/06/10 (Wed) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq15.session01",
+            "date": "2026/06/01 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq15.source01",
+                "role": "user",
+                "content": "Tilia's greenhouse plant sale is on June 20."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq15.session02",
+            "date": "2026/06/02 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq15.source02",
+                "role": "user",
+                "content": "Tilia's seed-swap signup sheet is by the potting bench."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq15.session03",
+            "date": "2026/06/03 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq15.source03",
+                "role": "user",
+                "content": "Tilia's greenhouse volunteers bring their own mugs."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq15.session04",
+            "date": "2026/06/04 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq15.source04",
+                "role": "user",
+                "content": "Tilia's pruning demonstration is on June 13."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq15.session05",
+            "date": "2026/06/05 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq15.source05",
+                "role": "user",
+                "content": "Tilia's seed envelopes need a variety name."
+              },
+              {
+                "sourceLabel": "rq15.source06",
+                "role": "user",
+                "content": "Blank envelopes are in the potting drawer."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq15.session06",
+            "date": "2026/06/06 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq15.source07",
+                "role": "user",
+                "content": "The Umbra greenhouse's seed swap is on June 14."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq15.session07",
+            "date": "2026/06/07 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq15.source08",
+                "role": "user",
+                "content": "Tilia's greenhouse closes at 17:00 on weekdays."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq15.session08",
+            "date": "2026/06/08 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq15.source09",
+                "role": "user",
+                "content": "Our Tilia greenhouse seed swap is this Saturday, five days from today."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq15.session09",
+            "date": "2026/06/09 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq15.source10",
+                "role": "user",
+                "content": "Tilia's seed swap uses the covered patio."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq15.session10",
+            "date": "2026/06/09 (Tue) 10:00",
+            "turns": [
+              {
+                "sourceLabel": "rq15.source11",
+                "role": "user",
+                "content": "Tilia's seed-swap tables are borrowed from the parish hall."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq15.card01",
+            "content": "Tilia's greenhouse plant sale is on June 20.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq15.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq15.card02",
+            "content": "Tilia's seed-swap signup sheet is by the potting bench.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq15.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq15.card03",
+            "content": "Tilia's greenhouse volunteers bring their own mugs.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq15.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq15.card04",
+            "content": "Tilia's pruning demonstration is on June 13.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq15.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq15.card05",
+            "content": "Tilia's seed envelopes need a variety name.\nBlank envelopes are in the potting drawer.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq15.source05",
+                "rq15.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq15.card06",
+            "content": "The Umbra greenhouse's seed swap is on June 14.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq15.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq15.card07",
+            "content": "Tilia's greenhouse closes at 17:00 on weekdays.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq15.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq15.card08",
+            "content": "Our Tilia greenhouse seed swap is this Saturday, five days from today.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq15.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq15.card09",
+            "content": "Tilia's seed swap uses the covered patio.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq15.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq15.card10",
+            "content": "Tilia's seed-swap tables are borrowed from the parish hall.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq15.source11"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ16",
+      "family": "event-time-late-import",
+      "variant": "overlapping-scopes",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-c582f508f6b11f3e85e6cd8352b57f1b9fac0a94ec0acc324a392d310d84933a"
+      },
+      "query": {
+        "text": "For the Valeo studio's evening ceramics class, what is the current cleanup start time?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq16.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source01",
+                "role": "user",
+                "content": "Valeo ceramics day classes begin cleanup at 15:40."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source02",
+                "role": "user",
+                "content": "Valeo's evening ceramics class originally began cleanup at 20:10."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source03",
+                "role": "user",
+                "content": "Valeo's evening drawing class begins cleanup at 20:25."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source04",
+                "role": "user",
+                "content": "Valeo's ceramics sinks have settling buckets."
+              },
+              {
+                "sourceLabel": "rq16.source05",
+                "role": "user",
+                "content": "The buckets are emptied by the studio technician."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source06",
+                "role": "user",
+                "content": "Effective April 5, only Valeo's evening ceramics class moves cleanup to 20:35."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source07",
+                "role": "user",
+                "content": "Valeo's painting room uses a separate wash station."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source08",
+                "role": "user",
+                "content": "Effective April 7, Valeo's ceramics day-class cleanup moves to 15:55."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source09",
+                "role": "user",
+                "content": "Valeo's evening ceramics class keeps the same arrival time."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source10",
+                "role": "user",
+                "content": "The Ravel studio starts evening ceramics cleanup at 20:45."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source11",
+                "role": "user",
+                "content": "Valeo's day-class handout rack is near the entrance."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session11",
+            "date": "2026/04/11 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source12",
+                "role": "user",
+                "content": "Valeo's evening drawing tutor locks the print cupboard."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq16.session12",
+            "date": "2026/04/12 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq16.source13",
+                "role": "user",
+                "content": "Valeo's ceramic tools are counted after cleanup."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq16.card01",
+            "content": "Valeo ceramics day classes begin cleanup at 15:40.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card02",
+            "content": "Valeo's evening ceramics class originally began cleanup at 20:10.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card03",
+            "content": "Valeo's evening drawing class begins cleanup at 20:25.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card04",
+            "content": "Valeo's ceramics sinks have settling buckets.\nThe buckets are emptied by the studio technician.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source04",
+                "rq16.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card05",
+            "content": "Effective April 5, only Valeo's evening ceramics class moves cleanup to 20:35.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card06",
+            "content": "Valeo's painting room uses a separate wash station.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card07",
+            "content": "Effective April 7, Valeo's ceramics day-class cleanup moves to 15:55.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card08",
+            "content": "Valeo's evening ceramics class keeps the same arrival time.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card09",
+            "content": "The Ravel studio starts evening ceramics cleanup at 20:45.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card10",
+            "content": "Valeo's day-class handout rack is near the entrance.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source11"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card11",
+            "content": "Valeo's evening drawing tutor locks the print cupboard.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source12"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq16.card12",
+            "content": "Valeo's ceramic tools are counted after cleanup.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq16.source13"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ17",
+      "family": "proposal-adoption-premise",
+      "variant": "unadopted-proposal",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-38c586856ed486ce1d78b4276437eeca74b1ab23f31050356cb2572dc7f8b5d5"
+      },
+      "query": {
+        "text": "Which new lockup procedure did I adopt for the Rondo costume room?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq17.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq17.source01",
+                "role": "user",
+                "content": "Rondo's costume rails are numbered by production."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq17.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq17.source02",
+                "role": "user",
+                "content": "I need to consider a new Rondo costume-room lockup procedure."
+              },
+              {
+                "sourceLabel": "rq17.source03",
+                "role": "assistant",
+                "content": "For Rondo, consider putting the key in a tamper bag and asking two stewards to sign it."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq17.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq17.source04",
+                "role": "user",
+                "content": "Rondo's lighting cupboard already uses a two-person signoff."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq17.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq17.source05",
+                "role": "user",
+                "content": "I haven't adopted a new Rondo costume-room lockup procedure; that decision is still pending."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq17.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq17.source06",
+                "role": "user",
+                "content": "Rondo's costume-room key currently hangs in the stage office."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq17.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq17.source07",
+                "role": "user",
+                "content": "The Orfeo costume room stores keys in a coded box."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq17.card01",
+            "content": "Rondo's costume rails are numbered by production.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq17.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq17.card02",
+            "content": "I need to consider a new Rondo costume-room lockup procedure.\nFor Rondo, consider putting the key in a tamper bag and asking two stewards to sign it.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq17.source02",
+                "rq17.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq17.card03",
+            "content": "Rondo's lighting cupboard already uses a two-person signoff.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq17.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq17.card04",
+            "content": "I haven't adopted a new Rondo costume-room lockup procedure; that decision is still pending.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq17.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq17.card05",
+            "content": "Rondo's costume-room key currently hangs in the stage office.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq17.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq17.card06",
+            "content": "The Orfeo costume room stores keys in a coded box.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq17.source07"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ18",
+      "family": "proposal-adoption-premise",
+      "variant": "explicit-adoption",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-0cdbfceb9c9676dcf0aad8cd579630ffb7982dda2fc12107a675dce00a5a1a1a"
+      },
+      "query": {
+        "text": "What return rule did I adopt for the Seren pump loan?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq18.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq18.source01",
+                "role": "assistant",
+                "content": "For the Seren pump loan, one option is a photo check; another is a signed return slip before the deposit is released."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq18.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq18.source02",
+                "role": "user",
+                "content": "Seren's pump adapter stays in the accessory pouch."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq18.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq18.source03",
+                "role": "user",
+                "content": "Seren's hose loan uses a photo check."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq18.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq18.source04",
+                "role": "user",
+                "content": "Seren's pump intake sheet lists the serial number."
+              },
+              {
+                "sourceLabel": "rq18.source05",
+                "role": "user",
+                "content": "Its case label should stay readable."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq18.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq18.source06",
+                "role": "user",
+                "content": "The Noven pump loan returns deposits after a phone call."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq18.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq18.source07",
+                "role": "user",
+                "content": "Seren's pump loan needs a booking name on the case."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq18.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq18.source08",
+                "role": "user",
+                "content": "I adopt the signed-return-slip option for the Seren pump loan: release the deposit only after that slip is signed."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq18.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq18.source09",
+                "role": "user",
+                "content": "Seren's service pump uses a separate maintenance register."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq18.card01",
+            "content": "For the Seren pump loan, one option is a photo check; another is a signed return slip before the deposit is released.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq18.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq18.card02",
+            "content": "Seren's pump adapter stays in the accessory pouch.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq18.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq18.card03",
+            "content": "Seren's hose loan uses a photo check.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq18.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq18.card04",
+            "content": "Seren's pump intake sheet lists the serial number.\nIts case label should stay readable.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq18.source04",
+                "rq18.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq18.card05",
+            "content": "The Noven pump loan returns deposits after a phone call.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq18.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq18.card06",
+            "content": "Seren's pump loan needs a booking name on the case.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq18.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq18.card07",
+            "content": "I adopt the signed-return-slip option for the Seren pump loan: release the deposit only after that slip is signed.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq18.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq18.card08",
+            "content": "Seren's service pump uses a separate maintenance register.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq18.source09"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ19",
+      "family": "proposal-adoption-premise",
+      "variant": "premise-changed-reconfirm",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-6cfd3ed12254c33c9934ea6d18d30e607210e78f376c7e84ce877666355b139e"
+      },
+      "query": {
+        "text": "Under the current conditions, which cover is confirmed for storing the Ilona percussion kit?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq19.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq19.source01",
+                "role": "user",
+                "content": "Ilona's percussion kit includes a felt-lined case."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq19.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq19.source02",
+                "role": "user",
+                "content": "Ilona's rehearsal room used to stay dry through the weekend."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq19.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq19.source03",
+                "role": "assistant",
+                "content": "Since Ilona's rehearsal room stays dry, use the breathable cotton cover for the percussion kit."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq19.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq19.source04",
+                "role": "user",
+                "content": "Ilona's metal stands are stored in the corridor cupboard."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq19.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq19.source05",
+                "role": "user",
+                "content": "The repair team has opened Ilona's roof; the rehearsal room is now damp. I have not reconfirmed a kit cover for these conditions."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq19.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq19.source06",
+                "role": "user",
+                "content": "Ilona's touring kit uses a sealed plastic cover."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq19.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq19.source07",
+                "role": "user",
+                "content": "Ilona's kit trolley has two locking wheels."
+              },
+              {
+                "sourceLabel": "rq19.source08",
+                "role": "user",
+                "content": "The trolley handle folds down for transport."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq19.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq19.source09",
+                "role": "user",
+                "content": "The Soren percussion kit stays in a climate-controlled store."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq19.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq19.source10",
+                "role": "user",
+                "content": "Ilona's cotton cover was washed last week."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq19.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq19.source11",
+                "role": "user",
+                "content": "Ilona's kit inventory sheet lists the spare beaters."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq19.card01",
+            "content": "Ilona's percussion kit includes a felt-lined case.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq19.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq19.card02",
+            "content": "Ilona's rehearsal room used to stay dry through the weekend.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq19.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq19.card03",
+            "content": "Since Ilona's rehearsal room stays dry, use the breathable cotton cover for the percussion kit.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq19.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq19.card04",
+            "content": "Ilona's metal stands are stored in the corridor cupboard.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq19.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq19.card05",
+            "content": "The repair team has opened Ilona's roof; the rehearsal room is now damp. I have not reconfirmed a kit cover for these conditions.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq19.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq19.card06",
+            "content": "Ilona's touring kit uses a sealed plastic cover.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq19.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq19.card07",
+            "content": "Ilona's kit trolley has two locking wheels.\nThe trolley handle folds down for transport.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq19.source07",
+                "rq19.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq19.card08",
+            "content": "The Soren percussion kit stays in a climate-controlled store.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq19.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq19.card09",
+            "content": "Ilona's cotton cover was washed last week.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq19.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq19.card10",
+            "content": "Ilona's kit inventory sheet lists the spare beaters.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq19.source11"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ20",
+      "family": "proposal-adoption-premise",
+      "variant": "reaffirmation-without-replacement",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-980f30cce9ac12bef628d23a603f480dfc5d039740710157f08b5d5964bb9acc"
+      },
+      "query": {
+        "text": "What is my standing checkout rule for the Merula telescope eyepiece kit?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq20.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source01",
+                "role": "user",
+                "content": "Merula's telescope tripod uses a separate booking sheet."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source02",
+                "role": "user",
+                "content": "Merula's eyepiece kit has a foam insert."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source03",
+                "role": "user",
+                "content": "The Merula star chart may be borrowed overnight."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source04",
+                "role": "assistant",
+                "content": "For the Merula eyepiece kit, require a named borrower and a next-day return."
+              },
+              {
+                "sourceLabel": "rq20.source05",
+                "role": "user",
+                "content": "I adopt that Merula eyepiece-kit rule: a named borrower and a next-day return."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source06",
+                "role": "user",
+                "content": "Merula's outreach telescope is loaned for three days."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source07",
+                "role": "user",
+                "content": "The Tycho eyepiece kit can be borrowed anonymously."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source08",
+                "role": "user",
+                "content": "Merula's lens brush stays with the kit."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source09",
+                "role": "user",
+                "content": "Merula's tripod borrowers leave a phone number."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source10",
+                "role": "user",
+                "content": "Merula's eyepiece case closes with two clips."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source11",
+                "role": "user",
+                "content": "Merula's star-chart folder has spare blank sheets."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session11",
+            "date": "2026/04/11 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source12",
+                "role": "user",
+                "content": "The Merula volunteer roster is updated each Monday."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq20.session12",
+            "date": "2026/04/12 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq20.source13",
+                "role": "user",
+                "content": "I still stand by the Merula eyepiece-kit checkout rule we adopted; this reminder does not replace any part of it."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq20.card01",
+            "content": "Merula's telescope tripod uses a separate booking sheet.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card02",
+            "content": "Merula's eyepiece kit has a foam insert.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card03",
+            "content": "The Merula star chart may be borrowed overnight.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card04",
+            "content": "For the Merula eyepiece kit, require a named borrower and a next-day return.\nI adopt that Merula eyepiece-kit rule: a named borrower and a next-day return.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source04",
+                "rq20.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card05",
+            "content": "Merula's outreach telescope is loaned for three days.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card06",
+            "content": "The Tycho eyepiece kit can be borrowed anonymously.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card07",
+            "content": "Merula's lens brush stays with the kit.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card08",
+            "content": "Merula's tripod borrowers leave a phone number.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card09",
+            "content": "Merula's eyepiece case closes with two clips.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card10",
+            "content": "Merula's star-chart folder has spare blank sheets.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source11"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card11",
+            "content": "The Merula volunteer roster is updated each Monday.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source12"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq20.card12",
+            "content": "I still stand by the Merula eyepiece-kit checkout rule we adopted; this reminder does not replace any part of it.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq20.source13"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ21",
+      "family": "unknown-conflict",
+      "variant": "absent-source",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-c4ab345f77ff8461303cb0ac27300519b52e6163dc38077d4986c969046a291c"
+      },
+      "query": {
+        "text": "What is the serial number of the replacement strobe for the Oswin photo booth?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq21.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq21.source01",
+                "role": "user",
+                "content": "Oswin's photo-booth backdrop is burgundy."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq21.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq21.source02",
+                "role": "user",
+                "content": "The old Oswin strobe has serial number OS-441."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq21.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq21.source03",
+                "role": "user",
+                "content": "Oswin's photo-booth flash cable has a bent clip."
+              },
+              {
+                "sourceLabel": "rq21.source04",
+                "role": "user",
+                "content": "A spare flash cable is in the booth drawer."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq21.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq21.source05",
+                "role": "user",
+                "content": "Oswin's replacement printer has serial number OP-208."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq21.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq21.source06",
+                "role": "user",
+                "content": "Oswin's photo-booth light stand is tagged L3."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq21.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq21.source07",
+                "role": "user",
+                "content": "The Rowan photo booth's strobe has serial number RW-916."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq21.card01",
+            "content": "Oswin's photo-booth backdrop is burgundy.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq21.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq21.card02",
+            "content": "The old Oswin strobe has serial number OS-441.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq21.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq21.card03",
+            "content": "Oswin's photo-booth flash cable has a bent clip.\nA spare flash cable is in the booth drawer.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq21.source03",
+                "rq21.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq21.card04",
+            "content": "Oswin's replacement printer has serial number OP-208.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq21.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq21.card05",
+            "content": "Oswin's photo-booth light stand is tagged L3.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq21.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq21.card06",
+            "content": "The Rowan photo booth's strobe has serial number RW-916.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq21.source07"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ22",
+      "family": "unknown-conflict",
+      "variant": "unresolved-conflict",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-223062518afafa4369822e1536264e11b578345f07a563fb066ca233bcbd7ada"
+      },
+      "query": {
+        "text": "What passenger capacity is confirmed for the Azura shuttle's current seating layout?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq22.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq22.source01",
+                "role": "user",
+                "content": "Azura's shuttle runs from the station to the hall."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq22.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq22.source02",
+                "role": "user",
+                "content": "Azura's shuttle timetable is taped to the windscreen."
+              },
+              {
+                "sourceLabel": "rq22.source03",
+                "role": "user",
+                "content": "Its first departure is at 09:10."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq22.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq22.source04",
+                "role": "user",
+                "content": "Azura's luggage trailer has space for six cases."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq22.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq22.source05",
+                "role": "user",
+                "content": "The current Azura shuttle seating sheet says 8 passengers."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq22.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq22.source06",
+                "role": "user",
+                "content": "The Astra shuttle seating sheet says 10 passengers."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq22.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq22.source07",
+                "role": "user",
+                "content": "Azura's accessible boarding slot must be booked."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq22.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq22.source08",
+                "role": "user",
+                "content": "The current Azura shuttle operator checklist says 10 passengers."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq22.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq22.source09",
+                "role": "user",
+                "content": "We have not reconciled Azura's conflicting current seating sheet and operator checklist."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq22.card01",
+            "content": "Azura's shuttle runs from the station to the hall.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq22.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq22.card02",
+            "content": "Azura's shuttle timetable is taped to the windscreen.\nIts first departure is at 09:10.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq22.source02",
+                "rq22.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq22.card03",
+            "content": "Azura's luggage trailer has space for six cases.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq22.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq22.card04",
+            "content": "The current Azura shuttle seating sheet says 8 passengers.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq22.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq22.card05",
+            "content": "The Astra shuttle seating sheet says 10 passengers.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq22.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq22.card06",
+            "content": "Azura's accessible boarding slot must be booked.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq22.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq22.card07",
+            "content": "The current Azura shuttle operator checklist says 10 passengers.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq22.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq22.card08",
+            "content": "We have not reconciled Azura's conflicting current seating sheet and operator checklist.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq22.source09"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ23",
+      "family": "unknown-conflict",
+      "variant": "partial-support",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-22112bd244b0e616698639216308408ed24d0689f6933539ca975377b8d5022c"
+      },
+      "query": {
+        "text": "For the Elara field recorder, what color is its ID label, and who holds its backup battery?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq23.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq23.source01",
+                "role": "user",
+                "content": "The Elara field recorder's ID label is violet."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq23.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq23.source02",
+                "role": "user",
+                "content": "Elara's microphone cable has an orange tag."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq23.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq23.source03",
+                "role": "user",
+                "content": "The Elara recorder's memory cards are held by Ren."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq23.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq23.source04",
+                "role": "user",
+                "content": "The Halden recorder's backup battery is held by Jo."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq23.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq23.source05",
+                "role": "user",
+                "content": "Elara's recorder case has a foam divider."
+              },
+              {
+                "sourceLabel": "rq23.source06",
+                "role": "user",
+                "content": "The divider keeps the microphone from rubbing the display."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq23.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq23.source07",
+                "role": "user",
+                "content": "Elara's recorder needs a windscreen outdoors."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq23.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq23.source08",
+                "role": "user",
+                "content": "The Elara recorder's backup-battery handoff line is still blank."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq23.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq23.source09",
+                "role": "user",
+                "content": "Elara's headset is loaned out by Jo."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq23.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq23.source10",
+                "role": "user",
+                "content": "The Elara recorder's spare memory-card wallet is gray."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq23.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq23.source11",
+                "role": "user",
+                "content": "Elara's recorder check-in sheet is in the field bag."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq23.card01",
+            "content": "The Elara field recorder's ID label is violet.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq23.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq23.card02",
+            "content": "Elara's microphone cable has an orange tag.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq23.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq23.card03",
+            "content": "The Elara recorder's memory cards are held by Ren.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq23.source03"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq23.card04",
+            "content": "The Halden recorder's backup battery is held by Jo.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq23.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq23.card05",
+            "content": "Elara's recorder case has a foam divider.\nThe divider keeps the microphone from rubbing the display.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq23.source05",
+                "rq23.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq23.card06",
+            "content": "Elara's recorder needs a windscreen outdoors.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq23.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq23.card07",
+            "content": "The Elara recorder's backup-battery handoff line is still blank.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq23.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq23.card08",
+            "content": "Elara's headset is loaned out by Jo.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq23.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq23.card09",
+            "content": "The Elara recorder's spare memory-card wallet is gray.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq23.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq23.card10",
+            "content": "Elara's recorder check-in sheet is in the field bag.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq23.source11"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "RQ24",
+      "family": "unknown-conflict",
+      "variant": "quoted-third-party-claim",
+      "namespace": {
+        "ownerId": "canonical-comparison-source-only",
+        "scope": "project",
+        "projectId": "lme-case-58d4b1eb8e0d830c41911e7bdf187e6f7817dfe7f3d58ed936f3e73e8c03c7fb"
+      },
+      "query": {
+        "text": "Have we confirmed that the Fenwick air unit's replacement filter is installed?",
+        "date": "2026/06/15 (Mon) 09:00"
+      },
+      "history": {
+        "sessions": [
+          {
+            "sourceSessionLabel": "rq24.session01",
+            "date": "2026/04/01 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source01",
+                "role": "user",
+                "content": "The Fenwick air unit's service visit was booked for Thursday."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session02",
+            "date": "2026/04/02 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source02",
+                "role": "user",
+                "content": "The Fenwick unit's filter carton arrived at reception."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session03",
+            "date": "2026/04/03 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source03",
+                "role": "user",
+                "content": "The contractor emailed, \"The replacement filter is installed in the Fenwick air unit.\""
+              },
+              {
+                "sourceLabel": "rq24.source04",
+                "role": "user",
+                "content": "I have not verified that contractor claim; our installation signoff is still unsigned."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session04",
+            "date": "2026/04/04 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source05",
+                "role": "user",
+                "content": "The Fenwick air unit's old filter is bagged by the door."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session05",
+            "date": "2026/04/05 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source06",
+                "role": "user",
+                "content": "The Whitby air unit's replacement filter has a signed installation record."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session06",
+            "date": "2026/04/06 (Mon) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source07",
+                "role": "user",
+                "content": "Fenwick's fan belt was inspected last month."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session07",
+            "date": "2026/04/07 (Tue) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source08",
+                "role": "user",
+                "content": "The Fenwick unit's filter invoice has been paid."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session08",
+            "date": "2026/04/08 (Wed) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source09",
+                "role": "user",
+                "content": "Fenwick's service desk keeps delivery notes in a folder."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session09",
+            "date": "2026/04/09 (Thu) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source10",
+                "role": "user",
+                "content": "The Fenwick air unit's control panel shows the room temperature."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session10",
+            "date": "2026/04/10 (Fri) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source11",
+                "role": "user",
+                "content": "The contractor asked for a photograph of the Fenwick service hatch."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session11",
+            "date": "2026/04/11 (Sat) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source12",
+                "role": "user",
+                "content": "Fenwick's spare filter remains sealed in its carton."
+              }
+            ]
+          },
+          {
+            "sourceSessionLabel": "rq24.session12",
+            "date": "2026/04/12 (Sun) 09:00",
+            "turns": [
+              {
+                "sourceLabel": "rq24.source13",
+                "role": "user",
+                "content": "The Whitby service signoff is filed under a different job number."
+              }
+            ]
+          }
+        ]
+      },
+      "scriptedExtraction": {
+        "cards": [
+          {
+            "cardLabel": "rq24.card01",
+            "content": "The Fenwick air unit's service visit was booked for Thursday.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source01"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card02",
+            "content": "The Fenwick unit's filter carton arrived at reception.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source02"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card03",
+            "content": "The contractor emailed, \"The replacement filter is installed in the Fenwick air unit.\"\nI have not verified that contractor claim; our installation signoff is still unsigned.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source03",
+                "rq24.source04"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card04",
+            "content": "The Fenwick air unit's old filter is bagged by the door.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source05"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card05",
+            "content": "The Whitby air unit's replacement filter has a signed installation record.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source06"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card06",
+            "content": "Fenwick's fan belt was inspected last month.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source07"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card07",
+            "content": "The Fenwick unit's filter invoice has been paid.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source08"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card08",
+            "content": "Fenwick's service desk keeps delivery notes in a folder.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source09"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card09",
+            "content": "The Fenwick air unit's control panel shows the room temperature.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source10"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card10",
+            "content": "The contractor asked for a photograph of the Fenwick service hatch.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source11"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card11",
+            "content": "Fenwick's spare filter remains sealed in its carton.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source12"
+              ]
+            ]
+          },
+          {
+            "cardLabel": "rq24.card12",
+            "content": "The Whitby service signoff is filed under a different job number.",
+            "kind": "context",
+            "confidence": 1,
+            "sourcePartitions": [
+              [
+                "rq24.source13"
+              ]
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
