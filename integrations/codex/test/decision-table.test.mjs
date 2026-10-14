@@ -176,6 +176,7 @@ for (const row of rows)
       const legacy = await f.cursor();
       legacy.version = 1;
       delete legacy.quotaRefusal;
+      delete legacy.arm;
       delete legacy.skipped.binding_changed;
       delete legacy.skipped.digest_migrated;
       delete legacy.skipped.digest_key_reset;

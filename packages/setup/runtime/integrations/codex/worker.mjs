@@ -2,12 +2,11 @@ import { randomBytes } from "node:crypto";
 import { transcriptDigest } from "./digest.mjs";
 import { checkedPath } from "../client/private-state.mjs";
 import { stateLock } from "../client/state-lock.mjs";
-import { readControlState, startIfActive } from "../client/control-state.mjs";
 import { hash, planBatches } from "../client/common-profile.mjs";
 import { cursorPath, readCursor, publishCursor, initialCursor } from "./cursor.mjs";
 import { MAX_LINE, MAX_READ, verifyHeader, parseLine } from "./parser.mjs";
 import { openSource, readBytes } from "./source.mjs";
-import { holdMarkerPause } from "./pause-marker.mjs";
+import { codexControl, startIfArmed } from "./tripwire.mjs";
 
 // Stubs only in CX-3. Installed transport enablement belongs to CX-4/LAC/CX-5.
 const WINDOW = MAX_READ - MAX_LINE - 1024; // header + anchor + boundary tail checks fit read budget
@@ -91,7 +90,7 @@ async function prepared(binding, options, action) {
         await publishCursor(cp, s, prior);
         prior = structuredClone(s);
       };
-      const control = await readControlState(root);
+      const control = await codexControl(root);
       const opaque = hash(targetId, projectId, wireBinding(binding).sessionId);
       if (
         options.byteEnd !== undefined &&
@@ -110,10 +109,8 @@ async function prepared(binding, options, action) {
         (["invalid_reply", "unsupported_format"].includes(s?.status) || (s?.status === "digest_key_reset" && !s.anchor))
       )
         return { status: s.status, state: s };
-      if (!options.reset && (control.paused || !control.valid)) {
-        if (control.valid) await holdMarkerPause(root).catch(() => {});
+      if (!options.reset && (control.paused || !control.valid))
         return { status: "paused", state: s };
-      }
       let file;
       try {
         file = await openSource(path);
@@ -138,11 +135,11 @@ async function prepared(binding, options, action) {
           if (!options.reset || !["digest_key_invalid", "state_too_large"].includes(error.message))
             throw error;
         }
-        if (!s) s = initialCursor(opaque, id, control.generation);
+        if (!s) s = initialCursor(opaque, id, control.generation, control.arm);
         async function boundary(reason, newEpoch = false) {
           const quotaRefusal = s.quotaRefusal;
           if (newEpoch) {
-            s = initialCursor(opaque, id, control.generation);
+            s = initialCursor(opaque, id, control.generation, control.arm);
             s.epoch = (prior?.epoch ?? randomBytes(6).readUIntBE(0, 6)) + 1;
           }
           s.skipped[reason] += size - s.offset;
@@ -152,6 +149,7 @@ async function prepared(binding, options, action) {
             control.paused || !control.valid
               ? "legacy-" + hash("paused-reset", control.generation)
               : control.generation;
+          s.arm = control.arm;
           s.pending = null;
           s.quotaRefusal = quotaRefusal;
           s.notBefore = 0;
@@ -177,6 +175,7 @@ async function prepared(binding, options, action) {
             s.file === id &&
             s.offset === size &&
             s.generation === generation &&
+            s.arm === control.arm &&
             !s.pending;
           if (!digest || (s.status === "digest_key_reset" && !s.anchor)) {
             // Publish content-free EOF intent BEFORE replacing the corrupt root key.
@@ -195,6 +194,7 @@ async function prepared(binding, options, action) {
             s.file === id &&
             s.offset === size &&
             s.generation === generation &&
+            s.arm === control.arm &&
             !s.pending &&
             s.anchor &&
             digest(await readBytes(file, s.anchor.start, s.anchor.end)) === s.anchor.digest
@@ -237,7 +237,9 @@ async function prepared(binding, options, action) {
           digest(await readBytes(file, s.anchor.start, s.anchor.end)) !== s.anchor.digest
         )
           return await boundary("source_changed", true);
-        if (s.generation !== control.generation || (!prior && control.generation !== "initial"))
+        // A session's first observation, and the first after any pause, resume or broken
+        // tripwire, is its boundary: nothing written before it is sent.
+        if (!prior || s.generation !== control.generation || s.arm !== control.arm)
           return await boundary("pause_boundary");
         if (s.pending && options.byteEnd !== undefined && options.byteEnd < s.pending.end)
           return { status: "pending", state: s };
@@ -323,25 +325,23 @@ export async function establishPauseBoundary(binding, options = {}) {
   return stateLock(
     cp.replace(/\.json$/, ".lock"),
     async () => {
-      const control = await readControlState(binding.root),
+      const control = await codexControl(binding.root),
         previous = await readCursor(cp);
       if (
         ["invalid_reply", "unsupported_format"].includes(previous?.status) ||
         (previous?.status === "digest_key_reset" && !previous.anchor)
       )
         return { status: previous.status, state: previous };
-      if (control.paused || !control.valid) {
-        if (control.valid) await holdMarkerPause(binding.root).catch(() => {});
-        return { status: "paused" };
-      }
+      if (control.paused || !control.valid) return { status: "paused" };
       const opaque = hash(binding.targetId, binding.projectId, wireBinding(binding).sessionId);
       const changed = previous && previous.binding !== opaque;
       const migration = previous?.version === 1;
       if (
         !changed &&
         !migration &&
-        ((previous && previous.generation === control.generation) ||
-          (!previous && control.generation === "initial"))
+        previous &&
+        previous.generation === control.generation &&
+        previous.arm === control.arm
       )
         return { status: "context_unavailable" };
       const digest = await transcriptDigest(binding);
@@ -353,7 +353,7 @@ export async function establishPauseBoundary(binding, options = {}) {
           previous && (changed || migration || previous.file !== id || stat.size < previous.offset);
         const s =
           !previous || replaced
-            ? initialCursor(opaque, id, control.generation)
+            ? initialCursor(opaque, id, control.generation, control.arm)
             : structuredClone(previous);
         if (replaced) s.epoch = previous.epoch + 1;
         const reason = changed
@@ -367,6 +367,7 @@ export async function establishPauseBoundary(binding, options = {}) {
         s.offset = stat.size;
         s.observedEnd = stat.size;
         s.generation = control.generation;
+        s.arm = control.arm;
         s.pending = null;
         s.quotaRefusal = previous?.quotaRefusal ?? null;
         s.notBefore = 0;
@@ -496,7 +497,7 @@ export async function runWorker(
           refusalObserved = false;
         try {
           const gate = await guard.dispatch(permit.id, () =>
-            startIfActive(binding.root, s.generation, () => {
+            startIfArmed(binding.root, s.generation, s.arm, () => {
               if (now() - started + requestMs > overallMs) throw new Error("deadline");
               began = true;
               const timeout = new Promise((_, reject) => {

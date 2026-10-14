@@ -19,6 +19,7 @@ import { resolveClient,clientProjectId,opaqueProjectId } from '../../../integrat
 import { readControlState,setPaused } from '../../../integrations/client/control-state.mjs';
 import { hash } from '../../../integrations/client/common-profile.mjs';
 import { cursorPath,readCursor } from '../../../integrations/codex/cursor.mjs';
+import { establishPauseBoundary } from '../../../integrations/codex/worker.mjs';
 import { hostedTargetId } from '../../../integrations/client/transport-hosted.mjs';
 import { PassThrough } from 'node:stream';
 import { binaryIdentity } from '../../../integrations/codex/qualification.mjs';
@@ -277,6 +278,13 @@ async function memoryRuntime(t,options={}) {
   const project='/synthetic/project',requests=[];
   const projectId=await clientProjectId({client:'codex',home:f.home,root:f.installed.root,
     usesClaude:f.installed.usesClaude,pairingRecord:f.installed.pairingRecord??undefined,env:{HOME:f.home}},project);
+  // By default the session was observed before anything was written, as UserPromptSubmit
+  // does for a new session: its boundary sits at 0 and the whole transcript is new.
+  if(options.observed!==false) {
+    await writeFile(path,'');
+    await establishPauseBoundary({root:f.installed.root,targetId:hostedTargetId(f.installed),projectId,sessionId:session,path});
+    await writeFile(path,transcript);
+  }
   let pause={paused:false,generation:0,enforced:true},capture={duplicate:false,memoryCount:1},recall={memories:[]},delay;
   const original=globalThis.fetch;
   globalThis.fetch=async(url,wire)=>{
@@ -351,7 +359,7 @@ for(const originator of ['codex_vscode','Codex Desktop'])test(`interactive app-s
 // Automation that talks to a separately running daemon has neither an exec
 // source nor a native exec ancestor; only its declared originator differs.
 for(const originator of ['codex_exec','vibe-codex-executor',null])test(`app-server automation (${originator}) outside exec ancestry needs the exec opt-in`,async t=>{
-  const f=await memoryRuntime(t,{sessionSource:'vscode',originator});
+  const f=await memoryRuntime(t,{sessionSource:'vscode',originator,observed:false});
   f.host.kind='app-server';assert.equal(f.host.execSession,undefined);
   for(const event of ['SessionStart','Stop','PreCompact','SessionEnd','UserPromptSubmit']) {
     assert.equal(await f.invoke(event,{prompt:'Automation preferences?'}),'');assert.equal(f.handoff(),undefined);
@@ -372,7 +380,7 @@ for(const originator of ['codex_exec','vibe-codex-executor',null])test(`app-serv
 // rotates it. Codex writes the rollout header and runs UserPromptSubmit before it
 // records the prompt, so the first hook a session sees comes before its first turn.
 async function activeRuntime(t) {
-  const f=await memoryRuntime(t,{sessionSource:'vscode'});f.host.kind='app-server';
+  const f=await memoryRuntime(t,{sessionSource:'vscode',observed:false});f.host.kind='app-server';
   const again=await f.run(['setup','--client','codex','--no-browser']);assert.equal(again.code,0,again.stdout);
   assert.match((await readControlState(f.installed.root)).generation,/^[a-f0-9-]{36}$/);
   const lines=(await readFile(f.path,'utf8')).trimEnd().split('\n').map(line=>line+'\n');
@@ -432,28 +440,51 @@ test('text written while paused stays out, even in a session that began during t
   await f.capture([['Prefer tables after resume.']]);
 });
 
-// Plugins that predate control.json pause with only the `paused` marker and
-// resume by deleting it, which leaves the pre-pause generation in control.json.
-test('a legacy marker pause keeps what a new session wrote during it, after the marker is deleted',async t=>{
-  const f=await activeRuntime(t);
+// Plugins that predate control.json pause with only the `paused` marker and resume
+// by deleting it, which leaves no trace and the pre-pause generation in control.json.
+const legacyPause=async f=>{
   const marker=join(f.installed.root,'paused');
-  await writeFile(marker,'paused\n',{mode:0o600});
+  await writeFile(marker,'paused\n',{mode:0o600});assert.equal((await readControlState(f.installed.root)).paused,true);
+  return async()=>{await unlink(marker);assert.equal((await readControlState(f.installed.root)).paused,false);};
+};
+for(const [name,during] of [
+  ['while hooks run during it',async f=>{await f.firstTurn();for(const event of ['Stop','UserPromptSubmit'])assert.equal(await f.invoke(event,{prompt:'Preferences?'}),'');}],
+  ['while no hook runs during it',async f=>{await f.firstTurn();}],
+])test(`a legacy marker pause ${name}: deleting the marker resumes, and nothing written during it is sent`,async t=>{
+  const f=await activeRuntime(t);
+  const control=join(f.installed.root,'control.json'),shared=await readFile(control,'utf8');
   await f.begin();
-  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');
-  await f.firstTurn();assert.equal(await f.invoke('Stop'),'');
-  await unlink(marker);
-  // Deleting the marker alone does not resume: nothing is launched or sent.
-  for(const event of ['Stop','UserPromptSubmit'])assert.equal(await f.invoke(event,{prompt:'Preferences?'}),'');
-  assert.equal(f.handoff(),undefined);assert.equal(await f.cursor(),null);assert.deepEqual(f.captured(),[]);
-  assert.equal(JSON.parse(await readFile(join(f.installed.root,'control.json'),'utf8')).paused,true);
-  const resumed=await f.run(['resume','--client','codex']);assert.equal(resumed.code,0,resumed.stdout);
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');await f.boundary();
+  const resume=await legacyPause(f);
+  await during(f);
+  await resume();
+  // Codex never rewrites the shared control, so the other tool resumes as before.
+  assert.equal(await readFile(control,'utf8'),shared);
+  // The first hook after the resume is the boundary; the paused turn is never sent.
   assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');await f.boundary();
   await f.turn('Prefer tables after resume.','after-resume');
   await f.capture([['Prefer tables after resume.']]);
 });
 
+for(const [name,pause] of [
+  ['resume',async f=>{
+    assert.equal((await f.run(['pause','--client','codex'])).code,0);
+    return async()=>{const resumed=await f.run(['resume','--client','codex']);assert.equal(resumed.code,0,resumed.stdout);};
+  }],
+  ['a legacy marker deletion',legacyPause],
+])test(`a new Codex session after ${name} keeps its first turn`,async t=>{
+  const f=await activeRuntime(t);
+  // An earlier session's hook armed Codex before the pause.
+  await f.begin();assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');
+  const resume=await pause(f);await resume();
+  await f.begin();
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');await f.boundary();
+  await f.firstTurn();
+  await f.capture([['Prefer diagrams.','Understood.']]);
+});
+
 test('CX-5 prompt recall injects receipt framing and shares project identity after verifying the session header',async t=>{
-  const f=await memoryRuntime(t);
+  const f=await memoryRuntime(t,{observed:false});
   f.recall({memories:[{id:'12345678-1234-4234-8234-123456789abc',content:'Prefer diagrams.',kind:'preference',
     scope:'project',projectId:f.projectId,origin:'explicit',confidence:1,createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',
     receipts:[{client:'claude-code',sessionId:'s',eventId:'e',role:'user',excerpt:'I prefer diagrams.',createdAt:'2026-10-01T00:00:00Z'}]}]});
@@ -463,11 +494,13 @@ test('CX-5 prompt recall injects receipt framing and shares project identity aft
   assert.match(context.additionalContext,/"client":"claude-code"/);assert.match(context.additionalContext,/"receipts":/);
   const recall=f.requests.find(r=>r.route.endsWith('/recall'));assert.ok(recall);assert.ok(!recall.body.query.includes('sk-'));
   assert.equal(recall.body.session_id,hash('wire-session-v1','codex',session));
-  assert.equal(await f.cursor(),null);
+  // The prompt hook only sets this unseen session's boundary; it sends nothing.
+  const cursor=await f.cursor();assert.equal(cursor.status,'pause_boundary');assert.equal(cursor.accepted,0);
+  assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,0);
 });
 
 test('CX-5 host upgrade refuses before fetching pause state or reading capture source',async t=>{
-  const f=await memoryRuntime(t);
+  const f=await memoryRuntime(t,{observed:false});
   const state=JSON.parse(await readFile(f.statePath,'utf8'));state.version='0.162.0';await writeFile(f.statePath,JSON.stringify(state));
   await appendFile(f.host.binaryPath,'\n// binary upgraded\n');f.host.identity=await binaryIdentity(f.host.binaryPath);
   assert.equal(await f.invoke('Stop'),'');assert.equal(f.requests.length,0);assert.equal(await f.cursor(),null);
@@ -1028,7 +1061,7 @@ test('CX-5 installed status reports pending qualification with a retry hint',asy
 });
 
 for(const legacy of [false,true])test(`exec default skips every installed hook without capture, recall or quota use (legacy=${legacy})`,async t=>{
-  const f=await memoryRuntime(t,{sessionSource:'exec'});
+  const f=await memoryRuntime(t,{sessionSource:'exec',observed:false});
   if(legacy){const {captureExec,...previous}=f.installed;await writeFile(f.installation,JSON.stringify(previous),{mode:0o600});}
   for(const event of ['SessionStart','Stop','PreCompact','SessionEnd','UserPromptSubmit']) {
     assert.equal(await f.invoke(event,{prompt:'Automation preferences?',source:'cli'}),'');
@@ -1117,7 +1150,7 @@ test('turning exec opt-in off during an in-flight recall withholds its context',
 });
 
 test('exec resume of an interactive transcript skips capture/recall unless opted in',async t=>{
-  const f=await memoryRuntime(t); // persisted header stays source: cli on resume
+  const f=await memoryRuntime(t,{observed:false}); // persisted header stays source: cli on resume
   f.host.execSession=true;
   for(const event of ['Stop','PreCompact','UserPromptSubmit']) {
     assert.equal(await f.invoke(event,{prompt:'Automated resume?',host:{...f.host,execSession:false}}),'');

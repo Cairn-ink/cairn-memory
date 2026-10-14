@@ -64,6 +64,7 @@ test(
             const value = await f.cursor();
             value.version = 1;
             delete value.quotaRefusal;
+            delete value.arm;
             delete value.skipped.binding_changed;
             delete value.skipped.digest_migrated;
             delete value.skipped.digest_key_reset;
@@ -107,6 +108,7 @@ test(
           ...state,
           file: "opaque-file",
           generation: "opaque-generation",
+          arm: state.arm ? "opaque-arm" : null,
           anchor: state.anchor ? { ...state.anchor, digest: "opaque-digest" } : null,
           pending: state.pending ? { ...state.pending, digest: "opaque-digest" } : null,
         };

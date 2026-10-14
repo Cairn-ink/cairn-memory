@@ -58,10 +58,10 @@ for (const stage of ["reserve", "dispatch"])
   });
 
 test("state_busy at Stop preparation returns fail-open output without launching; later same-session hook delivers once", async (t) => {
-  const f = await fixture(t);
+  const f = await fixture(t, { observed: false });
   const cwd = "/synthetic/state-busy-project";
   const clientOptions = { home: f.home, root: f.root, usesClaude: false, env: {} };
-  f.binding.projectId = await clientProjectId({ ...clientOptions, client: "codex" }, cwd);
+  await f.observe(await clientProjectId({ ...clientOptions, client: "codex" }, cwd));
   const oracle = new HistoryOracle(header(), f.binding.projectId);
   await runWorker(f.binding, { guard: f.guard, transport: f.transport });
   oracle.hook();

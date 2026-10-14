@@ -150,7 +150,9 @@ test(
 test(
   "A5 spawn, binding, source, permissions and unknown " + "replies fail without stale dispatch",
   async (t) => {
-    const f = await fixture(t, { text: header() + item("Human") });
+    const f = await fixture(t, { text: header() + item("Human"), observed: false });
+    await f.observe(await clientProjectId(
+      { client: "codex", home: f.home, root: f.root, usesClaude: false, env: {} }, "/synthetic"));
     const input = {
       hook_event_name: "Stop",
       session_id: session,
@@ -317,7 +319,9 @@ test(
 );
 
 test("A9 stalled fake headless startup never extends the 750ms hook wait", async (t) => {
-  const f = await fixture(t, { text: header() + item("Bounded startup") });
+  const f = await fixture(t, { text: header() + item("Bounded startup"), observed: false });
+  await f.observe(await clientProjectId(
+    { client: "codex", home: f.home, root: f.root, usesClaude: false, env: {} }, "/synthetic"));
   let launches = 0;
   const began = performance.now();
   const result = await handleHook(
@@ -343,7 +347,7 @@ test("A9 stalled fake headless startup never extends the 750ms hook wait", async
 test(
   "A5 live identity publication lock cannot extend the " + "hook deadline or dispatch late",
   async (t) => {
-    const f = await fixture(t, { text: header() + item("After blocked key creation") });
+    const f = await fixture(t, { text: header() + item("After blocked key creation"), observed: false });
     let launches = 0;
     const lock = join(f.root, ".project-key.lock");
     const watched = await observedHook(f.ws.path);

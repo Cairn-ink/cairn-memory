@@ -8,7 +8,7 @@ import { hostedTargetId } from '../client/transport-hosted.mjs';
 import { handleHook, readHookInput, validateHook, workerFromHandoff } from './hook.mjs';
 import { establishPauseBoundary } from './worker.mjs';
 import { cursorPath, readCursor } from './cursor.mjs';
-import { holdMarkerPause } from './pause-marker.mjs';
+import { codexControl } from './tripwire.mjs';
 import { detectRunningHost, cachedQualification, observeHost, qualifyBinary, validHost, boundBinary,
   scheduleQualification, finishQualification, hasQualifiedCreator } from './qualification.mjs';
 import { readInstallation, readCredential, clientOptions, childEnvironment, promptRecallEnabled } from './installed-state.mjs';
@@ -35,13 +35,14 @@ function launchQualification(configPath,host) {
   });
 }
 
-// Local only: a cursor already on this generation needs nothing, so a running
-// worker's lock never delays recall. Stop still sets the boundary at the latest.
+// Local only: a cursor already on this generation and tripwire needs nothing, so a
+// running worker's lock never delays recall. Stop still sets the boundary at the latest.
 async function promptBoundary(binding) {
   try {
-    const [control, cursor] = await Promise.all([readControlState(binding.root),
+    const [control, cursor] = await Promise.all([codexControl(binding.root),
       readCursor(cursorPath(binding.root, binding.targetId, binding.sessionId))]);
-    if (cursor?.generation !== control.generation) await establishPauseBoundary(binding);
+    if (!control.paused && (cursor?.generation !== control.generation || cursor.arm !== control.arm))
+      await establishPauseBoundary(binding);
   } catch { /* Recall never depends on the boundary. */ }
 }
 
@@ -70,9 +71,6 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
     try {await qualifyBinary(configPath,host);} finally {await finishQualification(configPath,host);}
     return '';
   }
-  // Every hook and worker that runs during a marker-only pause keeps it, before
-  // any host, session or network gate can return early.
-  if ((await readControlState(config.root)).paused) await holdMarkerPause(config.root).catch(() => {});
   // Detached workers re-check the host supplied by the trusted launcher. Hook
   // payloads cannot supply or override it; a changed binary invalidates the key.
   let input, qualification;

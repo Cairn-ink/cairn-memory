@@ -152,9 +152,11 @@ An explicitly paired plugin uses the recorded durable shared root:
 - `control.json`: content-free pause state and generation barrier;
 - `paired-root`: private 0600 JSON (`{"version":1,"paired":true}`) recording shared
   root history, published with the same owner/symlink checks as other private state;
-- `paused`: compatibility marker also honored as a pause; the first Codex hook or
-  worker that sees it without a paused `control.json` records the pause there, so
-  deleting the marker alone does not resume;
+- `paused`: compatibility marker also honored as a pause. Once Codex has run, it
+  is a dangling symlink to `.paused-tripwire` while active; pausing through it
+  creates that file, and resuming deletes the symlink;
+- `codex-tripwire.json`: a random token only. Codex cursors record the same token,
+  and a new one makes every Codex session start again at its next hook;
 - `sessions/*.json`: byte cursors, pending retry bounds, generation, incomplete-line discard state,
   and an optional `ownSkillTurn: true` boolean (no command or response content),
   keyed by a hash of the Claude session id;

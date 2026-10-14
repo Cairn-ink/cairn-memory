@@ -82,6 +82,7 @@ export function validateCursor(s) {
       "notBefore",
       "anchor",
       "quotaRefusal",
+      "arm",
     ]) ||
     s.version !== 2 ||
     s.format !== FORMAT ||
@@ -91,6 +92,7 @@ export function validateCursor(s) {
     !digest(s.file) ||
     !int(s.offset) ||
     !/^(initial|[a-f0-9-]{36}|legacy-[a-f0-9]{64})$/.test(s.generation) ||
+    !(s.arm === null || /^[a-f0-9]{32}$/.test(s.arm)) ||
     typeof s.discard !== "boolean" ||
     (s.discard ? !REASONS.includes(s.discardReason) : s.discardReason !== null) ||
     !int(s.accepted) ||
@@ -177,7 +179,7 @@ export async function readCursor(path, { recover = false } = {}) {
     const value = JSON.parse(bytes);
     if (value.version === 1) {
       const current = initialCursor(value.binding, value.file, value.generation);
-      const oldKeys = Object.keys(current).filter((k) => k !== "quotaRefusal");
+      const oldKeys = Object.keys(current).filter((k) => !["quotaRefusal", "arm"].includes(k));
       const oldReasons = REASONS.filter(
         (k) => !["binding_changed", "digest_migrated", "digest_key_reset"].includes(k),
       );
@@ -187,6 +189,7 @@ export async function readCursor(path, { recover = false } = {}) {
         ...value,
         version: 2,
         quotaRefusal: null,
+        arm: null,
         skipped: { ...current.skipped, ...value.skipped },
       });
       return { ...migrated, version: 1 }; // EOF epoch migration requires an authorized source.
@@ -199,6 +202,8 @@ export async function readCursor(path, { recover = false } = {}) {
       )
     )
       value.skipped.digest_key_reset = 0;
+    // Cursors from before the tripwire carry no arm token: their next observation is a boundary.
+    if (value.version === 2 && !("arm" in value)) value.arm = null;
     return validateCursor(value);
   } catch {
     if (recover) return null;
@@ -228,7 +233,7 @@ export async function publishCursor(path, next, previous) {
     throw new Error("cursor_epoch_invalid");
   await privateWrite(path, JSON.stringify(next));
 }
-export function initialCursor(binding, file, generation) {
+export function initialCursor(binding, file, generation, arm = null) {
   return {
     version: 2,
     format: FORMAT,
@@ -252,5 +257,6 @@ export function initialCursor(binding, file, generation) {
     status: "idle",
     notBefore: 0,
     anchor: null,
+    arm,
   };
 }

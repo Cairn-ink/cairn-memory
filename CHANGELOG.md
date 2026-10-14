@@ -2,22 +2,27 @@
 
 ## Unreleased — @cairn-ink/memory installer 0.5.3
 
-- Save a new Codex conversation from its first turn after setup. A rerun, upgrade
-  or resume moves the local pause generation off `initial`, so a session's first
-  hook sets its boundary at the end of the file. That first hook was the first
-  Stop, after the first exchange, which was skipped as `pause_boundary`. Codex
-  writes the rollout header and runs `UserPromptSubmit` before it records the
-  prompt, so that hook now sets the boundary for a session it has not seen, ahead
-  of the turn. It is local, needs no network, and runs with prompt recall on or
-  off. The boundary rule is unchanged, so text written while paused stays out,
-  and nothing skipped earlier is backfilled.
-- Keep a pause made with only the `paused` marker. Plugins that predate
-  `control.json` resume by deleting the marker, which used to bring back the
-  pre-pause generation, so text written meanwhile in a session that already had
-  a cursor, or under a control that never had a `control.json`, could be sent
-  after the marker went away. The first Codex hook or worker that runs during
-  such a pause now records it in `control.json`, so only `resume` lifts it and
-  the generation boundary applies; see
+- Save a new Codex conversation from its first turn after setup or resume. A
+  session's first Codex hook sets its pause boundary at the end of the rollout.
+  That hook used to be the first Stop, after the first exchange, which was then
+  skipped as `pause_boundary`. Codex writes the rollout header and runs
+  `UserPromptSubmit` before it records the prompt, so that hook now sets the
+  boundary for a session it has not seen, ahead of the turn. It is local, needs
+  no network, and runs with prompt recall on or off.
+- The first observation is the boundary everywhere, including a root that has
+  never been paused. An existing Codex conversation is no longer sent from its
+  start the first time a hook sees it, and nothing skipped earlier is backfilled.
+- Keep text written during a pause made only with the `paused` marker out, in
+  any order of events. Plugins that predate `control.json` pause by creating
+  that file and resume by deleting it, which leaves no trace and used to bring
+  back the pre-pause generation. Codex now keeps `paused` as a dangling symlink
+  to `.paused-tripwire`. Pausing through the marker, by any tool or by hand,
+  creates the target, which reads as paused exactly as before. Deleting the
+  marker removes the symlink, and both tools resume as before. Codex sends text
+  only while that tripwire is intact under the token each cursor records. When
+  it is broken, Codex arms a new token, and every Codex session starts again at
+  its next hook. Codex never writes `control.json`, and Codex's `resume` on an
+  active control changes nothing; see
   [limitations](docs/limitations.md#codex-new-session-boundary-installer-053).
 - Installer is 0.5.3; plugin remains 0.3.2. Publication is a separate step.
 

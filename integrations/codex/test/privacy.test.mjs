@@ -7,6 +7,7 @@ import { writeFile, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fixture,header,item,jsonl,session } from './helpers.mjs';
 import { runWorker } from '../worker.mjs';
+import { clientProjectId } from '../../client/pairing.mjs';
 import { captureSnapshot } from '../../../core/capture-input.mjs';
 import { normalizeBlocks, preflight } from '../../client/common-profile.mjs';
 
@@ -25,7 +26,8 @@ test('A1 actual hook → worker → loopback body, output and private state excl
   spanning.payload.item.content.push({type:'text',text:'SPLIT_SECRET_CANARY',text_elements:[]});
   const text=header()+exclusions+JSON.stringify(spanning)+'\n'+item(`Prefer diagrams. ${secret}`)+item('Understood.',1,'assistant',
     {phase:'final_answer',memory_citation:{text:'CITATION_CANARY'}});
-  const f=await fixture(t,{text});
+  const f=await fixture(t,{text,observed:false});
+  await f.observe(await clientProjectId({client:'codex',home:f.home,root:f.root,usesClaude:false,env:{}},'/synthetic/CWD_CANARY'));
   const bodies=[];
   const server=createServer(async(req,res)=>{
     let raw='';for await(const chunk of req) raw+=chunk;
