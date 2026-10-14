@@ -2,7 +2,7 @@
 
 Set up Cairn automatic memory for Claude Code and qualified Codex hosts.
 Requires Node ≥22.16 and the selected CLI on PATH; no runtime dependencies.
-This checkout prepares **installer 0.5.2**. The Claude plugin stays **0.3.2**.
+This checkout prepares **installer 0.5.3**. The Claude plugin stays **0.3.2**.
 The release must be published before `npx` can use these new flows.
 
 ## Setup / 安裝

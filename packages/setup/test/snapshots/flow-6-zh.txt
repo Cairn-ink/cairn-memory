@@ -1,4 +1,4 @@
-Cairn.ink Memory 安裝程式 0.5.2
+Cairn.ink Memory 安裝程式 0.5.3
 在這台電腦找到 Claude Code 和 Codex。
 
 連接後，你和 AI 的對話會先在本機盡量遮掉密碼、金鑰等敏感資訊，再存到你的 Cairn。

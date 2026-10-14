@@ -39,6 +39,10 @@ local pause remain shared; the installer daily cap/concurrency policy applies
 only to Codex workers. Claude hooks retain their released behavior; only status
 adds best-effort policy/pause availability diagnostics when a policy exists. `SessionStart` establishes pause EOF boundaries;
 no startup context is acknowledged without a qualified local o200k counter.
+`activation.mjs` keeps the time the active generation took effect (`activeSince`, written by
+Codex setup, resume and config). A session without a cursor whose rollout header time is
+later starts at its first unit; any other unseen session, or a control without the field,
+keeps the EOF boundary.
 
 The UserPromptSubmit recall port redacts/bounds queries, hashes the host session
 identity, rechecks hosted/local generations before dispatch and injection, and

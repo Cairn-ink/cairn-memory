@@ -1446,3 +1446,45 @@ Unverified:
 - Classification is per thread, from the creating client's header. Resuming an
   interactive thread through another app-server client keeps that header; only a
   native `codex exec` ancestor is detected.
+
+## Codex new-session boundary (installer 0.5.3)
+
+Codex hooks first observe a session at its first hook, usually the first Stop;
+the TUI writes the rollout lazily, so SessionStart often finds no file yet. Up to
+0.5.2, once the local pause generation had left `initial` (any rerun, upgrade or
+resume does that), the first hook of every session without a cursor set the
+boundary at the end of the file. The first exchange of each new conversation was
+skipped as `pause_boundary`.
+
+Installer 0.5.3 compares the rollout header time (`session_meta.payload.timestamp`)
+with `activeSince` in `control.json`, the time the active generation took effect.
+Codex `setup`, `resume` and `config` write that field. An unseen session whose
+header time is later is captured from its first turn; anything else keeps the
+boundary. Text skipped under 0.5.2 is not backfilled.
+
+Demonstrated:
+
+- Codex source at the pinned commit: the rollout recorder stamps
+  `session_meta.timestamp` once, when it creates the session, in UTC with
+  millisecond precision. It creates the file on first materialization, and resume
+  appends to the existing file without a new header.
+- Installed-hook tests with a fake endpoint and synthetic rollouts. A session
+  that starts after setup is captured from its first turn. A session that began
+  before setup, or before a pause and resume, is skipped up to its first hook. A
+  session that began during a pause has its paused text skipped. A 0.5.2 control
+  file, or one rewritten by the shared pause and resume, keeps the boundary.
+
+Limits:
+
+- Only the Codex installer writes `activeSince`. A Claude plugin pause and
+  resume, a hosted pause observation that rotates the local generation (including
+  the first observation for an account whose hosted generation is above 0) and
+  pairing changes rewrite `control.json` without it. Until the next Codex
+  `setup`, `resume` or `config`, new sessions again lose the text before their
+  first hook. The Claude plugin is unchanged in this release.
+- The comparison trusts the header time Codex wrote and the local clock. A clock
+  set back between a session's start and a later resume can make that session
+  look new and admit text written while paused.
+- A `paused` marker written by a plugin that predates `control.json` does not
+  rewrite it, so the old `activeSince` survives that pause. Sessions that already
+  have cursors cross such a pause the same way.

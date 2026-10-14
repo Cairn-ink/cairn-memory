@@ -149,7 +149,9 @@ An explicitly paired plugin uses the recorded durable shared root:
 - `created-by`: private client-creator record and non-secret identity fingerprint;
 - `.project-key.pending`: private staged secret during crash-safe key publication;
 - `.project-key.lock`: publication ownership and recovery files;
-- `control.json`: content-free pause state and generation barrier;
+- `control.json`: content-free pause state and generation barrier; Codex `setup`,
+  `resume` and `config` also store `activeSince`, the time in milliseconds the
+  active generation took effect;
 - `paired-root`: private 0600 JSON (`{"version":1,"paired":true}`) recording shared
   root history, published with the same owner/symlink checks as other private state;
 - `paused`: compatibility marker also honored as a pause;

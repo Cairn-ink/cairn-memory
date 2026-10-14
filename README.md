@@ -122,7 +122,7 @@ For **Claude Code and Codex automatic memory**, run the one-command installer:
 npx @cairn-ink/memory setup
 ```
 
-This checkout prepares installer **0.5.2**; publication is a separate step.
+This checkout prepares installer **0.5.3**; publication is a separate step.
 Try it with `node packages/setup/bin/memory.mjs setup`. The plugin stays 0.3.2.
 Requires Node ≥22.16 and at least one CLI on PATH. Setup asks about new tools,
 updates connected tools, and uses one browser sign-in when connecting both.
@@ -244,7 +244,7 @@ Run the published installer from your terminal:
 npx @cairn-ink/memory setup
 ```
 
-This checkout prepares installer **0.5.2** (plugin **0.3.2**); publish the
+This checkout prepares installer **0.5.3** (plugin **0.3.2**); publish the
 release before using these flows through npx. To run this checkout, use
 `node packages/setup/bin/memory.mjs setup`.
 

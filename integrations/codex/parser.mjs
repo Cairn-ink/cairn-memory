@@ -50,6 +50,18 @@ export function verifyHeader(line, sessionId, { qualifiedCreatorVersion } = {}) 
   }
   return FORMAT;
 }
+// The rollout recorder stamps session_meta once, when the session is created, in
+// UTC with millisecond precision; resume appends without a new header. Anything
+// else, or another session's header, is unknown (null).
+export function sessionStartedAt(line, sessionId) {
+  try {
+    const row = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(line));
+    const value = row?.type === 'session_meta' && row.payload?.id === sessionId ? row.payload.timestamp : null;
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)) return null;
+    const started = Date.parse(value);
+    return Number.isSafeInteger(started) && new Date(started).toISOString() === value ? started : null;
+  } catch { return null; }
+}
 
 export function parseLine(bytes, { sessionId, wireSessionId, epoch, start, end }) {
   let row;

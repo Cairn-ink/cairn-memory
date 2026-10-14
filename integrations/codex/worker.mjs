@@ -7,6 +7,7 @@ import { hash, planBatches } from "../client/common-profile.mjs";
 import { cursorPath, readCursor, publishCursor, initialCursor } from "./cursor.mjs";
 import { MAX_LINE, MAX_READ, verifyHeader, parseLine } from "./parser.mjs";
 import { openSource, readBytes } from "./source.mjs";
+import { startedWhileActive } from "./activation.mjs";
 
 // Stubs only in CX-3. Installed transport enablement belongs to CX-4/LAC/CX-5.
 const WINDOW = MAX_READ - MAX_LINE - 1024; // header + anchor + boundary tail checks fit read budget
@@ -234,7 +235,14 @@ async function prepared(binding, options, action) {
           digest(await readBytes(file, s.anchor.start, s.anchor.end)) !== s.anchor.digest
         )
           return await boundary("source_changed", true);
-        if (s.generation !== control.generation || (!prior && control.generation !== "initial"))
+        // An unseen session keeps the boundary unless it began after this generation
+        // took effect; its first unit is then new, not text from before a pause.
+        if (
+          s.generation !== control.generation ||
+          (!prior &&
+            control.generation !== "initial" &&
+            !(await startedWhileActive(root, control, header.subarray(0, nl), sessionId)))
+        )
           return await boundary("pause_boundary");
         if (s.pending && options.byteEnd !== undefined && options.byteEnd < s.pending.end)
           return { status: "pending", state: s };
@@ -343,6 +351,16 @@ export async function establishPauseBoundary(binding, options = {}) {
       try {
         const stat = await source.stat(),
           id = fileId(stat, binding.path);
+        // A session that began after this generation took effect has nothing to skip.
+        if (!previous) {
+          const header = await readBytes(source, 0, Math.min(stat.size, MAX_LINE));
+          const nl = header.indexOf(10);
+          if (
+            nl >= 0 &&
+            (await startedWhileActive(binding.root, control, header.subarray(0, nl), binding.sessionId))
+          )
+            return { status: "context_unavailable" };
+        }
         const replaced =
           previous && (changed || migration || previous.file !== id || stat.size < previous.offset);
         const s =
