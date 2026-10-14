@@ -1449,42 +1449,55 @@ Unverified:
 
 ## Codex new-session boundary (installer 0.5.3)
 
-Codex hooks first observe a session at its first hook, usually the first Stop;
-the TUI writes the rollout lazily, so SessionStart often finds no file yet. Up to
-0.5.2, once the local pause generation had left `initial` (any rerun, upgrade or
-resume does that), the first hook of every session without a cursor set the
-boundary at the end of the file. The first exchange of each new conversation was
-skipped as `pause_boundary`.
+Once the local generation has left `initial` (any rerun, upgrade or resume does
+that), a session's first Codex hook sets its pause boundary at the end of the
+rollout, and text before it is never sent. Up to 0.5.2 that first hook was
+normally the first Stop, so the first exchange of every new conversation was
+skipped as `pause_boundary`. Installer 0.5.3 also sets the boundary at `UserPromptSubmit`,
+which Codex runs before it records the prompt. The rule does not change; the
+first observation just comes earlier. It is local and runs with prompt recall
+on or off.
 
-Installer 0.5.3 compares the rollout header time (`session_meta.payload.timestamp`)
-with `activeSince` in `control.json`, the time the active generation took effect.
-Codex `setup`, `resume` and `config` write that field. An unseen session whose
-header time is later is captured from its first turn; anything else keeps the
-boundary. Text skipped under 0.5.2 is not backfilled.
+Plugins that predate `control.json`, and a hand-made marker, pause with only the
+`paused` file and resume by deleting it. Deleting it used to restore the
+pre-pause generation, so a session that already had a cursor, or any session
+under a root that never had a `control.json`, could send text written during
+that pause. The first Codex hook or worker that runs during such a pause now
+records it in `control.json` under the generation it already reads as. Deleting
+the marker then leaves Codex paused until `resume`, and the generation boundary
+applies to every session.
 
 Demonstrated:
 
-- Codex source at the pinned commit: the rollout recorder stamps
-  `session_meta.timestamp` once, when it creates the session, in UTC with
-  millisecond precision. It creates the file on first materialization, and resume
-  appends to the existing file without a new header.
+- Codex source at the pinned commit: `hook_transcript_path` materializes the
+  rollout before a hook gets its path, and `UserPromptSubmit` runs before
+  `record_pending_input` records the prompt. Resume appends to the existing file
+  without a new header.
 - Installed-hook tests with a fake endpoint and synthetic rollouts. A session
-  that starts after setup is captured from its first turn. A session that began
-  before setup, or before a pause and resume, is skipped up to its first hook. A
-  session that began during a pause has its paused text skipped. A 0.5.2 control
-  file, or one rewritten by the shared pause and resume, keeps the boundary.
+  that starts after setup keeps its first turn whether its first hook is
+  `UserPromptSubmit` (prompt recall on or off) or SessionStart. Sessions that
+  existed before setup or began before a pause, a session that began during a
+  pause, and a new session under a legacy marker pause send nothing written
+  before their boundary.
+- Worker tests for the marker cases, including the review's reproduction: a
+  stamped generation, a marker pause, an unseen session that writes during it,
+  then the marker deleted. An earlier 0.5.3 draft that trusted a stamped
+  activation time sent one capture there; this release sends none. A session
+  that already had a cursor, and a root without `control.json`, sent the paused
+  text under 0.5.2 and send nothing now.
 
 Limits:
 
-- Only the Codex installer writes `activeSince`. A Claude plugin pause and
-  resume, a hosted pause observation that rotates the local generation (including
-  the first observation for an account whose hosted generation is above 0) and
-  pairing changes rewrite `control.json` without it. Until the next Codex
-  `setup`, `resume` or `config`, new sessions again lose the text before their
-  first hook. The Claude plugin is unchanged in this release.
-- The comparison trusts the header time Codex wrote and the local clock. A clock
-  set back between a session's start and a later resume can make that session
-  look new and admit text written while paused.
-- A `paused` marker written by a plugin that predates `control.json` does not
-  rewrite it, so the old `activeSince` survives that pause. Sessions that already
-  have cursors cross such a pause the same way.
+- The hook order comes from Codex source and synthetic tests. Hook delivery in
+  a real TUI session on the app-server daemon was not observed. If
+  `UserPromptSubmit` does not reach the runtime (hooks not yet trusted in
+  `/hooks`, an unqualified host, a cursor lock held past its 250 ms wait), Stop
+  sets the boundary as before and that turn is skipped.
+- A marker created and deleted while no Cairn hook or worker runs leaves no
+  trace. A session first seen afterwards still gets the boundary. Text written in
+  that window to a session that already had a cursor, or in a root still at the
+  `initial` generation, can be sent. A pause through `pause` or
+  `/cairn-memory:pause` always writes `control.json` and is not affected.
+- After a marker pause is recorded, an older plugin that only deletes the marker
+  shows itself as active while Codex, and a current Claude plugin sharing the
+  root, stay paused until `resume`.

@@ -18,7 +18,6 @@ import { validateUsage } from '../runtime/integrations/client/runtime-usage.mjs'
 import { conforms } from '../runtime/integrations/client/hosted-contract.mjs';
 import { stateLock } from '../runtime/integrations/client/state-lock.mjs';
 import { hostedPauseStatus } from '../runtime/integrations/client/hosted-pause.mjs';
-import { markActive } from '../runtime/integrations/codex/activation.mjs';
 import { readInstallation, validateInstallation, readCredential, writeCredential, clientOptions,
   promptRecallEnabled, writePromptRecall } from '../runtime/integrations/codex/installed-state.mjs';
 import { observedHosts, qualifyBinary, refreshObservedHost, qualificationStatus, cachedQualification } from '../runtime/integrations/codex/qualification.mjs';
@@ -230,8 +229,6 @@ async function deliverClaudeIdentity(identity,neutral) {
 async function rotateBoundary(root) {
   await rotateAutomaticBoundary(root);
 }
-// Best effort: a control without the stamp keeps the pause boundary for unseen sessions.
-const stampActive = root => markActive(root).catch(() => null);
 
 export async function installedStatus({home,hostVersion,write,t,snapshot,cliHost,hostVerdict,verbose=false}) {
   const path = join(home,'cairn','installation.json');
@@ -419,7 +416,6 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged,neutr
     const quota = await resumeHostedQuota({root:config.root,targetId:hostedTargetId(config)});
     if (quota.status==='unavailable') throw new Error('quota_unavailable');
     await setPaused(config.root, false);
-    await stampActive(config.root);
     write(t('resume_done', { clients: config.usesClaude ? t('shared_clients') : 'Codex' }));
     if(['quota_reached','busy','repaired'].includes(quota.status))write(t('resume_'+quota.status));return 0;
   }
@@ -442,7 +438,7 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged,neutr
       if(JSON.stringify(current)!==JSON.stringify(config))throw new SetupError('codex_concurrent',2);
       // Deny captures during policy/config publication; usage and pause stay intact.
       await privateWrite(path,JSON.stringify({...config,enabled:false}));progress.install=true;
-      await rotateBoundary(config.root);await stampActive(config.root);
+      await rotateBoundary(config.root);
       await privateWrite(policyPath(config.root,config.endpoint),JSON.stringify({version:1,dailyCap:nextCap,concurrency:2}));
       if(nextCap!==config.dailyCap && !(await automaticGuard(config.root,config.endpoint,{dailyCap:nextCap,concurrency:2}).status()).ok)
         throw new SetupError('cap_policy_conflict',2);
@@ -632,9 +628,6 @@ export async function setupInstalledCodex(context) {
     if (hooksText!==hooksBefore.text) {await hostWrite(hooksPath,hooksText,hooksBefore,{snapshot,unchanged});progress.hooks=true;}
     phase = 'activation';
     if (!unchanged({text:hooksText,stat:(await snapshot(hooksPath)).stat},await snapshot(hooksPath))) throw new Error('hooks_changed');
-    // Sessions that begin from here on are captured from their first turn; older
-    // unseen sessions keep the pause boundary.
-    await stampActive(config.root);
     await privateWrite(path,JSON.stringify({...config,enabled:true}));
     write(t(previous?'codex_hooks_updated':'codex_hooks_ready'));
     write(t(config.captureExec?'codex_exec_enabled':'codex_exec_skipped'));reportBackups(identityPlan,write,t);

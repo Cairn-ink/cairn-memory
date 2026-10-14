@@ -369,89 +369,88 @@ for(const originator of ['codex_exec','vibe-codex-executor',null])test(`app-serv
 });
 
 // Every real install has left the "initial" generation: a rerun, upgrade or resume
-// rotates it. A session the hooks have not seen yet is judged by its header time.
+// rotates it. Codex writes the rollout header and runs UserPromptSubmit before it
+// records the prompt, so the first hook a session sees comes before its first turn.
 async function activeRuntime(t) {
   const f=await memoryRuntime(t,{sessionSource:'vscode'});f.host.kind='app-server';
   const again=await f.run(['setup','--client','codex','--no-browser']);assert.equal(again.code,0,again.stdout);
-  const control=()=>readFile(join(f.installed.root,'control.json'),'utf8').then(JSON.parse);
-  const value=await control();assert.match(value.generation,/^[a-f0-9-]{36}$/);assert.equal(value.paused,false);
-  assert.ok(Number.isSafeInteger(value.activeSince));
-  // The recorder stamps session_meta once, when it creates the session.
-  const startedAt=async ms=>{
-    const text=await readFile(f.path,'utf8');assert.ok(text.includes('"timestamp":"2026-10-08T07:38:37.287Z"'));
-    await writeFile(f.path,text.replace('"timestamp":"2026-10-08T07:38:37.287Z"',`"timestamp":"${new Date(ms).toISOString()}"`));
-  };
+  assert.match((await readControlState(f.installed.root)).generation,/^[a-f0-9-]{36}$/);
+  const lines=(await readFile(f.path,'utf8')).trimEnd().split('\n').map(line=>line+'\n');
+  assert.ok(lines[0].includes('"timestamp":"2026-10-08T07:38:37.287Z"'));
+  // A session the recorder has just materialized: its header only, stamped now.
+  const begin=()=>writeFile(f.path,lines[0].replace('"timestamp":"2026-10-08T07:38:37.287Z"',`"timestamp":"${new Date().toISOString()}"`));
+  const firstTurn=()=>appendFile(f.path,lines.slice(1).join(''));
   const turn=(text,id)=>appendFile(f.path,JSON.stringify({type:'event_msg',payload:{type:'item_completed',thread_id:session,
     turn_id:id,item:{type:'UserMessage',id,content:[{type:'text',text,text_elements:[]}]}}})+'\n');
   const captured=()=>f.requests.filter(r=>r.route.endsWith('/capture')).map(r=>r.body.messages.map(m=>m.content));
-  return {...f,control,startedAt,turn,captured,activeSince:value.activeSince};
+  const boundary=async()=>{
+    const cursor=await f.cursor();assert.equal(cursor.status,'pause_boundary');assert.equal(cursor.accepted,0);
+    assert.equal(cursor.offset,(await lstat(f.path)).size);assert.equal(cursor.skipped.pause_boundary,cursor.offset);
+  };
+  const capture=async expected=>{
+    assert.equal(await f.invoke('Stop'),'{}');assert.ok(f.handoff());await f.invoke('worker');
+    assert.deepEqual(captured(),expected);
+  };
+  return {...f,begin,firstTurn,turn,captured,boundary,capture};
 }
 
-test('a Codex session that starts after setup is captured from its first turn',async t=>{
-  const f=await activeRuntime(t);
-  await f.startedAt(f.activeSince+1);
-  // The rollout appears lazily; whether or not SessionStart sees it, nothing is skipped.
-  await f.invoke('SessionStart');assert.equal(await f.cursor(),null);
-  assert.equal(await f.invoke('Stop'),'{}');assert.ok(f.handoff());await f.invoke('worker');
-  assert.deepEqual(f.captured(),[['Prefer diagrams.','Understood.']]);
-  const cursor=await f.cursor();assert.equal(cursor.status,'idle');assert.equal(cursor.skipped.pause_boundary,0);
-  assert.ok(cursor.accepted>0);assert.equal(cursor.offset,(await lstat(f.path)).size);
-  await f.turn('Prefer tables too.','second-turn');
-  assert.equal(await f.invoke('Stop'),'{}');await f.invoke('worker');
-  assert.deepEqual(f.captured(),[['Prefer diagrams.','Understood.'],['Prefer tables too.']]);
-});
+for(const first of ['UserPromptSubmit','UserPromptSubmit with prompt recall off','SessionStart'])
+  test(`a Codex session that starts after setup keeps its first turn (${first})`,async t=>{
+    const f=await activeRuntime(t);
+    if(first.endsWith('off'))assert.equal((await f.run(['prompt-recall-off','--client','codex'])).code,0);
+    await f.begin();
+    assert.equal(await f.invoke(first.split(' ')[0],{prompt:'Preferences?'}),'');await f.boundary();
+    await f.firstTurn();
+    await f.capture([['Prefer diagrams.','Understood.']]);
+    assert.equal(f.requests.filter(r=>r.route.endsWith('/recall')).length,first==='UserPromptSubmit'?1:0);
+  });
 
-for(const [name,began] of [['started before setup and resumed in Codex',f=>f.activeSince-1],
-  ['started before a pause and resumed',async f=>{
-    const started=f.activeSince+1;
+for(const [name,before] of [['existed before setup',async f=>{await f.begin();await f.firstTurn();}],
+  ['started before a pause',async f=>{
+    await f.begin();await f.firstTurn();
     assert.equal((await f.run(['pause','--client','codex'])).code,0);
     const resumed=await f.run(['resume','--client','codex']);assert.equal(resumed.code,0,resumed.stdout);
-    assert.ok((await f.control()).activeSince>started);return started;
-  }]])test(`a Codex session ${name} keeps its earlier text out`,async t=>{
+  }]])test(`a Codex session that ${name} keeps its earlier text out`,async t=>{
   const f=await activeRuntime(t);
-  // The session has never been observed: its first hook comes after the boundary.
-  await f.startedAt(await began(f));const size=(await lstat(f.path)).size;
-  assert.equal(await f.invoke('Stop'),'{}');assert.equal(f.handoff(),undefined);
-  const cursor=await f.cursor();assert.equal(cursor.status,'pause_boundary');
-  assert.equal(cursor.skipped.pause_boundary,size);assert.equal(cursor.accepted,0);
+  // Never observed until now: its first hook is the boundary.
+  await before(f);
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');await f.boundary();
   await f.turn('Prefer tables after the boundary.','after-boundary');
-  assert.equal(await f.invoke('Stop'),'{}');assert.ok(f.handoff());await f.invoke('worker');
-  assert.deepEqual(f.captured(),[['Prefer tables after the boundary.']]);
+  await f.capture([['Prefer tables after the boundary.']]);
 });
 
 test('text written while paused stays out, even in a session that began during the pause',async t=>{
   const f=await activeRuntime(t);
   assert.equal((await f.run(['pause','--client','codex'])).code,0);
-  const started=Date.now();await f.startedAt(started);
-  for(const event of ['SessionStart','Stop'])assert.equal(await f.invoke(event),'');
+  await f.begin();
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');
+  await f.firstTurn();assert.equal(await f.invoke('Stop'),'');
   assert.equal(await f.cursor(),null);assert.equal(f.handoff(),undefined);
   const resumed=await f.run(['resume','--client','codex']);assert.equal(resumed.code,0,resumed.stdout);
-  assert.ok((await f.control()).activeSince>started);
-  // The first hook after resume is the boundary: everything before it stays out.
-  const size=(await lstat(f.path)).size;
-  assert.equal(await f.invoke('Stop'),'{}');assert.equal(f.handoff(),undefined);
-  const cursor=await f.cursor();assert.equal(cursor.status,'pause_boundary');
-  assert.equal(cursor.skipped.pause_boundary,size);assert.equal(cursor.accepted,0);
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');await f.boundary();
   await f.turn('Prefer tables after resume.','after-resume');
-  assert.equal(await f.invoke('Stop'),'{}');assert.ok(f.handoff());await f.invoke('worker');
-  assert.deepEqual(f.captured(),[['Prefer tables after resume.']]);
+  await f.capture([['Prefer tables after resume.']]);
 });
 
-// 0.5.2, the Claude plugin and every shared pause/resume/rotation writer store
-// control.json without the activation time.
-for(const [name,drop] of [['an old control file',async f=>{
-    const {version,paused,generation}=await f.control();
-    await writeFile(join(f.installed.root,'control.json'),JSON.stringify({version,paused,generation}),{mode:0o600});
-  }],['a shared pause and resume',async f=>{await setPaused(f.installed.root,true);await setPaused(f.installed.root,false);}]])
-  test(`${name} without the activation time keeps the pause boundary for unseen sessions`,async t=>{
-    const f=await activeRuntime(t);
-    await drop(f);assert.equal((await f.control()).activeSince,undefined);
-    await f.startedAt(Date.now());const size=(await lstat(f.path)).size;
-    assert.equal(await f.invoke('Stop'),'{}');assert.equal(f.handoff(),undefined);
-    const cursor=await f.cursor();assert.equal(cursor.status,'pause_boundary');
-    assert.equal(cursor.skipped.pause_boundary,size);assert.equal(cursor.accepted,0);
-    assert.equal(f.requests.filter(r=>r.route.endsWith('/capture')).length,0);
-  });
+// Plugins that predate control.json pause with only the `paused` marker and
+// resume by deleting it, which leaves the pre-pause generation in control.json.
+test('a legacy marker pause keeps what a new session wrote during it, after the marker is deleted',async t=>{
+  const f=await activeRuntime(t);
+  const marker=join(f.installed.root,'paused');
+  await writeFile(marker,'paused\n',{mode:0o600});
+  await f.begin();
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');
+  await f.firstTurn();assert.equal(await f.invoke('Stop'),'');
+  await unlink(marker);
+  // Deleting the marker alone does not resume: nothing is launched or sent.
+  for(const event of ['Stop','UserPromptSubmit'])assert.equal(await f.invoke(event,{prompt:'Preferences?'}),'');
+  assert.equal(f.handoff(),undefined);assert.equal(await f.cursor(),null);assert.deepEqual(f.captured(),[]);
+  assert.equal(JSON.parse(await readFile(join(f.installed.root,'control.json'),'utf8')).paused,true);
+  const resumed=await f.run(['resume','--client','codex']);assert.equal(resumed.code,0,resumed.stdout);
+  assert.equal(await f.invoke('UserPromptSubmit',{prompt:'Preferences?'}),'');await f.boundary();
+  await f.turn('Prefer tables after resume.','after-resume');
+  await f.capture([['Prefer tables after resume.']]);
+});
 
 test('CX-5 prompt recall injects receipt framing and shares project identity after verifying the session header',async t=>{
   const f=await memoryRuntime(t);

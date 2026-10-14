@@ -3,18 +3,21 @@
 ## Unreleased — @cairn-ink/memory installer 0.5.3
 
 - Save a new Codex conversation from its first turn after setup. A rerun, upgrade
-  or resume moves the local pause generation off `initial`, so every session the
-  hooks had not seen yet was treated as crossing a pause: its first hook (usually
-  the first Stop) set the boundary at the end of the file, and the first
-  exchange was skipped as `pause_boundary`. Codex `setup`, `resume` and `config`
-  now store when the active generation took effect (`activeSince` in
-  `control.json`). An unseen session whose rollout header time is later is saved
-  from its first turn.
-- Keep the boundary everywhere else. Sessions that began before setup or before
-  a pause, text written while paused, and any control without the new field
-  (written by 0.5.2, the Claude plugin or a hosted pause rotation) still skip to
-  the first hook. Nothing skipped earlier is backfilled. Resume, discard and the
-  exec gate are unchanged; see
+  or resume moves the local pause generation off `initial`, so a session's first
+  hook sets its boundary at the end of the file. That first hook was the first
+  Stop, after the first exchange, which was skipped as `pause_boundary`. Codex
+  writes the rollout header and runs `UserPromptSubmit` before it records the
+  prompt, so that hook now sets the boundary for a session it has not seen, ahead
+  of the turn. It is local, needs no network, and runs with prompt recall on or
+  off. The boundary rule is unchanged, so text written while paused stays out,
+  and nothing skipped earlier is backfilled.
+- Keep a pause made with only the `paused` marker. Plugins that predate
+  `control.json` resume by deleting the marker, which used to bring back the
+  pre-pause generation, so text written meanwhile in a session that already had
+  a cursor, or under a control that never had a `control.json`, could be sent
+  after the marker went away. The first Codex hook or worker that runs during
+  such a pause now records it in `control.json`, so only `resume` lifts it and
+  the generation boundary applies; see
   [limitations](docs/limitations.md#codex-new-session-boundary-installer-053).
 - Installer is 0.5.3; plugin remains 0.3.2. Publication is a separate step.
 
