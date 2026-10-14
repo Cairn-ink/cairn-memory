@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { runWorker, resetCapture, prepareCapture, establishPauseBoundary } from "../worker.mjs";
 for (const operation of ["hook", "worker", "reset"]) {
   test(`review repro: cwd change recovers through ${operation}`, async (t) => {
-    const f = await fixture(t, { text: header() + item("Old project preference") });
+    const f = await fixture(t, { text: header() + item("Old project preference"), observed: false });
     const clientOptions = {
       client: "codex",
       home: f.home,
@@ -21,7 +21,7 @@ for (const operation of ["hook", "worker", "reset"]) {
       usesClaude: false,
       env: {},
     };
-    f.binding.projectId = await clientProjectId(clientOptions, "/synthetic/A");
+    await f.observe(await clientProjectId(clientOptions, "/synthetic/A"));
     await runWorker(f.binding, { guard: f.guard, transport: f.transport });
     await appendFile(f.path, item("Between cwd changes", 1));
     f.binding.projectId = await clientProjectId(clientOptions, "/synthetic/B");
@@ -109,6 +109,7 @@ test("v1 cursor starts a keyed EOF epoch without replay", async (t) => {
   const value = await f.cursor();
   const legacy = { ...value, version: 1 };
   delete legacy.quotaRefusal;
+  delete legacy.arm;
   delete legacy.skipped.binding_changed;
   delete legacy.skipped.digest_migrated;
   delete legacy.skipped.digest_key_reset;

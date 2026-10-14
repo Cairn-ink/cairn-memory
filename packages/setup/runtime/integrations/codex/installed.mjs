@@ -7,6 +7,8 @@ import { readControlState } from '../client/control-state.mjs';
 import { hostedTargetId } from '../client/transport-hosted.mjs';
 import { handleHook, readHookInput, validateHook, workerFromHandoff } from './hook.mjs';
 import { establishPauseBoundary } from './worker.mjs';
+import { cursorPath, readCursor } from './cursor.mjs';
+import { codexControl } from './tripwire.mjs';
 import { detectRunningHost, cachedQualification, observeHost, qualifyBinary, validHost, boundBinary,
   scheduleQualification, finishQualification, hasQualifiedCreator } from './qualification.mjs';
 import { readInstallation, readCredential, clientOptions, childEnvironment, promptRecallEnabled } from './installed-state.mjs';
@@ -31,6 +33,17 @@ function launchQualification(configPath,host) {
     child.once('error',reject);child.stdin.once('error',reject);
     child.once('spawn',()=>child.stdin.end(JSON.stringify(host),()=>{child.unref();resolve();}));
   });
+}
+
+// Local only: a cursor already on this generation and tripwire needs nothing, so a
+// running worker's lock never delays recall. Stop still sets the boundary at the latest.
+async function promptBoundary(binding) {
+  try {
+    const [control, cursor] = await Promise.all([codexControl(binding.root),
+      readCursor(cursorPath(binding.root, binding.targetId, binding.sessionId))]);
+    if (!control.paused && (cursor?.generation !== control.generation || cursor.arm !== control.arm))
+      await establishPauseBoundary(binding);
+  } catch { /* Recall never depends on the boundary. */ }
 }
 
 function launchWorker(configPath, config, content) {
@@ -69,7 +82,6 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
     delete input.host;
   } else qualification=await currentHost(configPath,{detect:detectHost});
   if(qualification.status!=='qualified' || signal.aborted)return '';
-  if(event==='UserPromptSubmit' && !await promptRecallEnabled(configPath))return '';
   input??=await readHookInput(stream,{deadlineMs:300});
   const qualifyCreator = version => hasQualifiedCreator(configPath,version,{signal});
   const session = await sessionSource(event === 'worker' ? input?.path : input?.transcript_path,
@@ -105,6 +117,11 @@ export async function runInstalled(configPath, event, stream, { signal, launch =
   const projectId = await clientProjectId(options, hook.cwd, resolved);
   if (signal.aborted) return '';
   if (event === 'UserPromptSubmit') {
+    // Codex writes the rollout header and runs this hook before it records the
+    // prompt. A session first seen here gets its boundary before its coming turn,
+    // which Stop then captures, whether or not prompt recall is on.
+    await promptBoundary({ root: config.root, targetId, projectId, sessionId: hook.sessionId, path: hook.path });
+    if (!await promptRecallEnabled(configPath) || signal.aborted) return '';
     const token = await readCredential(configPath, config.endpoint);
     return recallContext(input, config, token, projectId, signal, async () => await promptRecallEnabled(configPath) && Boolean(await boundBinary(qualification.host)));
   }

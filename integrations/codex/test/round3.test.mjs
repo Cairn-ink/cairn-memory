@@ -11,8 +11,9 @@ import { HistoryOracle } from "./history-oracle.mjs";
 import { virtualHook } from "./lock-contention.mjs";
 
 test("review sequence: delayed A hook worker preserves B's first and second turns", async (t) => {
-  const f = await fixture(t, { text: header() + item("Sent under A") });
+  const f = await fixture(t, { text: header() + item("Sent under A"), observed: false });
   const clientOptions = { client: "codex", home: f.home, root: f.root, usesClaude: false, env: {} };
+  await f.observe(await clientProjectId(clientOptions, "/synthetic/A"));
   const handoffs = [];
   const options = {
     clientOptions,

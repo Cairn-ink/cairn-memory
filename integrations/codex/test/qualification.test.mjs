@@ -205,8 +205,9 @@ test('version-only refusal leaves the cursor retryable; later creator evidence c
   const q=await fixture(t),f=await captureFixture(t,{text:header({cli_version:'0.163.0'})+item('Version retry.')});
   const options={guard:f.guard,transport:f.transport,qualifiedCreatorVersion:'0.164.0',
     qualifyCreator:version=>hasQualifiedCreator(q.configPath,version)};
+  const observed=await f.cursor();
   assert.equal((await runWorker(f.binding,options)).status,'creator_unqualified');
-  assert.equal(await f.cursor(),null);assert.equal(f.calls.length,0);
+  assert.deepEqual(await f.cursor(),observed);assert.equal(f.calls.length,0);
   await qualifyBinary(q.configPath,q.host,{collect:async()=>result('0.163.0')});
   await runWorker(f.binding,options);await runWorker(f.binding,options);
   assert.deepEqual(f.calls.flatMap(row=>row.messages.map(m=>m.content)),['Version retry.']);

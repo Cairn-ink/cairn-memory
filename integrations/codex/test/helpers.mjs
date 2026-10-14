@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createRuntimeGuard } from '../../client/runtime-usage.mjs';
 import { cursorPath, readCursor } from '../cursor.mjs';
+import { establishPauseBoundary } from '../worker.mjs';
 
 export const session='11111111-1111-4111-8111-111111111111';
 export const timestamp='2026-09-30T00:00:00.000Z';
@@ -16,12 +17,21 @@ export const item = (text,id=0,role='user',extras={}) => jsonl({type:'event_msg'
   item:{type:role==='user'?'UserMessage':'AgentMessage',id:`item-${id}`,
     content:[{type:role==='user'?'text':'Text',text,...(role==='user'?{text_elements:[]}: {})}],...extras}}});
 
-export async function fixture(t, {text=header(),cap=10000,mode='api-key'}={}) {
+// By default the session is observed before anything is written, as UserPromptSubmit
+// does for a new session: its boundary sits at 0, so the whole text is new.
+export async function fixture(t, {text=header(),cap=10000,mode='api-key',observed=true}={}) {
   const ws=createTestWorkspace(t,{prefix:'cx3-'});
   const home=join(ws.path,'home'); await mkdir(home,{mode:0o700});
   const root=join(home,'state'); await mkdir(root,{mode:0o700});
-  const path=join(ws.path,'synthetic-rollout.jsonl'); await writeFile(path,text);
+  const path=join(ws.path,'synthetic-rollout.jsonl');
   const binding={root,path,targetId:'a'.repeat(64),projectId:'b'.repeat(64),sessionId:session};
+  // Observe with an empty transcript, then restore its bytes in place (same inode).
+  const observe=async(projectId=binding.projectId)=>{
+    binding.projectId=projectId;const bytes=await readFile(path);
+    await writeFile(path,'');await establishPauseBoundary(binding);await writeFile(path,bytes);
+  };
+  await writeFile(path,text);
+  if (observed) await observe();
   const guard=createRuntimeGuard({root,targetId:binding.targetId,mode,dailyCap:cap});
   const receiver=new Map(), calls=[];
   let failure=null, count=0;
@@ -39,7 +49,7 @@ export async function fixture(t, {text=header(),cap=10000,mode='api-key'}={}) {
     if(failure?.at===count && failure.kind==='lost') throw new Error('lost reply');
     return {status:duplicate?'duplicate':'complete',eventId:body.event_id};
   }};
-  return {ws,home,root,path,binding,guard,transport,calls,receiver,
+  return {ws,home,root,path,binding,guard,transport,calls,receiver,observe,
     fail:(kind,at=1)=>{failure={kind,at};count=0;},clear:()=>{failure=null;count=0;},
     cursor:()=>readCursor(cursorPath(root,binding.targetId,session)),
     stateBytes:()=>readFile(cursorPath(root,binding.targetId,session),'utf8')};

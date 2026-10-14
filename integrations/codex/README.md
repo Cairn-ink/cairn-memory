@@ -39,6 +39,13 @@ local pause remain shared; the installer daily cap/concurrency policy applies
 only to Codex workers. Claude hooks retain their released behavior; only status
 adds best-effort policy/pause availability diagnostics when a policy exists. `SessionStart` establishes pause EOF boundaries;
 no startup context is acknowledged without a qualified local o200k counter.
+A session's first observation is its EOF boundary in every root. `UserPromptSubmit` is an
+observation: Codex materializes the rollout and runs that hook before it records the prompt,
+so a new session's first turn falls after its boundary. `tripwire.mjs` keeps the legacy
+`paused` path as a dangling symlink to `.paused-tripwire`, so a pause made only with that
+marker leaves a trace after it is deleted. Cursors record the arm token in
+`codex-tripwire.json`. A broken tripwire is re-armed with a new token, and every Codex session
+starts again at its next hook. Codex never writes control.json.
 
 The UserPromptSubmit recall port redacts/bounds queries, hashes the host session
 identity, rechecks hosted/local generations before dispatch and injection, and

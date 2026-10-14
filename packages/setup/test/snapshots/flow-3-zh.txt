@@ -1,4 +1,4 @@
-Cairn.ink Memory 安裝程式 0.5.2
+Cairn.ink Memory 安裝程式 0.5.3
 在這台電腦找到 Claude Code 和 Codex。
 
 ✓ Claude Code 已連接（外掛會順便更新）

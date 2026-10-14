@@ -176,7 +176,7 @@ test('browser happy path uses S256, safe stdin, credential check then ACK and re
   assert.deepEqual(r.browses, [`${r.server.endpoint}/device`]);
   assert.deepEqual(r.server.requests.map(r => r.route), ['device-authorizations', 'token', 'token', 'credential', 'ack']);
   assert.equal(r.server.grant.state, 'delivered');
-  assert.match(r.stdout, /plugin (?:updated to )?0\.3\.1/); assert.match(r.stdout, /Cairn.ink Memory setup 0\.5\.2/);
+  assert.match(r.stdout, /plugin (?:updated to )?0\.3\.1/); assert.match(r.stdout, /Cairn.ink Memory setup 0\.5\.3/);
   assert.match(r.stdout, /Signed in to Cairn, valid until/);
   const second = await localWireRequest(r.server.server, requestJSON, new URL('/api/cli-auth/v1/token', r.server.endpoint),
     { body: r.server.lastProof, env: {} });

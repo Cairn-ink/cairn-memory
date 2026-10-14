@@ -19,18 +19,19 @@
     "integrations/client/state-lock.mjs": "ee4bc6161d97bac44a8dc34a2058ed48e3dbbfeb105e32f6e66590b883b29b58",
     "integrations/client/transport-hosted.mjs": "400ca332c50add89291504818305617d7b69287a1be0d86b17147bde01fa9e1e",
     "integrations/codex/context.mjs": "e3bb925f6f3d5ad81414ace302bf7f6cc16d235a785a0c68e39703809f992a1a",
-    "integrations/codex/cursor.mjs": "fa09adaf803254a5a2781b2e88df9df746131cb2b8ffea829bb0d527ae215eb5",
+    "integrations/codex/cursor.mjs": "d7f19621809e89c1b0a1420c08a358f19f4c1471e3cbeadf8b2789cd672c3e8b",
     "integrations/codex/digest.mjs": "eeb6b23e608344e42bc2ef3c862fbc3cf09af2c1034293205623f7a8abe37f4e",
     "integrations/codex/entry.mjs": "558a2f9f5cbed3c4e08146626708ba5ab4374e6938fa9c2e1cdc935d50580952",
     "integrations/codex/hook.mjs": "3298bd3147825eb76d97620f2c9bc978b506ae4a6b42509862081e970610a6a7",
     "integrations/codex/hosted-lifecycle.mjs": "8b4a8e7ea1cef5473147bfe2ea6af9548894c52f08e44a656e545fcb9fc8c496",
     "integrations/codex/installed-state.mjs": "7ebceb25f266b9aa635d1fd8a588504da33cbfc4c01144ce5b4b9c10f2864932",
-    "integrations/codex/installed.mjs": "c1b6b5ab09f91348a2504e09f03913b47cf40014a5c943a2019977c64f826db3",
+    "integrations/codex/installed.mjs": "778cfefb7f6aed93f68258c2a2ffc32de5110d2b41cd62b7ac922ae6dddf20ea",
     "integrations/codex/parser.mjs": "1a01cc1a4f41c829e70b21db3479a8fc596e953be58fcbb9ddf3e7af4ecb0601",
     "integrations/codex/qualification.mjs": "6d0285eb44207e6c13e534dd15220b95a6f47d1a75024d70c05782001eea3f74",
     "integrations/codex/schema-evidence.mjs": "dbae491e6e07c1f6f7abb4c7190cecdbc6cb9b09225f528190a1411c98918428",
     "integrations/codex/session-source.mjs": "4a0ced97f8c7b85a6a9af0b1e512be382cfb7c90936c81d9a6e285390421cd35",
     "integrations/codex/source.mjs": "6bf982b4227d6a7834c02faa74690340c72b269ccf1e9a1242358135de37b580",
-    "integrations/codex/worker.mjs": "f536616639a5a3450223dcad4a584914dfbb9061134f7d7ca4dea721255fb1a2"
+    "integrations/codex/tripwire.mjs": "96f09081cb2d9416baef2c7a0774a76da178006ad038e8f560af943331232af6",
+    "integrations/codex/worker.mjs": "0fbb1295e596769035eca5e974efa4f355774a6c37d70f3442a3e78c4aa7264d"
   }
 }

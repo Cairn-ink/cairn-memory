@@ -415,7 +415,9 @@ export async function controlCodex({action,home,write,t,snapshot,unchanged,neutr
     if (policy) await automaticGuard(config.root,config.endpoint,policy).resume();
     const quota = await resumeHostedQuota({root:config.root,targetId:hostedTargetId(config)});
     if (quota.status==='unavailable') throw new Error('quota_unavailable');
-    await setPaused(config.root, false);
+    // Resuming an active control would only delete Codex's marker tripwire, which
+    // starts every Codex session again at its next hook.
+    if ((await readControlState(config.root)).paused) await setPaused(config.root, false);
     write(t('resume_done', { clients: config.usesClaude ? t('shared_clients') : 'Codex' }));
     if(['quota_reached','busy','repaired'].includes(quota.status))write(t('resume_'+quota.status));return 0;
   }

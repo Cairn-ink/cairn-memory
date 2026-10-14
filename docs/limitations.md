@@ -1446,3 +1446,66 @@ Unverified:
 - Classification is per thread, from the creating client's header. Resuming an
   interactive thread through another app-server client keeps that header; only a
   native `codex exec` ancestor is detected.
+
+## Codex new-session boundary (installer 0.5.3)
+
+A session's first Codex hook sets its pause boundary at the end of the rollout,
+and nothing written before it is sent. This holds in every root, including one
+that has never been paused. Up to 0.5.2 that first hook was normally the first
+Stop, so once a root had been paused, resumed or set up again, the first
+exchange of every new conversation was skipped as `pause_boundary`. In a root
+that had never been paused, an existing conversation was sent from its start.
+Installer 0.5.3 also sets the boundary at `UserPromptSubmit`, which Codex runs
+before it records the prompt. The rule is the same; the first observation just
+comes earlier.
+
+A pause made with only the legacy `paused` marker (plugins that predate
+`control.json`, or by hand) is resumed by deleting the file, which leaves no
+trace and restores the pre-pause generation. Codex therefore keeps that path as a
+tripwire: a dangling symlink to `.paused-tripwire`.
+
+- Pausing through the marker by any means creates the target, so the root reads
+  as paused exactly as before.
+- Deleting the marker removes the symlink, so every tool resumes as before.
+- Each Codex cursor records the token in `codex-tripwire.json` it was observed
+  under. Codex prepares and sends text only while the tripwire is intact under
+  that token.
+- A missing symlink, a present target or a lost record means a pause may have
+  happened. Codex arms a new token under the control lock, and every Codex
+  session starts again at its next hook. If the lock is busy, Codex reads as
+  paused for that run.
+- Codex never writes `control.json`.
+
+Demonstrated:
+
+- Codex source at the pinned commit: `hook_transcript_path` materializes the
+  rollout before a hook gets its path, and `UserPromptSubmit` runs before
+  `record_pending_input` records the prompt. Resume appends to the existing file
+  without a new header.
+- Worker tests for the three invariants, run against this branch's earlier
+  commits and `main`. Paused text is not sent after a legacy pause that a run
+  observed while `control.lock` was held, after one no run observed (with an
+  existing cursor, after a resume while active, and in a root without
+  `control.json`), or after the 0.5.3 draft's stamped-activation case. Deleting
+  the marker resumes every tool and leaves `control.json` untouched. A session
+  that begins after a resume keeps its first turn.
+- Installed-hook tests with a fake endpoint and synthetic rollouts:
+  - The first turn is kept via `UserPromptSubmit` (prompt recall on or off) and
+    via SessionStart, after setup, after `resume` and after a marker deletion.
+  - Earlier sessions are skipped up to their boundary.
+  - Paused text is never sent, whether or not hooks ran during the pause.
+
+Limits:
+
+- The hook order comes from Codex source and synthetic tests. Hook delivery in
+  a real TUI session on the app-server daemon was not observed. If
+  `UserPromptSubmit` does not reach the runtime (hooks not yet trusted in
+  `/hooks`, an unqualified host, a busy lock), Stop sets the boundary and that
+  turn is skipped.
+- Every tripwire re-arm costs each Codex session the text since its last hook.
+  This includes a resume on an active control by the Claude plugin, which
+  deletes the symlink. Codex's own `resume` leaves an active control alone.
+- The tripwire guards the legacy marker path. Deleting or editing
+  `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
+- A foreign symlink at `paused` that does not resolve is left in place, and
+  Codex reads as paused until it is removed.
