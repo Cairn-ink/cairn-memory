@@ -38,6 +38,7 @@ import {
   runPublicPilot,
 } from '../public-pilot.mjs';
 import { experimentPolicy } from '../session.mjs';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 
 // Synthetic private ledgers and fake HTTP only: zero network, and no environment key is ever read.
 const python = new URL('../../longmemeval/fixtures/render-reference-sidecar.py', import.meta.url).pathname;
@@ -128,9 +129,9 @@ const fakeUpstream = ({ calls, chat = defaultChat, count = null, generation = nu
 const chatCalls = (calls) => calls.filter((call) => call.pathname === URLS.chat);
 
 async function setup(t, { source = sourceCases(), limitMicroUsd = 50_000_000, requestCap = 5_000,
-  maxCases = PILOT_DEFAULT_MAX_CASES } = {}) {
-  const root = await mkdtemp(path.join(tmpdir(), 'cairn-public-pilot-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  maxCases = PILOT_DEFAULT_MAX_CASES, workspace } = {}) {
+  const root = workspace?.path ?? await mkdtemp(path.join(tmpdir(), 'cairn-public-pilot-'));
+  if (!workspace) t.after(() => rm(root, { recursive: true, force: true }));
   const inputPath = path.join(root, 'source.json');
   const content = JSON.stringify(source);
   await writeFile(inputPath, content);
@@ -2038,6 +2039,69 @@ test('PO1-PO4: case artifacts distinguish adapter and core rejection without cha
     assert.ok(diagnostic.memoryModel.records.every((item) =>
       Object.keys(item).sort().join(',') === 'layer,reason,stage,version'));
   }
+});
+
+test('CR2 downstream: all eight finite classification reasons survive pilot diagnostic persistence', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'classification-pilot-reasons-' });
+  const f = await setup(t, { workspace, source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
+  const reasons = ['classification_duplicate_targets', 'classification_duplicate_l1_parents',
+    'classification_duplicate_l2_parents', 'classification_l1_title', 'classification_l2_title',
+    'classification_target_mismatch', 'classification_parent_visibility', 'classification_create_policy'];
+  const expected = reasons.map(reason => ({ version: 1, stage: 'classify', layer: 'core_validation', reason }));
+  let injected = false, reads = 0, session;
+  const generation = (body, record, method) => {
+    if (!injected) {
+      injected = true;
+      for (const event of expected) session.memoryModel.onDiagnostic({ ...event,
+        title: RAW_PHRASE, memoryId: 'synthetic-private-memory-id', rawProposal: KEY });
+      for (const event of [
+        { ...expected[0], reason: RAW_PHRASE }, { ...expected[0], stage: KEY },
+        { ...expected[0], layer: '__proto__' }, { ...expected[0], reason: { secret: KEY } },
+        { ...expected[0], get reason() { throw new Error(KEY); } },
+        { ...expected[0], get reason() { reads++; return reads === 1 ? RAW_PHRASE : expected[0].reason; } },
+      ]) session.memoryModel.onDiagnostic(event);
+    }
+    return Response.json(responsesEnvelope(body.model, scripted[method](JSON.parse(body.input[0].content[0].text))));
+  };
+  session = f.session(null, null, generation);
+  workspace.defer(() => session.close());
+  const output = f.output('finite-classification-reasons');
+  const report = await runPublicPilot({ pilot: f.pilot, session, directory: output });
+  const diagnostics = await readJson(output, 'cases', ids.plain, 'diagnostics.json');
+  assert.deepEqual(diagnostics.memoryModel.records, expected);
+  assert.equal(diagnostics.memoryModel.droppedRecords, 0);
+  assert.equal(reads, 1, 'stateful accessor must not swap an unvalidated second value');
+  assert.equal(report.summary.halted, false);
+  assert.equal(report.summary.generated, 1);
+  const stored = await readFile(path.join(output, 'cases', ids.plain, 'diagnostics.json'), 'utf8');
+  for (const secret of [KEY, RAW_PHRASE, 'synthetic-private-memory-id']) assert.equal(stored.includes(secret), false);
+  assert.equal((await lstat(path.join(output, 'cases', ids.plain, 'diagnostics.json'))).mode & 0o777, 0o600);
+  const calls = f.calls.length;
+  assert.deepEqual(await runPublicPilot({ pilot: f.pilot, session, directory: output }), report);
+  assert.equal(f.calls.length, calls, 'persistence roundtrip cannot retry completed work');
+  assert.equal(await readFile(path.join(output, 'cases', ids.plain, 'diagnostics.json'), 'utf8'), stored);
+});
+
+test('CR1 downstream: actual post-admission title rejection persists as a local partial capture', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'classification-pilot-partial-' });
+  const f = await setup(t, { workspace, source: [fixture({ id: 'plain', answerTurn: 'The plain color is amber.' })] });
+  const generation = (body, record, method) => {
+    const input = JSON.parse(body.input[0].content[0].text);
+    const output = method === 'classify' ? { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [],
+      newL1: { title: 'x'.repeat(121), parentL2Ids: [] } })) } : scripted[method](input);
+    return Response.json(responsesEnvelope(body.model, output));
+  };
+  const session = f.session(null, null, generation);
+  workspace.defer(() => session.close());
+  const output = f.output('actual-classification-rejection');
+  await runPublicPilot({ pilot: f.pilot, session, directory: output });
+  const diagnostics = await readJson(output, 'cases', ids.plain, 'diagnostics.json');
+  assert.deepEqual(diagnostics.memoryModel.records,
+    [{ version: 1, stage: 'classify', layer: 'core_validation', reason: 'classification_l1_title' }]);
+  assert.ok(diagnostics.captureAdmission.records.some(record => record.status === 'partial'
+    && record.admittedReferenceCount === 1 && record.classificationStatus === 'failed'));
+  assert.equal(f.calls.filter(call => call.pathname === URLS.generation
+    && call.body.text.format.name === 'cairn_classify').length, 1);
 });
 
 test('PO2-PO4: stop and length stay private while unknown finish rejection is unchanged', async (t) => {
