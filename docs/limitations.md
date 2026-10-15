@@ -1,5 +1,11 @@
 # Known limitations
 
+The latest [fresh thirty-case development record](plans/fresh-thirty-results.md)
+has durable terminal results accepted by the primary and two independent result
+audits; documentation review and delivery are pending. Cairn is 13 correct, ten
+incorrect and seven unresolved against fixed N=30; Mem0 is 21/8/1. Obtaining
+this comparison does not achieve the reliable, competitive product goal.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
@@ -1301,8 +1307,63 @@ and `core/test/classification-budget.test.mjs` use the test counter.
 counter is shaped like a padded o200k count but is not a provider tokenizer. The
 small-recall parity fixture was frozen from main `3a1c17d`.
 
+## Fresh thirty-case development pilot: execution and judgment remain distinct
+
+The [retained fresh-30 report](plans/fresh-thirty-results.md) covers five types
+with six cases each, zero preference cases, dataset/type order and alternating
+first-arm order 15/15. Runtime `142c7a242e345ae2cfe3920ae607828c742cf99a` stayed
+unchanged, with no retry or replacement. The prior N12 six-case development
+result (Cairn 3/6 versus Mem0 4/6 correct) is separate, not pooled into this N=30.
+
+Cairn completed 23/30 generation arms and Mem0 29/30. Fixed-30 correctness is
+13/30 versus 21/30; unresolved is seven versus one, not seven versus one
+incorrect answers. Conditional answered accuracy, 13/23 versus 21/29, is
+secondary and uses different denominators. On the common-resolved 23 cases,
+Cairn is correct on 13 and Mem0 on 17. Temporal reasoning was observed at
+0/6 versus 3/6; tiny category samples and chronological shared-host effects
+cannot establish category parity, provider causes or general temporal quality.
+
+Five Cairn failures arose during extraction (two text-bound refusals, one
+duplicate-source refusal, two timeouts), and two were post-admission
+classification partials (invalid output and timeout). The partials do not prove
+no memories were stored. Independent read-only cold inspection, rerun by
+primary with exit 0, found ordinal 6's failed twentieth capture retained four
+active, unchanged-revision unfiled cards and eight receipts, with a durable
+failed initial classification and no final placement/token. All 30 database
+hashes and the empty sidecar inventory stayed unchanged. The unique
+namespace/journal/claim join, not an independently matched event-ID list,
+supports that retention finding; no recovery or semantic-quality proof follows.
+Existing explicit classification-only recovery must
+not be confused with recovering this frozen evaluator's result. Mem0's one
+native `invalid_payload` failure remains unresolved; its bounded stage sample
+omits the terminating detail. The finite enums do not identify breached fields,
+canonical duplication details or the actual cause of timeout lateness.
+
+All 245 journal records, 60 generation positions and 60 scoring observations
+are terminal, with no global halt and `fullScoreAvailable:true`; this is not
+60 answered/judged cases. The original supervisor's OS exit remains UNKNOWN
+after daemon recovery, not exit 0. The round reserved US$55.877145; cumulative
+reservation US$308.817185 stays below US$400 with US$30 protected. Known actual
+portions are US$12.784226 for the round and US$63.559143 cumulatively, with
+2,831 and 16,103 unknown-price entries respectively. All requests are settled;
+unknown price does not mean pending. Full reservations and the entire old
+ledger history remain; none of these amounts is a total provider bill or refund.
+The 254-file result manifest covers JSON reports/journal, not the 30 databases
+in the 284-file output. A retrospective per-scope quota-usage witness is absent;
+aggregate accounting alone does not reconstruct one.
+
+This shared-host development pilot with one-pass model judgments is not the
+full 500-case official benchmark, independent holdout, dedicated-host latency
+measurement or MCP/Hermes end-to-end quality acceptance. Returned admission
+entries are not proven unique cards; recalled/packed units are not semantic
+coverage. PR #360 records the actual frozen wiring; prospective runtime PRs
+#361 and #362 were not activated and do not retrospectively change the run.
+Independent result audits passed; deterministic execution regressions, temporal
+evidence-chain diagnosis and installed-product gates remain distinct work.
+
 ## Where the evidence lives
 
+- [Verified fresh thirty-case development results and delivery limits](plans/fresh-thirty-results.md)
 - [Model input budgets and packing](model-input-budgets.md)
 - [Awaiting predecessors and conflicting current decisions](#awaiting-predecessors-are-not-reconciliation-candidates)
 - [Decision confirmation and whole-episode context cost](#decision-confirmation-hides-whole-episode-context)
