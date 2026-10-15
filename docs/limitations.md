@@ -1509,3 +1509,47 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Architecture loss-boundary inspection (2026-10-15)
+
+The [bounded architecture inspection](plans/architecture-loss-boundaries.md)
+retains the [closed canonical comparison's original first verdicts](https://github.com/Cairn-ink/cairn-memory/blob/01965c34dc2262de94b5de18505dedc9187df74a/docs/plans/receipt-group-canonical-comparison-results.md).
+RQ12/RQ19/RQ22 B delivered all required anchors and all selected whole-card
+evidence without packer-to-request omissions, but remained incorrect. RQ19 was
+a new severe regression; both arms failed RQ22. A RQ12 safety remains disputed
+and unknown. Required-anchor presence does not prove semantic support, and
+missing observations do not establish absence.
+
+Actual construction used injected scripted extraction and classification with
+empty topic parents. It did not enable normal model extraction, typed rationale
+creation or rationale-evidence traversal. B's receipt groups were query-local
+organization, not persisted support/challenge edges. These results therefore
+cannot establish that missing relationships, MOC routing, distractors, framing
+or any model-internal mechanism caused the errors. Current MOC candidate pages
+still omit group headers/edges; existing opt-in typed rationale and bounded
+source/revision/namespace guards are present capabilities with unproven semantic
+reliability. Receipts have no independent revision; receipt ingestion time is
+not event time.
+
+Primary advances only to a fresh normal-capture event/state opportunity packet
+on existing source-bound-v2 qualification/source-bound-v1 rationale. The next
+engineering deliverable is six new frozen source/rubric scenarios and offline
+wiring: budget crossed with B proposed, budget still satisfied, late older import,
+wrong authorized entity, unauthorized-scope near duplicate never read, and
+explicit sourced B adoption. Known-answer controls reject always returning
+reconfirmation/unknown. All slots and extraction/link failures remain retained;
+no seeded edges or reruns may manufacture opportunity. These are future slot
+definitions, not authored sources/gold, a score, an effective algorithm or a
+frozen executable experiment. Exact artifact/model/manifest/caps must be frozen
+before a real model run; no paid trial is authorized. No runtime/default/schema,
+closed score, raw archive,
+vector/graph service or Card query capability changes. All old cases remain
+closed, without replay, repair, recompile, rescore, rejudge or tuning.
+
+The [single reliability plan](https://github.com/Cairn-ink/cairn-memory/blob/36c566013d615bc29852428bbf5fb1c77b80c70f/docs/plans/reliability-three-stage.md)
+and [architecture agreement](https://github.com/Cairn-ink/cairn-memory/blob/e6b564b496ba38daed2fca6359fded36905b621c/docs/plans/memory-architecture-alignment.md)
+remain pinned unmerged sources. The 24-case paired net gain ≥3, targeted gain,
+no-harm/no-new-severe gates; fresh 30-case completion ≥29 and same-batch ≥Mem0;
+independent reliability, installed Hermes and lifecycle resource gates are
+unchanged. The cumulative US$400/protected US$30 is neither new paid authority
+nor a current balance. No ledger or provider was accessed by this packet.
