@@ -1509,3 +1509,23 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Event/state opportunity packet: synthetic wiring only
+
+The [frozen six-case packet](plans/event-state-opportunity.md) adds missing normal
+capture/qualification/rationale/readback observations, with an independent
+interpretation rubric. Real shared capture and cold SQLite reads are exercised;
+scripted extraction, all-unknown qualification, relation proposals and first
+answers prove mechanics only. No six-case semantic score, algorithm improvement,
+paired baseline, exact live-model result or generalization is established.
+
+The helper preserves failures, empty/no-edge proposals and all six slots. Full
+returned graphs/linked receipts reach the first-answer callback under the existing
+source-answer instruction, subject to a strict atomic byte cap. This does not
+prove source truth, correct entity/time/commitment interpretation, complete
+retrieval, or that an answer uses delivered evidence correctly. Foreign setup is
+separately authorized; exclusion checks cover only these fresh synthetic stores.
+No browser flow, public runtime/API, old case/result, host profile or prompt is
+changed. No provider call, key/environment/ledger access, paid run or production
+operation occurs. Independent reliability, installed Hermes, resources and the
+24/30-case semantic gates remain open; original $400/protected $30 are unchanged.

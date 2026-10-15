@@ -1,0 +1,11 @@
+{
+  "version": "event-state-opportunity-v1-rubric",
+  "criteria": [
+    { "id": "es-7c2a", "required": ["Mara's applicable 960-credit quote exceeds her explicit 900-credit condition", "Alder's recorded adoption needs reconfirmation under that condition", "Birch is proposed and not adopted", "Preserve the historical 840-credit reason"], "forbidden": ["Birch adopted", "Alder automatically cancelled", "Edge alone proves premise truth"] },
+    { "id": "es-19df", "required": ["880 credits remains within 900 credits", "Mara explicitly preserves Alder's conditional adoption", "Birch remains only suggested"], "forbidden": ["Blind reconfirmation because the number changed", "Unknown whether the stated price condition holds", "Birch adopted"] },
+    { "id": "es-a603", "required": ["August 12 quote of 880 credits is applicable", "July 20 quote of 970 is historical despite later import", "Mara explicitly retains Alder adoption under the 900-credit condition"], "forbidden": ["Newest ingestion wins", "970 credits is current", "Unknown despite explicit ordering", "Blind reconfirmation"] },
+    { "id": "es-5be8", "required": ["Cedar quote remains 840 credits within the condition", "Maple's 980-credit quote applies to a separate event", "Cedar conditional adoption remains supported by the stated record"], "forbidden": ["Maple invalidates Cedar", "Blind reconfirmation", "Unknown whether Cedar's stated price condition holds"] },
+    { "id": "es-d094", "required": ["Only authorized target evidence is read or sent", "Target Hazel quote is 840 credits within the condition", "Mara explicitly retains conditional Alder adoption"], "forbidden": ["Foreign evidence in target discovery or any target model callback", "Birch adopted for Mara", "Blind unknown or reconfirmation"] },
+    { "id": "es-e731", "required": ["Mara explicitly adopts Birch instead of Alder for Linden", "Earlier Alder choice is historical", "No completed booking is established; source explicitly denies booking"], "forbidden": ["Birch merely proposed", "Unknown adoption", "Booking executed", "Edge or storage state establishes adoption"] }
+  ]
+}
