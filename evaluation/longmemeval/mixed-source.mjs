@@ -4,6 +4,7 @@ import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 import { planIndexedWindowLongMemEvalCase, planIndexedEvidenceLongMemEvalCase } from './ingestion.mjs';
 
 export const MIXED_SOURCE_VERSION = 'cairn-lme-mixed-source-v2';
+export const SUPPLIED_HISTORY_VERSION = 'cairn-lme-supplied-history-v1';
 const CASE_ID = /^lme-case-[a-f0-9]{64}$/u;
 const SESSION_ID = /^lme-session-[a-f0-9]{64}$/u;
 const TURN_ID = /^lme-turn-[a-f0-9]{64}$/u;
@@ -63,6 +64,16 @@ const policyBody = freeze({ version: MIXED_SOURCE_VERSION,
     case: CASE_DOMAIN } });
 const POLICY = freeze({ ...policyBody, digest: digest(POLICY_DOMAIN, policyBody) });
 export function mixedSourcePolicy() { return POLICY; }
+
+const suppliedHistoryDomains = freeze({ policy: 'cairn.lme.supplied-history.policy.v1',
+  history: 'cairn.lme.supplied-history.original-history.v1',
+  turn: 'cairn.lme.supplied-history.rendered-turn.v1', case: 'cairn.lme.supplied-history.case.v1' });
+const suppliedHistoryBody = freeze({ ...policyBody, version: SUPPLIED_HISTORY_VERSION,
+  date: { ...policyBody.date, cutoff: 'include-all-supplied;preserve-source-order',
+    timestamps: 'preserve;no-repair' }, hashDomains: suppliedHistoryDomains });
+const SUPPLIED_HISTORY_POLICY = freeze({ ...suppliedHistoryBody,
+  digest: digest(suppliedHistoryDomains.policy, suppliedHistoryBody) });
+export function suppliedHistoryPolicy() { return SUPPLIED_HISTORY_POLICY; }
 
 // Copy only own enumerable JSON data, inspecting descriptors before any value read.
 // Byte and node accounting is charged before a full input tree can be cloned.
@@ -157,7 +168,7 @@ function normalizeTurn(content) {
   return normalized;
 }
 
-function renderTurn(content, normalized, date, origin, budget) {
+function renderTurn(content, normalized, date, origin, budget, turnDomain) {
   const prefix = PREFIX(date);
   const maxBody = MAX_MESSAGE - prefix.length - SUFFIX.length;
   if (maxBody < 1) fail('render_limit_exceeded');
@@ -191,7 +202,7 @@ function renderTurn(content, normalized, date, origin, budget) {
     budget.renderedMessages++;
     if (budget.renderedBytes > MAX_INPUT_BYTES || budget.renderedMessages > MAX_TURNS)
       fail('render_limit_exceeded');
-    const renderedTurnId = `lme-turn-${digest(TURN_DOMAIN,
+    const renderedTurnId = `lme-turn-${digest(turnDomain,
       [origin.turnId, start, end, date])}`;
     result.push({ turn: { turn_id: renderedTurnId, role: origin.role, content: rendered },
       origin: { renderedTurnId, originalSessionIndex: origin.sessionIndex,
@@ -205,6 +216,15 @@ function renderTurn(content, normalized, date, origin, budget) {
 }
 
 export function prepareMixedSourceCase(options, comparisonProfile) {
+  return prepareSourceCase(options, comparisonProfile, POLICY);
+}
+
+// Explicit pure preparation only: no runner, paid grant or default opts in.
+export function prepareSuppliedHistoryCase(options, comparisonProfile) {
+  return prepareSourceCase(options, comparisonProfile, SUPPLIED_HISTORY_POLICY);
+}
+
+function prepareSourceCase(options, comparisonProfile, policy) {
   if (comparisonProfile !== undefined && comparisonProfile !== 'indexed-evidence-v1') fail('invalid_options');
   let data;
   try { data = snapshot(options, { nodes: 0, bytes: 0, ancestors: new WeakSet() }); }
@@ -224,7 +244,8 @@ export function prepareMixedSourceCase(options, comparisonProfile) {
   const seenSessions = new Set(), seenTurns = new Set();
   const renderedSessions = [], sessionOrigins = [], turnOrigins = [];
   const renderBudget = { renderedBytes: 0, renderedMessages: 0, probedUtf16: 0 };
-  let originalTurnCount = 0, excludedFutureSessions = 0;
+  const includeAllSupplied = policy === SUPPLIED_HISTORY_POLICY;
+  let originalTurnCount = 0, excludedFutureSessions = 0, sessionsAfterQuestion = 0;
   for (const [sessionIndex, session] of history.sessions.entries()) {
     exact(session, ['session_index', 'session_id', 'date', 'turns'], 'invalid_history');
     if (session.session_index !== sessionIndex || Object.is(session.session_index, -0)
@@ -233,7 +254,8 @@ export function prepareMixedSourceCase(options, comparisonProfile) {
     seenSessions.add(session.session_id);
     dense(session.turns, 1, MAX_TURNS, 'invalid_history');
     const date = parseDate(session.date);
-    const eligible = date.order <= cutoff.order;
+    if (date.order > cutoff.order) sessionsAfterQuestion++;
+    const eligible = includeAllSupplied || date.order <= cutoff.order;
     const renderedTurns = [];
     for (const [turnIndex, turn] of session.turns.entries()) {
       originalTurnCount++;
@@ -247,7 +269,7 @@ export function prepareMixedSourceCase(options, comparisonProfile) {
       if (!eligible) continue;
       const { rendered } = renderTurn(turn.content, normalized, date.label,
         { sessionIndex, sessionId: session.session_id, turnIndex,
-          turnId: turn.turn_id, role: turn.role }, renderBudget);
+          turnId: turn.turn_id, role: turn.role }, renderBudget, policy.hashDomains.turn);
       for (const item of rendered) { renderedTurns.push(item.turn); turnOrigins.push(item.origin); }
     }
     if (!eligible) { excludedFutureSessions++; continue; }
@@ -316,13 +338,16 @@ export function prepareMixedSourceCase(options, comparisonProfile) {
   const mem0Input = { batches: mem0Batches, query };
   if (byteLength(JSON.stringify(mem0Input)) > MAX_INPUT_BYTES) fail('mem0_input_limit_exceeded');
   const originMap = { sessions: sessionOrigins, turns: turnOrigins, windows };
-  const originalHistoryDigest = digest(HISTORY_DOMAIN, history);
-  const caseDigest = digest(CASE_DOMAIN, { policyDigest: POLICY.digest,
+  const originalHistoryDigest = digest(policy.hashDomains.history, history);
+  const caseDigest = digest(policy.hashDomains.case, { policyDigest: policy.digest,
     history, question, namespace, renderedHistory, mem0Input, originMap });
-  return freeze({ version: MIXED_SOURCE_VERSION, policy: POLICY, originalQuestion: question,
+  const originalQuestion = includeAllSupplied
+    ? { question_id: question.question_id, text: question.text, date: question.date } : question;
+  return freeze({ version: policy.version, policy, originalQuestion,
     canonicalQuestionDate: cutoff.label, renderedHistory, cairnPlan, mem0Input,
     counts: { originalSessions: history.sessions.length, eligibleSessions: renderedSessions.length,
       excludedFutureSessions, originalTurns: originalTurnCount,
-      renderedTurns: turnOrigins.length, batches: mem0Batches.length, windows: windows.length },
+      renderedTurns: turnOrigins.length, batches: mem0Batches.length, windows: windows.length,
+      ...(includeAllSupplied ? { sessionsAfterQuestion } : {}) },
     originalHistoryDigest, caseDigest, originMap });
 }
