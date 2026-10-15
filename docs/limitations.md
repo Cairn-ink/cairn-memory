@@ -1,5 +1,14 @@
 # Known limitations
 
+The maintainer-only [exact orphan settlement](experiment-budget.md#exact-orphan-settlement--maintainer-only)
+can conservatively mark one precisely bound pending reservation unknown while
+retaining its entire reserved amount. Synthetic accounting tests do not settle
+an operational ledger, establish whether a provider completed a request, recover
+lost answers or repair an interrupted score. Commit acknowledgement can remain
+uncertain; read-only diagnosis, not automatic replay, is required. Filesystem
+checks and history hashes are not authentication against hostile same-user
+changes. Existing budgets, frozen failures and experiment authority are unchanged.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025

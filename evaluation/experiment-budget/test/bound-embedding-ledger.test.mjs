@@ -9,6 +9,8 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { holdReader } from '../testing/reader-lock.mjs';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import * as budgetApi from '../index.mjs';
 
 import { createExperimentBudget, inspectEmbeddingExperimentBudgetSnapshot,
   inspectExperimentBudgetForEmbeddingUpgrade, openBoundEmbeddingExperimentBudget,
@@ -18,6 +20,399 @@ import { createExperimentBudget, inspectEmbeddingExperimentBudgetSnapshot,
 const denied = code => error => error?.code === code;
 const filename = config => path.join(config.directory, 'experiment-budget.sqlite');
 const child = fileURLToPath(new URL('../testing/bound-embedding-ledger-child.mjs', import.meta.url));
+
+function orphanFixture(t) {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-orphan-settlement-' });
+  if (t) t.after(async () => { await workspace.cleanup(); assert.equal(existsSync(workspace.path), false); });
+  const config = { directory: path.join(workspace.path, 'budget #v2'), runId: randomUUID(),
+    limitMicroUsd: 300_000_000, requestCap: 840_000 };
+  const initial = createExperimentBudget(config);
+  try {
+    for (const [channel, amount, outcome] of [['host-completion', 13, 'unknown'],
+      ['cairn-count', 17, 'succeeded']]) {
+      const attemptId = randomUUID();
+      initial.reserve({ attemptId, channel, reservedMicroUsd: amount });
+      initial.recordOutcome({ attemptId, outcome });
+    }
+  } finally { initial.close(); }
+  const db = new DatabaseSync(filename(config));
+  try { db.exec('UPDATE attempts SET rowid = 9 WHERE rowid = 2'); } finally { db.close(); }
+  const inspection = inspectExperimentBudgetForEmbeddingUpgrade(config);
+  upgradeExperimentBudgetForEmbeddings({ ...config, expectedCheckpoint: {
+    requestCount: inspection.requestCount, reservedMicroUsd: inspection.reservedMicroUsd },
+  expectedHistorySha256: inspection.historySha256 });
+  const expectedAttempt = { attemptId: randomUUID(), channel: 'host-embedding', reservedMicroUsd: 5000 };
+  const handle = reopenEmbeddingExperimentBudget(config);
+  try { handle.reserve(expectedAttempt); } finally { handle.close(); }
+  const before = inspectEmbeddingExperimentBudgetSnapshot(config);
+  const expectedCheckpoint = checkpoint(before);
+  return { workspace, config, before, expectedAttempt, expectedCheckpoint,
+    options: { configuration: config, expectedCheckpoint, expectedAttempt, authorize() {} } };
+}
+
+function checkpoint(snapshot) {
+  return { requestCount: snapshot.requestCount, reservedMicroUsd: snapshot.reservedMicroUsd,
+    historySha256: snapshot.historySha256 };
+}
+
+test('OS8 exact checkpoint refuses foreign history at the real legacy settlement seam', t => {
+  const f = orphanFixture(t);
+  const foreign = reopenEmbeddingExperimentBudget(f.config);
+  try {
+    const attemptId = randomUUID();
+    foreign.reserve({ attemptId, channel: 'host-completion', reservedMicroUsd: 7 });
+    foreign.recordOutcome({ attemptId, outcome: 'unknown' });
+  } finally { foreign.close(); }
+  const changed = inspectEmbeddingExperimentBudgetSnapshot(f.config);
+  assert.notEqual(changed.historySha256, f.before.historySha256);
+  // Before the helper exists this deliberately exercises the actual old API,
+  // rather than failing on a missing import. Its legitimate unbound write is RED.
+  const settle = budgetApi.settleOrphanedEmbeddingAttemptUnknown ?? (options => {
+    const old = reopenEmbeddingExperimentBudget(options.configuration);
+    try { return old.recordOutcome({ attemptId: options.expectedAttempt.attemptId, outcome: 'unknown' }); }
+    finally { old.close(); }
+  });
+  let observed = 'accepted foreign history';
+  let calls = 0;
+  try { settle({ ...f.options, authorize() { calls++; } }); } catch (error) { observed = error.code; }
+  assert.equal(observed, 'configuration_mismatch', 'stale checkpoint must fence real settlement');
+  assert.equal(calls, 0);
+  assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(f.config), changed);
+  // The existing API remains intentionally unbound; do not change its semantics.
+  const old = reopenEmbeddingExperimentBudget(f.config);
+  try { old.recordOutcome({ attemptId: f.expectedAttempt.attemptId, outcome: 'unknown' }); }
+  finally { old.close(); }
+  assert.equal(inspectEmbeddingExperimentBudgetSnapshot(f.config).attempts[2].outcome, 'unknown');
+});
+
+const settleOrphan = options => budgetApi.settleOrphanedEmbeddingAttemptUnknown(options);
+
+test('OS1–OS6 exact orphan settlement retains every field and rowid and unlocks ordinary bound open', t => {
+  const f = orphanFixture(t), rows = rawRows(f.config), beforeBytes = readFileSync(filename(f.config));
+  assert.throws(() => bound(f.config), denied('budget_blocked'));
+  let calls = 0;
+  const result = settleOrphan({ ...f.options, authorize(envelope) {
+    calls++;
+    assert.equal(Object.isFrozen(envelope), true);
+    assert.equal(Object.isFrozen(envelope.state), true);
+    assert.equal(Object.isFrozen(envelope.state.attempts), true);
+    assert.equal(Object.isFrozen(envelope.target), true);
+    assert.deepEqual(envelope.state, f.before);
+    assert.deepEqual(envelope.target, { ...f.expectedAttempt, outcome: null, actualMicroUsd: null });
+    assert.deepEqual(Object.keys(envelope), ['state', 'target']);
+  } });
+  assert.equal(calls, 1);
+  assert.equal(Object.isFrozen(result), true);
+  assert.equal(Object.isFrozen(result.attempts[2]), true);
+  assert.deepEqual(result, { ...f.before, historySha256: result.historySha256,
+    attempts: f.before.attempts.map((row, i) => i === 2 ? { ...row, outcome: 'unknown' } : row) });
+  assert.notEqual(result.historySha256, f.before.historySha256);
+  assert.notDeepEqual(readFileSync(filename(f.config)), beforeBytes);
+  assert.deepEqual(rawRows(f.config).map(row => ({ ...row })), rows.map((row, i) => ({ ...row,
+    ...(i === 2 ? { outcome: 'unknown' } : {}) })));
+  assert.deepEqual(result, inspectEmbeddingExperimentBudgetSnapshot(f.config));
+  const handle = bound(f.config);
+  try { assert.deepEqual(handle.getState(), result); } finally { handle.close(); }
+  assert.throws(() => settleOrphan(f.options), denied('configuration_mismatch'));
+  assert.throws(() => settleOrphan({ ...f.options, expectedCheckpoint: checkpoint(result) }),
+    denied('attempt_terminal'));
+  assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(f.config), result);
+});
+
+test('OS1 descriptor-safe orphan options refuse malformed authority and data before opening', t => {
+  const f = orphanFixture(t), before = readFileSync(filename(f.config));
+  let reads = 0, authorizations = 0;
+  const base = { ...f.options, authorize() { authorizations++; } };
+  const getter = (value, key) => Object.defineProperty({ ...value }, key,
+    { enumerable: true, get() { reads++; throw new Error('synthetic private getter'); } });
+  const invalid = [null, [], { ...base, extra: 1 }, { ...base, [Symbol('extra')]: 1 },
+    getter(base, 'authorize'), getter(base, 'configuration'),
+    { ...base, configuration: getter(base.configuration, 'runId') },
+    { ...base, expectedCheckpoint: getter(base.expectedCheckpoint, 'historySha256') },
+    { ...base, expectedAttempt: getter(base.expectedAttempt, 'channel') },
+    { ...base, authorize: null }, { ...base, authorize: async () => { authorizations++; } }];
+  for (const [key, bad] of [['requestCount', -1], ['reservedMicroUsd', 1.5],
+    ['historySha256', 'A'.repeat(64)], ['historySha256', false]]) {
+    invalid.push({ ...base, expectedCheckpoint: { ...base.expectedCheckpoint, [key]: bad } });
+  }
+  for (const [key, bad] of [['attemptId', 'not-a-uuid'], ['channel', false], ['channel', 'unlisted'],
+    ['reservedMicroUsd', NaN], ['reservedMicroUsd', Number.MAX_SAFE_INTEGER + 1]]) {
+    invalid.push({ ...base, expectedAttempt: { ...base.expectedAttempt, [key]: bad } });
+  }
+  for (const key of ['configuration', 'expectedCheckpoint', 'expectedAttempt']) {
+    invalid.push({ ...base, [key]: { ...base[key], extra: true } });
+    invalid.push({ ...base, [key]: { ...base[key], [Symbol('extra')]: true } });
+  }
+  for (const options of invalid) assert.throws(() => settleOrphan(options), denied('invalid_options'));
+  assert.equal(reads, 0); assert.equal(authorizations, 0);
+  assert.deepEqual(readFileSync(filename(f.config)), before);
+});
+
+test('OS3 orphan target, checkpoint, multiple/no pending and overrun refuse before callback', t => {
+  const f = orphanFixture(t);
+  let calls = 0;
+  const options = { ...f.options, authorize() { calls++; } };
+  for (const [expectedAttempt, code] of [
+    [{ ...f.expectedAttempt, attemptId: randomUUID() }, 'attempt_not_found'],
+    [{ ...f.expectedAttempt, channel: 'host-completion' }, 'configuration_mismatch'],
+    [{ ...f.expectedAttempt, reservedMicroUsd: 4999 }, 'configuration_mismatch'],
+    [{ ...f.expectedAttempt, attemptId: f.before.attempts[0].attemptId }, 'attempt_terminal']]) {
+    assert.throws(() => settleOrphan({ ...options, expectedAttempt }), denied(code));
+  }
+  for (const expectedCheckpoint of [
+    { ...f.expectedCheckpoint, requestCount: 1 }, { ...f.expectedCheckpoint, reservedMicroUsd: 0 },
+    { ...f.expectedCheckpoint, historySha256: 'a'.repeat(64) }]) {
+    assert.throws(() => settleOrphan({ ...options, expectedCheckpoint }), denied('configuration_mismatch'));
+  }
+  for (const configuration of [{ ...f.config, runId: randomUUID() },
+    { ...f.config, limitMicroUsd: 299_999_999 }, { ...f.config, requestCap: 839_999 }]) {
+    assert.throws(() => settleOrphan({ ...options, configuration }));
+  }
+  assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(f.config), f.before);
+  const extra = reopenEmbeddingExperimentBudget(f.config), otherId = randomUUID();
+  try { extra.reserve({ attemptId: otherId, channel: 'cairn-count', reservedMicroUsd: 0 }); }
+  finally { extra.close(); }
+  const multiple = inspectEmbeddingExperimentBudgetSnapshot(f.config);
+  assert.throws(() => settleOrphan({ ...options, expectedCheckpoint: checkpoint(multiple) }), denied('budget_blocked'));
+  const terminal = reopenEmbeddingExperimentBudget(f.config);
+  try {
+    terminal.recordOutcome({ attemptId: otherId, outcome: 'unknown' });
+    terminal.recordOutcome({ attemptId: f.expectedAttempt.attemptId, outcome: 'failed' });
+  } finally { terminal.close(); }
+  const none = inspectEmbeddingExperimentBudgetSnapshot(f.config);
+  assert.throws(() => settleOrphan({ ...options, expectedCheckpoint: checkpoint(none) }), denied('attempt_terminal'));
+  const over = orphanFixture(t), h = reopenEmbeddingExperimentBudget(over.config);
+  const id = randomUUID();
+  try {
+    h.reserve({ attemptId: id, channel: 'host-completion', reservedMicroUsd: 1 });
+    h.recordOutcome({ attemptId: id, outcome: 'succeeded', actualMicroUsd: 2 });
+  } finally { h.close(); }
+  assert.throws(() => settleOrphan({ ...over.options, authorize() { calls++; },
+    expectedCheckpoint: checkpoint(inspectEmbeddingExperimentBudgetSnapshot(over.config)) }), denied('budget_blocked'));
+  assert.equal(calls, 0);
+});
+
+test('OS4 trusted callback return/throw/async refuses without settlement and leaks no arbitrary error', t => {
+  const f = orphanFixture(t), before = readFileSync(filename(f.config));
+  for (const authorize of [() => 1, () => Promise.resolve(),
+    () => { throw new Error('synthetic private callback body'); },
+    () => { throw new budgetApi.ExperimentBudgetError('synthetic_private_code'); }]) {
+    let calls = 0;
+    assert.throws(() => settleOrphan({ ...f.options, authorize(info) { calls++; return authorize(info); } }),
+      error => error.code === 'ledger_failed' && error.message === 'ledger_failed');
+    assert.equal(calls, 1);
+    assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(f.config), f.before);
+    assert.deepEqual(readFileSync(filename(f.config)), before);
+  }
+  let calls = 0;
+  assert.throws(() => settleOrphan({ ...f.options, authorize: async () => { calls++; } }), denied('invalid_options'));
+  assert.equal(calls, 0);
+});
+
+test('OS3 foreign terminal settlement and row-order drift cannot be adopted', t => {
+  for (const mutation of ['terminal', 'rowid']) {
+    const f = orphanFixture(t);
+    if (mutation === 'terminal') {
+      const h = reopenEmbeddingExperimentBudget(f.config);
+      try { h.recordOutcome({ attemptId: f.expectedAttempt.attemptId, outcome: 'failed' }); }
+      finally { h.close(); }
+    } else {
+      const db = new DatabaseSync(filename(f.config));
+      try { db.exec('UPDATE attempts SET rowid = 20 WHERE rowid = 1'); } finally { db.close(); }
+    }
+    const changed = inspectEmbeddingExperimentBudgetSnapshot(f.config);
+    let calls = 0;
+    assert.throws(() => settleOrphan({ ...f.options, authorize() { calls++; } }), denied('configuration_mismatch'));
+    assert.equal(calls, 0);
+    assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(f.config), changed);
+  }
+});
+
+test('OS2 exact-v2 orphan writer refuses missing/schema/privacy/hardlink paths without creation', t => {
+  for (const mutation of ['missing', 'schema', 'v1', 'mode', 'hardlink', 'symlink', 'directory-mode']) {
+    const f = orphanFixture(t), file = filename(f.config), original = readFileSync(file);
+    if (mutation === 'missing' || mutation === 'symlink') renameSync(file, `${file}.moved`);
+    if (mutation === 'symlink') symlinkSync(`${file}.moved`, file);
+    if (mutation === 'schema' || mutation === 'v1') {
+      const db = new DatabaseSync(file);
+      try { db.exec(`PRAGMA user_version = ${mutation === 'v1' ? 1 : 3}`); } finally { db.close(); }
+    }
+    if (mutation === 'mode') chmodSync(file, 0o644);
+    if (mutation === 'directory-mode') chmodSync(f.config.directory, 0o755);
+    if (mutation === 'hardlink') linkSync(file, `${file}.linked`);
+    let calls = 0;
+    assert.throws(() => settleOrphan({ ...f.options, authorize() { calls++; } }));
+    assert.equal(calls, 0);
+    if (mutation === 'missing') { assert.equal(existsSync(file), false); assert.deepEqual(readFileSync(`${file}.moved`), original); }
+    if (mutation === 'mode' || mutation === 'directory-mode') chmodSync(mutation === 'mode' ? file : f.config.directory,
+      mutation === 'mode' ? 0o600 : 0o700);
+    if (!['schema', 'v1', 'missing'].includes(mutation)) assert.deepEqual(readFileSync(file), original);
+  }
+});
+
+test('OS4 callback SQL drift rolls back; same-path inode/privacy replacements fail closed', t => {
+  const f = orphanFixture(t), rows = rawRows(f.config), originalExec = DatabaseSync.prototype.exec;
+  let active;
+  try {
+    DatabaseSync.prototype.exec = function(sql) {
+      if (sql === 'BEGIN IMMEDIATE') active = this;
+      return originalExec.call(this, sql);
+    };
+    assert.throws(() => settleOrphan({ ...f.options, authorize() {
+      active.exec('UPDATE attempts SET rowid = 20 WHERE rowid = 1');
+    } }), denied('invalid_ledger'));
+  } finally { DatabaseSync.prototype.exec = originalExec; }
+  assert.deepEqual(rawRows(f.config), rows);
+  for (const mutation of ['replacement', 'mode', 'hardlink']) {
+    const f = orphanFixture(t), file = filename(f.config), before = readFileSync(file);
+    assert.throws(() => settleOrphan({ ...f.options, authorize() {
+      if (mutation === 'replacement') { renameSync(file, `${file}.moved`); copyFileSync(`${file}.moved`, file); }
+      if (mutation === 'mode') chmodSync(file, 0o644);
+      if (mutation === 'hardlink') linkSync(file, `${file}.linked`);
+    } }), denied('unsafe_database_file'));
+    if (mutation === 'mode') chmodSync(file, 0o600);
+    if (mutation === 'hardlink') unlinkSync(`${file}.linked`);
+    assert.deepEqual(readFileSync(file), before);
+    assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(f.config), f.before);
+  }
+});
+
+test('OS6 orphan settlement lock exhaustion retains pending; short reader permits one settlement', async t => {
+  const f = orphanFixture(t);
+  // Register child shutdown with the workspace, not after its removal hook.
+  const reader = await holdReader({ after: fn => f.workspace.defer(fn) }, filename(f.config));
+  let calls = 0;
+  assert.throws(() => settleOrphan({ ...f.options, authorize() { calls++; } }), denied('ledger_busy'));
+  assert.equal(calls, 1); // BEGIN succeeds; DELETE-journal COMMIT waits on the reader.
+  await reader.release();
+  assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(f.config), f.before);
+  const short = await holdReader({ after: fn => f.workspace.defer(fn) }, filename(f.config));
+  await short.releaseAfter(150);
+  const result = settleOrphan(f.options);
+  await short.release();
+  assert.equal(result.attempts[2].outcome, 'unknown');
+  assert.equal(result.reservedMicroUsd, f.before.reservedMicroUsd);
+});
+
+test('OS5–OS6 conditional-write and before/after-commit/close faults retain exact uncertainty', t => {
+  for (const mode of ['zero-update', 'post-write-drift', 'before-commit', 'after-commit', 'after-close']) {
+    const f = orphanFixture(t), rows = rawRows(f.config);
+    const originalExec = DatabaseSync.prototype.exec, originalPrepare = DatabaseSync.prototype.prepare;
+    const originalClose = DatabaseSync.prototype.close;
+    try {
+      DatabaseSync.prototype.prepare = function(sql) {
+        const statement = originalPrepare.call(this, sql);
+        if (sql.startsWith("UPDATE attempts SET outcome = 'unknown'")) {
+          const originalRun = statement.run;
+          statement.run = (...args) => {
+            if (mode === 'zero-update') return { changes: 0 };
+            const result = originalRun.apply(statement, args);
+            if (mode === 'post-write-drift') originalExec.call(this, 'UPDATE attempts SET rowid = 21 WHERE rowid = 1');
+            return result;
+          };
+        }
+        return statement;
+      };
+      DatabaseSync.prototype.exec = function(sql) {
+        if (sql === 'COMMIT' && ['before-commit', 'after-commit'].includes(mode)) {
+          if (mode === 'after-commit') originalExec.call(this, sql);
+          throw new Error('synthetic acknowledgement body');
+        }
+        return originalExec.call(this, sql);
+      };
+      DatabaseSync.prototype.close = function() {
+        originalClose.call(this);
+        if (mode === 'after-close') throw new Error('synthetic close body');
+      };
+      assert.throws(() => settleOrphan(f.options), denied(['zero-update', 'post-write-drift'].includes(mode)
+        ? 'invalid_ledger' : 'ledger_failed'));
+    } finally {
+      DatabaseSync.prototype.exec = originalExec;
+      DatabaseSync.prototype.prepare = originalPrepare;
+      DatabaseSync.prototype.close = originalClose;
+    }
+    const committed = ['after-commit', 'after-close'].includes(mode);
+    assert.deepEqual(rawRows(f.config).map(row => ({ ...row })), rows.map((row, i) => ({ ...row,
+      ...(committed && i === 2 ? { outcome: 'unknown' } : {}) })));
+    const snapshot = inspectEmbeddingExperimentBudgetSnapshot(f.config);
+    assert.equal(snapshot.requestCount, f.before.requestCount);
+    assert.equal(snapshot.reservedMicroUsd, f.before.reservedMicroUsd);
+    if (committed) assert.throws(() => settleOrphan({ ...f.options, expectedCheckpoint: checkpoint(snapshot) }),
+      denied('attempt_terminal'));
+  }
+});
+
+test('OS7 owned orphan fixtures clean up success, refusal and synthetic assertion/setup failure', async () => {
+  for (const mode of ['success', 'refusal', 'assertion', 'setup']) {
+    const f = orphanFixture(null);
+    try {
+      if (mode === 'setup') throw new Error('synthetic setup');
+      if (mode === 'assertion') assert.equal(1, 2, 'synthetic assertion');
+      if (mode === 'refusal') assert.throws(() => settleOrphan({ ...f.options,
+        expectedCheckpoint: { ...f.expectedCheckpoint, requestCount: 0 } }));
+      else settleOrphan(f.options);
+    } catch (error) {
+      assert.ok(['assertion', 'setup'].includes(mode));
+    } finally { await f.workspace.cleanup(); }
+    assert.equal(existsSync(f.workspace.path), false);
+  }
+});
+
+test('OS2 writer-open disappearance cannot create or settle a replacement ledger', t => {
+  const f = orphanFixture(t), original = readFileSync(filename(f.config));
+  const moduleUrl = new URL('../index.mjs', import.meta.url).href;
+  const script = `import assert from 'node:assert/strict';
+    import { registerHooks } from 'node:module';
+    import { renameSync } from 'node:fs';
+    const config = ${JSON.stringify(f.config)};
+    registerHooks({ load(url, context, nextLoad) {
+      const loaded = nextLoad(url, context);
+      if (url !== ${JSON.stringify(moduleUrl)}) return loaded;
+      const source = String(loaded.source), start = source.indexOf('export function settleOrphanedEmbeddingAttemptUnknown');
+      assert.ok(start > 0);
+      const suffix = source.slice(start), seam = '  const db = constructExistingWritableDatabase(config.filename);';
+      assert.ok(suffix.includes(seam));
+      return { ...loaded, source: "import { renameSync as syntheticRename } from 'node:fs';\\n"
+        + source.slice(0, start) + suffix.replace(seam,
+          "  syntheticRename(config.filename, config.filename + '.moved');\\n" + seam) };
+    } });
+    const api = await import(${JSON.stringify(moduleUrl)});
+    let calls = 0;
+    try { api.settleOrphanedEmbeddingAttemptUnknown({ ...${JSON.stringify(f.options)}, authorize() { calls++; } }); }
+    catch(error) { assert.equal(error.code, 'ledger_failed'); }
+    assert.equal(calls, 0);`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script],
+    { env: { NODE_NO_WARNINGS: '1' }, encoding: 'utf8', timeout: 10_000 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(filename(f.config)), false);
+  assert.equal(existsSync(`${filename(f.config)}-journal`), false);
+  assert.deepEqual(readFileSync(`${filename(f.config)}.moved`), original);
+});
+
+test('OS3 writer lock refuses before callback and a constructor-time identity change is fenced', t => {
+  const locked = orphanFixture(t), holder = new DatabaseSync(filename(locked.config));
+  let calls = 0;
+  try {
+    holder.exec('BEGIN IMMEDIATE');
+    assert.throws(() => settleOrphan({ ...locked.options, authorize() { calls++; } }), denied('ledger_busy'));
+    assert.equal(calls, 0);
+  } finally { holder.exec('ROLLBACK'); holder.close(); }
+  assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(locked.config), locked.before);
+  const replaced = orphanFixture(t), file = filename(replaced.config);
+  const originalExec = DatabaseSync.prototype.exec;
+  try {
+    let changed = false;
+    DatabaseSync.prototype.exec = function(sql) {
+      if (!changed && sql.includes('PRAGMA foreign_keys')) {
+        changed = true; renameSync(file, `${file}.moved`); copyFileSync(`${file}.moved`, file);
+      }
+      return originalExec.call(this, sql);
+    };
+    assert.throws(() => settleOrphan({ ...replaced.options, authorize() { calls++; } }), denied('unsafe_database_file'));
+  } finally { DatabaseSync.prototype.exec = originalExec; }
+  assert.equal(calls, 0);
+  assert.deepEqual(inspectEmbeddingExperimentBudgetSnapshot(replaced.config), replaced.before);
+});
 
 test('B1 writable connections have the fixed wait while read-only inspection stays unchanged', t => {
   const f = fixture(t), originalExec = DatabaseSync.prototype.exec, statements = [];

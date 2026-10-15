@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
+import { isAsyncFunction } from 'node:util/types';
 
 const APPLICATION_ID = 0x43454247;
 const SCHEMA_VERSION = 1;
@@ -1012,6 +1013,67 @@ export function inspectEmbeddingExperimentBudgetSnapshot(configuration) {
     assertConfiguration(state, config);
     inspectTransitionLocation(config, identity);
     return boundEmbeddingSnapshot(state);
+  }));
+}
+
+/** Exact one-pending-row accounting CAS, not recovery or execution authority. */
+export function settleOrphanedEmbeddingAttemptUnknown(options) {
+  let config, checkpoint, target, authorize;
+  try {
+    const data = ownData(options, ['configuration', 'expectedCheckpoint', 'expectedAttempt', 'authorize']);
+    config = detachedEmbeddingConfiguration(data.configuration);
+    checkpoint = ownData(data.expectedCheckpoint, ['requestCount', 'reservedMicroUsd', 'historySha256']);
+    validateSafeInteger(checkpoint.requestCount);
+    validateSafeInteger(checkpoint.reservedMicroUsd);
+    if (typeof checkpoint.historySha256 !== 'string'
+      || !/^[a-f0-9]{64}$/u.test(checkpoint.historySha256)) fail('invalid_options');
+    target = ownData(data.expectedAttempt, ['attemptId', 'channel', 'reservedMicroUsd']);
+    validateUuid(target.attemptId);
+    validateSafeInteger(target.reservedMicroUsd);
+    if (!EMBEDDING_CHANNELS.has(target.channel)) fail('invalid_options');
+    authorize = data.authorize;
+    if (typeof authorize !== 'function' || isAsyncFunction(authorize)) fail('invalid_options');
+  } catch (error) { throw mapError(error); }
+  const identity = inspectTransitionLocation(config);
+  const db = constructExistingWritableDatabase(config.filename);
+  return closeAfter(db, () => withTransaction(db, 'write', function settleOrphan() {
+    inspectTransitionLocation(config, identity);
+    const before = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+    assertConfiguration(before, config);
+    if (before.run.state !== 'open') fail('budget_blocked');
+    const snapshot = boundEmbeddingSnapshot(before);
+    if (snapshot.requestCount !== checkpoint.requestCount
+      || snapshot.reservedMicroUsd !== checkpoint.reservedMicroUsd
+      || snapshot.historySha256 !== checkpoint.historySha256) fail('configuration_mismatch');
+    const attempt = before.attempts.find(row => row.attempt_id === target.attemptId);
+    if (!attempt) fail('attempt_not_found');
+    if (attempt.outcome !== null) fail('attempt_terminal');
+    if (before.attempts.filter(row => row.outcome === null).length !== 1) fail('budget_blocked');
+    if (attempt.channel !== target.channel || attempt.reserved_micro_usd !== target.reservedMicroUsd
+      || attempt.actual_micro_usd !== null) fail('configuration_mismatch');
+    // Trusted callback only; it receives neither SQL access nor a reserve handle.
+    let authorization;
+    try { authorization = authorize(Object.freeze({ state: snapshot, target: publicAttempt(attempt) })); }
+    catch { fail('ledger_failed'); }
+    if (authorization !== undefined) fail('ledger_failed');
+    inspectTransitionLocation(config, identity);
+    const afterCallback = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+    assertConfiguration(afterCallback, config);
+    if (embeddingHistorySha256(afterCallback) !== snapshot.historySha256
+      || JSON.stringify(afterCallback) !== JSON.stringify(before)) fail('invalid_ledger');
+    const changed = db.prepare(`UPDATE attempts SET outcome = 'unknown', actual_micro_usd = NULL
+      WHERE rowid = ? AND attempt_id = ? AND channel = ? AND reserved_micro_usd = ?
+        AND outcome IS NULL AND actual_micro_usd IS NULL`).run(attempt.rowid,
+      target.attemptId, target.channel, target.reservedMicroUsd);
+    if (Number(changed.changes) !== 1) fail('invalid_ledger');
+    const intended = { run: before.run, attempts: before.attempts.map(row => row.rowid === attempt.rowid
+      ? { ...row, outcome: 'unknown', actual_micro_usd: null } : row) };
+    const after = readValidatedState(db, EMBEDDING_SCHEMA_VERSION, true);
+    assertConfiguration(after, config);
+    if (JSON.stringify(after) !== JSON.stringify(intended)
+      || embeddingHistorySha256(after) !== embeddingHistorySha256(intended)) fail('invalid_ledger');
+    inspectTransitionLocation(config, identity);
+    return boundEmbeddingSnapshot(after);
   }));
 }
 
