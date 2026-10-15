@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { SOURCE_ANSWER_INSTRUCTION } from '../live/installed-source-answer-delivery.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
+import { loadOverlayFixture, overlayArmOrder, omitRelationshipOverlay, assertOverlayProjection } from './event-state-overlay.mjs';
 
 export const OPPORTUNITY_LIMITS = Object.freeze({ cases: 6, sessions: 3, messages: 2,
   messageUnits: 600, questionUnits: 500, fixtureBytes: 16000, callbackInputBytes: 64000,
@@ -46,22 +47,33 @@ export async function loadOpportunityFixture() {
 
 // Content-bearing traces are local diagnostic data. Only summary is publishable.
 // Model factories never receive fixtures, rubric, expected answers or writing history.
-export async function runEventStateOpportunity({ createModel, answer,
+export const runEventStateOpportunity = options => runOpportunity(options, false);
+export const runEventStateOverlayOpportunity = options => runOpportunity(options, true);
+async function runOpportunity({ createModel, answer,
   createWorkspace = () => createTestWorkspace(null, { prefix: 'cairn-event-state-' }),
-  answerInputBytes = OPPORTUNITY_LIMITS.answerInputBytes, onRecord = () => {} } = {}) {
+  answerInputBytes = OPPORTUNITY_LIMITS.answerInputBytes, onRecord = () => {},
+  prepareAnswers = () => {}, assertHealthy = () => {} } = {}, paired) {
   if (typeof createModel !== 'function' || typeof answer !== 'function'
     || typeof createWorkspace !== 'function' || typeof onRecord !== 'function' || !Number.isSafeInteger(answerInputBytes)
     || answerInputBytes < 1 || answerInputBytes > OPPORTUNITY_LIMITS.answerInputBytes) fail('invalid_opportunity_options');
-  const fixture = await loadOpportunityFixture();
+  if (paired && (typeof prepareAnswers !== 'function' || typeof assertHealthy !== 'function')) fail('invalid_opportunity_options');
+  const fixture = await (paired ? loadOverlayFixture() : loadOpportunityFixture());
   const { openMemoryCore } = await import('../../core/contract.mjs');
   const traces = [];
   const summaries = [];
   let persistenceError = null;
   let cleanupError = null;
+  let safetyError = null;
   for (const item of fixture.cases) {
     let workspace;
     const trace = { id: item.id, calls: [], captures: [], inspections: [], cold: [],
       diagnostics: [], recall: null, delivery: { included: [], omitted: [] }, answer: null, failures: [] };
+    if (paired) {
+      trace.order = overlayArmOrder(item.id);
+      trace.arms = Object.fromEntries(['A', 'B'].map(arm => [arm, {
+        delivery: { included: [], omitted: [], calls: 0 }, answer: { status: 'unavailable' },
+      }]));
+    }
     const persist = (kind, value) => {
       if (persistenceError) throw persistenceError;
       try {
@@ -76,7 +88,10 @@ export async function runEventStateOpportunity({ createModel, answer,
         throw persistenceError;
       }
     };
-    const checkPersistence = () => { if (persistenceError) throw persistenceError; };
+    const checkPersistence = () => {
+      if (persistenceError) throw persistenceError;
+      if (paired) try { assertHealthy(); } catch (error) { safetyError ??= error; throw error; }
+    };
     let traceSize = 0;
     const snapshot = (value, max = OPPORTUNITY_LIMITS.callbackInputBytes) => {
       const size = bytes(value);
@@ -137,7 +152,7 @@ export async function runEventStateOpportunity({ createModel, answer,
     const open = model => openMemoryCore({ path, model,
       captureQualification: 'source-bound-v2', captureRationale: 'source-bound-v1' });
     try {
-      if (persistenceError || cleanupError) {
+      if (persistenceError || cleanupError || safetyError) {
         trace.failures.push('not-run-after-fatal');
         continue;
       }
@@ -192,11 +207,44 @@ export async function runEventStateOpportunity({ createModel, answer,
             ...(trace.recall.value.recallTruncated ? { recallTruncated: trace.recall.value.recallTruncated } : {}) } : null,
           evidence }) }] };
       // Atomic evidence: never shorten receipts or silently discard rationale to fit.
-      if (!trace.recall.ok || !evidence.length) {
+      if (!trace.recall.ok || !evidence.length || paired && trace.failures.includes('capture-stage')) {
         trace.failures.push('no-safe-evidence');
         trace.delivery.omitted = refs;
       } else if (bytes(request) > answerInputBytes) {
         trace.failures.push('answer-input-bound'); trace.delivery.omitted = refs;
+      } else if (paired) {
+        let requests;
+        try {
+          requests = { A: copy(request), B: omitRelationshipOverlay(request) };
+          assertOverlayProjection(requests.A, requests.B);
+          // Both complete requests are bound synchronously before the first arm.
+          const acknowledgement = prepareAnswers(copy(requests), { caseId: item.id });
+          if (acknowledgement !== undefined) {
+            Promise.resolve(acknowledgement).catch(() => {}); fail('overlay_projection');
+          }
+        } catch (error) { safetyError = error; throw error; }
+        if (Object.values(requests).some(value => bytes(value) > answerInputBytes)) fail('answer_input_bound');
+        for (const arm of ['A', 'B']) trace.arms[arm].delivery = {
+          included: copy(refs), omitted: [], request: snapshot(requests[arm]), inputBytes: bytes(requests[arm]), calls: 0,
+        };
+        trace.delivery = { included: refs, omitted: [], calls: 0 };
+        persist('answer-pair', { order: trace.order, arms: trace.arms });
+        for (const arm of trace.order) {
+          try { assertHealthy(); } catch (error) { safetyError = error; throw error; }
+          const slot = trace.arms[arm], started = performance.now();
+          slot.delivery.calls = 1; trace.delivery.calls++;
+          try {
+            const output = await answer(copy(requests[arm]), { caseId: item.id, arm });
+            if (!exact(output, ['text']) || !boundedText(output.text, OPPORTUNITY_LIMITS.answerOutputBytes)
+              || bytes(output) > OPPORTUNITY_LIMITS.answerOutputBytes) fail('answer_output_bound');
+            slot.answer = { status: 'generated-unassessed', output: snapshot(output, OPPORTUNITY_LIMITS.answerOutputBytes) };
+          } catch {
+            trace.failures.push(`answer-${arm}-failed`); slot.answer = { status: 'failed' };
+          }
+          slot.delivery.elapsedMs = performance.now() - started;
+          persist('answer-arm', { arm, ...slot });
+          try { assertHealthy(); } catch (error) { safetyError = error; throw error; }
+        }
       } else {
         trace.delivery = { included: refs, omitted: [], request: snapshot(request),
           inputBytes: bytes(request), calls: 1 };
@@ -209,9 +257,15 @@ export async function runEventStateOpportunity({ createModel, answer,
         } catch { trace.failures.push('answer-failed'); trace.answer = { status: 'failed' }; }
         trace.delivery.elapsedMs = performance.now() - started;
       }
+      if (paired && trace.delivery.omitted.length) for (const arm of ['A', 'B']) {
+        trace.arms[arm].delivery.omitted = copy(refs);
+      }
       checkPersistence();
       persist('answer', { delivery: trace.delivery, answer: trace.answer, failures: trace.failures });
-    } catch { trace.failures.push(persistenceError ? 'persistence-failed' : 'case-failed'); }
+    } catch {
+      trace.failures.push(persistenceError ? 'persistence-failed' : 'case-failed');
+      if (paired) try { assertHealthy(); } catch (error) { safetyError ??= error; }
+    }
     finally {
       try { await workspace?.cleanup(); }
       catch (error) { cleanupError ??= error; trace.failures.push('cleanup-failed'); }
@@ -221,6 +275,10 @@ export async function runEventStateOpportunity({ createModel, answer,
       relationCalls: trace.calls.filter(call => call.method === 'relate').length,
       returnedMemories: trace.recall?.ok ? trace.recall.value.memories.length : 0,
       sentMemories: trace.delivery.included.length, answerCalls: trace.delivery.calls ?? 0 };
+      if (paired) summary.arms = Object.fromEntries(['A', 'B'].map(arm => [arm, {
+        status: trace.arms[arm].answer.status, answerCalls: trace.arms[arm].delivery.calls,
+        inputBytes: trace.arms[arm].delivery.inputBytes ?? null,
+      }]));
       summaries.push(summary);
       if (!persistenceError) {
         try { persist('case-complete', { trace, summary }); }
@@ -229,10 +287,10 @@ export async function runEventStateOpportunity({ createModel, answer,
       }
     }
   }
-  const report = { summary: { version: 'event-state-opportunity-v1', synthetic: true,
+  const report = { summary: { version: paired ? 'event-state-overlay-v1' : 'event-state-opportunity-v1', synthetic: true,
     semanticAccuracy: 'not-measured', denominator: 6, cases: summaries }, traces };
-  if (persistenceError || cleanupError) {
-    const error = persistenceError ?? new Error('opportunity_cleanup_failed', { cause: cleanupError });
+  if (persistenceError || cleanupError || safetyError) {
+    const error = persistenceError ?? safetyError ?? new Error('opportunity_cleanup_failed', { cause: cleanupError });
     error.report = report;
     throw error;
   }

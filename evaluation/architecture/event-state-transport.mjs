@@ -7,7 +7,8 @@ import { DEFAULT_MODEL } from '../../adapters/openai/profiles.mjs';
 import { standardInlineQualificationPrompt } from '../../core/qualification-candidates-prompt.mjs';
 import { openBoundEmbeddingExperimentBudget } from '../experiment-budget/index.mjs';
 import { SOURCE_ANSWER_INSTRUCTION } from '../live/installed-source-answer-delivery.mjs';
-import { loadOpportunityFixture, runEventStateOpportunity } from './event-state-opportunity.mjs';
+import { loadOpportunityFixture, runEventStateOpportunity, runEventStateOverlayOpportunity } from './event-state-opportunity.mjs';
+import { loadOverlayFixture, OVERLAY_IDS, overlayArmOrder, assertOverlayProjection } from './event-state-overlay.mjs';
 
 export const EVENT_STATE_LIVE_LIMITS = Object.freeze({ physicalRequests: 390,
   reservationMicroUsd: 5000, reservedMicroUsd: 1950000, cumulativeMicroUsd: 400000000,
@@ -72,7 +73,9 @@ async function readBody(response, maximum, signal, expiresAt) {
   } finally { reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
 
-export function createEventStateTransport(options) {
+export const createEventStateTransport = options => createTransport(options, false);
+export const createEventStateOverlayTransport = options => createTransport(options, true);
+function createTransport(options, paired) {
   const { configuration, checkpoint, historySha256, apiKey, fetchImpl, onRecord } = data(options,
     ['configuration', 'checkpoint', 'historySha256', 'apiKey', 'fetchImpl', 'onRecord']);
   const config = data(configuration, ['directory', 'runId', 'limitMicroUsd', 'requestCap']);
@@ -87,6 +90,7 @@ export function createEventStateTransport(options) {
   let fatal = null, closed = false, busy = false, expected = null, active = null;
   let caseIndex = 0, started = null, attempted = 0;
   const limits = EVENT_STATE_LIVE_LIMITS;
+  const caseIds = paired ? OVERLAY_IDS : ids;
   const stop = code => { fatal ??= code; fail(fatal); };
   const check = () => { if (fatal) fail(fatal); if (closed) fail('event_state_closed'); };
   const persist = record => {
@@ -113,7 +117,7 @@ export function createEventStateTransport(options) {
   };
   const remaining = () => Math.min(limits.runMs - (performance.now() - started),
     limits.caseMs - (performance.now() - active.started));
-  try { persist({ kind: 'transport-binding', version: 'event-state-live-v1', model: DEFAULT_MODEL,
+  try { persist({ kind: 'transport-binding', version: paired ? 'event-state-overlay-live-v1' : 'event-state-live-v1', model: DEFAULT_MODEL,
     configuration: config, checkpoint: expectedCheckpoint, historySha256, limits }); }
   catch (error) { handle.close(); throw error; }
 
@@ -146,6 +150,7 @@ export function createEventStateTransport(options) {
     options.signal.addEventListener('abort', cancel, { once: true });
     const timer = setTimeout(cancel, Math.max(1, expiresAt - performance.now()));
     const record = { kind: 'http-intent', caseId: active.id, phase: active.phase, method: request.method,
+      ...(paired && answering ? { arm: request.arm } : {}),
       attemptId, endpoint: url.slice(origin.length), requestBody: options.body, responseBody: null,
       requestBytes: bytes(options.body), localInputTokens: countOpenAITokens(options.body),
       responseBytes: null, httpStatus: null, providerInputTokens: null, usage: null,
@@ -219,11 +224,11 @@ export function createEventStateTransport(options) {
     check();
     const { caseId, phase } = data(metadata, ['caseId', 'phase']);
     if (!active) {
-      if (caseId !== ids[caseIndex]) stop('event_state_lifecycle');
+      if (caseId !== caseIds[caseIndex]) stop('event_state_lifecycle');
       started ??= performance.now();
       active = { id: caseId, phase: null, phases: [], started: performance.now(), calls: 0, answered: false };
     }
-    const phases = caseId === 'es-d094' ? ['foreign-setup', 'target', 'read'] : ['target', 'read'];
+    const phases = caseId === (paired ? 'eo-b8c4' : 'es-d094') ? ['foreign-setup', 'target', 'read'] : ['target', 'read'];
     if (busy || expected || caseId !== active.id || phase !== phases[active.phases.length]) stop('event_state_lifecycle');
     active.phase = phase; active.phases.push(phase);
     const binding = active;
@@ -263,11 +268,13 @@ export function createEventStateTransport(options) {
 
   async function answer(request, metadata) {
     check();
-    const { caseId } = data(metadata, ['caseId']);
+    const { caseId, arm } = data(metadata, paired ? ['caseId', 'arm'] : ['caseId']);
     const { messages } = data(request, ['messages']);
-    if (!active || busy || expected || caseId !== active.id || active.phase !== 'read' || active.answered
+    if (!active || busy || expected || caseId !== active.id || active.phase !== 'read' || !paired && active.answered
       || !Array.isArray(messages) || messages.length !== 2 || bytes(request) > limits.answerInputBytes
       || JSON.stringify(request).includes('FOREIGN_CANARY_QUARTZ')) stop('event_state_answer_denied');
+    if (paired && (!active.pair || arm !== overlayArmOrder(caseId)[active.answerCount]
+      || JSON.stringify(request) !== active.pair[arm])) stop('event_state_answer_denied');
     const system = data(messages[0], ['role', 'content']), user = data(messages[1], ['role', 'content']);
     if (system.role !== 'system' || system.content !== SOURCE_ANSWER_INSTRUCTION
       || user.role !== 'user' || typeof user.content !== 'string') stop('event_state_answer_denied');
@@ -281,7 +288,8 @@ export function createEventStateTransport(options) {
       max_tokens: 512, store: false, stream: false, n: 1 });
     if (countOpenAITokens(body) > 6000) fail('event_state_input_bounds');
     active.answered = true;
-    expected = { method: 'answer', generation: body };
+    if (paired) active.answerCount++;
+    expected = { method: 'answer', generation: body, ...(paired ? { arm } : {}) };
     try {
       const response = await send(`${origin}/chat/completions`, { method: 'POST', redirect: 'error',
         signal: new AbortController().signal, body });
@@ -294,8 +302,29 @@ export function createEventStateTransport(options) {
     } finally { expected = null; }
   }
   return Object.freeze({ createModel, answer, state,
+    ...(paired ? { prepareAnswers(requests, metadata) {
+      check();
+      const { caseId } = data(metadata, ['caseId']);
+      const pair = data(requests, ['A', 'B']);
+      if (!active || active.id !== caseId || active.phase !== 'read' || busy || expected || active.pair) {
+        stop('event_state_answer_denied');
+      }
+      try { assertOverlayProjection(pair.A, pair.B); }
+      catch { stop('event_state_projection_denied'); }
+      // Preflight both wires before either arm spends. Keep all ordinary bounds.
+      for (const request of Object.values(pair)) {
+        if (bytes(request) > limits.answerInputBytes || hasSecret(request, apiKey)
+          || JSON.stringify(request).includes('FOREIGN_CANARY_QUARTZ')) stop('event_state_answer_denied');
+        const body = JSON.stringify({ model: DEFAULT_MODEL, messages: request.messages, temperature: 0,
+          max_tokens: 512, store: false, stream: false, n: 1 });
+        if (countOpenAITokens(body) > limits.localInputTokens) stop('event_state_input_bounds');
+      }
+      active.pair = Object.fromEntries(Object.entries(pair).map(([arm, request]) => [arm, JSON.stringify(request)]));
+      active.answerCount = 0;
+      persist({ kind: 'answer-pair-bound', caseId, order: overlayArmOrder(caseId), requests: pair });
+    } } : {}),
     completeCase(caseId) {
-      if (closed || busy || expected || caseId !== ids[caseIndex]
+      if (closed || busy || expected || caseId !== caseIds[caseIndex]
         || (active ? active.id !== caseId : !fatal)) fail('event_state_lifecycle');
       active = null; caseIndex++;
     },
@@ -307,11 +336,18 @@ export function createEventStateTransport(options) {
 
 /** The operator persists each callback synchronously before returning undefined. */
 export async function runEventStateBaseline({ createWorkspace, ...options }) {
-  await loadOpportunityFixture();
-  const transport = createEventStateTransport(options);
+  return runClosedBaseline({ createWorkspace, ...options }, false);
+}
+export async function runEventStateOverlayProbe({ createWorkspace, ...options }) {
+  return runClosedBaseline({ createWorkspace, ...options }, true);
+}
+async function runClosedBaseline({ createWorkspace, ...options }, paired) {
+  await (paired ? loadOverlayFixture() : loadOpportunityFixture());
+  const transport = paired ? createEventStateOverlayTransport(options) : createEventStateTransport(options);
   let report;
   try {
-    report = await runEventStateOpportunity({ createModel: transport.createModel, answer: transport.answer,
+    report = await (paired ? runEventStateOverlayOpportunity : runEventStateOpportunity)({ createModel: transport.createModel, answer: transport.answer,
+      ...(paired ? { prepareAnswers: transport.prepareAnswers, assertHealthy: transport.assertHealthy } : {}),
       ...(createWorkspace === undefined ? {} : { createWorkspace }), onRecord: record => {
         const acknowledgement = options.onRecord(record);
         if (acknowledgement !== undefined) return acknowledgement;

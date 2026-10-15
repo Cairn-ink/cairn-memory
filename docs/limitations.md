@@ -1568,3 +1568,16 @@ synthetic run proves no algorithm gain, long-history/benchmark/Mem0 score, insta
 Hermes success or lightweight fit. One [fresh overlay ablation](plans/event-state-opportunity.md#next-one-prospective-graphstatus-overlay-ablation)
 is proposed, not implemented or effective. Original US$400/US$30 budget and all
 24/30-case safety, reliability and resource gates remain unchanged and open.
+
+## Prospective event/state overlay contrast: no paid or semantic result yet
+
+The [single six-pair overlay probe](plans/event-state-overlay-probe.md) compares
+ordinary graph context A with B containing the identical full receipts and other
+fields, omitting only generated edges and their derived status. It repairs no
+source, selection, relationship or prior answer. The closed strict baseline stays
+**2 pass / 3 fail / 1 uncertain**. Offline containment does not establish semantic
+gain, a new applicability mechanism or a product default. Primary verification
+of the exact runtime and one-use operator remains in progress; no paid result or
+improvement is claimed. Original US$400 cumulative/US$30 protection and the
+prospective US$1.95/390-request cap remain; existing safety and acceptance gates
+are unchanged.

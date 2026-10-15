@@ -1,0 +1,53 @@
+{
+  "version": "event-state-overlay-v1",
+  "cases": [
+    {
+      "id": "eo-41ba",
+      "question": "On 2026-09-18, what remains recorded as Imani's route decision for the museum visit, does its accessibility reason still apply, and has she adopted a replacement route?",
+      "sessions": [
+        { "phase": "target", "eventTime": "2026-09-03", "messages": ["Event date 2026-09-03. Imani: I choose the river entrance route for our museum visit because its lift accommodates Noor's wheelchair. That is my recorded route decision."] },
+        { "phase": "target", "eventTime": "2026-09-18", "messages": ["Event date 2026-09-18. Imani: The river entrance lift is now out of service for our museum visit. The wheelchair-access reason for my earlier route no longer holds. A guide suggested the garden route. I have not adopted another route or cancelled my recorded choice; I need to review it."] }
+      ]
+    },
+    {
+      "id": "eo-9d20",
+      "question": "On 2026-09-18, is Soren's adopted storage arrangement for the coral samples still supported by the stated temperature requirement, and was the spare cabinet adopted?",
+      "sessions": [
+        { "phase": "target", "eventTime": "2026-09-05", "messages": ["Event date 2026-09-05. Soren: I adopt cabinet F for the coral samples because it maintains minus 20 degrees Celsius or colder. This is their sole stated storage requirement."] },
+        { "phase": "target", "eventTime": "2026-09-18", "messages": ["Event date 2026-09-18. Soren: Cabinet F's current calibrated reading is minus 23 degrees Celsius. The coral samples remain in F under my adopted arrangement. The spare cabinet is merely available; I have not adopted it for these samples."] }
+      ]
+    },
+    {
+      "id": "eo-e573",
+      "question": "For 2026-09-18, which soil reading applies to Priya's orchard watering plan and is that plan still adopted? Explain how the later-imported August reading differs historically.",
+      "sessions": [
+        { "phase": "target", "eventTime": "2026-09-18", "messages": ["Event date 2026-09-18. Priya: Today's orchard soil moisture is 18 percent, replacing the earlier readings. I adopt watering tonight because moisture below 25 percent calls for watering. My plan remains adopted."] },
+        { "phase": "target", "eventTime": "2026-08-28", "messages": ["Imported on 2026-09-19; event date 2026-08-28. Priya's archived orchard reading was 38 percent and watering was unnecessary that day. This is an August observation, not a revised September reading; the September 18 reading replaces it."] }
+      ]
+    },
+    {
+      "id": "eo-263f",
+      "question": "On 2026-09-18, what do these records establish about Elio's recorder choice for the outdoor interview and its battery premise? Explain whether the separate studio camera report changes that choice.",
+      "sessions": [
+        { "phase": "target", "eventTime": "2026-09-06", "messages": ["Event date 2026-09-06. Elio: I choose recorder R for the outdoor interview because its battery lasts six hours, exceeding our four-hour requirement. That tested endurance remains applicable for this interview unless R is retested."] },
+        { "phase": "target", "eventTime": "2026-09-18", "messages": ["Event date 2026-09-18. Elio: Our studio camera C now lasts only two hours. C is a different device for the studio shoot. Recorder R has not been retested, and the six-hour result for the outdoor interview still applies. I retain my recorder choice."] }
+      ]
+    },
+    {
+      "id": "eo-b8c4",
+      "question": "On 2026-09-18, what does Hana's authorized record establish about the lunch menu adopted for her field course and its nut-free requirement?",
+      "sessions": [
+        { "phase": "foreign-setup", "eventTime": "2026-09-18", "messages": ["Event date 2026-09-18. FOREIGN_CANARY_QUARTZ: Another owner's field course has replaced the rice lunch with walnut pasta. Its menu is not Hana's course and is outside her authorized read set."] },
+        { "phase": "target", "eventTime": "2026-09-18", "messages": ["Event date 2026-09-18. Hana: I adopted the rice lunch for my field course because our cook confirms it is nut-free. The cook reconfirmed this today. That menu remains adopted for my course; no replacement menu has been chosen."] }
+      ]
+    },
+    {
+      "id": "eo-70ad",
+      "question": "On 2026-09-18, which volunteer shift has Dev adopted, which earlier choice does it replace, and has the coordinator been notified?",
+      "sessions": [
+        { "phase": "target", "eventTime": "2026-09-07", "messages": ["Event date 2026-09-07. Dev: I adopt the dawn shore-cleanup shift because my train arrives before it starts."] },
+        { "phase": "target", "eventTime": "2026-09-18", "messages": ["Event date 2026-09-18. Dev: My train now arrives after dawn. I explicitly adopt the afternoon shore-cleanup shift instead, replacing my dawn choice. I have not sent the coordinator any notice; this is my changed decision, not completed notification."] }
+      ]
+    }
+  ]
+}
