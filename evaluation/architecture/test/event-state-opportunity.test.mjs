@@ -192,3 +192,43 @@ test('owned scratch is removed when setup fails before capture', integration, as
   assert.ok(report.summary.cases.every(item => item.failures.includes('case-failed')));
   for (const path of paths) await assert.rejects(access(path), { code: 'ENOENT' });
 });
+
+test('E-live helper forwards exact adapter fit planning and diagnostic observers', integration, async t => {
+  let fits = 0, forwarded = 0;
+  const observations = [];
+  const report = await runEventStateOpportunity({
+    createWorkspace: () => createTestWorkspace(t, { prefix: 'cairn-event-fit-' }),
+    createModel: () => ({ ...eventStateScriptedModel(), fitsQualificationRequest(request) {
+      fits++; assert.equal(request.maxOutputTokens, 1024); return true;
+    }, onDiagnostic() { forwarded++; }, relate() { return { edges: [
+      { from: 0, to: 0, relation: 'challenges-premise', fromReceipt: 0, toReceipt: 0 },
+    ] }; } }),
+    answer: () => ({ text: 'Unassessed.' }), onRecord: record => { observations.push(record); },
+  });
+  assert.ok(fits > 0 && forwarded > 0);
+  assert.ok(report.traces.every(trace => trace.diagnostics.some(event => event.layer === 'core_validation'
+    && event.reason === 'invalid_rationale')));
+  assert.ok(observations.some(record => record.kind === 'diagnostic'));
+});
+
+test('E-live persistence failure in diagnostic or completed case retains six and cleans scratch', integration, async t => {
+  for (const kind of ['diagnostic', 'case-complete']) {
+    const paths = [];
+    let creates = 0;
+    let caught;
+    try {
+      await runEventStateOpportunity({ createWorkspace: () => {
+        const workspace = createTestWorkspace(t, { prefix: 'cairn-event-persist-' });
+        paths.push(workspace.path); return workspace;
+      }, createModel: () => { creates++; return eventStateScriptedModel({ failMethod: 'extract' }); },
+      answer: () => assert.fail('no answer expected'), onRecord: record => {
+        if (record.kind === kind) throw new Error('disk failed');
+      } });
+    } catch (error) { caught = error; }
+    assert.equal(caught.message, 'opportunity_persistence_failed');
+    assert.equal(caught.report.summary.denominator, 6);
+    assert.equal(caught.report.traces.length, 6);
+    assert.equal(creates, kind === 'diagnostic' ? 1 : 2);
+    for (const path of paths) await assert.rejects(access(path), { code: 'ENOENT' });
+  }
+});

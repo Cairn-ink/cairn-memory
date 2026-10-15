@@ -48,18 +48,35 @@ export async function loadOpportunityFixture() {
 // Model factories never receive fixtures, rubric, expected answers or writing history.
 export async function runEventStateOpportunity({ createModel, answer,
   createWorkspace = () => createTestWorkspace(null, { prefix: 'cairn-event-state-' }),
-  answerInputBytes = OPPORTUNITY_LIMITS.answerInputBytes } = {}) {
+  answerInputBytes = OPPORTUNITY_LIMITS.answerInputBytes, onRecord = () => {} } = {}) {
   if (typeof createModel !== 'function' || typeof answer !== 'function'
-    || typeof createWorkspace !== 'function' || !Number.isSafeInteger(answerInputBytes)
+    || typeof createWorkspace !== 'function' || typeof onRecord !== 'function' || !Number.isSafeInteger(answerInputBytes)
     || answerInputBytes < 1 || answerInputBytes > OPPORTUNITY_LIMITS.answerInputBytes) fail('invalid_opportunity_options');
   const fixture = await loadOpportunityFixture();
   const { openMemoryCore } = await import('../../core/contract.mjs');
   const traces = [];
   const summaries = [];
+  let persistenceError = null;
+  let cleanupError = null;
   for (const item of fixture.cases) {
-    const workspace = createWorkspace();
+    let workspace;
     const trace = { id: item.id, calls: [], captures: [], inspections: [], cold: [],
-      recall: null, delivery: { included: [], omitted: [] }, answer: null, failures: [] };
+      diagnostics: [], recall: null, delivery: { included: [], omitted: [] }, answer: null, failures: [] };
+    const persist = (kind, value) => {
+      if (persistenceError) throw persistenceError;
+      try {
+        const acknowledgement = onRecord(copy({ kind, caseId: item.id, ...value }));
+        if (acknowledgement !== undefined) {
+          // Never adopt asynchronous acknowledgement, including rejected promises.
+          Promise.resolve(acknowledgement).catch(() => {});
+          fail('opportunity_persistence_failed');
+        }
+      } catch {
+        persistenceError = new Error('opportunity_persistence_failed');
+        throw persistenceError;
+      }
+    };
+    const checkPersistence = () => { if (persistenceError) throw persistenceError; };
     let traceSize = 0;
     const snapshot = (value, max = OPPORTUNITY_LIMITS.callbackInputBytes) => {
       const size = bytes(value);
@@ -70,32 +87,63 @@ export async function runEventStateOpportunity({ createModel, answer,
     const modelFor = async phase => {
       const supplied = await createModel({ caseId: item.id, phase });
       const model = { contextWindow: supplied.contextWindow, countTokens: supplied.countTokens };
+      if (typeof supplied.fitsQualificationRequest === 'function') {
+        model.fitsQualificationRequest = request => {
+          checkPersistence();
+          return supplied.fitsQualificationRequest(request);
+        };
+      }
+      model.onDiagnostic = event => {
+        checkPersistence();
+        if (exact(event, ['version', 'stage', 'layer', 'reason']) && event.version === 1
+          && ['extract', 'qualifyCandidates', 'classify', 'relate', 'select', 'rank'].includes(event.stage)
+          && ['adapter', 'core_call', 'core_validation'].includes(event.layer)
+          && /^[a-z_]{1,80}$/.test(event.reason)) {
+          if (trace.diagnostics.length >= 128) fail('observation_bound');
+          const diagnostic = snapshot({ phase, ...event }, 1024);
+          trace.diagnostics.push(diagnostic);
+          persist('diagnostic', { diagnostic });
+        }
+        return supplied.onDiagnostic?.(event);
+      };
       for (const method of ['extract', 'qualifyCandidates', 'classify', 'relate', 'select', 'rank']) {
         if (typeof supplied[method] !== 'function') continue;
         model[method] = async request => {
+          checkPersistence();
           if (trace.calls.length >= OPPORTUNITY_LIMITS.callbacksPerCase) fail('callback_bound');
           const call = { phase, method, request: snapshot({ system: request.system, input: request.input,
             maxOutputTokens: request.maxOutputTokens }), output: null, status: 'failed', elapsedMs: null };
           trace.calls.push(call);
+          persist('call-start', { call });
           const started = performance.now();
           try {
             const output = await supplied[method](request);
             call.output = snapshot(output, OPPORTUNITY_LIMITS.callbackOutputBytes);
             call.status = 'returned';
             return output;
-          } finally { call.elapsedMs = performance.now() - started; }
+          } finally {
+            call.elapsedMs = performance.now() - started;
+            persist('call-finish', { call });
+          }
         };
       }
       return model;
     };
     const namespace = { ownerId: 'event-state-target', scope: 'project', projectId: item.id };
     const foreign = { ...namespace, ownerId: 'event-state-foreign' };
-    const path = join(workspace.path, 'memory.sqlite');
+    let path;
     let writing;
     let reading;
     const open = model => openMemoryCore({ path, model,
       captureQualification: 'source-bound-v2', captureRationale: 'source-bound-v1' });
     try {
+      if (persistenceError || cleanupError) {
+        trace.failures.push('not-run-after-fatal');
+        continue;
+      }
+      workspace = createWorkspace();
+      path = join(workspace.path, 'memory.sqlite');
+      persist('case-start', {});
       // Setup has its own model session and authorization; never shares target callbacks.
       for (const phase of ['foreign-setup', 'target']) {
         const sessions = item.sessions.map((session, index) => ({ ...session, index })).filter(s => s.phase === phase);
@@ -108,6 +156,8 @@ export async function runEventStateOpportunity({ createModel, answer,
             sessionId: `${item.id}-${session.index}`, eventId: `${item.id}-${session.index}`,
             messages: session.messages.map((content, index) => ({ id: `message-${index}`, role: 'user', content })) });
           trace.captures.push({ phase, eventTime: session.eventTime, result: snapshot(result) });
+          checkPersistence();
+          persist('capture', { capture: trace.captures.at(-1) });
           if (!result.ok || result.value.classification?.status === 'failed'
             || result.value.rationale?.status === 'failed') trace.failures.push('capture-stage');
           if (phase === 'target' && result.ok) for (const admitted of result.value.admission?.memories ?? []) {
@@ -126,10 +176,13 @@ export async function runEventStateOpportunity({ createModel, answer,
         rationale: snapshot(keyless.getRationale({ namespace, memoryId: memory.id, revision: memory.revision })),
       });
       keyless.close();
+      persist('cold', { cold: trace.cold, inspections: trace.inspections });
       reading = open(await modelFor('read'));
       const owned = reading; workspace.defer(() => owned.close());
       trace.recall = snapshot(await reading.recall({ readSet: [namespace], query: item.question,
         limit: 6, contextMode: 'rationale-evidence' }), OPPORTUNITY_LIMITS.traceBytes);
+      checkPersistence();
+      persist('recall', { recall: trace.recall });
       const evidence = trace.recall.ok ? trace.recall.value.memories : [];
       const refs = evidence.map(record => ({ memoryId: record.memory.id, revision: record.memory.revision }));
       const request = { messages: [{ role: 'system', content: SOURCE_ANSWER_INSTRUCTION },
@@ -149,22 +202,39 @@ export async function runEventStateOpportunity({ createModel, answer,
           inputBytes: bytes(request), calls: 1 };
         const started = performance.now();
         try {
-          const output = await answer(copy(request));
+          const output = await answer(copy(request), { caseId: item.id });
           if (!exact(output, ['text']) || !boundedText(output.text, OPPORTUNITY_LIMITS.answerOutputBytes)
             || bytes(output) > OPPORTUNITY_LIMITS.answerOutputBytes) fail('answer_output_bound');
           trace.answer = { status: 'generated-unassessed', output: snapshot(output, OPPORTUNITY_LIMITS.answerOutputBytes) };
         } catch { trace.failures.push('answer-failed'); trace.answer = { status: 'failed' }; }
         trace.delivery.elapsedMs = performance.now() - started;
       }
-    } catch { trace.failures.push('case-failed'); }
-    finally { await workspace.cleanup(); }
-    traces.push(trace);
-    summaries.push({ id: item.id, status: trace.failures.length ? 'failed-or-unassessed' : 'observed-unassessed',
+      checkPersistence();
+      persist('answer', { delivery: trace.delivery, answer: trace.answer, failures: trace.failures });
+    } catch { trace.failures.push(persistenceError ? 'persistence-failed' : 'case-failed'); }
+    finally {
+      try { await workspace?.cleanup(); }
+      catch (error) { cleanupError ??= error; trace.failures.push('cleanup-failed'); }
+      traces.push(trace);
+      const summary = { id: item.id, status: trace.failures.length ? 'failed-or-unassessed' : 'observed-unassessed',
       failures: [...trace.failures], captureCalls: trace.captures.length, modelCalls: trace.calls.length,
       relationCalls: trace.calls.filter(call => call.method === 'relate').length,
       returnedMemories: trace.recall?.ok ? trace.recall.value.memories.length : 0,
-      sentMemories: trace.delivery.included.length, answerCalls: trace.delivery.calls ?? 0 });
+      sentMemories: trace.delivery.included.length, answerCalls: trace.delivery.calls ?? 0 };
+      summaries.push(summary);
+      if (!persistenceError) {
+        try { persist('case-complete', { trace, summary }); }
+        catch { trace.failures.push('persistence-failed'); summary.failures.push('persistence-failed');
+          summary.status = 'failed-or-unassessed'; }
+      }
+    }
   }
-  return { summary: { version: 'event-state-opportunity-v1', synthetic: true,
+  const report = { summary: { version: 'event-state-opportunity-v1', synthetic: true,
     semanticAccuracy: 'not-measured', denominator: 6, cases: summaries }, traces };
+  if (persistenceError || cleanupError) {
+    const error = persistenceError ?? new Error('opportunity_cleanup_failed', { cause: cleanupError });
+    error.report = report;
+    throw error;
+  }
+  return report;
 }

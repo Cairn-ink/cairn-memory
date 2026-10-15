@@ -164,3 +164,118 @@ foundation candidates are not pulled into this packet.
 
 [loss]: https://github.com/Cairn-ink/cairn-memory/blob/8c46bf87d9e5b69b4a89c1e8e896d5d620ba7aa0/docs/plans/architecture-loss-boundaries.md
 [alignment]: https://github.com/Cairn-ink/cairn-memory/blob/e6b564b496ba38daed2fca6359fded36905b621c/docs/plans/memory-architecture-alignment.md
+
+## E-live: bounded first real-model baseline seam
+
+Implementation base `315cc55469e22c544a16587b8f38b1694564ee21`, isolated branch
+`experiment/event-state-baseline`. One actual GPT-6.1 Sol/high worker owns the
+evaluation-only helper, closed transport, focused tests and these notes; primary
+owns availability/pricing verification, private operator artifacts, affordability,
+independent acceptance/review and any paid execution. No public core, adapter,
+budget module, source/rubric bytes, prompt, old result or algorithm is changed.
+The only pre-existing helper caller is its focused offline test. There is no
+browser, installed-host or other product flow to update.
+
+E-live acceptance preserves all six frozen source scenarios, the independently
+frozen rubric and the exact SOURCE_ANSWER_INSTRUCTION. The helper forwards the
+adapter's exact qualification-wire fit capability and its diagnostic observer.
+Structured core validation reasons are retained in each trace; adapter-internal
+reasons are separately persisted as model-diagnostic records. Incremental call,
+capture, cold read, recall, answer and completed-case records require synchronous
+acknowledgement before proceeding. A persistence or cleanup failure rejects with
+a six-slot report, marks later slots not run and attempts owned cleanup. Observer
+errors swallowed by the core's existing diagnostic contract remain fatal in the
+transport, preventing subsequent HTTP. Neither persistence errors nor unavailable
+cases are counted as successful semantic answers.
+
+The closed [transport](../../evaluation/architecture/event-state-transport.mjs)
+composes the current createOpenAIModel with the existing-only v2
+openBoundEmbeddingExperimentBudget. It checks the exact approved checkpoint and
+history digest; it neither creates nor replenishes the ledger. Frozen historical
+unknown outcomes remain unchanged and fully reserved. New unknown/pending usage,
+history drift, authentication, usage or persistence anomalies halt further HTTP.
+Qualification and relation use their existing normal wire formats. Extraction
+uses extract-retained-sources, and rationale ranking uses its current rationale
+prompt, including the existing relation claim-focus guidance where present.
+
+The original cumulative ceiling is at most US$400, with US$30 protected. The
+established preflight floor remains US$10 spendable and 1,968 remaining physical
+request slots. This attempt has the stricter maximum of 390 physical requests,
+5,000 microUSD reserved before each HTTP request, and US$1.95 total reservation.
+Local complete-wire input is at most 6,000 tokens, provider input 7,024; core
+output is at most 1,024 and answer output 512. Call/case/run limits are
+200/1,200/7,200 seconds, subject also to existing shorter core deadlines. Core
+request/response caps are 100,000/262,144 bytes, count response 65,536, atomic
+answer input 24,000 and answer output 4,000. Counts precede generation. One
+answer uses the helper's messages verbatim; no packer drops graphs or receipts.
+There are no retries, fallback models, refunds or reinterpretation of authority.
+
+The explicit operator entrypoint is
+`runEventStateBaseline({configuration, checkpoint, historySha256, apiKey,
+fetchImpl, onRecord, createWorkspace?})`. It reads no environment or key file and
+has no CLI/top-level execution. onRecord must durably persist a detached record
+and synchronously return undefined; promises or other acknowledgements fail.
+It receives transport-binding, http-intent/http-final, model-diagnostic and
+helper observations through case-complete. HTTP records bind exact wire bodies
+to case, phase, method and attempt ID, with separate reservation and configured
+usage estimates. Success returns summary/traces/resources; terminal run errors
+carry report/resources. These content-bearing local artifacts are not public
+report payloads. The primary operator must freeze exact runtime/prompt/model
+artifacts, persist the original/final budget provenance and completed/failed
+six-case report, and perform independent interpretation before any claim.
+
+The primary verified on 2026-10-16 that gpt-4.1-mini-2025-04-14 remains available
+after its October 14 deprecation, with shutdown scheduled January 14, 2027;
+configured input/output rates remain US$0.40/1.60 per million tokens. See the
+[official deprecations](https://developers.openai.com/api/docs/deprecations) and
+[model page](https://developers.openai.com/api/docs/models/gpt-4.1-mini).
+Preserving this historical baseline model avoids changing the model factor;
+this is a dated diagnostic baseline, not a new product default or migration.
+
+The focused fake-HTTP suite runs the real adapter's qualification serialization/
+decoding, relation proposals, capture, cold store and exact first-answer path.
+It checks historical unknown accounting, stale/pending/drift refusal, synchronous
+persistence failures, byte/token/credential/authentication bounds, all-six failure
+retention and cleanup. Existing no-edge, dropped-evidence and atomic-overflow
+controls remain red capable. Timer/clock probes check call/case/run ceilings.
+These tests establish mechanical containment and observations only, not six-case
+semantic correctness, provider availability, invoices or algorithm gains.
+
+The generic architecture test retains helper-only regressions and its Node 20
+SQLite skip. Adapter/SQLite-dependent fake HTTP tests are routed to
+evaluation/live/test/event-state-transport.test.mjs, outside generic npm test's
+architecture glob. package.json and ci.yml confirm the live-evidence job installs
+both isolated adapters before running test:live-evidence-offline on both supported
+runtimes. The focused command is:
+
+```sh
+node tools/testing/run.mjs evaluation/architecture/test/event-state-opportunity.test.mjs evaluation/live/test/event-state-transport.test.mjs
+```
+
+Primary's narrow integration exception is limited to private operator glue:
+explicit frozen manifest/checkpoint, one-use execution claim, fsynced bounded
+records and final ledger prefix/delta reconciliation. It does not redesign the
+transport/accounting. Independent reviewers inspect the exact private operator
+hash alongside the fixed public candidate before any paid call. Existing PR
+#426 is updated for this coherent packet, rather than creating another PR.
+
+The exact focused command above passed on Node **22.16.0**, actual exit **0**,
+**18 passed, zero failed/skipped**, and on Node **24.15.0**, actual exit **0**,
+**18 passed, zero failed/skipped**, against the final uncommitted runtime/test
+bytes. Primary owns generic and full live-evidence gates, final candidate/blob
+acceptance and the independent fixed-diff reviews. These worker runs used fresh
+synthetic ledgers and fake HTTP only; no operational ledger or key was accessed.
+
+Two independent inventories agree on **6 changed files**: Git diff plus untracked
+names versus recursive filesystem discovery comparing actual Git blob hashes
+against the complete fixed base tree. The same check confirms the complete prior
+limitations bytes remain an unchanged prefix, actual exit **0**. Source fixture,
+rubric, core, prompts, adapter and ledger-module blobs are outside the changed
+inventory. New live-evidence tests stay outside the generic architecture glob.
+
+The absolute-clock red probe exposed a pre-dispatch expiry that prevented HTTP
+but did not mark the transport terminal. The branch now explicitly halts with
+event_state_deadline. The timer assertion checks a positive delay at most 200,000
+milliseconds, since setup time is subtracted from the absolute deadline rather
+than incorrectly expecting exactly 200,000. The targeted bounded-clock and
+shorter-core-deadline probes then passed, actual exit **0**, both tests passed.

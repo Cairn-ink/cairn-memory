@@ -1529,3 +1529,21 @@ No browser flow, public runtime/API, old case/result, host profile or prompt is
 changed. No provider call, key/environment/ledger access, paid run or production
 operation occurs. Independent reliability, installed Hermes, resources and the
 24/30-case semantic gates remain open; original $400/protected $30 are unchanged.
+
+## Event/state live baseline seam: capability remains unmeasured
+
+The [event/state packet](plans/event-state-opportunity.md#e-live-bounded-first-real-model-baseline-seam)
+now has an evaluation-only adapter/transport seam for a first bounded real-model
+baseline. Fake HTTP exercises qualification/rationale/cold-read/answer plumbing,
+exact source-graph forwarding, incremental local persistence and existing v2
+ledger accounting. It does not establish a live completion or semantic score,
+algorithm improvement, retrieval quality, production reliability or invoice.
+No paid request is made by these tests or by importing the module. The six-case
+fixture, independent rubric, answer instruction and public memory core remain
+unchanged. Frozen historical unknown usage stays fully reserved; the original
+US$400 cumulative ceiling and US$30 protection are preserved, with a stricter
+US$1.95/390-request ceiling for this diagnostic attempt. The baseline model is
+the dated, deprecated but currently available gpt-4.1-mini-2025-04-14; availability
+and configured rates require primary verification before execution. Independent
+interpretation, paired gain, fresh completion, installed-host and resource gates
+remain separate and open.
