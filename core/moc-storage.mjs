@@ -154,46 +154,63 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         if (item.newL1) for (const id of item.newL1.parentL2Ids) checkedMoc(ns, id, 2);
       }
 
-      const newL1 = new Map();
-      const newL2 = new Map();
+      // Canonical identity may survive its label's source validity. Reuse never
+      // renews that label: only genuinely created groups gain title sources.
+      const resolveTitle = (title, level) => {
+        const existing = db.prepare(`SELECT * FROM mocs WHERE ${namespaceWhere}
+          AND level = ? AND canonical_title = ?`).get(...boundary(ns), level, titleKey(title));
+        if (existing && visibleTitle(existing) !== null) fail("moc_title_conflict");
+        return { title, id: existing?.id ?? randomUUID(), created: !existing, sourceIds: new Set() };
+      };
+      const resolvedL1 = new Map();
+      const resolvedL2 = new Map();
       for (const item of items) {
         if (!item.newL1) continue;
         const l1Key = titleKey(item.newL1.title);
-        if (db.prepare(`SELECT 1 FROM mocs WHERE ${namespaceWhere} AND level = 1
-          AND canonical_title = ?`).get(...boundary(ns), l1Key)) fail("moc_title_conflict");
-        let l1 = newL1.get(l1Key);
+        let l1 = resolvedL1.get(l1Key);
         if (!l1) {
-          l1 = { title: item.newL1.title, id: randomUUID(), sourceIds: new Set(),
+          l1 = { ...resolveTitle(item.newL1.title, 1),
             parentIds: new Set(), newParentKeys: new Set() };
-          newL1.set(l1Key, l1);
+          resolvedL1.set(l1Key, l1);
         }
-        l1.sourceIds.add(item.memoryId);
+        if (l1.created) l1.sourceIds.add(item.memoryId);
         for (const id of item.newL1.parentL2Ids) l1.parentIds.add(id);
         if (item.newL1.newL2Title) {
           const l2Key = titleKey(item.newL1.newL2Title);
-          if (db.prepare(`SELECT 1 FROM mocs WHERE ${namespaceWhere} AND level = 2
-            AND canonical_title = ?`).get(...boundary(ns), l2Key)) fail("moc_title_conflict");
-          let l2 = newL2.get(l2Key);
+          let l2 = resolvedL2.get(l2Key);
           if (!l2) {
-            l2 = { title: item.newL1.newL2Title, id: randomUUID(), sourceIds: new Set() };
-            newL2.set(l2Key, l2);
+            l2 = resolveTitle(item.newL1.newL2Title, 2);
+            resolvedL2.set(l2Key, l2);
           }
-          l2.sourceIds.add(item.memoryId);
+          if (l2.created) l2.sourceIds.add(item.memoryId);
           l1.newParentKeys.add(l2Key);
         }
       }
 
       // Per-item limits also apply to the union when a batch coalesces a topic.
-      for (const l1 of newL1.values()) if (l1.parentIds.size > 3) fail("invalid_input");
+      for (const l1 of resolvedL1.values()) if (l1.parentIds.size > 3) fail("invalid_input");
+
+      const createdGroups = [...resolvedL2.values(), ...resolvedL1.values()].filter(group => group.created);
+      const createdIds = new Set(createdGroups.map(group => group.id));
+      const newEdges = [];
+      for (const l1 of resolvedL1.values()) {
+        // Explicit and title-based requests may resolve to the same parent.
+        const parents = new Set(l1.parentIds);
+        for (const key of l1.newParentKeys) parents.add(resolvedL2.get(key).id);
+        for (const parentId of parents) {
+          if (!db.prepare("SELECT 1 FROM moc_edges WHERE parent_id = ? AND child_id = ?")
+            .get(parentId, l1.id)) newEdges.push({ parentId, childId: l1.id });
+        }
+      }
 
       const nextRevision = new Map();
       const desiredByMemory = new Map();
       const affected = new Set();
-      let changed = newL1.size > 0 || newL2.size > 0;
+      let changed = createdGroups.length > 0 || newEdges.length > 0;
       for (const item of items) {
         const memory = memories.get(item.memoryId);
         const desired = new Set(item.parentIds);
-        if (item.newL1) desired.add(newL1.get(titleKey(item.newL1.title)).id);
+        if (item.newL1) desired.add(resolvedL1.get(titleKey(item.newL1.title)).id);
         desiredByMemory.set(item.memoryId, desired);
         const oldRefs = currentMemoryRefs(ns, item.memoryId);
         const old = new Set(oldRefs.map((ref) => ref.moc_id));
@@ -208,15 +225,14 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           const candidates = revision !== memory.revision ? new Set([...old, ...desired]) :
             new Set([...old].filter((id) => !desired.has(id)).concat(
               [...desired].filter((id) => !old.has(id))));
-          for (const id of candidates) if (![...newL1.values()].some((entry) => entry.id === id))
-            affected.add(id);
+          for (const id of candidates) if (!createdIds.has(id)) affected.add(id);
         }
         if (revision !== memory.revision) {
           for (const row of db.prepare("SELECT moc_id FROM moc_title_sources WHERE memory_id = ?")
             .all(item.memoryId)) affected.add(row.moc_id);
         }
       }
-      for (const l1 of newL1.values()) for (const id of l1.parentIds) affected.add(id);
+      for (const { parentId } of newEdges) if (!createdIds.has(parentId)) affected.add(parentId);
 
       if (!changed) {
         const resultMemories = items.map(({ memoryId }) => memoryDto(memories.get(memoryId), true));
@@ -231,12 +247,14 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       const filingEdges = rationaleStorage.snapshotFilingEdges(ns, filingRevisions.keys());
 
       const now = new Date().toISOString();
-      for (const l1 of newL1.values()) {
+      for (const l1 of resolvedL1.values()) {
+        if (!l1.created) continue;
         db.prepare(`INSERT INTO mocs (id, owner_id, scope, project_id, level, title,
           canonical_title, revision, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?, 1, ?, ?)`)
           .run(l1.id, ...boundary(ns), l1.title, titleKey(l1.title), now, now);
       }
-      for (const l2 of newL2.values()) {
+      for (const l2 of resolvedL2.values()) {
+        if (!l2.created) continue;
         db.prepare(`INSERT INTO mocs (id, owner_id, scope, project_id, level, title,
           canonical_title, revision, created_at, updated_at) VALUES (?, ?, ?, ?, 2, ?, ?, 1, ?, ?)`)
           .run(l2.id, ...boundary(ns), l2.title, titleKey(l2.title), now, now);
@@ -266,7 +284,8 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
 
       const insertSource = db.prepare(`INSERT INTO moc_title_sources
         (moc_id, memory_id, memory_revision) VALUES (?, ?, ?)`);
-      for (const group of [...newL1.values(), ...newL2.values()]) {
+      for (const group of [...resolvedL1.values(), ...resolvedL2.values()]) {
+        if (!group.created) continue;
         for (const memoryId of group.sourceIds) insertSource.run(group.id, memoryId,
           nextRevision.get(memoryId));
       }
@@ -275,22 +294,14 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         SELECT parent.id, parent.revision, child.id, child.revision
         FROM mocs parent, mocs child WHERE parent.id = ? AND child.id = ?`);
       const writtenEdges = [];
-      for (const l1 of newL1.values()) {
-        for (const parentId of l1.parentIds) {
-          insertEdge.run(parentId, l1.id);
-          writtenEdges.push(db.prepare("SELECT * FROM moc_edges WHERE parent_id = ? AND child_id = ?")
-            .get(parentId, l1.id));
-        }
-        for (const parentKey of l1.newParentKeys) {
-          const parentId = newL2.get(parentKey).id;
-          insertEdge.run(parentId, l1.id);
-          writtenEdges.push(db.prepare("SELECT * FROM moc_edges WHERE parent_id = ? AND child_id = ?")
-            .get(parentId, l1.id));
-        }
+      for (const { parentId, childId } of newEdges) {
+        insertEdge.run(parentId, childId);
+        writtenEdges.push(db.prepare("SELECT * FROM moc_edges WHERE parent_id = ? AND child_id = ?")
+          .get(parentId, childId));
       }
 
       const indexRevision = advanceEpoch(ns);
-      const created = [...newL2.values(), ...newL1.values()]
+      const created = createdGroups
         .map(({ id }) => mocDto(db.prepare("SELECT * FROM mocs WHERE id = ?").get(id)));
       const refs = items.flatMap(({ memoryId }) => currentMemoryRefs(ns, memoryId).map(memoryRef));
       refs.push(...writtenEdges.map(edgeRef));

@@ -1,5 +1,37 @@
 # Known limitations
 
+## NULL-title filing is structural reuse, not semantic recovery
+
+The [NR1–NR8](plans/null-title-main-integration.md) implementation changes only
+shared-core placement behavior. Fresh tests-first RED preserved 21 failures and
+nine passing controls against unchanged main. The unchanged focused 30 tests,
+complete core/OpenAI/MCP suites and artifact suite including three installed NR
+regressions subsequently passed on Node 22.16.0 and 24.15.0. Accepted offline
+regressions and synthetic demos establish the specified contracts, not quality.
+Prior composed-branch results remain historical and do not certify this candidate.
+
+The NULL-only identity exception deliberately associates fresh
+memberships with retained hierarchy and can make ancestor navigation visible
+again. Unsupported visible labels must remain NULL; stored titles and original
+source bindings must remain unchanged. Key equality does not prove semantic
+equivalence or restore forgotten evidence. Visible collisions still refuse, and
+later recovery must not rewrite a failed initial classification attempt.
+Synthetic contracts do not establish extraction/recall quality, a historical
+paid failure's cause, performance gain, installed-host readiness or a new score.
+No provider, default, cap, timer, retention, promotion or paid authority changes.
+
+Thirty source-declared installed/Hermes/rationale opt-in cases remain uncovered;
+the Node 24 downstream suite passed 541 tests with those 30 skips, not full
+coverage. The original Node 22 downstream phase remains failed acceptance:
+its seven executed commands exited zero, but a combined-warning JSON observer
+failed, leaving the mixed demo unrun. That previously unrun demo was later
+accepted once with separate stdout/stderr; the earlier failure was not erased
+or rerun. Copied native backing is DATA only, not native runtime readiness or a
+Mem0 result. Native-local/mixed opt-ins remain separate prerequisite work, not
+new NR acceptance credit. At the 2026-10-05 documentation checkpoint, network
+clean-cache and installed-rationale CI, plus independent Standards/Spec review
+of the final fixed candidate, remain pending.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025

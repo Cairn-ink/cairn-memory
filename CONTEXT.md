@@ -42,6 +42,16 @@ The current organization of an active memory under topics, which does not
 establish how or whether its original capture batch was classified.
 _Avoid_: Classification success, verified truth
 
+**Topic identity**:
+The identity of a filing group, distinct from its source-supported label and
+current memberships. Shared identity does not establish semantic equivalence.
+_Avoid_: Semantic match, renewed label evidence
+
+**Topic label**:
+A source-supported name for a filing group, distinct from its identity and
+current memberships. A label does not establish semantic equivalence.
+_Avoid_: Permanent topic truth, restored evidence
+
 **Session episode**:
 A bounded, source-anchored model interpretation of one captured session. Its
 retained source passages are independent of memory admission and are not source

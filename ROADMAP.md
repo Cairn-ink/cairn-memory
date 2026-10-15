@@ -16,6 +16,20 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- [NULL-title structural filing](docs/plans/null-title-main-integration.md)
+  reuses exact namespace/level/canonical topic identities only while their
+  authoritative labels are NULL. Tests-first RED and subsequent focused,
+  core/adapter, installed-artifact and released-client regression gates are
+  accepted on Node 22.16.0 and 24.15.0. The original Node 22 downstream observer
+  failure remains recorded; its previously unrun mixed demo passed separately,
+  not as a retry of those seven commands. Thirty opt-in cases remain uncovered.
+  At the 2026-10-05 documentation checkpoint, final fixed-candidate
+  Standards/Spec review and network clean-cache/installed-rationale CI are
+  pending; the NR plan records these scopes. Structural association can
+  re-expose ancestors without renewing label evidence. It does not repair
+  source-support failures, establish semantic quality, native readiness,
+  lightweight performance or a new pilot score, or change defaults.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It
