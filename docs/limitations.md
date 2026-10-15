@@ -1581,3 +1581,56 @@ of the exact runtime and one-use operator remains in progress; no paid result or
 improvement is claimed. Original US$400 cumulative/US$30 protection and the
 prospective US$1.95/390-request cap remain; existing safety and acceptance gates
 are unchanged.
+
+## Closed event/state overlay contrast: withholding is not advanced
+
+The [six-pair probe](plans/event-state-overlay-probe.md#closed-six-pair-live-result-2026-10-16)
+closed on **2026-10-16**. This supersedes the prospective status immediately
+above while preserving its chronology. Two fresh blind independent GPT-6.1
+Sol/high judges agree: ordinary context A **6/6 pass**, B omitting only generated
+edges/status **4/6 pass**, with **12/12 first answers complete**, zero uncertain/
+unavailable and no frozen forbidden assertions observed. Strict net **−2** fails
+the ≥1-net-gain gate; A has no gain opportunity in this cohort. Withholding is
+stopped, with no product default/core change or new paid run.
+
+B's two strict failures omit the garden route's suggestion-only detail
+(`eo-41ba`) and the historical August conclusion that watering was unnecessary
+(`eo-e573`). Neither is a wrong current-state answer. In `eo-41ba`, the question
+asks whether any replacement was adopted, not explicitly the suggested route's
+name/status; the frozen rubric's extra detail violates O1's intended alignment.
+Keep that limitation and the original strict score without alteration/rescore;
+this is not robust evidence of semantic harm. In `eo-263f`, only the old/root
+recorder receipt reached the answer, and the question mentions the separate
+camera. Its pass does not prove full evidence retrieval. The earlier baseline's
+**2 pass / 3 fail / 1 uncertain** concerns different cases/questions: **2→6 is not
+an algorithm-improvement result**.
+
+The original frozen persistence audit **failed, actual exit 1**: five of twelve
+admission-to-final-cold DTOs differed in MOC placement revision **1→2** after
+intervening capture/classification writes. A separate post-hoc read-only
+reconciliation exited **0**, verifying retained other fields/receipts/
+qualifications, source/wire projection and accounting; missing pre-close final
+warm snapshots prevent proof of exact final-warm-to-cold equality. A separate
+fresh synthetic mock reproduction passed three tests on each Node **22.16.0 /
+24.15.0**, actual exits **0**, demonstrating the intervening-write explanation
+and fresh-data warm/cold equality. It does not upgrade the paid-run audit.
+
+The run used **132 HTTP requests**, reserved **660000 microUSD**, and recorded
+**34912 microUSD** known configured usage plus **60 unknown-cost requests**, not
+zero cost or an invoice. Reported final ledger totals are **58413 requests /
+336402281 reserved microUSD**, under unchanged **US$400 / US$30 protected**.
+Answer-only B input was **583 tokens (about 10.47%)** below A; this is not
+lifecycle savings. Whole-operator **1336132 KiB** RSS includes ledger/diagnostic
+work and does not establish engine memory fit. The linked plan retains frozen
+runtime, source/rubric and raw manifest/report/audit/reconciliation/judge hashes.
+
+Primary separately observed event-time assignments to later planned activity,
+measurement claims tagged adopted, and an unsupported relationship despite a
+correct answer. These were not independently scored upstream semantics or an
+established cause of B's omissions; memory/qualification text was absent from
+the source-only answer context. The next bounded direction is write-time claim,
+time and commitment separation under existing contracts, with actual-adoption
+positive controls. No schema overhaul, vector default or answer-prompt tuning
+follows. Independent **24-pair net +3/no-harm**, fresh **30-case ≥29 complete and
+correctness ≥Mem0**, reliability, installed Hermes and lifecycle resource gates
+remain open.

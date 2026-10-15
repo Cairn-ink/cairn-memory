@@ -1,9 +1,17 @@
-# Prospective source-preserving relationship-overlay probe
+# Source-preserving relationship-overlay probe
 
-Status: bounded offline implementation; no paid result or improvement claim.
+Status: **CLOSED (2026-10-16); overlay withholding is not advanced.**
+Both fresh blind judges agree: ordinary context A **6/6 pass**, overlay-omitted
+B **4/6 pass**, with **12/12 first answers completed**. The strict net change is
+**−2**, so O8's at-least-one-net-gain gate fails; A also leaves no gain
+opportunity in this cohort. The two B failures are detail omissions, not wrong
+current-state answers. See the [closure and evidence limits](#closed-six-pair-live-result-2026-10-16).
+
 Dependent base: `ae9f3371b49bc241f6dc94ddf1bbf3c4a83ad895`.
-This is the single next controlled contrast in the event/state diagnostic cycle,
-not a new architecture, applicability generator or product default.
+This was the single controlled contrast in the event/state diagnostic cycle.
+The acceptance contract and dated implementation/pre-live sections below retain
+their original chronology, including failures and then-pending work; they do not
+describe the current status. No product default or public core change follows.
 
 ## Question and acceptance fixed before implementation
 
@@ -88,7 +96,7 @@ which alternative causes a final answer. Primary selects this one bounded probe;
 an actual GPT-6.1 Sol/high worker owns implementation, primary owns integration,
 verification, fixed-diff independent review and any later one-use live operator.
 
-## Implementation and evidence notes
+## Historical implementation and evidence notes (2026-10-16, pre-live)
 
 One bounded actual GPT-6.1 Sol/high implementation worker, without subdelegation,
 works from the fixed base above in `experiment/event-state-overlay-probe`.
@@ -200,7 +208,7 @@ source/rubric, event-state plan, limitations, core, prompts, adapters, ledger
 module, packages and CI are unchanged. `git diff --check` returned actual exit
 **0**. No material deletions, commits, pushes, remote writes or paid calls.
 
-## Primary integration exception and prospective execution boundary
+## Historical primary integration exception and prospective boundary (2026-10-16)
 
 Primary adapted a one-use private operator from the reviewed baseline operator
 to bind the new six fresh fixtures, exact runtime/rubric, case/arm order and the
@@ -218,7 +226,7 @@ The prospective cap remains **US$1.95 / 390 requests**, inside the original
 The closed strict baseline remains **2 pass / 3 fail / 1 uncertain**; this single
 six-pair source-preserving contrast supplies no improvement or default claim.
 
-## Primary pre-live verification of the integrated candidate
+## Historical primary pre-live verification (2026-10-16)
 
 Primary personally reran the exact integrated runtime/tests. The four focused
 suites passed **27 tests, zero failed/skipped**, actual exit **0** on each of
@@ -243,7 +251,7 @@ it deterministically freezes the blind X/Y mapping before calls. These checks
 establish preparation only. Independent review and all paid execution remain
 pending; no semantic result, improvement or final acceptance is claimed.
 
-## Pre-live review corrections: private retention and verbatim audit
+## Historical pre-live review corrections (2026-10-16): private retention and verbatim audit
 
 At fixed candidate `1c4906013741f68e26ecb331c8009ab9771e1b06`, Standards found
 one P2: the private audit incorrectly trimmed the raw response. Spec found two
@@ -266,3 +274,125 @@ and a changed answer rejected. Maximum 12-answer payload was **49794 bytes**;
 with **12000 bytes** metadata it remains below **65536 bytes**. No ledger, key or
 paid calls were used. Re-review remains pending; public runtime/tests, source
 and rubric are unchanged.
+
+## Closed six-pair live result (2026-10-16)
+
+Before execution, both independent Standards and Spec reviewers examined fixed
+candidate `75381f963c7fae49521c0b0d165a87647d01f4f2` and the corrected private
+glue, with zero actionable findings. This resolved the historical pre-live
+review boundary above; final results-document/reconciliation review is separate.
+
+The retained run completed at frozen runtime
+`75381f963c7fae49521c0b0d165a87647d01f4f2`, on Node **24.15.0**, using
+`gpt-4.1-mini-2025-04-14`. The manifest fixes source/rubric hashes recorded above,
+answer-instruction hash, case order, alternating A/B order and the pre-call X/Y
+blind mapping. The two fresh independent non-implementing GPT-6.1 Sol/high
+judges received neither treatment mapping nor each other's judgments. Their
+retained initial judgments agree on every answer; no rubric change, answer
+retry, case replacement or rescore was used.
+
+| Frozen case | A: ordinary context | B: omit only edges/status | Strict B omission |
+| --- | --- | --- | --- |
+| `eo-41ba` | Pass | Fail | Garden route's suggestion-only status |
+| `eo-9d20` | Pass | Pass | None |
+| `eo-e573` | Pass | Fail | Watering was unnecessary on the historical August date |
+| `eo-263f` | Pass | Pass | None |
+| `eo-b8c4` | Pass | Pass | None |
+| `eo-70ad` | Pass | Pass | None |
+
+Both arms completed **6/6**, with zero uncertain/unavailable answers and no
+frozen forbidden assertions observed. Both B failures retain the correct
+current decision/premise conclusion. In `eo-41ba`, the question asks whether
+any replacement was adopted, but does not explicitly request the suggested
+route's name/status. The frozen rubric nevertheless requires that extra detail,
+contrary to O1's intended question/rubric alignment. Retain the strict failure
+and this limitation together; it is not a robust semantic-harm result. The
+historical watering omission in `eo-e573` likewise is not a current-state reversal.
+
+Source equality between A and B is not complete retrieval. In `eo-263f`, only
+the old/root recorder receipt was delivered, while the question itself mentions
+the separate camera. Both answers pass the frozen rubric, but this does not
+prove retrieval of the camera evidence or complete evidence coverage. Ordinary
+A's **6/6** creates no opportunity for net gain here. The prior baseline's
+**2 pass / 3 fail / 1 uncertain** used different fresh cases and questions;
+**2→6 is not an algorithm-improvement comparison**.
+
+### Persistence audit: original failure retained
+
+The frozen initial audit
+`edfe37e59e297c56b01086d085129ac749dd12c6209f1e15812e97cfbe922f3c`
+**failed, actual exit 1**. It compared each admission snapshot with the final
+cold DTO after intervening capture/classification writes. Five of twelve target
+memories differed only in the same MOC placement's revision **1→2**, explained
+by later capture classification and apply. The original whole-DTO assertion
+remains failed; this is not a paid-run audit pass.
+
+The separate read-only post-hoc reconciliation exited **0** and verifies all
+other admitted fields, receipts and qualifications retained, delivered source/
+wire projection equality, namespace isolation and reported ledger accounting.
+Its script SHA-256 is
+`4e3c1d2018198c9336b6a740b49450fe6d5af54d8e9cb5abea79cf9a53408c0a`.
+It cannot establish exact final-warm-to-cold equality: pre-close final warm
+snapshots were not retained. Primary also reports a separate pure mock
+reproduction on fresh synthetic data, **3 tests passed**, actual exit **0** on
+each of Node **22.16.0** and **24.15.0**. That reproduction shows the intervening
+write alone can change placement revision and verifies final warm/cold equality
+for its fresh data; it does not retroactively establish that equality for this run.
+The reproduction SHA-256 is
+`4ce900def8bf7e696ea7f11c4a1647a37fce05b953eb1d1c427341c21c19de26`;
+primary personally reran it through the owned runner on both pinned runtimes.
+
+### Resource/accounting scope
+
+The report retains **132 physical HTTP requests**: **60 count + 60 Responses +
+12 first answers**, elapsed **387565.344244 ms**, and **660000 microUSD** reserved.
+The **34912 microUSD** known configured-usage subtotal excludes **60 requests
+with unknown cost**; unknown is neither zero nor an invoice. Reported final
+ledger totals are **58413 requests / 336402281 reserved microUSD**, zero pending,
+under the unchanged **US$400 cumulative ceiling / US$30 protection**.
+
+Primary's usage aggregation reports whole-generation **67581 input / 4907
+output tokens**. Answer-only A uses **5568 input / 454 output** versus B **4985
+input / 427 output**: B has **583 fewer input tokens (about 10.47%)** at the
+answer stage. This does not establish lifecycle savings. Whole-operator peak
+RSS **1336132 KiB** includes ledger/diagnostic work and is not memory-engine
+resource-fit evidence.
+
+### Retained artifact identities and next boundary
+
+The private artifacts remain retained; filenames and hashes identify evidence,
+not public content or semantic certification.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `manifest.json` | `5f320c358e94b580f0f24a540f26f1f1580557882ef960fefc578541d9d09835` |
+| `report.json` | `73e533cf9dee5d3122d2dc6b65d49a291c6d41223bf206ead2d39c0ba82f2df1` |
+| `audit-initial-failure.json` | `357ba3e02a762a359257cf30aac8ca4b825696a5588d8700eca85d318317b383` |
+| `primary-reconciliation-v2.json` | `2599a3376acf396c03a41f23c84b4a174bf5ee2cd5c3db6e334b2f178afb20b1` |
+| `judge-a-initial.json` | `211bc35d7c209c1badf9a82fd743106efc14a47e92145cfbf989fb1b81c17ef2` |
+| `judge-b-initial.json` | `1fc8f5bf1f4e86958f11c4b610a080526be44819f1ba67703d8cb871012e025a` |
+| `judgment-consensus.json` | `03e2a680cb87a613a066f262544156529f5e17ccbf7c9f662e32627e5049034e` |
+
+Primary's upstream observations, separately from the independent answer scores:
+generated event dates sometimes refer to a later planned activity; measurement
+claims receive adopted commitment contrary to the
+[claim-qualification guidance](../claim-qualification.md); and an unsupported
+relationship can coexist with a correct answer. These observations do not
+establish the cause of B's omissions. Generated memory/qualification text was
+not in the source-only answer context.
+
+O8 does not advance: strict net **−2**, no newly correct answer, and no remaining
+gain opportunity in A. Stop this contrast without new paid work or presentation
+tuning on these cases. The next bounded direction is write-time separation of
+claim, applicable/event time and decision commitment using existing contracts,
+with positive controls for actual adopted decisions. It does not yet call for
+a schema overhaul, vector default or answer-prompt changes. Independent
+**24-pair net +3/no-harm**, fresh **30-case ≥29 complete and correctness ≥Mem0**,
+reliability, installed Hermes and lifecycle resource gates remain open.
+
+This documentation closure changes no browser/product-flow entrypoint or its
+dependent replay. One bounded actual GPT-6.1 Sol/high worker owns only this plan
+and the append-only limitations entry, without subdelegation, commit/push,
+operator/key/ledger access or paid calls. Primary owns integrated validation,
+inventory, the candidate commit, fresh independent Standards/Spec review and
+updating existing PR **426**; those unperformed final reviews are not a pass.
