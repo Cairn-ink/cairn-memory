@@ -16,6 +16,18 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- At the 2026-09-30 checkpoint, the fresh
+  [metadata-eligible official six](docs/evidence/official-eligible-six-observation.md)
+  completed all twelve arms with common resolved N=6: Cairn 2/4/0 and native
+  Mem0 4/2/0 correct/incorrect/unresolved. This is mechanical completion, not
+  semantic parity; earlier failed cohorts remain unchanged. The separately
+  authorized frozen thirty was running, with ordinal 22 dual-unresolved in
+  N=30 and remaining cases first executions. Its specific continuation keeps
+  the original cumulative US$300 ceiling, without retries, replacements or
+  general old-run resume authority. No thirty-case completion or score is
+  claimed. Default source fidelity, installed-host adoption and lightweight
+  latency/RSS/cost gates remain open; older failure blocks below are historical.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It

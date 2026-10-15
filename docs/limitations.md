@@ -1,5 +1,18 @@
 # Known limitations
 
+At the 2026-09-30 checkpoint, the fresh
+[metadata-eligible official six](evidence/official-eligible-six-observation.md)
+completed all twelve arms and judgments, with common resolved N=6: Cairn 2/6
+correct, native Mem0 4/6. Mechanical completion does not establish semantic
+parity, default source fidelity, installed MCP/Hermes adoption or lightweight
+latency/RSS/cost. Earlier official-six failures remain unchanged. The separately
+authorized frozen thirty was running, with ordinal 22 retained dual-unresolved
+within N=30; remaining cases are first executions, without retries or
+replacements and under the original cumulative US$300 ceiling. This specific
+continuation is not general old-run resume authority. No thirty-case completion
+or score is claimed; earlier failure and authority checkpoints below remain
+historical, not rewritten as fixed.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
