@@ -1509,3 +1509,128 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Event/state opportunity packet: synthetic wiring only
+
+The [frozen six-case packet](plans/event-state-opportunity.md) adds missing normal
+capture/qualification/rationale/readback observations, with an independent
+interpretation rubric. Real shared capture and cold SQLite reads are exercised;
+scripted extraction, all-unknown qualification, relation proposals and first
+answers prove mechanics only. No six-case semantic score, algorithm improvement,
+paired baseline, exact live-model result or generalization is established.
+
+The helper preserves failures, empty/no-edge proposals and all six slots. Full
+returned graphs/linked receipts reach the first-answer callback under the existing
+source-answer instruction, subject to a strict atomic byte cap. This does not
+prove source truth, correct entity/time/commitment interpretation, complete
+retrieval, or that an answer uses delivered evidence correctly. Foreign setup is
+separately authorized; exclusion checks cover only these fresh synthetic stores.
+No browser flow, public runtime/API, old case/result, host profile or prompt is
+changed. No provider call, key/environment/ledger access, paid run or production
+operation occurs. Independent reliability, installed Hermes, resources and the
+24/30-case semantic gates remain open; original $400/protected $30 are unchanged.
+
+## Event/state live baseline seam: capability remains unmeasured
+
+The [event/state packet](plans/event-state-opportunity.md#e-live-bounded-first-real-model-baseline-seam)
+now has an evaluation-only adapter/transport seam for a first bounded real-model
+baseline. Fake HTTP exercises qualification/rationale/cold-read/answer plumbing,
+exact source-graph forwarding, incremental local persistence and existing v2
+ledger accounting. It does not establish a live completion or semantic score,
+algorithm improvement, retrieval quality, production reliability or invoice.
+No paid request is made by these tests or by importing the module. The six-case
+fixture, independent rubric, answer instruction and public memory core remain
+unchanged. Frozen historical unknown usage stays fully reserved; the original
+US$400 cumulative ceiling and US$30 protection are preserved, with a stricter
+US$1.95/390-request ceiling for this diagnostic attempt. The baseline model is
+the dated, deprecated but currently available gpt-4.1-mini-2025-04-14; availability
+and configured rates require primary verification before execution. Independent
+interpretation, paired gain, fresh completion, installed-host and resource gates
+remain separate and open.
+
+## First event/state real-model baseline: strict coverage remains limited
+
+The [closed first baseline](plans/event-state-opportunity.md#first-real-model-baseline-closed)
+completed six first answers, operator exit 0. Two independent GPT-6.1 Sol/high
+judges agreed: **2 pass / 3 fail / 1 uncertain / 0 unavailable** under the frozen
+rubric. Initial judgments/uncertainty remain without retries or repeated scoring.
+Both receipts reached the over-budget answer, which omitted historical rationale/
+reconfirmation; cancellation overclaim remains ambiguous. Two strict failures give
+the central conclusion correctly but omit ancillary details not expressly asked.
+Do not call these factual reversals or force irrelevant retrieval to raise counts.
+
+Thirteen target memories preserved semantic distortions; generated summaries/
+qualifications were omitted from source-only answers, so their effect is unproved.
+The explicit replacement answer follows sources despite a wrong graph overlay.
+Audit exit 0 proves continuity, not meaning; known usage is a subtotal and unknown
+costs stay reserved. Runner RSS includes historical ledger/diagnostics. This small
+synthetic run proves no algorithm gain, long-history/benchmark/Mem0 score, installed
+Hermes success or lightweight fit. One [fresh overlay ablation](plans/event-state-opportunity.md#next-one-prospective-graphstatus-overlay-ablation)
+is proposed, not implemented or effective. Original US$400/US$30 budget and all
+24/30-case safety, reliability and resource gates remain unchanged and open.
+
+## Prospective event/state overlay contrast: no paid or semantic result yet
+
+The [single six-pair overlay probe](plans/event-state-overlay-probe.md) compares
+ordinary graph context A with B containing the identical full receipts and other
+fields, omitting only generated edges and their derived status. It repairs no
+source, selection, relationship or prior answer. The closed strict baseline stays
+**2 pass / 3 fail / 1 uncertain**. Offline containment does not establish semantic
+gain, a new applicability mechanism or a product default. Primary verification
+of the exact runtime and one-use operator remains in progress; no paid result or
+improvement is claimed. Original US$400 cumulative/US$30 protection and the
+prospective US$1.95/390-request cap remain; existing safety and acceptance gates
+are unchanged.
+
+## Closed event/state overlay contrast: withholding is not advanced
+
+The [six-pair probe](plans/event-state-overlay-probe.md#closed-six-pair-live-result-2026-10-16)
+closed on **2026-10-16**. This supersedes the prospective status immediately
+above while preserving its chronology. Two fresh blind independent GPT-6.1
+Sol/high judges agree: ordinary context A **6/6 pass**, B omitting only generated
+edges/status **4/6 pass**, with **12/12 first answers complete**, zero uncertain/
+unavailable and no frozen forbidden assertions observed. Strict net **−2** fails
+the ≥1-net-gain gate; A has no gain opportunity in this cohort. Withholding is
+stopped, with no product default/core change or new paid run.
+
+B's two strict failures omit the garden route's suggestion-only detail
+(`eo-41ba`) and the historical August conclusion that watering was unnecessary
+(`eo-e573`). Neither is a wrong current-state answer. In `eo-41ba`, the question
+asks whether any replacement was adopted, not explicitly the suggested route's
+name/status; the frozen rubric's extra detail violates O1's intended alignment.
+Keep that limitation and the original strict score without alteration/rescore;
+this is not robust evidence of semantic harm. In `eo-263f`, only the old/root
+recorder receipt reached the answer, and the question mentions the separate
+camera. Its pass does not prove full evidence retrieval. The earlier baseline's
+**2 pass / 3 fail / 1 uncertain** concerns different cases/questions: **2→6 is not
+an algorithm-improvement result**.
+
+The original frozen persistence audit **failed, actual exit 1**: five of twelve
+admission-to-final-cold DTOs differed in MOC placement revision **1→2** after
+intervening capture/classification writes. A separate post-hoc read-only
+reconciliation exited **0**, verifying retained other fields/receipts/
+qualifications, source/wire projection and accounting; missing pre-close final
+warm snapshots prevent proof of exact final-warm-to-cold equality. A separate
+fresh synthetic mock reproduction passed three tests on each Node **22.16.0 /
+24.15.0**, actual exits **0**, demonstrating the intervening-write explanation
+and fresh-data warm/cold equality. It does not upgrade the paid-run audit.
+
+The run used **132 HTTP requests**, reserved **660000 microUSD**, and recorded
+**34912 microUSD** known configured usage plus **60 unknown-cost requests**, not
+zero cost or an invoice. Reported final ledger totals are **58413 requests /
+336402281 reserved microUSD**, under unchanged **US$400 / US$30 protected**.
+Answer-only B input was **583 tokens (about 10.47%)** below A; this is not
+lifecycle savings. Whole-operator **1336132 KiB** RSS includes ledger/diagnostic
+work and does not establish engine memory fit. The linked plan retains frozen
+runtime, source/rubric and raw manifest/report/audit/reconciliation/judge hashes.
+
+Primary separately observed statement/event dates assigned to activities whose dates were not established,
+measurement claims tagged adopted, and an unsupported relationship despite a
+correct answer. These were not independently scored upstream semantics or an
+established cause of B's omissions; memory/qualification text was absent from
+the source-only answer context. The next bounded direction is write-time claim,
+time and commitment separation under existing contracts, with actual-adoption
+positive controls. No schema overhaul, vector default or answer-prompt tuning
+follows. Independent **24-pair net +3/no-harm**, fresh **30-case ≥29 complete and
+correctness ≥Mem0**, reliability, installed Hermes and lifecycle resource gates
+remain open.

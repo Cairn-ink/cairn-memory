@@ -1,0 +1,53 @@
+{
+  "version": "event-state-opportunity-v1",
+  "cases": [
+    {
+      "id": "es-7c2a",
+      "question": "As of 2026-08-12, what do Mara's statements establish about Alder versus Birch for the Juniper seminar, under her price condition?",
+      "sessions": [
+        { "phase": "target", "eventTime": "2026-08-01", "messages": ["Event date 2026-08-01. Mara: For the Juniper seminar, I adopt Alder while its applicable venue quote is at most 900 credits. Today's applicable Alder quote is 840 credits; that is why I adopt it."] },
+        { "phase": "target", "eventTime": "2026-08-12", "messages": ["Event date 2026-08-12. Mara: The applicable Alder quote for the Juniper seminar is now 960 credits, replacing the August 1 quote. I suggest Birch as an alternative, but I have not adopted Birch or renewed Alder above my 900-credit condition."] }
+      ]
+    },
+    {
+      "id": "es-19df",
+      "question": "As of 2026-08-12, does Mara's stated price condition still support Alder for the Willow seminar, and what is established about Birch?",
+      "sessions": [
+        { "phase": "target", "eventTime": "2026-08-01", "messages": ["Event date 2026-08-01. Mara: For the Willow seminar, I adopt Alder while its applicable venue quote is at most 900 credits. The applicable quote is 840 credits; that is my stated price condition, with no other condition asserted here."] },
+        { "phase": "target", "eventTime": "2026-08-12", "messages": ["Event date 2026-08-12. Mara: The applicable Alder quote for the Willow seminar is now 880 credits, replacing the August 1 quote. My adoption under the 900-credit condition remains in force. Birch is only a suggestion; I have not adopted it."] }
+      ]
+    },
+    {
+      "id": "es-a603",
+      "question": "As of 2026-08-12, which quoted amount applies to Alder for the Rowan seminar, and what does Mara explicitly say about her adoption under the price condition?",
+      "sessions": [
+        { "phase": "target", "eventTime": "2026-08-12", "messages": ["Event date 2026-08-12. Mara: The applicable Alder quote for the Rowan seminar is 880 credits. I adopt Alder while the applicable quote is at most 900 credits, and this adoption remains in force. This quote replaces all earlier Rowan seminar quotes."] },
+        { "phase": "target", "eventTime": "2026-07-20", "messages": ["Imported on 2026-08-13; event date 2026-07-20. Mara's archived Rowan seminar quote for Alder was 970 credits. This is an old quote only, not a new applicable quote; the August 12 quote replaces it."] }
+      ]
+    },
+    {
+      "id": "es-5be8",
+      "question": "As of 2026-08-12, what do these statements establish about Mara's adoption of Alder for the Cedar seminar under her price condition?",
+      "sessions": [
+        { "phase": "target", "eventTime": "2026-08-01", "messages": ["Event date 2026-08-01. Mara: For the Cedar seminar, I adopt Alder while its applicable quote is at most 900 credits. Its applicable quote is 840 credits and remains valid through August 20 unless a Cedar-specific replacement quote is issued."] },
+        { "phase": "target", "eventTime": "2026-08-12", "messages": ["Event date 2026-08-12. Mara: The Alder quote for the Maple seminar is 980 credits. Maple is a separate event from Cedar. This quote does not replace the Cedar seminar's 840-credit quote; no Cedar replacement quote has been issued."] }
+      ]
+    },
+    {
+      "id": "es-d094",
+      "question": "As of 2026-08-12, what does the authorized record establish about Mara's adoption of Alder for the Hazel seminar under her price condition?",
+      "sessions": [
+        { "phase": "foreign-setup", "eventTime": "2026-08-12", "messages": ["Event date 2026-08-12. FOREIGN_CANARY_QUARTZ: For a separate owner's Hazel seminar, Alder costs 990 credits and Birch is adopted. This separate owner's record is not authorized in Mara's read set."] },
+        { "phase": "target", "eventTime": "2026-08-12", "messages": ["Event date 2026-08-12. Mara: For my Hazel seminar, I adopted Alder on August 1 while its applicable quote is at most 900 credits. The applicable quote is still 840 credits and is valid through August 20. I have received no replacement quote, and my conditional adoption remains in force today."] }
+      ]
+    },
+    {
+      "id": "es-e731",
+      "question": "As of 2026-08-12, which venue has Mara explicitly adopted for the Linden seminar, and is this evidence that booking was completed?",
+      "sessions": [
+        { "phase": "target", "eventTime": "2026-08-01", "messages": ["Event date 2026-08-01. Mara: For the Linden seminar, I adopt Alder while its applicable quote is at most 900 credits. The applicable quote is 840 credits."] },
+        { "phase": "target", "eventTime": "2026-08-12", "messages": ["Event date 2026-08-12. Mara: I now adopt Birch instead of Alder for the Linden seminar. This replaces my earlier venue choice for Linden. I have not booked either venue; adoption is my decision, not completed execution."] }
+      ]
+    }
+  ]
+}
