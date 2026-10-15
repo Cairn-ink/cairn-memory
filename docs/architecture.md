@@ -3,6 +3,11 @@
 See the [delivery roadmap](plans/delivery-roadmap.md) for remaining work,
 delegation, acceptance gates and the public-core/hosted migration sequence.
 
+The [memory architecture alignment](plans/memory-architecture-alignment.md)
+records proposed data roles and retrieval responsibilities alongside current
+capability boundaries. It is a planning addendum, not shipped behavior or a
+replacement for the reliability plan and its unchanged gates.
+
 Cairn Memory is moving toward a shared open-source memory core. The public
 repository now includes local storage and injected capture/recall orchestration
 (`core/`). The deployed service remains unchanged until a separately staged migration.
