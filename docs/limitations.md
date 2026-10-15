@@ -1624,7 +1624,7 @@ lifecycle savings. Whole-operator **1336132 KiB** RSS includes ledger/diagnostic
 work and does not establish engine memory fit. The linked plan retains frozen
 runtime, source/rubric and raw manifest/report/audit/reconciliation/judge hashes.
 
-Primary separately observed event-time assignments to later planned activity,
+Primary separately observed statement/event dates assigned to activities whose dates were not established,
 measurement claims tagged adopted, and an unsupported relationship despite a
 correct answer. These were not independently scored upstream semantics or an
 established cause of B's omissions; memory/qualification text was absent from

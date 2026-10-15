@@ -374,7 +374,7 @@ not public content or semantic certification.
 | `judgment-consensus.json` | `03e2a680cb87a613a066f262544156529f5e17ccbf7c9f662e32627e5049034e` |
 
 Primary's upstream observations, separately from the independent answer scores:
-generated event dates sometimes refer to a later planned activity; measurement
+statement/event dates assigned to activities whose dates were not established; measurement
 claims receive adopted commitment contrary to the
 [claim-qualification guidance](../claim-qualification.md); and an unsupported
 relationship can coexist with a correct answer. These observations do not
