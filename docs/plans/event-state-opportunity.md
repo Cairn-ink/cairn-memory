@@ -1,7 +1,15 @@
 # Event/state opportunity packet
 
-Status: frozen synthetic offline instrumentation; semantic accuracy not measured.
-Base: `ad274b6117f86446fbf0ff16f503ae69d0278ce5`. This implements only the
+Latest status: first real-model diagnostic baseline closed, six first answers
+completed; strict results: **2 pass / 3 fail / 1 uncertain / 0 unavailable**.
+See [closed results](#first-real-model-baseline-closed) and the
+[prospective probe](#next-one-prospective-graphstatus-overlay-ablation). No
+algorithm improvement or effective successor is established.
+
+The original offline contracts and pre-live history below retain their earlier
+pending/unmeasured wording. The helper's mechanical summary remains unassessed;
+the new independent first judgments are separate evidence, not a rewritten score.
+Original offline base: `ad274b6117f86446fbf0ff16f503ae69d0278ce5`. This implements only the
 missing-coverage packet selected by the [loss-boundary plan][loss] under the
 [architecture agreement][alignment], neither of which is merged in this base.
 
@@ -279,3 +287,114 @@ event_state_deadline. The timer assertion checks a positive delay at most 200,00
 milliseconds, since setup time is subtracted from the absolute deadline rather
 than incorrectly expecting exactly 200,000. The targeted bounded-clock and
 shorter-core-deadline probes then passed, actual exit **0**, both tests passed.
+
+## First real-model baseline: closed
+
+Runtime `ae9f3371b49bc241f6dc94ddf1bbf3c4a83ad895` completed the six frozen
+normal-capture scenarios once with gpt-4.1-mini-2025-04-14. All six first answers
+completed; actual operator exit **0**. The primary continuity audit also exited
+**0**: exact HTTP messages matched helper delivery, answers matched their first
+HTTP responses, delivered recall/rationale matched cold readback, and the foreign
+canary was excluded from target/read traffic. Thirteen target memories persisted
+with matching receipts/qualifications, including semantic distortions; persistence
+does not validate meaning. No source, rubric, prompt or runtime changed for results.
+
+Two fresh, independent actual GPT-6.1 Sol/high judges agreed on all six initial
+verdicts: **2 pass, 3 fail, 1 uncertain, 0 unavailable**, denominator six. Each used
+the frozen required/forbidden clauses and first answers without seeing the other
+judgment. Both initial submissions and their uncertainty are retained; there was
+no repeated scoring, rubric change or repair of answers. These same-family agent
+judgments are not human ground truth or a benchmark score.
+
+| Frozen case ID | Strict result | Observed boundary and qualification |
+| --- | --- | --- |
+| es-7c2a | Fail | Historical reason and reconfirmation distinction omitted despite both full receipts reaching the answer. Whether its conclusion overclaims cancellation remains ambiguous; required omissions independently establish failure. |
+| es-19df | Uncertain | Price-condition support and proposal status conveyed, with both receipts delivered; wording does not unambiguously preserve explicitly continuing adoption. Keep uncertain. |
+| es-a603 | Fail | Central current quote and continuing adoption correct; required historical detail omitted. The archived receipt was available to rank but absent from returned/delivered evidence. No stale-current assertion was observed. |
+| es-5be8 | Fail | Central target conclusion correct; required separate-event distinction omitted. The other-event/nonreplacement receipt was absent after selection. No cross-event invalidation was observed. |
+| es-d094 | Pass | Authorized-only evidence and continuing conditional adoption preserved in this observed run; no general isolation guarantee follows. |
+| es-e731 | Pass | Explicit replacement distinguished from completed booking despite an unsupported relationship overlay. |
+
+Rubric completeness matters: the historical-detail and separate-event failures
+retain the strict frozen result, but their central current-state conclusions were
+right. Those questions did not explicitly request every ancillary rubric detail.
+Do not describe these omissions as factual reversals, or optimize irrelevant
+retrieval merely to improve this count. Align future questions and gold before
+calls; do not rewrite this rubric or upgrade the uncertain answer afterward.
+
+Older-to-newer challenge directions were unsupported in the over-budget and
+explicit-replacement scenarios. Quote/date observations were labelled adopted,
+and event dates became invented scheduling information in generated summaries
+or qualifications. Those generated summaries/qualifications were omitted from
+the source-only answer context. Both full sources reached the over-budget case;
+the replacement answer followed explicit source evidence despite a comparable
+wrong overlay. These observations distinguish formation, selection and answer-use
+boundaries; they do not prove a model-internal cause or that removing edges helps.
+
+Execution used **126 HTTP requests: 60 count + 60 Responses + 6 answers**, with
+elapsed **345341.491639 ms**. Original cumulative reservations moved from
+**335112281 to 335742281 microUSD**, an increase of **630000**; request count
+moved **58155 to 58281**. Zero pending attempts and the **23 historical unknowns**
+were unchanged, without refunds/reset. The unchanged US$400 ceiling and US$30
+protection remain; this historical checkpoint grants no future affordability.
+
+Known configured usage subtotal was **32689 microUSD**, with **60 unknown-cost
+requests** retained; unknown is not zero and the subtotal is not an invoice.
+Known generations reported **62803 input / 4713 output tokens**. Maximum complete
+local input was **2916 tokens**, provider input **2325**. Diagnostic records used
+**2937646 bytes**. Peak runner RSS was **1336132 KiB**, including historical ledger
+and diagnostics; it is not isolated engine memory, lightweight product resource
+fit, or a long-history measurement.
+
+Artifact bindings below use SHA-256. The docs worker rehashed the public runtime
+files and five permitted result/judgment artifacts. The manifest and corrected
+operator bindings are primary-verified; manifest digests also agree across report,
+audit and both judges. Judge B's transcription was corrected to its original
+submission, not rejudged; its current digest is retained here.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Runtime helper | `a577c68735ed1a759b1b76e4c911a0b2e7696e5efdc6edc9fd3b754bf8dcb665` |
+| Runtime transport | `d3b65d803082af8494776a9338f6b77f5cc4273160bc15dbb70857f90a00d96d` |
+| Frozen manifest | `71b8df75a4b90d1aeec408664671c7bd69ade8fff588a859f3757045ab651e4f` |
+| First report | `beb63b5c8b3296078a84fb5ae9bc2431fabbb94f13e56b0eab4d83760ee928df` |
+| Initial judge A transcription | `32d6ce04227c2d17f1982012c9cc8b5446fcdfdfac175aee7313d5f26910dc31` |
+| Initial judge B transcription | `59547273a5cfa55883cfd6956ac7363292cd9e231cec884513278a0fead92ec8` |
+| Retained adjudication | `68f806fa404484ef5e7306d246cd71e76d2de4386ad6b84dc501073406709d40` |
+| Primary continuity audit | `1dd77505bb63c512bdf82523d2db4b1841455cc0d1dbdc65b153056f27fb0752` |
+| Corrected reviewed operator | `63cc6c0a9c20b4c034e0d0b789f72224efb6bc692b3b1d0b441847c4be1f8690` |
+
+Primary pre-live checks passed: focused **18/18** on Node 22.16/24.15, actual exit
+**0** each; full live-evidence **350 passed / 30 explicit opt-in skips**, exit **0**
+each; generic **643 passed** on Node 24, exit **0**. Validate, plus the pinned
+Claude **2.1.260** marketplace and plugin checks, each exited **0**. Pre-live Standards and Spec
+reported zero findings on the runtime/corrected operator. Primary owns pending
+combined docs acceptance/review/delivery. No browser flow, paid or ledger work here.
+
+## Next: one prospective graph/status-overlay ablation
+
+No new applicability generator or effective successor is selected. Next candidate:
+one bounded contrast on **fresh cases only**, after primary acceptance;
+capture/recall once, then paired first answers using identical full source
+inventory/order, question, model and instruction. Withhold only generated edges
+and their derived status in the treatment; keep the original baseline unchanged.
+Preserve every linked receipt as well as root receipts. Test exact projection
+equality offline; a fault that drops a linked receipt must turn the check red.
+Do not change recall mode, repair/reverse edges or supply oracle relationships.
+
+Freeze explicit questions aligned with gold and positive/unsafe controls for
+over-budget proposed alternatives, in-budget continuity, history, wrong entity and
+explicit adoption versus execution; blanket unknown/reconfirmation must fail. Improved answers with
+unchanged sources would support an overlay effect, not establish general causality;
+unchanged errors would weaken it and leave answer-use reasoning unresolved.
+Prior focus/role/context trials still establish no reliable successor.
+
+Exact new fixture/rubric/model/artifact digests, caps, independent review and fresh
+affordability under the original budget must be frozen before any paid call.
+No old-case reruns, retries, model changes, schema/vectors or default promotion.
+At most one contrast: failure or inconclusive evidence requires re-scope, not
+endless formatting trials. The 24-case paired net gain >=3 plus targeted gain,
+no increased unsupported/stale use and no new severe regression remain; the fresh
+30-case completion >=29 and correct >= same-batch Mem0 gate remains separate,
+with uncertainty, reliability, installed Hermes and lifecycle resource gates open.
+Unknown safety blocks advancement.

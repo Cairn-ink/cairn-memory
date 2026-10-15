@@ -1547,3 +1547,24 @@ the dated, deprecated but currently available gpt-4.1-mini-2025-04-14; availabil
 and configured rates require primary verification before execution. Independent
 interpretation, paired gain, fresh completion, installed-host and resource gates
 remain separate and open.
+
+## First event/state real-model baseline: strict coverage remains limited
+
+The [closed first baseline](plans/event-state-opportunity.md#first-real-model-baseline-closed)
+completed six first answers, operator exit 0. Two independent GPT-6.1 Sol/high
+judges agreed: **2 pass / 3 fail / 1 uncertain / 0 unavailable** under the frozen
+rubric. Initial judgments/uncertainty remain without retries or repeated scoring.
+Both receipts reached the over-budget answer, which omitted historical rationale/
+reconfirmation; cancellation overclaim remains ambiguous. Two strict failures give
+the central conclusion correctly but omit ancillary details not expressly asked.
+Do not call these factual reversals or force irrelevant retrieval to raise counts.
+
+Thirteen target memories preserved semantic distortions; generated summaries/
+qualifications were omitted from source-only answers, so their effect is unproved.
+The explicit replacement answer follows sources despite a wrong graph overlay.
+Audit exit 0 proves continuity, not meaning; known usage is a subtotal and unknown
+costs stay reserved. Runner RSS includes historical ledger/diagnostics. This small
+synthetic run proves no algorithm gain, long-history/benchmark/Mem0 score, installed
+Hermes success or lightweight fit. One [fresh overlay ablation](plans/event-state-opportunity.md#next-one-prospective-graphstatus-overlay-ablation)
+is proposed, not implemented or effective. Original US$400/US$30 budget and all
+24/30-case safety, reliability and resource gates remain unchanged and open.
