@@ -23,6 +23,21 @@ an immutable host. The normalized native result has only ordered bounded
 ADD records; it does not infer source provenance, timestamps, missing facts,
 or a quality score. Synthetic fake-provider tests do not authorize paid work.
 
+The opt-in [private mixed result journal](mixed-result-journal.md) adds local
+0700/0600 retention of the existing validated generation/scoring outputs:
+questions, actual answers, opaque IDs/hashes, receipt coordinates, finite
+diagnostics and judgments. These are personal-data-bearing private evidence,
+not redacted telemetry or guaranteed secret-free model content. The writer
+receives no API key option, headers, raw provider body, arbitrary exception,
+corpus history or evaluator/reference payload. Local backups and same-UID
+tampering remain operator responsibilities; hash links are not signatures.
+Durable terminal records follow scope/transport settlement and precede the next
+arm. An entered or unobserved arm is unknown, never incorrect or completed.
+Partial inspection cannot mint whole-phase success, replace scorer/X validation,
+settle accounting, execute, resume, retry or grant spending authority. This
+evaluation-only journal versions its own format without changing core, MOC,
+plugin/MCP/HTTP, report, prompt, model or default-policy schemas.
+
 The private mixed generation report may retain a failed Cairn arm's first
 noncompleted, arm-disqualifying ingestion batch index and fixed outcome counts.
 A duplicate can precede another ingested batch; this field does not claim the
