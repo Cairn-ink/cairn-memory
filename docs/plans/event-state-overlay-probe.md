@@ -242,3 +242,27 @@ The private operator syntax check exited **0**. Its current SHA-256 is
 it deterministically freezes the blind X/Y mapping before calls. These checks
 establish preparation only. Independent review and all paid execution remain
 pending; no semantic result, improvement or final acceptance is claimed.
+
+## Pre-live review corrections: private retention and verbatim audit
+
+At fixed candidate `1c4906013741f68e26ecb331c8009ab9771e1b06`, Standards found
+one P2: the private audit incorrectly trimmed the raw response. Spec found two
+P2s: that comparison and loss of the private operator's A/B fallback when
+case-complete persistence failed. Both reviews found zero actionable public
+runtime issues. Primary's narrow glue correction retains result.summary.cases
+and traces, initializes all 12 arm outcomes before any case completes, and keeps
+produced first answers in a private closure bounded to 64 KiB, never public stdout.
+The audit now compares verbatim and checks closure-retained answers against traces.
+
+The corrected operator SHA-256 is
+`498f9fa763c62d96ea45cbcb59ec86e0d11236162900c9ff58f7ffba38fdc359`;
+the corrected audit SHA-256 is
+`edfe37e59e297c56b01086d085129ac749dd12c6209f1e15812e97cfbe922f3c`.
+These supersede earlier pre-live private artifact hashes. Primary's offline glue
+test executes the actual pure retention function and audit comparison without
+importing the operational entrypoint. Node 22/24 each exited **0**: 12 unavailable
+slots retained, first A preserved without case-complete, whitespace preserved,
+and a changed answer rejected. Maximum 12-answer payload was **49794 bytes**;
+with **12000 bytes** metadata it remains below **65536 bytes**. No ledger, key or
+paid calls were used. Re-review remains pending; public runtime/tests, source
+and rubric are unchanged.
