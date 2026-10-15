@@ -15,20 +15,26 @@ export async function classify({ model, snapshot, map, validateFresh, deadline }
   const output = await callModel(model, 'classify', system, input,
     { validateFresh, failureCode: 'classification_failed', deadline });
   let proposal;
+  let reason = 'invalid_classification';
+  const reject = category => { reason = category; fail('invalid_model_output'); };
   try {
-    proposal = placementProposal(output, snapshot.memories.map((memory) => memory.id));
+    proposal = placementProposal(output, snapshot.memories.map((memory) => memory.id),
+      category => { reason = category; });
     const visibleGroups = new Map(input.map.filter((item) => item.type === 'moc')
       .map((item) => [item.moc.id, item.moc.level]));
     for (const item of proposal.items) {
-      if (item.parentIds.some((id) => visibleGroups.get(id) !== 'L1')) fail('invalid_model_output');
-      if (item.newL1 && (!input.mapExhausted || item.newL1.parentL2Ids.some((id) => visibleGroups.get(id) !== 'L2'))) {
-        fail('invalid_model_output');
+      if (item.parentIds.some((id) => visibleGroups.get(id) !== 'L1')) reject('classification_parent_visibility');
+      if (item.newL1) {
+        if (!input.mapExhausted) reject('classification_create_policy');
+        if (item.newL1.parentL2Ids.some((id) => visibleGroups.get(id) !== 'L2')) {
+          reject('classification_parent_visibility');
+        }
       }
     }
   } catch (error) {
     deadline?.check();
     if (error?.code === 'token_count_unavailable') throw error;
-    emitDiagnostic(model, 'classify', 'core_validation', 'invalid_classification');
+    emitDiagnostic(model, 'classify', 'core_validation', reason);
     fail('invalid_model_output');
   }
   validateFresh();

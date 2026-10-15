@@ -16,6 +16,14 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The OFF-by-default [source-partition offline diagnostic](docs/plans/source-partition-offline.md)
+  plans synthetic whole messages using actual source windows and local token
+  budgets. Corrected public-core capture/cold-receipt, stop/replay and query-aware
+  recall controls passed 36/36 on Node 22.16.0 and 24.15.0, with independent
+  primary reruns and mandatory offline gates. This establishes no semantic
+  quality, historical cause or score, changes no default and authorizes no paid
+  run. Final candidate review and CI remain delivery requirements.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It
