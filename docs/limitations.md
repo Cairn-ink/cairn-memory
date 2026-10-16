@@ -1514,14 +1514,28 @@ Limits:
 
 The [claim-local commitment candidate](plans/claim-local-commitment.md) is
 evaluation-only. Its second stage revisits commitment for the baseline's frozen
-selected claim while retaining the original output. Twelve scripted tests check
-mapping, failure handling and source-bound storage; they establish no semantic
-gain. The retained wrong adoption already appears in raw provider output, and
-the original frozen-output replay still fails by design. No historical result
-has been repaired or rescored, and no paid candidate run has occurred.
+selected claim while retaining the original decoded output. The completed
+[24-case paired diagnostic](../evaluation/architecture/results/claim-local-commitment-v1.json)
+improved target/commitment success from 12/24 to 18/24: six gains, zero regressions.
+Five false adopted observations and one uncertainty error remain, along with
+three unchanged attribution issues. The 10→16/24 score excluding other flagged
+issues is not full-field success. Removing the interpretation-sensitive
+negative-polarity gain only for sensitivity leaves five net gains/23; the primary
+24-case denominator remains unchanged. Two masked GPT-6.1 Sol/high raters agreed,
+but same-family agreement is not independent human calibration.
 
-The prospective 24-case mechanism diagnostic keeps the same pinned historical
-model. Even a passing result would permit only the next held-out/integration
-gate; the existing quality gate, later development and benchmark checks remain
-unmet. This candidate addresses commitment of a selected tuple, not claim
-selection, attribution, dates, truth or execution authority.
+This used fixed extraction-like cards, one short source/item per case and the
+same historical model pin. It did not test actual extraction, histories, MOC,
+multi-item packing or downstream answers. The full candidate doubles generation
+calls and adds 13,004 input/654 output tokens; known generation estimates rise
+from US$0.021892 to US$0.028150, excluding 48 unknown-cost count requests. The
+extra call, prompt and projection are bundled, so their individual effects remain
+unproven. Public replay validates decoded-output/compiler/pairing integrity, not
+provider origin, semantic truth or authorization; private raw HTTP audit is separate.
+
+Only the next separately frozen held-out integration gate is supported. The
+planned next step uses 24 NEW actual-extraction/qualification/refinement/cold-store
+cases, with mixed/negative/uncertain coverage and total resource overhead recorded.
+It is not dispatched by this result. Production, benchmark and general quality
+gates remain unmet. No historical result has been repaired or rescored, and the
+original fixed-output semantic replay still fails by design.

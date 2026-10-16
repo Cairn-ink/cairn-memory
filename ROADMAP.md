@@ -16,6 +16,12 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The evaluation-only [claim-local commitment diagnostic](docs/plans/claim-local-commitment.md)
+  improved conditional target/commitment success from 12/24 to 18/24 on fixed
+  short cards, with an extra call. It supports only a separately frozen held-out
+  integration check; production, official answer-score and broad quality gates
+  remain unmet.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It

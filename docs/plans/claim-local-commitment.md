@@ -1,6 +1,7 @@
 # Evaluation-only claim-local commitment refinement
 
-Status: implementation contract; no paid execution, promotion or production change.
+Status: completed 24-case mechanism diagnostic; next held-out integration remains
+planned. No production change or broad quality gate passed.
 Fixed base: `ad274b6117f86446fbf0ff16f503ae69d0278ce5`.
 
 The September 28 meaning probe retained eight false adopted nondecision outcomes
@@ -128,7 +129,7 @@ was cross-checked by `git ls-files --others --exclude-standard` and independent
 porcelain status, count **5**, no difference. No commit, push, provider request,
 credential/ledger read or semantic gain claim was made.
 
-## Prospective mechanism acceptance preparation
+## Frozen mechanism acceptance protocol
 
 Before freezing any paid protocol, the rubric was corrected to accept equivalent
 negative-choice polarities across eight decision controls. A semantically matching
@@ -140,16 +141,118 @@ rescore. The NEW source fixture remains unchanged at SHA256
 the corrected rubric SHA256 is
 `3be9fa39ea44de06ce617afc71b9cc3155e8752e629463f7baa1232d18d01814`.
 
-The private prospective operator is bounded to 24 cases × two stages × one count
+The private operator was bounded to 24 cases × two stages × one count
 and one generation request: at most **96 HTTP requests** and **US$0.48 reserved**.
 It remains within the existing **US$400 cumulative cap**, preserving **US$30**;
 these are bounds, not measured spend. Both stages retain the same historical
 `gpt-4.1-mini-2025-04-14` pin to compare the mechanism without a model switch.
-No model-quality or model-switch gain is claimed.
+No broad model-quality or model-switch gain is claimed.
 
-A NEW run may begin only after complete review, offline verification and a fresh
+The authorized one-shot run followed review, offline verification and a fresh
 audit of the existing cumulative ledger, with the primary's frozen acceptance
-operator and manifest. No paid call has occurred for this candidate. The operator
-and its resource envelope do not change production behavior or grant dispatch
-authority. This 24-case mechanism test does not satisfy the future 24-case
-development gate, fresh 30-case benchmark or installed integration acceptance.
+operator and manifest. It completed exactly 96 HTTP requests without retry,
+replacement or fallback. The operator and its resource envelope do not change
+production behavior or grant further dispatch authority. This 24-case mechanism
+test does not satisfy the future development gate, fresh 30-case benchmark or
+installed integration acceptance.
+
+## Completed paired observation — 2026-10-16
+
+The [public evidence](../../evaluation/architecture/results/claim-local-commitment-v1.json)
+preserves all 24 fixed source/card pairs, baseline-produced tuples, exact original
+decoded outputs, refinement outputs, merged candidate outputs and actual compiled
+qualifications. Shared system prompts are retained once with exact per-case inputs.
+The runtime was `065fd11325c4ae7fa0126b24fa4bc0ae7200dc31`; the source, rubric and
+helper pins above are unchanged. Exact original report, manifest, packet, raw-rater,
+consensus and primary cold-audit hashes are retained in the public projection.
+The primary independently inspected all 48 generation responses: each reported
+the same `gpt-4.1-mini-2025-04-14` pin and completed status.
+
+All 24 baseline and 24 refinement outputs mechanically completed. The primary
+audited all 48 actual compiled qualifications through admission, get and cold
+reopen, with zero unexpected scratch residues. Public originals are **decoded
+provider outputs**, not complete wire traces. The private raw HTTP audit remains
+separate; public replay checks recorded outputs, compilation and pairing, without
+proving provider origin, semantic truth or permission.
+
+Two masked, independent non-implementing GPT-6.1 Sol/high raters agreed on all
+five core judgment fields for all 48 outputs: 240/240 field agreements, zero
+adjudication overrides. They are from the same model family; this agreement is
+not independent human calibration. Raw judgments and masked IDs remain unaltered.
+
+| Fixed-denominator result | Baseline | Baseline plus refinement |
+| --- | ---: | ---: |
+| Target match and commitment supported | 12/24 | 18/24 |
+| Commitment supported | 13/24 | 19/24 |
+| Selected target matches source | 23/24 | 23/24 |
+| False adopted observations | 10/12 | 5/12 |
+| Other attribution issues flagged | 3/24 | 3/24 |
+| Target/commitment success without other flagged issues | 10/24 | 16/24 |
+
+Strict success requires a completed output, target match and supported commitment.
+There are six paired gains and zero regressions. The final row excludes recorded
+other issues but is **not full-field success**: this protocol did not assess every
+field. Two target/commitment passes in each arm still have attribution problems.
+Group target/commitment results are pure observations 1→3/6, mixed-source
+observations 0→3/6, adopted choices 4→4/4, considered options 4→4/4 and rejected
+options 3→4/4. The candidate retains five false adopted observations and one
+lost-uncertainty target error; its three attribution issues are unchanged.
+
+The corrected negative-polarity case `cc-7db0` is interpretation-sensitive: the
+selected tuple already describes rejecting the mezzanine, and the raters treat
+adopting that rejection as the tuple-appropriate stance. A sensitivity view without
+that one gain gives five net gains across 23 cases. This does not exclude the case
+from the primary denominator of 24, alter the rubric or rescore either output.
+
+The predeclared mechanism gate (at least three net gains, no lost actual decisions
+or new severe errors) passes **only for proceeding to a separately frozen held-out
+integration diagnostic**. It establishes no production readiness, official answer
+score, algorithm-wide improvement or automatic enablement.
+
+## Resource penalty and scope limits
+
+The full candidate includes both the baseline and the additional refinement:
+
+| Measured quantity | Baseline | Extra refinement | Full candidate |
+| --- | ---: | ---: | ---: |
+| HTTP requests, including counts | 48 | 48 | 96 |
+| Generation calls | 24 | 24 | 48 |
+| Generation input tokens | 42,060 | 13,004 | 55,064 |
+| Generation output tokens | 3,162 | 654 | 3,816 |
+| Known generation estimate, US$ | 0.021892 | 0.006258 | 0.028150 |
+| Sum of instrumented stage durations, ms | 170,367.975274 | 130,357.851251 | 300,725.826525 |
+
+Known estimates exclude 48 count requests of unknown cost and are not invoices.
+The conservative new reservation was US$0.48, without refund. Cumulative reserved
+funds are US$336.882281 under the US$400 cap; US$30 remains protected and
+US$33.117719 is spendable under that accounting. This is no new spend authority.
+The measured run lasted 301,801.173353 ms; per-case durations sum to
+300,726.008519 ms. Guarded HTTP sums were 62,604.255297 ms for baseline and
+33,141.050532 ms for refinement. These instrumented quantities include different
+local/transport work and are not isolated model latency or end-user response time.
+
+Inputs were fixed extraction-like cards, **not actual extraction results**.
+Every case had one short source candidate and one item. Mixed sources contain
+an observation and separate choice, but their supplied cards focus the observation;
+they do not reproduce every property of the original mixed-summary failure.
+No long histories, multi-item packing, MOC retrieval, downstream answers or
+installed host were tested. The intervention bundles an extra call, narrower
+output/prompt and a frozen-tuple projection, so this comparison cannot identify
+which component caused the gain or claim equal-resource superiority.
+
+The next small step is a separately frozen **24 NEW held-out cases** through actual
+extraction → baseline qualification → refinement → cold storage. At least half
+should cover mixed cards/source passages or negative/uncertain claims. Keep the
+same model pin and share exact first baseline outputs, retain every attempt in
+the denominator, and require at least three net target/commitment gains with no
+lost actual decisions or new severe errors. Record total calls, tokens, costs and
+latency overhead, including failures. Do not rerun these old 24 cases or enable
+production automatically. This follow-up records that plan and dispatches no run.
+
+The six public integrity tests pass on Node 22.16.0 and 24.15.0 through the owned
+runner, actual exit **0** on each. They regenerate snapshots and second-stage
+requests, compile all recorded outputs, preserve unchanged fields, reconstruct
+the original judging packet/consensus and recompute pair counts, sensitivity and
+resource sums. Deliberate output, judgment, pairing, aggregate and accounting
+corruptions fail. These offline checks establish evidence integrity, not new
+LLM semantic accuracy. Primary owns final combined verification and review.
