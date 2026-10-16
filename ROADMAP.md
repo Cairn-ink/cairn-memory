@@ -17,10 +17,14 @@ service must use the same public core, not separate engines.
 ## Current developer preview
 
 - The evaluation-only [claim-local commitment diagnostic](docs/plans/claim-local-commitment.md)
-  improved conditional target/commitment success from 12/24 to 18/24 on fixed
-  short cards, with an extra call. It supports only a separately frozen held-out
-  integration check; production, official answer-score and broad quality gates
-  remain unmet.
+  is **not adopted**: its NEW actual-extraction check improves strict source
+  success from 11/24 to 16/24, but loses one correctly considered option and
+  fails the frozen gate while adding 50% more generation calls. The earlier
+  prepared-card cohort uses a different rubric and is not a trend comparison.
+  Next is bounded offline diagnosis/prototyping of source-backed propositions
+  versus decision state, independently reviewed with fresh cases before any
+  future paid proposal. Do not enable or stack more post-hoc refiners; official
+  QA, MOC/vector/relationship, installed-host and broad quality gates remain open.
 
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,

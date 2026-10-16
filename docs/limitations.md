@@ -1533,9 +1533,33 @@ extra call, prompt and projection are bundled, so their individual effects remai
 unproven. Public replay validates decoded-output/compiler/pairing integrity, not
 provider origin, semantic truth or authorization; private raw HTTP audit is separate.
 
-Only the next separately frozen held-out integration gate is supported. The
-planned next step uses 24 NEW actual-extraction/qualification/refinement/cold-store
-cases, with mixed/negative/uncertain coverage and total resource overhead recorded.
-It is not dispatched by this result. Production, benchmark and general quality
-gates remain unmet. No historical result has been repaired or rescored, and the
-original fixed-output semantic replay still fails by design.
+That prepared-card result supported only a separately frozen integration check.
+The completed [NEW actual-extraction diagnostic](../evaluation/architecture/results/claim-local-extracted-v1.json)
+retains 24 sources, 32 extracted cards and all 64 cold-verified arm/card views.
+Strict source success is 11/24 baseline and 16/24 with refinement: six gains,
+one regression, net five. **Do not adopt**: refinement changes the council's
+correctly considered parking proposal to unknown, failing the zero-lost-decision
+gate. Eight false adoptions remain. Required coverage is 23/24 in both arms;
+source success requires all required claims and every actual card to pass.
+
+The two same-family masked raters differed on 16 entries. Explicit primary source
+audit resolves those and records four corrections to agreed entries, retaining
+all raw judgments. The corrections cover a lost podcast condition and treating
+a permissible windowsill location as settled. The latter admits a competing
+pragmatic reading: accepting it adds one candidate pass but does not remove the
+parking regression or pass the gate. This is not independent human calibration.
+
+The full actual-extraction baseline uses 48 generations and the candidate 72,
+**50% extra generation calls**. Known estimates are US$0.033967 and US$0.041171,
+excluding unknown-cost count requests; the US$0.72 reservation is not an invoice.
+The full-source/all-card rubric differs from the earlier prepared-card rubric,
+so these cohorts are not a trend comparison. Public offline replay and the
+separate primary wire/cold audit establish evidence integrity, not official QA,
+MOC/vector/relationship quality, full capture or installed-host acceptance.
+
+Next is bounded offline architecture diagnosis/prototyping of source-backed
+propositions versus decision state, with independent review and fresh cases
+before any future paid proposal. Do not enable this refiner or stack more
+post-hoc refiners. Production, benchmark and general quality gates remain unmet;
+this result grants no new paid authority. No historical result has been repaired
+or rescored, and the original fixed-output semantic replay still fails by design.

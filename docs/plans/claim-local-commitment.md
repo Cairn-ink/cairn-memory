@@ -382,3 +382,138 @@ packet is constructed afterward from first outputs. This records source/rubric
 approval, not paid-run authority, a semantic result or completion of dual review.
 The focused owned runner now passes **7/7** on Node **22.16.0** and **24.15.0**,
 actual exit **0** on each; standalone `git diff --check` also exits **0**.
+
+## Completed actual-extraction observation — 2026-10-16
+
+**Do not adopt the refinement mechanism.** The new
+[public retained evidence](../../evaluation/architecture/results/claim-local-extracted-v1.json)
+records 24/24 completed paired sources and 32 actual extracted cards, with all
+64 arm/card views admitted, read and cold-checked. Strict source success rises
+from **11/24 to 16/24**, with six gains and one regression, net five. Nevertheless,
+the frozen gate fails because `ce-39cf` loses a correct consideration: the
+council's unapproved two-hour Market Lane parking proposal changes from
+`considered` to `unknown`. This is a lost actual decision under the frozen rule,
+even though no new false-adoption/other severe-error flag is introduced. The
+minimum-gain threshold does not override the zero-loss requirement.
+
+Primary replay of the retained `ce-39cf` output through real
+`prepareClaimLocalCommitment` and `compileClaimLocalCommitment` reproduces the
+compiled bytes exactly. The separate source-supported-consideration preservation
+assertion exits **1**, an expected retained semantic regression with no provider
+call. The selected tuple remains council / exploring a two-hour parking window /
+proposal not yet approved; the raw refiner proposes unknown and compilation/cold
+storage preserve unknown. The observed error is already in the model proposal,
+not a compiler flip or disk loss. Its model-internal cause remains unproven.
+
+The runtime was `e0759d26b387bee48b2272ec1a981415a968462b`; the approved source,
+rubric, helper and operator pins remain unchanged. The one-shot run used exactly
+144 HTTP requests, including 72 count requests and 72 generations, with no retry,
+repair or replacement. Primary independently audited the raw wire, actual
+extraction/receipt binding, complete qualifications and cold storage, and the
+retained accounting, actual exit **0**, with zero unexpected scratch residues.
+The public projection was written once, actual exit **0**, at SHA256
+`b5845b92b6ef11d119d070f3069881c858c7ef0f76aeea74e9d3a3d9f95fe132`.
+It includes every first decoded output, actual item, request input, all 144
+sanitized usage records, raw judgments, explicit adjudication and the unchanged
+consensus. Private wire/audit artifacts are hash-bound, not exposed as headers,
+credentials, operational paths or ledger identifiers. The three old source,
+rubric and result files remain byte-identical.
+
+| Fixed-denominator source/item measure | Baseline | Baseline plus refinement |
+| --- | ---: | ---: |
+| Completed and cold-verified sources | 24/24 | 24/24 |
+| All required claims covered | 23/24 | 23/24 |
+| Strict source success | 11/24 | 16/24 |
+| Actual item target matches | 30/32 | 30/32 |
+| Actual item commitments supported | 15/32 | 21/32 |
+| False adoptions among actual items | 14/32 | 8/32 |
+
+Strict source success requires all required claims and every actual card to pass,
+including extras; it is not an item-average or full-memory accuracy score.
+Attribution, scope, uncertainty, citation and other material/nonmaterial issues
+remain separately recorded. All 24 sources and all original item indices stay
+in the denominator. There are no unresolved stages or judgments in this run.
+Group strict results are pure observations 1→2/6, mixed sources 1→5/6, adopted
+controls 3→3/4, considered controls 3→2/4 and rejected controls 3→4/4. The
+glossy-varnish exclusion gain `ce-f04e` is polarity-sensitive. A labeled
+sensitivity omitting only that gain gives five gains and one regression, net
+four across 23 sources, and still fails the lost-decision gate. This changes
+neither the primary denominator of 24 nor its six gains/one regression.
+
+Two independent masked GPT-6.1 Sol raters from the **same model family**, not
+human calibration, returned 48 judgments each. Sixteen entries differed on
+normalized judgments. Primary source audit explicitly resolved all sixteen and
+corrected four originally agreed entries separately, preserving both raw raters.
+The latter are the paired podcast workload-condition loss and paired solar-lantern
+location strengthening. Retained source receipts cannot restore a material
+condition absent from the represented content/tuple. The podcast's conditional
+future workload became a present reason; the lantern source's permissible
+windowsill location became part of a settled choice. The windowsill case has a
+defensible competing pragmatic reading: accepting it would add one candidate
+source pass while leaving the baseline unchanged, and would not remove the
+parking-consideration regression or pass the gate. That sensitivity does not
+replace the frozen-rule primary result or alter raw judgments. The exact
+adjudication and consensus hashes are retained in the public projection; the
+consensus SHA256 is
+`a3dcc50d3ee15157fbbe78af53d6198d7b4d73b2087a6d646f2c0cdad5a72c34`.
+
+| Resource measure | Extraction | Qualification | Extra refinement | Full baseline | Full candidate |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| HTTP requests, including counts | 48 | 48 | 48 | 96 | 144 |
+| Generation calls | 24 | 24 | 24 | 48 | 72 |
+| Generation input tokens | 17,748 | 44,118 | 14,710 | 61,866 | 76,576 |
+| Generation output tokens | 1,445 | 4,307 | 820 | 5,752 | 6,572 |
+| Known generation estimate, US$ | 0.009420 | 0.024547 | 0.007204 | 0.033967 | 0.041171 |
+| Sum of instrumented stage durations, ms | 187,626.323 | 201,235.921 | 169,069.011 | 388,862.244 | 557,931.255 |
+
+Full baseline includes extraction plus qualification; the full candidate adds
+refinement and therefore **50% more generation calls**. Known estimates exclude
+72 count requests of unknown cost and are not invoices. The new conservative
+reservation was US$0.72 without refund; cumulative reserved funds are
+US$337.602281 under the US$400 cap, preserving US$30 and leaving US$32.397719
+spendable under that accounting. The measured run duration was 560,605.947124 ms;
+per-case durations sum to 558,525.633113 ms. Guarded HTTP sums were
+109,776.776592 ms for full baseline and an additional 40,279.184547 ms for
+refinement. These durations include different local/transport work and do not
+establish isolated model latency or end-user speed. This record grants no new
+spend authority.
+
+This cohort uses full sources and actual extraction, unlike the earlier prepared
+single-card cohort. Its source-level, all-required-claims/all-cards rubric is also
+different. The two observations are **not a trend comparison**. Neither establishes
+official QA, MOC, vector or relationship quality, full `core.capture`, an installed
+host, the 24-question end-to-end QA development gate or the 30-case benchmark.
+Production core/defaults, schemas and model choice remain unchanged.
+
+The five new public integrity tests pass through the owned runner on Node
+**22.16.0** and **24.15.0**, actual exit **0** on each. They reconstruct extraction,
+trusted receipts, canonical snapshots, complete compilation and paired invariance;
+rebuild the exact masked packet and independently derive every score/gate from raw
+judgments plus explicit primary overrides; and recompute per-request estimates,
+three-phase resources, full-baseline/candidate totals and cold counts. Deliberate
+source/card/output/receipt/index/judgment/adjudication/mapping/aggregate/cost/privacy
+corruptions fail. These are evidence-integrity checks, not new model judgments.
+The first projected run of this suite exited **1** on both runtimes because the
+test incorrectly equated canonical embedded JSON with the frozen contract's
+compact original bytes. Only that test was corrected to bind both hashes; no
+artifact, output, rubric or judgment was rewritten. Core-dependent replay imports
+are dynamic and skipped below Node 22.16; ordinary JSON checks have no global
+SQLite import. Primary still owns final combined verification and dual review.
+
+The next decision is bounded **offline** architecture diagnosis/prototyping around
+separating source-backed propositions from decision state. Do not enable this
+refiner or stack more post-hoc refinement calls. Independently review the design
+and fresh cases before considering any future paid proposal. This failed gate
+authorizes no new paid experiment, replay, model switch or production change;
+the recorded 12-hour discussion checkpoint remains a checkpoint, not proof of
+goal completion.
+
+Worker handoff verification also ran the new fixture and result suites alongside
+the unchanged previous-result suite: **18/18** pass on Node **22.16.0** and
+**24.15.0**, actual exit **0** on each. The current five-file evidence/documentation
+inventory was derived from `git diff --name-only` plus untracked `git ls-files`,
+independently re-derived from full porcelain status, and compared with zero
+differences, count **5**. Standalone `git diff --check` exits **0**. No commit,
+push, paid call, credential access or operational-ledger read was made by this
+bounded projection/test/documentation worker; primary owns final combined
+verification, independent review and delivery.
