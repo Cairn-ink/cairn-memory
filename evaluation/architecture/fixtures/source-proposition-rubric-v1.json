@@ -1,0 +1,161 @@
+{
+  "version": "source-proposition-rubric-v1",
+  "sourceVersion": "source-proposition-v1",
+  "expectedCaseCount": 24,
+  "expectedClaimCount": 34,
+  "groupCounts": { "pure-observation": 6, "mixed-observation-choice": 6, "adopted": 4, "considered": 4, "rejected": 4 },
+  "grading": {
+    "unit": "source",
+    "denominator": 24,
+    "tupleMatching": "Semantic equivalence, not literal slot strings: each interpretation is a complete seven-field meaning. Null denotes no material restriction for that field. A faithful broader or narrower slot representation is acceptable only if the same material actor, proposition, conditions, attribution and commitment survive in the persisted projection. Do not require an exact card count, segmentation, wording or one-to-one alignment.",
+    "sourcePass": "Every required semantic claim is covered, all material emitted claims are supported, and each selected persisted tuple expresses the correct commitment and attribution for its own proposition. A decision elsewhere in the evidence does not turn an observation into an adopted decision. Unknown/omitted decision qualification fails a required decision. Unsupported severe additions fail even if required claims are present.",
+    "lossGate": "Independently compare every baseline-correct required decision against the candidate, including decisions from baseline sources that failed another required claim. Missing or wrong decisions are losses even when source pass totals improve. A permissible polarity interpretation preserves meaning; merely changing a rejected affirmative proposition to an adopted affirmative proposition does not.",
+    "failures": "Failed, empty, malformed and overflowing outputs remain in the denominator of 24 and do not pass. Preserve any individually verifiable correct baseline decision before a later failure when the persisted result contains it; do not infer correctness from an unusable response.",
+    "acceptance": { "minimumNetSourceGains": 3, "maximumLostCorrectDecisions": 0, "maximumNewSevereClaims": 0 },
+    "severeClaims": ["unsupported material assertion", "superseded or stale choice asserted as current", "unsupported authorization or completed action"],
+    "commonProjection": ["content", "kind", "confidence", "receipts", "qualification.slot.subject", "qualification.slot.property", "qualification.slot.scope", "qualification.slot.applies", "qualification.value", "qualification.attribution", "qualification.commitment"],
+    "sidecars": "Role and claimant sidecars are exploratory and hidden from primary paired grading. Never reward the candidate for new fields or require the baseline to emit them."
+  },
+  "cases": [
+    {
+      "id": "a91f03b7c482", "group": "pure-observation",
+      "requiredClaims": [{ "id": "q01", "meaning": "The shelf thermometer read 27 degrees Celsius at noon today.", "materialConditions": ["A local reading at the kitchen shelf at noon, not a kitchen temperature target."], "tupleInterpretations": [{ "subject": "kitchen shelf thermometer", "property": "temperature reading", "scope": "kitchen shelf", "applies": "noon today", "value": "27 degrees Celsius", "attribution": "direct", "commitment": "unknown" }] }],
+      "forbiddenInferences": ["The user chose a 27-degree kitchen target."]
+    },
+    {
+      "id": "7dc480a1f6b3", "group": "pure-observation",
+      "requiredClaims": [{ "id": "q02", "meaning": "This morning's Oak Street to library bus trip took 38 minutes.", "materialConditions": ["Only the observed trip this morning; no regular departure choice."], "tupleInterpretations": [{ "subject": "user's bus trip", "property": "duration", "scope": "Oak Street to library", "applies": "this morning", "value": "38 minutes", "attribution": "direct", "commitment": "unknown" }] }],
+      "forbiddenInferences": ["The user selected a regular departure time or a 38-minute travel limit."]
+    },
+    {
+      "id": "0b62eaf931d8", "group": "pure-observation",
+      "requiredClaims": [{ "id": "q03", "meaning": "The user's basil plant has four attached yellow leaves this afternoon; the cause is unknown.", "materialConditions": ["Attached leaves only.", "No established cause."], "tupleInterpretations": [{ "subject": "user's basil plant", "property": "attached yellow leaf count", "scope": null, "applies": "this afternoon", "value": "four; cause unknown", "attribution": "direct", "commitment": "unknown" }] }],
+      "forbiddenInferences": ["Overwatering, inadequate light or another cause is established."]
+    },
+    {
+      "id": "f4e981c0a237", "group": "pure-observation",
+      "requiredClaims": [{ "id": "q04", "meaning": "At 09:10 today the tracking page showed the parcel at East Depot.", "materialConditions": ["Tracking-page status at that check, not a guaranteed current location or delivery date."], "tupleInterpretations": [{ "subject": "parcel", "property": "tracking location", "scope": "tracking-page observation", "applies": "09:10 today", "value": "East Depot", "attribution": "reported", "commitment": "unknown" }, { "subject": "user", "property": "observed tracking-page status", "scope": "parcel", "applies": "09:10 today", "value": "East Depot", "attribution": "direct", "commitment": "unknown" }] }],
+      "forbiddenInferences": ["The parcel has a known delivery date."]
+    },
+    {
+      "id": "36a7d8c109ef", "group": "pure-observation",
+      "requiredClaims": [{ "id": "q05", "meaning": "The user counted 18 entrants to the community hall between 2:00 and 2:15 this afternoon.", "materialConditions": ["Entrants during the window, excluding people already inside."], "tupleInterpretations": [{ "subject": "community hall entrants", "property": "count", "scope": "excludes prior occupants", "applies": "2:00–2:15 this afternoon", "value": "18", "attribution": "direct", "commitment": "unknown" }] }],
+      "forbiddenInferences": ["Total hall occupancy was 18."]
+    },
+    {
+      "id": "d2096f84b1a5", "group": "pure-observation",
+      "requiredClaims": [{ "id": "q06", "meaning": "The label of the user's moon-marked blue mug states a 350-millilitre capacity, unverified by the user.", "materialConditions": ["Label-reported capacity, not a measurement by the user.", "The moon-marked blue mug, not the other blue mug."], "tupleInterpretations": [{ "subject": "user's moon-marked blue mug", "property": "labelled capacity", "scope": "not independently checked", "applies": null, "value": "350 millilitres", "attribution": "reported", "commitment": "unknown" }, { "subject": "user", "property": "observation of capacity label", "scope": "moon-marked blue mug; not independently checked", "applies": null, "value": "350 millilitres", "attribution": "direct", "commitment": "unknown" }] }],
+      "forbiddenInferences": ["The user measured the mug's actual capacity."]
+    },
+    {
+      "id": "8f1c420d6ab9", "group": "mixed-observation-choice",
+      "requiredClaims": [
+        { "id": "q07", "meaning": "Yesterday's lake walk from the north gate back to it took 52 minutes.", "materialConditions": ["Yesterday's measured duration, including the bird stop."], "tupleInterpretations": [{ "subject": "user's lake walk", "property": "duration", "scope": "north gate round trip", "applies": "yesterday", "value": "52 minutes", "attribution": "direct", "commitment": "unknown" }] },
+        { "id": "q08", "meaning": "The user chose a maximum 40-minute duration for next Saturday's walk.", "materialConditions": ["Chosen maximum for next Saturday; not yesterday's measurement."], "tupleInterpretations": [{ "subject": "user", "property": "walk duration limit", "scope": "next walk", "applies": "next Saturday", "value": "maximum 40 minutes", "attribution": "direct", "commitment": "adopted" }] }
+      ], "forbiddenInferences": ["Yesterday's walk took 40 minutes.", "A permanent 40-minute rule applies to every walk."]
+    },
+    {
+      "id": "c703fa5128de", "group": "mixed-observation-choice",
+      "requiredClaims": [
+        { "id": "q09", "meaning": "The shop quoted 85 dollars for the desk lamp repair, including switch and labour but no shade.", "materialConditions": ["A quote, not a paid bill or completed repair.", "Includes switch and labour, excludes shade."], "tupleInterpretations": [{ "subject": "repair shop", "property": "desk lamp repair quote", "scope": "switch and labour; no shade", "applies": null, "value": "85 dollars", "attribution": "reported", "commitment": "unknown" }] },
+        { "id": "q10", "meaning": "The user decided to have that shop repair the desk lamp for the quoted 85 dollars.", "materialConditions": ["That shop, that lamp and that quoted price.", "Repair chosen, not completed or paid."], "tupleInterpretations": [{ "subject": "user", "property": "desk lamp repair choice", "scope": "that shop at quoted 85 dollars", "applies": null, "value": "have lamp repaired", "attribution": "direct", "commitment": "adopted" }] }
+      ], "forbiddenInferences": ["The lamp has already been repaired.", "The assistant may spend 85 dollars."]
+    },
+    {
+      "id": "21e5b8a6d047", "group": "mixed-observation-choice",
+      "requiredClaims": [
+        { "id": "q11", "meaning": "The small rehearsal room has eight chairs.", "materialConditions": ["Small room, not the large room."], "tupleInterpretations": [{ "subject": "small rehearsal room", "property": "chair count", "scope": null, "applies": null, "value": "eight", "attribution": "direct", "commitment": "unknown" }] },
+        { "id": "q12", "meaning": "The user decided to book the large room for Friday's choir practice instead of the small room.", "materialConditions": ["Friday's choir practice.", "Booking chosen but not stated completed."], "tupleInterpretations": [{ "subject": "user", "property": "choir room choice", "scope": "choir practice", "applies": "Friday", "value": "large room instead of small room", "attribution": "direct", "commitment": "adopted" }] }
+      ], "forbiddenInferences": ["The large room has eight chairs.", "A reservation has already been made."]
+    },
+    {
+      "id": "b8d306f1e94a", "group": "mixed-observation-choice",
+      "requiredClaims": [
+        { "id": "q13", "meaning": "The balcony gets about two hours of direct morning sun, based on observations this week.", "materialConditions": ["Approximate duration, mornings this week."], "tupleInterpretations": [{ "subject": "user's balcony", "property": "direct sunlight duration", "scope": "morning observations", "applies": "this week", "value": "about two hours", "attribution": "direct", "commitment": "unknown" }] },
+        { "id": "q14", "meaning": "The user is considering growing mint on the balcony without choosing a plant yet.", "materialConditions": ["Balcony only; no plant chosen."], "tupleInterpretations": [{ "subject": "user", "property": "balcony planting choice", "scope": "balcony", "applies": null, "value": "grow mint", "attribution": "direct", "commitment": "considered" }] }
+      ], "forbiddenInferences": ["The user has chosen or planted mint."]
+    },
+    {
+      "id": "5a0e729c4fd1", "group": "mixed-observation-choice",
+      "requiredClaims": [
+        { "id": "q15", "meaning": "The booking page says Thursday's museum evening tour starts at 6:30 p.m.", "materialConditions": ["Page information checked today; Thursday evening tour."], "tupleInterpretations": [{ "subject": "museum evening tour", "property": "start time", "scope": "booking-page information", "applies": "Thursday", "value": "6:30 p.m.", "attribution": "reported", "commitment": "unknown" }] },
+        { "id": "q16", "meaning": "The user decided against taking that Thursday evening tour.", "materialConditions": ["That Thursday evening tour only.", "No alternative tour selected or booking authorized."], "tupleInterpretations": [{ "subject": "user", "property": "museum tour choice", "scope": "Thursday evening tour", "applies": "Thursday", "value": "take that tour", "attribution": "direct", "commitment": "rejected" }, { "subject": "user", "property": "museum tour choice", "scope": "Thursday evening tour", "applies": "Thursday", "value": "not take that tour", "attribution": "direct", "commitment": "adopted" }] }
+      ], "forbiddenInferences": ["A different tour was selected or a booking was authorized."]
+    },
+    {
+      "id": "e19a64c7b203", "group": "mixed-observation-choice",
+      "requiredClaims": [
+        { "id": "q17", "meaning": "The current forecast gives a 60 percent chance of rain on Sunday.", "materialConditions": ["Forecast probability, not certain rain."], "tupleInterpretations": [{ "subject": "Sunday picnic weather", "property": "forecast rain probability", "scope": "current forecast", "applies": "Sunday", "value": "60 percent", "attribution": "reported", "commitment": "unknown" }] },
+        { "id": "q18", "meaning": "Nia told the user that Nia decided to reserve the covered pavilion for their Sunday picnic.", "materialConditions": ["Nia is the chooser, not the user.", "Sunday picnic; reservation intended, not confirmed completed."], "tupleInterpretations": [{ "subject": "Nia", "property": "picnic location reservation choice", "scope": "their picnic", "applies": "Sunday", "value": "reserve covered pavilion", "attribution": "reported", "commitment": "adopted" }] }
+      ], "forbiddenInferences": ["The user chose or made the reservation.", "The pavilion is already reserved."]
+    },
+    {
+      "id": "4c8f1d963a70", "group": "adopted",
+      "requiredClaims": [
+        { "id": "q19", "meaning": "The user decided to make lentil soup for this month's neighbourhood supper.", "materialConditions": ["This month's supper only."], "tupleInterpretations": [{ "subject": "user", "property": "supper dish choice", "scope": "neighbourhood supper", "applies": "this month", "value": "make lentil soup", "attribution": "direct", "commitment": "adopted" }] },
+        { "id": "q20", "meaning": "The user decided to label that pot with its ingredients before serving at this supper.", "materialConditions": ["The soup pot at this supper; before serving."], "tupleInterpretations": [{ "subject": "user", "property": "ingredient labelling choice", "scope": "lentil soup pot at this supper", "applies": "before serving", "value": "label with ingredients", "attribution": "direct", "commitment": "adopted" }] }
+      ], "forbiddenInferences": ["The user agreed to cook at future events."]
+    },
+    {
+      "id": "a6d024b9e158", "group": "adopted",
+      "requiredClaims": [{ "id": "q21", "meaning": "The user adopted a conditional Sunday cycling plan: use the beach route only if Saturday's wind forecast is below 20 kilometres per hour; otherwise postpone.", "materialConditions": ["Sunday ride.", "Saturday forecast below 20 kilometres per hour is necessary for using the beach route.", "At 20 or above postpone, not take the route."], "tupleInterpretations": [{ "subject": "user", "property": "cycling plan", "scope": "Sunday ride", "applies": "beach route iff Saturday wind forecast below 20 km/h; otherwise postpone", "value": "conditional beach route or postponement", "attribution": "direct", "commitment": "adopted" }] }],
+      "forbiddenInferences": ["The beach route is chosen unconditionally.", "A low-wind forecast has already been observed."]
+    },
+    {
+      "id": "93b57e0a2fc6", "group": "adopted",
+      "requiredClaims": [{ "id": "q22", "meaning": "Leo decided to take the train to their aunt's birthday lunch next Sunday, as reported by the user.", "materialConditions": ["Leo is chooser, not user.", "Next Sunday's birthday lunch."], "tupleInterpretations": [{ "subject": "Leo", "property": "birthday lunch travel choice", "scope": "aunt's birthday lunch", "applies": "next Sunday", "value": "take train", "attribution": "reported", "commitment": "adopted" }, { "subject": "Leo", "property": "birthday lunch travel choice", "scope": "aunt's birthday lunch", "applies": "next Sunday", "value": "take train", "attribution": "quoted", "commitment": "adopted" }] }],
+      "forbiddenInferences": ["The user chose train travel."]
+    },
+    {
+      "id": "dc17a9e435b0", "group": "adopted",
+      "requiredClaims": [
+        { "id": "q23", "meaning": "The user chose to buy a warm-white bulb for the bedroom reading light.", "materialConditions": ["Bedroom reading light, not hallway."], "tupleInterpretations": [{ "subject": "user", "property": "bulb purchase choice", "scope": "bedroom reading light", "applies": null, "value": "buy warm-white bulb", "attribution": "direct", "commitment": "adopted" }] },
+        { "id": "q24", "meaning": "The user chose to keep the existing lampshade for the bedroom reading light.", "materialConditions": ["Bedroom reading light, not hallway."], "tupleInterpretations": [{ "subject": "user", "property": "lampshade choice", "scope": "bedroom reading light", "applies": null, "value": "keep existing lampshade", "attribution": "direct", "commitment": "adopted" }] }
+      ], "forbiddenInferences": ["The hallway light will receive these changes.", "A purchase has already been made."]
+    },
+    {
+      "id": "6e4092c81afd", "group": "considered",
+      "requiredClaims": [{ "id": "q25", "meaning": "The user is considering a Saturday pottery class at the community centre next month.", "materialConditions": ["Next month; Saturday class.", "No enrollment, session choice or fee commitment."], "tupleInterpretations": [{ "subject": "user", "property": "class choice", "scope": "community centre Saturday pottery", "applies": "next month", "value": "take pottery class", "attribution": "direct", "commitment": "considered" }] }],
+      "forbiddenInferences": ["Enrollment, a selected session or spending permission exists."]
+    },
+    {
+      "id": "18bf6a30d5e2", "group": "considered",
+      "requiredClaims": [
+        { "id": "q26", "meaning": "The user is considering the wool blanket for the guest room, without deciding to buy it.", "materialConditions": ["Guest room; no purchase adoption."], "tupleInterpretations": [{ "subject": "user", "property": "guest room blanket choice", "scope": "guest room", "applies": null, "value": "buy wool blanket", "attribution": "direct", "commitment": "considered" }] },
+        { "id": "q27", "meaning": "The assistant recommends the cotton blanket for the guest room; the user has not adopted it or authorized buying it.", "materialConditions": ["Assistant recommendation, not user's choice.", "No adoption or purchase authorization."], "tupleInterpretations": [{ "subject": "assistant", "property": "guest room blanket recommendation", "scope": "guest room", "applies": null, "value": "cotton blanket", "attribution": "proposed", "commitment": "unknown" }] }
+      ], "forbiddenInferences": ["The user chose cotton or authorized a blanket purchase."]
+    },
+    {
+      "id": "f0237c9a16bd", "group": "considered",
+      "requiredClaims": [{ "id": "q28", "meaning": "Mira is considering moving the book club to the cafe near the station for November without choosing a venue yet.", "materialConditions": ["Mira is considering, not the user or the club as a whole.", "November; cafe near station; no venue chosen."], "tupleInterpretations": [{ "subject": "Mira", "property": "book club venue choice", "scope": "cafe near station", "applies": "November", "value": "move book club to cafe", "attribution": "reported", "commitment": "considered" }] }],
+      "forbiddenInferences": ["The user or entire club selected the cafe."]
+    },
+    {
+      "id": "70da815e3bc4", "group": "considered",
+      "requiredClaims": [{ "id": "q29", "meaning": "The user is considering Tuesday swimming before work next month if the pool opens at six; even that condition would not make it a commitment.", "materialConditions": ["Tuesdays before work next month.", "Pool opening at six is uncertain and conditional.", "No commitment even if the condition holds."], "tupleInterpretations": [{ "subject": "user", "property": "swimming schedule choice", "scope": "Tuesdays before work", "applies": "next month if pool opens at six", "value": "swim before work", "attribution": "direct", "commitment": "considered" }] }],
+      "forbiddenInferences": ["The pool is known to open at six.", "Swimming is adopted conditionally or unconditionally."]
+    },
+    {
+      "id": "2ea748d0c615", "group": "rejected",
+      "requiredClaims": [{ "id": "q30", "meaning": "The user decided against buying the red raincoat for this winter.", "materialConditions": ["That red raincoat, this winter only.", "No different coat selected."], "tupleInterpretations": [{ "subject": "user", "property": "winter raincoat purchase choice", "scope": "red raincoat", "applies": "this winter", "value": "buy red raincoat", "attribution": "direct", "commitment": "rejected" }, { "subject": "user", "property": "winter raincoat purchase choice", "scope": "red raincoat", "applies": "this winter", "value": "not buy red raincoat", "attribution": "direct", "commitment": "adopted" }] }],
+      "forbiddenInferences": ["The user dislikes all red clothing or chose another coat."]
+    },
+    {
+      "id": "bb6049f2a18e", "group": "rejected",
+      "requiredClaims": [
+        { "id": "q31", "meaning": "The user rejected the midnight train for the reunion trip.", "materialConditions": ["This reunion trip only."], "tupleInterpretations": [{ "subject": "user", "property": "reunion travel choice", "scope": "reunion trip", "applies": null, "value": "take midnight train", "attribution": "direct", "commitment": "rejected" }, { "subject": "user", "property": "reunion travel choice", "scope": "reunion trip", "applies": null, "value": "not take midnight train", "attribution": "direct", "commitment": "adopted" }] },
+        { "id": "q32", "meaning": "The user decided to take the 9 a.m. train for that reunion trip without authorizing the assistant to buy a ticket.", "materialConditions": ["That reunion trip.", "Choice is not purchase authorization."], "tupleInterpretations": [{ "subject": "user", "property": "reunion travel choice", "scope": "reunion trip", "applies": null, "value": "take 9 a.m. train", "attribution": "direct", "commitment": "adopted" }] }
+      ], "forbiddenInferences": ["The assistant may buy a ticket or a ticket was already bought."]
+    },
+    {
+      "id": "3f92d6a081ce", "group": "rejected",
+      "requiredClaims": [{ "id": "q33", "meaning": "Omar, acting as treasurer, rejected raising the garden club annual fee this year, as reported by the user.", "materialConditions": ["Omar in treasurer role, not user or committee vote.", "This year's annual fee proposal."], "tupleInterpretations": [{ "subject": "Omar", "property": "garden club annual fee proposal", "scope": "treasurer decision", "applies": "this year", "value": "raise annual fee", "attribution": "reported", "commitment": "rejected" }, { "subject": "Omar", "property": "garden club annual fee proposal", "scope": "treasurer decision", "applies": "this year", "value": "not raise annual fee", "attribution": "reported", "commitment": "adopted" }] }],
+      "forbiddenInferences": ["The committee voted or the user made the fee decision."]
+    },
+    {
+      "id": "e5c17b409a62", "group": "rejected",
+      "requiredClaims": [{ "id": "q34", "meaning": "The user decided against including the blurry beach photo in the family album.", "materialConditions": ["That blurry photo only.", "No decision about other beach photos or the cover."], "tupleInterpretations": [{ "subject": "user", "property": "family album photo selection", "scope": "blurry beach photo", "applies": null, "value": "include blurry beach photo", "attribution": "direct", "commitment": "rejected" }, { "subject": "user", "property": "family album photo selection", "scope": "blurry beach photo", "applies": null, "value": "omit blurry beach photo", "attribution": "direct", "commitment": "adopted" }] }],
+      "forbiddenInferences": ["All beach photos were rejected or a cover was selected."]
+    }
+  ]
+}
