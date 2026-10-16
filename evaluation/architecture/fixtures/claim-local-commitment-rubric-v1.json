@@ -1,0 +1,253 @@
+{
+  "version": "claim-local-commitment-rubric-v1",
+  "cases": [
+    {
+      "id": "cc-7a13",
+      "group": "pure-observation",
+      "selectedClaim": { "subject": "fermentation-room wall display", "property": "temperature reading at 06:40", "value": "18°C" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "The selected claim is an observed temperature reading. Equivalent descriptors may name the room's displayed temperature; retain the reading and time. The source establishes no setpoint choice.",
+      "forbiddenInterpretation": "Treating a displayed number as a chosen temperature, or dropping the real temperature descriptors to produce unknown."
+    },
+    {
+      "id": "cc-c420",
+      "group": "pure-observation",
+      "selectedClaim": { "subject": "sealed crates in the loading bay", "property": "count on Monday morning", "value": "eleven" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "Counting establishes the crate count at the stated time, not a chosen shipment quantity. The counter can appear in attribution, but the selected proposition must remain the count.",
+      "forbiddenInterpretation": "Converting an inventory count to an adopted packing plan or discarding the count as unsupported."
+    },
+    {
+      "id": "cc-19be",
+      "group": "pure-observation",
+      "selectedClaim": { "subject": "test dough", "property": "rise during its first hour in the bowl", "value": "did not rise" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "This is a negative observation of dough behavior. Both the absence of rising and the one-hour limit are part of the target meaning.",
+      "forbiddenInterpretation": "Reading did not rise as rejection of rising, or losing the negation when selecting the claim."
+    },
+    {
+      "id": "cc-f802",
+      "group": "pure-observation",
+      "selectedClaim": { "subject": "faint click during the suitcase test", "property": "possible origin", "value": "may have come from the latch" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "The source tentatively attributes an observed click to the latch. The possible origin is useful supported meaning even though its causal certainty is limited.",
+      "forbiddenInterpretation": "Making the latch a confirmed cause or a considered design choice, or erasing the tentative origin."
+    },
+    {
+      "id": "cc-6d31",
+      "group": "pure-observation",
+      "selectedClaim": { "subject": "user", "property": "feeling after the language exam on 2026-02-17", "value": "relieved that afternoon" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "The source reports a dated feeling after an exam, with no chosen stance or settled preference. An equivalent tuple can place the date in scope or applies.",
+      "forbiddenInterpretation": "Calling relief an adopted choice or enduring personality trait, or dropping the feeling to obtain unknown."
+    },
+    {
+      "id": "cc-b9e4",
+      "group": "pure-observation",
+      "selectedClaim": { "subject": "parcel", "property": "weight at dispatch as reported by Lale", "value": "740 grams" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "Lale reports a parcel weight. The reporter relationship and dispatch time may live in other qualification fields, but the target remains the weight observation.",
+      "forbiddenInterpretation": "Inferring that either Lale or the user chose a 740-gram target weight, or replacing parcel weight with a generic report event."
+    },
+    {
+      "id": "cc-2f75",
+      "group": "mixed-observation",
+      "selectedClaim": { "subject": "scanner lamp", "property": "flickering during the morning scan", "value": "twice" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "The card selects lamp behavior. The external-drive backup choice is a separate source clause. A baseline tuple selecting backup storage instead is wrong-selected-claim and is not an observation commitment result.",
+      "forbiddenInterpretation": "Borrowing adopted from the drive choice, or switching the selected tuple to drive storage to manufacture a commitment result."
+    },
+    {
+      "id": "cc-83ad",
+      "group": "mixed-observation",
+      "selectedClaim": { "subject": "trial loaf", "property": "center texture when cut at noon", "value": "sticky" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "Sticky texture is an observation, while the lower rack is a separately chosen action for the next batch. A tuple about rack selection is wrong-selected-claim even though its commitment could be adopted.",
+      "forbiddenInterpretation": "Applying the next-batch rack decision to the observed sticky center or replacing texture with rack choice."
+    },
+    {
+      "id": "cc-d106",
+      "group": "mixed-observation",
+      "selectedClaim": { "subject": "Platform 3", "property": "crowding at the user's 08:15 arrival", "value": "crowded" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "The card describes platform crowding. Selecting a return-trip seat in the quiet carriage is a distinct adopted action. Judge the target match before commitment; selecting the carriage instead is wrong-selected-claim.",
+      "forbiddenInterpretation": "Treating the crowding as adopted because the source also contains a seat choice, or changing the tuple to that choice."
+    },
+    {
+      "id": "cc-54ca",
+      "group": "mixed-observation",
+      "selectedClaim": { "subject": "delivery carton", "property": "corner condition on arrival", "value": "dented" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "The arrival condition is the selected observation. Settling on foam sleeves concerns next week's shipment. Selecting sleeves is wrong-selected-claim, not a valid alternative target for this card.",
+      "forbiddenInterpretation": "Transferring the packaging decision to the dented corner or suppressing the observed damage."
+    },
+    {
+      "id": "cc-e728",
+      "group": "mixed-observation",
+      "selectedClaim": { "subject": "cart's front wheel", "property": "behavior during the user's checkout test", "value": "wobbled" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "The card selects the user's wheel observation. Odo's quoted rubber-wheel choice is separate and belongs to Odo. A baseline tuple selecting wheel material is wrong-selected-claim, regardless of its commitment.",
+      "forbiddenInterpretation": "Borrowing Odo's adoption for the wobble, treating Odo's choice as the user's, or replacing wobble with material selection."
+    },
+    {
+      "id": "cc-0b69",
+      "group": "mixed-observation",
+      "selectedClaim": { "subject": "rehearsal recording's opening passage", "property": "audible echo", "value": "none heard" },
+      "expectedCommitment": "unknown",
+      "sourceRationale": "The target is the absence of audible echo in a recording. The microphone choice concerns Saturday's performance. A tuple about microphone selection is wrong-selected-claim and cannot score as this target.",
+      "forbiddenInterpretation": "Converting no echo into a rejection, assigning the microphone decision to acoustic behavior, or losing the negation."
+    },
+    {
+      "id": "cc-a452",
+      "group": "adopted",
+      "selectedClaim": { "subject": "user", "property": "thermostat setpoint choice for the fermentation room's overnight cycle", "value": "18°C" },
+      "expectedCommitment": "adopted",
+      "sourceRationale": "The source explicitly chooses the 18°C setpoint. Equivalent tuples may use the thermostat as subject if they retain the chosen setpoint rather than inventing an observed reading. First match the actual baseline tuple semantically, then assess commitment using its polarity; labels need not match literally.",
+      "acceptedEquivalentTargets": [
+        {
+          "selectedClaim": { "subject": "user", "property": "forgoing the chosen setpoint for the fermentation room's overnight cycle", "value": "not setting the thermostat to 18°C" },
+          "expectedCommitment": "rejected",
+          "condition": "Accept only a negative encoding of the same explicit 18°C choice within the same cycle, not an invented discussion or rejection of a particular alternative temperature."
+        }
+      ],
+      "forbiddenInterpretation": "Downgrading a stated choice to unknown merely because its value is numeric or its kind is fact, or replacing a setpoint with a measurement."
+    },
+    {
+      "id": "cc-38fc",
+      "group": "adopted",
+      "selectedClaim": { "subject": "Pavel", "property": "table choice for his workshop's lunch area", "value": "round table" },
+      "expectedCommitment": "adopted",
+      "sourceRationale": "Pavel's quoted words explicitly establish his choice. The quote is sufficient for Pavel's represented commitment, with quoted attribution; it does not establish reporter adoption. Match the actual baseline tuple semantically before assessing commitment according to its polarity.",
+      "acceptedEquivalentTargets": [
+        {
+          "selectedClaim": { "subject": "Pavel", "property": "forgoing his chosen table for his workshop's lunch area", "value": "not choosing a round table" },
+          "expectedCommitment": "rejected",
+          "condition": "Accept only if the tuple means the same bounded round-table choice by Pavel. Do not invent rejection of a particular other shape or transfer ownership to the reporter."
+        }
+      ],
+      "forbiddenInterpretation": "Assigning Pavel's choice to the user or calling the represented choice unknown simply because it was quoted."
+    },
+    {
+      "id": "cc-91d7",
+      "group": "adopted",
+      "selectedClaim": { "subject": "volunteer team", "property": "badge choice for the chess tournament", "value": "reusable badges" },
+      "expectedCommitment": "adopted",
+      "sourceRationale": "The assistant conveys the team's explicit settled choice. Reported attribution preserves this relationship; speaker role does not negate the represented team's commitment. Judge a semantically matching baseline tuple's actual polarity rather than requiring the canonical wording.",
+      "acceptedEquivalentTargets": [
+        {
+          "selectedClaim": { "subject": "volunteer team", "property": "forgoing its chosen badges for the chess tournament", "value": "not using reusable badges" },
+          "expectedCommitment": "rejected",
+          "condition": "Accept only a negative encoding of the same settled reusable-badge choice for this tournament, without inventing any particular rejected replacement or reporter adoption."
+        }
+      ],
+      "forbiddenInterpretation": "Treating the report as an assistant suggestion, moving ownership to the user, or erasing the team's explicit adoption."
+    },
+    {
+      "id": "cc-f563",
+      "group": "adopted",
+      "selectedClaim": { "subject": "user", "property": "added-ice choice for all three tasting-flight drinks", "value": "no added ice" },
+      "expectedCommitment": "adopted",
+      "sourceRationale": "The user explicitly decides to serve the drinks without added ice. Adopted no-ice service and rejected ice addition can encode the same bounded decision. Match the actual baseline tuple semantically first, then judge commitment against that tuple's polarity; do not use automatic word matching.",
+      "acceptedEquivalentTargets": [
+        {
+          "selectedClaim": { "subject": "user", "property": "ice-addition option for all three tasting-flight drinks", "value": "adding ice" },
+          "expectedCommitment": "rejected",
+          "condition": "The tuple must refer to adding ice to these three drinks and preserve the explicit serving decision, not a general dislike of ice or an observation that ice was absent."
+        }
+      ],
+      "forbiddenInterpretation": "Calling this explicit serving decision unknown, rejecting the no-ice option itself, or adopting the ice-addition option itself. An equivalent rejected ice-addition tuple is valid."
+    },
+    {
+      "id": "cc-4e18",
+      "group": "considered",
+      "selectedClaim": { "subject": "user", "property": "lining option for the instrument case", "value": "cork lining" },
+      "expectedCommitment": "considered",
+      "sourceRationale": "The user explicitly considers cork and states that the lining is not settled. Both the option and its tentative status must survive semantic paraphrase.",
+      "forbiddenInterpretation": "Treating a named option as adopted, treating lack of a settled choice as rejection, or deleting the option."
+    },
+    {
+      "id": "cc-b032",
+      "group": "considered",
+      "selectedClaim": { "subject": "Nela", "property": "start-time option for her cycling trip", "value": "sunrise start" },
+      "expectedCommitment": "considered",
+      "sourceRationale": "Nela's quoted message weighs sunrise while comparison remains unfinished. This represents Nela's consideration and does not transfer a choice to the user.",
+      "forbiddenInterpretation": "Assigning consideration or adoption to the reporter, or turning Nela's tentative option into a settled start time."
+    },
+    {
+      "id": "cc-6c8f",
+      "group": "considered",
+      "selectedClaim": { "subject": "user", "property": "collection schedule option for bakery returns", "value": "weekly pickup" },
+      "expectedCommitment": "considered",
+      "sourceRationale": "Not committed excludes adoption but does not mean rejection: the next sentence explicitly keeps weekly pickup under consideration.",
+      "forbiddenInterpretation": "Interpreting not committed as rejected or unknown while ignoring the explicit consideration of weekly pickup."
+    },
+    {
+      "id": "cc-d947",
+      "group": "considered",
+      "selectedClaim": { "subject": "knitting club", "property": "venue option for its winter meetup", "value": "greenhouse" },
+      "expectedCommitment": "considered",
+      "sourceRationale": "The assistant reports club minutes that explicitly consider the greenhouse with a vote pending. This is the club's represented consideration, not an assistant recommendation.",
+      "forbiddenInterpretation": "Inferring adoption before the vote, treating the reported option as the user's preference, or assigning unknown solely due to assistant role."
+    },
+    {
+      "id": "cc-15e6",
+      "group": "rejected",
+      "selectedClaim": { "subject": "user", "property": "lid option for the spice jars", "value": "steel lids" },
+      "expectedCommitment": "rejected",
+      "sourceRationale": "Ruled out explicitly rejects steel lids. The metallic smell explains the rejection but is not the selected lid option. Rejected steel lids and an adopted decision to avoid steel lids can express the same bounded decision; judge commitment against the actual semantically matching tuple's polarity.",
+      "acceptedEquivalentTargets": [
+        {
+          "selectedClaim": { "subject": "user", "property": "lid exclusion for the spice jars", "value": "avoid steel lids" },
+          "expectedCommitment": "adopted",
+          "condition": "Accept only the decision to avoid steel lids for these jars, without inventing a chosen replacement material or a general aversion to steel."
+        }
+      ],
+      "forbiddenInterpretation": "Selecting the smell observation instead of the lid decision, adopting steel lids themselves, or calling the explicit decision unknown."
+    },
+    {
+      "id": "cc-7db0",
+      "group": "rejected",
+      "selectedClaim": { "subject": "Rafi", "property": "location option for his studio desk", "value": "mezzanine" },
+      "expectedCommitment": "rejected",
+      "sourceRationale": "Rafi explicitly rejects the mezzanine in quoted speech. The quoted rejection belongs to Rafi, while the low ceiling supplies its reason. An adopted decision to exclude the mezzanine is equivalent; first match the baseline tuple's decision meaning, then assess commitment using its polarity.",
+      "acceptedEquivalentTargets": [
+        {
+          "selectedClaim": { "subject": "Rafi", "property": "location exclusion for his studio desk", "value": "keep the desk off the mezzanine" },
+          "expectedCommitment": "adopted",
+          "condition": "Retain Rafi's ownership and the same desk-location exclusion. Do not imply that another location was selected or that the reporter made the choice."
+        }
+      ],
+      "forbiddenInterpretation": "Assigning the decision to the reporter, selecting only the ceiling observation, or losing the explicit exclusion of the mezzanine."
+    },
+    {
+      "id": "cc-c6a9",
+      "group": "rejected",
+      "selectedClaim": { "subject": "user", "property": "bell-addition option for the library's book-return slot", "value": "adding a bell" },
+      "expectedCommitment": "rejected",
+      "sourceRationale": "Decided against explicitly rejects adding a bell. Rejected bell addition and adopted no-bell addition encode the same decision. First judge whether the actual baseline tuple preserves that decision, then assess commitment according to the tuple's polarity; a polarity change alone is not wrong-selected-claim.",
+      "acceptedEquivalentTargets": [
+        {
+          "selectedClaim": { "subject": "user", "property": "bell-addition choice for the library's book-return slot", "value": "do not add a bell" },
+          "expectedCommitment": "adopted",
+          "condition": "Accept the settled choice not to add a bell to this slot. Do not infer that an existing bell was removed, that every library bell is opposed, or that its physical absence was observed."
+        }
+      ],
+      "forbiddenInterpretation": "Adopting bell addition itself, rejecting the decision to omit bell addition, or replacing the decision with the separate disturbance premise."
+    },
+    {
+      "id": "cc-08f4",
+      "group": "rejected",
+      "selectedClaim": { "subject": "race organizers", "property": "surface option for the finish lane", "value": "gravel" },
+      "expectedCommitment": "rejected",
+      "sourceRationale": "The assistant conveys an explicit ruling out of gravel by the organizers. Reported ownership is separate from the source role and from the stated accessibility reason. An adopted exclusion of gravel is equivalent; judge the actual baseline tuple semantically before assigning its polarity-appropriate commitment.",
+      "acceptedEquivalentTargets": [
+        {
+          "selectedClaim": { "subject": "race organizers", "property": "surface exclusion for the finish lane", "value": "avoid gravel" },
+          "expectedCommitment": "adopted",
+          "condition": "Accept only the same organizers' settled exclusion of gravel for this lane, without asserting that a particular alternative surface was chosen."
+        }
+      ],
+      "forbiddenInterpretation": "Replacing the surface decision with the accessibility premise, attributing the decision to the user, adopting gravel itself, or treating the explicit decision as unknown."
+    }
+  ]
+}

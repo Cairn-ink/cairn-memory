@@ -1509,3 +1509,19 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Claim-local commitment refinement candidate
+
+The [claim-local commitment candidate](plans/claim-local-commitment.md) is
+evaluation-only. Its second stage revisits commitment for the baseline's frozen
+selected claim while retaining the original output. Twelve scripted tests check
+mapping, failure handling and source-bound storage; they establish no semantic
+gain. The retained wrong adoption already appears in raw provider output, and
+the original frozen-output replay still fails by design. No historical result
+has been repaired or rescored, and no paid candidate run has occurred.
+
+The prospective 24-case mechanism diagnostic keeps the same pinned historical
+model. Even a passing result would permit only the next held-out/integration
+gate; the existing quality gate, later development and benchmark checks remain
+unmet. This candidate addresses commitment of a selected tuple, not claim
+selection, attribution, dates, truth or execution authority.
