@@ -1509,3 +1509,23 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Source-selection memory is an offline evaluation candidate
+
+The [source-selection memory plan](plans/source-selection-memory.md) tests
+bounded selection of canonical source windows with labeled copied previews
+and full exact receipts. It is evaluation-only, with no production default,
+core, persisted schema or raw-archive change. Literal copying does not establish
+adequate selection, semantic fidelity, currentness, adoption or safe actions;
+an unselected qualifier remains lost. Actual local token counting can require
+a smaller preview tier to fit the unchanged output cap, hiding more context
+from normal filing or retrieval even when full receipts survive.
+
+Scripted real-core capture, normal filing, cold receipt reads and source-only
+recall passed offline checks on Node 22.16 and 24.15. These are integration and
+capacity observations, not measured QA improvement, autonomous classification
+quality, natural-session reliability or competitive parity. The plan retains
+the original capacity failure and later fixture/test corrections separately.
+No live two-session feasibility has executed, no paid result is established,
+and no new provider call or spend follows from these checks. Independent
+fixed-commit reviews and latest-head CI remain pending primary delivery.
