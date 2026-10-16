@@ -1,0 +1,320 @@
+# Source to proposition comparison: frozen acceptance contract
+
+## Question and boundary
+
+Does a single generation that extracts propositions together with the existing
+seven qualification fields improve faithful persistence over the current real
+extraction followed by qualification, under the same pinned model, exact source
+evidence and a 1,024 output-token bound per generation? This is a diagnostic
+comparison, not an additional refinement stage or a production default change.
+The baseline uses two generations per source; the candidate uses one. Candidate
+role/claimant sidecars are exploratory only. Neither arm receives credit for
+fields outside the identical persisted shape: content, kind, confidence,
+receipts and the seven existing qualification fields. The baseline need not
+produce the sidecars.
+
+## Observable acceptance criteria (declared before fixture authorship)
+
+1. Freeze exactly 24 newly authored ordinary synthetic conversations: six pure
+   observations, six observations mixed with a choice, four adopted choices,
+   four considered choices and four rejected choices. Use opaque source IDs,
+   1–3 user/assistant messages each, and 1–800 well-formed UTF-16 code units per
+   message. At least four cases have a message longer than 200 units and at
+   least four have multiple messages. Length comes from meaningful context,
+   never padding. Include diverse everyday domains, uncertainty, a conditional
+   adoption, a negated option, a reported chooser, an unadopted recommendation,
+   and a measured quantity distinguished from a chosen limit.
+2. The source fixture has only version and cases; each case has only id and
+   messages; each message has only role and content. Keep expectations, groups,
+   answers, hints, model metadata and evaluator language in a separate rubric.
+   Predeclare approximately 30–36 semantic required claims with material
+   conditions, attribution and permissible tuple polarity interpretations.
+3. Score source cases, not a fixed card count or exact wording. A source passes
+   only when all required claims are covered, every material emitted claim is
+   supported, and the actual tuple selected for each claim correctly expresses
+   its commitment, conditions and attribution. A decision elsewhere in the
+   source does not make an observation's tuple a decision. Accept faithful
+   paraphrases and different card segmentation, including several claims in
+   one card or a claim represented across cards, when their selected tuples
+   are jointly unambiguous. Omission of an unrequired incidental detail is not
+   itself a failure; unsupported material additions are.
+4. Keep failures, empty outputs, malformed outputs and overflows in N=24.
+   Inspect every baseline-correct required decision for loss under the
+   candidate, even when the baseline's whole source failed for another claim.
+   The semantic gate requires net source gains of at least three, zero lost
+   correct decisions, and zero new severe unsupported, stale or authorization
+   claims. Report each gate separately, including inconclusive judgments.
+5. Predeclare a same-family masked independent two-rater procedure. Each rater
+   sees randomized arm labels, exact evidence, the frozen rubric and only the
+   common persisted projection. Preserve both raw judgments, disagreements and
+   adjudication without rewriting earlier ratings. This is independent model
+   rating, not human calibration. Report agreement and unresolved judgments;
+   adjudication cannot erase source failures or silently change the rubric.
+6. Give both arms identical source evidence. Use the first attempt exactly
+   once; no retries, replacement sources, substitutions or hidden failures.
+   Record the pinned model/provider and generation settings before running.
+   Record all HTTP requests, token usage and reported invoice amounts for all
+   three expected generations per source (two baseline, one candidate); never
+   guess spend or treat a missing usage field as zero. Record failed attempts
+   and any additional rating/adjudication resources separately. Execution and
+   any new provider/budget authority belong to the primary operator; fixture
+   preparation does not authorize calls or access to keys, profiles or ledgers.
+7. Keep mechanical cold-gate results separate from semantic gains. Strict
+   offline tests cover shapes, exact groups/denominator, claim maps, source
+   oracle exclusion, UTF-16 bounds, mutation rejection and non-BMP handling.
+   They import neither candidate code nor SQLite. Run through the owned runner
+   on Node 22.16 and 24.15 and report actual process exit codes. Cross-check the
+   four-file delivery inventory by two independent mechanical routes and print
+   its count. Freeze source/rubric hashes before future outputs are observed.
+
+## Implementation and evidence ownership
+
+The fixture worker owns only the two source/rubric JSON files, their standalone
+offline test, and this plan. It does not inspect historical fixture contents,
+candidate prompts/implementation or future model outputs, and cannot alter the
+cohort after freeze. The primary owns candidate integration, executable scoring,
+resource accounting, independent review, final verification, commits and PR
+delivery. No user-flow entrypoint, browser replay or product caller changes in
+this packet; those checks remain the primary's responsibility if its wider
+implementation affects them.
+
+Requested and actual fixture author: GPT-6.1-Sol, high reasoning. Fixed base:
+`ad274b6117f86446fbf0ff16f503ae69d0278ce5`. Fixture branch:
+`experiment/source-proposition-cohort`. No commit or push by the fixture worker.
+
+## Frozen semantic judging procedure
+
+Before any generations, retain source/rubric SHA-256 hashes, the exact pinned
+model identifier, generation settings and the randomization seed. Prepare each
+arm from the same source bytes; evaluator rubric content must not enter either
+generation request. Expected extraction/qualification work is 72 generations:
+24 baseline extractions, 24 baseline qualifications and 24 candidate joint
+generations, each bounded to 1,024 output tokens. Actual attempted generations
+and HTTP requests remain authoritative when early failures prevent a later
+baseline stage; record the missing stage and reason rather than invent a call.
+Execute independent arms in a fixed alternating order by zero-based source
+index: baseline first for even indices, candidate first for odd indices. Failure
+of either arm does not prevent the other arm's first attempt; both stay in N=24.
+The source version is `source-proposition-v1`; the evaluator-only rubric version
+is `source-proposition-rubric-v1`.
+
+Two independent raters from the same declared model family receive the frozen
+rubric and exact source evidence, with arm labels independently shuffled from a
+retained seed and no candidate sidecars, prompt, implementation or arm identity.
+Each produces a raw per-arm record containing source status, per-required-claim
+coverage, selected card/tuple references, commitment and attribution correctness,
+material support for emitted claims, severe additions, source pass and reasons.
+Neither rater sees the other's ratings. A distinct masked adjudication pass
+resolves disagreements with reasons, retaining both raw records and the raw
+adjudication response. Missing or unresolved judgments remain visible and block
+a definitive pass. This design offers model-based independence; it provides no
+human calibration or evidence of independent model-family error distributions.
+
+After unmasking, compute source gains as baseline-fail/candidate-pass cases,
+source losses as baseline-pass/candidate-fail cases, and net gains as gains
+minus losses. Independently enumerate every required decision that is correct
+under the baseline's persisted projection, regardless of that source's overall
+pass. Check each against the candidate for faithful coverage, commitment,
+conditions, attribution and polarity. Report those losses and new severe claims
+beside the source totals. Freeze and preserve all failures, incomplete records
+and attempted resources. Passing the mechanical cold gate is a prerequisite to
+running; it cannot satisfy any semantic gate. Neither a positive result nor a
+lower generation count by itself authorizes changing production defaults.
+
+## Verification record
+
+Frozen source SHA-256:
+`2018e0502c9e4533114855c2e336cc9414a0006f53b5aa2afec1f0ca577970eb`.
+Frozen evaluator rubric SHA-256:
+`39f2e1eef57d59d5a93c000dbceaae9b0a2077bc024c337ddf6cc7a5e9532f26`.
+Freeze occurred after both offline runtime gates and before any future model
+output was seen by the fixture author. Do not alter these cases in response to
+outputs; any revised cohort needs a distinct version and fresh diagnostic.
+
+The source-only inventory contains 24 cases and 31 messages, with message
+lengths from 41 to 320 UTF-16 code units. Eight cases contain a message longer
+than 200 units; six cases have multiple messages. The rubric independently
+contains 34 required claims, including 21 required decisions. Actual groups
+match the declared 6/6/4/4/4 split. None of these counts is a semantic score.
+This cohort uses explicit authored statements. It is not an official QA
+benchmark and does not represent real-conversation quality or distributions.
+
+Commands run from the isolated worktree:
+
+- `node tools/testing/run.mjs evaluation/architecture/test/source-proposition-fixtures.test.mjs`
+  with Node `v22.16.0` — final exit **0**, seven tests passed, none skipped.
+- The same command with Node `v24.15.0` — final exit **0**, seven tests passed,
+  none skipped.
+
+The first Node 22 run exited **1** because the test's message-count assertion
+incorrectly said 33; the source inventory was actually 31. Correcting that
+assertion required no source or gold change. The final passing runs above used
+the corrected test and exact version strings agreed with the operator. Explicit
+version probes reported `v22.16.0` and `v24.15.0`.
+The seventh test pins the exact frozen source/rubric bytes by SHA-256 so that
+CI rejects edits even when their IDs and structural counts are unchanged.
+
+Delivery inventory was derived from `git ls-files --others --exclude-standard`
+and independently from `find` traversing the fixtures, tests and plans
+directories for `source-proposition-*`; sorted lists matched, count **4**:
+
+- `docs/plans/source-proposition-comparison.md`
+- `evaluation/architecture/fixtures/source-proposition-rubric-v1.json`
+- `evaluation/architecture/fixtures/source-proposition-v1.json`
+- `evaluation/architecture/test/source-proposition-fixtures.test.mjs`
+
+The inventory assertion command exited **0**. The primary owns full repository
+checks, final committed-diff review and integration checks. No semantic model
+result, provider resource measurement or paid experiment is claimed here.
+
+## Public negative-result delivery acceptance (2026-10-17)
+
+This additive delivery preserves the frozen experiment above, its first attempts,
+source/rubric bytes and runtime `bae2938bf170c4ce07b42f15c7a6b4010ed0ffc3`.
+It publishes an auditable failure, not adoption or official QA accuracy.
+
+- A1: retain all 24 sources (baseline 24 completed, candidate 21), including
+  failed/empty/invalid/timeout attempts in the denominator; verify both frozen
+  fixture hashes and original packet/judgment/adjudication/acceptance hashes.
+- A2: pure public recomputation must reproduce 10/24 to 11/24, seven gains,
+  six regressions, net +1 against >=3, ten lost previously correct decisions
+  against zero, three new severe assertion instances in two sources against
+  zero, zero unresolved and zero cold failures: FAIL, do not adopt. Preserve
+  exact original blinded judgments and adjudication, common projections and map;
+  never subtract aggregate severe totals to manufacture equivalence.
+- A3: explain four decision losses from three atomic structural rejections,
+  two omitted considerations, one omitted conditional branch, two considered
+  to unknown and one intended to completed. Keep failures; no repairs/retries.
+- A4: distinguish 74/74 compiled-item cold persistence (33/41 by arm) from
+  semantic trust. State the 24 synthetic cases/31 messages/34 claims/21 decisions,
+  same-family two blind raters and fresh adjudicator, primary acceptance, and
+  absence of human calibration, real users, official QA, installed Hermes,
+  full capture, long histories or competitor parity. No production changes.
+- A5: report 48 to 24 generation calls and counts, known generation estimates
+  $0.035110 to $0.023554, unknown counting/judging costs and $0.72 reservation
+  (not invoice); exclude filing/rationale/recall and full-lifecycle savings.
+- A6: offline tests reproduce scores and check hashes/counts/cold/resources;
+  mutation controls reject dropped failures, lost-decision/severe laundering
+  and edited originals/source. Run the owned runner on Node 22.16 and 24.15,
+  report actual exit codes, and independently cross-check changed-file count.
+  Entry points are evaluation-only scorer exports and their focused tests;
+  existing product/core/adapters/browser callers are unchanged. Primary owns
+  full repository gates and independent fixed-diff review.
+- A7: next direction is ownership/opportunity re-scope after two failed
+  controlled approaches, not a selected third candidate. MOC/vectors cannot
+  repair omitted write evidence; inspect existing bounded source/episode
+  functionality before adding source capsules. No broader Raw authority.
+
+Routing: bounded delivery implementation is actual GPT-6.1 Sol/high, as explicitly
+selected by the user; primary owns integration/acceptance. Fixed base
+`ad274b6117f86446fbf0ff16f503ae69d0278ce5`, existing isolated branch
+`experiment/source-proposition-builder`. Independent Standards/Spec review is
+pending. Correction rounds, elapsed time and agent cost are not yet measured.
+Allowed additions: public result JSON, pure scorer and focused tests, evidence
+note; additive status/results in this plan, builder plan, limitations and roadmap.
+No production, fixture, helper, workflow or package changes are authorized here.
+
+## Completed comparison status (2026-10-17)
+
+The [retained public result](../evidence/source-proposition-comparison.md) is
+**FAIL — do not adopt**. Baseline 10/24 and candidate 11/24 source passes hide
+ten lost previously correct required decisions and three new severe assertion
+instances in two sources. All 24 first attempts remain; candidate completed
+21/24. Three whole-output structural rejections caused four losses, and six
+substantive losses remain beyond typed-wire corrections. Primary acceptance
+preserved all original ratings. Exact original masked projections, map, rater
+judgments, adjudication and acceptance are public with fixed SHA-256 pins.
+Re-scoring is mechanical, not new semantic validation or paid-run reproduction.
+
+The separate physical-availability audit finds five of the ten lost decisions'
+whole user messages in persisted candidate receipts, one source-selection
+omission and four losses through atomic rejection. It changes no score and
+does not demonstrate answer recovery. Public QA/mixed LongMemEval already uses
+source-evidence context. Re-scope ownership/opportunity after two failed
+controlled approaches; no third candidate, wider Raw retention or new paid
+authority is selected. Check existing bounded source/episode functionality
+before proposing source capsule duplication.
+
+Affected entrypoints/callers: new pure `validateJudgments`, `scoreJudgments`
+and `reproduceSourcePropositionResult` exports are imported only by the new
+focused offline suite. The result JSON is consumed by that suite and linked
+from evidence/limitations/roadmap. The existing builder/capture/adapters,
+product/browser routes, old URLs and cross-feature runtime callers have no
+changed entrypoint. Worker owns focused replay/mutation checks; primary owns
+combined regression gates and independent Standards/Spec review.
+
+## Public delivery verification checkpoint
+
+Worker verification ran against frozen runtime HEAD
+`bae2938bf170c4ce07b42f15c7a6b4010ed0ffc3` plus the eight uncommitted delivery
+paths below. Explicit binary probes returned `v22.16.0` and `v24.15.0`.
+
+```sh
+node tools/testing/run.mjs evaluation/architecture/test/source-proposition-score.test.mjs
+```
+
+The same command was invoked with each explicitly selected version's Node
+binary. Both runs had **actual process exit 0**, **21/21 tests passed**, no skipped
+tests. An earlier 20-test version also passed on both runtimes (exit 0); the
+added test covers the separate physical-source audit. No failing run is hidden.
+The tests preserve the original scorer's synthetic cases and exactly reproduce
+the retained score, agreement, completion, cold markers and resource invariants.
+Mutation controls reject omitted failed arms, cross-source severe equivalence,
+lost-decision/severe laundering, edited original ratings/map/measurements and
+modified source/rubric bytes, including attacker-recomputed file hashes.
+The original scorer body hash is independently checked. No model, network,
+SQLite, environment/key or operational ledger access occurs in this suite.
+
+`git diff --check` had actual exit **0**. A read-only Node inventory assertion
+had actual exit **0**: Git diff plus untracked names was independently compared
+against full root filesystem traversal and fixed-base blob hashes, including
+root/config, scripts, docs and public paths when present. Ignored dependency/
+generated directories and Git metadata were excluded. Exact counts matched:
+**8 delivery paths** against frozen runtime HEAD, and **13 combined paths**
+against `ad274b6117f86446fbf0ff16f503ae69d0278ce5`. The original seven-file
+builder/cohort diff remains, with additive status/results in its two plans.
+
+The mechanically derived eight-path delivery inventory is:
+
+- `ROADMAP.md`
+- `docs/evidence/source-proposition-comparison.md`
+- `docs/limitations.md`
+- `docs/plans/source-proposition-builder.md`
+- `docs/plans/source-proposition-comparison.md`
+- `evaluation/architecture/results/source-proposition-v1.json`
+- `evaluation/architecture/source-proposition-score.mjs`
+- `evaluation/architecture/test/source-proposition-score.test.mjs`
+
+| Packet | Owner/model/effort | Fixed point | Evidence / next owner |
+| --- | --- | --- | --- |
+| A1–A7 public failure delivery | Worker, actual GPT-6.1 Sol/high, requested selection honored | Runtime `bae2938`; base `ad274b6`; uncommitted delivery | Focused 21/21 on both runtimes, exits 0; no correction round yet; elapsed/cost unknown |
+| Physical-source diagnostic | Primary acceptance plus separate read-only audit; worker mechanical replay | Same frozen original source/projections | 5 present / 1 selection omission / 4 rejection, no semantic rescore |
+| Integration and delivery review | Primary; independent Standards/Spec reviewers pending | Final candidate not yet committed | Primary reruns combined gates, inspects actual diff and owns commit/PR; no review pass claimed |
+
+The shared worktree workflow kept this packet isolated and made the acceptance
+criteria explicit before changes. Worker made no commit or push. Full gates,
+final fixed-diff reviews and delivery remain the primary's work; this checkpoint
+does not declare those pending gates complete.
+
+### Primary combined-candidate verification
+
+Primary independently inspected the eight-path delivery, all original-byte
+bindings and the full combined scope before freezing the delivery commit:
+
+- `npm test` — actual exit **0**, **680/680** passed, no skips, 204,332 ms.
+- `node tools/testing/run.mjs evaluation/architecture/test/*.test.mjs` — actual
+  exit **0**, **128/128** on Node **22.16.0** and **24.15.0**, no skips.
+- `npm run validate` and `git diff --check` — each actual exit **0**.
+- Pinned Claude Code **2.1.260**, marketplace validation and plugin `--strict`
+  validation — each actual exit **0**, with an isolated owned configuration
+  directory removed afterward. No user Claude configuration was used.
+- Independently compared all seven embedded original UTF-8 records against
+  the retained files and their SHA-256 hashes — actual exit **0**.
+- Git diff/untracked inventory versus a separate filesystem/base-blob SHA-1
+  comparison — actual exit **0**, **13** combined paths, **8** delivery paths,
+  **1,642** inspected nonignored files. Core, adapters, integrations, plugins,
+  schemas and CI trees remain unchanged against the fixed base.
+
+The final commit and independent Standards/Spec outcomes are recorded on PR
+#428 after fixed-point review. These checks validate delivery consistency;
+the semantic decision remains **FAIL — do not adopt**.

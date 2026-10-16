@@ -1,0 +1,120 @@
+{
+  "version": "source-proposition-v1",
+  "cases": [
+    {
+      "id": "a91f03b7c482",
+      "messages": [{ "role": "user", "content": "The thermometer on the kitchen shelf read 27 degrees Celsius at noon today. It was beside the flour jar, away from the oven, and I took the reading before cooking lunch. This is a temperature reading from that spot and time; I have not set a temperature target for the kitchen." }]
+    },
+    {
+      "id": "7dc480a1f6b3",
+      "messages": [{ "role": "user", "content": "On this morning's bus trip from Oak Street to the library, the journey took 38 minutes. The bus waited at the bridge while a delivery truck turned, and I stayed on until the library stop. I am recording the duration of that one trip; I have not chosen a regular departure time." }]
+    },
+    {
+      "id": "0b62eaf931d8",
+      "messages": [{ "role": "user", "content": "My basil plant has four yellow leaves this afternoon. I counted only leaves still attached to the plant. I do not yet know whether the cause is watering, light, or something else." }]
+    },
+    {
+      "id": "f4e981c0a237",
+      "messages": [
+        { "role": "assistant", "content": "What did the parcel tracking page show when you checked it?" },
+        { "role": "user", "content": "At 09:10 today, the tracking page showed the parcel at the East Depot. It did not give a delivery date, and I have no additional location update." }
+      ]
+    },
+    {
+      "id": "36a7d8c109ef",
+      "messages": [{ "role": "user", "content": "I counted 18 people entering the community hall between 2:00 and 2:15 this afternoon. This count does not include people who were already inside when I arrived." }]
+    },
+    {
+      "id": "d2096f84b1a5",
+      "messages": [{ "role": "user", "content": "The label on my blue mug says it holds 350 millilitres. I have not checked its capacity myself. The mug has a little moon 🌙 beside the handle, which is how I distinguish it from the other blue mug." }]
+    },
+    {
+      "id": "8f1c420d6ab9",
+      "messages": [{ "role": "user", "content": "Yesterday's walk around the lake took me 52 minutes from the north gate back to the same gate. I stopped once to look at the birds. For next Saturday's walk, I have decided to allow a maximum of 40 minutes, because I need to meet my sister afterward. The 40 minutes is my chosen limit, not yesterday's measured duration." }]
+    },
+    {
+      "id": "c703fa5128de",
+      "messages": [
+        { "role": "user", "content": "The repair shop quoted 85 dollars to fix my desk lamp. That quote includes the switch and labour, but no new shade." },
+        { "role": "assistant", "content": "Have you chosen what to do with the lamp?" },
+        { "role": "user", "content": "Yes. I have decided to have that shop repair the lamp for the quoted 85 dollars. I am not buying a replacement lamp." }
+      ]
+    },
+    {
+      "id": "21e5b8a6d047",
+      "messages": [{ "role": "user", "content": "The small rehearsal room has eight chairs. For Friday's choir practice, I have decided to book the large room instead of that small room, because we expect twelve singers." }]
+    },
+    {
+      "id": "b8d306f1e94a",
+      "messages": [{ "role": "user", "content": "My balcony gets direct sun for about two hours in the morning, based on my observations this week. I am considering growing mint there, but I have not chosen a plant yet." }]
+    },
+    {
+      "id": "5a0e729c4fd1",
+      "messages": [
+        { "role": "user", "content": "The museum's evening tour begins at 6:30 p.m. on Thursday. That is what the booking page says today." },
+        { "role": "user", "content": "I have decided not to take that Thursday evening tour. I have not selected another tour or authorized anyone to book one for me." }
+      ]
+    },
+    {
+      "id": "e19a64c7b203",
+      "messages": [{ "role": "user", "content": "The picnic forecast currently gives a 60 percent chance of rain on Sunday. My cousin Nia told me she has decided to reserve the covered pavilion for our Sunday picnic. I am reporting Nia's decision; I have not made a reservation myself." }]
+    },
+    {
+      "id": "4c8f1d963a70",
+      "messages": [{ "role": "user", "content": "For the neighbourhood supper this month, I have decided to make lentil soup. I have also decided to label the pot with the ingredients before serving it, since several neighbours asked about ingredients last time. These are my plans for this supper, and I have not offered to cook for any later event." }]
+    },
+    {
+      "id": "a6d024b9e158",
+      "messages": [
+        { "role": "assistant", "content": "Is the beach route your final choice for Sunday's bike ride?" },
+        { "role": "user", "content": "I have decided to use the beach route for Sunday's ride only if the wind forecast on Saturday is below 20 kilometres per hour. If it is 20 or above, I will postpone the ride rather than take that route." }
+      ]
+    },
+    {
+      "id": "93b57e0a2fc6",
+      "messages": [{ "role": "user", "content": "My brother Leo told me, 'I have decided to take the train to our aunt's birthday lunch next Sunday.' That is Leo's travel decision. I have not chosen my own way to get there." }]
+    },
+    {
+      "id": "dc17a9e435b0",
+      "messages": [{ "role": "user", "content": "For my bedroom reading light, I have decided to buy the warm-white bulb. I have also decided to keep the existing lampshade. Both choices apply to this bedroom light, not the hallway light." }]
+    },
+    {
+      "id": "6e4092c81afd",
+      "messages": [{ "role": "user", "content": "I am considering a Saturday pottery class at the community centre for next month. I have not enrolled, chosen a session, or decided to spend the class fee yet." }]
+    },
+    {
+      "id": "18bf6a30d5e2",
+      "messages": [
+        { "role": "user", "content": "I am considering the wool blanket for the guest room, but I have not decided to buy it. What would you recommend for that room?" },
+        { "role": "assistant", "content": "I recommend the cotton blanket for the guest room because it can be washed in your machine. This is my recommendation; you have not adopted it or authorized a purchase." }
+      ]
+    },
+    {
+      "id": "f0237c9a16bd",
+      "messages": [{ "role": "user", "content": "My colleague Mira says she is considering moving the book club to the cafe near the station for November. She explicitly said she has not chosen a venue yet. I am passing along Mira's consideration, not choosing for the club." }]
+    },
+    {
+      "id": "70da815e3bc4",
+      "messages": [{ "role": "user", "content": "I am considering swimming before work on Tuesdays if the pool opens at six next month. I do not yet know its opening hours, and even if it opens at six I have not committed to going." }]
+    },
+    {
+      "id": "2ea748d0c615",
+      "messages": [{ "role": "user", "content": "I have decided not to buy the red raincoat for this winter. I have not chosen a different coat, and this decision does not mean I dislike every red item of clothing." }]
+    },
+    {
+      "id": "bb6049f2a18e",
+      "messages": [
+        { "role": "assistant", "content": "Would you like the midnight train for the trip to the reunion?" },
+        { "role": "user", "content": "I have rejected the midnight train for this reunion trip. I have decided to take the 9 a.m. train instead. This is a travel choice, not permission for you to buy a ticket." }
+      ]
+    },
+    {
+      "id": "3f92d6a081ce",
+      "messages": [{ "role": "user", "content": "Our treasurer Omar told me he has rejected the proposal to raise the garden club's annual fee this year. Omar made that decision in his treasurer role. I am reporting it and am not claiming that the whole committee has voted." }]
+    },
+    {
+      "id": "e5c17b409a62",
+      "messages": [{ "role": "user", "content": "For the family photo album, I have decided not to include the blurry beach photo. I have not rejected the other beach photos and have not decided which cover to use." }]
+    }
+  ]
+}
