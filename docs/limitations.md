@@ -1,5 +1,30 @@
 # Known limitations
 
+The completed [source-to-proposition experiment](evidence/source-proposition-comparison.md)
+fails its frozen adoption gate: baseline 10/24 source passes versus candidate
+11/24 (seven gains, six regressions, net +1 against >=3), ten lost previously
+correct required decisions and three new severe assertion instances in two
+sources. All 24 first attempts remain, including three candidate structural
+rejections. Claim correctness fell 21/34 to 20/34 and coverage 34/34 to 28/34.
+Cold persistence of all 74 compiled items does not establish semantic trust.
+The candidate uses 24 rather than 48 generations, with known generation
+estimates $0.023554 rather than $0.035110; counting/judging charges remain
+unknown and the $0.72 reservation is not an invoice or lifecycle saving.
+The public artifact replays exact original same-family blind ratings and fresh
+adjudication, with primary acceptance; it is not human calibration, official QA,
+real-user, installed-Hermes, full-capture, long-history or competitor evidence.
+Do not adopt; no production default changed.
+
+Of the ten lost decisions, five still have the complete necessary user message
+in candidate persisted receipts, one lost the user source during selection and
+four disappeared through atomic structural rejection. This physical-availability
+audit is not a rescore or answer-recovery proof. Public QA/mixed LongMemEval
+already uses source-evidence context. After two failed controlled approaches,
+re-scope ownership/opportunity before selecting another candidate; MOC/vectors
+cannot repair omitted write evidence, and existing bounded source/episode
+functionality must be checked before adding source capsules. No broader Raw
+retention or new paid-run authority follows.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025

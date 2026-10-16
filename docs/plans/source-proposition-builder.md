@@ -1,5 +1,11 @@
 # Source-to-proposition builder: bounded offline prototype
 
+Delivery update (2026-10-17): the subsequently frozen controlled comparison is
+complete and **failed**. [Public retained result](../evidence/source-proposition-comparison.md):
+10/24 to 11/24 source passes, net +1, ten lost correct decisions, three new
+severe assertion instances in two sources. Do not adopt. The historical offline
+prototype contract/status below is preserved; no production default changes.
+
 Status: bounded offline implementation; primary contract corrections recorded
 below after the first scripted implementation. Evaluation only. The previous
 post-hoc refiner failed its no-harm gate. This prototype explores replacing

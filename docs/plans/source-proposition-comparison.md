@@ -166,3 +166,155 @@ directories for `source-proposition-*`; sorted lists matched, count **4**:
 The inventory assertion command exited **0**. The primary owns full repository
 checks, final committed-diff review and integration checks. No semantic model
 result, provider resource measurement or paid experiment is claimed here.
+
+## Public negative-result delivery acceptance (2026-10-17)
+
+This additive delivery preserves the frozen experiment above, its first attempts,
+source/rubric bytes and runtime `bae2938bf170c4ce07b42f15c7a6b4010ed0ffc3`.
+It publishes an auditable failure, not adoption or official QA accuracy.
+
+- A1: retain all 24 sources (baseline 24 completed, candidate 21), including
+  failed/empty/invalid/timeout attempts in the denominator; verify both frozen
+  fixture hashes and original packet/judgment/adjudication/acceptance hashes.
+- A2: pure public recomputation must reproduce 10/24 to 11/24, seven gains,
+  six regressions, net +1 against >=3, ten lost previously correct decisions
+  against zero, three new severe assertion instances in two sources against
+  zero, zero unresolved and zero cold failures: FAIL, do not adopt. Preserve
+  exact original blinded judgments and adjudication, common projections and map;
+  never subtract aggregate severe totals to manufacture equivalence.
+- A3: explain four decision losses from three atomic structural rejections,
+  two omitted considerations, one omitted conditional branch, two considered
+  to unknown and one intended to completed. Keep failures; no repairs/retries.
+- A4: distinguish 74/74 compiled-item cold persistence (33/41 by arm) from
+  semantic trust. State the 24 synthetic cases/31 messages/34 claims/21 decisions,
+  same-family two blind raters and fresh adjudicator, primary acceptance, and
+  absence of human calibration, real users, official QA, installed Hermes,
+  full capture, long histories or competitor parity. No production changes.
+- A5: report 48 to 24 generation calls and counts, known generation estimates
+  $0.035110 to $0.023554, unknown counting/judging costs and $0.72 reservation
+  (not invoice); exclude filing/rationale/recall and full-lifecycle savings.
+- A6: offline tests reproduce scores and check hashes/counts/cold/resources;
+  mutation controls reject dropped failures, lost-decision/severe laundering
+  and edited originals/source. Run the owned runner on Node 22.16 and 24.15,
+  report actual exit codes, and independently cross-check changed-file count.
+  Entry points are evaluation-only scorer exports and their focused tests;
+  existing product/core/adapters/browser callers are unchanged. Primary owns
+  full repository gates and independent fixed-diff review.
+- A7: next direction is ownership/opportunity re-scope after two failed
+  controlled approaches, not a selected third candidate. MOC/vectors cannot
+  repair omitted write evidence; inspect existing bounded source/episode
+  functionality before adding source capsules. No broader Raw authority.
+
+Routing: bounded delivery implementation is actual GPT-6.1 Sol/high, as explicitly
+selected by the user; primary owns integration/acceptance. Fixed base
+`ad274b6117f86446fbf0ff16f503ae69d0278ce5`, existing isolated branch
+`experiment/source-proposition-builder`. Independent Standards/Spec review is
+pending. Correction rounds, elapsed time and agent cost are not yet measured.
+Allowed additions: public result JSON, pure scorer and focused tests, evidence
+note; additive status/results in this plan, builder plan, limitations and roadmap.
+No production, fixture, helper, workflow or package changes are authorized here.
+
+## Completed comparison status (2026-10-17)
+
+The [retained public result](../evidence/source-proposition-comparison.md) is
+**FAIL — do not adopt**. Baseline 10/24 and candidate 11/24 source passes hide
+ten lost previously correct required decisions and three new severe assertion
+instances in two sources. All 24 first attempts remain; candidate completed
+21/24. Three whole-output structural rejections caused four losses, and six
+substantive losses remain beyond typed-wire corrections. Primary acceptance
+preserved all original ratings. Exact original masked projections, map, rater
+judgments, adjudication and acceptance are public with fixed SHA-256 pins.
+Re-scoring is mechanical, not new semantic validation or paid-run reproduction.
+
+The separate physical-availability audit finds five of the ten lost decisions'
+whole user messages in persisted candidate receipts, one source-selection
+omission and four losses through atomic rejection. It changes no score and
+does not demonstrate answer recovery. Public QA/mixed LongMemEval already uses
+source-evidence context. Re-scope ownership/opportunity after two failed
+controlled approaches; no third candidate, wider Raw retention or new paid
+authority is selected. Check existing bounded source/episode functionality
+before proposing source capsule duplication.
+
+Affected entrypoints/callers: new pure `validateJudgments`, `scoreJudgments`
+and `reproduceSourcePropositionResult` exports are imported only by the new
+focused offline suite. The result JSON is consumed by that suite and linked
+from evidence/limitations/roadmap. The existing builder/capture/adapters,
+product/browser routes, old URLs and cross-feature runtime callers have no
+changed entrypoint. Worker owns focused replay/mutation checks; primary owns
+combined regression gates and independent Standards/Spec review.
+
+## Public delivery verification checkpoint
+
+Worker verification ran against frozen runtime HEAD
+`bae2938bf170c4ce07b42f15c7a6b4010ed0ffc3` plus the eight uncommitted delivery
+paths below. Explicit binary probes returned `v22.16.0` and `v24.15.0`.
+
+```sh
+node tools/testing/run.mjs evaluation/architecture/test/source-proposition-score.test.mjs
+```
+
+The same command was invoked with each explicitly selected version's Node
+binary. Both runs had **actual process exit 0**, **21/21 tests passed**, no skipped
+tests. An earlier 20-test version also passed on both runtimes (exit 0); the
+added test covers the separate physical-source audit. No failing run is hidden.
+The tests preserve the original scorer's synthetic cases and exactly reproduce
+the retained score, agreement, completion, cold markers and resource invariants.
+Mutation controls reject omitted failed arms, cross-source severe equivalence,
+lost-decision/severe laundering, edited original ratings/map/measurements and
+modified source/rubric bytes, including attacker-recomputed file hashes.
+The original scorer body hash is independently checked. No model, network,
+SQLite, environment/key or operational ledger access occurs in this suite.
+
+`git diff --check` had actual exit **0**. A read-only Node inventory assertion
+had actual exit **0**: Git diff plus untracked names was independently compared
+against full root filesystem traversal and fixed-base blob hashes, including
+root/config, scripts, docs and public paths when present. Ignored dependency/
+generated directories and Git metadata were excluded. Exact counts matched:
+**8 delivery paths** against frozen runtime HEAD, and **13 combined paths**
+against `ad274b6117f86446fbf0ff16f503ae69d0278ce5`. The original seven-file
+builder/cohort diff remains, with additive status/results in its two plans.
+
+The mechanically derived eight-path delivery inventory is:
+
+- `ROADMAP.md`
+- `docs/evidence/source-proposition-comparison.md`
+- `docs/limitations.md`
+- `docs/plans/source-proposition-builder.md`
+- `docs/plans/source-proposition-comparison.md`
+- `evaluation/architecture/results/source-proposition-v1.json`
+- `evaluation/architecture/source-proposition-score.mjs`
+- `evaluation/architecture/test/source-proposition-score.test.mjs`
+
+| Packet | Owner/model/effort | Fixed point | Evidence / next owner |
+| --- | --- | --- | --- |
+| A1–A7 public failure delivery | Worker, actual GPT-6.1 Sol/high, requested selection honored | Runtime `bae2938`; base `ad274b6`; uncommitted delivery | Focused 21/21 on both runtimes, exits 0; no correction round yet; elapsed/cost unknown |
+| Physical-source diagnostic | Primary acceptance plus separate read-only audit; worker mechanical replay | Same frozen original source/projections | 5 present / 1 selection omission / 4 rejection, no semantic rescore |
+| Integration and delivery review | Primary; independent Standards/Spec reviewers pending | Final candidate not yet committed | Primary reruns combined gates, inspects actual diff and owns commit/PR; no review pass claimed |
+
+The shared worktree workflow kept this packet isolated and made the acceptance
+criteria explicit before changes. Worker made no commit or push. Full gates,
+final fixed-diff reviews and delivery remain the primary's work; this checkpoint
+does not declare those pending gates complete.
+
+### Primary combined-candidate verification
+
+Primary independently inspected the eight-path delivery, all original-byte
+bindings and the full combined scope before freezing the delivery commit:
+
+- `npm test` — actual exit **0**, **680/680** passed, no skips, 204,332 ms.
+- `node tools/testing/run.mjs evaluation/architecture/test/*.test.mjs` — actual
+  exit **0**, **128/128** on Node **22.16.0** and **24.15.0**, no skips.
+- `npm run validate` and `git diff --check` — each actual exit **0**.
+- Pinned Claude Code **2.1.260**, marketplace validation and plugin `--strict`
+  validation — each actual exit **0**, with an isolated owned configuration
+  directory removed afterward. No user Claude configuration was used.
+- Independently compared all seven embedded original UTF-8 records against
+  the retained files and their SHA-256 hashes — actual exit **0**.
+- Git diff/untracked inventory versus a separate filesystem/base-blob SHA-1
+  comparison — actual exit **0**, **13** combined paths, **8** delivery paths,
+  **1,642** inspected nonignored files. Core, adapters, integrations, plugins,
+  schemas and CI trees remain unchanged against the fixed base.
+
+The final commit and independent Standards/Spec outcomes are recorded on PR
+#428 after fixed-point review. These checks validate delivery consistency;
+the semantic decision remains **FAIL — do not adopt**.

@@ -16,6 +16,22 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The completed [source-to-proposition comparison](docs/evidence/source-proposition-comparison.md)
+  fails: 10/24 to 11/24 source passes, net +1 (requires >=3), ten lost correct
+  decisions and three new severe assertion instances in two sources. Retain
+  all 24 first attempts and three atomic candidate rejections; do not adopt.
+  All 74 compiled items persisted cold, but this is not semantic trust. Fewer
+  generation calls and lower known generation estimates do not establish total
+  lifecycle savings; counting/judging charges remain unknown. Exact original
+  supplied judgments are publicly replayable, not new official QA accuracy.
+  After two failed controlled approaches, re-scope ownership/opportunity rather
+  than select a third candidate here. Five lost decisions retain their user
+  evidence, one loses source selection and four disappear with rejected outputs;
+  this is no answer-recovery proof. Public QA already uses source context.
+  Check existing bounded source/episode functionality before adding source
+  capsules; MOC/vectors do not repair omitted write evidence. No production
+  default or broader Raw retention authority changes.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It
