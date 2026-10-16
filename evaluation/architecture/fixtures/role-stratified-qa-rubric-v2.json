@@ -1,0 +1,216 @@
+{
+  "version":"role-stratified-qa-rubric-v1",
+  "fixtureVersion":"role-stratified-qa-v1",
+  "cases":[
+    {
+      "id":"b72c84000101","group":"dated-personal-events","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"My first public cello solo was on 18 January 2032, and my first quartet-member rehearsal was on 2 February 2032.",
+      "claims":[
+        {"id":"c1","text":"The user's first public cello solo was on 18 January 2032.","decision":false,"evidence":[{"messageIndex":0,"quote":"I finally played my first public cello solo at the winter concert on 18 January 2032."}]},
+        {"id":"c2","text":"The user's first rehearsal as a quartet member was on 2 February 2032.","decision":false,"evidence":[{"messageIndex":2,"quote":"My first rehearsal as a quartet member was on 2 February 2032"}]}
+      ],
+      "forbiddenAssertions":[{"text":"The first solo and first quartet-member rehearsal occurred on the same date.","severe":true},{"text":"A quartet performance has already been booked or performed.","severe":true}]
+    },
+    {
+      "id":"b72c84000102","group":"dated-personal-events","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"Rhea's final shift was 4 April 2031, and her retirement lunch was 6 April 2031.",
+      "claims":[
+        {"id":"c1","text":"Rhea worked her final shift on 4 April 2031.","decision":false,"evidence":[{"messageIndex":0,"quote":"Today is Monday, 7 April 2031. My mother Rhea worked her final shift at the botanical visitor center last Friday"}]},
+        {"id":"c2","text":"Rhea's retirement lunch was on 6 April 2031.","decision":false,"evidence":[{"messageIndex":0,"quote":"Today is Monday, 7 April 2031. My mother Rhea worked her final shift at the botanical visitor center last Friday, and yesterday we held her retirement lunch."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The user retired from their own job along with Rhea.","severe":true},{"text":"Rhea's final shift and lunch were both on Monday, 7 April.","severe":true}]
+    },
+    {
+      "id":"b72c84000103","group":"dated-personal-events","unknown":true,"assistantInformation":false,
+      "expectedAnswer":"The original broadcast date is not established. The reel is undated, the family recollection is imprecise, and the archive has not supplied an identification.",
+      "claims":[
+        {"id":"c1","text":"The original broadcast date of Asa's interview cannot be determined from these messages.","decision":false,"evidence":[{"messageIndex":0,"quote":"The reel has the program title written on it, but no broadcast date."},{"messageIndex":2,"quote":"My aunt remembers hearing it when she was young, yet cannot narrow that down. The station archive has acknowledged my inquiry and has not sent a result."}]}
+      ],
+      "forbiddenAssertions":[{"text":"A definite day, month, or year for the original broadcast has been established.","severe":true},{"text":"The archive's acknowledgment supplied a confirmed broadcast date.","severe":true}]
+    },
+    {
+      "id":"b72c84000104","group":"dated-personal-events","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"I passed the practical assessment on 12 August 2032 and worked my first paid pool shift on 20 August 2032.",
+      "claims":[
+        {"id":"c1","text":"The practical lifeguard assessment was passed on 12 August 2032.","decision":false,"evidence":[{"messageIndex":0,"quote":"I passed the practical assessment for my pool lifeguard qualification on 12 August 2032."}]},
+        {"id":"c2","text":"The first paid pool shift was on 20 August 2032.","decision":false,"evidence":[{"messageIndex":0,"quote":"My first paid pool shift was 20 August 2032."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The practical assessment was passed on the certificate-arrival date, 16 August.","severe":true},{"text":"The qualification described was for open-water rescue.","severe":true}]
+    },
+    {
+      "id":"b72c84000201","group":"changed-observations","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"The atlas's loan period was fourteen days. The original is back at the library.",
+      "claims":[
+        {"id":"c1","text":"The actual atlas loan period was fourteen days.","decision":false,"evidence":[{"messageIndex":2,"quote":"This atlas has a fourteen-day loan, not twenty-one"}]},
+        {"id":"c2","text":"The original atlas has been returned to the library.","decision":false,"evidence":[{"messageIndex":2,"quote":"I finished the pages I wanted and returned the atlas to the library yesterday."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The atlas had a twenty-one-day loan.","severe":true},{"text":"The original borrowed atlas is currently at the user's home.","severe":true}]
+    },
+    {
+      "id":"b72c84000202","group":"changed-observations","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"The circle now meets upstairs in the Cedar Room on Thursday evenings.",
+      "claims":[
+        {"id":"c1","text":"The mending circle's current room is the Cedar Room.","decision":false,"evidence":[{"messageIndex":2,"quote":"The mending circle now meets in the upstairs Cedar Room on Thursday evenings."}]},
+        {"id":"c2","text":"The mending circle's current meeting evening is Thursday.","decision":false,"evidence":[{"messageIndex":2,"quote":"The mending circle now meets in the upstairs Cedar Room on Thursday evenings."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The current meeting is in the downstairs Maple Room or on Tuesday evenings.","severe":true},{"text":"Both the old and new arrangements are current weekly sessions.","severe":true}]
+    },
+    {
+      "id":"b72c84000203","group":"changed-observations","unknown":true,"assistantInformation":false,
+      "expectedAnswer":"The current total is unknown. Thirty-six was the old count, and the added parcel has not been opened or counted.",
+      "claims":[
+        {"id":"c1","text":"The collection's present total including the new parcel is not established.","decision":false,"evidence":[{"messageIndex":0,"quote":"That was the count in my notebook before my cousin sent a small sealed parcel of more stones."},{"messageIndex":2,"quote":"I have not counted the new stones, and my cousin's card does not give a number."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The current total including the parcel is exactly thirty-six.","severe":true},{"text":"A specific number of new stones or a definite new total has been supplied.","severe":true}]
+    },
+    {
+      "id":"b72c84000204","group":"changed-observations","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"The spare glasses have oval lenses and are in their hard case in my work tote.",
+      "claims":[
+        {"id":"c1","text":"The spare glasses have oval lenses.","decision":false,"evidence":[{"messageIndex":0,"quote":"I described my spare reading glasses as round, but I compared them with an old photograph and realized the lenses are oval."}]},
+        {"id":"c2","text":"The spare glasses are now in the work tote.","decision":false,"evidence":[{"messageIndex":1,"quote":"I moved their hard case from the bedroom drawer into my work tote this morning. The spare glasses are inside that case now."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The spare glasses are round or currently in the bedroom drawer.","severe":true},{"text":"The spare glasses are the everyday pair beside the sofa.","severe":true}]
+    },
+    {
+      "id":"b72c84000301","group":"intentions-adoption","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"We booked a called-dance set with the caller, lasting thirty minutes.",
+      "claims":[
+        {"id":"c1","text":"The booked activity is a called-dance set.","decision":true,"evidence":[{"messageIndex":2,"quote":"We booked her for a thirty-minute called-dance set after dessert."}]},
+        {"id":"c2","text":"The booked dance set lasts thirty minutes.","decision":true,"evidence":[{"messageIndex":2,"quote":"We booked her for a thirty-minute called-dance set after dessert."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The user booked the assistant's initially suggested foxtrot lesson.","severe":true},{"text":"A live band was hired or all guests committed to dancing.","severe":true}]
+    },
+    {
+      "id":"b72c84000302","group":"intentions-adoption","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"I joined the art-supply team for alternate Saturday afternoons.",
+      "claims":[
+        {"id":"c1","text":"The user joined the art-supply team.","decision":true,"evidence":[{"messageIndex":2,"quote":"I visited and chose the art-supply team for alternate Saturday afternoons."}]},
+        {"id":"c2","text":"The regular volunteer pattern is alternate Saturday afternoons.","decision":true,"evidence":[{"messageIndex":2,"quote":"I visited and chose the art-supply team for alternate Saturday afternoons."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The user joined the coat team or both teams.","severe":true},{"text":"The first session is an unsupported shift working alone.","severe":true}]
+    },
+    {
+      "id":"b72c84000303","group":"intentions-adoption","unknown":true,"assistantInformation":false,
+      "expectedAnswer":"The deposit amount is not stated. The messages confirm that the tent was booked and the required deposit paid, but do not give its value.",
+      "claims":[
+        {"id":"c1","text":"The amount paid as the tent-hire deposit is not established by these messages.","decision":false,"evidence":[{"messageIndex":2,"quote":"I booked it and paid the required deposit through their invoice."},{"messageIndex":2,"quote":"I have filed the receipt with the swap's other expenses."}]}
+      ],
+      "forbiddenAssertions":[{"text":"Any particular currency amount or percentage has been established as the deposit.","severe":true},{"text":"No deposit was paid or the user chose the borrowed gazebos.","severe":true}]
+    },
+    {
+      "id":"b72c84000304","group":"intentions-adoption","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"I accepted sound editing for the oral-history series.",
+      "claims":[
+        {"id":"c1","text":"The accepted oral-history role is sound editing.","decision":true,"evidence":[{"messageIndex":2,"quote":"I tried the sample clip and accepted sound editing."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The user accepted interview hosting or both roles.","severe":true},{"text":"The user has already conducted the interviews on air.","severe":true}]
+    },
+    {
+      "id":"b72c84000401","group":"conditions-uncertainty","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"The wind must be below 20 kilometers per hour at setup, and the side gate must be latched.",
+      "claims":[
+        {"id":"c1","text":"Using rod puppets requires setup wind strictly below 20 kilometers per hour.","decision":true,"evidence":[{"messageIndex":0,"quote":"We agreed that if the anemometer reads 20 kilometers per hour or more at setup, we will use only the hand puppets. Below 20, the rod puppets can be used."}]},
+        {"id":"c2","text":"Using rod puppets also requires the side gate to be latched.","decision":true,"evidence":[{"messageIndex":2,"quote":"the rod-puppet version also requires the side gate to be latched"}]}
+      ],
+      "forbiddenAssertions":[{"text":"Rod puppets are permitted at exactly 20 kilometers per hour or with an unlatched gate.","severe":true},{"text":"The show-day checks have already been completed or a public performance has already occurred.","severe":true}]
+    },
+    {
+      "id":"b72c84000402","group":"conditions-uncertainty","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"The cape is in the ventilated crate, and the wardrobe teacher will receive it.",
+      "claims":[
+        {"id":"c1","text":"The cape's transport container is the ventilated crate.","decision":true,"evidence":[{"messageIndex":2,"quote":"The lining is still damp, so I put the cape loosely in the ventilated crate by itself."}]},
+        {"id":"c2","text":"The wardrobe teacher will receive the cape at the school.","decision":true,"evidence":[{"messageIndex":2,"quote":"I called the wardrobe teacher, and she will hang the cape on a wide hanger in the open wardrobe area when I arrive."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The cape is traveling in the cloth garment bag.","severe":true},{"text":"The cape has already been tumble-dried, heated, or handed over at the school.","severe":true}]
+    },
+    {
+      "id":"b72c84000403","group":"conditions-uncertainty","unknown":true,"assistantInformation":false,
+      "expectedAnswer":"The specific time is not given. Lea and I settled it by phone, but these messages only identify Friday.",
+      "claims":[
+        {"id":"c1","text":"The agreed Friday pickup time cannot be recovered from these messages.","decision":false,"evidence":[{"messageIndex":2,"quote":"Lea and I spoke by phone and settled on Friday, including a specific pickup time."}]}
+      ],
+      "forbiddenAssertions":[{"text":"A particular hour or time of day for Friday pickup has been stated.","severe":true},{"text":"No pickup time has been agreed between Lea and the user.","severe":true}]
+    },
+    {
+      "id":"b72c84000404","group":"conditions-uncertainty","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"I put the double-stamped parcel on the express rack.",
+      "claims":[
+        {"id":"c1","text":"The parcel with both stamps was placed on the express rack.","decision":true,"evidence":[{"messageIndex":2,"quote":"I put that double-stamped parcel on the express rack."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The double-stamped parcel is on the ordinary rack or was left with the coordinator unsorted.","severe":true},{"text":"The stripe stamp took priority over the star.","severe":true}]
+    },
+    {
+      "id":"b72c84000501","group":"assistant-information","unknown":false,"assistantInformation":true,
+      "expectedAnswer":"A new word begins with the last two letters of the previous word, in the same order. A pass costs two glass beads returned to the bowl.",
+      "claims":[
+        {"id":"c1","text":"Each new word begins with the previous word's last two letters in the same order.","decision":false,"evidence":[{"messageIndex":1,"quote":"each new word must begin with the last two letters of the previous word, in the same order"}]},
+        {"id":"c2","text":"Passing costs two glass beads returned to the bowl.","decision":false,"evidence":[{"messageIndex":1,"quote":"A player may pass by returning two glass beads to the bowl"}]}
+      ],
+      "forbiddenAssertions":[{"text":"The link uses only the last letter or reverses the last two letters.","severe":true},{"text":"A pass is free, costs one bead, or has already been approved through playtesting.","severe":true}]
+    },
+    {
+      "id":"b72c84000502","group":"assistant-information","unknown":false,"assistantInformation":true,
+      "expectedAnswer":"The small diamond means two short running stitches. The hollow triangle means leave an unstitched six-millimeter gap before the next mark.",
+      "claims":[
+        {"id":"c1","text":"The small diamond means make two short running stitches.","decision":false,"evidence":[{"messageIndex":1,"quote":"the small diamond means make two short running stitches"}]},
+        {"id":"c2","text":"The hollow triangle means leave an unstitched six-millimeter gap before the next mark.","decision":false,"evidence":[{"messageIndex":1,"quote":"The hollow triangle means leave an unstitched gap of six millimeters before the next mark."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The triangle means six stitches rather than an unstitched gap, or the diamond means a repeated row.","severe":true},{"text":"The invented meanings are universal sewing notation or an already adopted group project.","severe":true}]
+    },
+    {
+      "id":"b72c84000503","group":"assistant-information","unknown":false,"assistantInformation":true,
+      "expectedAnswer":"The eastern passage leads to the Tide Archive, whose door bears a silver spiral.",
+      "claims":[
+        {"id":"c1","text":"The Tide Archive is reached through the eastern passage.","decision":false,"evidence":[{"messageIndex":0,"quote":"The route to the Tide Archive is the eastern passage"}]},
+        {"id":"c2","text":"The archive door is marked with a silver spiral.","decision":false,"evidence":[{"messageIndex":0,"quote":"ending at a door marked with a silver spiral"}]}
+      ],
+      "forbiddenAssertions":[{"text":"The central stair or western arch is the route to the archive.","severe":true},{"text":"A visitor must bring a silver-spiral object to enter.","severe":true}]
+    },
+    {
+      "id":"b72c84000504","group":"assistant-information","unknown":false,"assistantInformation":true,
+      "expectedAnswer":"It admits one person to the dyeing tent. The holder says colors wake here at the entrance.",
+      "claims":[
+        {"id":"c1","text":"The prism-and-leaf token admits its holder to the dyeing tent.","decision":false,"evidence":[{"messageIndex":0,"quote":"the token showing a prism and a leaf admits one person to the dyeing tent"}]},
+        {"id":"c2","text":"The entrance phrase is colors wake here.","decision":false,"evidence":[{"messageIndex":0,"quote":"At the tent entrance, its holder says the phrase colors wake here."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The token admits multiple people or can be reused for a second visit.","severe":true},{"text":"The wave-only token is accepted for the dyeing tent.","severe":true}]
+    },
+    {
+      "id":"b72c84000601","group":"mixed-attribution","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"Tomas prefers unscented soap and objected to lavender as too sharp. I enjoy citrus-scented soap.",
+      "claims":[
+        {"id":"c1","text":"Tomas prefers unscented soap.","decision":false,"evidence":[{"messageIndex":0,"quote":"I am choosing a housewarming gift for my father Tomas. He likes unscented soap"}]},
+        {"id":"c2","text":"Tomas objected to lavender fragrance.","decision":false,"evidence":[{"messageIndex":0,"quote":"He likes unscented soap and finds lavender fragrance too sharp."}]},
+        {"id":"c3","text":"The user enjoys citrus-scented soap.","decision":false,"evidence":[{"messageIndex":0,"quote":"I enjoy citrus-scented soap myself"}]}
+      ],
+      "forbiddenAssertions":[{"text":"The user's expressed preference is for unscented soap instead of citrus.","severe":true},{"text":"Tomas has a stated allergy or has specifically said he dislikes citrus.","severe":true}]
+    },
+    {
+      "id":"b72c84000602","group":"mixed-attribution","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"The telescope belongs to Ila, and I agreed to return it on Monday evening.",
+      "claims":[
+        {"id":"c1","text":"The borrowed telescope belongs to Ila.","decision":false,"evidence":[{"messageIndex":0,"quote":"My neighbor Ila has lent me her small telescope"}]},
+        {"id":"c2","text":"The agreed telescope return time is Monday evening.","decision":true,"evidence":[{"messageIndex":2,"quote":"She asked me to return the telescope on Monday evening, and I agreed."}]}
+      ],
+      "forbiddenAssertions":[{"text":"The user or Keir owns the borrowed telescope.","severe":true},{"text":"Keir's heavy tripod is included in the accepted equipment loan.","severe":true}]
+    },
+    {
+      "id":"b72c84000603","group":"mixed-attribution","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"Mira reserved the indoor room.",
+      "claims":[
+        {"id":"c1","text":"Mira reserved the indoor room for the team lunch.","decision":true,"evidence":[{"messageIndex":2,"quote":"Mira reserved the indoor room."}]}
+      ],
+      "forbiddenAssertions":[{"text":"Mira booked the hypothetical courtyard arrangement or held both spaces.","severe":true},{"text":"The user has expressed a personal preference for indoor seating or made the venue booking.","severe":true}]
+    },
+    {
+      "id":"b72c84000604","group":"mixed-attribution","unknown":false,"assistantInformation":false,
+      "expectedAnswer":"Edda ultimately requested River at Breakfast, and I ordered it.",
+      "claims":[
+        {"id":"c1","text":"Edda's final requested book was River at Breakfast.","decision":true,"evidence":[{"messageIndex":2,"quote":"Edda changed her request to the poetry collection River at Breakfast."}]},
+        {"id":"c2","text":"The user ordered River at Breakfast.","decision":true,"evidence":[{"messageIndex":2,"quote":"I ordered River at Breakfast"}]}
+      ],
+      "forbiddenAssertions":[{"text":"The final gift is the earlier adventure-novel request or a book of essays chosen for the user.","severe":true},{"text":"Edda has already received and reviewed the gift.","severe":true}]
+    }
+  ]
+}
