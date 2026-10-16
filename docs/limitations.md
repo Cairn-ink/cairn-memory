@@ -1529,3 +1529,35 @@ the original capacity failure and later fixture/test corrections separately.
 No live two-session feasibility has executed, no paid result is established,
 and no new provider call or spend follows from these checks. Independent
 fixed-commit reviews and latest-head CI remain pending primary delivery.
+
+## Closed source-selection feasibility failed its semantic gate
+
+The later [two-session first-only result](plans/source-selection-feasibility-results.md)
+supersedes the preceding offline checkpoint's "not executed" status. All four
+scheduled arms completed (zero failed, zero not-run) and passed the mechanical
+checks, but the semantic gate failed and the candidate does not advance to the
+24-question study. Both independent masked reviewers agreed before mapping
+reveal on eight minimal-claim statuses and four full-answer flags; copied previews
+can reveal the mechanism, so reviewer blindness is not established.
+
+Baseline and candidate each satisfied both minimal claims in 1/2 answers.
+Answers both complete and fully supported were 0/2 versus 1/2; supported minimal
+claims were 3/4 versus 2/4. These are separate metrics, not an accuracy headline
+or evidence of parity. The Chinese baseline's extra `已經帶了轉接線` assertion was
+unsupported despite satisfying both minimal claims. The English candidate
+stored the latest failed-canopy/access-pending sources and exposed their memory
+reference plus a relevant label to select, but selected only the old memory.
+Rank and answer never received the update; answer packing omitted zero sources.
+This does not prove why selection failed or that label truncation caused it.
+
+The frozen public projection retains all sources, first answers, previews,
+ordinal receipts, select/rank/packing trace and both judgments. Exact copying is
+not semantic truth, and unanswered rejection information can still be omitted.
+The 56 HTTP requests reserved US$0.280000; the generation-only usage estimate
+was US$0.019681. Actual invoice and count billing remain unknown; reservation
+is not actual cost. Original US$400 cumulative / US$30 protected limits remain.
+
+Existing opt-in bounded-source-scan is available for a separately frozen fresh
+fixed-write/read-policy ablation; that planned ablation has no result here.
+Earlier manual/oracle 16/16 versus 12/16 source coverage was not QA. No new
+engine, vector store, product default, promotion or old-cohort retry follows.

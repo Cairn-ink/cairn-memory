@@ -454,3 +454,37 @@ limitations index; module, test and prompt SHA-256s remain unchanged. Worker
 `git diff --check` exits **0**; an explicit untracked-plan whitespace check also
 reports no whitespace diagnostics. No commit, push, PR or paid execution was
 performed by the documentation worker.
+
+## Closed two-session feasibility and result delivery
+
+The earlier "not executed" statements describe the offline implementation
+checkpoint above. The separately frozen first-only feasibility subsequently ran
+against runtime `d549f0681d2949731254d0945acaef09155ebad4`. Its
+[closed result](source-selection-feasibility-results.md) preserves all four
+first answers and both independent masked judgments: **4 completed, 0 failed,
+0 not-run; mechanical pass true, semantic pass false; no advance to 24 questions**.
+The English candidate retained the latest update and exposed its reference and
+relevant label to select, but select returned only the old memory. Rank and
+answer never received that update; packing omitted zero recalled sources.
+This observation does not identify the model's internal reason for its choice.
+
+Minimal-claim-complete answers were baseline 1/2 and candidate 1/2; answers both
+complete and fully supported were 0/2 and 1/2; supported minimal claims were
+3/4 and 2/4. These distinct metrics are not an accuracy headline or parity claim.
+Exact copying remains insufficient for adequate selection or semantic support.
+The original closed bytes and first outputs are not edited or rescored.
+
+One bounded actual GPT-6.1 Sol/high result-delivery worker owns exactly five
+paths: this plan, the new result document, the central limitations append, the
+frozen public JSON projection and its focused offline integrity test. Delivery
+base is the runtime SHA above; primary owns integration, scoped commits, push,
+independent fixed-diff review and the existing PR. No worker commit, provider
+call, operational ledger/key access or runtime worktree edit is authorized.
+The result document records focused Node 22.16.0/24.15.0 exit codes and evidence.
+No runtime flow, browser replay, old URL assumption or cross-feature caller is
+changed: the only new entrypoints are documentation links and an offline test.
+
+The next proposed fresh fixed-write/read-policy ablation uses the existing
+opt-in bounded-source-scan path. It has no result here; the prior manual/oracle
+16/16 versus 12/16 source-coverage observation was not QA. No new default,
+duplicate engine, vector store, closed-case retry or gate relaxation follows.
