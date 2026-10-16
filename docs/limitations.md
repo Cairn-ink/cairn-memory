@@ -1531,3 +1531,29 @@ Capacity checks preserve original anchors and skip optional additions; invalid
 original output still fails. Corrected or forgotten records cannot be restored
 by the sidecar. Broader privacy/retention review and fresh independently judged
 write-to-answer evidence are prerequisites to considering product adoption.
+
+### Pending dialogue-context QA study
+
+The [fresh dialogue-context QA study](plans/dialogue-context-qa.md) remains
+offline-only, with semantic results pending a paid run and independent masked
+review. Its [24 synthetic dialogues](../evaluation/architecture/fixtures/dialogue-context-qa-v1.json)
+cover six groups of four: consideration, explicit adoption, rejection, factual
+correction, observation and insufficient information. Both arms use ordinary
+capture, share one first extraction, and independently classify when capture
+requires it. Source-only answers use evidence resolved after a real store
+close/reopen; the report binds source receipts to authoritative cold message
+identities rather than guessing from source-window numbers.
+
+The intervention retains adjacent predecessor passages in existing receipt
+slots. It adds no semantic relation, Raw archive, MOC/vector change or complete
+new memory architecture. Resolving every admitted memory in these small
+captures does not measure normal retrieval or LongMemEval performance.
+
+The [frozen rubric](../evaluation/architecture/fixtures/dialogue-context-qa-rubric-v1.json)
+excludes four insufficient-information cases from positive necessary-quote
+coverage; their evidence is audit context, while all 24 cases remain in the
+answer denominator and uncertainty/no-harm judgments. More retained or packed
+quotes alone cannot pass: supported-answer gains and all paired completion,
+unsupported-assertion, stale-fact and decision-preservation no-harm gates are
+required. Pending results support no adoption, default change or product
+readiness claim.

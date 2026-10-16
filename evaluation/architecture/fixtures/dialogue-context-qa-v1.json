@@ -1,0 +1,207 @@
+{
+  "version": "dialogue-context-qa-v1",
+  "cases": [
+    {
+      "id": "7b6e201a9c43",
+      "messages": [{"role": "user", "content": "I'm considering taking a pottery class on Sundays. The evening class might fit, but I haven't checked the bus timetable or signed up."}],
+      "question": "What is my situation with the pottery class?"
+    },
+    {
+      "id": "a2d97308fb61",
+      "messages": [
+        {"role": "user", "content": "I might take the train to see my cousin, if I can get Friday afternoon off."},
+        {"role": "assistant", "content": "You could ask about leave before buying a ticket."},
+        {"role": "user", "content": "My kitchen clock stopped this morning. Anyway, leave hasn't been approved yet, so the train is still just an option."}
+      ],
+      "question": "What needs to happen before my possible train visit can go ahead?"
+    },
+    {
+      "id": "e04b7c926d15",
+      "messages": [
+        {"role": "user", "content": "The library offers a monthly mystery book club. I'm curious, but crowds wear me out."},
+        {"role": "assistant", "content": "Would attending once as a guest help you decide?"},
+        {"role": "user", "content": "Maybe. I could try a guest evening; I haven't agreed to a regular membership."},
+        {"role": "assistant", "content": "That would let you see how the group feels."}
+      ],
+      "question": "Have I committed to the book club, and what possibility was I considering?"
+    },
+    {
+      "id": "19f82a5c40de",
+      "messages": [
+        {"role": "user", "content": "I may replace the curtains with blinds, but I want to see a fabric sample first."},
+        {"role": "assistant", "content": "A sample could help you check the color in daylight."}
+      ],
+      "question": "Where did I leave the idea of changing the window covering?"
+    },
+    {
+      "id": "c85a1603e7bd",
+      "messages": [{"role": "user", "content": "I've chosen the dark green yarn for the scarf. I'll buy two skeins after payday; I haven't bought any yet."}],
+      "question": "Which yarn have I chosen, and have I purchased it?"
+    },
+    {
+      "id": "4d9b20af8673",
+      "messages": [
+        {"role": "user", "content": "For the picnic, should I bring sandwiches or a rice salad?"},
+        {"role": "assistant", "content": "A rice salad would travel well. You could keep the dressing separate."},
+        {"role": "user", "content": "The neighbor's cat finally came home. For the picnic, yes, I'll make the rice salad and pack the dressing separately."}
+      ],
+      "question": "What did I decide to bring to the picnic, and how will I pack the dressing?"
+    },
+    {
+      "id": "86ce35b149a0",
+      "messages": [
+        {"role": "user", "content": "I want a simpler way to back up my holiday photos."},
+        {"role": "assistant", "content": "You could copy them to an external drive every month."},
+        {"role": "user", "content": "I'll do that on the first Sunday of each month. The first copy is still waiting; the drive arrives tomorrow."},
+        {"role": "assistant", "content": "That gives you a regular reminder."}
+      ],
+      "question": "What backup routine did I settle on, and has the first copy happened?"
+    },
+    {
+      "id": "d71a6fb2308c",
+      "messages": [
+        {"role": "user", "content": "I couldn't decide where to donate the spare blankets."},
+        {"role": "assistant", "content": "The neighborhood animal shelter or the community cupboard might be possibilities."},
+        {"role": "user", "content": "I chose the animal shelter and dropped off all three blankets there this morning."}
+      ],
+      "question": "Where did my spare blankets end up, and how many did I donate?"
+    },
+    {
+      "id": "2ea5419cd670",
+      "messages": [
+        {"role": "user", "content": "The scented detergent gave me a headache last time."},
+        {"role": "assistant", "content": "Would you try the lavender version, or switch to an unscented one?"},
+        {"role": "user", "content": "No lavender for me. I'll use up my current unscented bottle before buying anything else."}
+      ],
+      "question": "What did I rule out, and what am I doing about detergent for now?"
+    },
+    {
+      "id": "b9037e14a5cf",
+      "messages": [
+        {"role": "user", "content": "I need directions for the walking trail."},
+        {"role": "assistant", "content": "You could install the trail app and follow its phone map."},
+        {"role": "user", "content": "My sister is learning the trumpet, by the way. For the trail, I don't want to use my phone. I'll take the paper map from the visitor center."}
+      ],
+      "question": "How do I intend to navigate the trail?"
+    },
+    {
+      "id": "5f8d69a207bc",
+      "messages": [
+        {"role": "user", "content": "The weekend cooking course looks interesting, but I can't spare a whole Saturday."},
+        {"role": "assistant", "content": "They also list a shorter weekday evening course."},
+        {"role": "user", "content": "I'm passing on both courses this month. My evenings are full too."},
+        {"role": "assistant", "content": "You could revisit the listings when your schedule eases."}
+      ],
+      "question": "Am I taking either of those cooking courses this month?"
+    },
+    {
+      "id": "f24c0b8e916d",
+      "messages": [
+        {"role": "user", "content": "Someone suggested a plastic cover for my wooden desk. I don't want a plastic cover; I like touching the wood. I haven't picked another way to protect it."},
+        {"role": "assistant", "content": "A desk mat might be another option to look at."}
+      ],
+      "question": "What protection have I chosen for the desk?"
+    },
+    {
+      "id": "a6e3107fd258",
+      "messages": [
+        {"role": "user", "content": "The reading is on Tuesday at the east branch library."},
+        {"role": "assistant", "content": "Tuesday at the east branch, understood."},
+        {"role": "user", "content": "I checked the invitation: it's Thursday, not Tuesday. The east branch is still right. Also, my kettle needs descaling."}
+      ],
+      "question": "When and where is the reading?"
+    },
+    {
+      "id": "08b5d92e46ac",
+      "messages": [
+        {"role": "user", "content": "My foster dog Milo is a three-year-old female."},
+        {"role": "assistant", "content": "How is Milo settling in?"},
+        {"role": "user", "content": "Well! I mistyped earlier: Milo is male. He's still three years old."}
+      ],
+      "question": "What age and sex did I give for Milo after correcting myself?"
+    },
+    {
+      "id": "63dc1a70be95",
+      "messages": [
+        {"role": "user", "content": "My appointment with the optician is at 10:30 tomorrow."},
+        {"role": "assistant", "content": "Would you like help thinking through what to bring?"},
+        {"role": "user", "content": "I found my missing umbrella. And the appointment time I gave you was wrong: it's 11:15 tomorrow, with the same optician."},
+        {"role": "assistant", "content": "Got it, 11:15 tomorrow."}
+      ],
+      "question": "Who is my appointment with, and what is the corrected time?"
+    },
+    {
+      "id": "eb7294f108da",
+      "messages": [
+        {"role": "user", "content": "The workshop fee is 45 dollars, due on the 8th."},
+        {"role": "assistant", "content": "So both the fee and the deadline are on your notice."},
+        {"role": "user", "content": "Correction: I read the wrong line. The fee is 54 dollars. The due date is still the 8th."}
+      ],
+      "question": "What are the workshop fee and its due date?"
+    },
+    {
+      "id": "94ac820e7f36",
+      "messages": [{"role": "user", "content": "From my balcony this morning I saw two herons beside the canal. One flew away before I got my camera, and the other stayed on the railing."}],
+      "question": "What did I see by the canal, and what happened when I went for the camera?"
+    },
+    {
+      "id": "3c1f75a9d082",
+      "messages": [
+        {"role": "user", "content": "Yesterday's loaf had a dense middle even though the crust looked brown."},
+        {"role": "assistant", "content": "You might try a longer bake next time."},
+        {"role": "user", "content": "The mail carrier brought a postcard from my aunt. About the bread, that's just what I noticed; I haven't decided what to change for the next loaf."}
+      ],
+      "question": "What was my observation about the loaf, and have I settled on a baking change?"
+    },
+    {
+      "id": "6a08de4b137f",
+      "messages": [
+        {"role": "user", "content": "The lamp in the spare room flickered twice last night. The hallway lamp stayed steady."},
+        {"role": "assistant", "content": "Did you notice anything else at the same time?"},
+        {"role": "user", "content": "Only that it was raining. I also finished a crossword today. I don't know what caused the flicker."}
+      ],
+      "question": "Which lamp flickered, and do we know the cause?"
+    },
+    {
+      "id": "fd2649a08c71",
+      "messages": [
+        {"role": "user", "content": "My knees felt fine during the short walk, but they ached after I sat down at home."},
+        {"role": "assistant", "content": "So you noticed the ache after the walk rather than while walking."}
+      ],
+      "question": "When did I notice my knees aching?"
+    },
+    {
+      "id": "15d8f02bc6a9",
+      "messages": [{"role": "user", "content": "I met my neighbor's new kitten today. It was hiding under a chair, so we mostly talked about how shy it seemed."}],
+      "question": "What is my neighbor's kitten called?"
+    },
+    {
+      "id": "c0b7a3149ed2",
+      "messages": [
+        {"role": "user", "content": "I'm choosing between the Oak Street and River Road flats."},
+        {"role": "assistant", "content": "Oak Street has the shorter commute you mentioned; River Road has the bigger kitchen."},
+        {"role": "user", "content": "My basil plant has new leaves. I still haven't chosen a flat; I need to see both again."}
+      ],
+      "question": "Which flat am I moving into?"
+    },
+    {
+      "id": "7ed65a209bf4",
+      "messages": [
+        {"role": "user", "content": "I plan to book a seat on the early ferry for Monday."},
+        {"role": "assistant", "content": "You could check whether reservations are available online."},
+        {"role": "user", "content": "I'll look after dinner."}
+      ],
+      "question": "Do I have a confirmed ferry reservation?"
+    },
+    {
+      "id": "ba418f630d97",
+      "messages": [
+        {"role": "user", "content": "The cafe has lentil soup and tomato soup today."},
+        {"role": "assistant", "content": "Which one did you have?"},
+        {"role": "user", "content": "It was pouring outside when I got there."},
+        {"role": "assistant", "content": "That sounds like a wet trip."}
+      ],
+      "question": "Which soup did I eat at the cafe?"
+    }
+  ]
+}
