@@ -8,7 +8,8 @@ import { captureSnapshot } from '../../core/capture-input.mjs';
 import { sourceWindowCatalog } from '../../core/source-windows.mjs';
 import { countTokens } from '../../core/model-budget.mjs';
 import { isCoreModelDeadlineSignal } from '../../core/model-call.mjs';
-import { boundedText, MemoryStoreError } from '../../core/validation.mjs';
+import { boundedText, identifier, revision, MemoryStoreError } from '../../core/validation.mjs';
+import { placementProposal } from '../../core/placement-input.mjs';
 import { PUBLIC_ANSWER_INSTRUCTION } from '../longmemeval/public-comparison.mjs';
 
 export const ROLE_STRATIFIED_QA_REPORT_VERSION = 'role-stratified-qa-report-v1';
@@ -112,15 +113,47 @@ export function roleStratifiedQaCapture(source) {
   return freeze(captureFor(row));
 }
 
-function boundMemories(core, capture, result, catalog) {
+function readRevisions(result, classificationOutput) {
+  try {
+    if (!Array.isArray(result.admission.memories) || result.admission.memories.length > 5) fail('source_binding_failed');
+    const expected = new Map();
+    for (const admitted of result.admission.memories) {
+      if (!exact(admitted, ['id', 'revision']) || expected.has(identifier(admitted.id))) fail('source_binding_failed');
+      expected.set(admitted.id, revision(admitted.revision));
+    }
+    const classification = result.classification;
+    if (!['applied', 'failed', 'skipped'].includes(classification?.status)) fail('source_binding_failed');
+    if (classification.status !== 'applied') {
+      if (Object.hasOwn(classification, 'memoryRevisions')) fail('source_binding_failed');
+      return expected;
+    }
+    // Each runner arm starts with a new store: every admitted memory is
+    // initially unfiled. The core returns every placement item's revision,
+    // including items whose filing did not change. Never guess a later read.
+    const proposal = placementProposal(classificationOutput, [...expected.keys()]);
+    if (!Array.isArray(classification.memoryRevisions) || classification.memoryRevisions.length !== proposal.items.length) fail('source_binding_failed');
+    const selected = new Map(proposal.items.map(item => [item.memoryId, item]));
+    const seen = new Set();
+    for (const entry of classification.memoryRevisions) {
+      if (!exact(entry, ['memoryId', 'revision']) || !selected.has(identifier(entry.memoryId)) || seen.has(entry.memoryId)) fail('source_binding_failed');
+      seen.add(entry.memoryId);
+      const current = revision(entry.revision), admitted = expected.get(entry.memoryId), item = selected.get(entry.memoryId);
+      // Validate this core's 0/1 filing transition, but bind only the explicit
+      // returned revision, not a calculated increment or arbitrary latest row.
+      if (current !== admitted + Number(item.parentIds.length > 0 || Boolean(item.newL1))) fail('source_binding_failed');
+      expected.set(entry.memoryId, current);
+    }
+    return expected;
+  } catch { fail('source_binding_failed'); }
+}
+
+function boundMemories(core, capture, result, catalog, classificationOutput) {
   const memories = [];
-  const ids = new Set();
+  const revisions = readRevisions(result, classificationOutput);
   for (const admitted of result.admission.memories) {
-    if (ids.has(admitted.id)) continue;
-    ids.add(admitted.id);
     const detail = core.get({ namespace: capture.namespace, memoryId: admitted.id, receiptLimit: 100 });
     if (!detail.ok || !detail.value.exhausted || detail.value.memory.id !== admitted.id ||
-        detail.value.memory.revision !== admitted.revision || !detail.value.receipts.length) fail('source_binding_failed');
+        detail.value.memory.revision !== revisions.get(admitted.id) || !detail.value.receipts.length) fail('source_binding_failed');
     const memory = detail.value.memory;
     const receipts = detail.value.receipts.map(receipt => {
       const matches = catalog.entries.filter(window => receipt.client === capture.client &&
@@ -302,12 +335,12 @@ export async function runRoleStratifiedQa({ fixtureJson, model, answer, onRecord
           // Inspect admission even after a guard/observer or classification failure.
           if (arm.capture.ok) {
             phase = 'source-binding';
-            arm.admittedMemories = boundMemories(writer, capture, arm.capture.value, catalog);
+            arm.admittedMemories = boundMemories(writer, capture, arm.capture.value, catalog, arm.classificationOutput);
             writer.close();
             const coldModel = Object.freeze({ countTokens: counter.countTokens });
             const cold = openMemoryCore({ path, model: coldModel, ...prepared.options });
             workspace.defer(() => cold.close());
-            const memories = boundMemories(cold, capture, arm.capture.value, catalog);
+            const memories = boundMemories(cold, capture, arm.capture.value, catalog, arm.classificationOutput);
             if (!isDeepStrictEqual(memories, arm.admittedMemories)) fail('source_binding_failed');
             arm.coldRead = { verified: true, generationMethods: [], memories };
             emit({ kind: 'source-bound', caseId: row.id, arm: armName, admittedMemories: memories, coldRead: arm.coldRead });

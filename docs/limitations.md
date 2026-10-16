@@ -1532,3 +1532,27 @@ write-to-answer comparison uses an all-admitted source read rather than ordinary
 production recall. It establishes no long-history retrieval result, MOC/vector
 improvement, installed Hermes reliability, full three-role architecture quality
 or competitive parity. The existing advancement gate remains unchanged.
+
+## Role-stratified first live run: no paired score
+
+The first 24-case role-stratified diagnostic at runtime
+`9b1293cbad986c0d463a8aa87fb75e9507c5bd5a` stopped after the first baseline
+extraction and classification, before any answer or candidate execution.
+Ordinary new-topic filing correctly advanced memory revisions, but the
+evaluation runner incorrectly checked them against the earlier admission
+revisions. An offline retained-output replay and one-memory reduction reproduced
+the defect; source receipts and cold reopening were unchanged. This is an
+evaluation integration defect, not a measured algorithm-quality result.
+All 24 rows and the original failed operation are retained and closed.
+Four requests are fully accounted (US$0.020 conservatively reserved); a
+generation-only US$0.002060 estimate is not total billed cost. The same revision
+assumption in the scorer also requires correction. See the correction acceptance
+in [the experiment plan](plans/role-stratified-extraction.md); no quality gate or
+production default is relaxed.
+
+The separately authored fresh v2 cohort has passed pre-output source/rubric
+fairness review and full-wire input preflight. It is still only 24 English
+synthetic cases: twelve longer dialogues, four short unknowns, and concentrated
+assistant-information/late-source controls. These checks establish no answer
+gain. Fixing the revision-binding defect does not establish that role-stratified
+extraction improves retention, fidelity or supported answers.

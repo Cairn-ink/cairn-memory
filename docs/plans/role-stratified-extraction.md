@@ -1,8 +1,10 @@
 # Role-stratified extraction: one-call development candidate
 
-Status: prospective offline implementation, not a demonstrated repair or product
-default. Primary recorded this contract before implementation and any candidate
-model output. Base: `ad274b6117f86446fbf0ff16f503ae69d0278ce5`; branch:
+Status: the first live cohort is closed after a runner revision-binding defect,
+before any paired answer. The extraction hypothesis remains unmeasured, not a
+demonstrated repair or product default. Primary recorded the original contract
+before implementation and any candidate model output. Base:
+`ad274b6117f86446fbf0ff16f503ae69d0278ce5`; branch:
 `experiment/role-stratified-extraction`.
 
 The goal remains one lightweight, source-backed memory engine for Hermes and
@@ -494,6 +496,142 @@ the freshness of a supplied snapshot. Primary's launcher binds reviewed artifact
 hashes and the original checkpoint, uses one exclusive durable cohort-start
 claim, then records first outputs without retries. These are acceptance
 integration tools, not a new public product or a change to the quality gate.
+
+## Closed first live cohort and revision-binding correction
+
+The first cohort executed runtime `9b1293cbad986c0d463a8aa87fb75e9507c5bd5a`
+after independent review, primary verification and all 31 exact-head CI checks.
+It started at `2026-10-16T21:20:13.965Z` and stopped on the first baseline arm
+with `source_binding_failed`, before any answer or candidate extraction. All
+24 rows remain: one failed baseline arm and 47 not-run arms. There is no paired
+semantic result, and this is not evidence that the extraction candidate is
+ineffective. The operation is permanently closed; no retry or completion of its
+unrun rows is authorized by this correction.
+
+Four physical requests (two counts, two generations) are fully accounted; the
+original ledger retains US$0.020 in new reservations. The generation-only price
+estimate is US$0.002060, not an invoice or total cost; count-route billing remains
+unknown. Resource accounting passed, but complete execution and advancement did
+not. Original report file SHA-256:
+`43f8d7da3c8fa1c6be5938a2107b7bbdb9b697a11b452cb622b5783d9184ce90`.
+
+Primary reproduced the actual retained model outputs offline, then reduced the
+case to one message and one memory. Full, one-memory and minimal reproductions
+each failed with the same source-binding stop (actual exit 1); the identical
+minimal case without filing passed (exit 0). A separate real-core probe showed
+that filing under a new L1 changes memory revision 1 to 2 while admission still
+correctly reports revision 1. Source receipts remain exact and cold reopening
+does not change them (exit 0). The runner incorrectly compared the current
+post-classification read with the earlier admission revision; the pure scorer
+contains the same assumption. The previous scripted classification controls
+left memories unfiled and therefore did not exercise this normal transition.
+The initial diagnostic harness invocation omitted required callbacks and failed
+with `invalid_options`; it is not counted as the reproduced product-path failure.
+
+Correction acceptance, recorded before editing runner/scorer:
+
+- C1: Preserve the original admission and classification results. Bind reads
+  to the explicit revisions returned by this capture's applied classification,
+  with admission revisions for memories not updated by it. Do not invent an
+  increment, accept an arbitrary current revision, or weaken receipt identity.
+- C2: Validate revision identities, uniqueness and supported transition bounds
+  against the actual core contract; unknown, missing or contradictory revision
+  evidence fails closed. Failed/skipped classification must not invent a later
+  revision. Retain deduplicated admission behavior and failed-arm evidence.
+- C3: The pure scorer must independently validate the same recorded transition,
+  retain the earlier admission evidence, and reject forged post-classification
+  revisions. Both arms use identical revision semantics. No quality metric,
+  rubric, prompt, quota, dataset or deadline changes in this correction.
+- C4: Exercise real successful new-L1 filing, mixed filed/unfiled memories,
+  unchanged filing, empty extraction and failed classification; cold reopen must
+  retain exact contents and receipts. Inject a later unrelated revision and
+  source drift to confirm they still stop the run. Cover both arms, not only a
+  direct helper function or a hand-edited report.
+- C5: Add the failing regression before implementation. Re-run the original
+  retained-output replay plus minimal/control cases without any provider call.
+  These are engineering replays, never substituted for the closed live results.
+  Re-run affected combined tests on Node 22.16/24.15, contributor gates, primary
+  verification, fixed-commit dual review and exact-head CI.
+- C6: A new paid diagnostic may use only a separately authored and independently
+  reviewed fresh cohort after this correction passes. Preserve the same
+  predeclared hypothesis, six families, 24-case quality gate, original ledger,
+  limits and no-retry policy. Freeze fresh sources, rubric and hashes before
+  outputs; the closed cohort's 24 cases remain excluded. No raw archive or
+  production-core change is part of this correction.
+
+### Correction and fresh-cohort acceptance evidence
+
+The bounded runner/scorer author added three real-filing regressions first:
+**0/3 passed, exit 1**. The correction then passed all three and the combined
+runner/scorer suites on Node 22.16 and 24.15 (**39/39 each, exit 0**). Primary
+inspected the actual core placement/admission contract and all four changed
+code/test files, independently reran **39/39, exit 0**, and reran the original
+full, one-memory, minimal and unfiled-control reproductions: **all exit 0**.
+Tests also exercise deduplicated admission revision 2 followed by filing
+revision 3, mixed filed/unfiled results, reversed proposal order, empty/failed
+classification, forged revision maps and later unrelated cold-read drift.
+Neither the extraction policy nor the production core changed.
+
+The fresh `role-stratified-qa-v2.json` and separate rubric were independently
+authored without implementation or model outputs. The filename denotes a new
+cohort; wire schemas remain v1. Primary and an independent nonauthor reviewer
+read all 24 complete sources and rubrics before execution. Pre-output corrections
+removed unnecessary answer details and shortened redundant evidence anchors;
+the final fairness review passed. Source SHA-256 is
+`6685fc6f5154e608f6e27946a2d3702c7b02dfc2d4ba69a9aa597f30db15b75a`;
+rubric SHA-256 is
+`1e1cd7a68945e45a0ae43a53fe5a53358123a32e1bce67b956c4960c8c0b6bd9`.
+All 24 earlier cohort cases are excluded, not silently retried.
+
+There are 129 messages, 95,567 source UTF-16 units, twelve sources of
+6,115–6,593 units, four single-role controls and four genuine unknowns.
+The rubric has 38 positive minimum claims, four unknown claims and eight late
+evidence quotes in four cases. All alternating dialogues have six turns; all
+unknowns are short, and assistant-information/late-source cases concentrate
+in one family. This remains a small English synthetic diagnostic, not a
+representative workload or an official benchmark.
+
+Primary's fresh-ledger source preflight passed with **exit 0**, all 48 actual
+extraction wires ready, zero HTTP requests/reservations and scratch removed.
+Full generation-wire local counts were 506–1,859 for baseline and 1,005–2,358
+for candidate, below the unchanged 6,000-input ceiling. Primary's final Node
+24 architecture suite passed **150/150, exit 0**; the Node 20 compatibility
+suite passed **26 tests, 41 explicit SQLite skips, exit 0**. Skips establish
+no SQLite support. Primary's final combined Node 22 contributor run passed
+**702/702, exit 0**, with no skips or cancellations. JSON validation and the
+pinned plugin checks exited 0; the scripted comparison demo exited 0 on both
+core runtimes. Independent Git and filesystem/base-blob inventories matched
+all **15** changed files (1,645 inspected).
+
+The fresh private launcher/judge reuse the unchanged reviewed operator and
+resource auditor. Their owned fake-HTTP integration suite passed **9/9,
+exit 0** on both core runtimes; primary independently reran **9/9, exit 0**.
+It includes all 48 arms with real new-L1 classification and cold reads,
+fully accounted failed-arm scoring with the full denominator, and rejection
+of a real unrelated SQL revision change. These tests use fresh synthetic
+ledgers, not the original budget or a model service. Supplemental private
+dependencies are hash-bound before launch; validation alone does not unmask
+scores. Independent fixed-commit reviews and exact-head CI are recorded in
+the PR before any new paid launch.
+
+## Research alternatives, not interventions in this comparison
+
+Primary checked the original method sections after a separate read-only research
+assignment. [SimpleMem v1](https://arxiv.org/html/2601.02553v1) motivates
+self-contained event statements with referential and temporal context;
+[LightMem v1](https://arxiv.org/html/2510.18866v1) motivates topic-coherent
+construction units; [LeanMem v1](https://arxiv.org/html/2608.03463v1) distinguishes
+compact profiles, evolving events and detail-sensitive records. These are
+research precedents, not evidence that Cairn's five-item policy works.
+
+Any bounded adaptation is a separate hypothesis: preserving actor, explicit
+time, qualification and necessary receipts may improve fidelity; topic-aware
+presentation may improve selection. Neither can recover facts already omitted
+from storage. LeanMem's source expansion and LightMem's stored dialogue are
+not authorization to introduce a raw archive here. Do not change this frozen
+role-policy experiment based on its first engineering failure. Decide the next
+intervention from independently judged source retention, memory fidelity and
+answer outcomes, and test it on fresh cases with unchanged comparison limits.
 
 ## Ownership and checkpoints
 

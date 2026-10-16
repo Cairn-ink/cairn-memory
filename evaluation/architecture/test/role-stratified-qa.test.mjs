@@ -339,7 +339,9 @@ sqliteTest('Q3 cold reopen detects changed memory content/revision and receipt d
       }
       return result;
     });
-    const report = await run({ onRecord(record) {
+    const report = await run({ model: modelFor({ classify: ({ input }) => ({ items: input.memories.map(memory => ({
+      memoryId: memory.id, parentIds: [], newL1: { title: 'Trip information', parentL2Ids: [] },
+    })) }) }), onRecord(record) {
       if (record.kind === 'model-output' && record.phase === 'classify') path = newlyOwnedStore(before);
     } });
     mock.mock.restore();
@@ -410,4 +412,29 @@ sqliteTest('Q3 actual admitted canonical prose is distinct from the original bas
   assert.equal(formatted.fixtureVersion, report.fixtureVersion);
   assert.equal(formatted.fixtureSha256, sha256(formattedJson));
   assert.notEqual(formatted.fixtureSha256, report.fixtureSha256);
+});
+
+sqliteTest('C1/C4 both arms bind real new-L1, mixed filing and deduplicated admission revisions through cold reads', async () => {
+  for (const mode of ['filed', 'mixed', 'deduplicated']) {
+    const same = mode === 'deduplicated';
+    const report = await run({ model: modelFor({
+      ...(same ? { extract: () => ({ items: [item('Same claim.', [1]), item('Same claim.', [0])] }),
+        extractRoleStratified: () => ({ userItems: [item('Same claim.', [0])], assistantItems: [item('Same claim.', [1])] }) } : {}),
+      classify: ({ input }) => ({ items: input.memories.map((memory, i) => ({ memoryId: memory.id, parentIds: [],
+        ...(mode !== 'mixed' || i === 0 ? { newL1: { title: 'Trip information', parentL2Ids: [] } } : {}) })).reverse() }),
+    }) });
+    assert.equal(report.status, 'completed', `${mode}: ${report.reason}`);
+    assert.equal(report.completedArms, 2);
+    for (const name of report.rows[0].order) {
+      const arm = report.rows[0][name], capture = arm.capture.value;
+      assert.equal(capture.classification.status, 'applied');
+      assert.deepEqual(capture.admission.memories.map(memory => memory.revision), same ? [2] : [1, 1]);
+      const revisions = new Map(capture.classification.memoryRevisions.map(memory => [memory.memoryId, memory.revision]));
+      assert.deepEqual(arm.admittedMemories.map(memory => memory.revision), same ? [3] : mode === 'mixed' ? [2, 1] : [2, 2]);
+      for (const memory of arm.admittedMemories) assert.equal(memory.revision, revisions.get(memory.memoryId));
+      assert.deepEqual(arm.coldRead.memories, arm.admittedMemories);
+      assert.deepEqual(arm.packed.retainedIds, ['window-0', 'window-1']);
+      assert.equal(arm.cleanupCompleted, true);
+    }
+  }
 });

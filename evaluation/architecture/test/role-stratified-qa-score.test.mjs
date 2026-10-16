@@ -49,7 +49,9 @@ function armFor(row, name, indices) {
         eventId: window.id, role: window.role, excerpt: window.content },
       windowIndex: window.index, messageIndex: window.messageIndex, start: window.start, end: window.end };
     }) }));
-  const classification = ordered.length ? { status: 'applied' } : { status: 'skipped', reason: 'empty' };
+  const classification = ordered.length ? { status: 'applied',
+    memoryRevisions: memories.map(memory => ({ memoryId: memory.memoryId, revision: memory.revision })), indexRevision: 0 }
+    : { status: 'skipped', reason: 'empty' };
   return { status: 'completed', reason: null, failedPhase: null,
     extraction: { request: { system: `${name} extraction instruction.`, input: clone(catalog.input), maxOutputTokens: 1024 },
       proposal: name === 'candidate' ? { userItems: users, assistantItems: assistants } : { items: ordered },
@@ -133,6 +135,42 @@ test('S1/S2 pure 24-case packet is deterministic, detached, shuffled, hashed and
   assert.equal(JSON.stringify(result).includes('Changed later.'), false);
   assert.notEqual(createRoleStratifiedJudgingPacket(experiment({ missingFirstThree: false })).packet.packetSha256, result.packet.packetSha256);
   assert.throws(() => createRoleStratifiedJudgingPacket({ ...experiment(), seed: 'bad' }), { code: 'invalid_seed' });
+});
+
+test('C1/C3 pure scorer accepts explicit mixed filing revisions while preserving admission and rejects forged transitions', () => {
+  const valid = experiment(), arm = valid.report.rows[0].candidate;
+  arm.classificationOutput.items[0].newL1 = { title: 'Trip information', parentL2Ids: [] };
+  arm.capture.value.classification.memoryRevisions = arm.admittedMemories.map((memory, i) => ({ memoryId: memory.memoryId, revision: i === 0 ? 2 : 1 }));
+  arm.admittedMemories[0].revision = 2;
+  arm.coldRead.memories = clone(arm.admittedMemories);
+  assert.doesNotThrow(() => createRoleStratifiedJudgingPacket(valid));
+  assert.deepEqual(arm.capture.value.admission.memories.map(memory => memory.revision), [1, 1]);
+  for (const change of [
+    arm => { delete arm.capture.value.classification.memoryRevisions; },
+    arm => { arm.capture.value.classification.memoryRevisions.pop(); },
+    arm => { arm.capture.value.classification.memoryRevisions.push(clone(arm.capture.value.classification.memoryRevisions[0])); },
+    arm => { arm.capture.value.classification.memoryRevisions[0].memoryId = 'foreign-memory'; },
+    arm => { arm.capture.value.classification.memoryRevisions[0].revision = 3; arm.admittedMemories[0].revision = 3; },
+    arm => { arm.capture.value.classification.memoryRevisions[0].revision = 1; arm.admittedMemories[0].revision = 1; },
+    arm => { arm.capture.value.classification.memoryRevisions[1].revision = 2; arm.admittedMemories[1].revision = 2; },
+    arm => { arm.capture.value.classification.memoryRevisions[0].revision = 0; },
+    arm => { arm.capture.value.classification.memoryRevisions[0].revision = 1.5; },
+    arm => { arm.capture.value.classification.memoryRevisions[0].revision = Number.MAX_SAFE_INTEGER; },
+    arm => { arm.classificationOutput.items[0].memoryId = 'foreign-memory'; },
+    arm => { arm.classificationOutput.items.pop(); },
+    arm => { arm.classificationOutput.items.push(clone(arm.classificationOutput.items[0])); },
+    arm => { arm.capture.value.admission.memories.push(clone(arm.capture.value.admission.memories[0])); },
+    arm => { arm.capture.value.admission.memories[0].revision = 0; },
+    arm => { arm.capture.value.admission.memories[0].id = ' foreign '; },
+    arm => { arm.capture.value.classification.memoryRevisions[0].extra = true; },
+    arm => { arm.classificationOutput = null; },
+    arm => { arm.capture.value.classification.status = 'failed'; arm.status = 'failed'; arm.failedPhase = 'classify'; },
+    arm => { arm.capture.value.classification.status = 'skipped'; },
+  ]) {
+    const options = clone(valid), candidate = options.report.rows[0].candidate;
+    change(candidate); candidate.coldRead.memories = clone(candidate.admittedMemories);
+    rejectsReport(options);
+  }
 });
 
 test('S3/S5 supported-correct gains and two independent coverage scopes pass semantic gate but never attest resources', () => {
@@ -417,7 +455,8 @@ test('S1 real scripted full-24 runner reports, including classification failure,
           userItems: [item('  Shared  statement. ', [0])], assistantItems: [item('Shared statement.', [1])] } : {
           userItems: [item('  User   chose Tuesday.  ', [0])], assistantItems: [item('Ａssistant reports nine.', [1])] },
         classify({ input }) { if (++classifications === 1) return {};
-          return { items: input.memories.map(memory => ({ memoryId: memory.id, parentIds: [] })) }; } },
+          return { items: input.memories.map((memory, i) => ({ memoryId: memory.id, parentIds: [],
+            ...(i === 0 ? { newL1: { title: 'Trip information', parentL2Ids: [] } } : {}) })) }; } },
       answer: () => ({ answer: 'Tuesday.' }), onRecord() {}, assertActive() {} });
     assert.equal(report.status, 'completed'); assert.equal(report.failedArms, 1);
     assert.equal(report.rows[0].candidate.extraction.proposal.userItems[0].content, '  User   chose Tuesday.  ');
@@ -429,6 +468,13 @@ test('S1 real scripted full-24 runner reports, including classification failure,
       assert.deepEqual(report.rows[1][name].packed.retainedIds, ['window-0', 'window-1']);
     }
     const actual = { ...options, report }, bundle = reviews(actual, []), result = score(actual, bundle);
+    for (const name of ARMS) {
+      const arm = report.rows[1][name];
+      assert.deepEqual(arm.capture.value.admission.memories.map(memory => memory.revision), [2]);
+      assert.deepEqual(arm.capture.value.classification.memoryRevisions.map(memory => memory.revision), [3]);
+      assert.deepEqual(arm.admittedMemories.map(memory => memory.revision), [3]);
+      assert.deepEqual(arm.coldRead.memories, arm.admittedMemories);
+    }
     assert.equal(result.metrics.baseline.completed, 23); assert.equal(result.metrics.candidate.completed, 24);
     assert.equal(result.metrics.baseline.memories.reviewed, 47);
     assert.equal(result.gate.fullyCompleteExecution, false);

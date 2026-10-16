@@ -2,7 +2,8 @@ import { createHash, createHmac } from 'node:crypto';
 import { isDeepStrictEqual, types } from 'node:util';
 import { captureSnapshot } from '../../core/capture-input.mjs';
 import { sourceWindowCatalog, extractedWindowItems } from '../../core/source-windows.mjs';
-import { boundedText } from '../../core/validation.mjs';
+import { boundedText, identifier, revision } from '../../core/validation.mjs';
+import { placementProposal } from '../../core/placement-input.mjs';
 
 // Deliberately do not import the runner: this module is usable on Node 20 and
 // never opens a store, reads a file/environment, or invokes a model/counter.
@@ -173,6 +174,40 @@ function validatePacking(packed, retained, source, code) {
   if (included.length) requireValue(packed.inputTokens === packed.decisions.findLast(decision => decision.included).attemptedInputTokens, code);
 }
 
+function recordedReadRevisions(result, classificationOutput, code) {
+  array(result.admission.memories, 5, code);
+  const revisions = new Map();
+  for (const admitted of result.admission.memories) {
+    exact(admitted, ['id', 'revision'], code);
+    identifier(admitted.id); revision(admitted.revision);
+    requireValue(!revisions.has(admitted.id), code);
+    revisions.set(admitted.id, admitted.revision);
+  }
+  const classification = result.classification;
+  requireValue(['applied', 'skipped', 'failed'].includes(classification?.status), code);
+  if (classification.status !== 'applied') {
+    requireValue(!Object.hasOwn(classification, 'memoryRevisions'), code);
+    return revisions;
+  }
+  // Independently verify the recorded placement: fresh arm stores start
+  // unfiled, and core returns all selected revisions, changed or unchanged.
+  const proposal = placementProposal(classificationOutput, [...revisions.keys()]);
+  array(classification.memoryRevisions, 5, code);
+  requireValue(classification.memoryRevisions.length === proposal.items.length, code);
+  const selected = new Map(proposal.items.map(item => [item.memoryId, item]));
+  const seen = new Set();
+  for (const entry of classification.memoryRevisions) {
+    exact(entry, ['memoryId', 'revision'], code);
+    identifier(entry.memoryId); revision(entry.revision);
+    requireValue(selected.has(entry.memoryId) && !seen.has(entry.memoryId), code);
+    seen.add(entry.memoryId);
+    const item = selected.get(entry.memoryId), admitted = revisions.get(entry.memoryId);
+    requireValue(entry.revision === admitted + Number(item.parentIds.length > 0 || Boolean(item.newL1)), code);
+    revisions.set(entry.memoryId, entry.revision);
+  }
+  return revisions;
+}
+
 function validateReport(original, data) {
   const code = 'invalid_report';
   const report = copyJson(original, code);
@@ -235,7 +270,8 @@ function validateReport(original, data) {
         const result = arm.capture.value;
         requireValue(result && result.duplicate === false && result.admission && Array.isArray(result.admission.memories) &&
           equal(result.sourceWindowCatalog, catalog.coverage.sourceWindowCatalog), code);
-        const admitted = [...new Map(result.admission.memories.map(memory => [memory.id, memory.revision])).entries()];
+        const revisions = recordedReadRevisions(result, arm.classificationOutput, code);
+        const admitted = result.admission.memories.map(memory => [memory.id, revisions.get(memory.id)]);
         requireValue(equal(admitted, arm.admittedMemories.map(memory => [memory.memoryId, memory.revision])), code);
         requireValue(['applied', 'skipped', 'failed'].includes(result.classification?.status), code);
         if (result.classification.status === 'failed') requireValue(arm.status === 'failed' && arm.failedPhase !== null, code);
