@@ -1,0 +1,217 @@
+{
+  "version": "role-stratified-qa-rubric-v1",
+  "fixtureVersion": "role-stratified-qa-v1",
+  "cases": [
+    {
+      "id": "a61b73000101", "group": "dated-personal-events", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "I collected the repaired lantern on 9 May 2031 and brought it home. I delivered the sign to Liora on 11 May 2031.",
+      "claims": [
+        {"id": "c1", "text": "The repaired lantern was collected on 9 May 2031 and taken home.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "Today is Monday, 12 May 2031."}, {"messageIndex": 2, "quote": "The other finished event is collecting the repaired lantern from Dev's workshop last Friday, 9 May. I brought it straight home; it did not go to Liora or the fair."}]},
+        {"id": "c2", "text": "The sign was delivered to Liora on 11 May 2031.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "Today is Monday, 12 May 2031."}, {"messageIndex": 0, "quote": "I am sorting the little events around my aunt Liora's village fair. I delivered her painted sign yesterday"}]}
+      ],
+      "forbiddenAssertions": [{"text": "The repaired lantern was delivered to Liora or the fair.", "severe": true}, {"text": "The spare candles have already been delivered.", "severe": true}]
+    },
+    {
+      "id": "a61b73000102", "group": "dated-personal-events", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "Nessa collected the keys on 4 February 2031 and first slept in the apartment on 8 February 2031.",
+      "claims": [
+        {"id": "c1", "text": "Nessa collected her apartment keys on 4 February 2031.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "She had collected the keys on Tuesday, 4 February"}, {"messageIndex": 2, "quote": "Nessa's first night sleeping there was Saturday, 8 February 2031."}]},
+        {"id": "c2", "text": "Nessa first slept in the apartment on 8 February 2031.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "Nessa's first night sleeping there was Saturday, 8 February 2031."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The user moved apartments in February.", "severe": true}, {"text": "Nessa first slept there on the key-collection date or the soup-visit date.", "severe": true}]
+    },
+    {
+      "id": "a61b73000103", "group": "dated-personal-events", "unknown": true, "assistantInformation": false,
+      "expectedAnswer": "The exact race date is not known from these messages; only summer and a time before the roof renovation are recalled.",
+      "claims": [
+        {"id": "c1", "text": "The exact calendar date of Emil's medal race is not established.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "the back just says summer"}, {"messageIndex": 2, "quote": "Emil remembers that it was before the pool's roof renovation, but he cannot place the year."}, {"messageIndex": 4, "quote": "Until then I am leaving the date field empty rather than picking a likely Sunday."}]}
+      ],
+      "forbiddenAssertions": [{"text": "Any specific calendar date is established for Emil's race.", "severe": true}, {"text": "The race definitely occurred on a Sunday.", "severe": true}]
+    },
+    {
+      "id": "a61b73000104", "group": "dated-personal-events", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "I delivered the quilt on 18 November 2031. Ivo is keeping it in his reading room.",
+      "claims": [
+        {"id": "c1", "text": "The quilt was delivered on 18 November 2031.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "today is Wednesday, 19 November 2031. I took the blue quilt to Grandfather Ivo yesterday, so the delivery was 18 November."}]},
+        {"id": "c2", "text": "Ivo is keeping the quilt in his reading room.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "I took the blue quilt to Grandfather Ivo yesterday, so the delivery was 18 November. He is keeping it in his reading room."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The quilt delivery is still planned for Friday the 21st.", "severe": true}]
+    },
+    {
+      "id": "a61b73000201", "group": "changed-observations", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "The corrected Monday minimum was 14 degrees. The basil is now on the kitchen windowsill.",
+      "claims": [
+        {"id": "c1", "text": "The corrected Monday north-shelf minimum was 14 degrees.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "Monday's north-shelf minimum was actually 14 degrees, not 18."}]},
+        {"id": "c2", "text": "The basil is now in the kitchen.", "decision": false, "evidence": [{"messageIndex": 4, "quote": "The basil is still in the kitchen today; I have not moved it back just because the display is working."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The corrected Monday minimum was 18 degrees.", "severe": true}, {"text": "The basil is currently on the greenhouse north shelf.", "severe": true}]
+    },
+    {
+      "id": "a61b73000202", "group": "changed-observations", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "Tern Bakery opens at 8:45 on Saturday. I now buy the rehearsal-week loaf on Friday afternoon.",
+      "claims": [
+        {"id": "c1", "text": "Tern Bakery's corrected Saturday opening time is 8:45.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "The owner said the old sign was wrong: Saturday opening is 8:45"}]},
+        {"id": "c2", "text": "The user now buys the rehearsal-week loaf on Friday afternoon.", "decision": true, "evidence": [{"messageIndex": 4, "quote": "Put Friday afternoon as my actual bread-shopping habit for rehearsal weeks."}]}
+      ],
+      "forbiddenAssertions": [{"text": "Tern Bakery currently opens at eight on Saturdays.", "severe": true}, {"text": "The user now shops at Tern at 8:45 on Saturdays.", "severe": true}]
+    },
+    {
+      "id": "a61b73000203", "group": "changed-observations", "unknown": true, "assistantInformation": false,
+      "expectedAnswer": "The finished color is not known. Mara completed the repaint but did not say which color she used.",
+      "claims": [
+        {"id": "c1", "text": "The bicycle's color after the repaint has not been established.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "We talked about copper and cream, but I told her to choose a suitable finish once she saw what paint she had."}, {"messageIndex": 2, "quote": "Mara texted that the repair and repaint are finished. Her message did not mention a color, and I have not seen a photo or collected the bike yet."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The completed repaint is confirmed as dark green, copper, or cream.", "severe": true}]
+    },
+    {
+      "id": "a61b73000204", "group": "changed-observations", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "The lid is intact; the apparent crack was dried glue. The terrarium is now on the east windowsill.",
+      "claims": [
+        {"id": "c1", "text": "The terrarium lid is intact rather than cracked.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "That was wrong: the line was dried glue on the outside. I cleaned it yesterday and the glass underneath is intact."}]},
+        {"id": "c2", "text": "The terrarium is now on the east windowsill.", "decision": false, "evidence": [{"messageIndex": 1, "quote": "The terrarium is now on the east windowsill."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The terrarium currently has a cracked lid or is still on the desk.", "severe": true}]
+    },
+    {
+      "id": "a61b73000301", "group": "intentions-adoption", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "I enrolled in the library printmaking workshop on Tuesday evenings.",
+      "claims": [
+        {"id": "c1", "text": "The user enrolled in the library printmaking workshop.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I checked both timetables and enrolled in the library printmaking workshop for Tuesday evenings."}]},
+        {"id": "c2", "text": "The enrolled workshop is on Tuesday evenings.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I checked both timetables and enrolled in the library printmaking workshop for Tuesday evenings."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The user enrolled in pottery or both classes.", "severe": true}, {"text": "The assistant's pottery suggestion was a pottery preference expressed by the user.", "severe": true}]
+    },
+    {
+      "id": "a61b73000302", "group": "intentions-adoption", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "I adopted a low floor trough on the balcony, with mint in its own separate inner pot.",
+      "claims": [
+        {"id": "c1", "text": "The adopted herb setup is a low floor trough.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I measured this afternoon and chose a low floor trough"}]},
+        {"id": "c2", "text": "Mint is kept in its own separate pot.", "decision": true, "evidence": [{"messageIndex": 4, "quote": "I planted parsley and chives on either side of the separate mint pot."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The user adopted or ordered the assistant's proposed shelf.", "severe": true}, {"text": "The user added hanging pots this season.", "severe": true}]
+    },
+    {
+      "id": "a61b73000303", "group": "intentions-adoption", "unknown": true, "assistantInformation": false,
+      "expectedAnswer": "The Danish course's policy for missed sessions is not provided in the conversation.",
+      "claims": [
+        {"id": "c1", "text": "The Danish course's attendance policy for missed sessions is not established by these messages.", "decision": false, "evidence": [{"messageIndex": 1, "quote": "Ask each organizer about missed sessions, recordings, and whether a place can be deferred."}, {"messageIndex": 2, "quote": "Both organizers replied, but I am still weighing it up."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The Danish course is confirmed to allow, forbid, record, refund, or provide makeups for missed sessions.", "severe": true}, {"text": "The assistant's Italian suggestion establishes the user's enrollment decision.", "severe": true}]
+    },
+    {
+      "id": "a61b73000304", "group": "intentions-adoption", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "I accepted the riverside cargo-bike book-delivery route for alternate Sunday mornings.",
+      "claims": [
+        {"id": "c1", "text": "The user accepted the riverside cargo-bike route.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "I spoke to the coordinator and accepted the riverside cargo-bike route for alternate Sunday mornings."}]},
+        {"id": "c2", "text": "The commitment is on alternate Sunday mornings.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "accepted the riverside cargo-bike route for alternate Sunday mornings"}]}
+      ],
+      "forbiddenAssertions": [{"text": "The user accepted the hill route or both routes.", "severe": true}, {"text": "The first delivery date has been set.", "severe": false}]
+    },
+    {
+      "id": "a61b73000401", "group": "conditions-uncertainty", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "Open the inner vent for twenty minutes only if humidity is above 75 percent and someone can stay in the flat for that period. Otherwise leave it shut.",
+      "claims": [
+        {"id": "c1", "text": "Opening requires humidity above 75 percent.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "If the room hygrometer reads above 75 percent, my neighbor should open the inner vent for twenty minutes"}]},
+        {"id": "c2", "text": "Opening also requires someone to stay in the flat for the whole period.", "decision": true, "evidence": [{"messageIndex": 4, "quote": "if nobody can stay in the flat for the twenty minutes, the vent must remain shut even if the reading is higher"}]},
+        {"id": "c3", "text": "The opening period is twenty minutes.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "open the inner vent for twenty minutes"}]}
+      ],
+      "forbiddenAssertions": [{"text": "The vent should open at exactly 75 percent or without anyone staying in the flat.", "severe": true}, {"text": "The neighbor has already performed the trip vent procedure.", "severe": true}]
+    },
+    {
+      "id": "a61b73000402", "group": "conditions-uncertainty", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "Cancel the picnic: exactly 60 percent triggers the pavilion switch, and an unavailable pavilion leads to cancellation.",
+      "claims": [
+        {"id": "c1", "text": "With an exactly 60 percent forecast and unavailable pavilion, the picnic must be canceled.", "decision": true, "evidence": [{"messageIndex": 4, "quote": "If it reaches 60 percent and the pavilion cannot be booked, the event is canceled."}]}
+      ],
+      "forbiddenAssertions": [{"text": "Under those conditions the picnic stays in the meadow or moves to the user's kitchen.", "severe": true}, {"text": "The conversation reports that the actual forecast has arrived and the picnic is already canceled.", "severe": true}]
+    },
+    {
+      "id": "a61b73000403", "group": "conditions-uncertainty", "unknown": true, "assistantInformation": false,
+      "expectedAnswer": "The key's current location is unknown; the bowl was empty and the other suggested places have not been confirmed.",
+      "claims": [
+        {"id": "c1", "text": "The spare key's current location is not established.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "She mentioned a drawer and a coat pocket as possible places, not as places she remembered using."}, {"messageIndex": 2, "quote": "I have not checked every drawer or coat yet, and nobody has found it."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The key is confirmed to be in the bowl, a drawer, or a coat pocket.", "severe": true}, {"text": "The key is definitely lost permanently or absent from the flat.", "severe": true}]
+    },
+    {
+      "id": "a61b73000404", "group": "conditions-uncertainty", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "I am bringing bread and roasted peppers to this supper.",
+      "claims": [
+        {"id": "c1", "text": "The settled contribution is bread and roasted peppers.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "The pot did not arrive by Thursday evening, so I bought bread and roasted the peppers. The soup is not happening for this supper."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The user is bringing lentil soup to this supper.", "severe": true}, {"text": "The menu is still waiting for a pot delivery decision.", "severe": true}]
+    },
+    {
+      "id": "a61b73000501", "group": "assistant-information", "unknown": false, "assistantInformation": true,
+      "expectedAnswer": "A three-color basket scores seven points without an amber token and nine points with one.",
+      "claims": [
+        {"id": "c1", "text": "A three-different-color basket scores seven points without an amber token.", "decision": false, "evidence": [{"messageIndex": 1, "quote": "a full basket containing three different fruit colors scores seven points"}]},
+        {"id": "c2", "text": "Spending one amber token makes that basket score nine points.", "decision": false, "evidence": [{"messageIndex": 1, "quote": "If the player spends one amber token when scoring that full basket, it scores nine points instead."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The token adds nine points on top of seven.", "severe": true}, {"text": "The nieces have tested and approved these scoring totals.", "severe": true}]
+    },
+    {
+      "id": "a61b73000502", "group": "assistant-information", "unknown": false, "assistantInformation": true,
+      "expectedAnswer": "Tuck the folded front top point behind the upper edge of the left flap. Draw two short parallel blue lines on the upright back layer.",
+      "claims": [
+        {"id": "c1", "text": "The front top point is tucked behind the upper edge of the left flap to lock the pocket.", "decision": false, "evidence": [{"messageIndex": 1, "quote": "Fold only the front layer of the top point down over those crossed flaps, then tuck that point behind the upper edge of the left flap to lock the pocket."}]},
+        {"id": "c2", "text": "The upright back layer is marked with two short parallel blue lines.", "decision": false, "evidence": [{"messageIndex": 1, "quote": "Draw two short parallel blue lines on that upright back layer as the Pocket Harbor mark."}]}
+      ],
+      "forbiddenAssertions": [{"text": "Both top layers are folded down or the point locks behind the right flap.", "severe": true}, {"text": "The reading club has already selected or completed Pocket Harbor.", "severe": true}]
+    },
+    {
+      "id": "a61b73000503", "group": "assistant-information", "unknown": false, "assistantInformation": true,
+      "expectedAnswer": "The puzzle combination is 4-2-7, read in Bell Room, Map Room, Shell Room order.",
+      "claims": [
+        {"id": "c1", "text": "The fictional cabinet's puzzle combination is 4-2-7.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "The cabinet's puzzle combination is 4-2-7"}]},
+        {"id": "c2", "text": "Read the digits in Bell Room, Map Room, Shell Room order.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "read from the three room cards in the order Bell Room, Map Room, Shell Room"}]}
+      ],
+      "forbiddenAssertions": [{"text": "The combination depends on the players' walking order.", "severe": true}, {"text": "The cabinet has a different fixed combination than 4-2-7.", "severe": true}]
+    },
+    {
+      "id": "a61b73000504", "group": "assistant-information", "unknown": false, "assistantInformation": true,
+      "expectedAnswer": "Bring the sealed parcel to the lighthouse steps.",
+      "claims": [
+        {"id": "c1", "text": "The white pennant with a green circle means bring the sealed parcel to the lighthouse steps.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "A white pennant with a green circle means bring the sealed parcel to the lighthouse steps."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The green-circle banner means wait at the island jetty.", "severe": true}]
+    },
+    {
+      "id": "a61b73000601", "group": "mixed-attribution", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "Sora avoids walnuts because they taste bitter to her. I do not share that dislike; I like walnuts.",
+      "claims": [
+        {"id": "c1", "text": "Sora is the person who dislikes and avoids walnuts.", "decision": false, "evidence": [{"messageIndex": 2, "quote": "the walnut dislike belongs to Sora, and mine is the opposite"}]},
+        {"id": "c2", "text": "Sora's stated reason is their bitter taste.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "She told me she avoids walnuts because she dislikes their bitter taste"}]},
+        {"id": "c3", "text": "The user likes walnuts rather than sharing Sora's dislike.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "I like walnuts and often put them in my own salad."}]}
+      ],
+      "forbiddenAssertions": [{"text": "The user dislikes or avoids walnuts as a general preference.", "severe": true}, {"text": "Sora or the user has a stated walnut allergy.", "severe": true}]
+    },
+    {
+      "id": "a61b73000602", "group": "mixed-attribution", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "Oren requested it. The wider amber-bodied lamp was chosen, and the choir owns it.",
+      "claims": [
+        {"id": "c1", "text": "Oren requested the rehearsal-piano lamp.", "decision": false, "evidence": [{"messageIndex": 0, "quote": "our community choir director, Oren. He says he wants a battery lamp on the rehearsal piano"}]},
+        {"id": "c2", "text": "The selected lamp was the wider amber-bodied one.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "He chose the wider amber-bodied one"}]},
+        {"id": "c3", "text": "The lamp is owned by the choir.", "decision": false, "evidence": [{"messageIndex": 4, "quote": "do not convert choir property into something I own at home"}]}
+      ],
+      "forbiddenAssertions": [{"text": "The user requested a replacement for their own desk lamp or owns the purchased lamp at home.", "severe": true}, {"text": "The narrow black lamp was chosen.", "severe": true}]
+    },
+    {
+      "id": "a61b73000603", "group": "mixed-attribution", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "Hana chose tea only for the opening.",
+      "claims": [
+        {"id": "c1", "text": "Hana chose tea only for her gallery opening.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "Hana has now chosen tea only."}]}
+      ],
+      "forbiddenAssertions": [{"text": "Hana adopted the assistant's hypothetical apple-juice plan.", "severe": true}, {"text": "The user personally prefers tea over apple juice.", "severe": true}]
+    },
+    {
+      "id": "a61b73000604", "group": "mixed-attribution", "unknown": false, "assistantInformation": false,
+      "expectedAnswer": "Davi will spend three nights in Cedar Bay and take the afternoon ferry to Moss Island.",
+      "claims": [
+        {"id": "c1", "text": "Davi's updated Cedar Bay stay is three nights.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "Davi has changed it: three nights in Cedar Bay, then the afternoon ferry to Moss Island."}]},
+        {"id": "c2", "text": "Davi's updated ferry is the afternoon departure.", "decision": true, "evidence": [{"messageIndex": 2, "quote": "Davi has changed it: three nights in Cedar Bay, then the afternoon ferry to Moss Island."}]}
+      ],
+      "forbiddenAssertions": [{"text": "Davi's current plan is two nights followed by the morning ferry.", "severe": true}, {"text": "The user is taking Davi's trip or has booked the ferry.", "severe": true}]
+    }
+  ]
+}

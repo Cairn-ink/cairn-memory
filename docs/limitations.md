@@ -1509,3 +1509,26 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Role-stratified extraction remains an unproven evaluation candidate
+
+The [role-stratified extraction experiment](plans/role-stratified-extraction.md)
+is evaluation-only and changes no production default. Its grouped policy changes
+both role-specific prompt guidance and slot allocation, so a paired difference
+cannot isolate the effect of numeric quotas. Up to three user-group and two
+assistant-group items share the unchanged five-item total, with no borrowing;
+this allocation may lose useful assistant information. A role citation checks
+source membership, not truth, correct attribution, adoption or currentness.
+
+The 24 authored synthetic cases are a development diagnostic. Explicit
+recordkeeping reminders often cue the distinction under test; all four unknown
+cases are short, and assistant-only and late-evidence controls concentrate in
+one family. These features limit generalization to natural conversations.
+Scripted mechanics and exact-quote conservation do not measure semantic recall
+or establish that generated claims preserve their sources' meaning.
+
+No quality score has been established for this candidate. The bounded
+write-to-answer comparison uses an all-admitted source read rather than ordinary
+production recall. It establishes no long-history retrieval result, MOC/vector
+improvement, installed Hermes reliability, full three-role architecture quality
+or competitive parity. The existing advancement gate remains unchanged.
