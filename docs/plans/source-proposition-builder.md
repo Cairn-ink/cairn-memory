@@ -179,3 +179,14 @@ previous no-harm result.
 - Primary still owns the final combined checks, candidate commit and two
   independent fixed-diff reviews. No semantic effectiveness or spend/cost claim
   follows from these scripted results. Agent elapsed time and cost are unknown.
+- Review round 1 correction on candidate `9c38fd5`: original JSON response
+  strings now use their raw UTF-16 length for the compiler's 40,000-unit bound,
+  preserving the exact string without charging another JSON wrapper. JSON
+  object/parsed-value limits and the existing `callModel` serialized accounting
+  are unchanged. Added exact 40,000 accept/40,001 reject and escape-heavy wire
+  fixtures, plus a model-call regression retaining its stricter envelope bound.
+  This corrects the declared boundary; it is not a semantic method change.
+- Review round 1 verification: the focused owned-runner suite passed **17/17**
+  on Node **22.16.0** and **24.15.0**, **actual exit 0** for both. The three-file
+  correction inventory was cross-checked using Git names and independent
+  filesystem/base-tree membership plus blob hashes against `9c38fd5`.

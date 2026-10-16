@@ -75,6 +75,15 @@ function jsonCopy(value) {
   return result;
 }
 
+// A response string is already the original JSON wire, so charge its raw
+// UTF-16 units rather than an additional JSON encoding of that string.
+// Objects and the subsequently parsed value keep jsonCopy's existing bounds.
+function responseCopy(value) {
+  if (typeof value !== 'string') return jsonCopy(value);
+  if (!value.isWellFormed() || value.length > 40000) throw new Error('boundary');
+  return value;
+}
+
 function exact(value, required, optional = []) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
       required.some(key => !Object.hasOwn(value, key)) ||
@@ -158,7 +167,7 @@ export function compileSourcePropositions(prepared, output) {
   const state = states.get(prepared);
   if (!state) fail('invalid_preparation');
   try {
-    const originalOutput = jsonCopy(output);
+    const originalOutput = responseCopy(output);
     const parsed = typeof originalOutput === 'string' ? jsonCopy(JSON.parse(originalOutput)) : originalOutput;
     exact(parsed, ['propositions']);
     if (!Array.isArray(parsed.propositions) || parsed.propositions.length > 5) throw new Error('propositions');
@@ -223,7 +232,7 @@ export async function buildSourcePropositions(model, input, deadline) {
     // Do not adopt an arbitrary synchronous thenable before inspecting its
     // descriptors: reading its `then` could execute an output accessor.
     const result = isPromise(pending) ? await pending : pending;
-    try { return jsonCopy(result); } catch { fail('invalid_model_output'); }
+    try { return responseCopy(result); } catch { fail('invalid_model_output'); }
   };
   const response = await callModel(port, 'proposeSourcePropositions', prepared.request.system, prepared.request.input,
     { failureCode: 'proposition_build_failed', deadline });

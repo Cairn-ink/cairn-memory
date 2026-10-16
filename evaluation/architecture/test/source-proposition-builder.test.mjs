@@ -277,3 +277,38 @@ test('SP16 transient source and segment indices preserve multi-window message gr
   for (const candidate of request.input.candidates)
     assert.deepEqual(Object.keys(candidate).sort(), ['candidateIndex', 'role', 'segmentIndex', 'sourceIndex', 'text']);
 });
+
+test('SP17 original JSON strings use raw UTF-16 bounds while object and model-call accounting stay unchanged', async () => {
+  const prepared = prepareSourcePropositions(input('Synthetic source.'));
+  const empty = JSON.stringify(output()).padEnd(40000, ' ');
+  assert.equal(empty.length, 40000);
+  assert.ok(JSON.stringify(empty).length > 40000);
+  assert.equal(compileSourcePropositions(prepared, empty).originalOutput, empty);
+  invalid(prepared, empty + ' ');
+
+  const escapedContent = '"\\'.repeat(250);
+  const escapedWire = JSON.stringify(output(proposition({ content: escapedContent }))).padEnd(40000, ' ');
+  assert.equal(escapedWire.length, 40000);
+  assert.ok(JSON.stringify(escapedWire).length > escapedWire.length + 500);
+  const escapedResult = compileSourcePropositions(prepared, escapedWire);
+  assert.equal(escapedResult.originalOutput, escapedWire);
+  assert.equal(escapedResult.items[0].content, escapedContent);
+  invalid(prepared, escapedWire + ' ');
+
+  const unicodeWire = JSON.stringify(output(proposition())).replace('Synthetic observation', '\\u0061'.repeat(600))
+    .padEnd(40000, ' ');
+  assert.equal(unicodeWire.length, 40000);
+  assert.equal(compileSourcePropositions(prepared, unicodeWire).items[0].content, 'a'.repeat(600));
+  const oversizedObject = { ...output(), extra: '\\'.repeat(20000) };
+  assert.ok(JSON.stringify(oversizedObject).length > 40000);
+  invalid(prepared, oversizedObject);
+
+  // callModel still serializes its response envelope and applies its own
+  // 40,000-unit and exact-token ceilings; the compiler's raw-wire bound
+  // does not relax that independent model-call contract.
+  let calls = 0;
+  await assert.rejects(buildSourcePropositions({ contextWindow: 8192, countTokens: () => 1,
+    proposeSourcePropositions() { calls++; return empty; } }, input('Synthetic source.')),
+  { code: 'invalid_model_output' });
+  assert.equal(calls, 1);
+});
