@@ -1,0 +1,29 @@
+{
+  "version": "claim-local-extracted-v1",
+  "cases": [
+    { "id": "ce-8f21", "messages": [{ "role": "user", "text": "The river gauge beside the field station read 42 cm at 07:10 today. That reading is the first entry in my month-long silt survey at this station." }] },
+    { "id": "ce-b604", "messages": [{ "role": "user", "text": "I'm tracing the custody of the orchard deed in the blue archive-drawer envelope. It had no wax seal when I opened the drawer on Tuesday; its flap was tucked inside." }] },
+    { "id": "ce-3d97", "messages": [{ "role": "user", "text": "My walking-access diary covers the footbridge route to the community garden. On Saturday afternoon I felt uneasy crossing the bridge, and the feeling lasted until I reached the far bank." }] },
+    { "id": "ce-a250", "messages": [{ "role": "user", "text": "Kemi texted that the trail marker above Alder Falls was leaning east when she passed it this morning. Her report is part of our ongoing trail-maintenance record for the ridge route." }] },
+    { "id": "ce-6c83", "messages": [{ "role": "assistant", "text": "The observatory's unresolved-sighting register describes a pale streak over the south dome at 21:05. The observer says it may have been an aircraft, but could not identify it; this is the register's open south-dome entry." }] },
+    { "id": "ce-e419", "messages": [{ "role": "user", "text": "The violet patch in my pigment-fading study looked paler after an afternoon by the window. I cannot tell whether sunlight caused the change; this is the violet watercolour swatch in the study notebook." }] },
+    { "id": "ce-91ab", "messages": [{ "role": "user", "text": "The irrigation pump's flow meter showed zero during this morning's inspection. I have chosen a paper logbook for pump inspections this month." }] },
+    { "id": "ce-2e76", "messages": [{ "role": "assistant", "text": "Noor's message says, 'The ink on my seed labels ran in yesterday's rain. I've chosen a pencil for the labels at my next seed swap.'" }] },
+    { "id": "ce-d530", "messages": [{ "role": "user", "text": "The spotlight hummed during the portrait session; the ballast might be the source. I've settled on a matte backdrop for Friday's portraits." }] },
+    { "id": "ce-48fc", "messages": [{ "role": "user", "text": "We collected fourteen bottles at the canal cleanup on Sunday. For next Sunday's cleanup, our group has chosen a limit of five volunteers in each canoe." }] },
+    { "id": "ce-f682", "messages": [{ "role": "assistant", "text": "The exhibit committee's note says no audio was audible at the east kiosk during Monday's test. The committee has selected 90-second audio tracks for opening weekend." }] },
+    { "id": "ce-0a3d", "messages": [{ "role": "user", "text": "The fern on my kitchen shelf has brown spots on two leaves. I noticed them while watering it this morning." }, { "role": "user", "text": "Etta wrote, 'I've decided on peat-free mix for my balcony planters this spring.' Her new planters arrived yesterday." }] },
+    { "id": "ce-c187", "messages": [{ "role": "user", "text": "For the July pop-up, I have chosen a limit of 36 characters per caption line on the display signs. The captions will sit beneath the specimen drawings." }] },
+    { "id": "ce-75e0", "messages": [{ "role": "assistant", "text": "The guild's signed minutes settle the public roster format: members' surnames will be omitted. This choice applies to the autumn exhibition roster." }] },
+    { "id": "ce-14b9", "messages": [{ "role": "user", "text": "Daro wrote, 'If the west room is available, I've decided to lease the weaving loom for six weeks.' He is waiting for the room manager's reply." }] },
+    { "id": "ce-ab62", "messages": [{ "role": "assistant", "text": "The school-trip packing sheet has a space for the solar lanterns." }, { "role": "user", "text": "I've decided to keep those lanterns indoors whenever it rains during this school trip. They can stay on the windowsill then." }] },
+    { "id": "ce-5d28", "messages": [{ "role": "user", "text": "I'm considering copper bookmarks for the museum shop's anniversary bundle. I still need to compare the samples before settling on a material." }] },
+    { "id": "ce-e703", "messages": [{ "role": "user", "text": "Lio messaged, 'I'm considering leaving my pottery demonstration unrecorded. I haven't decided; I want to hear what my co-presenter thinks first.'" }] },
+    { "id": "ce-39cf", "messages": [{ "role": "assistant", "text": "The council's draft minutes say a two-hour parking window on Market Lane is being explored for the spring trial. The proposal has not been approved." }] },
+    { "id": "ce-862a", "messages": [{ "role": "user", "text": "I might move my radio-history podcast to a fortnightly schedule if editing keeps taking this long. I'm weighing that option and have not changed the schedule." }] },
+    { "id": "ce-f04e", "messages": [{ "role": "user", "text": "I've ruled out glossy varnish for the miniature bridge. It hides too much of the carved grain in the sample." }] },
+    { "id": "ce-27d1", "messages": [{ "role": "assistant", "text": "The campsite board's notice rejects overnight campfires at Reed Hollow for the winter gathering. The notice refers specifically to fires left burning after bedtime." }] },
+    { "id": "ce-9ba5", "messages": [{ "role": "user", "text": "Suri told me, 'I've turned down the 12-seat shuttle for my geology field visit.' She said its turning circle was too wide for the access road." }] },
+    { "id": "ce-60c8", "messages": [{ "role": "user", "text": "I've decided against automatically posting the nesting-trail locations during breeding season. Visitors can ask at the information desk instead." }] }
+  ]
+}

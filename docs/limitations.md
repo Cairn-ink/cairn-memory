@@ -1509,3 +1509,57 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Claim-local commitment refinement candidate
+
+The [claim-local commitment candidate](plans/claim-local-commitment.md) is
+evaluation-only. Its second stage revisits commitment for the baseline's frozen
+selected claim while retaining the original decoded output. The completed
+[24-case paired diagnostic](../evaluation/architecture/results/claim-local-commitment-v1.json)
+improved target/commitment success from 12/24 to 18/24: six gains, zero regressions.
+Five false adopted observations and one uncertainty error remain, along with
+three unchanged attribution issues. The 10→16/24 score excluding other flagged
+issues is not full-field success. Removing the interpretation-sensitive
+negative-polarity gain only for sensitivity leaves five net gains/23; the primary
+24-case denominator remains unchanged. Two masked GPT-6.1 Sol/high raters agreed,
+but same-family agreement is not independent human calibration.
+
+This used fixed extraction-like cards, one short source/item per case and the
+same historical model pin. It did not test actual extraction, histories, MOC,
+multi-item packing or downstream answers. The full candidate doubles generation
+calls and adds 13,004 input/654 output tokens; known generation estimates rise
+from US$0.021892 to US$0.028150, excluding 48 unknown-cost count requests. The
+extra call, prompt and projection are bundled, so their individual effects remain
+unproven. Public replay validates decoded-output/compiler/pairing integrity, not
+provider origin, semantic truth or authorization; private raw HTTP audit is separate.
+
+That prepared-card result supported only a separately frozen integration check.
+The completed [NEW actual-extraction diagnostic](../evaluation/architecture/results/claim-local-extracted-v1.json)
+retains 24 sources, 32 extracted cards and all 64 cold-verified arm/card views.
+Strict source success is 11/24 baseline and 16/24 with refinement: six gains,
+one regression, net five. **Do not adopt**: refinement changes the council's
+correctly considered parking proposal to unknown, failing the zero-lost-decision
+gate. Eight false adoptions remain. Required coverage is 23/24 in both arms;
+source success requires all required claims and every actual card to pass.
+
+The two same-family masked raters differed on 16 entries. Explicit primary source
+audit resolves those and records four corrections to agreed entries, retaining
+all raw judgments. The corrections cover a lost podcast condition and treating
+a permissible windowsill location as settled. The latter admits a competing
+pragmatic reading: accepting it adds one candidate pass but does not remove the
+parking regression or pass the gate. This is not independent human calibration.
+
+The full actual-extraction baseline uses 48 generations and the candidate 72,
+**50% extra generation calls**. Known estimates are US$0.033967 and US$0.041171,
+excluding unknown-cost count requests; the US$0.72 reservation is not an invoice.
+The full-source/all-card rubric differs from the earlier prepared-card rubric,
+so these cohorts are not a trend comparison. Public offline replay and the
+separate primary wire/cold audit establish evidence integrity, not official QA,
+MOC/vector/relationship quality, full capture or installed-host acceptance.
+
+Next is bounded offline architecture diagnosis/prototyping of source-backed
+propositions versus decision state, with independent review and fresh cases
+before any future paid proposal. Do not enable this refiner or stack more
+post-hoc refiners. Production, benchmark and general quality gates remain unmet;
+this result grants no new paid authority. No historical result has been repaired
+or rescored, and the original fixed-output semantic replay still fails by design.

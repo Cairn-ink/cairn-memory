@@ -1,0 +1,149 @@
+{
+  "version": "claim-local-commitment-v1",
+  "cases": [
+    {
+      "id": "cc-7a13",
+      "content": "The fermentation-room wall display read 18°C at 06:40.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "At 06:40, the fermentation-room wall display read 18°C." }
+    },
+    {
+      "id": "cc-c420",
+      "content": "The loading-bay count was eleven sealed crates on Monday morning.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "I counted eleven sealed crates in the loading bay on Monday morning." }
+    },
+    {
+      "id": "cc-19be",
+      "content": "The test dough did not rise during its first hour in the bowl.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "The test dough did not rise during its first hour in the bowl." }
+    },
+    {
+      "id": "cc-f802",
+      "content": "A faint click during the suitcase test may have come from its latch.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "During the suitcase test I heard a faint click; it may have come from the latch." }
+    },
+    {
+      "id": "cc-6d31",
+      "content": "The user felt relieved after the language exam on 2026-02-17.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "After the language exam on 2026-02-17, I felt relieved that afternoon." }
+    },
+    {
+      "id": "cc-b9e4",
+      "content": "According to Lale, the parcel weighed 740 grams at dispatch.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "Lale told me the parcel weighed 740 grams when she dispatched it." }
+    },
+    {
+      "id": "cc-2f75",
+      "content": "The scanner lamp flickered twice during the morning scan.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "The scanner lamp flickered twice during the morning scan. I decided to store today's image backups on the external drive." }
+    },
+    {
+      "id": "cc-83ad",
+      "content": "The trial loaf had a sticky center when cut at noon.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "When I cut the trial loaf at noon, its center was sticky. For the next batch, I chose the lower oven rack." }
+    },
+    {
+      "id": "cc-d106",
+      "content": "Platform 3 was crowded when the user arrived at 08:15.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "Platform 3 was crowded when I arrived at 08:15. I chose a seat in the quiet carriage for the return trip." }
+    },
+    {
+      "id": "cc-54ca",
+      "content": "The delivery carton had a dented corner on arrival.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "The delivery carton had a dented corner on arrival. We settled on foam sleeves for next week's mug shipment." }
+    },
+    {
+      "id": "cc-e728",
+      "content": "The cart's front wheel wobbled during the user's checkout test.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "Odo wrote, 'I chose rubber wheels for my cart.' During my checkout test, the cart's front wheel wobbled." }
+    },
+    {
+      "id": "cc-0b69",
+      "content": "The rehearsal recording contained no audible echo in the opening passage.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "I heard no echo in the opening passage of the rehearsal recording. We decided to use clip-on microphones for Saturday's performance." }
+    },
+    {
+      "id": "cc-a452",
+      "content": "The user chose an 18°C setpoint for the fermentation room's overnight cycle.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "For the fermentation room's overnight cycle, I have decided to set the thermostat to 18°C." }
+    },
+    {
+      "id": "cc-38fc",
+      "content": "Pavel chose a round table for his own workshop's lunch area.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "Pavel wrote to me, 'I've chosen a round table for the lunch area in my workshop.'" }
+    },
+    {
+      "id": "cc-91d7",
+      "content": "The volunteer team settled on reusable badges for the chess tournament.",
+      "kind": "fact",
+      "source": { "role": "assistant", "text": "The volunteer team's update says they have settled on reusable badges for the chess tournament." }
+    },
+    {
+      "id": "cc-f563",
+      "content": "The user decided to serve the tasting flight without added ice.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "For the tasting flight, I've decided to serve all three drinks with no added ice." }
+    },
+    {
+      "id": "cc-4e18",
+      "content": "The user is considering cork lining for the instrument case.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "I'm considering cork lining for the instrument case, but I haven't settled on a lining yet." }
+    },
+    {
+      "id": "cc-b032",
+      "content": "Nela is weighing a sunrise start for her cycling trip.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "Nela messaged, 'I'm weighing a sunrise start for my cycling trip; I still need to compare the bus times.'" }
+    },
+    {
+      "id": "cc-6c8f",
+      "content": "The user is still considering a weekly pickup for bakery returns.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "I haven't committed to a collection schedule for bakery returns. A weekly pickup is still under consideration." }
+    },
+    {
+      "id": "cc-d947",
+      "content": "The knitting club is considering holding its winter meetup in a greenhouse.",
+      "kind": "fact",
+      "source": { "role": "assistant", "text": "The knitting club's minutes say it is considering the greenhouse for its winter meetup; a venue vote is still pending." }
+    },
+    {
+      "id": "cc-15e6",
+      "content": "The user ruled out steel lids for the spice jars.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "I ruled out steel lids for the spice jars after they left a metallic smell." }
+    },
+    {
+      "id": "cc-7db0",
+      "content": "Rafi rejected the mezzanine as the location for his studio desk.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "Rafi told me, 'I've rejected the mezzanine as a place for my studio desk because of the low ceiling.'" }
+    },
+    {
+      "id": "cc-c6a9",
+      "content": "The user decided against adding a bell to the library's book-return slot.",
+      "kind": "fact",
+      "source": { "role": "user", "text": "I decided against adding a bell to the library's book-return slot; it would disturb readers." }
+    },
+    {
+      "id": "cc-08f4",
+      "content": "The race organizers explicitly ruled out a gravel finish lane.",
+      "kind": "fact",
+      "source": { "role": "assistant", "text": "The race organizers' notice explicitly rules out a gravel finish lane because wheelchairs need a firm surface." }
+    }
+  ]
+}
