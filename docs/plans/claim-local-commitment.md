@@ -1,7 +1,7 @@
 # Evaluation-only claim-local commitment refinement
 
-Status: completed 24-case mechanism diagnostic; next held-out integration remains
-planned. No production change or broad quality gate passed.
+Status: prepared-card and actual-extraction diagnostics completed; the integration
+gate failed. Do not adopt. No production change or broad quality gate passed.
 Fixed base: `ad274b6117f86446fbf0ff16f503ae69d0278ce5`.
 
 The September 28 meaning probe retained eight false adopted nondecision outcomes
@@ -257,7 +257,7 @@ resource sums. Deliberate output, judgment, pairing, aggregate and accounting
 corruptions fail. These offline checks establish evidence integrity, not new
 LLM semantic accuracy. Primary owns final combined verification and review.
 
-## New actual-extraction integration contract — pending freeze
+## New actual-extraction integration contract — frozen before execution
 
 This is a second small mechanism/integration diagnostic, continuing the existing
 isolated PR 427. It does not satisfy the product's 24-question end-to-end QA
