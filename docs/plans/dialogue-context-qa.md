@@ -298,3 +298,142 @@ explains that provider counts include request framing absent from local text
 tokenization. Local checks therefore do not replace the existing provider
 preflight. Usage estimates, conservative reservations and invoices remain
 distinct; count-endpoint and agent-judging costs are not silently treated as zero.
+
+## Closed-run delivery acceptance
+
+Primary recorded R1–R8 after masked adjudication and before assigning delivery.
+The exact pre-execution contract remains in runtime
+`884b03b2274558b6e64f9db2bd7d36a93cc9b794`; this appendix changes no frozen rule.
+The operation stopped at its unchanged 30-minute deadline. Its closed original
+outcomes cannot be retried, repaired, extended, replaced or semantically regraded.
+
+- R1: Publish the fixed denominator of 24: each arm has 14 supported answers,
+  two wrong completed answers and eight without completed answers. Baseline has
+  one failed/seven not-run; candidate has zero failed/eight not-run. Report no
+  unresolved semantic judgments separately from incomplete execution. Net gain
+  is zero, not a passed quality gate or competitive benchmark score.
+- R2: Preserve all 24 rows and exact supplied judgments. Include the source,
+  minimal rubric, public runner result, randomization seed, both original raters,
+  masked adjudication and a clearly identified public projection of its notes.
+  Do not publish operational ledger configuration, credentials, private paths,
+  provider headers or unrelated data. Literal artifacts and derived projections
+  must be distinguished, with their respective hashes.
+- R3: Add an offline recorded-result replay test using the existing scorer.
+  Verify exact denominators, 14/14 supported answers, gain zero, failed gates,
+  adjudication packet binding and all first-attempt statuses. This is arithmetic
+  and integrity replay, not a new model run or independent semantic rejudgment.
+- R4: Explain formal positive evidence coverage of 29/34 versus 27/34. The
+  baseline-only partial 17th case retained two necessary claims before timing
+  out; this is not a paired evidence regression. As an explicitly secondary
+  diagnostic, the 16 completed pairs have 27/27 necessary claims in both arms,
+  38 versus 44 packed passages, and 2,873 versus 3,163 source bytes. Ten answer
+  requests were identical and six differed. Neither shared wrong answer lacked
+  its necessary source: one omitted a condition; one invented a specific causal
+  history. Do not infer the model's internal cause from these observations.
+- R5: Preserve independent review/judging limitations: 152 correctness/support
+  boolean comparisons agree; two source-ID-only differences and one issue-
+  existence disagreement were resolved while masked. One shared unsupported
+  proposition remains, with one occurrence per arm; no severe/stale or new
+  candidate issue was judged. Same-family agents are not human calibration.
+- R6: Report 616 audited records, 164 physical requests (82 count/82 generation),
+  44,529 input and 4,711 output generation tokens, US$0.82 conservative reserved
+  delta and US$0.025381 known generation estimate, not an invoice. Count-endpoint
+  and agent costs remain unknown. The original cumulative reservation is
+  US$339.142281; US$30.857719 remains outside protected US$30 at post-run audit.
+  No new unknown/pending usage was found. These are dated observations, not a
+  fresh dispatch grant.
+- R7: Disposition is STOP this predecessor-context candidate. Completion,
+  necessary-evidence improvement and net-answer-gain gates failed. Even the
+  completed portion had no necessary-evidence opportunity, so fixing operating
+  overhead alone does not justify spending on the reserved fresh cohort.
+  Leave that cohort unused. No algorithm/default promotion, Stage 3, source-
+  retention contract change, merge, release or deployment follows. The next
+  work is a bounded review of multi-memory retrieval/assembly opportunities,
+  not another same-mechanism run or an asserted successful new architecture.
+- R8: One bounded actual GPT-6.1 Sol/high worker owns only the result report,
+  public replay artifact/test, append-only result/ownership notes here and
+  append-only limitations. Preserve all original fixture/rubric/runtime bytes.
+  Worker runs focused tests on Node 22.16.0/24.15.0 and two-route inventories;
+  primary inspects exact diff, reruns contributor gates, freezes a scoped commit
+  and obtains separate nonauthor Standards/Spec reviews before PR delivery.
+
+The private operator's history-scan overhead was independently reproduced with
+owned synthetic ledgers, not by profiling or modifying the operational ledger.
+A prospective guard-frequency correction passed offline acceptance after an
+independent reviewer found and the worker fixed a queued-callback dispatch gap.
+The final private candidate passed 22/22 tests on both supported Nodes and the
+primary's 59,000-history/56 fake-request gate in 145,762 ms (all exit 0).
+The failed correction and red reproduction remain preserved. These private
+operating-tool checks do not repair the closed study or establish product speed,
+semantic reliability or authority to launch another paid experiment.
+
+### Closed result publication and bounded delivery ownership
+
+The [closed result report](dialogue-context-qa-results.md) supersedes the earlier
+pending-run status above. STOP this predecessor-context candidate: baseline and
+candidate each have 14 supported answers, two wrong completed answers and eight
+incomplete outcomes in the original denominator of 24. Net gain is zero. Formal
+necessary-evidence totals are 29/34 versus 27/34 because only baseline reached
+the partial 17th case. The secondary common-16 comparison is 27/27 in both arms,
+with 38 versus 44 packed passages and 2,873 versus 3,163 source bytes. There is
+no measured answer-quality lift or justification to launch the unused cohort.
+
+One bounded worker, actual GPT-6.1 Sol/high, owns exactly five delivery paths:
+the report, public recorded packet, offline replay test, this append-only plan
+note and an append-only limitations note. Scope is R1–R8; the original source,
+rubric, runner, scorer, helper, prompts and product runtime remain frozen. There
+is no changed user-flow entrypoint, browser replay, URL, UI text or cross-feature
+caller. The replay test is discovered by the existing architecture test glob;
+the primary owns full contributor gates, exact-diff acceptance, commit, separate
+nonauthor Standards/Spec reviews and PR delivery. The worker does not commit,
+push, call providers or inspect operational credentials/ledger files.
+
+The [public packet](../../evaluation/architecture/fixtures/dialogue-context-qa-recorded-v1.json)
+contains parsed original rater values and accepted judgments, only the public
+runner result, and adjudication notes with the private runtime path removed.
+Its provenance distinguishes original-byte digests from projected-object
+digests. The [offline replay](../../evaluation/architecture/test/dialogue-context-qa-recorded.test.mjs)
+checks integrity and exact supplied-judgment arithmetic, not semantics. The
+original 30-minute run exited 1; passing replay tests cannot turn that stopped
+run into a completed or promotable study. No successor architecture is selected;
+the next bounded review concerns multi-memory retrieval/assembly opportunity.
+
+Worker verification on the uncommitted delivery bytes (2026-10-17):
+
+- Separate owned-runner invocations of
+  `node tools/testing/run.mjs evaluation/architecture/test/dialogue-context-qa-recorded.test.mjs`
+  passed 5/5 on Node 22.16.0 and 24.15.0, actual exit codes **0** each.
+- Separate owned-runner invocations including
+  `dialogue-context-qa-score.test.mjs`, `dialogue-context-qa-recorded.test.mjs`
+  and `dialogue-context-qa-fixtures.test.mjs` passed 25/25 on each runtime,
+  actual exit codes **0**; no skipped/cancelled tests. This checks the unchanged
+  scorer and frozen fixtures alongside the recorded replay, without providers.
+- Direct comparisons verified seven original object sets against their public
+  counterparts, including both raters and notes minus only `validation.node`.
+  All 24 report-table rows matched the score; eight new local links resolved.
+  These checks returned actual exit **0**. The public packet is 746,557 bytes,
+  SHA-256 `ae8cbe10395ab04d20782cc66b0f8a0d3cbdea5b835d52f24bc48f88748f647b`.
+- Git diff plus untracked paths and an independent filesystem/base-blob hash
+  inventory agreed on **five** delivery paths versus runtime `884b03b`, and
+  **15** combined paths versus base `ad274b6`, inspecting 1,645 files. Both
+  inventory checks returned actual exit **0**; existing docs are append-only.
+  `git diff --check` returned actual exit **0**. Full contributor gates and
+  exact-commit independent reviews remain primary-owned acceptance work.
+
+Primary integrated acceptance before delivery freeze (2026-10-17): the exact
+five-file result delta was read directly. Six original byte hashes and six
+parsed/projection comparisons matched; both existing docs retained their full
+runtime prefix and all 24 outcome-table rows matched the supplied score. These
+read-only checks exited **0**. Independent Git/untracked and physical/base-blob
+inventories agreed on five delivery paths and 15 combined paths, inspecting
+1,645 files; both invocations and `git diff --check` exited **0**.
+
+Primary `npm test` on Node 22.16.0 passed **691/691**, actual exit **0**, no
+skips/cancellations. The complete architecture glob through the owned runner
+on Node 24.15.0 passed **139/139**, actual exit **0**, no skips/cancellations.
+`npm run validate` exited **0**. Pinned Claude Code 2.1.260 marketplace and
+strict plugin validations each exited **0**, using a fresh isolated config
+workspace whose verified teardown removed it. No runtime behavior or original
+study artifacts changed. Final-commit Standards/Spec reviews and latest-head
+CI follow this local acceptance; none of these gates converts the stopped
+experiment into a quality pass.
