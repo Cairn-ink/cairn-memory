@@ -1509,3 +1509,99 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Offline predecessor-source binding
+
+The [bounded source-binding experiment](plans/neighbor-source-binding.md)
+retains a selected source window's immediate predecessor when existing receipt
+and output budgets permit. Scripted real-core tests demonstrate that the added
+exact source and speaker survive ordinary capture, classification and a cold
+reopen without another generation call. This is mechanical source retention,
+not measured answer quality or a semantic relation between memories.
+
+The helper is evaluation-only and no production caller imports it. It does not
+change host retention, archive Raw inputs, improve MOC/vector retrieval, infer
+support/adoption, or recover a discarded passage from another batch. Provenance
+is an integrity-pinned experimental sidecar, not a persisted public schema or
+signed archive. Resolution validates each current entry but is not an atomic
+multi-memory snapshot. The caller must use the same synchronous deterministic
+token counter for the helper and core model.
+
+Capacity checks preserve original anchors and skip optional additions; invalid
+original output still fails. Corrected or forgotten records cannot be restored
+by the sidecar. Broader privacy/retention review and fresh independently judged
+write-to-answer evidence are prerequisites to considering product adoption.
+
+### Pending dialogue-context QA study
+
+The [fresh dialogue-context QA study](plans/dialogue-context-qa.md) remains
+offline-only, with semantic results pending a paid run and independent masked
+review. Its [24 synthetic dialogues](../evaluation/architecture/fixtures/dialogue-context-qa-v1.json)
+cover six groups of four: consideration, explicit adoption, rejection, factual
+correction, observation and insufficient information. Both arms use ordinary
+capture, share one first extraction, and independently classify when capture
+requires it. Source-only answers use evidence resolved after a real store
+close/reopen; the report binds source receipts to authoritative cold message
+identities rather than guessing from source-window numbers.
+
+The intervention retains adjacent predecessor passages in existing receipt
+slots. It adds no semantic relation, Raw archive, MOC/vector change or complete
+new memory architecture. Resolving every admitted memory in these small
+captures does not measure normal retrieval or LongMemEval performance.
+
+The [frozen rubric](../evaluation/architecture/fixtures/dialogue-context-qa-rubric-v1.json)
+excludes four insufficient-information cases from positive necessary-quote
+coverage; their evidence is audit context, while all 24 cases remain in the
+answer denominator and uncertainty/no-harm judgments. More retained or packed
+quotes alone cannot pass: supported-answer gains and all paired completion,
+unsupported-assertion, stale-fact and decision-preservation no-harm gates are
+required. Pending results support no adoption, default change or product
+readiness claim.
+
+### Closed dialogue-context QA result: stop this candidate
+
+The [closed result report](plans/dialogue-context-qa-results.md) supersedes the
+pending-study status immediately above. Both arms have **14 supported, two
+wrong completed and eight incomplete outcomes out of 24 first attempts**.
+Baseline has one failed/seven not-run; candidate has zero failed/eight not-run.
+There are zero supported-answer gains or regressions, zero newly unsupported/
+severe/stale issues, zero lost supported required decisions and zero unresolved
+semantic judgments. This is no measured answer-quality lift. The four unknown-
+information cases were not reached, so no uncertainty-answer success was observed.
+
+The unchanged 30-minute deadline stopped the run after 164 physical requests;
+the original process exited **1**. The structural audit passed 616 records with
+zero errors and zero new unknown/pending usage, while explicitly marking the
+run incomplete and Q8 evidence ineligible. The reserved delta was US$0.82; the
+known generation estimate was US$0.025381 for 44,529 input/4,711 output tokens.
+Count-endpoint and agent/judging costs remain unknown; the estimate is not an
+invoice. Original cumulative reservations were US$339.142281, with US$30.857719
+outside protected US$30 at the dated post-run audit. These figures confer no
+new dispatch authority.
+
+Formal retained and packed necessary evidence was 29/34 baseline versus 27/34
+candidate: baseline alone reached two claims in the partial 17th case. This is
+not a paired evidence regression. The explicitly secondary 16 completed pairs
+had 27/27 necessary claims in both arms, 38 versus 44 packed passages and 2,873
+versus 3,163 source bytes; ten answer requests were identical and six differed.
+Both wrong answers had their necessary source: the curtain answer omitted the
+sample-first condition; the detergent answer invented a lavender-specific
+headache history. These observations do not establish model-internal causes.
+
+Both original nonauthor rater judgments and masked adjudication are preserved
+in the [public replay packet](../evaluation/architecture/fixtures/dialogue-context-qa-recorded-v1.json).
+All 152 correctness/support boolean comparisons agreed; two source-ID-only
+differences and one issue-existence disagreement were reconciled while masked.
+One shared unsupported proposition remains, one occurrence per arm. Same-family
+agents and label masking are not independent human calibration. The offline
+test repeats integrity and supplied-judgment arithmetic, not semantic judging.
+
+**STOP this predecessor-context candidate.** Completion, necessary-evidence
+improvement and net-answer-gain gates failed. Even the completed portion had
+no necessary-evidence opportunity; fixing operating overhead alone does not
+justify launching the reserved fresh cohort, which remains unused. This tiny
+source-only all-admitted-memory read is not ordinary MOC/vector retrieval or a
+LongMemEval/competitive benchmark result. No default promotion, Stage 3,
+retention-contract change, merge, release or deployment follows. A bounded
+review of multi-memory retrieval/assembly opportunities is next; no successor
+mechanism has been selected or demonstrated successful.
