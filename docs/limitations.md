@@ -1527,11 +1527,12 @@ one family. These features limit generalization to natural conversations.
 Scripted mechanics and exact-quote conservation do not measure semantic recall
 or establish that generated claims preserve their sources' meaning.
 
-No quality score has been established for this candidate. The bounded
-write-to-answer comparison uses an all-admitted source read rather than ordinary
-production recall. It establishes no long-history retrieval result, MOC/vector
-improvement, installed Hermes reliability, full three-role architecture quality
-or competitive parity. The existing advancement gate remains unchanged.
+The completed fresh v2 comparison failed the unchanged advancement gate; see
+[the result report](plans/role-stratified-v2-results.md) and the current result
+limitations below. The bounded write-to-answer comparison uses an all-admitted
+source read rather than ordinary production recall. It establishes no
+long-history retrieval result, MOC/vector improvement, installed Hermes
+reliability, full three-role architecture quality or competitive parity.
 
 ## Role-stratified first live run: no paired score
 
@@ -1556,3 +1557,54 @@ synthetic cases: twelve longer dialogues, four short unknowns, and concentrated
 assistant-information/late-source controls. These checks establish no answer
 gain. Fixing the revision-binding defect does not establish that role-stratified
 extraction improves retention, fidelity or supported answers.
+
+## Role-stratified v2: perfect source-only answers do not establish memory fidelity
+
+The separately authored fresh v2 operation completed at runtime
+`9f21697bfc1c43b7b7f23782b46771c866db47b2` with actual execution exit 0.
+All 24 pairs and 48 first answers remain in the denominator. Two independent
+masked agent ratings and a separate masked adjudication were fixed before
+unmasking; the public [result report](plans/role-stratified-v2-results.md) links
+the complete synthetic report projection and exact original judgment bytes for
+offline replay through the unchanged scorer. The earlier failed v1 operation
+above is still closed and was not retried or counted as a paired score.
+
+Both arms produced 24/24 supported-correct answers, including 4/4 unknowns,
+and retained and packed all 38/38 positive minimum claims/quotes. This baseline
+ceiling provides no answer or necessary-source improvement opportunity on this
+cohort. The common answer policy reads the union of retained source receipts,
+not generated memory prose: correct answers can coexist with unsupported stored
+statements. Mechanical quote conservation is not semantic recall.
+
+The baseline had 86 supported statements out of 111, versus 76/95 for the
+candidate; unsupported statement counts fell from 25 to 19. Unsupported
+semantic issue propositions fell from 31 to 26, but the candidate introduced
+23 new unsupported memory propositions, including one new severe/stale issue.
+These are different counting units: statement verdicts are not atomic-fact rates,
+and a lower total does not cancel new errors. In the puppet case, candidate
+memory-1 says wind below 20 permits rod puppets even though its own updated
+receipt also requires a latched gate. Candidate memory-2 preserves that gate
+condition, and both source-only answers preserve both requirements; the issue
+is the stale sufficient condition in memory-1, not absence from the whole bank.
+
+There were 18 pre-adjudication memory-support flag disagreements across 13
+pairs and no required-answer-claim flag disagreements. Independent adjudication
+also corrected two agreed memory verdicts. No unresolved judgment, answer issue,
+lost supported decision, assistant-information loss or completion loss remained.
+This is same-family agent review, not human calibration or demonstrated blindness.
+
+All 288 HTTP requests were accounted (144 counts and 144 generations), with
+US$1.44 conservatively reserved. The US$0.104164 generation-only estimate is
+separate from unknown count-route billing and the unknown actual invoice.
+Elapsed 1,111,772.585455 ms includes local accounting overhead. Agent review
+costs are not exposed by that ledger. The public resource observations do not
+replay private accounting or authenticate an invoice; no budget reset, refund
+or future paid authority follows.
+
+The unchanged gate failed on zero net answer gain, zero retained/packed coverage
+gain and new memory issues. Role quotas are not adopted or enabled by default.
+These 24 English synthetic development cases are not an official LongMemEval QA
+score, production recall, natural installed Hermes use, long-history reliability
+or competitor parity. The next step is an explicit representation/opportunity
+review; this result does not authorize a tuned quota rerun, raw retention/search
+or a production change.

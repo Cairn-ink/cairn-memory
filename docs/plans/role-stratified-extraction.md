@@ -1,9 +1,15 @@
 # Role-stratified extraction: one-call development candidate
 
-Status: the first live cohort is closed after a runner revision-binding defect,
-before any paired answer. The extraction hypothesis remains unmeasured, not a
-demonstrated repair or product default. Primary recorded the original contract
-before implementation and any candidate model output. Base:
+Status: the fresh v2 cohort is complete and closed: the unchanged advancement
+gate failed. Both arms achieved 24/24 supported-correct first answers and
+38/38 retained/packed positive support, leaving no paired gain; the candidate
+introduced 23 unsupported memory propositions, including one severe/stale
+proposition. Role-stratified extraction is not adopted or a product default.
+See [the complete result](role-stratified-v2-results.md) and its public offline
+replay evidence. The earlier first live cohort remains closed after its runner
+revision-binding defect, before any paired answer; its history below is preserved.
+Primary recorded the original contract before implementation and any candidate
+model output. Base:
 `ad274b6117f86446fbf0ff16f503ae69d0278ce5`; branch:
 `experiment/role-stratified-extraction`.
 
@@ -614,6 +620,57 @@ dependencies are hash-bound before launch; validation alone does not unmask
 scores. Independent fixed-commit reviews and exact-head CI are recorded in
 the PR before any new paid launch.
 
+## Completed fresh v2 result and public delivery
+
+The first and only fresh v2 execution completed at runtime
+`9f21697bfc1c43b7b7f23782b46771c866db47b2`, actual execution **exit 0**.
+Both masked independent ratings and separate masked adjudication were fixed
+before unmasking. The unchanged gate **failed**: supported-correct answers
+24/24 -> 24/24 and retained/packed positive support 38/38 -> 38/38 provide no
+gain, while the candidate introduces 23 unsupported memory propositions,
+including one severe/stale proposition. Supported memory statements are
+86/111 -> 76/95; unsupported statements 25 -> 19. A lower aggregate error
+count does not cancel newly introduced propositions. All 24 pairs, 48 first
+answers, both original ratings and final adjudication remain preserved.
+
+The [full result report](role-stratified-v2-results.md) includes every case,
+the two-condition puppet example, 18 memory-support disagreements across 13
+pairs, two independently corrected agreed verdicts, and limitations. Answers
+read retained source receipts rather than generated memory prose, so their
+100% score does not demonstrate fidelity or ordinary production recall. There
+are no answer issues, lost decisions, assistant-information losses, completion
+losses or unresolved judgments. This is a synthetic development diagnostic,
+not official LongMemEval QA, natural installed Hermes use or competitor parity.
+
+All 288 HTTP requests (144 counts / 144 generations) were accounted with
+US$1.44 conservatively reserved. The generation-only estimate is US$0.104164;
+count-route billing and actual invoice are unknown. Elapsed
+1,111,772.585455 ms includes local accounting overhead. Agent review costs
+are not exposed by that ledger. No closed operation is retried or refunded,
+and the protected budget is not a grant for future work.
+
+D1–D8 delivery is bounded to this plan, `docs/limitations.md`, the result report,
+the synthetic result JSON and its focused test. One actual GPT-6.1 Sol/high
+worker authored these five paths; primary retains acceptance, independent
+arithmetic/byte checks, broader gates and final review/delivery ownership.
+The focused unchanged-scorer replay passed **7/7, exit 0**, on Node 22.16 and
+24.15 through the owned runner. It checks the complete report projection,
+original judgment bytes, regenerated packet, exact score, denominators and
+mutation rejection without provider/store/ledger access. No runtime consumer,
+browser entrypoint, replay URL, prompt, fixture, schema, scorer, package,
+workflow or default changes. No TypeScript gate exists in this JavaScript repo.
+Worker JSON validation and `git diff --check` each exited **0**. Git
+diff/untracked inventories matched an independent filesystem/base-blob route:
+**5** delivery paths against the executed runtime and **18** total branch paths
+against the fixed base, with **1,648** files inspected (exit 0). The complete
+synthetic projection and all raw original judgment strings passed a private-field
+and machine-path scan. Broader contributor gates and independent final-candidate
+reviews remain primary acceptance work, not implied by the focused 7-test run.
+
+Role-stratified extraction is not adopted. Next is an explicit representation
+and opportunity review, not an automatic promotion or tuned quota rerun.
+Raw retention/search and future paid operations remain outside this delivery.
+
 ## Research alternatives, not interventions in this comparison
 
 Primary checked the original method sections after a separate read-only research
@@ -646,3 +703,59 @@ self-review. Preserve unrelated worktrees and all closed run artifacts.
 The user requested discussion after 12–18 hours if work is still ongoing;
 this turn's first checkpoint is 2026-10-17 03:09 UTC. Stop earlier for a material
 choice outside existing scope, not merely to report ordinary progress.
+
+## Closed v2 result delivery contract (recorded before delegation)
+
+The first and only v2 operation completed at runtime
+`9f21697bfc1c43b7b7f23782b46771c866db47b2`. Both independent masked ratings
+and the separate masked adjudication were fixed before primary unmasked the
+result. The unchanged gate returns **do not advance**. Delivery requirements:
+
+- D1: Preserve all 24 pairs / 48 first answers, both original ratings, final
+  adjudication, source/rubric hashes and the earlier closed v1 failure. Neither
+  rerun, rescore with new judgments, remove failures nor modify runtime,
+  prompts, fixtures, limits or gates. Publish the completed v2 independently
+  from every external benchmark and earlier synthetic experiment.
+- D2: Add a public synthetic-only evidence bundle sufficient to reproduce the
+  existing pure scorer: the complete runner-report projection, frozen masking
+  seed, exact original rating/adjudication text and their hashes, packet binding,
+  expected score, and resource observations. Bind the projection's own digest
+  separately from the original private report-file digest; do not claim they
+  are the same bytes. Exclude HTTP records, keys, headers, account identifiers,
+  machine paths, operational ledger contents and production/user data.
+- D3: Reuse the existing scorer unchanged. A focused offline result test must
+  regenerate the same masked packet, validate both raw ratings and adjudication,
+  and exactly reproduce the frozen score. Independently assert the full
+  denominators, completion, supported answers, memory support, new severe/stale
+  issue and failed advancement. Mutation controls reject changed originals,
+  missing cases and laundering the severe issue; no provider, store or ledger
+  access is part of this replay. Replay is not a new semantic judgment.
+- D4: Report baseline/candidate supported answers **24/24 → 24/24**, retained
+  and packed positive minimum support **38/38 → 38/38**, memory statements
+  supported **86/111 → 76/95**, unsupported **25 → 19**, and zero unresolved.
+  The lower aggregate unsupported count does not cancel **23 newly introduced
+  unsupported memory propositions**, including **one new severe/stale
+  proposition**. These issue counts are not memory counts or atomic-fact rates.
+  Include all 24 case outcomes and the exact two-condition puppet example.
+- D5: Preserve the 18 pre-adjudication memory-support disagreements across
+  13 pairs, zero required-answer-claim flag disagreements, and two independent
+  corrections of agreed memory verdicts. Explain that source-only answering
+  bypasses generated memory prose, and that 100% here is a diagnostic ceiling,
+  not a new LongMemEval score, proof of reliability or competitor parity.
+- D6: Report actual execution exit 0, all 288 HTTP requests (144 counts / 144
+  generations) fully accounted, US$1.44 conservatively reserved, and the
+  generation-only US$0.104164 price estimate separately from unknown count-route
+  billing and actual invoice. Elapsed 1,111,772.585455 ms includes local
+  accounting overhead, not only provider latency. Agent review costs are not
+  exposed by that ledger. No reset/refund or new paid work follows.
+- D7: Update this plan's current status, append honest limitations, and add one
+  result report plus the evidence bundle and its focused replay test. No README,
+  ROADMAP gate, production engine, architecture contract or default change.
+  Next is an explicit representation/opportunity review, not automatic promotion
+  or another tuned role-quota run. Raw retention/search remains outside scope.
+- D8: One bounded actual GPT-6.1 Sol/high worker owns these five delivery paths;
+  primary inspects the actual data/diff, independently checks arithmetic and
+  original-byte bindings, reruns affected and contributor gates, then freezes
+  a candidate for separate nonauthor Standards/Spec reviews and exact-head CI.
+  Cross-check inventories via Git and filesystem/base blobs. Update existing
+  PR #431; no merge, release, deployment or historical cleanup.
