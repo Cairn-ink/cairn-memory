@@ -256,3 +256,129 @@ the original judging packet/consensus and recompute pair counts, sensitivity and
 resource sums. Deliberate output, judgment, pairing, aggregate and accounting
 corruptions fail. These offline checks establish evidence integrity, not new
 LLM semantic accuracy. Primary owns final combined verification and review.
+
+## New actual-extraction integration contract — pending freeze
+
+This is a second small mechanism/integration diagnostic, continuing the existing
+isolated PR 427. It does not satisfy the product's 24-question end-to-end QA
+development gate or the fresh 30-case formal benchmark. The previous cohort,
+frozen rubric, outputs and results above remain unchanged. No MOC, vector or
+relationship capability is added. This appendix is a preparation contract, not
+paid-run authority or permission to enable production behavior.
+
+- E1 — Sources and separation: use exactly 24 entirely NEW synthetic ordinary
+  conversations in `evaluation/architecture/fixtures/claim-local-extracted-v1.json`.
+  The only source fields are version, cases, opaque ID and 1–3 user/assistant
+  messages with trimmed, well-formed text of 1–800 UTF-16 units each. No prepared
+  card, kind, expected stance, rubric, group or evaluator hint enters a model
+  request. The evaluator-only `claim-local-extracted-rubric-v1.json` has six pure
+  observations, six mixed observation/adoption sources, four adopted, four
+  considered and four rejected controls; at least half are mixed, negative or
+  uncertain. There are 30 required claims, with both claims required in every
+  mixed source. Independent mechanical source/rubric tests establish shape and
+  metadata integrity only; primary source review owns semantic suitability and
+  novelty. Freeze exact source and rubric SHA256 hashes after primary review and
+  final gate definition, and before paid execution. Freeze judging instructions
+  and schema before dispatch; construct and hash the masked judging packet only
+  afterward from the preserved first actual outputs. Do not tune against outputs.
+- E2 — Actual extraction seam: the private operator uses the existing core
+  `captureSnapshot`, `extractionRequest`, `callModel.extract` and `extractedItems`
+  path with actual trusted source receipts. Retain request/response evidence and
+  receipt bindings. Share the identical first extraction and first baseline
+  qualification output across both arms. The extractor may choose nothing; do
+  not prompt it with gold, force extraction or replace its output. Keep every
+  original attempt; there is no retry, repair, source replacement, old-run
+  redrive or selection of a later/better output.
+- E3 — Pairing and invariance: retain all 1–5 actual extracted items and original
+  indices, even when items are redundant or semantically wrong. Baseline uses
+  actual extraction plus baseline qualification; candidate adds only the
+  existing claim-local refinement. Its frozen selected tuples, item content,
+  attribution and all fields except commitment and its citations stay unchanged.
+  No synthetic card substitution, best-card selection, gold-informed packing or
+  source-based shortcut is permitted. More than five items, invalid extraction,
+  overflow, missing required claims or empty extraction remain paired failures
+  in the fixed denominator of 24; empty/missing coverage fails both arms.
+- E4 — Mechanical integration: compile actual qualifications, admit every actual
+  card through the existing admission path, read it, close/reopen the synthetic
+  store and cold-check every card. Retain all cards and mechanical evidence in
+  both arms. Malformed output, failure at any stage or unverifiable cold storage
+  is unresolved and scores zero for that arm, never an exclusion or a substituted
+  baseline. This checks the extraction seam and admission/read/cold path; it is
+  not full `core.capture`, classification, MOC retrieval or an installed-host
+  test. No production core/default, schema, model, credentials or user data change.
+- E5 — Source-level judgment: inspect full original sources and ALL actual output
+  cards, including unmatched extras. Strict success requires mechanical
+  completion and cold verification, coverage of ALL required claims, preserved
+  target meaning and supported commitment on EVERY actual output card. One card
+  may cover multiple required claims and multiple cards may cover one; do not
+  require duplication or preferred phrasing. Judge the actual tuple's polarity
+  and represented claimant: observations are unknown, chosen numeric settings
+  may be adopted, quotations preserve the represented party's choice, considering
+  is not adopting, and adopting an exclusion can equal rejecting inclusion.
+  Preserve negation, uncertainty and material conditions. Report item judgments
+  separately from fixed-denominator source results, with attribution, scope and
+  uncertainty issues separately visible. This is not a full-memory accuracy score.
+- E6 — Frozen safety and comparison gate: before execution define severe errors
+  as new false adoption; a misassigned decision maker; erased uncertainty,
+  negation or material scope/conditions; an invented choice, unsupported authority,
+  consent or execution permission; or loss/downgrade/reversal of any baseline-correct
+  actual decision, including decisions inside otherwise failing sources. Require
+  at least three NET source-level gains across 24, zero lost actual decisions and
+  zero new severe errors. Unknowns and unresolved judgments block promotion.
+  Use two independent masked non-implementing GPT-6.1 Sol raters, explicitly the
+  SAME model family and not human calibration. Retain all raw judgments and masked
+  mappings; disagreements need an explicit primary source audit preserving both
+  judgments and the resolution reason, never silent relabeling. Passing permits
+  only discussion of a next diagnostic; it is no production promotion authority.
+- E7 — Private operator envelope: 24 sources × three stages (extraction, baseline
+  qualification, extra refinement), each at most one count plus one generation,
+  means at most 144 total HTTP requests and 72 generation calls. Retain the
+  `gpt-4.1-mini-2025-04-14` pin, 6,000 local / 7,024 provider input-token bounds
+  and 1,024 output-token bound. Maximum new conservative reservation is US$0.72,
+  within the US$400 cumulative cap with US$30 protected. These are limits, not
+  measured spend. Primary must freshly inspect the shared cumulative ledger,
+  freeze the manifest/operator/source/rubric and complete independent Standards
+  and Spec review before any paid dispatch. This appendix supplies no dispatch
+  authority. Report full baseline cost as extraction PLUS qualification and full
+  candidate as baseline PLUS refinement, including counts of unknown cost,
+  failures, actual calls/tokens, estimates/reservations and duration overhead.
+- E8 — Ownership, verification and checkpoint: bounded fixture/rubric/test/appendix
+  implementation remains within this existing isolated worktree/branch. Primary
+  owns final source inspection, gate, freeze, combined verification, dual review,
+  paid acceptance and PR delivery. No browser or production call-site changes
+  occur. Run the focused fixture-integrity test through the owned runner on
+  Node 22.16.0 and 24.15.0; record actual exit codes. Derive the four-file change
+  inventory by git diff plus untracked listing and independently by porcelain
+  status, compare and print its count. The user requested a 12-hour checkpoint
+  from `2026-10-16T15:09:19Z`: if not converged by
+  `2026-10-17T03:09:19Z`, return for discussion. This is a discussion checkpoint,
+  not a deadline to declare the goal complete.
+
+Preparation verification: the focused owned command
+`node tools/testing/run.mjs evaluation/architecture/test/claim-local-extracted-fixtures.test.mjs`
+passes all **6** tests on Node **22.16.0** and **24.15.0**, actual exit **0** on
+each. These checks use ordinary JSON and no SQLite/provider imports. They check
+strict source/evaluator field separation, bounds and malformed-copy rejection,
+group metadata, 30 required-claim entries and fixed gate shape, exact old-source
+disjointness, and unchanged previous fixture/rubric byte hashes. They establish
+no semantic accuracy or provider-origin evidence. The new inventory is 24 sources,
+26 messages, maximum 221 UTF-16 units per message and 18 sources marked mixed,
+negative or uncertain. The four assigned files were derived by `git diff
+--name-only` plus `git ls-files --others --exclude-standard`, independently
+re-derived by full porcelain status, and compared with **zero differences**, count
+**4**; the prior plan bytes remain an exact prefix. Primary still owns final
+semantic review, new byte pins, combined verification, dual review and freeze.
+
+Primary pre-execution source review subsequently inspected all 24 conversations
+and the complete rubric and approved their semantic suitability before any paid
+outputs. The approved source SHA256 is
+`36d3655dae7e3f8edd78c038ab63a7b32cab1b0f5d23e00f3751ab6938506983`;
+the approved rubric SHA256 is
+`7217bd39c59cae0243e16e52ca2255fdf8fee2bbb493b83e3b47cc3ffd910da0`.
+A seventh integrity test now pins these exact bytes alongside the unchanged old
+cohort pins. The private acceptance-only judging instructions/schema are frozen
+before dispatch and their hash is included by the launcher; the actual masked
+packet is constructed afterward from first outputs. This records source/rubric
+approval, not paid-run authority, a semantic result or completion of dual review.
+The focused owned runner now passes **7/7** on Node **22.16.0** and **24.15.0**,
+actual exit **0** on each; standalone `git diff --check` also exits **0**.
