@@ -1538,3 +1538,48 @@ counters do not measure actual provider tokens or costs. See the prospective
 An independently frozen real-model opportunity probe, a shared internal
 candidate-strategy seam with existing finalization and bounded fallback, and
 fresh paired acceptance remain required before any paid quality comparison.
+
+The integration stress fixture for more than 200 L1 groups uses public filing
+APIs only to create unrelated structural load; it is not a manually filed
+oracle target or semantic evidence. Ordinary classification reads at most 100
+catalog rows and refuses new groups when its catalog is incomplete, so this
+fixture does not prove normal capture scales to 200 L1 groups. The separate
+greater-than-36 eligible-reference/target fixture uses normal capture and
+classification throughout.
+
+## Opt-in integrated MOC recall
+
+The source-evidence-only `moc-hierarchy-v1` strategy connects bounded hierarchy
+navigation to the existing fetch, atomic source packing, rank and authoritative
+finalization. Its private L2-only catalog avoids mixed-root/L1 crowding, but
+limited pages and untrusted topic titles still miss relevant groups and evidence.
+One ordinary query page per namespace and one twelve-ref selection reserve
+provide bounded unfiled/orphan fallback, not complete recall. Invalid/stale data
+or model failures reject the request; fallback does not hide errors.
+
+Within each routed L1, the leaf page is the first six memory-ID-ordered refs,
+not query-aware within-topic retrieval. A useful later memory can remain unseen
+even when the correct topic was selected. The scripted hierarchy-only target
+does not establish a real target absent from actual flat navigation.
+
+Candidate provenance and actual rank-visible/omitted references are reported
+without source bodies in selection audit. Reserving a candidate slot does not
+guarantee rank visibility: source-mode packing can omit whole candidates. All
+observed namespace epochs and exact returned source evidence are validated in
+the existing final transaction, which establishes freshness rather than semantic
+sufficiency, truth or adoption.
+
+Maximum navigation is sixteen maps, two group calls, one flat select and one
+rank. Four model calls allow local-input/output ceilings of 24,000/4,096,
+versus the default three calls' 18,000/3,072. Per-call limits remain unchanged.
+This is not equal total budget or demonstrated lightweight improvement. SQL
+work/latency and actual provider tokens, physical requests and cost need separate
+measurement. Compact group wire schemas avoid repeated-object schema bloat;
+local tokenizer measurements and fake provider counts are not provider invoices.
+Existing paid guards still reject the new dynamic-only adapter method.
+
+Offline scripted capture/classification and fake HTTP establish integration and
+failure behavior only. Independently frozen real-model opportunity, fresh paired
+24 acceptance, unchanged net≥3/24 quality criteria and lifecycle ceilings remain
+open. Raw archive, Card governance, links, vector fusion and installed-Hermes
+value are not established by this implementation.

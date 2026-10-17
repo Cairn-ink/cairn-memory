@@ -311,7 +311,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
         localTokens = qualifier.localTokens;
       } else {
         // Validate before JSON serialization can erase sparse/custom fields.
-        if (method === 'selectChecklist') schemasFor(method, input);
+        if (method === 'selectChecklist' || method === 'selectGroups') schemasFor(method, input);
         const prevalidated = method === 'extract' && Object.hasOwn(input, 'inputMode')
           ? snapshotIndexedExtractInput(input) : input;
         const originalSerializedInput = JSON.stringify(prevalidated);
@@ -335,7 +335,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
       diagnose('request_invalid'); throw new Error('invalid_openai_request');
     }
     if (localTokens > 6000) { diagnose('request_bounds'); fail('context_budget_exceeded'); }
-    const selected = profile[method === 'selectChecklist' ? 'select' : method];
+    const selected = profile[['selectChecklist', 'selectGroups'].includes(method) ? 'select' : method];
     const payload = qualifier ? null : { model: selected.model, instructions,
       input: [{ role: 'user', content: [{ type: 'input_text', text: serializedInput }] }],
       text: { format: { type: 'json_schema', name: `cairn_${method}`, strict: true,
@@ -361,6 +361,17 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     const response = await post('/responses', generateBody, 262144, signal, diagnose);
     checkAbort(signal, diagnose);
     const output = parseOutput(response, selected.contextWindow, selected.model, diagnose);
+    if (method === 'selectGroups') {
+      const identity = ref => JSON.stringify([ref.namespaceIndex, ref.mocId, ref.revision]);
+      const allowed = new Set(snapshot.maps.flatMap(map => map.groups.map(identity)));
+      if (!schemaAccepts(schema, output) || new Set(output.refs.map(ref =>
+        identity(ref))).size !== output.refs.length || output.refs.some(ref => !allowed.has(identity(ref))) ||
+        [...new Set(output.refs.map(ref => ref.namespaceIndex))].some(index =>
+          output.refs.filter(ref => ref.namespaceIndex === index).length > snapshot.maxRefsPerNamespace)) {
+        diagnose('output_shape'); fail('invalid_model_output');
+      }
+      return output;
+    }
     if (episodic) return normalizeEpisodeOutput(method, snapshot, output, qualifier?.schema ?? schema, diagnose);
     return normalizeClassificationWire(method, output, schema, wire, diagnose)
       ?? normalizeQualificationSlots(method, snapshot, output, validationSchema, diagnose);
@@ -386,6 +397,7 @@ export function createOpenAIModel({ apiKey, fetchImpl = globalThis.fetch,
     reviewBasis: (request) => invoke('reviewBasis', request),
     classify: (request) => invoke('classify', request),
     select: (request) => invoke('select', request),
+    selectGroups: (request) => invoke('selectGroups', request),
     selectChecklist: (request) => invoke('selectChecklist', request),
     rank: (request) => invoke('rank', request),
     reconcile: (request) => invoke('reconcile', request),

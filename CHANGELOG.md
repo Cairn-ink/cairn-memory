@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — embedded core experiment
+
+- Add source-evidence-only `selectionMode:'moc-hierarchy-v1'`: bounded private
+  L2→L1 navigation and ordinary-search reserve feed the existing fetch/rank/atomic
+  finalization. Default recall and host behavior stay unchanged. The opt-in allows
+  sixteen maps/four model calls; semantic benefit and lifecycle cost are unassessed.
+- Add dynamic-only OpenAI `selectGroups` with exact reference validation. Existing
+  live guards continue to deny it; this does not authorize paid evaluation.
+
 ## Unreleased — @cairn-ink/memory installer 0.5.3
 
 - Save a new Codex conversation from its first turn after setup or resume. A

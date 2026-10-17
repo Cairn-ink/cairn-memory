@@ -5,6 +5,7 @@ import { fail, object, identifier, revision, denseArray } from './validation.mjs
 import { isSourceContext } from './source-evidence.mjs';
 import { packRank, packSelect } from './model-packing.mjs';
 import { createQueryWindow } from './query-excerpt.mjs';
+import { generateMocCandidates } from './moc-recall-candidates.mjs';
 
 const selectPrompt = readFileSync(new URL('./prompts/recall-select.md', import.meta.url), 'utf8');
 const rankPrompt = readFileSync(new URL('./prompts/recall-rank.md', import.meta.url), 'utf8');
@@ -72,7 +73,7 @@ function selection(output, allowed, maximum, model, stage) {
   } catch { emitDiagnostic(model, stage, 'core_validation', reason); fail('invalid_model_output'); }
 }
 
-export async function recallMemories({ model, readSet, query, limit, map, fetch, finalize, recentReceipts,
+export async function recallMemories({ model, readSet, query, limit, map, hierarchyMap, fetch, finalize, recentReceipts,
   validateFresh = () => {}, includeQualification = false, contextMode, selectionMode }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
@@ -82,7 +83,70 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
   const chosen = new Map();
   const truncation = { navigationItemsOmitted: 0, candidatesOmitted: 0, candidatesShortened: 0, receiptListsCapped: 0 };
   let strategy = 'model-selected';
-  for (let round = 0; round < 2; round++) {
+  let hierarchySelection;
+  if (selectionMode === 'moc-hierarchy-v1') {
+    const routed = await generateMocCandidates({ core: { map: hierarchyMap }, readSet, query,
+      groupModel: model, validateFresh });
+    const visible = readSet.map((namespace, namespaceIndex) => {
+      validateFresh();
+      const page = unwrap(map({ namespace, purpose: 'recall', limit: 100, tokenBudget: 4000 }));
+      if (page.invalidRefs.length) fail('invalid_ref');
+      maps[namespaceIndex] = page;
+      return { namespaceIndex, items: page.items, exhausted: page.exhausted };
+    });
+    const packed = packSelect(model, selectPrompt, { query, maps: visible, maxRefs: 12 });
+    truncation.navigationItemsOmitted += packed.omitted;
+    const allowed = new Map();
+    for (const page of packed.input.maps) for (const item of page.items) {
+      const ref = mapRef(item);
+      if (ref) { const candidate = { namespaceIndex: page.namespaceIndex, ...ref }; allowed.set(key(candidate), candidate); }
+    }
+    let fallback = [];
+    let flatCalls = 0;
+    if (allowed.size || packed.overflow) {
+      flatCalls++;
+      fallback = selection(await callModel(model, 'select', selectPrompt, packed.input, { validateFresh }),
+        allowed, 12, model, 'select');
+    }
+    const add = (ref, origin) => {
+      if (!ref) return;
+      const previous = chosen.get(key(ref));
+      if (previous) {
+        if (!previous.origins.includes(origin)) previous.origins.push(origin);
+        if (origin === 'hierarchy') previous.paths = ref.paths;
+      } else chosen.set(key(ref), { namespaceIndex: ref.namespaceIndex, memoryId: ref.memoryId,
+        revision: ref.revision, origins: [origin], paths: ref.paths ?? [] });
+    };
+    for (let index = 0; index < Math.max(fallback.length, routed.candidates.length); index++) {
+      add(fallback[index], 'fallback'); add(routed.candidates[index], 'hierarchy');
+    }
+    if (chosen.size > 36 || readSet.some((_, index) =>
+      [...chosen.values()].filter(ref => ref.namespaceIndex === index).length > 24)) {
+      fail('invalid_model_output');
+    }
+    strategy = 'hierarchy-with-bounded-flat-reserve';
+    hierarchySelection = { mode: selectionMode, strategy, semanticCoverage: 'unassessed',
+      snapshotGuarantee: 'atomic-finalization', fallback: { strategy: 'one-current-query-page-per-namespace',
+        maxRefs: 12, selectedRefs: fallback, navigationItemsOmitted: packed.omitted },
+      selectedL2: routed.audit.selectedL2, selectedL1: routed.audit.selectedL1,
+      candidates: [...chosen.values()].map(({ namespaceIndex, memoryId, revision, origins, paths }) => {
+        const edge = value => ({ parentId: value.parentId, parentRevision: value.parentRevision,
+          childType: value.childType, childId: value.childId, childRevision: value.childRevision, relation: value.relation });
+        const group = value => ({ namespaceIndex: value.namespaceIndex, mocId: value.mocId, revision: value.revision });
+        return { namespaceIndex, memoryId, revision, origins: [...origins], paths: paths.map(path => ({
+          l2: group(path.l2), l1: group(path.l1), l2ToL1: edge(path.l2ToL1), l1ToMemory: edge(path.l1ToMemory) })) };
+      }),
+      partialPages: routed.audit.partialPages,
+      // Audit exposes references and page metadata, never the flat map labels or fetched bodies.
+      maps: [...routed.audit.maps.map(({ namespaceIndex, stage, result }) => ({ namespaceIndex, stage,
+        indexRevision: result.value.indexRevision, rows: result.value.items.length + result.value.invalidRefs.length,
+        exhausted: result.value.exhausted, truncatedBy: result.value.truncatedBy })),
+      ...maps.map((page, namespaceIndex) => ({ namespaceIndex, stage: 'fallback', indexRevision: page.indexRevision,
+        rows: page.items.length, exhausted: page.exhausted, truncatedBy: page.truncatedBy }))],
+      resources: { mapCalls: routed.audit.resources.mapCalls + maps.length,
+        groupModelCalls: routed.audit.resources.modelCalls, flatModelCalls: flatCalls, rankModelCalls: 0,
+        modelCalls: routed.audit.resources.modelCalls + flatCalls, fetchCalls: 0 }, rankVisibleRefs: [], rankSelectedRefs: [] };
+  } else for (let round = 0; round < 2; round++) {
     const visible = [];
     const complete = new Map();
     readSet.forEach((namespace, namespaceIndex) => {
@@ -128,7 +192,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
       if (!chosen.has(key(ref))) chosen.set(key(ref), ref);
     }
   }
-  const namespaces = readSet.map((namespace, i) => ({ namespace, mapExhausted: maps[i].exhausted,
+  const namespaces = readSet.map((namespace, i) => ({ namespace, mapExhausted: !hierarchySelection && maps[i].exhausted,
     fetchExhausted: true }));
   const candidates = [];
   for (const ref of chosen.values()) {
@@ -143,6 +207,7 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
     let item;
     let exhausted = false;
     for (let round = 0; round < 2; round++) {
+      if (hierarchySelection) hierarchySelection.resources.fetchCalls++;
       const result = fetch({ ...request, ...(page ? { cursor: page.nextCursor } : {}) });
       // A memory that cannot fit one fetch envelope is left out, not fatal; a
       // later receipt page that cannot fit leaves the earlier receipts.
@@ -185,17 +250,26 @@ export async function recallMemories({ model, readSet, query, limit, map, fetch,
       candidates[packed.included[position]].receiptCap = sent.receipts.length;
     });
     const shown = packed.included.map((index) => candidates[index]);
+    if (hierarchySelection) hierarchySelection.rankVisibleRefs = shown.map(ref => ({ namespaceIndex: ref.namespaceIndex,
+      memoryId: ref.memoryId, revision: ref.revision }));
     if (shown.length || packed.overflow) {
+      if (hierarchySelection) { hierarchySelection.resources.rankModelCalls++; hierarchySelection.resources.modelCalls++; }
       const rankOutput = await callModel(model, 'rank', prompt, packed.input,
         { validateFresh: () => validateFresh(candidates) });
       ranked = selection(rankOutput, new Map(shown.map((ref) => [key(ref), ref])), limit, model, 'rank');
     }
   }
+  if (hierarchySelection) {
+    hierarchySelection.rankSelectedRefs = ranked;
+    const visible = new Set(hierarchySelection.rankVisibleRefs.map(key));
+    hierarchySelection.rankOmittedRefs = [...chosen.values()].filter(ref => !visible.has(key(ref)))
+      .map(ref => ({ namespaceIndex: ref.namespaceIndex, memoryId: ref.memoryId, revision: ref.revision }));
+  }
   const truncated = Object.values(truncation).some((count) => count > 0);
   // No model/counter callback may follow the authoritative final read.
   const memories = finalize(candidates, ranked.map((ref) => candidates.findIndex((item) => key(item) === key(ref))));
   return { memories, namespaces,
-    ...(selectionMode ? { selection: { mode: selectionMode, strategy, semanticCoverage: 'unassessed' } } : {}),
+    ...(selectionMode ? { selection: hierarchySelection ?? { mode: selectionMode, strategy, semanticCoverage: 'unassessed' } } : {}),
     coverage: !truncated && namespaces.every((ns) => ns.mapExhausted && ns.fetchExhausted)
     ? 'complete' : 'budget_exhausted',
     ...(truncated ? { recallTruncated: truncation } : {}) };
