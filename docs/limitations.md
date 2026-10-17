@@ -1583,3 +1583,43 @@ failure behavior only. Independently frozen real-model opportunity, fresh paired
 24 acceptance, unchanged net≥3/24 quality criteria and lifecycle ceilings remain
 open. Raw archive, Card governance, links, vector fusion and installed-Hermes
 value are not established by this implementation.
+
+## One authentic MOC opportunity probe (2026-10-17)
+
+The [one-case LongMemEvalS development probe](plans/moc-hierarchy-real-opportunity.md)
+completed all 43 ordinary indexed-evidence capture batches and both cold
+source-only read/answer outcomes on an unchanged shared store. Mechanical
+completion is not answer quality: both independent same-family AI reviewers
+judged both answers minimally incorrect and not fully supported. Neither gave
+the required relative-value ratio. One default-answer extra assertion remains
+disputed; the history also does not independently corroborate the question's
+sunset-artwork referent. No official score or binary winner is claimed.
+
+The necessary source was retained but absent from both actual packed flat-select
+inputs: default exposed 69 unique refs across two stages, opt-in exposed 35 in
+its one flat reserve. It reached neither rank nor answer evidence. There were
+203 active memories, but zero L2 creation/parent proposals and no actual group
+calls or selected L1/L2. Thus the intended connected-hierarchy opportunity was
+not established; lower observed opt-in work is not improved routing efficiency.
+Normal classification explicitly permits standalone L1s, whereas H2's private
+entry requires connected L2. A separate synthetic actual-core/adapter control
+can create L2 through optional classification output; this is a topology-entry
+mismatch, not proof of model incapability or a reason to repair the closed case.
+
+The [exact public projection](../evaluation/architecture/moc-hierarchy-real-opportunity-results-20261017.json)
+retains hashes, disagreements, source-path metadata and resource distinctions.
+Its 184 physical requests retained US$0.920000 of reservation; US$0.154336 is a
+known generation usage-rate estimate, not an invoice. Count-route billing stays
+unknown/unrefunded, historical unknowns stay recorded, and the original
+cumulative/protected ledger boundaries remain. Public metadata cannot replay
+the full private authentic trace; no raw history/answer or anonymization
+guarantee is supplied. Fixed default-first order, custom answers and one case
+do not establish broad quality, official accuracy or competitive parity.
+
+No paid paired24 advancement or default promotion follows. Bounded standalone-L1
+entry plus preservation of ordinary flat coverage is only a next hypothesis,
+not implemented or proven. Net≥3/24 with targeted gain, no increased unsupported/
+stale use or new severe failure, and resource gates remain. Later fresh30 still
+requires ≥29 complete and ≥same-batch Mem0 with failures retained. Raw archive,
+Card governance, links/vector fusion and
+installed-Hermes value remain open. No consumed-case retry or replacement.
