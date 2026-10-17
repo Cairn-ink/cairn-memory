@@ -3,9 +3,14 @@ import test from 'node:test';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { openMemoryCore } from '../../../core/contract.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { generateMocCandidates } from '../moc-hierarchy-candidates.mjs';
+
+const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
+const sqliteSupported = nodeMajor > 22 || nodeMajor === 22 && nodeMinor >= 16;
+const { openMemoryCore } = sqliteSupported ? await import('../../../core/contract.mjs') : {};
+const sqliteTest = (name, body) => test(name, { skip: sqliteSupported ? false
+  : 'Actual SQLite integration requires Node >=22.16; synthetic map mechanics still run.' }, body);
 
 if (process.env.CAIRN_MOC_CLEANUP_PROBE) {
   const workspace = createTestWorkspace(null, { prefix: 'cairn-moc-behavior-' });
@@ -91,7 +96,7 @@ function snapshot(core, readSet) {
 const route = (core, readSet = [personal], model = groupModel(), query = 'Work Alpha Beta') =>
   generateMocCandidates({ core, readSet, query, groupModel: model });
 
-test('H1/H3 actual capture, source binding, classification and two-hop paths; traversal-only red control', async t => {
+sqliteTest('H1/H3 actual capture, source binding, classification and two-hop paths; traversal-only red control', async t => {
   const { core } = fixture(t);
   await capture(core, personal);
   const before = snapshot(core, [personal]);
@@ -134,7 +139,7 @@ test('H1/H3 actual capture, source binding, classification and two-hop paths; tr
   t.diagnostic(`mechanics only: ${eligible.size} eligible refs, ${result.candidates.length} bounded candidates; no semantic or flat-baseline claim`);
 });
 
-test('H2 two namespaces preserve supplied order and never mix independent epochs', async t => {
+sqliteTest('H2 two namespaces preserve supplied order and never mix independent epochs', async t => {
   const { core } = fixture(t);
   await capture(core, personal, 15); await capture(core, project, 10);
   const readSet = [project, personal];
@@ -155,7 +160,7 @@ test('H2 two namespaces preserve supplied order and never mix independent epochs
   assert.deepEqual(snapshot(core, readSet), before);
 });
 
-test('H2 model-invented, foreign-namespace, stale, duplicate and oversized group outputs fail closed', async t => {
+sqliteTest('H2 model-invented, foreign-namespace, stale, duplicate and oversized group outputs fail closed', async t => {
   const { core } = fixture(t); await capture(core, personal, 5);
   const before = snapshot(core, [personal]);
   const selectors = [
@@ -173,7 +178,7 @@ test('H2 model-invented, foreign-namespace, stale, duplicate and oversized group
   assert.deepEqual(snapshot(core, [personal]), before);
 });
 
-test('H2 stale memory/parent/index mutations during either model stage fail without repair', async t => {
+sqliteTest('H2 stale memory/parent/index mutations during either model stage fail without repair', async t => {
   for (const [stage, mutation] of [['L2', 'forget'], ['L1', 'correct'], ['L1', 'admit']]) {
     const { core } = fixture(t); await capture(core, personal, 5);
     const target = snapshot(core, [personal])[0].details[0].memory;
@@ -198,7 +203,7 @@ test('H2 stale memory/parent/index mutations during either model stage fail with
   }
 });
 
-test('H3 empty maps stop without model calls; cancellation and callModel budgets propagate', async t => {
+sqliteTest('H3 empty maps stop without model calls; cancellation and callModel budgets propagate', async t => {
   const { core } = fixture(t);
   const empty = await route(core);
   assert.deepEqual(empty.candidates, []); assert.equal(empty.audit.resources.modelCalls, 0);
@@ -215,7 +220,7 @@ test('H3 empty maps stop without model calls; cancellation and callModel budgets
   assert.deepEqual(snapshot(core, [personal]), before);
 });
 
-test('H3 real mixed root rows exhaust two fixed pages before L2; no forced third page or invented fallback', async t => {
+sqliteTest('H3 real mixed root rows exhaust two fixed pages before L2; no forced third page or invented fallback', async t => {
   const { core } = fixture(t); await capture(core, personal, 205, true);
   const before = snapshot(core, [personal]);
   assert.equal(before[0].details.length, 205);
@@ -351,7 +356,7 @@ test('H1 local query/readSet shape validation does not read map or model', async
   }
 });
 
-test('H3 owned workspace cleanup after passing and deliberately failing behavior subprocesses', t => {
+sqliteTest('H3 owned workspace cleanup after passing and deliberately failing behavior subprocesses', t => {
   const parent = createTestWorkspace(t, { prefix: 'cairn-moc-runner-probe-' });
   for (const failing of [false, true]) {
     const child = spawnSync(process.execPath, ['tools/testing/run.mjs', '--script',

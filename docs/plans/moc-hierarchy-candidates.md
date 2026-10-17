@@ -211,3 +211,26 @@ state and report partial status, not a made-up pass.
 Primary must inspect the actual diff, rerun contributor gates and invoke both
 independent review axes against one final SHA before any push/PR. No push,
 merge, deployment or paid follow-up is authorized by this candidate experiment.
+
+### Supported-runtime correction
+
+Primary's Node20.19 generic-gate probe failed with actual exit 1:
+the test's static core import loaded unsupported `node:sqlite` before any test
+could be gated. Following the existing architecture-test runtime precedent,
+load the native core dynamically only on Node >=22.16 and mark seven native
+SQLite cases explicitly skipped on Node20. The six synthetic map/mechanics
+cases still execute there. This changes the test harness, not routing or the
+prospective native-runtime acceptance criteria.
+
+Correction round 1, focused owned-runner command
+`NODE tools/testing/run.mjs evaluation/architecture/test/moc-hierarchy-candidates.test.mjs`:
+
+- `/tmp/node-v20.19.0-linux-x64/bin/node`: actual exit 0, six passed, seven
+  explicitly skipped; skipped native cases are not counted as passes.
+- `/home/chichieh/.nvm/versions/node/v22.16.0/bin/node`: actual exit 0,
+  13/13 passed, no skips.
+- `/home/chichieh/.nvm/versions/node/v24.15.0/bin/node`: actual exit 0,
+  13/13 passed, no skips.
+
+Only the H1 test and this plan changed. Primary must rerun its contributor gates
+and both independent review axes against the corrected candidate before push.
