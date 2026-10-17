@@ -20,8 +20,10 @@ service must use the same public core, not separate engines.
   completed 43 batches and two read/answer outcomes mechanically, but both
   answers missed the reviewed ratio fact. Its source was retained yet absent
   from actual flat selection; zero L2/group calls meant no connected-hierarchy
-  opportunity was established. Standalone-L1 entry and preserved flat coverage
-  are next hypotheses only. No paid paired24 advancement or default promotion;
+  opportunity was established. Qualified closed-snapshot literal order puts
+  the necessary memory at 102/203, not a provider-visible position. Standalone-L1
+  entry and relevance ranking with preserved flat coverage are separate next
+  hypotheses, not a proven fix. No paid paired24 advancement or default promotion;
   formal quality/resource and later fresh30 comparison gates remain unchanged.
 
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)

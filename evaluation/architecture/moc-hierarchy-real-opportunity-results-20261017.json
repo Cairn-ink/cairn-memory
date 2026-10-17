@@ -1,5 +1,5 @@
 {
-  "version": "cairn.moc-hierarchy-real-opportunity-results.v1",
+  "version": "cairn.moc-hierarchy-real-opportunity-results.v2",
   "observedAt": "2026-10-17",
   "status": "closed-no-quality-advancement",
   "officialScore": false,
@@ -44,7 +44,9 @@
     "necessity-standards.json": "4f599f7067c047418660930536a4196671a56ba2081888e9a9d13c069dda322b",
     "necessity-spec.json": "8f9149222b00fe26635490b172528bed0f51b7df45fcd7a17a9daa6dc6aa4960",
     "answer-standards.json": "e5a9a958d91ca12375637a8d9308919f401b4e4286f82e9b0f38627955eaf13f",
-    "answer-spec.json": "546040a939f8ab536478181e69e6d8188231b95b478e461378b7f8ff76d2a6f5"
+    "answer-spec.json": "546040a939f8ab536478181e69e6d8188231b95b478e461378b7f8ff76d2a6f5",
+    "baseline-order-audit.json": "3aa47f5ed302675bfcf5e049744ac387e0f63c9d3cfe90482d503255ca0a233b",
+    "baseline-order-spec-audit.json": "0c668ecfb3ed7b7b15c0a373090c14588b8ca9d186ce47d49bae6a4c348fd8ee"
   },
   "mechanical": {
     "pass": true,
@@ -327,7 +329,7 @@
     "semanticGain": "not-established",
     "advancePaired24": false,
     "promoteDefault": false,
-    "nextDirection": "First investigate bounded standalone-L1 entry and a non-starved ordinary-search reserve; keep exact provenance/freshness and existing engine. No fix or future paid run is established here.",
+    "nextDirection": "Separately investigate bounded standalone-L1 entry with preserved ordinary-search coverage, then a lightweight relevance-ranking hypothesis. The existing literal rank places the necessary memory outside both observed prefixes; no new ranking, hierarchy repair or future paid run is established here.",
     "formalQualityGate": "net>=3/24 correct; targeted gain; no increased unsupported/stale use or new severe failure; report lifecycle resources",
     "subsequentComparisonGate": "fresh30>=29 completed and >=same-batch Mem0 with failures retained in denominator"
   },
@@ -337,6 +339,48 @@
     "H2 has one flat reserve page versus default two rounds; candidate opportunities are unequal.",
     "Normal classification permits standalone L1s; a zero-L2 store cannot exercise an L2-only entry.",
     "Primary/source bindings and frozen reviews are private retained evidence; public metadata cannot independently replay full authentic traces.",
-    "No consumed-case retry or silent replacement. No raw archive, Card governance, link discovery, vector fusion, installed-Hermes gain or competitive parity established."
-  ]
+    "No consumed-case retry or silent replacement. No raw archive, Card governance, link discovery, vector fusion, installed-Hermes gain or competitive parity established.",
+    "The 102nd position is a qualified closed-snapshot reconstruction, not a provider-visible row, an alternative-method evaluation or proof that standalone-L1 entry alone would fix the answer."
+  ],
+  "priorAcceptedProjectionSha256": "b075d90c699907ac55ee994b53b2ac95bd0ba2ad73767778a146383544f91a66",
+  "baselineOrderReconstruction": {
+    "method": "Post-closure reconstruction of the unchanged pinned literal scorer and label policy, independently checked against every actual select-input ID, revision and label.",
+    "activeRows": 203,
+    "physicalScanLimit": 1024,
+    "receiptLimitPerMemory": 4,
+    "necessaryMemoryId": "762d13b0-3e5f-4d66-927d-6a5863333d1f",
+    "necessaryRevision": 2,
+    "necessaryRankOneBased": 102,
+    "necessaryDistinctMatchedTerms": 6,
+    "higherScoringRows": 85,
+    "equalScoreRowsBeforeById": 16,
+    "labelSource": "interpretation",
+    "necessaryReceiptsConsidered": 4,
+    "labelContainsEssentialRatioCue": true,
+    "actualPrefixChecks": [
+      {
+        "mode": "default",
+        "stages": [
+          35,
+          34
+        ],
+        "actualUnique": 69,
+        "allIdsRevisionsLabelsMatch": true
+      },
+      {
+        "mode": "moc-hierarchy-v1",
+        "stages": [
+          35
+        ],
+        "actualUnique": 35,
+        "allIdsRevisionsLabelsMatch": true
+      }
+    ],
+    "policy": "Equal weight for each distinct matching whole Unicode letter/number token; no stopword filter, stemming, synonym expansion or inverse-document-frequency weighting. Receipt replaces body only on a strictly higher score; score ties sort by memory ID.",
+    "membershipQualification": "Reconstruction relies on this fresh store ordinary-capture path with no index rebuild, plus complete current-memory snapshots. Exact observed prefixes corroborate it. The deleted SQLite store was not reopened; arbitrary active-index membership is not independently enumerated by the public snapshot.",
+    "interpretation": "The necessary reference and answer-bearing label fall beyond both actual flat prefixes. For this target, source loss, receipt-cap exclusion, physical 1024-row scan limit and label truncation do not explain the omission.",
+    "providerSawRank102": false,
+    "alternativeRankingEvaluated": false,
+    "fixValidated": false
+  }
 }

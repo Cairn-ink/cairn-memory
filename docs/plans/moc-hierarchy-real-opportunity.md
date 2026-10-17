@@ -8,7 +8,7 @@ no established connected-hierarchy opportunity, semantic gain, paired24
 advancement or default promotion.
 
 The accepted [machine-readable result](../../evaluation/architecture/moc-hierarchy-real-opportunity-results-20261017.json)
-retains exact source/selection/evidence hashes, source bindings, independent
+retains exact source/selection/evidence hashes, source-path metadata, independent
 review disagreements and phase-level resources. This document summarizes that
 projection; it is not an official score or an independently replayable trace.
 
@@ -83,6 +83,32 @@ defensible with the retrieved evidence without answering the full-history
 question. For default, one reviewer flagged an overcertain appraisal-prerequisite
 rationale while the other read context-limited abstention. That extra-assertion
 disagreement is retained; no binary winner is forced from it.
+
+## Closed-snapshot flat-order reconstruction
+
+A post-closure reconstruction of the unchanged pinned
+[literal scorer](../../core/moc-storage.mjs#L380) places the necessary memory at
+flat position **102 of 203** current rows: score 6 (six distinct matched terms),
+with 85 higher-scoring rows and 16 equal-score rows preceding it by memory ID.
+Primary and independent Spec checked every actual select-input ID, revision
+and label against the reconstruction: default's 35 + 34 refs and opt-in's 35
+match their respective prefixes. Position 102 was **not provider-visible**;
+this is not a replay, alternative ranking evaluation or validated remedy.
+
+The existing interpretation label already contains the essential ratio cue.
+All four target receipts were considered; receipt text replaces the body label
+only on a strictly higher score. For this target, source loss, receipt-cap
+exclusion, the physical 1,024-row scan limit and label truncation do not explain
+the omission. The scorer gives equal weight to distinct matching whole Unicode
+letter/number tokens, with no stopword filter, stemming, synonym expansion or
+inverse-document-frequency weighting. No alternative policy was evaluated.
+
+Membership remains qualified: this was a fresh ordinary-capture store with no
+index rebuild, reconstructed from complete current-memory snapshots and
+corroborated by exact observed prefixes. The deleted SQLite store was not
+reopened, and the public snapshot does not independently enumerate arbitrary
+active-index membership. The original private projection and both forensic
+audits remain retained; their approved metadata/hashes are in projection v2.
 
 ## Why ordinary capture did not activate the hierarchy
 
@@ -159,11 +185,13 @@ one-case result cannot support equal-budget or lightweight-quality claims.
 Mechanical gate passed; a retained flat-invisible necessary source was observed.
 Connected hierarchy opportunity is **inconclusive/not established**, semantic
 gain is not established, and neither paired24 nor default promotion advances.
-First investigate bounded standalone-L1 entry and preservation of ordinary flat
-coverage on the same engine, with real provenance/freshness and unchanged
-authoritative finalization. This is a prospective hypothesis, not a fix or
-authority for another paid run. Query-aware leaves cannot help before an L1
-route is entered.
+Separately investigate bounded standalone-L1 entry with preserved ordinary flat
+coverage, then a lightweight relevance-ranking hypothesis on the same engine.
+Keep real provenance/freshness and unchanged authoritative finalization.
+Standalone-L1 entry alone is not proven to fix this answer: the necessary
+memory's existing flat order also lies beyond both observed prefixes. These
+are prospective hypotheses, not implementations, validated remedies or authority
+for another paid run. Query-aware leaves cannot help before an L1 route is entered.
 
 The formal gate remains net≥3/24 correct with targeted gain, no increased
 unsupported/stale use or new severe failure, and reported lifecycle resources.
@@ -193,10 +221,13 @@ was reused read-only. Actual pre-commit checks:
 | `npm run validate` | Node 22.16 and 24.15 | exit 0 each |
 | `claude plugin validate .` | pinned 2.1.260 on Node 22.16 | exit 0 |
 | `claude plugin validate plugins/cairn-memory --strict` | same pinned CLI | exit 0 |
-| Projection, scope, local links, `git diff --check` | local read-only checks | exit 0; exact projection bytes/object, 4 scoped paths independently derived twice, 14 links |
+| Projection v2, scope, local links, `git diff --check` | local read-only checks | exit 0; exact projection bytes/object, 4 scoped paths independently derived twice, 15 links |
 
 The accepted/published projection SHA256 is
-`b075d90c699907ac55ee994b53b2ac95bd0ba2ad73767778a146383544f91a66`.
+`000cff08c6688acbd1008bd0f085949b46b8ddcbf858343153e4366add887000`.
+The original accepted projection remains private and unchanged at SHA256
+`b075d90c699907ac55ee994b53b2ac95bd0ba2ad73767778a146383544f91a66`;
+the v2 addition does not amend the frozen O1–O5 paid protocol or its outcomes.
 Checks also confirmed limitations are append-only and ROADMAP has exactly one
 new item. These delivery checks do not add semantic evidence or turn the
 private diagnostic into a public reproducibility claim.
