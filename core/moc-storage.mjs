@@ -484,15 +484,31 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     });
   }
 
+  const recallL2Visible = `moc.level = 2 AND EXISTS (SELECT 1 FROM moc_edges edge JOIN mocs child
+    ON child.id = edge.child_id WHERE edge.parent_id = moc.id AND child.level = 1
+    AND child.owner_id = moc.owner_id AND child.scope = moc.scope
+    AND child.project_id = moc.project_id AND edge.parent_revision = moc.revision
+    AND edge.child_revision = child.revision AND EXISTS
+      (SELECT 1 FROM moc_memory_refs mr JOIN memories memory ON memory.id = mr.memory_id
+       WHERE mr.moc_id = child.id AND memory.deleted = 0
+       AND memory.owner_id = child.owner_id AND memory.scope = child.scope
+       AND memory.project_id = child.project_id AND mr.moc_revision = child.revision
+       AND mr.memory_revision = memory.revision))`;
+
   function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label,
-    catalogOnly = false }) {
+    catalogOnly = false, recallL2Only = false }) {
     return transaction(db, () => {
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && expectedEpoch !== currentEpoch) fail("cursor_stale");
       const count = limit + 1;
       let rows;
-      if (catalogOnly) {
+      if (recallL2Only) {
+        rows = projectPrepare(`SELECT 'moc' row_kind, moc.id moc_id
+          FROM mocs moc WHERE ${qualifiedNamespace('moc')} AND (${recallL2Visible})
+          ORDER BY COALESCE(${titleExpression}, ''), moc.id LIMIT ? OFFSET ?`)
+          .all(...boundary(ns), count, offset);
+      } else if (catalogOnly) {
         // Classification needs the complete topic catalog, not every placement or
         // unfiled body. Filter before paging so memory growth cannot crowd it out.
         rows = projectPrepare(`SELECT 'moc' row_kind, moc.id moc_id
@@ -511,16 +527,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
               AND memory.owner_id = moc.owner_id AND memory.scope = moc.scope
               AND memory.project_id = moc.project_id AND mr.moc_revision = moc.revision
               AND mr.memory_revision = memory.revision)) OR
-            (moc.level = 2 AND EXISTS (SELECT 1 FROM moc_edges edge JOIN mocs child
-              ON child.id = edge.child_id WHERE edge.parent_id = moc.id AND child.level = 1
-              AND child.owner_id = moc.owner_id AND child.scope = moc.scope
-              AND child.project_id = moc.project_id AND edge.parent_revision = moc.revision
-              AND edge.child_revision = child.revision AND EXISTS
-                (SELECT 1 FROM moc_memory_refs mr JOIN memories memory ON memory.id = mr.memory_id
-                 WHERE mr.moc_id = child.id AND memory.deleted = 0
-                 AND memory.owner_id = child.owner_id AND memory.scope = child.scope
-                 AND memory.project_id = child.project_id AND mr.moc_revision = child.revision
-                 AND mr.memory_revision = memory.revision))))
+            (${recallL2Visible}))
           UNION ALL
           SELECT CASE WHEN parent.id IS NULL OR child.id IS NULL OR parent.level != 2 OR child.level != 1
                     OR parent.owner_id != child.owner_id OR parent.scope != child.scope
