@@ -1561,3 +1561,38 @@ Existing opt-in bounded-source-scan is available for a separately frozen fresh
 fixed-write/read-policy ablation; that planned ablation has no result here.
 Earlier manual/oracle 16/16 versus 12/16 source coverage was not QA. No new
 engine, vector store, product default, promotion or old-cohort retry follows.
+
+## Closed source-selection factorial shows no observed answer-input gain
+
+The later [fixed-write/read-policy factorial](plans/source-selection-factorial-results.md)
+supersedes the preceding "planned ablation has no result" checkpoint while
+preserving the original feasibility's failed gate unchanged. Four writes and
+eight first read/answers completed on two fresh synthetic sessions. Each cell
+has two answers, all 2/2 minimal-complete. Fully supported answers were
+baseline/default 2/2, baseline/scan 1/2, candidate/default 1/2 and candidate/scan
+2/2. Frozen candidate-scan feasibility passes; formal quality was not evaluated
+or passed, with no QA24 advance or default promotion.
+
+All four within-write full answer requests and packed evidence sets were
+identical across modes. More scan rank candidates produced no observed packed
+coverage or first-answer gain. Differing extras under identical inputs cannot
+establish causal routing improvement. Candidate/default's installed-sign claim
+lacked actual answer-input support despite confirmation in the full timeline;
+baseline/scan added an unsupported layout-simplicity choice rationale.
+Both issues, all 16 initial rating views and eight first answers are retained.
+
+Same-family AI reviews agreed before explicit unmasking; possible mechanism
+leakage, no human calibration, synthetic small sample and unmeasured variation
+remain. No LongMemEval, Mem0/parity, large-store, installed Hermes, full-archive
+or lightweight superiority claim. Next direction is bounded offline actual
+MOC L2/L1 routing; any paid study needs a separate frozen contract and realistic
+routing opportunity.
+
+The 72 physical requests (36 count/36 generation) reserve US$0.360000;
+generation usage-rate estimate is US$0.027968. Four shared writes count once.
+Invoice and count billing are unknown; reservation is not actual spend.
+Original US$400 cumulative/US$30 protected limits remain, with no new
+unknown/pending outcome. Bindings address existing NFKC/whitespace canonical
+text; authored originals and actual stored excerpts are both retained.
+The public projection excludes operational identities, local paths, credentials,
+headers and raw HTTP bodies.

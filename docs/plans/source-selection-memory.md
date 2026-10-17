@@ -488,3 +488,35 @@ The next proposed fresh fixed-write/read-policy ablation uses the existing
 opt-in bounded-source-scan path. It has no result here; the prior manual/oracle
 16/16 versus 12/16 source-coverage observation was not QA. No new default,
 duplicate engine, vector store, closed-case retry or gate relaxation follows.
+
+## Closed fixed-write/read-policy factorial result
+
+The fresh ablation proposed above is now closed; see its distinct
+[result and frozen evidence](source-selection-factorial-results.md).
+Two new synthetic sessions produced four shared writes/eight first reads, with
+two answers per capture/read-policy cell. All cells are 2/2 minimal-complete;
+fully supported answers are baseline/default 2/2, baseline/scan 1/2,
+candidate/default 1/2 and candidate/scan 2/2. Frozen candidate-scan semantic
+feasibility passes; formal quality was not evaluated/passed. No QA24 or default
+promotion follows. The preceding failed v1 result remains unchanged.
+
+All four within-write full answer requests and packed source sets are identical
+across modes despite more scan rank candidates. No packed-coverage or first-answer
+quality gain is observed. Both unsupported extras remain: installed-sign wording
+in candidate/default unsupported by actual answer input, and baseline/scan's
+Chinese layout-simplicity rationale. Same-family AI agreement is not human ground
+truth; mechanism leakage, synthetic sample size and unmeasured variation remain.
+
+Seventy-two physical requests (36 count/36 generation) count four writes once:
+US$0.360000 reservation and US$0.027968 generation estimate, not invoice or count
+billing. No new unknown/pending outcomes. No paid rerun, promotion, parity,
+large-store or installed Hermes claim follows. Primary selected bounded offline
+actual revisioned MOC L2/L1 routing; any later quality study needs separately
+frozen acceptance and a realistic routing opportunity.
+
+One actual GPT-6.1 Sol/high worker owns five delivery paths from
+2204df5e286424baae30a7e44f6e88e3229a943a against full PR base
+ad274b6117f86446fbf0ff16f503ae69d0278ce5. The result document records D1–D5,
+original hashes, actual pinned Node22/24 exits and initial test corrections.
+Only documentation links and one offline regression are new entrypoints.
+Primary owns integration, independent same-SHA reviews and existing-PR delivery.
