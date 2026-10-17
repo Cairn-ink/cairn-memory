@@ -36,6 +36,29 @@ unrelated sources, excludes staged/history/deleted data and interpretations, and
 fails without partial evidence or fallback. Storage-current does not mean true or
 still applicable today. Existing recall and MCP defaults are unchanged.
 
+The opt-in embedded recall strategy `selectionMode:'moc-hierarchy-v1'` is valid
+only with `contextMode:'source-evidence'`. It navigates a private L2-only current
+catalog, revision-matched L1 children and memory refs, then reserves one existing
+query-candidate page per namespace and one ordinary selection of at most twelve
+fallback refs. Fallback includes eligible unfiled/orphan memories but does not
+guarantee finding them. The deduplicated, fallback-first union enters the existing
+fetch, source packing, rank and atomic `runtime.recallSnapshot` finalization.
+Every observed namespace epoch is checked; errors reject rather than repair or
+silently recover. Public maps, classification catalogs, default recall and hosts
+are unchanged.
+
+This experimental strategy permits at most sixteen navigation maps and four
+model calls, versus the default's maximum three model calls. Existing per-call
+limits remain: 4,000 map tokens, 6,000 model-input tokens, 1,024 model-output
+tokens, an 8,192 minimum model context window and a 30-second model timeout.
+The candidate union is at most 36 total/24 per namespace (24 for one namespace).
+Selection metadata carries reference-only provenance, resource/page observations
+and the actual rank-visible/omitted refs. Selected candidates can be omitted by
+source packing. Overall coverage remains `budget_exhausted`; freshness is atomic
+at finalization, while semantic coverage remains unassessed. This is not an
+equal-budget or demonstrated lightweight/quality improvement. See the
+[prospective integration contract](plans/moc-hierarchy-recall.md).
+
 ## Run the synthetic example
 
 Use Node >=22.16 (tested in CI on 22.16 and 24). The existing plugin still

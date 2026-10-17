@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -12,6 +12,7 @@ import { callModel, isCoreModelDeadlineSignal } from '../model-call.mjs';
 import { reviewCapturedRationale } from '../automatic-rationale.mjs';
 import { transaction } from '../database.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
 const namespace = { ownerId: 'capture-deadline-synthetic', scope: 'personal', projectId: null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
@@ -143,35 +144,40 @@ test('D2/D4 late extraction is ignored, core signal provenance is private, and a
   assert.equal(classifyCalls, 1);
 });
 
-test('D4 post-admission classifier expiry retains receipts and cold failed journal without later rationale', async t => {
-  const methods = [];
-  let classifySignal;
-  const model = rationaleModel((method, request) => {
-    methods.push(method);
-    if (method === 'classify') classifySignal = request.signal;
-  });
-  model.classify = ({ signal }) => { methods.push('classify'); classifySignal = signal;
-    return new Promise(() => {}); };
-  const { core, db, path } = fixture(t, { model, captureDeadlineMs: 1_000,
-    captureQualification: 'source-bound-v2', captureRationale: 'source-bound-v1' });
-  const result = ok(await core.capture(input('classify-timeout', 'I chose A because it supports offline work.')));
-  assert.equal(result.admission.memories.length, 1);
-  assert.equal(result.classification.status, 'failed');
-  assert.equal(result.classification.error.code, 'model_timeout');
-  assert.equal(result.rationale.status, 'failed');
-  assert.equal(result.rationale.error.code, 'model_timeout');
-  assert.equal(methods.includes('relate'), false);
-  assert.equal(methods.includes('classify'), true, 'classification began after committed admission');
-  assert.equal(classifySignal.aborted, true);
-  assert.equal(isCoreModelDeadlineSignal(classifySignal), true);
-  assert.equal(count(db, 'receipts'), 1);
-  assert.equal(count(db, 'rationale_edges'), 0);
-  const cold = openMemoryCore({ path }); t.after(() => cold.close());
-  const inspected = ok(cold.inspectAdmission({ namespace, client: 'deadline-client',
-    eventId: 'classify-timeout', includeInitialClassification: true }));
-  assert.equal(inspected.status, 'completed');
-  assert.equal(inspected.initialClassification.status, 'failed');
-  assert.equal(inspected.members[0].filing.status, 'unfiled');
+test('D4 post-admission classifier expiry retains receipts and cold failed journal without later rationale', t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-classifier-child-parent-' });
+  const child = fileURLToPath(new URL('../testing/capture-classifier-clock-child.mjs', import.meta.url));
+  const run = mutation => spawnSync(process.execPath, [child, ...(mutation ? ['remove-controller-abort'] : [])],
+    { encoding: 'utf8', timeout: 10_000,
+      env: { TMPDIR: workspace.path, TMP: workspace.path, TEMP: workspace.path } });
+  const real = run(false);
+  assert.equal(real.status, 0, real.stderr);
+  const observed = JSON.parse(real.stdout);
+  assert.equal(observed.methods.includes('classify'), true, 'classification began after committed admission');
+  assert.equal(observed.methods.includes('relate'), false);
+  assert.deepEqual(observed.entry, { atMs: 0, admission: 'completed', journal: 'in_flight_or_interrupted', receipts: 1 });
+  assert.equal(observed.pendingAtExpiry, true);
+  assert.equal(observed.timerFired, 1);
+  assert.equal(observed.preparationDelayCompleted, true);
+  assert.equal(observed.signalAborted, true);
+  assert.equal(observed.signalProvenance, true);
+  assert.equal(observed.classification, 'failed');
+  assert.equal(observed.rationale, 'failed');
+  assert.equal(observed.coldAdmission, 'completed');
+  assert.equal(observed.coldJournal, 'failed');
+  assert.equal(observed.coldFiling, 'unfiled');
+  assert.equal(observed.memories, 1);
+  assert.equal(observed.receipts, 1);
+  assert.equal(observed.rationaleEdges, 0);
+  assert.equal(observed.cleanup, true);
+  assert.deepEqual(readdirSync(workspace.path), [], 'successful child leaves no scratch');
+  const mutant = run(true);
+  assert.equal(mutant.status, 2, mutant.stderr);
+  assert.match(mutant.stderr, /CLASSIFIER_TIMEOUT_ASSERTION_FAILED:classifier signal aborted after expiry/u);
+  const failed = JSON.parse(mutant.stdout);
+  assert.equal(failed.cleanup, true);
+  assert.match(failed.assertion, /classifier signal aborted after expiry/u);
+  assert.deepEqual(readdirSync(workspace.path), [], 'failing child leaves no scratch');
 });
 
 test('D3 optional transaction check rejects before BEGIN and rolls back after work', t => {

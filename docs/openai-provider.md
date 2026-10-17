@@ -221,6 +221,19 @@ fixed provider-input budget and can fail explicitly before generation. A shorter
 local input can leave room for more than 1,024 tokens of schema/framing overhead;
 the 7,024-token ceiling and existing cost reservations are not enlarged.
 
+The embedded opt-in MOC strategy additionally uses dynamic-only `selectGroups`.
+Its closed schema returns `mocId` references with compact visible namespace,
+group-ID and revision domains. Both the adapter and core independently validate
+exact tuples, duplicates and stage limits; scalar enums alone are insufficient.
+Input is checked before serialization can erase malformed fields. Count and
+generation share one detached input/schema, explicitly use the existing select
+model profile, and retain the 6,000 local/7,024 provider-input/1,024 output limits.
+The exported legacy schema allowlist and live guards do not authorize this
+method: existing guards reject it without transport or reservations. Fake HTTP
+integration is not paid authorization. Two group calls plus one ordinary fallback
+select and one unchanged rank allow four model calls, versus default recall's
+three; physical request/provider-token/cost overhead remains a later gate.
+
 The opt-in `qualifyCandidates` path uses the named
 [`evidence-pool-v1` wire](qualification-evidence-pool.md): each item supplies at
 most four original candidate IDs in one pool and its fields cite pool slots.
