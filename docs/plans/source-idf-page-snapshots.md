@@ -212,3 +212,40 @@ Planning only. P1-P7 precede correction implementation and H5b measurements.
 Independent prospective review used `7f980ff`; its two suggested acceptance
 clarifications are recorded in P7 before dispatch. No blocking finding or
 resource pass was claimed.
+
+### Integrated candidate, before broad/resource acceptance
+
+The runtime worker used GPT-6.1 Sol/high at fixed base `f0c0828`, committing
+`2083236` (runtime and 21 isolated structural scenarios) and `f816816`
+(descriptive docs). The separate measurement worker, also GPT-6.1 Sol/high,
+committed `05d11ab` at the same base. Primary integrated them as `a273293`,
+`c48e1a4` and `6cfacf0`, respectively. Neither worker accessed a model key,
+authentic corpus, operational ledger or a paid endpoint.
+
+Runtime evidence: `/tmp/cairn-h5b-runtime-evidence-0uBH8P`. Both Node 22.16 and
+24.15 focused runs passed 46/46 with actual exit 0, including the 21 new
+scenarios and 25 original ranking checks. The final exact durable-count
+strengthening passed all four affected foreign-capture/red-control cases on
+both runtimes, actual exit 0. Page/winner structural capacity setup uses five
+normal captures plus correctly hashed synthetic rows; it is race evidence,
+not model extraction or admission-quality evidence. Original normal-capture
+positive controls remain unchanged. No watchdog was raised or test skipped.
+
+Measurement evidence: `/tmp/cairn-page-measure-evidence-gUPcbL`. All 25 frozen
+and new measurement tests passed on both runtimes with actual exit 0. A native
+1000-row smoke against the unchanged predecessor correctly returned an
+inconclusive capture-overlap result: the capture committed after query end.
+It is neither a resource pass nor an H5b full campaign. The frozen original
+measurement module and tests remain byte-identical.
+
+Primary independently compared `git diff --name-only` with complete-tree
+mode/blob inventories at `c48e1a4`: 22 full H4-to-candidate paths and 9 H5b
+correction paths agreed, all within their allowlists. The R1-R7, R8 and P1-P7
+hashes are unchanged, as are the protected runtime/math/measurement files and
+the legacy scan/scoring/label body. Verification exited 0.
+
+Full Node 22.16 and 24.15 core gates started at `a273293`; `c48e1a4` changes
+only CHANGELOG, ROADMAP and local-store documentation, with identical test and
+runtime bytes. These broad runs, primary same-state parity, separate resource
+campaign and final independent dual review/CI are still pending. There is no
+new semantic score, evaluator activation, default promotion or merge.

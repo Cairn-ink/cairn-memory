@@ -1691,3 +1691,25 @@ Node 24 resource testing also remains unexecuted. Faster ranking does not resolv
 the long writer-reserving transaction, and H5 is not approved for evaluator or
 default activation. The complete outcome and unchanged gates are recorded in
 the [H5 execution record](plans/source-idf-ranking.md#r5-outcome-stopped-at-writer-contention-not-promoted).
+
+## H5b read snapshots: correction pending resource acceptance
+
+A separate prospective correction changes only opted-in IDF ranking to bounded
+read snapshots, releasing SQLite transactions before validation, match-mask
+processing and excerpt computation. It anchors both namespace epoch and exact
+index-generation availability; a staged first rebuild cannot be mistaken for
+the earlier absence of an index-state row. Same-namespace changes reject the
+query rather than silently mix populations or retry.
+
+Focused synthetic structural tests demonstrate complete competing foreign
+captures during computation, precise rejection after relevant mutations, and
+rollback/owned-directory cleanup. Deliberate pauses establish these mechanics,
+not actual latency or semantic relevance. A separate unpaused full resource
+campaign, broad integrated gates, primary parity and independent reviews are
+still required. Original H5 failure records and thresholds remain unchanged.
+
+The option-off path retains its known long-transaction limitation. The new
+path is still synchronous JavaScript and can occupy its own thread for seconds;
+short database snapshots do not make it asynchronous or establish that it is
+lightweight. The same 120-code-point labels and whole-source packing limitations
+remain. See the [H5b contract](plans/source-idf-page-snapshots.md).
