@@ -191,6 +191,24 @@ two-case diagnostic, later paired24 and fresh30 gates remain separate. Budget
 remains cumulative400USD with protected30USD, requiring a fresh ledger check.
 The 12-hour discussion checkpoint remains 2026-10-19 03:58UTC.
 
+## P7. Prospective acceptance clarifications
+
+Before implementation, an independent GPT-6.1 Sol/high Spec reviewer found
+P1-P6 feasible. Make these test preconditions explicit:
+
+- Exercise staged NULL-generation creation both during outside-lock ranking
+  work and from a later map/model token-counter callback. Require the precise
+  availability failure and no subsequent selector invocation.
+- A successful competing capture requires `ok: true`, exactly one newly
+  admitted memory, applied initial classification and its expected complete
+  disposition, plus a cold-read durable memory and source receipt. Partial
+  capture/admission with a failed later stage cannot pass P3 or P4.
+- Releasing a snapshot means no active reader/iterator or transaction spans
+  computation. Reusable prepared statement handles need not be destroyed.
+
 ## Execution record
 
-Planning only. P1-P6 precede correction implementation and H5b measurements.
+Planning only. P1-P7 precede correction implementation and H5b measurements.
+Independent prospective review used `7f980ff`; its two suggested acceptance
+clarifications are recorded in P7 before dispatch. No blocking finding or
+resource pass was claimed.
