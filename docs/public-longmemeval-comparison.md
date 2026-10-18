@@ -96,6 +96,8 @@ packing counts, omissions, retrieved and packed opaque session IDs, and
 source-selection coverage are diagnostic only.
 Capture is source-time-unaware: source dates are reattached from the prepared
 history after source binding, not inferred by core.
+This describes this historical comparator's existing entrypoint; the explicit
+consumer below has a separate version and performs no history join.
 
 The frozen run has schema version `cairn-longmemeval-public-comparison-v1`,
 `questionId`, `question:{text,date}`, `answerModel`, `templateVersion`,
@@ -116,3 +118,81 @@ core's redacted capture path. Only synthetic fixtures belong in this offline
 demo. Before a real provider transport is connected, the operator must review
 dataset privacy and permissions; this API does not authorize exporting private
 conversations or bypassing the project's redaction rules.
+
+## Explicit source-time answer consumer
+
+`packSourceTimeAnswer` from `evaluation/longmemeval/source-time-answer.mjs`
+returns `cairn-longmemeval-source-time-answer-v1`. It packages a request only:
+
+```js
+const packed = packSourceTimeAnswer({
+  question: { text: 'When was travel discussed?', date: '2026-03-10' },
+  namespace,
+  recall: successfulSourceEvidenceRecall.value, // the value, not {ok,value}
+  get: coldCore.get, // actual authoritative synchronous local core.get
+  model: declaredModel,
+  limits: { inputTokens: 7000, outputTokens: 512, contextTokens: 7512 },
+  countTokens: trustedLocalSynchronousCounter,
+});
+// No provider call occurs. A future authorized caller would use packed.request.
+```
+
+There are exactly these seven input fields. No history, plan, source/origin map,
+reference, gold ID or repair channel is accepted. Only current source-evidence
+memories are accepted; historical assertions need a separate future applicability
+consumer. The detached bounded JSON snapshot permits at most 12 memories,
+100 complete receipts per memory, 800 UTF-16 excerpt units per receipt, canonical
+128-unit optional source labels, a 4000-unit nonempty question and 128-unit
+nonempty question date. Sparse data, accessors, cycles, explicit undefined labels
+and oversized candidates fail; nothing is silently sliced. A generic 4 MiB,
+60,000-node, depth14 snapshot ceiling also bounds accepted ancillary recall data.
+These are accepted-data bounds, not isolation against arbitrary Proxy traps.
+
+Before counting, the helper verifies each memory's ID/revision/currentness,
+namespace, source-only markers and complete unique receipt set against an
+exhausted local `get({namespace,memoryId,receiptLimit:100})`. Exact receipt ID,
+role, excerpt and sourceTime presence/value must agree. Missing labels are never
+enriched from canonical inspection, question date or another source. Failed,
+stale, partial, foreign or malformed reads fail closed. The same verification
+runs after all token-counter callbacks. This is packaging-time validation; it
+does not grant an indefinite freshness lease or execution permission. `get` is
+a trusted local core port, not a callback-based remote provenance authority.
+
+The model-facing JSON is `{evidence,currentQuestion:{text,date}}`. Each receipt
+is one tuple `{role,content:excerpt,sourceTime?}`. The helper preserves first-seen
+order and deduplicates only identical role/content/optional-time tuples; different
+dates, roles and absent versus present dates remain distinct. It never concatenates
+cards, reconstructs turns, sorts dates or sends identities/date sidecars. The
+new instruction retains evidence-only, untrusted-data and insufficient-evidence
+rules and explains that sourceTime claims utterance time, without establishing
+event time, applicability, chronology, ordering or authority.
+
+The exact request is `{model,messages,temperature:0,max_tokens:outputTokens,n:1}`,
+where messages contain that system instruction and one serialized user object.
+The trusted local counter receives the complete `JSON.stringify(request)`,
+including model, instructions, question, tuple framing and labels. Input tokens
+must fit `inputTokens`; input plus reserved `outputTokens` must safely fit
+`contextTokens`. Every limit is a positive safe integer. A whole tuple fits or
+is omitted; smaller later tuples may fit. No metadata is stripped and no excerpt
+is shortened. The empty question envelope must fit even when recall is empty.
+
+The frozen result contains `request`, its exact `serializedRequest`, `inputTokens`,
+`reservedOutputTokens`, `totalEstimatedTokens` and `included`, `duplicates`,
+`omitted` diagnostics. Each diagnostic maps tuple/memory/receipt positions to
+original IDs outside model evidence. A duplicate names its first tuple and its
+`included` or `omitted` disposition, including when the first copy did not fit.
+Omission does not claim the remaining tuples cover a complete memory or decision.
+
+Counter throws, negative/noninteger/overflow results and thenables fail
+synchronously with controlled errors; arbitrary thenables are never invoked.
+Accidentally rejected native Promises are observed to prevent an unhandled
+rejection, then refused. Asynchronous/provider counting, transport deadlines and
+paid dispatch belong to a future guarded caller, not this helper. Resource
+metadata is an estimate under the declared counter, not provider context-fit
+proof, usage or an invoice. The demo's UTF-8 byte counter is synthetic.
+
+Select the [new producer](longmemeval-ingestion.md#explicit-source-time-indexed-evidence-producer)
+explicitly and run `npm run demo:longmemeval-source-time` for actual capture →
+close → cold recall → measured request. This leaves existing comparators/scorers,
+mixed helpers, historical wire goldens and defaults unchanged. There is no host,
+provider transport or model-service integration, no new score, and no H6 replay.

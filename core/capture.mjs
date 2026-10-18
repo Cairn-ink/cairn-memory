@@ -113,9 +113,9 @@ function keepRequest(model, request, deadline) {
 
 /** Public-envelope operations own all transactions; no model work runs inside them. */
 export async function captureMessages({ model, input, operations, captureQualification,
-  captureSourcePolicy, captureRationale, captureEvidence, deadline, episodeRun }) {
+  captureSourcePolicy, captureSourceTime, captureRationale, captureEvidence, deadline, episodeRun }) {
   deadline?.check();
-  const snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
+  const snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy, captureSourceTime);
   deadline?.check();
   let request = extractionRequest(snapshot, { captureQualification, captureSourcePolicy, episode: Boolean(episodeRun) });
   const { catalog, retained, sourceMessages } = request;

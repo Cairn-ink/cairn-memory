@@ -71,6 +71,16 @@ frozen evaluation and subsequent verification are retained in
 
 ## Offline checks
 
+Embedded `moc-hierarchy-v2` recall reuses the existing dynamic `selectGroups`
+method and selection model. The core packs whole groups with namespace/origin
+reservation before calling the adapter; the strict request still contains only
+query, maps, maxRefs and maxRefsPerNamespace, with the existing group fields.
+Origin, omissions and fit-check metadata stay in the core's reference-only
+audit. The adapter's complete provider-wire token guard still applies, so fitting
+the core envelope alone does not promise provider acceptance. Existing live
+guards continue to deny `selectGroups`; neither the opt-in nor fake-HTTP tests
+authorize paid calls. See [H4](plans/moc-standalone-entry.md).
+
 ### Ordered-capture judgment boundary
 
 Opt-in local [ordered capture](capture.md#opt-in-source-ordered-reconciliation)
@@ -220,6 +230,19 @@ enums do not replace those checks. Larger candidate schemas consume the same
 fixed provider-input budget and can fail explicitly before generation. A shorter
 local input can leave room for more than 1,024 tokens of schema/framing overhead;
 the 7,024-token ceiling and existing cost reservations are not enlarged.
+
+The embedded opt-in MOC strategy additionally uses dynamic-only `selectGroups`.
+Its closed schema returns `mocId` references with compact visible namespace,
+group-ID and revision domains. Both the adapter and core independently validate
+exact tuples, duplicates and stage limits; scalar enums alone are insufficient.
+Input is checked before serialization can erase malformed fields. Count and
+generation share one detached input/schema, explicitly use the existing select
+model profile, and retain the 6,000 local/7,024 provider-input/1,024 output limits.
+The exported legacy schema allowlist and live guards do not authorize this
+method: existing guards reject it without transport or reservations. Fake HTTP
+integration is not paid authorization. Two group calls plus one ordinary fallback
+select and one unchanged rank allow four model calls, versus default recall's
+three; physical request/provider-token/cost overhead remains a later gate.
 
 The opt-in `qualifyCandidates` path uses the named
 [`evidence-pool-v1` wire](qualification-evidence-pool.md): each item supplies at

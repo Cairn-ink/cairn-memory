@@ -1,4 +1,4 @@
-import { boundedText, identifier, revision, fail } from './validation.mjs';
+import { boundedText, identifier, revision, fail, receiptFromRow, sourceTimeFields } from './validation.mjs';
 
 export const isSourceContext = mode => ['source-evidence', 'rationale-evidence'].includes(mode);
 
@@ -7,13 +7,12 @@ export function validateSourceReceipt(memoryId, receipt, receiptKey) {
   try {
     identifier(memoryId); identifier(receipt.id);
     if (receipt.memory_id !== memoryId) fail('storage_error');
-    const source = { client: receipt.client, sessionId: receipt.session_id,
-      eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt };
+    const source = receiptFromRow(receipt);
     for (const key of ['client', 'sessionId', 'eventId']) identifier(source[key]);
     if (!['user', 'assistant'].includes(source.role) || typeof source.excerpt !== 'string' ||
         !source.excerpt.isWellFormed() || boundedText(source.excerpt, 800) !== source.excerpt ||
         receipt.receipt_key !== receiptKey(source)) fail('storage_error');
-    return { id: receipt.id, role: source.role, excerpt: source.excerpt };
+    return { id: receipt.id, role: source.role, excerpt: source.excerpt, ...sourceTimeFields(source) };
   } catch { fail('storage_error'); }
 }
 

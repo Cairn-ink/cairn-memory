@@ -1,4 +1,4 @@
-const stages = new Set(['interpretEpisode', 'extract', 'classify', 'select', 'rank', 'reconcile', 'qualify', 'qualifyCandidates', 'relate', 'reviewBasis']);
+const stages = new Set(['interpretEpisode', 'extract', 'classify', 'select', 'selectGroups', 'rank', 'reconcile', 'qualify', 'qualifyCandidates', 'relate', 'reviewBasis']);
 const reasons = {
   core_call: new Set(['model_not_configured', 'context_budget_exceeded', 'token_count_unavailable',
     'model_timeout', 'model_cancelled', 'provider_failure', 'adapter_output_invalid',

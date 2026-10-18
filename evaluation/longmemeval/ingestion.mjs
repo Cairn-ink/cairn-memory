@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 
 import { captureSnapshot, retainedSourceView } from '../../core/capture-input.mjs';
 import { sourceWindowCatalog } from '../../core/source-windows.mjs';
+import { sourceTimeLabel } from '../../core/validation.mjs';
+import { snapshotJson } from './mixed-validation.mjs';
 import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 
 export const INGESTION_PLAN_SCHEMA_VERSION = 'cairn-longmemeval-ingestion-plan-v1';
@@ -431,6 +433,43 @@ export function planIndexedEvidenceLongMemEvalCase(options) {
     captureSourcePolicy: 'indexed-evidence-v1', qualificationStatus: 'not-requested', batches });
 }
 
+export const SOURCE_TIME_INGESTION_PLAN_SCHEMA_VERSION = 'cairn-longmemeval-source-time-indexed-evidence-plan-v1';
+export const SOURCE_TIME_INGESTION_POLICY = 'session-source-time-claimed-v1';
+
+// Explicit opt-in: preserve the original partition and event identities. A date
+// change therefore conflicts on replay rather than silently creating new events.
+export function planSourceTimeIndexedEvidenceLongMemEvalCase(options) {
+  let detached;
+  try {
+    detached = snapshotJson(options, { bytes: 64 * 1024 * 1024, nodes: 1_000_000, depth: 12 }, 'invalid_options');
+  } catch { fail('invalid_options'); }
+  const indexed = planIndexedEvidenceLongMemEvalCase(detached);
+  // Validate every session, including ones whose source could not be partitioned,
+  // before there is any possibility of invoking capture.
+  try { for (const session of detached.history.sessions) sourceTimeLabel(session.date); }
+  catch { fail('invalid_source_time'); }
+  const batches = indexed.batches.map(batch => {
+    const captureInput = { ...batch.captureInput, messages: batch.captureInput.messages.map((message, index) =>
+      ({ ...message, sourceTime: batch.sourceMap[index].sourceDate })) };
+    let snapshot, catalog;
+    try {
+      snapshot = captureSnapshot(captureInput, undefined, 'indexed-evidence-v1', 'claimed-v1');
+      catalog = sourceWindowCatalog(snapshot);
+    } catch { fail('source_time_preflight_failed'); }
+    return { ...batch, captureInput,
+      normalizedCapture: { messages: snapshot.messages,
+        normalizedTotalUtf16: snapshot.messages.reduce((sum, message) => sum + message.content.length, 0),
+        payloadDigest: snapshot.payloadDigest },
+      indexedWindows: catalog.entries, sourceWindowCatalog: catalog.coverage.sourceWindowCatalog };
+  });
+  const planDigest = sha256(JSON.stringify([SOURCE_TIME_INGESTION_PLAN_SCHEMA_VERSION,
+    SOURCE_TIME_INGESTION_POLICY, indexed.questionId, indexed.namespace,
+    batches.map(batch => [batch.normalizedCapture.payloadDigest,
+      batch.captureInput.messages.map(message => message.sourceTime)])]));
+  return deepFreeze({ ...indexed, schemaVersion: SOURCE_TIME_INGESTION_PLAN_SCHEMA_VERSION,
+    sourceTimePolicy: SOURCE_TIME_INGESTION_POLICY, captureSourceTime: 'claimed-v1', planDigest, batches });
+}
+
 export function planQualifiedPrefixLongMemEvalCase(options) {
   const legacy = planLongMemEvalCase(options);
   const blockers = structuredClone(legacy.blockers);
@@ -644,6 +683,26 @@ export function ingestIndexedWindowLongMemEvalCase(options) {
 
 export function ingestIndexedEvidenceLongMemEvalCase(options) {
   return ingestCase(options, planIndexedEvidenceLongMemEvalCase, RESPONSE_METADATA.evidence);
+}
+
+export function ingestSourceTimeIndexedEvidenceLongMemEvalCase(options) {
+  // Keep the old ingestion API untouched, but do not let its ordinary property
+  // reads invoke caller accessors before this new entrypoint's strict snapshot.
+  if (!isPlainObject(options) || Reflect.ownKeys(options).length !== INGEST_OPTIONS_KEYS.length) fail('invalid_options');
+  const values = {};
+  for (const key of Reflect.ownKeys(options)) {
+    const descriptor = Object.getOwnPropertyDescriptor(options, key);
+    if (!INGEST_OPTIONS_KEYS.includes(key) || !descriptor || !Object.hasOwn(descriptor, 'value')
+      || !descriptor.enumerable) fail('invalid_options');
+    values[key] = descriptor.value;
+  }
+  if (typeof values.capture !== 'function') fail('invalid_options');
+  let detached;
+  try {
+    detached = snapshotJson({ history: values.history, namespace: values.namespace },
+      { bytes: 64 * 1024 * 1024, nodes: 1_000_000, depth: 12 }, 'invalid_options');
+  } catch { fail('invalid_options'); }
+  return ingestCase({ ...detached, capture: values.capture }, planSourceTimeIndexedEvidenceLongMemEvalCase, RESPONSE_METADATA.evidence);
 }
 
 export function ingestQualifiedPrefixLongMemEvalCase(options) {

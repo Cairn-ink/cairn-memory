@@ -1,4 +1,4 @@
-import { boundedText, denseArray, fail, object } from './validation.mjs';
+import { boundedText, denseArray, fail, object, sourceTimeFields } from './validation.mjs';
 
 const FIELDS = ['subject', 'property', 'scope', 'applies', 'value', 'attribution', 'commitment'];
 const ATTRIBUTIONS = ['direct', 'reported', 'quoted', 'proposed', 'unknown'];
@@ -21,7 +21,8 @@ function label(value, maximum) {
 export function qualificationSources(content, receipts) {
   if (typeof content !== 'string' || !content.isWellFormed()) fail('invalid_input');
   for (const receipt of denseArray(receipts, 1, 4)) {
-    object(receipt, ['client', 'sessionId', 'eventId', 'role', 'excerpt']);
+    object(receipt, ['client', 'sessionId', 'eventId', 'role', 'excerpt', 'sourceTime']);
+    sourceTimeFields(receipt);
     if (Object.values(receipt).some(value => typeof value !== 'string' || !value.isWellFormed())) fail('invalid_input');
   }
 }

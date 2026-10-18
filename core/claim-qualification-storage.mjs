@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto';
 import { qualificationInput, qualificationSources } from './claim-qualification-input.mjs';
-import { fail } from './validation.mjs';
+import { fail, receiptFromRow } from './validation.mjs';
 
 const digest = text => createHash('sha256').update(text, 'utf8').digest('hex');
-const source = row => ({ client: row.client, sessionId: row.session_id,
-  eventId: row.event_id, role: row.role, excerpt: row.excerpt });
+const source = receiptFromRow;
 
 // All callers hold the shared runtime transaction. No model or external I/O.
 export function createQualificationStorage({ db, receiptKey }) {

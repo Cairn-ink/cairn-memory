@@ -142,7 +142,8 @@ test('R9 schema 11 upgrade preserves previous state and migration failure is ato
     for (const row of f.db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'rationale_%'").all()) f.db.exec(`DROP TRIGGER ${row.name}`);
     installIndexReaders(f.db, true);
     f.db.exec('DROP VIEW review_hidden_episodes; DROP TABLE confirmation_actions; DROP TABLE confirmation_supersessions; DROP TABLE confirmation_conflicts; ALTER TABLE memories DROP COLUMN review_state');
-    // This synthetic downgrade must remove every post-v11 table before reopening.
+    // This synthetic downgrade must remove every post-v11 table/column before reopening.
+    f.db.exec('ALTER TABLE receipts DROP COLUMN source_time');
     f.db.exec('DROP INDEX receipt_time_read');
     f.db.exec('DROP TABLE episode_sources; DROP TABLE episode_memory_links; DROP TABLE episode_attempts; DROP TABLE episode_events; DROP TABLE episode_messages; DROP TABLE episode_keep_actions; DROP TABLE session_episodes; DROP TABLE episode_controls; DROP TABLE episode_identity; DROP TABLE procedural_tags;');
     f.db.exec('DROP TABLE capture_initial_classification; DROP TABLE staged_capture_evidence; DROP TABLE staged_capture_clocks; DROP TABLE rationale_edges; PRAGMA user_version=11');
@@ -157,9 +158,12 @@ test('R9 schema 11 upgrade preserves previous state and migration failure is ato
   assert.equal(f.db.prepare("SELECT count(*) n FROM sqlite_master WHERE type='trigger' AND name LIKE 'rationale_%'").get().n, 0);
   f.db.exec('DROP TABLE rationale_edges');
   const migrated = openMemoryCore({ path: f.path }); t.after(() => migrated.close());
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 19);
   assert.deepEqual(f.db.prepare('SELECT * FROM memories ORDER BY id').all().map(({ review_state, ...row }) => row), before.map(row => ({ ...row })));
-  assert.deepEqual(f.db.prepare('SELECT * FROM receipts ORDER BY id').all(), receipts);
+  assert.deepEqual(f.db.prepare('SELECT * FROM receipts ORDER BY id').all().map(({ source_time, ...row }) => {
+    assert.equal(source_time, null);
+    return row;
+  }), receipts.map(row => ({ ...row })));
   assert.deepEqual(f.db.prepare('SELECT * FROM store_metadata').all(), identity);
 });
 

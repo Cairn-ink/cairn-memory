@@ -10,6 +10,7 @@ import { createCaptureDeadline } from './capture-deadline.mjs';
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens } from './model-budget.mjs';
 import { isSourceContext } from './source-evidence.mjs';
+import { SOURCE_RANKING_VERSION } from './source-ranking.mjs';
 import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
@@ -26,7 +27,7 @@ import { qualificationInput, qualificationSources } from './claim-qualification-
 import { proposeRationale } from './rationale.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
 import {
-  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
+  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray, sourceTimeFields,
 } from "./validation.mjs";
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -68,8 +69,9 @@ function contractReadSet(input) {
   } catch { throw new MemoryStoreError('invalid_read_set'); }
 }
 
-function contractReceipt(input) {
-  object(input, ["client", "sessionId", "eventId", "role", "excerpt"]);
+function contractReceipt(input, allowSourceTime = false) {
+  object(input, ["client", "sessionId", "eventId", "role", "excerpt", ...(allowSourceTime ? ['sourceTime'] : [])]);
+  if (!allowSourceTime && Object.hasOwn(input, 'sourceTime')) throw new MemoryStoreError('invalid_input');
   if (!["user", "assistant"].includes(input.role)) throw new MemoryStoreError("invalid_input");
   try {
     return {
@@ -78,6 +80,7 @@ function contractReceipt(input) {
       eventId: identifier(input.eventId),
       role: input.role,
       excerpt: boundedText(input.excerpt, 800, true),
+      ...(allowSourceTime ? sourceTimeFields(input) : {}),
     };
   } catch {
     throw new MemoryStoreError("invalid_input");
@@ -150,8 +153,8 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
-  object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
-    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview']);
+  object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureSourceTime', 'captureRationale', 'captureEvidence',
+    'captureDeadlineMs', 'sourceCandidatePolicy', 'sourceRankingPolicy', 'sessionEpisodes', 'decisionReview']);
   const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
   const captureSourcePolicy = policyDescriptor?.value;
@@ -168,6 +171,10 @@ export function openMemoryCore(input) {
       sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version)) {
     throw new MemoryStoreError('invalid_input');
   }
+  const sourceRankingDescriptor = Object.getOwnPropertyDescriptor(input, 'sourceRankingPolicy');
+  const sourceRankingPolicy = sourceRankingDescriptor?.value;
+  if (sourceRankingDescriptor && (!Object.hasOwn(sourceRankingDescriptor, 'value') ||
+      sourceRankingPolicy !== SOURCE_RANKING_VERSION)) throw new MemoryStoreError('invalid_input');
   const hasCaptureDeadline = Object.hasOwn(input, 'captureDeadlineMs');
   const captureDeadlineMs = hasCaptureDeadline ? input.captureDeadlineMs : undefined;
   if (hasCaptureDeadline && (!Number.isSafeInteger(captureDeadlineMs) ||
@@ -190,6 +197,12 @@ export function openMemoryCore(input) {
   }
   const sessionEpisodes = Object.hasOwn(input, 'sessionEpisodes') ? episodeOptions(input.sessionEpisodes) : undefined;
   if (sessionEpisodes && (captureQualification !== 'source-bound-v2' || captureEvidence !== 'staged-v1')) throw new MemoryStoreError('invalid_input');
+  const sourceTimeDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourceTime');
+  const captureSourceTime = sourceTimeDescriptor?.value;
+  if (sourceTimeDescriptor && (!Object.hasOwn(sourceTimeDescriptor, 'value') || captureSourceTime !== 'claimed-v1' ||
+      (!evidenceOnly && captureQualification !== 'source-bound-v2') || sessionEpisodes || captureRationale !== undefined)) {
+    throw new MemoryStoreError('invalid_input');
+  }
   const model = input.model;
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
   const runtime = createMemoryRuntime({ path: input.path, ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
@@ -255,7 +268,7 @@ export function openMemoryCore(input) {
       if (!Array.isArray(input.receipts) || input.receipts.length < 1 || input.receipts.length > 4) {
         throw new MemoryStoreError("invalid_input");
       }
-      const receipts = input.receipts.map(contractReceipt);
+      const receipts = input.receipts.map(receipt => contractReceipt(receipt));
       const conflictHints = contractConflictHints(input.conflictHints);
       if (Object.hasOwn(input, 'qualification')) qualificationSources(input.memory.content, input.receipts);
       const qualification = Object.hasOwn(input, 'qualification') ? qualificationInput(input.qualification, receipts) : undefined;
@@ -401,7 +414,7 @@ export function openMemoryCore(input) {
       const id = contractId(input.memoryId);
       const expectedRevision = contractRevision(input.expectedRevision);
       const replacement = contractMemory(input.replacement);
-      const receipts = denseArray(input.receipts, 1, 4).map(contractReceipt);
+      const receipts = denseArray(input.receipts, 1, 4).map(receipt => contractReceipt(receipt));
       return runtime.supersede(ns, id, { ...replacement, receipts }, expectedRevision);
     });
   }
@@ -482,13 +495,13 @@ export function openMemoryCore(input) {
     });
   }
 
-  function admissionItems(input, episode = false) {
+  function admissionItems(input, episode = false, allowSourceTime = false) {
     return denseArray(input, 0, 5).map((item) => {
       object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification', ...(episode ? ['procedural'] : [])]);
       if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
           item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
       const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
-      const receipts = denseArray(item.receipts, 1, 4).map(contractReceipt);
+      const receipts = denseArray(item.receipts, 1, 4).map(receipt => contractReceipt(receipt, allowSourceTime));
       const conflictHints = contractConflictHints(item.conflictHints);
       if (Object.hasOwn(item, 'qualification')) qualificationSources(item.content, item.receipts);
       const qualification = Object.hasOwn(item, 'qualification') ? qualificationInput(item.qualification, receipts) : undefined;
@@ -504,7 +517,7 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       const key = admissionKey(input);
       const token = contractId(input.token);
-      const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes));
+      const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes), captureInitial && Boolean(captureSourceTime));
       return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
@@ -624,7 +637,8 @@ export function openMemoryCore(input) {
     return mapPage(input);
   }
 
-  function mapPage(input, navigation, { catalogOnly = false } = {}) {
+  function mapPage(input, navigation, { catalogOnly = false, recallL2Only = false,
+    recallStandaloneL1Only = false } = {}) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'purpose', 'parentRef', 'limit', 'cursor', 'tokenBudget']);
@@ -644,6 +658,16 @@ export function openMemoryCore(input) {
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'map',
         p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
       if (catalogOnly) binding.o = 'classification_catalog';
+      if (recallL2Only) {
+        if (parentRef || purpose !== 'recall' || navigation) throw new MemoryStoreError('invalid_input');
+        binding.o = 'recall_l2_catalog';
+      }
+      if (recallStandaloneL1Only) {
+        if (parentRef || purpose !== 'recall' || navigation || catalogOnly || recallL2Only) {
+          throw new MemoryStoreError('invalid_input');
+        }
+        binding.o = 'recall_standalone_l1_catalog_v1';
+      }
       if (navigation) Object.assign(binding, { o: 'recall_map',
         q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION,
         policy: navigation.sourceCandidatePolicy ?? QUERY_CANDIDATE_VERSION,
@@ -654,6 +678,7 @@ export function openMemoryCore(input) {
         physicalPage: BOUNDED_KEYSET_SOURCE_CANDIDATES.page,
         top: BOUNDED_KEYSET_SOURCE_CANDIDATES.top,
       });
+      if (navigation?.sourceRankingPolicy) binding.sourceRankingPolicy = navigation.sourceRankingPolicy;
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
@@ -665,6 +690,8 @@ export function openMemoryCore(input) {
         if (!snapshot) {
           snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt,
             ...(navigation.sourceMode ? { sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT } : {}),
+            ...(navigation.sourceRankingPolicy ? { sourceRankingPolicy: navigation.sourceRankingPolicy,
+              query: navigation.query } : {}),
             ...(navigation.sourceCandidatePolicy ? { sourceCandidatePolicy: navigation.sourceCandidatePolicy } : {}) });
           navigation.pages.set(key, snapshot);
         }
@@ -674,7 +701,7 @@ export function openMemoryCore(input) {
         page = { ...snapshot, rows: snapshot.rows.slice(offset, offset + count + 1) };
       } else {
         page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
-          catalogOnly });
+          catalogOnly, recallL2Only, recallStandaloneL1Only });
       }
       const capacity = Math.min(count, page.rows.length);
       for (let take = capacity; take >= 0; take--) {
@@ -752,7 +779,8 @@ export function openMemoryCore(input) {
       const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
       const selectionMode = input.selectionMode;
       if (Object.hasOwn(input, 'selectionMode') &&
-          (selectionMode !== 'bounded-source-scan' || !isSourceContext(contextMode))) {
+          !(selectionMode === 'bounded-source-scan' && isSourceContext(contextMode) ||
+            ['moc-hierarchy-v1', 'moc-hierarchy-v2'].includes(selectionMode) && contextMode === 'source-evidence')) {
         throw new MemoryStoreError('invalid_input');
       }
       if ((Object.hasOwn(input, 'contextMode') && !isSourceContext(contextMode)) ||
@@ -764,17 +792,38 @@ export function openMemoryCore(input) {
       const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
         ...(isSourceContext(contextMode) ? { sourceMode: contextMode } : {}),
         ...(sourceCandidatePolicy && isSourceContext(contextMode) ? { sourceCandidatePolicy } : {}),
+        ...(sourceRankingPolicy && isSourceContext(contextMode) ? { sourceRankingPolicy, query } : {}),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
+      const hierarchy = ['moc-hierarchy-v1', 'moc-hierarchy-v2'].includes(selectionMode);
+      const observedEpochs = new Map();
+      const observed = (request, result) => {
+        if (!result.ok) return result;
+        const ns = contractNamespace(request.namespace);
+        const key = namespaceBinding(ns);
+        if (!namespaces.some(namespace => namespaceBinding(namespace) === key)) throw new MemoryStoreError('invalid_read_set');
+        const epoch = result.value.indexRevision;
+        if (observedEpochs.has(key) && observedEpochs.get(key) !== epoch) throw new MemoryStoreError('index_revision_conflict');
+        observedEpochs.set(key, epoch);
+        return result;
+      };
+      const epochGuards = () => namespaces.flatMap(namespace => {
+        const indexRevision = hierarchy ? observedEpochs.get(namespaceBinding(namespace))
+          : navigation.pages.get(namespaceBinding(namespace))?.epoch;
+        return indexRevision === undefined ? [] : [{ namespace, indexRevision }];
+      });
       const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
         namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
         revision: candidate.revision,
-      })), [], namespaces.flatMap((namespace) => {
-        const page = navigation.pages.get(namespaceBinding(namespace));
-        return page ? [{ namespace, indexRevision: page.epoch }] : [];
-      }));
+      })), [], epochGuards());
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
-        limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
+        limit: count, map: request => hierarchy ? observed(request, mapPage(request, navigation))
+          : mapPage(request, navigation),
+        ...(hierarchy ? { hierarchyMap: request => observed(request,
+          mapPage(request, undefined, { recallL2Only: !request.parentRef })) } : {}),
+        ...(selectionMode === 'moc-hierarchy-v2' ? { standaloneMap: request => observed(request,
+          mapPage(request, undefined, { recallStandaloneL1Only: true })) } : {}),
+        fetch, includeQualification, contextMode, selectionMode,
         validateFresh,
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
@@ -782,8 +831,7 @@ export function openMemoryCore(input) {
           revision: candidate.revision, receiptLimit: candidate.receiptCap ?? candidate.item.receipts.length,
           ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
-        })), selected, namespaces.map((namespace) => ({ namespace,
-          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),
+        })), selected, epochGuards(), includeQualification, contextMode),
       }));
     } catch (error) { return failure(error); }
   }
@@ -861,8 +909,8 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
       const captureKey = value => keepInput ? { ...value, [keepAdmissionKey]: true } : value;
-      if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
-      return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
+      if ((captureEvidence || evidenceOnly || captureSourceTime) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
+      return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy, captureSourceTime,
         runtime, ns, sessionEpisodes, keepInput,
         startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
         captureRationale, captureEvidence,
@@ -921,13 +969,14 @@ export function openMemoryCore(input) {
       object(input, ['messages']);
       const episode = Boolean(sessionEpisodes);
       const messages = denseArray(input.messages, 1, 240).map((message) => {
-        object(message, ['id', 'role', 'content', ...(episode ? ['occurredAt'] : [])]);
-        return { id: message.id, role: message.role, content: message.content };
+        object(message, ['id', 'role', 'content', ...(episode ? ['occurredAt'] : []), ...(captureSourceTime ? ['sourceTime'] : [])]);
+        if (!captureSourceTime && Object.hasOwn(message, 'sourceTime')) throw new MemoryStoreError('invalid_input');
+        return { id: message.id, role: message.role, content: message.content, ...(captureSourceTime ? sourceTimeFields(message) : {}) };
       });
       // Only message text enters an extraction request; identity is a placeholder.
       const snapshot = (batch) => captureSnapshot({ namespace: { ownerId: 'plan', scope: 'personal', projectId: null },
         client: 'plan', eventId: 'plan', sessionId: 'plan', messages: batch },
-      episode ? 'source-bound-v2' : captureQualification, episode ? undefined : captureSourcePolicy);
+      episode ? 'source-bound-v2' : captureQualification, episode ? undefined : captureSourcePolicy, captureSourceTime);
       for (const message of messages) snapshot([message]);
       if (new Set(messages.map((message) => message.id)).size !== messages.length) throw new MemoryStoreError('invalid_input');
       countTokens(model, '');
