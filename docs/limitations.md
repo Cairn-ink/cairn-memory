@@ -1742,3 +1742,58 @@ short database snapshots do not make it asynchronous or establish that it is
 lightweight. Worst new uncontended query medians remain about 6.7 seconds. The
 same 120-code-point labels and whole-source packing limitations remain. See the
 [H5b contract](plans/source-idf-page-snapshots.md).
+
+## H6 routing × ranking diagnostic: no demonstrated quality benefit
+
+The [two-case H6 diagnostic](evidence/routing-idf-diagnostic.md) closed with
+actual exit 0 on reviewed runtime `d46f7d0`; H5 PR #438 had cleared all 31
+exact-head checks and was ready/unmerged at the checked pre-run snapshot.
+Both ordinary writes completed
+(51/48 batches, 239/225 memories), followed by all eight first read/answer
+outcomes against unchanged per-case canonical snapshots. Closure audit and
+exact owned-workspace absence passed. N=2 distinct cases and eight correlated
+arm outcomes are different denominators. Mechanical completion establishes
+neither minimal/full correctness nor necessary-source support. Independent
+two-pass masked review and primary adjudication, frozen before arm unmasking,
+found all four H6-1 outcomes not ratable because of conflicting source/question
+date anchors. All four H6-2 outcomes are incorrect: their requested interval
+is absent, though abstention is justified by missing source-time anchors in
+the actual delivered context. One also asserts an unsupported question date
+as an event date. Reviewer flag disagreements and primary resolutions remain
+visible; justified abstention is not correctness. No benefit is demonstrated.
+The accepted independent trace found references visible on all 16
+original-statement/arm paths, but only 12/16 paths answer-packed (four unique
+original statements × four arms): A/B retained both per case;
+H6-1 C/D lost one at rank, while H6-2 C/D never selected the original repair
+statement. D's assistant acknowledgment substitute is not that original.
+There were no answer-token-packing omissions. Original dates existed only in
+operator source-map/audit sidecars, not persisted receipts or model context;
+stored `createdAt` is ingestion time. Capture rejects extra message time fields,
+and the answer serializer additionally keeps only role/content. The next stage
+is explicit shared-engine/consumer source-time transport with offline
+regressions, then complementary-evidence selection. This report claims no
+runtime fix or new accuracy percentage. No paid rerun, replacement or rescoring
+of this closed diagnostic is authorized.
+
+The 472 physical requests retained US$2.36 reservation. US$0.373619 is a known
+generation usage-rate estimate, not an invoice; count-route billing remains
+unknown and unrefunded. The closure snapshot retained US$344.522281 cumulative
+reservation, leaving US$25.477719 below the unchanged ceiling after protecting
+US$30. Zero new pending/unknown outcomes does not erase the 23 historical
+unknowns or authorize another run.
+
+Operator row/group and request durations include frozen artifact/runtime
+checks, source/ledger validation and durable recording. Request timers start
+before HTTP-intent persistence and the frozen fetch check. They are neither
+pure provider latency nor normal product latency. Cold reads reopened
+MemoryCore in one operator process, not a new process or OS-cold cache.
+Additional v2 calls prevent an equal-cost routing-efficiency claim; one
+stochastic result per arm does not isolate model variance from code effects.
+
+This concerns two implemented read changes, standalone-L1-aware v2 routing and
+bounded literal IDF ranking, not a complete Raw/Memory/Card, relationships or
+vector architecture. The earlier H3 miss and original H5 writer-contention
+failure remain closed and unchanged. The public metadata is hash-bound private
+operator evidence, not a publicly replayable benchmark or an anonymization
+guarantee. No official score, competitor comparison, reliability certification,
+default promotion or automatic paired24/fresh30 advancement is established.

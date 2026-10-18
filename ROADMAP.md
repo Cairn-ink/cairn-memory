@@ -16,6 +16,22 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [two-case routing × ranking diagnostic](docs/evidence/routing-idf-diagnostic.md)
+  mechanically completed two ordinary writes and eight correlated first
+  read/answer outcomes at reviewed runtime `d46f7d0` (PR #438 ready/unmerged
+  at the checked pre-run snapshot). All snapshots were unchanged and cleanup
+  passed. Frozen masked review/adjudication found four not-ratable H6-1
+  outcomes and four incorrect H6-2 outcomes despite justified context-limited
+  abstention: no quality benefit demonstrated. Accepted exact-path tracing
+  found sidecar-only source dates and complementary-source selection loss;
+  next is shared-engine/consumer time transport, then complementary selection,
+  with offline regressions, not a claimed runtime fix. No official score,
+  equal-cost routing claim, automatic
+  paired24/fresh30 expansion or default promotion follows. US$2.36 reservation
+  is distinct from the US$0.373619 generation
+  usage estimate and unknown count-route billing. Diagnostic timings include
+  audit/persistence overhead, not normal product latency.
+
 - The [one authentic MOC opportunity probe](docs/plans/moc-hierarchy-real-opportunity.md)
   completed 43 batches and two read/answer outcomes mechanically, but both
   answers missed the reviewed ratio fact. Its source was retained yet absent
