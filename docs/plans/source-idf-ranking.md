@@ -307,3 +307,71 @@ R1-R7. The primary integrates their scoped commits, personally verifies the
 combined candidate and runs resource cells only after other heavy gates finish.
 No worker may start the full resource experiment independently. Final Standards
 and Spec reviewers must not be either implementer.
+
+Runtime worker execution, 2026-10-19: continued the authorized isolated
+`feat/source-idf-ranking` worktree at
+`/home/chichieh/Github/cairn-memory-worktrees/source-idf-ranking`, base
+`1a072c5eb05742841e5114b22ffc1478287fd3e8` and prospective plan commit
+`e1faac0c332103206068c54c6618b66263a5e2e2`. Read CONTRIBUTING, CONTEXT, SECURITY,
+the delivery/model-routing workflow and all R1-R7 before implementation. The
+prospective prefix still hashes to
+`8ed97e23f6449d68e67fe8901cc5ec59410bc3a95d9e6e6411a53e9c7309926f`.
+
+Actual caller trace before edits: `openMemoryCore` validates constructor policy;
+`recall` creates source-only navigation; private `mapPage` binds cursors and caches
+one namespace snapshot; `runtime.queryCandidateRows` delegates unchanged to
+`moc-storage`. The new branch performs one indexed physical scan, projected
+eligibility before source reads, compact typed masks/per-memory union DF, sorted
+query-token accumulation and retained-winner rereads inside the same trusted
+transaction. Only numeric ranking metadata returns privately. Automatic rationale
+discovery calls the same runtime method without the option and remains on the
+old scorer. Public maps, capture/classification, ordinary recall and host wiring
+have no activation. Excerpt/scorer/model prompts and runtime finalization were
+not edited.
+
+Affected checks and ownership: worker owns the new core oracle/recall tests,
+strict adapter test, installed-archive test and predecessor query-candidate/keyset
+regressions. Primary owns complete core/OpenAI/MCP/artifact/generic/workspace
+gates, demos, pinned plugin validation, independent predecessor parity, combined
+candidate acceptance and final double review. Separate measurement worker owns
+R5; neither implementation worker authorizes resource promotion or paid work.
+
+Focused command, with each absolute Node22.16.0/24.15.0 executable:
+`node tools/testing/run.mjs core/test/source-ranking.test.mjs core/test/source-ranking-recall.test.mjs adapters/openai/test/source-ranking.test.mjs packaging/test/source-ranking.test.mjs`.
+Both actual exits were 0, 25/25 tests each. Logs are retained at
+`/tmp/cairn-idf-worker-evidence-BQzElu/focused-node22-final.log` and
+`focused-node24-final.log`. The builder and test independently compared tar and
+manifest listings, 101 paths, and matched ranking source/archive/installed SHA256.
+Normal capture/classification plus cold reopen establishes predetermined source
+visibility across both scan policies with scripted and actual o200k counters;
+structural SQL fixtures are separately labeled and never quality evidence.
+Tests retain all four inappropriate rare-token distractor choices, the hidden
+rare-cue label and navigation-visible/rank-omitted source counterexamples.
+Successful and deliberately failing subprocess fixtures close connections,
+exit with exactly 0/1 and remove their owned scratch.
+
+Failure evidence is retained, not replaced by the final green run. The initial
+core command exited 1 (13/18), from fixture errors: incorrect filing DTO path,
+missing fixture token counter, duplicate receipt identity violating its unique
+key, an invalid non-null tombstone body, and a fetch freshness expectation.
+`initial-failure-summary.log` is explicitly a transcription of those errors,
+not a complete raw TAP log; the corrected core run exited 0 (18/18). Subsequent
+raw `focused-node22.log` exited 1 (19/21): admission metadata omits body content,
+so the adapter target lookup now uses canonical `get`; rank mutation reaches
+the existing candidate-revision fence before the namespace-epoch fence.
+Raw `focused-node22-r2.log` and `focused-node24.log` exited 1 (23/24): a three-row
+HTTP fixture incorrectly assumed one rare token outweighed four generic tokens.
+Its matched-wire query now uses one generic and one rare term, with an explicit
+independent formula inequality; the 240-decoy actual-window fixture and frozen
+R1-R7 remained unchanged. No runtime correction or gate relaxation resulted.
+
+Exact freshness expectations follow existing authority: count/microtask/select
+mutations return `index_revision_conflict`; mutation during source-fetch counting
+returns `cursor_stale` when `fetchPage` rereads the saved epoch; rank mutation
+returns `revision_conflict` when atomic `recallSnapshot` checks current rows first.
+Earlier 34-test query-candidate/keyset regression run on Node22.16 exited 0.
+The same command on Node24.15 exited 0, 34/34, retained in
+`/tmp/cairn-idf-worker-evidence-BQzElu/predecessor-regressions-node24.log`.
+Resource fit, independent final review and broad combined gates remain pending
+primary verification; these focused passes establish no semantic gain or resource
+claim.

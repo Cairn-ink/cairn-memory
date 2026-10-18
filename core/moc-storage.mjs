@@ -4,6 +4,7 @@ import { fail } from "./validation.mjs";
 import { QUERY_SCAN_LIMIT, SOURCE_QUERY_RECEIPT_LIMIT,
   BOUNDED_KEYSET_SOURCE_CANDIDATES } from './query-candidates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
+import { createSourceRanking, SOURCE_RANKING_VERSION } from './source-ranking.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
 const qualifiedNamespace = (alias) => `${alias}.owner_id = ? AND ${alias}.scope = ? AND ${alias}.project_id = ?`;
@@ -361,15 +362,18 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     THEN moc.title ELSE NULL END`;
 
   function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
-    sourceCandidatePolicy = null }) {
+    sourceCandidatePolicy = null, sourceRankingPolicy = null, query }) {
     return transaction(db, () => {
       if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
       const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
       if (sourceCandidatePolicy !== null && (!keyset || sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT)) {
         fail('invalid_input');
       }
+      if (sourceRankingPolicy !== null && (sourceRankingPolicy !== SOURCE_RANKING_VERSION ||
+          sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT)) fail('invalid_input');
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
+      if (sourceRankingPolicy) return rankedSourceRows(ns, { query, memoryLabel, keyset, currentEpoch });
       // The existing partial index excludes history/tombstones before traversal.
       // Require that access path: a missing index must not trigger a full scan.
       // Projection-rejected current rows still consume the bounded allowance.
@@ -482,6 +486,74 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       });
       return { rows, epoch: currentEpoch, scanExhausted };
     });
+  }
+
+  // The caller owns one trusted BEGIN IMMEDIATE transaction, including retained
+  // winner rereads. Physical exclusions consume capacity without exposing text.
+  function rankedSourceRows(ns, { query, memoryLabel, keyset, currentEpoch }) {
+    const ranking = createSourceRanking(query);
+    const scan = keyset ? BOUNDED_KEYSET_SOURCE_CANDIDATES.scan : QUERY_SCAN_LIMIT;
+    const page = keyset ? BOUNDED_KEYSET_SOURCE_CANDIDATES.page : QUERY_SCAN_LIMIT;
+    const top = keyset ? BOUNDED_KEYSET_SOURCE_CANDIDATES.top : QUERY_SCAN_LIMIT;
+    const physicalPage = db.prepare(`SELECT id,revision FROM memories INDEXED BY capture_current_memories
+      WHERE ${namespaceWhere} AND deleted=0 AND review_state!='awaiting' AND currentness='current'
+        AND id>? ORDER BY id LIMIT ?`);
+    const sentinel = db.prepare(`SELECT id FROM memories INDEXED BY capture_current_memories
+      WHERE ${namespaceWhere} AND deleted=0 AND review_state!='awaiting' AND currentness='current'
+        AND id>? ORDER BY id LIMIT 1`);
+    const projected = projectPrepare(`SELECT id,revision,content FROM memories WHERE ${namespaceWhere}
+      AND id=? AND revision=? AND deleted=0 AND review_state!='awaiting' AND currentness='current'`);
+    const sources = db.prepare(`SELECT id,memory_id,receipt_key,client,session_id,event_id,role,excerpt
+      FROM receipts INDEXED BY capture_memory_receipts WHERE memory_id=? ORDER BY id LIMIT ?`);
+    let lastId = '';
+    let physicalRows = 0;
+    let receiptReads = 0;
+    while (physicalRows < scan) {
+      const limit = Math.min(page, scan - physicalRows);
+      const batch = physicalPage.all(...boundary(ns), lastId, limit);
+      if (!batch.length) break;
+      const masks = ranking.slab(batch.length);
+      for (let slot = 0; slot < batch.length; slot += 1) {
+        const physical = batch[slot];
+        physicalRows += 1;
+        lastId = physical.id;
+        const memory = projected.get(...boundary(ns), physical.id, physical.revision);
+        if (!memory) continue;
+        const receipts = sources.all(memory.id, SOURCE_QUERY_RECEIPT_LIMIT);
+        receiptReads += receipts.length;
+        ranking.add(masks, slot, memory,
+          receipts.map(receipt => validateSourceReceipt(memory.id, receipt, receiptKey)));
+      }
+      if (batch.length < limit) break;
+    }
+    const more = physicalRows === scan && Boolean(sentinel.get(...boundary(ns), lastId));
+    const stats = ranking.stats();
+    const retained = ranking.top(top);
+    const sourceById = db.prepare(`SELECT id,memory_id,receipt_key,client,session_id,event_id,role,excerpt
+      FROM receipts WHERE memory_id=? AND id=?`);
+    let retainedReceiptReads = 0;
+    const rows = retained.map(candidate => {
+      const memory = projected.get(...boundary(ns), candidate.id, candidate.revision);
+      if (!memory) fail('index_revision_conflict');
+      let passage = memory.content;
+      if (candidate.receiptId !== undefined) {
+        const receipt = sourceById.get(memory.id, candidate.receiptId);
+        retainedReceiptReads += 1;
+        if (!receipt) fail('storage_error');
+        passage = validateSourceReceipt(memory.id, receipt, receiptKey).excerpt;
+      }
+      const placement = projectPrepare(`SELECT r.* FROM moc_memory_refs r
+        JOIN mocs parent ON parent.id=r.moc_id WHERE r.memory_id=? AND r.memory_revision=?
+          AND ${qualifiedNamespace('parent')} AND parent.level=1 AND parent.revision=r.moc_revision
+        ORDER BY parent.canonical_title,parent.id LIMIT 1`).get(memory.id, memory.revision, ...boundary(ns));
+      const text = memoryLabel(passage);
+      return { item: placement ? { type: 'ref', ref: memoryRef(placement), label: text }
+        : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision }, label: text } };
+    });
+    if (epoch(ns) !== currentEpoch) fail('index_revision_conflict');
+    return { rows, epoch: currentEpoch, scanExhausted: !more && stats.eligibleMemories <= top,
+      ranking: { version: SOURCE_RANKING_VERSION, physicalRows, ...stats, receiptReads,
+        retainedRows: retained.length, retainedReceiptReads } };
   }
 
   const recallL2Visible = `moc.level = 2 AND EXISTS (SELECT 1 FROM moc_edges edge JOIN mocs child

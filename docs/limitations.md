@@ -1655,3 +1655,28 @@ wire validation can still reject a request that fits the core envelope.
 No host/default promotion or paid evaluation follows. Frequency-aware lexical
 ranking, query-aware leaves and the frozen later quality/resource gates remain
 separate work. See the [prospective H4 contract and execution record](plans/moc-standalone-entry.md).
+
+## H5 bounded source IDF: literal mechanics only
+
+The trusted embedded `sourceRankingPolicy:'bounded-idf-v1'` weights literal query
+runs using per-memory frequency inside each namespace's existing physical scan
+prefix. It scores individual passages and reads only the first four stable
+receipts for navigation statistics. It does not find synonyms, combine separate
+passages into joint support, or infer subject, date, negation or adoption.
+Scripted diagnostic controls deliberately select wrong-person, old-date,
+negated and proposal-only rare-token distractors: four inappropriate selections
+remain recorded for later semantic diagnostics.
+
+The unchanged excerpt can hide a rare cue within a winning passage; independent
+whole-source packing can omit a navigation-visible selected candidate before
+rank. Both failures are retained in synthetic tests. Capture/classification and
+cold-reopen positives establish source plumbing only. No new real-model score,
+lightweight claim, paid-run permission or default/host promotion follows.
+
+One bounded scan retains query-match masks rather than a source-text sidecar.
+The 25,200,000-byte maximum mask payload excludes scalar metadata, temporary
+allocation and delayed garbage collection. Per-namespace processing does not
+establish a process peak-RSS bound. Statistics and retained-winner rereads use
+the existing writer-reserving transaction; competing-writer blocking remains
+a cost. The separately frozen resource gate must pass before evaluator
+activation. See the [H5 contract](plans/source-idf-ranking.md).

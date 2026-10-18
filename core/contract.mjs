@@ -10,6 +10,7 @@ import { createCaptureDeadline } from './capture-deadline.mjs';
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens } from './model-budget.mjs';
 import { isSourceContext } from './source-evidence.mjs';
+import { SOURCE_RANKING_VERSION } from './source-ranking.mjs';
 import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
@@ -151,7 +152,7 @@ function failure(error) {
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
   object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
-    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview']);
+    'captureDeadlineMs', 'sourceCandidatePolicy', 'sourceRankingPolicy', 'sessionEpisodes', 'decisionReview']);
   const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
   const captureSourcePolicy = policyDescriptor?.value;
@@ -168,6 +169,10 @@ export function openMemoryCore(input) {
       sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version)) {
     throw new MemoryStoreError('invalid_input');
   }
+  const sourceRankingDescriptor = Object.getOwnPropertyDescriptor(input, 'sourceRankingPolicy');
+  const sourceRankingPolicy = sourceRankingDescriptor?.value;
+  if (sourceRankingDescriptor && (!Object.hasOwn(sourceRankingDescriptor, 'value') ||
+      sourceRankingPolicy !== SOURCE_RANKING_VERSION)) throw new MemoryStoreError('invalid_input');
   const hasCaptureDeadline = Object.hasOwn(input, 'captureDeadlineMs');
   const captureDeadlineMs = hasCaptureDeadline ? input.captureDeadlineMs : undefined;
   if (hasCaptureDeadline && (!Number.isSafeInteger(captureDeadlineMs) ||
@@ -665,6 +670,7 @@ export function openMemoryCore(input) {
         physicalPage: BOUNDED_KEYSET_SOURCE_CANDIDATES.page,
         top: BOUNDED_KEYSET_SOURCE_CANDIDATES.top,
       });
+      if (navigation?.sourceRankingPolicy) binding.sourceRankingPolicy = navigation.sourceRankingPolicy;
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
@@ -676,6 +682,8 @@ export function openMemoryCore(input) {
         if (!snapshot) {
           snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt,
             ...(navigation.sourceMode ? { sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT } : {}),
+            ...(navigation.sourceRankingPolicy ? { sourceRankingPolicy: navigation.sourceRankingPolicy,
+              query: navigation.query } : {}),
             ...(navigation.sourceCandidatePolicy ? { sourceCandidatePolicy: navigation.sourceCandidatePolicy } : {}) });
           navigation.pages.set(key, snapshot);
         }
@@ -776,6 +784,7 @@ export function openMemoryCore(input) {
       const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
         ...(isSourceContext(contextMode) ? { sourceMode: contextMode } : {}),
         ...(sourceCandidatePolicy && isSourceContext(contextMode) ? { sourceCandidatePolicy } : {}),
+        ...(sourceRankingPolicy && isSourceContext(contextMode) ? { sourceRankingPolicy, query } : {}),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
       const hierarchy = ['moc-hierarchy-v1', 'moc-hierarchy-v2'].includes(selectionMode);

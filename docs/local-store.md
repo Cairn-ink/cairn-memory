@@ -89,6 +89,34 @@ public maps and host settings retain their existing behavior. These are offline
 mechanics bounds, not an equal-cost or measured quality improvement. See the
 [frozen H4 contract](plans/moc-standalone-entry.md).
 
+Trusted callers may independently opt into
+`openMemoryCore({ path, model, sourceRankingPolicy: 'bounded-idf-v1' })` for
+`source-evidence` and `rationale-evidence` recall. Per namespace, it counts each
+query run once per eligible memory across the body and first four validated
+receipts, weights that run by bounded inverse document frequency, then ranks by
+the highest individual body/receipt score. Separate receipts never combine into
+one score. Body wins passage ties, then stable receipt ID; memory ties use ID.
+This is weighted binary overlap, without stemming, segmentation or synonyms.
+
+Ranking does not expand the scan: the default remains the first 1,024 physical
+current rows; the separate `sourceCandidatePolicy:'bounded-keyset-v1'` uses its
+20,000-row cap, 256-row pages and 1,024 retained candidates. Projected-out rows
+still consume physical capacity. Statistics are private to each authorized
+namespace and one recall snapshot. Query-local typed masks retain at most
+25,200,000 payload bytes per active namespace for the maximum bounded scan and
+2,000 distinct query runs; this excludes metadata and is not a peak-RSS bound.
+Only retained winning passages are reread for labels, under the existing
+`BEGIN IMMEDIATE` transaction, which can block competing writers.
+
+The unchanged 120-code-point excerpt can hide a rare cue even when its passage
+wins. Canonical fetch, whole-source rank packing and final atomic validation
+still decide what reaches the model and caller. Rare overlap proves neither
+support nor current applicability. The option adds no model stage and works
+independently of `selectionMode`. Ordinary recall, automatic rationale discovery,
+public maps and host defaults keep their existing behavior. Resource and
+real-model quality gates remain separate; see the
+[frozen H5 contract](plans/source-idf-ranking.md).
+
 ## Run the synthetic example
 
 Use Node >=22.16 (tested in CI on 22.16 and 24). The existing plugin still

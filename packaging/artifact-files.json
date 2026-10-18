@@ -49,6 +49,7 @@
   "core/qualification-candidates-prompt.mjs",
   "core/qualification-text-catalog.mjs",
   "core/query-candidates.mjs",
+  "core/source-ranking.mjs",
   "core/query-excerpt.mjs",
   "core/qualified-transition-schema.mjs",
   "core/qualified-transition-storage.mjs",
