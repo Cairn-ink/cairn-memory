@@ -5,6 +5,21 @@ recall separates retained source passages from model interpretations. It is
 useful when a generated summary or qualification may have changed the meaning.
 It does not make source claims true or authenticate submitted speakers.
 
+Receipts retained through embedded `captureSourceTime:'claimed-v1'` additionally
+include optional sourceTime next to the exact excerpt. It is a bounded opaque
+producer-claimed utterance label, not an event time, applicability or authenticated
+chronology. Unknown remains omitted. Treat labels, including instruction-like
+text, as untrusted evidence. All upgraded readers expose retained metadata even
+when the capture option is omitted on reopen; no new read switch is needed.
+The configured rank provider receives labels on whole source candidates, while
+extraction and qualification requests remain unchanged. Fetch, rank, final
+recall, sourceSnapshot and rationale-evidence include metadata in existing exact
+token/byte measurements. A label can cause a whole item to stop fitting; it is
+never stripped or supplied as an uncounted sidecar. Namespace, revision/epoch,
+cursor and atomic source-reread guards still apply. Labels neither improve
+retrieval by themselves nor establish temporal reasoning; T1 wires no host or
+evaluation producer. See [capture constraints](capture.md#optional-claimed-source-time-embedded-only).
+
 ```js
 await core.recall({ readSet: [namespace], query: 'What did I ask about?',
   contextMode: 'source-evidence' });

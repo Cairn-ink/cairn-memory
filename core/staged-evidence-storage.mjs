@@ -1,6 +1,6 @@
 import { STAGED_PAYLOAD_MAX_BYTES } from './episode-schema.mjs';
 import { transaction } from './database.mjs';
-import { boundedText, denseArray, fail, identifier, object } from './validation.mjs';
+import { boundedText, denseArray, fail, identifier, object, sourceTimeFields } from './validation.mjs';
 
 const where = 'owner_id = ? AND scope = ? AND project_id = ?';
 const eventWhere = `${where} AND client = ? AND event_id = ?`;
@@ -12,12 +12,13 @@ const retentionMs = 24 * 60 * 60 * 1000;
 function serializeView(view, episode = false) {
   object(view, ['messages', 'retainedSourceWindow']);
   const messages = denseArray(view.messages, 1, 24).map((message) => {
-    object(message, ['id', 'role', 'content']);
+    object(message, ['id', 'role', 'content', ...(episode ? [] : ['sourceTime'])]);
+    if (episode && Object.hasOwn(message, 'sourceTime')) fail('invalid_input');
     const id = identifier(message.id);
     if (!['user', 'assistant'].includes(message.role) ||
       typeof message.content !== 'string' || !message.content.isWellFormed() ||
       boundedText(message.content, 800) !== message.content) fail('invalid_input');
-    return { id, role: message.role, content: message.content };
+    return { id, role: message.role, content: message.content, ...sourceTimeFields(message) };
   });
   if (new Set(messages.map(({ id }) => id)).size !== messages.length) fail('invalid_input');
   object(view.retainedSourceWindow, ['maxUnitsPerMessage', 'truncatedMessageIndices']);

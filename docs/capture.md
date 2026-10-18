@@ -12,6 +12,46 @@ units, totaling at most 20,000. Invalid input is rejected before claiming work.
 Redaction and normalization precede hashing and model calls. The digest binds
 namespace, event/session/client and ordered message IDs, roles and full content.
 
+### Optional claimed source time (embedded only)
+
+`openMemoryCore({ path, model, captureQualification:'source-bound-v2',
+captureSourceTime:'claimed-v1' })` accepts optional message `sourceTime`.
+`captureSourcePolicy:'indexed-evidence-v1'` also supports this capability, as
+does ordinary v2 with existing `captureEvidence:'staged-v1'`. V2's existing
+`captureSourcePolicy:'indexed-windows-v1'` also retains labels. This is a producer's
+opaque claim about when that utterance was made, not event occurrence, claim
+applicability, import/arrival time, authenticated chronology or causal authority.
+Unknown is an omitted property. No date parsing, timezone, sorting, clock
+fallback or historical backfill occurs. Capture planning retains the same label
+across whole-message batches and every selected window from the message.
+
+A present label must be a well-formed string of 1–128 UTF-16 units with no
+C0/C1 controls, Unicode line/paragraph separators or outer whitespace. Existing
+NFKC, whitespace normalization and secret redaction must leave it byte-for-byte
+unchanged; invalid labels are rejected rather than transformed/truncated.
+Explicit undefined/null/empty labels reject. Instruction-like valid labels remain
+untrusted data. Without the constructor capability, any own message sourceTime
+rejects before model calls or claims. The capability rejects unqualified/legacy
+or source-bound-v1 capture, session episodes and automatic rationale capture;
+any own capture causal field also rejects before work, even undefined.
+Explicit remember/admit/correct/supersede receipt inputs are not widened.
+
+Extraction and qualification provider requests remain unchanged: the trusted
+source layer carries labels separately into immutable canonical receipts.
+Annotated event digests bind the ordered optional-label vector in a versioned
+domain around the old digest. Without labels, digests and receipt keys remain
+unchanged. Changing, adding or removing a label under the same event identity
+returns event_payload_conflict before a model/write; identical replay duplicates.
+V2 qualification anchors still bind excerpt text only and qualified dedup can
+still return qualification_conflict for a different source identity.
+
+All upgraded readers expose retained labels on reopen even without the capture
+option. Source-evidence rank exposes them to the configured ranking provider;
+fetch/recall, sourceSnapshot and source-rationale contexts count them inside the
+ordinary whole-source token/byte budgets. See [source context](source-evidence-context.md).
+No MCP/HTTP/hooks, hosted schema, provider adapter or evaluation producer forwards
+this option/field in T1. This preservation seam makes no temporal or accuracy claim.
+
 The injected model must provide `extract({system,input,maxOutputTokens,signal})`,
 `countTokens` and context capacity, using the same bounded-call contract as
 [classification](moc-placement.md). Extractor input contains only indexed roles

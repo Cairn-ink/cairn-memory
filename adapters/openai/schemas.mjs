@@ -280,6 +280,9 @@ function checklistSchema(input) {
 
 /** Request-scoped identifier constraints; core still validates correlated tuples. */
 export function schemasFor(method, input) {
+  if (method === 'selectGroups') {
+    try { return groupSelectionSchema(input); } catch { invalid(); }
+  }
   if (method === 'selectChecklist') {
     try { return checklistSchema(input); } catch { invalid(); }
   }
@@ -441,4 +444,41 @@ export function schemasFor(method, input) {
   return object({ refs: array(object({ namespaceIndex: constrained(integer, namespaces),
     memoryId: constrained(string, memoryIds), revision: constrained({ type: 'integer', minimum: 1 }, revisions) }),
   memoryIds.length ? Math.min(maximum, memoryIds.length) : 0) });
+}
+
+function groupSelectionSchema(input) {
+  exactData(input, ['query', 'maps', 'maxRefs', 'maxRefsPerNamespace']);
+  if (typeof input.query !== 'string' || !input.query.trim() || !input.query.isWellFormed() || input.query.length > 4000 ||
+      ![2, 4].includes(input.maxRefs) || input.maxRefsPerNamespace !== 2) invalid();
+  const rows = (value, maximum) => {
+    denseArray(value, 0, maximum);
+    if (Reflect.ownKeys(value).length !== value.length + 1) invalid();
+    for (let position = 0; position < value.length; position++) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(position));
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) invalid();
+    }
+  };
+  rows(input.maps, 2);
+  const namespaces = new Set(), seen = new Set(), groupIds = [], revisions = [];
+  for (const map of input.maps) {
+    exactData(map, ['namespaceIndex', 'groups']);
+    if (![0, 1].includes(map.namespaceIndex) || namespaces.has(map.namespaceIndex)) invalid();
+    namespaces.add(map.namespaceIndex);
+    rows(map.groups, 400);
+    for (const group of map.groups) {
+      exactData(group, ['namespaceIndex', 'mocId', 'revision', 'title']);
+      identifier(group.mocId); revision(group.revision);
+      if (group.namespaceIndex !== map.namespaceIndex ||
+          (group.title !== null && (typeof group.title !== 'string' || !group.title.isWellFormed() || group.title.length > 240))) invalid();
+      const identity = JSON.stringify([map.namespaceIndex, group.mocId]);
+      if (seen.has(identity)) invalid();
+      seen.add(identity);
+      groupIds.push(group.mocId); revisions.push(group.revision);
+    }
+  }
+  // Compact domains keep schema overhead bounded. Adapter and core both check
+  // exact correlated tuples after decoding, as ordinary memory selection does.
+  return object({ refs: array(object({ namespaceIndex: constrained(integer, [...namespaces]),
+    mocId: constrained(string, groupIds), revision: constrained({ type: 'integer', minimum: 1 }, revisions) }),
+  Math.min(input.maxRefs, groupIds.length)) });
 }

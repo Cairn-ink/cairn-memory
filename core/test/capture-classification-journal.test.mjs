@@ -492,7 +492,7 @@ test('CJ6 true v13 old-format claims migrate to unknown without changing existin
   assert.equal(db.prepare(`SELECT count(*) AS n FROM sqlite_master
     WHERE name='capture_initial_classification'`).get().n, 0);
   const cold = openMemoryCore({ path }); t.after(() => cold.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 19);
   for (const [name, rows] of before) assert.deepEqual(db.prepare(`SELECT ${rows.length ? Object.keys(rows[0]).join(',') : '*'} FROM "${name}" ORDER BY rowid`).all(), rows);
   assert.equal(db.prepare('SELECT count(*) AS n FROM capture_initial_classification').get().n, 0);
   const old = ok(cold.inspectAdmission({ namespace: saved.key.namespace, client: saved.key.client,
@@ -513,5 +513,5 @@ test('CJ6 v13 migration collision rolls back DDL and remains retryable', (t) => 
   assert.equal(db.prepare('SELECT synthetic_marker FROM capture_initial_classification').get().synthetic_marker, 'keep');
   db.exec('DROP TABLE capture_initial_classification');
   const core = openMemoryCore({ path }); t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 19);
 });

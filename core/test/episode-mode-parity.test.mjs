@@ -16,9 +16,13 @@ test('E10 frozen committed v14/v15 mode-off prompts, requests, outputs, rows and
     const fixture = JSON.parse(readFileSync(new URL(`../testing/episode-v${version}-fixture.json`, import.meta.url), 'utf8'));
     for (const [index, { config, expected }] of fixture.parity.entries()) {
       const path = join(dir, `${version}-${index}.sqlite`);
-      assert.deepEqual(await captureEpisodeParity(new URL('../../', import.meta.url).pathname, path, config), expected);
+      const actual = await captureEpisodeParity(new URL('../../', import.meta.url).pathname, path, config);
+      actual.rows.receipts = actual.rows.receipts.map(({ source_time, ...row }) => {
+        assert.equal(source_time, null); return row;
+      });
+      assert.deepEqual(actual, expected);
       const db = new DatabaseSync(path);
-      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 19);
       assert.equal(db.prepare('SELECT count(*) n FROM episode_messages').get().n, 0);
       db.close();
     }
