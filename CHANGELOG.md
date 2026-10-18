@@ -8,7 +8,9 @@
   checks epoch and generation, and computes outside transactions; synchronous
   CPU work still occupies its thread. Scan caps, excerpts, model stages and
   defaults retain their existing contracts. The original H5 resource failure
-  remains recorded; H5b resources and real-model quality are pending.
+  remains recorded. H5b offline elapsed/CPU, actual capture and separate
+  current-image RSS gates passed on Node 22/24; final exact-head reviews/CI and
+  real-model quality remain pending. No default promotion or paid activation.
 - Add source-evidence-only `selectionMode:'moc-hierarchy-v2'`: standalone L1
   entry, whole-group origin reservation and the default's two flat rounds, with
   flat fetch priority. Reference-only audits separate observed packing/capacity

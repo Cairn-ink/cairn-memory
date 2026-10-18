@@ -334,3 +334,93 @@ The primary repeats key checks and both independent reviewers inspect the
 exact helper hashes and this contract before running the supplement. After
 closure, final docs and the unchanged runtime receive both review axes and
 exact-head CI before any real-model diagnostic.
+
+## P8 execution record
+
+The separate memory-only supplement closed at `0116e9f`, whose runtime/test
+bytes are identical to reviewed `21cec10`. Node 22.16 ran
+2026-10-18 18:21:53-18:22:47 UTC, then Node 24.15 ran
+18:23:28-18:24:28 UTC. Both operators and primary verification commands exited
+0. Each stream contains 80 records, 35 fresh child exits (5 preparation and
+30 query), three alternating old/new pairs for all five cells, and five passing
+current-image memory gates. Every child exited 0 without signal/watchdog;
+unchanged-store hashes, exact counts/index/masks and removal of owned stores
+after child closure were independently verified. No contention was rerun.
+
+Before execution, worker and primary helper tests passed 10/10 on each Node
+version, actual exits 0. The real held-128MiB parent controls met all three
+frozen conditions: parent RSS increase >=96MiB, child reported-peak increase
+>=32MiB and child current-image peak difference <=16MiB. Separate non-author
+GPT-6.1 Sol/high Standards and Spec reviewers inspected the P8 contract and
+these exact private helper hashes and reported no findings:
+
+- `rss-measure.mjs`: SHA256
+  `3a208af3894bdb03b3ab56b925ce239ea0942db8c04b3e4166aff962d75023dc`.
+- `rss-measure.test.mjs`: SHA256
+  `ecd852bea28921ffede3f004e334318893e23bbb1c2bd1853a1f8feddaba04a4`.
+
+The two files remain private, hash-bound acceptance helpers under
+`/tmp/cairn-idf-h5b-rss-rc7Jio`, not a packaged benchmark. Independent inventories
+agreed on two files. The frozen P8 section SHA256 remains
+`6f3dfe831510ba22d9c09df199c4fededb51a2c98925c8dd43663f34a534c0d4`;
+P1-P7 and the original H5 failure record remain unchanged.
+
+The following medians were derived from the closed streams and cross-checked
+against the P8 verification JSONs and independently recomputed RSS medians.
+Elapsed/CPU columns belong to the original H5b campaign at `21cec10`;
+current-image RSS belongs to the separate P8 supplement at `0116e9f`.
+These are different campaigns with identical runtime bytes, not pooled trials;
+P8 timing observations do not replace or rejudge the earlier timing outcomes.
+Each pair of values is old/new, and MiB means 1,048,576 bytes.
+
+| Node | Cell | H5b elapsed ms old/new | H5b CPU ms old/new | P8 current-image MiB old/new |
+| --- | --- | ---: | ---: | ---: |
+| 22 | 1000 | 235.508 / 49.436 | 243.033 / 62.424 | 81.22 / 67.76 |
+| 22 | 20000 | 635.377 / 451.761 | 671.122 / 512.603 | 106.95 / 107.05 |
+| 22 | worst1000 | 180.261 / 106.578 | 196.618 / 136.905 | 90.88 / 88.03 |
+| 22 | foreign1000 | 133.989 / 29.054 | 139.282 / 37.909 | 81.98 / 69.28 |
+| 22 | worst20000 | 7835.475 / 6658.313 | 7943.650 / 6913.586 | 166.39 / 211.59 |
+| 24 | 1000 | 93.097 / 24.124 | 99.960 / 31.622 | 91.09 / 74.59 |
+| 24 | 20000 | 321.567 / 281.768 | 347.609 / 346.211 | 110.42 / 109.75 |
+| 24 | worst1000 | 154.294 / 84.712 | 161.858 / 95.926 | 102.38 / 90.82 |
+| 24 | foreign1000 | 95.313 / 24.116 | 102.088 / 31.333 | 90.84 / 75.25 |
+| 24 | worst20000 | 7738.758 / 6735.402 | 7836.742 / 7015.418 | 314.36 / 352.29 |
+
+Every P8 cell satisfies median new current-image peak <= median old +64MiB.
+The worst-cell median bytes are 174,477,312/221,868,032 on Node 22 and
+329,633,792/369,397,760 on Node 24. Node 24's three old trials were
+170,459,136, 329,633,792 and 330,563,584 bytes; its new trials were
+371,068,928, 369,397,760 and 368,652,288 bytes. The frozen median decision
+passes despite that substantial spread. A single pair is not the acceptance
+rule. This shared WSL host and the observed variance establish neither memory
+efficiency, a lightweight implementation nor a cross-host memory promise.
+VmHWM includes current-image startup/core-open and small observation/validation
+overhead; it is not allocation attribution or a JS-heap measurement. The
+original inherited/pre-exec `getrusage` peaks remain recorded and are not used
+to infer ranking memory cost.
+
+Retained P8 streams in `/tmp/cairn-idf-h5b-primary-xLEMbe`:
+
+- `p8-node22.ndjson`: SHA256
+  `7d311b268730e1577ab49d4b23b5af3c89a1f5f3336c12bbcadd0af22dbbd55c`.
+- `p8-node24.ndjson`: SHA256
+  `d3c78b81345b13984cbe3a6bf524511a73e12eb1be9574be9859bfdbaae8d69b`.
+
+The previously completed offline gates remain: 1211/1211 core, OpenAI318,
+MCP111, artifact93 passed/1 native-Windows skip, workspace25, generic673,
+validate, four applicable demos and both pinned Claude validations per Node,
+all actual exits 0. Focused71, deadline19 and 168 same-state comparisons on
+212 normal captures also exited 0. Full H4-to-`21cec10` Standards and Spec
+reviews reported no findings; the P8 helper reviews are separate from those
+runtime reviews and from the final exact-head reviews still required.
+
+Together with the closed H5b elapsed/CPU and complete-capture observations,
+P8 meets the frozen offline resource gates on this host. All 12 candidate
+captures completed during their queries in 102.019-806.181ms; unchanged legacy
+worst-cell captures still reached the existing roughly 5-second timeout.
+The default path retains that limitation. New ranking remains synchronous;
+its worst uncontended query medians are still about 6.7 seconds. Labels can
+still hide a rare cue, and whole-source packing can omit selected evidence.
+There is no new semantic score, default promotion, paid evaluator activation
+or merge. Final documentation and unchanged runtime still need exact-head
+Standards/Spec review and CI before any real-model diagnostic.

@@ -1692,7 +1692,7 @@ the long writer-reserving transaction, and H5 is not approved for evaluator or
 default activation. The complete outcome and unchanged gates are recorded in
 the [H5 execution record](plans/source-idf-ranking.md#r5-outcome-stopped-at-writer-contention-not-promoted).
 
-## H5b read snapshots: correction pending resource acceptance
+## H5b read snapshots: offline resource gates met, final delivery pending
 
 A separate prospective correction changes only opted-in IDF ranking to bounded
 read snapshots, releasing SQLite transactions before validation, match-mask
@@ -1704,12 +1704,41 @@ query rather than silently mix populations or retry.
 Focused synthetic structural tests demonstrate complete competing foreign
 captures during computation, precise rejection after relevant mutations, and
 rollback/owned-directory cleanup. Deliberate pauses establish these mechanics,
-not actual latency or semantic relevance. A separate unpaused full resource
-campaign, broad integrated gates, primary parity and independent reviews are
-still required. Original H5 failure records and thresholds remain unchanged.
+not actual latency or semantic relevance. Separate unpaused H5b campaigns on
+Node 22.16 and 24.15 passed the frozen elapsed/CPU and complete-capture gates,
+actual exits 0: all 12 candidate captures committed during queries in
+102.019-806.181ms. A later, separately frozen memory-only supplement passed
+all five current-image RSS median gates on both runtimes, also actual exits 0.
+Each supplemental stream retains 80 records and 35 successful child exits
+(5 preparation/30 query), unchanged-store checks and verified owned cleanup.
+Original H5 failure records and thresholds remain unchanged; legacy worst-cell
+captures still reached the existing roughly 5-second timeout.
+
+The original reported `getrusage` peaks include inherited/pre-exec residency
+and remain recorded; they cannot establish ranking memory cost. The supplement
+instead observes Linux current-image VmHWM while preserving those original
+fields. Worst-cell old/new current-image medians were 174,477,312/221,868,032
+bytes on Node 22 and 329,633,792/369,397,760 on Node 24, within the frozen
+64MiB additional-median allowance. Node 24 old trials ranged from 170,459,136
+to 330,563,584 bytes. This substantial variance on a shared WSL host does not
+establish memory efficiency, lightweight behavior or a cross-host bound.
+VmHWM includes startup/core-open and small observation/validation overhead,
+not allocation attribution or JS heap. The hash-bound supplemental helpers
+remain private acceptance evidence, not a packaged benchmark; the
+[execution record](plans/source-idf-page-snapshots.md#p8-execution-record)
+keeps the separate campaigns, full table, trial spread and raw-stream hashes.
+
+Broad core1211, OpenAI318, MCP111, artifact93 passed/1 native-Windows skip,
+workspace25, generic673 and applicable validation/demo gates passed per Node,
+all actual exits 0; 168 independent comparisons on 212 normal captures passed.
+Independent full H4-to-`21cec10` and separate P8 helper Standards/Spec reviews
+reported no findings. Final exact-head reviews and CI remain pending; these
+offline passes provide no new semantic score, default promotion, paid evaluator
+activation or merge authorization.
 
 The option-off path retains its known long-transaction limitation. The new
 path is still synchronous JavaScript and can occupy its own thread for seconds;
 short database snapshots do not make it asynchronous or establish that it is
-lightweight. The same 120-code-point labels and whole-source packing limitations
-remain. See the [H5b contract](plans/source-idf-page-snapshots.md).
+lightweight. Worst new uncontended query medians remain about 6.7 seconds. The
+same 120-code-point labels and whole-source packing limitations remain. See the
+[H5b contract](plans/source-idf-page-snapshots.md).

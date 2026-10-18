@@ -31,7 +31,10 @@ service must use the same public core, not separate engines.
   [H5b correction](docs/plans/source-idf-page-snapshots.md) uses at most 256 memories
   per read snapshot, epoch/generation fences and computation outside transactions.
   Default behavior is unchanged; same-thread CPU work remains synchronous.
-  H5b resources and real-model quality are pending, with no default promotion.
+  H5b offline elapsed/CPU, actual capture and separate current-image RSS gates
+  passed on Node 22/24. Final exact-head reviews/CI and real-model quality remain
+  pending; shared-host variance does not establish lightweight behavior or a
+  cross-host resource bound. No default promotion or paid evaluator activation.
 
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
