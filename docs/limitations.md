@@ -1,5 +1,19 @@
 # Known limitations
 
+The [T1 source-time foundation](plans/source-time-preservation.md) is embedded
+core-only: no host, MCP/HTTP/hooks, provider adapter or evaluation ingestion
+producer supplies the optional field yet. It preserves exact bounded opaque
+producer-claimed utterance labels through capture and retained source reads,
+without date parsing, authenticated chronology, event/applicability inference,
+historical backfill or retrieval/answer-quality improvement. Labels can be false
+or hostile and consume the same source budgets; whole items can cease fitting.
+Source rank exposes retained labels to its configured provider, while extraction
+and qualification requests stay unchanged. Unsupported legacy/v1, episode,
+causal and automatic-rationale combinations reject explicitly. Schema v19
+requires draining older connections before upgrade. Synthetic scripted
+capture/cold-read tests verify transport only: no H6 replay, score claim,
+evaluation/default promotion or paid authorization is included.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025

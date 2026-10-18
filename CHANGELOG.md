@@ -2,6 +2,15 @@
 
 ## Unreleased — embedded core experiment
 
+- Add embedded opt-in `captureSourceTime:'claimed-v1'` for ordinary v2/staged
+  and indexed-evidence capture. Exact bounded opaque utterance labels survive
+  immutable receipt identity, restart and source reads, under existing budgets.
+  Schema v19 adds nullable receipt metadata without backfilling old rows or
+  changing unannotated hashes. Stop/drain older connections before upgrading;
+  older binaries reject v19. Labels are untrusted producer claims, not temporal
+  reasoning or event order. No host/adapter/evaluation producer is wired in T1,
+  and H6 remains closed; no score, quality or default promotion is implied.
+
 - Add trusted opt-in `sourceRankingPolicy:'bounded-idf-v1'` for source/rationale
   recall: bounded per-namespace document frequency and maximum individual
   body/receipt weighted overlap. H5b reads at most 256 memories per short snapshot,

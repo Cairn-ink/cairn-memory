@@ -27,7 +27,7 @@ import { qualificationInput, qualificationSources } from './claim-qualification-
 import { proposeRationale } from './rationale.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
 import {
-  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
+  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray, sourceTimeFields,
 } from "./validation.mjs";
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -69,8 +69,9 @@ function contractReadSet(input) {
   } catch { throw new MemoryStoreError('invalid_read_set'); }
 }
 
-function contractReceipt(input) {
-  object(input, ["client", "sessionId", "eventId", "role", "excerpt"]);
+function contractReceipt(input, allowSourceTime = false) {
+  object(input, ["client", "sessionId", "eventId", "role", "excerpt", ...(allowSourceTime ? ['sourceTime'] : [])]);
+  if (!allowSourceTime && Object.hasOwn(input, 'sourceTime')) throw new MemoryStoreError('invalid_input');
   if (!["user", "assistant"].includes(input.role)) throw new MemoryStoreError("invalid_input");
   try {
     return {
@@ -79,6 +80,7 @@ function contractReceipt(input) {
       eventId: identifier(input.eventId),
       role: input.role,
       excerpt: boundedText(input.excerpt, 800, true),
+      ...(allowSourceTime ? sourceTimeFields(input) : {}),
     };
   } catch {
     throw new MemoryStoreError("invalid_input");
@@ -151,7 +153,7 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
-  object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
+  object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureSourceTime', 'captureRationale', 'captureEvidence',
     'captureDeadlineMs', 'sourceCandidatePolicy', 'sourceRankingPolicy', 'sessionEpisodes', 'decisionReview']);
   const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
@@ -195,6 +197,12 @@ export function openMemoryCore(input) {
   }
   const sessionEpisodes = Object.hasOwn(input, 'sessionEpisodes') ? episodeOptions(input.sessionEpisodes) : undefined;
   if (sessionEpisodes && (captureQualification !== 'source-bound-v2' || captureEvidence !== 'staged-v1')) throw new MemoryStoreError('invalid_input');
+  const sourceTimeDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourceTime');
+  const captureSourceTime = sourceTimeDescriptor?.value;
+  if (sourceTimeDescriptor && (!Object.hasOwn(sourceTimeDescriptor, 'value') || captureSourceTime !== 'claimed-v1' ||
+      (!evidenceOnly && captureQualification !== 'source-bound-v2') || sessionEpisodes || captureRationale !== undefined)) {
+    throw new MemoryStoreError('invalid_input');
+  }
   const model = input.model;
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
   const runtime = createMemoryRuntime({ path: input.path, ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
@@ -260,7 +268,7 @@ export function openMemoryCore(input) {
       if (!Array.isArray(input.receipts) || input.receipts.length < 1 || input.receipts.length > 4) {
         throw new MemoryStoreError("invalid_input");
       }
-      const receipts = input.receipts.map(contractReceipt);
+      const receipts = input.receipts.map(receipt => contractReceipt(receipt));
       const conflictHints = contractConflictHints(input.conflictHints);
       if (Object.hasOwn(input, 'qualification')) qualificationSources(input.memory.content, input.receipts);
       const qualification = Object.hasOwn(input, 'qualification') ? qualificationInput(input.qualification, receipts) : undefined;
@@ -406,7 +414,7 @@ export function openMemoryCore(input) {
       const id = contractId(input.memoryId);
       const expectedRevision = contractRevision(input.expectedRevision);
       const replacement = contractMemory(input.replacement);
-      const receipts = denseArray(input.receipts, 1, 4).map(contractReceipt);
+      const receipts = denseArray(input.receipts, 1, 4).map(receipt => contractReceipt(receipt));
       return runtime.supersede(ns, id, { ...replacement, receipts }, expectedRevision);
     });
   }
@@ -487,13 +495,13 @@ export function openMemoryCore(input) {
     });
   }
 
-  function admissionItems(input, episode = false) {
+  function admissionItems(input, episode = false, allowSourceTime = false) {
     return denseArray(input, 0, 5).map((item) => {
       object(item, ['content', 'kind', 'confidence', 'receipts', 'conflictHints', 'qualification', ...(episode ? ['procedural'] : [])]);
       if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) ||
           item.confidence < 0 || item.confidence > 1) throw new MemoryStoreError('invalid_input');
       const memory = contractMemory({ content: item.content, kind: item.kind }, 600);
-      const receipts = denseArray(item.receipts, 1, 4).map(contractReceipt);
+      const receipts = denseArray(item.receipts, 1, 4).map(receipt => contractReceipt(receipt, allowSourceTime));
       const conflictHints = contractConflictHints(item.conflictHints);
       if (Object.hasOwn(item, 'qualification')) qualificationSources(item.content, item.receipts);
       const qualification = Object.hasOwn(item, 'qualification') ? qualificationInput(item.qualification, receipts) : undefined;
@@ -509,7 +517,7 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       const key = admissionKey(input);
       const token = contractId(input.token);
-      const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes));
+      const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes), captureInitial && Boolean(captureSourceTime));
       return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
@@ -901,8 +909,8 @@ export function openMemoryCore(input) {
       const ns = contractNamespace(input.namespace);
       const namespace = publicNamespace(ns);
       const captureKey = value => keepInput ? { ...value, [keepAdmissionKey]: true } : value;
-      if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
-      return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
+      if ((captureEvidence || evidenceOnly || captureSourceTime) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
+      return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy, captureSourceTime,
         runtime, ns, sessionEpisodes, keepInput,
         startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
         captureRationale, captureEvidence,
@@ -961,13 +969,14 @@ export function openMemoryCore(input) {
       object(input, ['messages']);
       const episode = Boolean(sessionEpisodes);
       const messages = denseArray(input.messages, 1, 240).map((message) => {
-        object(message, ['id', 'role', 'content', ...(episode ? ['occurredAt'] : [])]);
-        return { id: message.id, role: message.role, content: message.content };
+        object(message, ['id', 'role', 'content', ...(episode ? ['occurredAt'] : []), ...(captureSourceTime ? ['sourceTime'] : [])]);
+        if (!captureSourceTime && Object.hasOwn(message, 'sourceTime')) throw new MemoryStoreError('invalid_input');
+        return { id: message.id, role: message.role, content: message.content, ...(captureSourceTime ? sourceTimeFields(message) : {}) };
       });
       // Only message text enters an extraction request; identity is a placeholder.
       const snapshot = (batch) => captureSnapshot({ namespace: { ownerId: 'plan', scope: 'personal', projectId: null },
         client: 'plan', eventId: 'plan', sessionId: 'plan', messages: batch },
-      episode ? 'source-bound-v2' : captureQualification, episode ? undefined : captureSourcePolicy);
+      episode ? 'source-bound-v2' : captureQualification, episode ? undefined : captureSourcePolicy, captureSourceTime);
       for (const message of messages) snapshot([message]);
       if (new Set(messages.map((message) => message.id)).size !== messages.length) throw new MemoryStoreError('invalid_input');
       countTokens(model, '');

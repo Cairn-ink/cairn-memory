@@ -8,6 +8,17 @@ access](standalone-mcp.md#optional-staged-source-inspection)
 over the same contract. Causal capture is rejected in this first
 version. No model is trained, selected or called by enabling inspection.
 
+For ordinary embedded v2 capture, optional `captureSourceTime:'claimed-v1'`
+retains each valid message sourceTime in this same bounded canonical JSON view.
+It consumes the existing UTF-8 payload/quota caps and follows existing expiry,
+discard, failure/retry and namespace forgetting policies; no separate retention
+channel or retry permission is added. Cold inspection exposes exact retained
+labels even when capture opt-in is omitted. Successful admission binds labels
+into immutable receipts; qualification candidates/requests remain unchanged.
+Unknown stays absent. Episode capture and automatic rationale are incompatible
+with this new capability. No MCP/HTTP/host producer is added. See [claimed-source
+time constraints](capture.md#optional-claimed-source-time-embedded-only).
+
 ```js
 const core = openMemoryCore({ path, model,
   captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1' });

@@ -381,7 +381,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
       // Require that access path: a missing index must not trigger a full scan.
       // Projection-rejected current rows still consume the bounded allowance.
       const receiptSources = sourceReceiptLimit === 0 ? null : db.prepare(`SELECT id,memory_id,receipt_key,
-        client,session_id,event_id,role,excerpt FROM receipts INDEXED BY capture_memory_receipts
+        client,session_id,event_id,role,excerpt,source_time FROM receipts INDEXED BY capture_memory_receipts
         WHERE memory_id = ? ORDER BY id LIMIT ?`);
       const eligible = [];
       const scoreMemory = (memory) => {
@@ -528,7 +528,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
         AND id>? ORDER BY id LIMIT 1`);
     const projected = projectPrepare(`SELECT id,revision,content FROM memories WHERE ${namespaceWhere}
       AND id=? AND revision=? AND deleted=0 AND review_state!='awaiting' AND currentness='current'`);
-    const sources = db.prepare(`SELECT id,memory_id,receipt_key,client,session_id,event_id,role,excerpt
+    const sources = db.prepare(`SELECT id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,source_time
       FROM receipts INDEXED BY capture_memory_receipts WHERE memory_id=? ORDER BY id LIMIT ?`);
     let lastId = '';
     let physicalRows = 0;
@@ -555,7 +555,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     const more = physicalRows === scan && readSnapshot(() => Boolean(sentinel.get(...boundary(ns), lastId)));
     const stats = ranking.stats();
     const retained = ranking.top(top);
-    const sourceById = db.prepare(`SELECT id,memory_id,receipt_key,client,session_id,event_id,role,excerpt
+    const sourceById = db.prepare(`SELECT id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,source_time
       FROM receipts WHERE memory_id=? AND id=?`);
     const placementByMemory = projectPrepare(`SELECT r.* FROM moc_memory_refs r
       JOIN mocs parent ON parent.id=r.moc_id WHERE r.memory_id=? AND r.memory_revision=?

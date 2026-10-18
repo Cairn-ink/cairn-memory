@@ -44,6 +44,10 @@ const snapshot = (db) => tables.map((table) => db.prepare(`SELECT * FROM ${table
     assert.equal(row.currentness, 'current');
     const { currentness, review_state, ...preserved } = row; return preserved;
   }
+  if (table === 'receipts' && Object.hasOwn(row, 'source_time')) {
+    assert.equal(row.source_time, null);
+    const { source_time, ...preserved } = row; return preserved;
+  }
   return { ...row };
 }));
 
@@ -53,7 +57,7 @@ test('v4→v9 preserves complete store state and authenticated cursors', (t) => 
   const savedCursor = cursor(db);
   const core = openMemoryCore({ path });
   t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 19);
   assert.deepEqual(snapshot(db), before);
   const page = core.list({ namespace, limit: 1, cursor: savedCursor });
   assert.equal(page.ok, true, JSON.stringify(page));
@@ -88,6 +92,6 @@ test('v4 upgrade blocked by another writer remains intact and retries', (t) => {
   } finally { db.exec('ROLLBACK'); }
   const core = openMemoryCore({ path });
   t.after(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 19);
   assert.deepEqual(snapshot(db), before);
 });

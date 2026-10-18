@@ -101,18 +101,34 @@ an explicit decision, not blind replay of the stale request.
 
 ## Database upgrade boundary
 
-Opening the committed v1 or v3–v17 format performs an atomic upgrade to v18, retaining
+Opening the committed v1 or v3–v18 format performs an atomic upgrade to v19, retaining
 existing memory/source data, revisions and suppression. Back up the file while
 all older-runtime processes and connections (including idle readers) are closed
 before upgrading meaningful data. The host must stop/drain those connections
 before opening the store for upgrade, even with episodes disabled. No request
 performs a lazy upgrade. Mixed-version coexistence is unsupported;
 an already-open old process is not retroactively fenced. Older binaries cannot
-open v18; there is no downgrade tool. Existing receipts remain unordered; no past
+open v19; there is no downgrade tool. Existing receipts remain unordered; no past
 chronology is invented. The unmerged engine draft reserved v2; this
 slice deliberately **rejects v2** rather than guessing its migration semantics.
 Keep draft-engine test databases separate. Unknown/foreign databases are refused,
 not reset. Reconciliation with that draft belongs to the later engine work.
+
+The v18→v19 step adds nullable receipts.source_time after the preserved earlier
+migrations. Existing rows stay NULL and five-field receipt keys and unannotated
+capture digests/output envelopes remain byte-identical. Embedded opt-in
+`captureSourceTime:'claimed-v1'` appends a validated opaque claimed utterance
+label to canonical receipt identity only when present; changing metadata creates
+a different immutable receipt, never enriches an old one. Annotation-aware
+reconstruction is shared by validation, qualification binding and source reads.
+Annotated event replay binds a versioned ordered optional-label vector around
+the old digest; adding/removing/changing metadata conflicts before calls/writes.
+Explicit receipt APIs remain strict. Labels are not excerpt anchors and cannot
+prove claim applicability; exact v2 qualification/dedup guards remain in force.
+All upgraded readers expose retained metadata, including on feature-off reopen,
+under existing namespace, revision/epoch, retention and whole-source budget
+checks. There is no backfill from createdAt, date parsing, sorting or timezone
+inference. See [capture constraints](capture.md#optional-claimed-source-time-embedded-only).
 
 ## Verification without overstating coverage
 
@@ -146,7 +162,7 @@ The local envelope facade adds `getEpisode`, `correctEpisode`,
 `releaseEpisodeCorrection`, `forgetEpisode`, `getCaptureControl`,
 `setCapturePaused`, `setProjectCapture`, and `setProceduralMemory`. No HTTP/MCP
 schema or provider interface is widened. `getEpisode` needs no model or mode
-option on a v18 store. It takes the plan's exact namespace/episode ID and
+option on a v19 store. It takes the plan's exact namespace/episode ID and
 independent source/memory/policy/keep limits/cursors (20 default, 50 maximum).
 `{episode,sources,memoryLinks,policies,keepActions,status}` returns each page as
 `{items,nextCursor,exhausted}`. Signed cursors bind store, namespace, episode,
@@ -273,7 +289,7 @@ remaining messages; a closed stage records a content-free gap for any remainder.
 Different digests reject with `event_payload_conflict`. It holds no source
 plaintext or role and survives deletion as content-free fence metadata.
 Upgrading v15 creates an empty ledger; earlier messages are not reconstructed.
-The v14, v15, v16 and v17 formats upgrade eagerly to v18, including feature-off opens, with
+The v14, v15, v16, v17 and v18 formats upgrade eagerly to v19, including feature-off opens, with
 foreign keys on and rollback on failure.
 
 `endEpisodeSession({namespace,client,sessionId,generation,eventId})` is an
@@ -520,8 +536,9 @@ at its next draft. These are provenance rules, not semantic judgments about recu
 
 The [confirmation-state appendix](plans/confirmation-state.md) extends this
 contract with opt-in review, person-only awaiting reads, revision-checked
-`confirm`/`reject`, durable replay identities, and eager additive schema v18.
-Review is independent of currentness and filing. Older openers refuse v18;
+`confirm`/`reject` and durable replay identities. The v18 migration introduced
+the eager additive review schema; the current opener continues to v19.
+Review is independent of currentness and filing. Older openers refuse v19;
 option-off openers retain their DTO shapes and exclude awaiting rows. They never
 return `reviewEffects`, even when an explicit admit promotes an awaiting row.
 Review-enabled mutations return only the `reviewEffects` performed by that call;

@@ -4,7 +4,8 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16/v17 data now upgrades it to v18 for
+v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16/v17/v18 data now upgrades it to v19 for
+[optional claimed source-time preservation](capture.md#optional-claimed-source-time-embedded-only),
 [opt-in decision confirmation](plans/confirmation-state.md),
 [episode storage and explicit procedural tags](#episode-storage-foundation-se-1),
 [opt-in staged capture evidence](staged-capture-evidence.md),
@@ -15,10 +16,20 @@ v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16/v17 data now upgrades it to 
 [historical currentness](supersession.md), preserving index generations,
 [conflict hints](conflicts.md), [admission claims](admission-claims.md) and
 the bounded [initial capture classification journal](capture.md).
-Draft-v2 and unknown formats are rejected; older binaries cannot open v18.
+Draft-v2 and unknown formats are rejected; older binaries cannot open v19.
 Stop all older-runtime processes/connections, including idle readers, before
 the upgrade. Previously opened old runtimes are not retroactively fenced;
 mixed-version coexistence is unsupported.
+
+Schema v19 adds nullable receipts.source_time; old rows remain NULL and old
+receipt keys/capture digests stay unchanged. Embedded `captureSourceTime:'claimed-v1'`
+retains bounded canonical opaque utterance labels in immutable receipts for
+ordinary v2/staged and indexed-evidence capture. Unknown stays omitted; no
+backfill, date/timezone parsing, chronology/order inference or clock fallback.
+All upgraded readers return retained annotations even if capture opt-in is
+omitted on reopen. Metadata consumes exact source budgets and can reach the
+configured rank provider; extraction/qualification requests remain unchanged.
+No host/adapter/evaluation producer is wired by this core-only seam.
 
 This is a real SQLite persistence library runnable from public source. It is
 **not itself a standalone memory service**. The shared core now supplies capture
@@ -314,12 +325,12 @@ Episode mode now enables debounced capture through an injected interpretation po
 quick handling, explicit keep and automatic source-bound procedural tags.
 Mode-off capture remains unchanged. See [capture](capture.md#opt-in-session-episodes).
 
-Every open atomically upgrades an older committed format to v18, including with
+Every open atomically upgrades an older committed format to v19, including with
 episodes off. Explicit procedural tags are available immediately in both modes;
 no request triggers a lazy upgrade. Inspection and memory correction/forgetting
 still enforce episode dependencies with the feature off. The host must stop/drain
 **all** older-runtime processes and connections, including idle readers, before
-opening the store for upgrade. Older binaries reject v18 on subsequent opens;
+opening the store for upgrade. Older binaries reject v19 on subsequent opens;
 an already-open old process is not retroactively fenced. There is no downgrade.
 
 The upgrade runs within the existing immediate transaction with foreign keys on.
@@ -362,10 +373,11 @@ admitted inferred decisions in an independent review state. Ordinary reads exclu
 this option is absent. Person-facing hosts may use `list({reviewState:'awaiting'})`
 and `get({includeAwaiting:true})`; model tools must not expose these switches.
 `confirm` and `reject` require an expected revision and durable action ID.
-`openMemoryStore` does not accept this option. Schema v18 eagerly adds
+`openMemoryStore` does not accept this option. The v18 migration introduced
 `memories.review_state`, `confirmation_actions`, `confirmation_supersessions`,
 `confirmation_conflicts` (with durable statuses/results and dropped-hint reasons),
 bound predecessor fingerprints and receipt IDs for held work, and the
-`review_hidden_episodes` view, and updates index eligibility/readers. See the
+`review_hidden_episodes` view, and updated index eligibility/readers. The current
+opener continues to v19. See the
 [contract appendix](plans/confirmation-state.md) for replay, episode visibility,
 and the direct-statement provenance limitation.
