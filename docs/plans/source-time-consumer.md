@@ -200,3 +200,22 @@ that scoped fix and reran affected checks. Final Standards/Spec review remains
 independent and is not replaced by these worker checks. Full final-file hashes
 are returned separately after this evidence update to avoid a self-referential
 plan hash. All work remains an organized uncommitted diff at the exact T1 base.
+
+## Dependent T3 factual closure
+
+The separate [T3 source-time semantic diagnostic](source-time-semantic-results.md)
+used the accepted T2 runtime `287d22625faaa50b056c83cc5745be16d01171bf` for six
+new authored cases: one capture, cold ordinary flat recall and canonical T2 pack
+per case, then A deleted only included labels and B retained them. All twelve
+answers completed; A was correct on 3/6 and B on 6/6. Only Juniper was
+prospectively repair-dependent. Alder's arithmetic difference with already
+explicit event dates is not missing-date causal proof; Maple's empty recall
+leaves the planned nonempty unknown-date safety exposure unexercised.
+
+The linked result and [sanitized evidence](../evidence/source-time-semantic-results.json)
+retain every actual context, answer, independent judgment/disagreement and
+source-cited primary adjudication. The narrow criterion permits considering a
+fresh P4 design only. It clears neither P4, Stage 3, independent reliability,
+installed-host/resource nor default-adoption gates and authorizes no further
+paid work. T2 APIs, public scripted demo, earlier tests and historical results
+remain unchanged; this dependent evidence does not make T2 a public live runner.

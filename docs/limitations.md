@@ -1770,3 +1770,38 @@ short database snapshots do not make it asynchronous or establish that it is
 lightweight. Worst new uncontended query medians remain about 6.7 seconds. The
 same 120-code-point labels and whole-source packing limitations remain. See the
 [H5b contract](plans/source-idf-page-snapshots.md).
+
+## T3 source-time semantic diagnostic: narrow gain, broader gates open
+
+The [one-shot authored diagnostic](plans/source-time-semantic-results.md)
+completed six shared capture/cold-flat-recall pipelines and twelve answers.
+Deleting only included sourceTime labels gave A 3/6 correct; retaining them gave
+B 6/6, with three paired wins, no losses and three ties. Only Juniper was
+prospectively designed to require repaired labels. Alder already had explicit
+event dates in both arms, so its arithmetic difference is not missing-date causal
+proof. Maple returned no memories: both arms correctly abstained, but safety
+with nonempty unknown-event-date evidence and known utterance labels remains
+unexercised. This conditional answer-use experiment establishes no retrieval
+improvement, broad accuracy, statistical superiority or competitor parity.
+
+The [sanitized evidence](evidence/source-time-semantic-results.json) retains all
+twelve actual contexts/answers, full authored histories/rubrics, two independent
+masked two-pass reviews and primary source-cited adjudication. Both first-pass
+safety disagreements and the one second-pass disagreement remain visible.
+Unsupported answer content was A3/B0; final unsupported-certainty safety labels
+were A2/B0, arithmetic errors A1/B0 and specific predefined severe violations
+A1/B0. Those counts are distinct. No safety judgment remains unresolved after
+the documented primary adjudication; no frozen reviewer report was rewritten.
+
+Measured shared capture/recall used 70 HTTP requests; each answer arm used 12.
+The total new reservation was US$0.470000 and known generation estimate
+US$0.012482, not an invoice. Count billing, production memory/storage overhead
+and lightweight readiness remain unknown. Shared-host elapsed measurements do
+not establish production latency. All 23 historical unknowns and the original
+accounting prefix were retained; newly owned scratch was verified absent.
+
+The primary finds the narrow T3 criterion met only for considering a fresh P4
+design. P4 fixed-24/net-at-least-three, Stage 3 fresh-30 native comparison,
+independent reliability, installed Hermes new-session, resource and default
+adoption gates remain unmet. No gate changes, additional paid work, closed-H6
+replay or historical-result relabeling follows from this checkpoint.

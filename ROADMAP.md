@@ -22,9 +22,14 @@ service must use the same public core, not separate engines.
   remains closed and no evaluation/default promotion follows. The explicit
   [T2 evaluation producer and source-time answer packer](docs/plans/source-time-consumer.md)
   transport exact receipt tuples through cold reads without history joins;
-  they add no host/provider/paid integration or semantic score. Further semantic
-  validation requires a separately frozen and reviewed scope; no candidate is
-  promoted. Host/MCP/HTTP/hooks/provider-adapter schemas stay unchanged.
+  they add no host/provider/paid integration or semantic score. The separate
+  [T3 authored semantic diagnostic](docs/plans/source-time-semantic-results.md)
+  completed six shared recalls and twelve answers: labels-deleted A 3/6 correct,
+  labels-retained B 6/6. Only Juniper was prospectively repair-dependent; Alder
+  already had event dates and Maple retrieved no evidence. The narrow result
+  permits considering a fresh P4 design only, without clearing P4/Stage 3,
+  reliability, host/resource or default-promotion gates. No further paid run is
+  authorized. Host/MCP/HTTP/hooks/provider-adapter schemas stay unchanged.
 
 - The [one authentic MOC opportunity probe](docs/plans/moc-hierarchy-real-opportunity.md)
   completed 43 batches and two read/answer outcomes mechanically, but both
