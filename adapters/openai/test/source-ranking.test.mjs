@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createOpenAIModel } from '../index.mjs';
+import { countOpenAITokens, createOpenAIModel } from '../index.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+import { assertRareSourceRecall } from '../../../core/testing/source-ranking-recall-fixture.mjs';
 
 const namespace = { ownerId: 'idf-fake-http', scope: 'personal', projectId: null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
@@ -11,6 +12,10 @@ const response = (model, output) => Response.json({ object: 'response', model, s
   error: null, incomplete_details: null, output: [{ type: 'message', role: 'assistant', status: 'completed',
     content: [{ type: 'output_text', text: JSON.stringify(output) }] }],
   usage: { input_tokens: 100, output_tokens: 40, total_tokens: 140 } });
+
+test('R4 real o200k counter preserves rare-source packed windows after capture/classify and cold reopen', async t => {
+  await assertRareSourceRecall(t, countOpenAITokens);
+});
 
 test('R4 strict real adapter uses o200k and existing select/rank calls for opt-in source ranking', async t => {
   const workspace = createTestWorkspace(t, { prefix: 'cairn-idf-http-' });

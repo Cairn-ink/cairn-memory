@@ -487,3 +487,56 @@ H5 resource acceptance is not met. There is no evaluator activation, default
 promotion, paid call or new quality score. Keep this outcome intact; a different
 transaction/read design requires a new prospective hypothesis and independent
 verification, not a relaxed threshold or reinterpretation of this campaign.
+
+## CI dependency-boundary correction
+
+CI run `39154687056` at `8a298c6` failed core Node 24 with
+`ERR_MODULE_NOT_FOUND` for `tiktoken`: the new core recall test directly
+imported `adapters/openai/index.mjs`. Core Node 22 was cancelled by matrix
+fail-fast; the other 29 checks passed. Primary reproduced the import failure
+in a clean archive. Worker repetitions on both Node 22.16 and 24.15 also exited
+1 at that exact missing-package import. Prior fully provisioned local tests
+and independent reviews missed this dependency-free CI condition; those
+passes do not override the CI failure.
+
+The correction moves the existing synthetic scripted helpers and complete
+240-decoy normal-capture/cold-recall assertion body into
+`core/testing/source-ranking-recall-fixture.mjs`, which registers no tests and
+imports no provider dependency. The core test invokes it with the existing
+dependency-free counter; the already provisioned OpenAI suite invokes the same
+fixture with actual `countOpenAITokens`. Both scan policies, source/rationale
+modes, original-source fetch/rank assertions, model quotas and v2/flat input
+comparisons remain. Mechanical source comparison verified that the helpers
+and scenario differ only by exports, indentation and moving the counter loop
+to the two suite callers; every remaining core test is byte-identical.
+
+No runtime, math, prompt, schema, dependency, packaging or CI configuration
+changes. The shared fixture is not in the public artifact manifest. A separately
+authorized wording correction in `docs/local-store.md` brings its current H5b
+resource status into agreement with the closed offline acceptance records;
+final delivery/CI and real-model quality remain pending, with no lightweight
+certification. Historical pending records and all closed resource outcomes
+remain unchanged.
+
+Verification used staged test tree `ade61cfd839c707b212b6c78e984f732e3e25aa9`
+in a fresh owned git archive with no root, OpenAI or MCP `node_modules`.
+With each absolute Node 22.16.0/24.15.0 executable, the ordinary full core
+command `node tools/testing/run.mjs core/test/*.test.mjs` passed 1211/1211,
+actual exits 0 and zero skips. It used the repository's default test-file
+concurrency; versions ran sequentially against unchanged archive source.
+The existing provisioned OpenAI suite also passed on both runtimes, actual
+exits 0 and 319/319 with zero skips, using its existing command from
+`adapters/openai`: `node ../../tools/testing/run.mjs --test-concurrency=1 test/*.test.mjs`.
+Its added registration preserves the real-token-counter scenario rather than
+skipping missing dependencies. The two suite wrappers exited 0, awaited their
+children and verified their newly owned archive/scratch directories removed;
+existing dependency installations were not changed.
+
+Raw red, focused and full logs remain under
+`/tmp/cairn-idf-h5b-primary-xLEMbe`, named `ci-boundary-red-node{22,24}.log`,
+`ci-boundary-focused-node22.log`, `ci-boundary-core-node{22,24}.log` and
+`ci-boundary-openai-node{22,24}.log`. These are test-boundary observations,
+not new resource measurements or semantic evidence. Original H5, H5b and P8
+campaigns remain closed. The corrected fixed-head diff still requires primary
+affected-path repeats, independent Standards/Spec review and green exact-head
+CI; the PR remains draft until those delivery gates pass. No merge authority.

@@ -122,8 +122,10 @@ independently of `selectionMode`. Ordinary recall, automatic rationale discovery
 public maps and host defaults keep their existing behavior. Resource and
 real-model quality gates remain separate. The original H5 resource campaign
 failed when its legacy worst20000 query exhausted a competing writer's
-five-second reservation timeout; that failure is retained. H5b resource
-acceptance and real-model quality remain pending. See the
+five-second reservation timeout; that failure is retained. H5b's closed offline
+resource gates are met; final exact-head delivery/CI and real-model quality
+remain pending. These synthetic observations do not certify a lightweight
+implementation. See the
 [frozen H5 contract](plans/source-idf-ranking.md) and separate
 [H5b read-snapshot contract](plans/source-idf-page-snapshots.md).
 
