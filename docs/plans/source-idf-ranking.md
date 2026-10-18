@@ -375,3 +375,54 @@ The same command on Node24.15 exited 0, 34/34, retained in
 Resource fit, independent final review and broad combined gates remain pending
 primary verification; these focused passes establish no semantic gain or resource
 claim.
+
+## R8. Prospective test-only finalization clock correction
+
+Primary2026-10-18, after combined4082f24 broad gates, before correction.
+R1-R7 and all algorithm/resource thresholds remain unchanged. Both concurrent
+Node22.16/24.15 core suites exited1:1188/1190passed; the same two unchanged
+capture deadline tests failed because their injected target SQL was never
+reached (`0 !== 1`), not because a checked rollback persisted a write. Each
+isolated two-test rerun exited0; the whole19-test deadline file exited0.
+The test file's SHA256 is identical to H4. A primary synthetic differential
+probe on H4 and4082f24 showed the same four outcomes: no early delay reaches
+the intended SQL and rolls back; a650ms earlier model-stage delay exhausts
+the600ms budget before that SQL, while preserving the expected durable state.
+This establishes sensitivity to earlier elapsed work; the original full-run
+logs did not record per-stage timestamps, so exact host scheduling attribution
+is not claimed. Raw failures and the diagnostic remain retained.
+
+Extend R6 only by these two test-only paths; do not change runtime or CI gates:
+
+- core/test/capture-invocation-deadline.test.mjs
+- core/testing/capture-finalization-clock-child.mjs (new)
+
+Replace only the two failing rationale/staged-final-admission fixtures with an
+isolated-process controlled monotonic clock, following the existing placement
+clock child pattern. Advance time only AFTER the actual target SQL has executed,
+before the real transaction's post-work deadline check. Assert the target was
+reached exactly once and its in-transaction writes were observable. Then assert
+rollback preserves admitted sources/applied placement for rationale and prevents
+memory/receipt/qualified-evidence admission for staged finalization, retaining
+the pending/not-admitted disposition. Keep actual model/capture/storage paths.
+
+For each case, a process-local loader mutation removing only the transaction
+post-work check must produce a nonzero, specifically identified assertion and
+observable durable writes; a missing mutation target or unrelated exception
+does not count. No repository runtime mutation, relaxed timeout, skipped test,
+accepted alternate error or increased product deadline is permitted. Child
+scratch/resources close and clean on both the normal and deliberately failing
+paths. All other deadline tests remain byte-for-byte unchanged.
+
+One GPT-6.1Sol/high worker owns those two paths in an isolated worktree from this
+prospective record. Primary owns integration/diagnosis and personally reruns the
+full deadline file, combined core gates on both Node versions, original H5
+acceptance and exact-candidate independent Standards/Spec reviews. Existing
+resource cells remain unexecuted and cannot start until the corrected integrated
+offline gates pass. Preserve R1-R7 prefix hash and record this additional scope
+explicitly in the final inventory and PR; no semantic gain is inferred.
+
+## Post-R8 execution
+
+Pending worker implementation and primary acceptance. Resource campaign and
+provider calls have not started.
