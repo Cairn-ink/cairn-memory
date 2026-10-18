@@ -36,6 +36,59 @@ unrelated sources, excludes staged/history/deleted data and interpretations, and
 fails without partial evidence or fallback. Storage-current does not mean true or
 still applicable today. Existing recall and MCP defaults are unchanged.
 
+The opt-in embedded recall strategy `selectionMode:'moc-hierarchy-v1'` is valid
+only with `contextMode:'source-evidence'`. It navigates a private L2-only current
+catalog, revision-matched L1 children and memory refs, then reserves one existing
+query-candidate page per namespace and one ordinary selection of at most twelve
+fallback refs. Fallback includes eligible unfiled/orphan memories but does not
+guarantee finding them. The deduplicated, fallback-first union enters the existing
+fetch, source packing, rank and atomic `runtime.recallSnapshot` finalization.
+Every observed namespace epoch is checked; errors reject rather than repair or
+silently recover. Public maps, classification catalogs, default recall and hosts
+are unchanged.
+
+This experimental strategy permits at most sixteen navigation maps and four
+model calls, versus the default's maximum three model calls. Existing per-call
+limits remain: 4,000 map tokens, 6,000 model-input tokens, 1,024 model-output
+tokens, an 8,192 minimum model context window and a 30-second model timeout.
+The candidate union is at most 36 total/24 per namespace (24 for one namespace).
+Selection metadata carries reference-only provenance, resource/page observations
+and the actual rank-visible/omitted refs. Selected candidates can be omitted by
+source packing. Overall coverage remains `budget_exhausted`; freshness is atomic
+at finalization, while semantic coverage remains unassessed. This is not an
+equal-budget or demonstrated lightweight/quality improvement. See the
+[prospective integration contract](plans/moc-hierarchy-recall.md).
+
+The separate opt-in `selectionMode:'moc-hierarchy-v2'` also requires
+`contextMode:'source-evidence'`. It adds one private standalone-L1 catalog page
+per namespace alongside the independent L2 lane. A standalone topic has a
+current eligible memory membership and no valid same-namespace parent in the
+active projected index, including parents outside the visited root pages.
+Its provenance contains its actual L1 and memory edge, without an invented L2.
+
+V2 preserves the default's two cursor-following flat rounds, exact navigation
+packing and selection quotas. Flat choices get fetch capacity first; hierarchy
+refs then fill the remaining 36-total/24-per-namespace capacity. Equality of flat
+inputs assumes a stable store/query/counter and the same scripted first-round
+choices. It does not promise identical stochastic choices or later rank packing.
+
+Whole-group selection reserves the first group of each nonempty namespace/origin
+lane before one round-robin pass over the rest. An oversized reserved bundle
+fails explicitly. Titles and reference identities stay whole. Reference-only
+`groupPacking` metadata lists exact observed packed/omitted refs and fit-check
+counts; `partialPages` marks unread tails as unknown. Capacity omissions and
+actual rank-visible/omitted refs are separate. Source evidence uses the existing
+whole-source rank packing and atomic final read.
+
+V2 permits at most 20 navigation maps and five model calls, compared with the
+default's three model calls. There are at most 36 chosen identities and up to
+72 actual fetch page calls. Group packing observes at most 400 distinct groups
+per stage and performs at most N+3 full-request fit checks for N groups.
+Catalog row limits do not bound SQLite work. Default, bounded-source-scan, v1,
+public maps and host settings retain their existing behavior. These are offline
+mechanics bounds, not an equal-cost or measured quality improvement. See the
+[frozen H4 contract](plans/moc-standalone-entry.md).
+
 ## Run the synthetic example
 
 Use Node >=22.16 (tested in CI on 22.16 and 24). The existing plugin still

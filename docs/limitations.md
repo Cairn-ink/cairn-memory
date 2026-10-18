@@ -1509,3 +1509,149 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Evaluation-only MOC hierarchy candidates
+
+The bounded `generateMocCandidates` experiment navigates existing public
+L2→L1→memory maps and returns candidate references plus observed paths. It does
+not fetch, rank, finalize, answer, replace default recall or implement an
+integrated fallback. Every result declares `finalRetrieval:false`,
+`fallbackRequired:true`, `snapshotGuarantee:'per-call-not-atomic'` and
+`semanticCoverage:'unassessed'`. Namespace epoch checks catch observed drift;
+even matching final root observations cannot reproduce the core's private
+atomic recall finalization. A change after a namespace's last read can race it.
+
+Public root maps mix L1 headers, memory refs, L2 groups, edges and unfiled refs.
+Two fixed root pages can end before any L2 is visible. Two bounded child pages
+can omit a header/edge join; one six-row leaf page can omit required memories.
+Orphan L1, unfiled, cross-topic and unvisited evidence may remain inaccessible.
+Empty candidate sets do not establish absence or complete recall. Titles and
+placement are untrusted navigation hints, not truth, adoption, permission or
+current-state proof.
+
+Offline input-only scripted capture/classification verifies actual filing,
+source receipts, greater-than-36 eligible refs, traversal and bounded failure
+behavior. Disabling group selection is a mechanics red control, not a comparison
+against existing flat recall or evidence of real-model quality. Synthetic token
+counters do not measure actual provider tokens or costs. See the prospective
+[H1–H5 contract and execution record](plans/moc-hierarchy-candidates.md).
+An independently frozen real-model opportunity probe, a shared internal
+candidate-strategy seam with existing finalization and bounded fallback, and
+fresh paired acceptance remain required before any paid quality comparison.
+
+The integration stress fixture for more than 200 L1 groups uses public filing
+APIs only to create unrelated structural load; it is not a manually filed
+oracle target or semantic evidence. Ordinary classification reads at most 100
+catalog rows and refuses new groups when its catalog is incomplete, so this
+fixture does not prove normal capture scales to 200 L1 groups. The separate
+greater-than-36 eligible-reference/target fixture uses normal capture and
+classification throughout.
+
+## Opt-in integrated MOC recall
+
+The source-evidence-only `moc-hierarchy-v1` strategy connects bounded hierarchy
+navigation to the existing fetch, atomic source packing, rank and authoritative
+finalization. Its private L2-only catalog avoids mixed-root/L1 crowding, but
+limited pages and untrusted topic titles still miss relevant groups and evidence.
+One ordinary query page per namespace and one twelve-ref selection reserve
+provide bounded unfiled/orphan fallback, not complete recall. Invalid/stale data
+or model failures reject the request; fallback does not hide errors.
+
+Within each routed L1, the leaf page is the first six memory-ID-ordered refs,
+not query-aware within-topic retrieval. A useful later memory can remain unseen
+even when the correct topic was selected. The scripted hierarchy-only target
+does not establish a real target absent from actual flat navigation.
+
+Candidate provenance and actual rank-visible/omitted references are reported
+without source bodies in selection audit. Reserving a candidate slot does not
+guarantee rank visibility: source-mode packing can omit whole candidates. All
+observed namespace epochs and exact returned source evidence are validated in
+the existing final transaction, which establishes freshness rather than semantic
+sufficiency, truth or adoption.
+
+Maximum navigation is sixteen maps, two group calls, one flat select and one
+rank. Four model calls allow local-input/output ceilings of 24,000/4,096,
+versus the default three calls' 18,000/3,072. Per-call limits remain unchanged.
+This is not equal total budget or demonstrated lightweight improvement. SQL
+work/latency and actual provider tokens, physical requests and cost need separate
+measurement. Compact group wire schemas avoid repeated-object schema bloat;
+local tokenizer measurements and fake provider counts are not provider invoices.
+Existing paid guards still reject the new dynamic-only adapter method.
+
+Offline scripted capture/classification and fake HTTP establish integration and
+failure behavior only. Independently frozen real-model opportunity, fresh paired
+24 acceptance, unchanged net≥3/24 quality criteria and lifecycle ceilings remain
+open. Raw archive, Card governance, links, vector fusion and installed-Hermes
+value are not established by this implementation.
+
+## One authentic MOC opportunity probe (2026-10-17)
+
+The [one-case LongMemEvalS development probe](plans/moc-hierarchy-real-opportunity.md)
+completed all 43 ordinary indexed-evidence capture batches and both cold
+source-only read/answer outcomes on an unchanged shared store. Mechanical
+completion is not answer quality: both independent same-family AI reviewers
+judged both answers minimally incorrect and not fully supported. Neither gave
+the required relative-value ratio. One default-answer extra assertion remains
+disputed; the history also does not independently corroborate the question's
+sunset-artwork referent. No official score or binary winner is claimed.
+
+The necessary source was retained but absent from both actual packed flat-select
+inputs: default exposed 69 unique refs across two stages, opt-in exposed 35 in
+its one flat reserve. It reached neither rank nor answer evidence. There were
+203 active memories, but zero L2 creation/parent proposals and no actual group
+calls or selected L1/L2. Thus the intended connected-hierarchy opportunity was
+not established; lower observed opt-in work is not improved routing efficiency.
+Normal classification explicitly permits standalone L1s, whereas H2's private
+entry requires connected L2. A separate synthetic actual-core/adapter control
+can create L2 through optional classification output; this is a topology-entry
+mismatch, not proof of model incapability or a reason to repair the closed case.
+
+A qualified closed-snapshot reconstruction of the unchanged literal scorer puts
+the necessary memory at position 102/203, score 6: 85 higher scores and 16
+earlier-ID ties. Every actual default 69-ref and opt-in 35-ref prefix ID,
+revision and label matches. All four target receipts were considered and its
+existing label contains the ratio cue, so this target is not explained by label truncation.
+Position 102 was not provider-visible. Reconstruction relies on fresh ordinary
+capture without rebuild and complete current snapshots; the deleted store was
+not reopened and arbitrary active-index membership is not independently
+enumerated by the public snapshot. No alternate ranking or fix was evaluated.
+
+The [exact public projection](../evaluation/architecture/moc-hierarchy-real-opportunity-results-20261017.json)
+retains hashes, disagreements, source-path metadata and resource distinctions.
+Its 184 physical requests retained US$0.920000 of reservation; US$0.154336 is a
+known generation usage-rate estimate, not an invoice. Count-route billing stays
+unknown/unrefunded, historical unknowns stay recorded, and the original
+cumulative/protected ledger boundaries remain. Public metadata cannot replay
+the full private authentic trace; no raw history/answer or anonymization
+guarantee is supplied. Fixed default-first order, custom answers and one case
+do not establish broad quality, official accuracy or competitive parity.
+
+No paid paired24 advancement or default promotion follows. Separately examine
+bounded standalone-L1 entry and relevance ranking while preserving ordinary flat
+coverage; standalone-L1 entry alone is not proven to fix the answer. Neither
+hypothesis is implemented or validated. Net≥3/24 with targeted gain, no increased
+unsupported/stale use or new severe failure, and resource gates remain. Later
+fresh30 still requires ≥29 complete and ≥same-batch Mem0 with failures retained. Raw archive,
+Card governance, links/vector fusion and
+installed-Hermes value remain open. No consumed-case retry or replacement.
+
+## H4 standalone entry: offline mechanics, no new semantic result
+
+The separately versioned embedded `moc-hierarchy-v2` adds a bounded private
+standalone-L1 lane and preserves the existing two-round flat opportunity.
+Synthetic ordinary-capture/cold-reopen and fake-HTTP controls exercise exact
+source visibility, reference provenance, group packing and freshness. They do
+not establish a better first answer, realistic routing gain or an equal-cost
+comparison. The earlier closed H3 case remains closed and was not replayed.
+
+The strategy can use five model calls versus the default's three; bounds cover
+returned catalog rows and requests, not SQLite work or provider billing.
+Flat fetch priority preserves selected identities, while source packing can
+still omit evidence before rank/final output. Observed group omissions have
+exact references; unread tails have unknown size. Each namespace's freshness
+anchor is its first trusted observation, not invocation start. Full provider
+wire validation can still reject a request that fits the core envelope.
+
+No host/default promotion or paid evaluation follows. Frequency-aware lexical
+ranking, query-aware leaves and the frozen later quality/resource gates remain
+separate work. See the [prospective H4 contract and execution record](plans/moc-standalone-entry.md).
