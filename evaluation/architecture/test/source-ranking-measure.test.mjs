@@ -98,6 +98,24 @@ test('H5 private query options preserve disabled shape and reject silently ignor
   } }, spec, 'new'), /new_ranking_called_legacy_scorer/);
 });
 
+test('H5 both measured arms run the actual query-aware excerpt callback beyond the prefix', () => {
+  const spec = { ...cellSpec('1000'), authorized: 1 };
+  const content = `${'.'.repeat(250)} tailmarker ${'z'.repeat(150)}`;
+  assert.equal(content.slice(0, 120).includes('tailmarker'), false);
+  for (const arm of ['old', 'new']) {
+    let label;
+    const runtime = { queryCandidateRows(namespace, input) {
+      label = input.memoryLabel(content);
+      if (arm === 'old') { input.score(content); input.score('receipt'); }
+      return { rows: [{}], scanExhausted: true,
+        ...(arm === 'new' ? { ranking: numericRanking(spec) } : {}) };
+    } };
+    queryMeasurement(runtime, spec, arm);
+    assert.equal(label, `${'.'.repeat(109)} tailmarker`);
+    assert.equal([...label].length, 120);
+  }
+});
+
 test('H5 paired gates retain all observations and freeze elapsed/CPU/RSS tolerances', () => {
   const observations = Array.from({ length: 3 }, (_, pair) => ['old', 'new'].map(arm => ({ pair, arm,
     elapsedMs: arm === 'old' ? 10 : 30, cpuTotalMs: arm === 'old' ? 5 : 20,

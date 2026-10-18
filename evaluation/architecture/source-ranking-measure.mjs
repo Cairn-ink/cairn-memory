@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { createQueryScore } from '../../core/query-candidates.mjs';
+import { createQueryExcerpt } from '../../core/query-excerpt.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
 export const CELLS = Object.freeze(['1000', '20000', 'worst1000', 'foreign1000', 'worst20000']);
@@ -122,7 +123,7 @@ export function queryMeasurement(runtime, spec, arm) {
   let scored = 0;
   let excludedScored = false;
   const options = { score(text) { scored += 1; excludedScored ||= text.includes('excludedmarker'); return scorer(text); },
-    memoryLabel: text => [...text].slice(0, 120).join(''),
+    memoryLabel: createQueryExcerpt(query),
     sourceReceiptLimit: 4, sourceCandidatePolicy: 'bounded-keyset-v1',
     ...(arm === 'new' ? { sourceRankingPolicy: POLICY, query } : {}) };
   const rssBefore = process.memoryUsage().rss;
