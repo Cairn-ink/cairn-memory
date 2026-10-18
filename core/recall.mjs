@@ -73,7 +73,7 @@ function selection(output, allowed, maximum, model, stage) {
   } catch { emitDiagnostic(model, stage, 'core_validation', reason); fail('invalid_model_output'); }
 }
 
-export async function recallMemories({ model, readSet, query, limit, map, hierarchyMap, fetch, finalize, recentReceipts,
+export async function recallMemories({ model, readSet, query, limit, map, hierarchyMap, standaloneMap, fetch, finalize, recentReceipts,
   validateFresh = () => {}, includeQualification = false, contextMode, selectionMode }) {
   if (typeof model?.select !== 'function' || typeof model?.rank !== 'function') {
     emitDiagnostic(model, typeof model?.select !== 'function' ? 'select' : 'rank', 'core_call', 'model_not_configured');
@@ -146,50 +146,98 @@ export async function recallMemories({ model, readSet, query, limit, map, hierar
       resources: { mapCalls: routed.audit.resources.mapCalls + maps.length,
         groupModelCalls: routed.audit.resources.modelCalls, flatModelCalls: flatCalls, rankModelCalls: 0,
         modelCalls: routed.audit.resources.modelCalls + flatCalls, fetchCalls: 0 }, rankVisibleRefs: [], rankSelectedRefs: [] };
-  } else for (let round = 0; round < 2; round++) {
-    const visible = [];
-    const complete = new Map();
-    readSet.forEach((namespace, namespaceIndex) => {
-      const previous = maps[namespaceIndex];
-      if (previous && (previous.exhausted || previous.nextCursor === null)) return;
-      const page = unwrap(map({ namespace, purpose: 'recall', tokenBudget: 4000,
-        ...(previous ? { cursor: previous.nextCursor } : {}) }));
-      maps[namespaceIndex] = page;
-      visible.push({ namespaceIndex, items: page.items, exhausted: page.exhausted });
-      for (const item of page.items) {
+  } else {
+    const routed = selectionMode === 'moc-hierarchy-v2'
+      ? await generateMocCandidates({ core: { map: hierarchyMap, standaloneMap }, readSet, query,
+        groupModel: model, validateFresh, selectionMode }) : null;
+    const flatPages = [];
+    let flatModelCalls = 0;
+    for (let round = 0; round < 2; round++) {
+      const visible = [];
+      const complete = new Map();
+      readSet.forEach((namespace, namespaceIndex) => {
+        const previous = maps[namespaceIndex];
+        if (previous && (previous.exhausted || previous.nextCursor === null)) return;
+        const page = unwrap(map({ namespace, purpose: 'recall', tokenBudget: 4000,
+          ...(previous ? { cursor: previous.nextCursor } : {}) }));
+        if (routed) {
+          if (page.invalidRefs.length) fail('invalid_ref');
+          flatPages.push({ namespaceIndex, stage: 'flat', round, indexRevision: page.indexRevision,
+            rows: page.items.length, exhausted: page.exhausted, truncatedBy: page.truncatedBy });
+        }
+        maps[namespaceIndex] = page;
+        visible.push({ namespaceIndex, items: page.items, exhausted: page.exhausted });
+        for (const item of page.items) {
+          const ref = mapRef(item);
+          if (ref) { const candidate = { namespaceIndex, ...ref }; complete.set(key(candidate), candidate); }
+        }
+      });
+      if (!visible.length) break;
+      if (selectionMode === 'bounded-source-scan' && round === 0 &&
+          maps.every(page => page.exhausted && page.nextCursor === null) && complete.size <= 24 &&
+          readSet.every((_, index) => [...complete.values()].filter(ref => ref.namespaceIndex === index).length <= 12)) {
+        for (const [identity, ref] of complete) chosen.set(identity, ref);
+        strategy = 'complete-map';
+        break;
+      }
+      const maxRefs = Math.min(24, 36 - chosen.size);
+      const packed = packSelect(model, selectPrompt, { query, maps: visible, maxRefs });
+      truncation.navigationItemsOmitted += packed.omitted;
+      // Only refs shown in this request's maps are selectable.
+      const allowed = new Map();
+      for (const page of packed.input.maps) for (const item of page.items) {
         const ref = mapRef(item);
-        if (ref) { const candidate = { namespaceIndex, ...ref }; complete.set(key(candidate), candidate); }
+        if (ref) { const candidate = { namespaceIndex: page.namespaceIndex, ...ref }; allowed.set(key(candidate), candidate); }
       }
-    });
-    if (!visible.length) break;
-    if (selectionMode === 'bounded-source-scan' && round === 0 &&
-        maps.every(page => page.exhausted && page.nextCursor === null) && complete.size <= 24 &&
-        readSet.every((_, index) => [...complete.values()].filter(ref => ref.namespaceIndex === index).length <= 12)) {
-      for (const [identity, ref] of complete) chosen.set(identity, ref);
-      strategy = 'complete-map';
-      break;
-    }
-    const maxRefs = Math.min(24, 36 - chosen.size);
-    const packed = packSelect(model, selectPrompt, { query, maps: visible, maxRefs });
-    truncation.navigationItemsOmitted += packed.omitted;
-    // Only refs shown in this request's maps are selectable.
-    const allowed = new Map();
-    for (const page of packed.input.maps) for (const item of page.items) {
-      const ref = mapRef(item);
-      if (ref) { const candidate = { namespaceIndex: page.namespaceIndex, ...ref }; allowed.set(key(candidate), candidate); }
-    }
-    if (packed.omitted && !packed.overflow && packed.input.maps.every((page) => !page.items.length)) continue;
-    const output = await callModel(model, 'select', selectPrompt, packed.input,
-      { validateFresh: () => validateFresh([...chosen.values()]) });
-    const selected = selection(output, allowed, maxRefs, model, 'select');
-    for (let i = 0; i < readSet.length; i++) {
-      if (selected.filter((ref) => ref.namespaceIndex === i).length > 12) {
-        emitDiagnostic(model, 'select', 'core_validation', 'namespace_selection_limit');
-        fail('invalid_model_output');
+      if (packed.omitted && !packed.overflow && packed.input.maps.every((page) => !page.items.length)) continue;
+      flatModelCalls++;
+      const output = await callModel(model, 'select', selectPrompt, packed.input,
+        { validateFresh: () => validateFresh([...chosen.values()]) });
+      const selected = selection(output, allowed, maxRefs, model, 'select');
+      for (let i = 0; i < readSet.length; i++) {
+        if (selected.filter((ref) => ref.namespaceIndex === i).length > 12) {
+          emitDiagnostic(model, 'select', 'core_validation', 'namespace_selection_limit');
+          fail('invalid_model_output');
+        }
+      }
+      for (const ref of selected) {
+        if (!chosen.has(key(ref))) chosen.set(key(ref), ref);
       }
     }
-    for (const ref of selected) {
-      if (!chosen.has(key(ref))) chosen.set(key(ref), ref);
+    if (routed) {
+      const reference = ({ namespaceIndex, memoryId, revision }) => ({ namespaceIndex, memoryId, revision });
+      const flatRefs = [...chosen.values()].map(reference);
+      for (const ref of chosen.values()) Object.assign(ref, { origins: ['flat'], paths: [] });
+      const capacityOmittedRefs = [];
+      for (const ref of routed.candidates) {
+        const previous = chosen.get(key(ref));
+        if (previous) {
+          previous.origins.push('hierarchy');
+          previous.paths = ref.paths;
+        } else if (chosen.size >= 36 || [...chosen.values()]
+          .filter(candidate => candidate.namespaceIndex === ref.namespaceIndex).length >= 24) {
+          capacityOmittedRefs.push(reference(ref));
+        } else chosen.set(key(ref), { ...ref, origins: ['hierarchy'] });
+      }
+      strategy = 'hierarchy-with-two-round-flat-priority';
+      hierarchySelection = { mode: selectionMode, strategy, semanticCoverage: 'unassessed',
+        snapshotGuarantee: 'atomic-finalization',
+        fallback: { strategy: 'two-current-query-rounds', maxRefsPerCall: 24,
+          maxRefsPerNamespacePerRound: 12, maxCumulativeRefs: 36, selectedRefs: flatRefs,
+          navigationItemsOmitted: truncation.navigationItemsOmitted },
+        selectedL2: routed.audit.selectedL2, selectedL1: routed.audit.selectedL1,
+        candidates: [...chosen.values()].map(ref => ({ ...reference(ref), origins: ref.origins, paths: ref.paths })),
+        hierarchyCapacityOmittedRefs: capacityOmittedRefs,
+        groupPacking: routed.audit.packing ?? [],
+        partialPages: routed.audit.partialPages.map(page => ({ ...page, unreadTail: 'unknown' })),
+        maps: [...routed.audit.maps.map(({ namespaceIndex, stage, result }) => ({ namespaceIndex, stage,
+          indexRevision: result.value.indexRevision, rows: result.value.items.length + result.value.invalidRefs.length,
+          exhausted: result.value.exhausted, truncatedBy: result.value.truncatedBy })), ...flatPages],
+        resources: { mapCalls: routed.audit.resources.mapCalls + flatPages.length,
+          groupModelCalls: routed.audit.resources.modelCalls, flatModelCalls, rankModelCalls: 0,
+          groupFitChecks: (routed.audit.packing ?? []).reduce((sum, packed) => sum + packed.fitChecks, 0),
+          modelCalls: routed.audit.resources.modelCalls + flatModelCalls, fetchCalls: 0 },
+        rankVisibleRefs: [], rankSelectedRefs: [] };
     }
   }
   const namespaces = readSet.map((namespace, i) => ({ namespace, mapExhausted: !hierarchySelection && maps[i].exhausted,

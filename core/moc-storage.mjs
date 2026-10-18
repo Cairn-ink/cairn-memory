@@ -496,14 +496,30 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
        AND mr.memory_revision = memory.revision))`;
 
   function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label,
-    catalogOnly = false, recallL2Only = false }) {
+    catalogOnly = false, recallL2Only = false, recallStandaloneL1Only = false }) {
     return transaction(db, () => {
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && expectedEpoch !== currentEpoch) fail("cursor_stale");
       const count = limit + 1;
       let rows;
-      if (recallL2Only) {
+      if (recallStandaloneL1Only) {
+        rows = projectPrepare(`SELECT 'moc' row_kind, moc.id moc_id
+          FROM mocs moc WHERE ${qualifiedNamespace('moc')} AND moc.level = 1
+          AND EXISTS (SELECT 1 FROM moc_memory_refs mr JOIN memories memory ON memory.id = mr.memory_id
+            WHERE mr.moc_id = moc.id AND mr.moc_revision = moc.revision
+              AND mr.memory_revision = memory.revision AND memory.deleted = 0
+              AND memory.currentness = 'current' AND memory.review_state != 'awaiting'
+              AND memory.owner_id = moc.owner_id AND memory.scope = moc.scope
+              AND memory.project_id = moc.project_id)
+          AND NOT EXISTS (SELECT 1 FROM moc_edges edge JOIN mocs parent ON parent.id = edge.parent_id
+            WHERE edge.child_id = moc.id AND parent.level = 2
+              AND edge.parent_revision = parent.revision AND edge.child_revision = moc.revision
+              AND parent.owner_id = moc.owner_id AND parent.scope = moc.scope
+              AND parent.project_id = moc.project_id)
+          ORDER BY COALESCE(${titleExpression}, ''), moc.id LIMIT ? OFFSET ?`)
+          .all(...boundary(ns), count, offset);
+      } else if (recallL2Only) {
         rows = projectPrepare(`SELECT 'moc' row_kind, moc.id moc_id
           FROM mocs moc WHERE ${qualifiedNamespace('moc')} AND (${recallL2Visible})
           ORDER BY COALESCE(${titleExpression}, ''), moc.id LIMIT ? OFFSET ?`)

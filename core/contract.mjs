@@ -624,7 +624,8 @@ export function openMemoryCore(input) {
     return mapPage(input);
   }
 
-  function mapPage(input, navigation, { catalogOnly = false, recallL2Only = false } = {}) {
+  function mapPage(input, navigation, { catalogOnly = false, recallL2Only = false,
+    recallStandaloneL1Only = false } = {}) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'purpose', 'parentRef', 'limit', 'cursor', 'tokenBudget']);
@@ -647,6 +648,12 @@ export function openMemoryCore(input) {
       if (recallL2Only) {
         if (parentRef || purpose !== 'recall' || navigation) throw new MemoryStoreError('invalid_input');
         binding.o = 'recall_l2_catalog';
+      }
+      if (recallStandaloneL1Only) {
+        if (parentRef || purpose !== 'recall' || navigation || catalogOnly || recallL2Only) {
+          throw new MemoryStoreError('invalid_input');
+        }
+        binding.o = 'recall_standalone_l1_catalog_v1';
       }
       if (navigation) Object.assign(binding, { o: 'recall_map',
         q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION,
@@ -678,7 +685,7 @@ export function openMemoryCore(input) {
         page = { ...snapshot, rows: snapshot.rows.slice(offset, offset + count + 1) };
       } else {
         page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
-          catalogOnly, recallL2Only });
+          catalogOnly, recallL2Only, recallStandaloneL1Only });
       }
       const capacity = Math.min(count, page.rows.length);
       for (let take = capacity; take >= 0; take--) {
@@ -757,7 +764,7 @@ export function openMemoryCore(input) {
       const selectionMode = input.selectionMode;
       if (Object.hasOwn(input, 'selectionMode') &&
           !(selectionMode === 'bounded-source-scan' && isSourceContext(contextMode) ||
-            selectionMode === 'moc-hierarchy-v1' && contextMode === 'source-evidence')) {
+            ['moc-hierarchy-v1', 'moc-hierarchy-v2'].includes(selectionMode) && contextMode === 'source-evidence')) {
         throw new MemoryStoreError('invalid_input');
       }
       if ((Object.hasOwn(input, 'contextMode') && !isSourceContext(contextMode)) ||
@@ -771,7 +778,7 @@ export function openMemoryCore(input) {
         ...(sourceCandidatePolicy && isSourceContext(contextMode) ? { sourceCandidatePolicy } : {}),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
-      const hierarchy = selectionMode === 'moc-hierarchy-v1';
+      const hierarchy = ['moc-hierarchy-v1', 'moc-hierarchy-v2'].includes(selectionMode);
       const observedEpochs = new Map();
       const observed = (request, result) => {
         if (!result.ok) return result;
@@ -797,6 +804,8 @@ export function openMemoryCore(input) {
           : mapPage(request, navigation),
         ...(hierarchy ? { hierarchyMap: request => observed(request,
           mapPage(request, undefined, { recallL2Only: !request.parentRef })) } : {}),
+        ...(selectionMode === 'moc-hierarchy-v2' ? { standaloneMap: request => observed(request,
+          mapPage(request, undefined, { recallStandaloneL1Only: true })) } : {}),
         fetch, includeQualification, contextMode, selectionMode,
         validateFresh,
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),

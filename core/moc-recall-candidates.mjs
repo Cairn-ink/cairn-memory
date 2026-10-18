@@ -2,9 +2,11 @@ import { readFileSync } from 'node:fs';
 import { callModel } from './model-call.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
+import { packMocGroups } from './moc-group-packing.mjs';
 
 const l2Prompt = readFileSync(new URL('./prompts/moc-route-l2.md', import.meta.url), 'utf8');
 const l1Prompt = readFileSync(new URL('./prompts/moc-route-l1.md', import.meta.url), 'utf8');
+const l1V2Prompt = readFileSync(new URL('./prompts/moc-route-l1-v2.md', import.meta.url), 'utf8');
 const key = ref => JSON.stringify([ref.namespaceIndex, ref.mocId ?? ref.memoryId, ref.revision]);
 const flags = { finalRetrieval: false, fallbackRequired: true,
   snapshotGuarantee: 'per-call-not-atomic', semanticCoverage: 'unassessed' };
@@ -50,7 +52,8 @@ function select(output, visible, maximum, perNamespace, model) {
 }
 
 /** Internal two-hop candidate navigation. This does not fetch, rank or finalize. */
-export async function generateMocCandidates({ core, readSet, query, groupModel, validateFresh = () => {} }) {
+export async function generateMocCandidates({ core, readSet, query, groupModel, validateFresh = () => {}, selectionMode }) {
+  const standalone = selectionMode === 'moc-hierarchy-v2';
   const audit = { maps: [], models: [], selectedL2: [], selectedL1: [],
     resources: { mapCalls: 0, modelCalls: 0, returnedRows: 0 }, partialPages: [] };
   try {
@@ -69,9 +72,9 @@ export async function generateMocCandidates({ core, readSet, query, groupModel, 
       const request = { namespace: { ...ordered[namespaceIndex] }, purpose: 'recall', limit, tokenBudget: 4000,
         ...(parentRef ? { parentRef: { mocId: parentRef.mocId, revision: parentRef.revision } } : {}),
         ...(cursor === undefined ? {} : { cursor }) };
-      if (++audit.resources.mapCalls > 14) fail('invalid_input');
+      if (++audit.resources.mapCalls > (standalone ? 16 : 14)) fail('invalid_input');
       validateFresh();
-      const result = await core.map(request);
+      const result = await (stage === 'standalone' ? core.standaloneMap(request) : core.map(request));
       audit.maps.push({ namespaceIndex, stage, request: structuredClone(request), result: structuredClone(result) });
       if (!result.ok) fail(result.error.code);
       validateFresh();
@@ -107,17 +110,29 @@ export async function generateMocCandidates({ core, readSet, query, groupModel, 
       const ref = { namespaceIndex, mocId: moc.id, revision: moc.revision };
       groups.set(key(ref), { ...ref, title: moc.title });
     };
-    const decide = async (stage, groups, maximum, perNamespace, system) => {
+    const decide = async (stage, groups, maximum, perNamespace, system, lanes) => {
       if (!groups.size) return [];
-      const input = { query: cleanQuery, maps: ordered.map((_, namespaceIndex) => ({ namespaceIndex,
+      let input = { query: cleanQuery, maps: ordered.map((_, namespaceIndex) => ({ namespaceIndex,
         groups: [...groups.values()].filter(ref => ref.namespaceIndex === namespaceIndex) })),
       maxRefs: maximum, maxRefsPerNamespace: perNamespace };
+      let allowed = groups;
+      if (standalone) {
+        const packed = packMocGroups(groupModel, system, input, lanes ?? ordered.map((_, namespaceIndex) => ({
+          namespaceIndex, origin: 'root', groups: [...groups.values()].filter(ref => ref.namespaceIndex === namespaceIndex),
+        })), validateFresh);
+        input = packed.input;
+        allowed = new Map(input.maps.flatMap(map => map.groups).map(group => [key(group), group]));
+        (audit.packing ??= []).push({ stage, observedGroups: packed.observedGroups,
+          packedGroups: packed.packedRefs.length, omittedGroups: packed.omittedRefs.length,
+          packedRefs: packed.packedRefs, omittedRefs: packed.omittedRefs, fitChecks: packed.fitChecks,
+          lanes: packed.lanes });
+      }
       const record = { stage, input: structuredClone(input), system };
       audit.models.push(record);
       audit.resources.modelCalls++;
       const output = await callModel(groupModel, 'selectGroups', system, input, { validateFresh });
       record.output = structuredClone(output);
-      return select(output, groups, maximum, perNamespace, groupModel);
+      return select(output, allowed, maximum, perNamespace, groupModel);
     };
     const l2 = new Map();
     for (let namespaceIndex = 0; namespaceIndex < ordered.length; namespaceIndex++) {
@@ -128,6 +143,16 @@ export async function generateMocCandidates({ core, readSet, query, groupModel, 
     audit.selectedL2 = await decide('L2', l2, 2, 2, l2Prompt);
     const l1 = new Map();
     const l1Paths = new Map();
+    const standaloneGroups = new Map();
+    if (standalone) for (let namespaceIndex = 0; namespaceIndex < ordered.length; namespaceIndex++) {
+      for (const item of await pages(namespaceIndex, 'standalone', 100, 1)) {
+        if (item.type === 'moc') addGroup(standaloneGroups, namespaceIndex, item.moc, 'L1');
+      }
+    }
+    for (const [identity, group] of standaloneGroups) {
+      l1.set(identity, group);
+      l1Paths.set(identity, [{ origin: 'standalone' }]);
+    }
     for (const parent of audit.selectedL2) {
       const items = await pages(parent.namespaceIndex, 'children', 50, 2, parent);
       const children = new Map();
@@ -142,11 +167,16 @@ export async function generateMocCandidates({ core, readSet, query, groupModel, 
         if (!child) continue; // A header or edge outside the fixed pages is not a joined group.
         l1.set(key(ref), child);
         const paths = l1Paths.get(key(ref)) ?? [];
-        if (!paths.some(path => key(path.l2) === key(parent))) paths.push({ l2: { ...parent }, edge: { ...edge } });
+        if (!paths.some(path => path.l2 && key(path.l2) === key(parent))) {
+          paths.push({ ...(standalone ? { origin: 'connected' } : {}), l2: { ...parent }, edge: { ...edge } });
+        }
         l1Paths.set(key(ref), paths);
       }
     }
-    audit.selectedL1 = await decide('L1', l1, 4, 2, l1Prompt);
+    const lanes = ordered.flatMap((_, namespaceIndex) => ['standalone', 'connected'].map(origin => ({ namespaceIndex,
+      origin, groups: [...l1.values()].filter(ref => ref.namespaceIndex === namespaceIndex &&
+        l1Paths.get(key(ref)).some(path => path.origin === origin)) })));
+    audit.selectedL1 = await decide('L1', l1, 4, 2, standalone ? l1V2Prompt : l1Prompt, lanes);
     const candidates = new Map();
     for (const parent of audit.selectedL1) {
       for (const item of await pages(parent.namespaceIndex, 'leaves', 6, 1, parent)) {
@@ -156,8 +186,10 @@ export async function generateMocCandidates({ core, readSet, query, groupModel, 
         observeRef(parent.namespaceIndex, edge.childId, edge.childRevision);
         const ref = { namespaceIndex: parent.namespaceIndex, memoryId: edge.childId, revision: edge.childRevision };
         const candidate = candidates.get(key(ref)) ?? { ...ref, paths: [] };
-        for (const path of l1Paths.get(key(parent))) candidate.paths.push({ l2: { ...path.l2 },
-          l2ToL1: { ...path.edge }, l1: { ...parent }, l1ToMemory: { ...edge } });
+        for (const path of l1Paths.get(key(parent))) candidate.paths.push({
+          ...(standalone ? { origin: path.origin } : {}),
+          ...(path.l2 ? { l2: { ...path.l2 }, l2ToL1: { ...path.edge } } : {}),
+          l1: { ...parent }, l1ToMemory: { ...edge } });
         candidates.set(key(ref), candidate);
       }
     }
@@ -167,7 +199,8 @@ export async function generateMocCandidates({ core, readSet, query, groupModel, 
     return { ...flags, readSet: ordered, candidates: [...candidates.values()], audit,
       namespaces: ordered.map((namespace, namespaceIndex) => ({ namespace, namespaceIndex,
         indexRevision: epochs.get(namespaceIndex) })),
-      coverage: 'incomplete', unvisitedEvidence: ['orphan-L1', 'unfiled', 'cross-topic', 'unvisited-groups'],
+      coverage: 'incomplete', unvisitedEvidence: [...(standalone ? [] : ['orphan-L1']), 'unfiled', 'cross-topic', 'unvisited-groups',
+        ...(standalone ? ['unread-catalog-tails'] : [])],
       notObservedMeansAbsent: false };
   } catch (error) {
     // Failed observations remain inspectable, but never expose a success set.

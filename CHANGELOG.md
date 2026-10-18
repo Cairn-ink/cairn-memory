@@ -2,6 +2,11 @@
 
 ## Unreleased — embedded core experiment
 
+- Add source-evidence-only `selectionMode:'moc-hierarchy-v2'`: standalone L1
+  entry, whole-group origin reservation and the default's two flat rounds, with
+  flat fetch priority. Reference-only audits separate observed packing/capacity
+  omissions from unknown unread tails. It permits twenty maps/five model calls;
+  quality and lifecycle cost remain unassessed. Existing modes retain behavior.
 - Add source-evidence-only `selectionMode:'moc-hierarchy-v1'`: bounded private
   L2→L1 navigation and ordinary-search reserve feed the existing fetch/rank/atomic
   finalization. Default recall and host behavior stay unchanged. The opt-in allows

@@ -1634,3 +1634,24 @@ unsupported/stale use or new severe failure, and resource gates remain. Later
 fresh30 still requires ≥29 complete and ≥same-batch Mem0 with failures retained. Raw archive,
 Card governance, links/vector fusion and
 installed-Hermes value remain open. No consumed-case retry or replacement.
+
+## H4 standalone entry: offline mechanics, no new semantic result
+
+The separately versioned embedded `moc-hierarchy-v2` adds a bounded private
+standalone-L1 lane and preserves the existing two-round flat opportunity.
+Synthetic ordinary-capture/cold-reopen and fake-HTTP controls exercise exact
+source visibility, reference provenance, group packing and freshness. They do
+not establish a better first answer, realistic routing gain or an equal-cost
+comparison. The earlier closed H3 case remains closed and was not replayed.
+
+The strategy can use five model calls versus the default's three; bounds cover
+returned catalog rows and requests, not SQLite work or provider billing.
+Flat fetch priority preserves selected identities, while source packing can
+still omit evidence before rank/final output. Observed group omissions have
+exact references; unread tails have unknown size. Each namespace's freshness
+anchor is its first trusted observation, not invocation start. Full provider
+wire validation can still reject a request that fits the core envelope.
+
+No host/default promotion or paid evaluation follows. Frequency-aware lexical
+ranking, query-aware leaves and the frozen later quality/resource gates remain
+separate work. See the [prospective H4 contract and execution record](plans/moc-standalone-entry.md).

@@ -71,6 +71,16 @@ frozen evaluation and subsequent verification are retained in
 
 ## Offline checks
 
+Embedded `moc-hierarchy-v2` recall reuses the existing dynamic `selectGroups`
+method and selection model. The core packs whole groups with namespace/origin
+reservation before calling the adapter; the strict request still contains only
+query, maps, maxRefs and maxRefsPerNamespace, with the existing group fields.
+Origin, omissions and fit-check metadata stay in the core's reference-only
+audit. The adapter's complete provider-wire token guard still applies, so fitting
+the core envelope alone does not promise provider acceptance. Existing live
+guards continue to deny `selectGroups`; neither the opt-in nor fake-HTTP tests
+authorize paid calls. See [H4](plans/moc-standalone-entry.md).
+
 ### Ordered-capture judgment boundary
 
 Opt-in local [ordered capture](capture.md#opt-in-source-ordered-reconciliation)
