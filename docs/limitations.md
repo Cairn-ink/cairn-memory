@@ -1680,3 +1680,14 @@ establish a process peak-RSS bound. Statistics and retained-winner rereads use
 the existing writer-reserving transaction; competing-writer blocking remains
 a cost. The separately frozen resource gate must pass before evaluator
 activation. See the [H5 contract](plans/source-idf-ranking.md).
+
+The first frozen H5 resource campaign stopped with exit 1 on Node 22.16.0.
+Five cells passed relative elapsed/CPU/extra-RSS checks, but the extreme
+20,000-row/2,000-query-token cell failed competing-writer reservation: the old
+query took about 8.06 seconds and its competing writer failed after the existing
+5-second timeout. New ranking's uncontended median was about 7.09 seconds versus
+8.02 seconds old, but its worst-cell contention was not run after that stop.
+Node 24 resource testing also remains unexecuted. Faster ranking does not resolve
+the long writer-reserving transaction, and H5 is not approved for evaluator or
+default activation. The complete outcome and unchanged gates are recorded in
+the [H5 execution record](plans/source-idf-ranking.md#r5-outcome-stopped-at-writer-contention-not-promoted).

@@ -424,5 +424,66 @@ explicitly in the final inventory and PR; no semantic gain is inferred.
 
 ## Post-R8 execution
 
-Pending worker implementation and primary acceptance. Resource campaign and
-provider calls have not started.
+R8 worker (GPT-6.1 Sol/high) delivered `2261ba25cef15423476ace16fcde89aad7f233a3`.
+Primary integrated that exact commit after the preceding gates had exited.
+Only the two prospective test paths changed: normal children exit 0, and
+post-work-check-removal mutants exit 2 at the specific rollback assertion with
+observable durable writes. Both paths remove owned scratch. Every byte outside
+the two named deadline test bodies remains identical to H4; all 19 tests remain.
+The R1-R7 prefix and prospective R8 section hashes are unchanged.
+
+On the combined candidate, primary reran 41 focused tests, the full 19-test
+deadline file and all 1,190 core tests on Node 22.16.0 and 24.15.0: every command
+exited 0, with no skipped tests. Independent predecessor parity used 212 normal
+captures, 72 exact option-off comparisons, 12 ordinary opt-in comparisons and
+24 hierarchy-v2/flat-input comparisons; both Node commands exited 0 and cleaned
+scratch. The canonical store was unchanged.
+
+Before R8, with identical product/runtime bytes, both runtimes passed OpenAI
+(318), MCP (111), artifact (93 passed, one explicit native-Windows skip),
+workspace lifecycle (25), generic (664), validation, four offline demos and
+pinned Claude plugin validation. All actual exits were 0. Earlier broad core
+failures remain retained rather than replaced by these passing observations.
+Independent Standards and Spec reviewers (both GPT-6.1 Sol/high, neither an
+implementer) reviewed the same final `2261ba2` and reported no findings.
+Git diff and independent complete-tree mode/blob inventories agreed on 16 paths.
+
+### R5 outcome: stopped at writer contention, not promoted
+
+The first resource campaign ran on Node 22.16.0, 2026-10-18 17:25:13–17:26:19 UTC,
+at frozen `2261ba2`, after all primary heavy gates had finished. This WSL2 host
+has a Ryzen 9 9950X and 32 logical CPUs. Before launch, live CPU samples were
+95–96% idle with no active swap traffic. Other user agents/dev services and an
+idle external test remained present; this was not an exclusive benchmark host.
+
+All five frozen cells completed three alternating old/new pairs. Their relative
+elapsed/CPU/extra-RSS checks passed; the last cell failed its separate contention
+check. Times below are uncontended medians, not model latency or a product SLA.
+
+| Frozen cell | Old elapsed ms | New elapsed ms | Old/new CPU ms | Old/new peak RSS bytes |
+| --- | ---: | ---: | ---: | ---: |
+| 1000 | 91.151 | 92.509 | 96.241 / 100.667 | 90263552 / 96714752 |
+| 20000 | 315.131 | 347.823 | 335.617 / 390.643 | 96976896 / 111620096 |
+| worst1000 | 153.302 | 160.721 | 168.832 / 182.499 | 97574912 / 100913152 |
+| foreign1000 | 93.079 | 94.694 | 98.134 / 103.454 | 91910144 / 98017280 |
+| worst20000 | 8015.215 | 7088.537 | 8120.551 / 7179.278 | 372875264 / 372875264 |
+
+For the ordinary 20,000-row cell, query-only overlap was established: old/new
+conservative blocking brackets were 334.773/434.835 ms, with successful writer
+reservations. For worst20000, the old query ran 8055.883 ms. Its probe observed
+BUSY during the query, then the single 5,000 ms writer attempt failed after
+5006.583 ms. Initialization had finished before the query start handshake.
+The CPU-heavy scan remains inside `BEGIN IMMEDIATE`; the existing long writer
+reservation is the leading explanation, not a model or accounting failure.
+
+The campaign stopped with actual exit 1 as specified. The new arm's worst-cell
+contention and the entire Node 24 resource campaign were **not run**, not passed.
+All 41 child processes exited 0 without watchdog/signal failure; the probe's
+failure was a retained result, correctly causing campaign failure. Owned stores
+were removed after child closure. The complete 58-record raw stream is retained
+privately, SHA256 `45a16cab138e60f0177de3e7c724e5d67b06cd5e747b3e3c4ac78780a138e8c4`.
+
+H5 resource acceptance is not met. There is no evaluator activation, default
+promotion, paid call or new quality score. Keep this outcome intact; a different
+transaction/read design requires a new prospective hypothesis and independent
+verification, not a relaxed threshold or reinterpretation of this campaign.
