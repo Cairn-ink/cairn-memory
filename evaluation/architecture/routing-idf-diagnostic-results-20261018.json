@@ -1,0 +1,1530 @@
+{
+  "version": "cairn.routing-idf-diagnostic-results.v1",
+  "status": "completed-no-demonstrated-quality-benefit",
+  "evidenceClass": "two-case-private-operator-development-diagnostic-not-public-benchmark",
+  "provenance": {
+    "runtimeCommit": "d46f7d0aef7b0011e982da8e10f1f26e90706767",
+    "originalDispatchContractSha256": "b8de4055fd74f9c7a48ceb4457e9e12cb5f70495951b86edd3dc500338524e46",
+    "runtimeBoundContractSha256": "5e1bbde0d7a46c70e3855ff59bda3d9721f975b7af117c28d0f201465c8083a2",
+    "manifestSha256": "39a8c8020655c5216ad956cb020996b9b4887a5abe39da35cfef7054878f3e11",
+    "privateReportSha256": "96e6ad9afc60ab12fd5e66a8e9f57a486e07e2935fb42dc2cc38be1cb8d3c8c7",
+    "mechanicalProjectionSha256": "2e1b16d869162731f5305306148a0a8909cdfb6c17b3d16bb07bac80a807ad71",
+    "closureAuditSha256": "dc6a0d7d9e97cdbdb70ddd72b5f403bd111cc6d91da0a23a6b12ae707fb71f38",
+    "liveCompletedAt": "2026-10-18T20:02:46Z",
+    "liveActualExitCode": 0,
+    "closureAuditedAt": "2026-10-18T20:05:19.119Z",
+    "closureAuditActualExitCode": 0,
+    "semanticProjectionSha256": "18d41296665aa3c9ec1cb99803c52fe00b42bc6e0a9b159334b64d53f1a1e286",
+    "sourceTraceProjectionSha256": "71060dea1e2cb458a3e2bc77660f986ab431c9728905d80488dae4c1b424b052"
+  },
+  "denominators": {
+    "cases": 2,
+    "ingestionGroups": 2,
+    "readAnswerOutcomes": 8,
+    "correlatedArmsPerCase": 4,
+    "interpretation": "eight correlated arm outcomes, not eight independent benchmark cases"
+  },
+  "arms": [
+    {
+      "arm": "A",
+      "routing": "flat",
+      "ranking": "literal"
+    },
+    {
+      "arm": "B",
+      "routing": "moc-hierarchy-v2",
+      "ranking": "literal"
+    },
+    {
+      "arm": "C",
+      "routing": "flat",
+      "ranking": "bounded-idf-v1"
+    },
+    {
+      "arm": "D",
+      "routing": "moc-hierarchy-v2",
+      "ranking": "bounded-idf-v1"
+    }
+  ],
+  "orders": {
+    "H6-1": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ],
+    "H6-2": [
+      "D",
+      "C",
+      "B",
+      "A"
+    ]
+  },
+  "execution": {
+    "status": "completed",
+    "mechanicalPass": true,
+    "fatal": null,
+    "completedWrites": 2,
+    "completedReadAnswers": 8,
+    "modelStageStarts": 236,
+    "sourceAndRuntimeUnchanged": true,
+    "exactOwnedWorkspacesAbsent": true,
+    "independentRecordInventoriesAgree": true,
+    "recordInventoryCount": 1545,
+    "durationMs": 2122007.764746
+  },
+  "cases": [
+    {
+      "alias": "H6-1",
+      "status": "completed",
+      "reason": null,
+      "batches": 51,
+      "memories": 239,
+      "durationMs": 903973.502064,
+      "calls": {
+        "extract": 51,
+        "classify": 51
+      },
+      "cleanupCompleted": true,
+      "resources": {
+        "reservedAttempts": 204,
+        "physicalRequests": 204,
+        "reservedMicroUsd": 1020000,
+        "knownGenerationUsageEstimateMicroUsd": 161790,
+        "knownGenerationInputTokens": 311580,
+        "knownGenerationOutputTokens": 23201,
+        "physicalRequestDurationMs": 372454.2097120007,
+        "byPhase": {
+          "extract": {
+            "physicalRequests": 102,
+            "reservationsMicroUsd": 510000,
+            "knownGenerationInputTokens": 131542,
+            "knownGenerationOutputTokens": 18636,
+            "durationMs": 226661.09641600028
+          },
+          "classify": {
+            "physicalRequests": 102,
+            "reservationsMicroUsd": 510000,
+            "knownGenerationInputTokens": 180038,
+            "knownGenerationOutputTokens": 4565,
+            "durationMs": 145793.11329600035
+          }
+        },
+        "unknownOutcomes": 0,
+        "countRouteBilling": "unknown-reservation-not-refunded",
+        "generationCost": "usage-rate-estimate-not-invoice"
+      },
+      "semanticSummary": {
+        "alias": "H6-1",
+        "minimalCorrect": 0,
+        "fullCorrect": 0,
+        "incorrect": 0,
+        "notRatable": 4,
+        "reason": "The only recorded transaction and the later question anchor the same relative weekday phrase to different calendar dates. Target-day truth cannot be established; a reference-number match does not resolve this. No replacement or automatic abstention success."
+      }
+    },
+    {
+      "alias": "H6-2",
+      "status": "completed",
+      "reason": null,
+      "batches": 48,
+      "memories": 225,
+      "durationMs": 888110.402006,
+      "calls": {
+        "extract": 48,
+        "classify": 48
+      },
+      "cleanupCompleted": true,
+      "resources": {
+        "reservedAttempts": 192,
+        "physicalRequests": 192,
+        "reservedMicroUsd": 960000,
+        "knownGenerationUsageEstimateMicroUsd": 156946,
+        "knownGenerationInputTokens": 299175,
+        "knownGenerationOutputTokens": 23276,
+        "physicalRequestDurationMs": 360040.4851769984,
+        "byPhase": {
+          "extract": {
+            "physicalRequests": 96,
+            "reservationsMicroUsd": 480000,
+            "knownGenerationInputTokens": 131231,
+            "knownGenerationOutputTokens": 18608,
+            "durationMs": 221222.62176399864
+          },
+          "classify": {
+            "physicalRequests": 96,
+            "reservationsMicroUsd": 480000,
+            "knownGenerationInputTokens": 167944,
+            "knownGenerationOutputTokens": 4668,
+            "durationMs": 138817.86341299978
+          }
+        },
+        "unknownOutcomes": 0,
+        "countRouteBilling": "unknown-reservation-not-refunded",
+        "generationCost": "usage-rate-estimate-not-invoice"
+      },
+      "semanticSummary": {
+        "alias": "H6-2",
+        "minimalCorrect": 0,
+        "fullCorrect": 0,
+        "incorrect": 4,
+        "notRatable": 0,
+        "reason": "The complete original history supports an elapsed interval, but all four answers omit it. Their actual answer requests lack source-time anchors, so abstaining from the interval is justified by the delivered context; this does not change first-pass correctness. One answer additionally substitutes the question date for an event date."
+      }
+    }
+  ],
+  "reads": [
+    {
+      "alias": "H6-1",
+      "arm": "A",
+      "status": "completed",
+      "reason": null,
+      "calls": {
+        "selectGroups": 0,
+        "select": 2,
+        "rank": 1,
+        "answer": 1
+      },
+      "durationMs": 31236.93920299993,
+      "snapshotUnchanged": true,
+      "returnedMemories": 2,
+      "packedSources": 2,
+      "packingOmissions": 0,
+      "resources": {
+        "reservedAttempts": 8,
+        "physicalRequests": 8,
+        "reservedMicroUsd": 40000,
+        "knownGenerationUsageEstimateMicroUsd": 5030,
+        "knownGenerationInputTokens": 11564,
+        "knownGenerationOutputTokens": 252,
+        "physicalRequestDurationMs": 9704.559838999994,
+        "byPhase": {
+          "select": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 9460,
+            "knownGenerationOutputTokens": 145,
+            "durationMs": 5070.751217999961
+          },
+          "rank": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 1855,
+            "knownGenerationOutputTokens": 73,
+            "durationMs": 2490.825932000065
+          },
+          "answer": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 249,
+            "knownGenerationOutputTokens": 34,
+            "durationMs": 2142.9826889999676
+          }
+        },
+        "unknownOutcomes": 0,
+        "countRouteBilling": "unknown-reservation-not-refunded",
+        "generationCost": "usage-rate-estimate-not-invoice"
+      },
+      "semanticAssessment": {
+        "status": "adjudicated",
+        "ratable": false,
+        "minimalCorrect": null,
+        "fullCorrect": null,
+        "abstains": false,
+        "flags": {
+          "unsupportedAssertion": true,
+          "staleState": true,
+          "proposalUpgrade": false,
+          "unjustifiedCertainty": true
+        },
+        "requestedFactRecoverableFromDelivered": null,
+        "abstentionStatus": "not-applicable",
+        "independentReviewers": [
+          {
+            "reviewer": "A",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": false,
+              "minimalCorrect": null,
+              "fullCorrect": null,
+              "abstains": false,
+              "flags": {
+                "unsupportedAssertion": true,
+                "staleState": true,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": true
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": null,
+              "abstentionStatus": "not-applicable"
+            }
+          },
+          {
+            "reviewer": "B",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": false,
+              "minimalCorrect": null,
+              "fullCorrect": null,
+              "abstains": false,
+              "flags": {
+                "unsupportedAssertion": true,
+                "staleState": true,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": true
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": null,
+              "abstentionStatus": "not-applicable"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "alias": "H6-1",
+      "arm": "B",
+      "status": "completed",
+      "reason": null,
+      "calls": {
+        "selectGroups": 2,
+        "select": 2,
+        "rank": 1,
+        "answer": 1
+      },
+      "durationMs": 47658.69796699996,
+      "snapshotUnchanged": true,
+      "returnedMemories": 2,
+      "packedSources": 2,
+      "packingOmissions": 0,
+      "resources": {
+        "reservedAttempts": 12,
+        "physicalRequests": 12,
+        "reservedMicroUsd": 60000,
+        "knownGenerationUsageEstimateMicroUsd": 8534,
+        "knownGenerationInputTokens": 19975,
+        "knownGenerationOutputTokens": 338,
+        "physicalRequestDurationMs": 16462.44250899984,
+        "byPhase": {
+          "selectGroups": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 5627,
+            "knownGenerationOutputTokens": 86,
+            "durationMs": 5332.140409999876
+          },
+          "select": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 9460,
+            "knownGenerationOutputTokens": 145,
+            "durationMs": 5752.113129000063
+          },
+          "rank": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 4639,
+            "knownGenerationOutputTokens": 73,
+            "durationMs": 2961.2748249999713
+          },
+          "answer": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 249,
+            "knownGenerationOutputTokens": 34,
+            "durationMs": 2416.9141449999297
+          }
+        },
+        "unknownOutcomes": 0,
+        "countRouteBilling": "unknown-reservation-not-refunded",
+        "generationCost": "usage-rate-estimate-not-invoice"
+      },
+      "semanticAssessment": {
+        "status": "adjudicated",
+        "ratable": false,
+        "minimalCorrect": null,
+        "fullCorrect": null,
+        "abstains": false,
+        "flags": {
+          "unsupportedAssertion": true,
+          "staleState": true,
+          "proposalUpgrade": false,
+          "unjustifiedCertainty": true
+        },
+        "requestedFactRecoverableFromDelivered": null,
+        "abstentionStatus": "not-applicable",
+        "independentReviewers": [
+          {
+            "reviewer": "A",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": false,
+              "minimalCorrect": null,
+              "fullCorrect": null,
+              "abstains": false,
+              "flags": {
+                "unsupportedAssertion": true,
+                "staleState": true,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": true
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": null,
+              "abstentionStatus": "not-applicable"
+            }
+          },
+          {
+            "reviewer": "B",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": false,
+              "minimalCorrect": null,
+              "fullCorrect": null,
+              "abstains": false,
+              "flags": {
+                "unsupportedAssertion": true,
+                "staleState": true,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": true
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": null,
+              "abstentionStatus": "not-applicable"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "alias": "H6-1",
+      "arm": "C",
+      "status": "completed",
+      "reason": null,
+      "calls": {
+        "selectGroups": 0,
+        "select": 2,
+        "rank": 1,
+        "answer": 1
+      },
+      "durationMs": 33729.72601700004,
+      "snapshotUnchanged": true,
+      "returnedMemories": 1,
+      "packedSources": 1,
+      "packingOmissions": 0,
+      "resources": {
+        "reservedAttempts": 8,
+        "physicalRequests": 8,
+        "reservedMicroUsd": 40000,
+        "knownGenerationUsageEstimateMicroUsd": 4675,
+        "knownGenerationInputTokens": 10935,
+        "knownGenerationOutputTokens": 187,
+        "physicalRequestDurationMs": 10931.208187000128,
+        "byPhase": {
+          "select": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 9427,
+            "knownGenerationOutputTokens": 114,
+            "durationMs": 5536.40780200006
+          },
+          "rank": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 1300,
+            "knownGenerationOutputTokens": 39,
+            "durationMs": 2916.2175990000833
+          },
+          "answer": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 208,
+            "knownGenerationOutputTokens": 34,
+            "durationMs": 2478.5827859999845
+          }
+        },
+        "unknownOutcomes": 0,
+        "countRouteBilling": "unknown-reservation-not-refunded",
+        "generationCost": "usage-rate-estimate-not-invoice"
+      },
+      "semanticAssessment": {
+        "status": "adjudicated",
+        "ratable": false,
+        "minimalCorrect": null,
+        "fullCorrect": null,
+        "abstains": true,
+        "flags": {
+          "unsupportedAssertion": false,
+          "staleState": false,
+          "proposalUpgrade": false,
+          "unjustifiedCertainty": false
+        },
+        "requestedFactRecoverableFromDelivered": null,
+        "abstentionStatus": "not-ratable",
+        "independentReviewers": [
+          {
+            "reviewer": "A",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": false,
+              "minimalCorrect": null,
+              "fullCorrect": null,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": false,
+                "staleState": false,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": false
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": null,
+              "abstentionStatus": "not-ratable"
+            }
+          },
+          {
+            "reviewer": "B",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": false,
+              "minimalCorrect": null,
+              "fullCorrect": null,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": false,
+                "staleState": false,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": false
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": null,
+              "abstentionStatus": "not-ratable"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "alias": "H6-1",
+      "arm": "D",
+      "status": "completed",
+      "reason": null,
+      "calls": {
+        "selectGroups": 2,
+        "select": 2,
+        "rank": 1,
+        "answer": 1
+      },
+      "durationMs": 48750.1423549999,
+      "snapshotUnchanged": true,
+      "returnedMemories": 1,
+      "packedSources": 1,
+      "packingOmissions": 0,
+      "resources": {
+        "reservedAttempts": 12,
+        "physicalRequests": 12,
+        "reservedMicroUsd": 60000,
+        "knownGenerationUsageEstimateMicroUsd": 8338,
+        "knownGenerationInputTokens": 19704,
+        "knownGenerationOutputTokens": 283,
+        "physicalRequestDurationMs": 15000.54356000037,
+        "byPhase": {
+          "selectGroups": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 5627,
+            "knownGenerationOutputTokens": 86,
+            "durationMs": 5305.514858000097
+          },
+          "select": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 9427,
+            "knownGenerationOutputTokens": 114,
+            "durationMs": 4998.601105000009
+          },
+          "rank": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 4454,
+            "knownGenerationOutputTokens": 40,
+            "durationMs": 2319.732272000052
+          },
+          "answer": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 196,
+            "knownGenerationOutputTokens": 43,
+            "durationMs": 2376.6953250002116
+          }
+        },
+        "unknownOutcomes": 0,
+        "countRouteBilling": "unknown-reservation-not-refunded",
+        "generationCost": "usage-rate-estimate-not-invoice"
+      },
+      "semanticAssessment": {
+        "status": "adjudicated",
+        "ratable": false,
+        "minimalCorrect": null,
+        "fullCorrect": null,
+        "abstains": true,
+        "flags": {
+          "unsupportedAssertion": true,
+          "staleState": true,
+          "proposalUpgrade": false,
+          "unjustifiedCertainty": false
+        },
+        "requestedFactRecoverableFromDelivered": null,
+        "abstentionStatus": "not-ratable",
+        "independentReviewers": [
+          {
+            "reviewer": "A",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": false,
+              "minimalCorrect": null,
+              "fullCorrect": null,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": false,
+                "staleState": false,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": false
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": null,
+              "abstentionStatus": "not-ratable"
+            }
+          },
+          {
+            "reviewer": "B",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": false,
+              "minimalCorrect": null,
+              "fullCorrect": null,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": true,
+                "staleState": true,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": false
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": null,
+              "abstentionStatus": "not-ratable"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "alias": "H6-2",
+      "arm": "D",
+      "status": "completed",
+      "reason": null,
+      "calls": {
+        "selectGroups": 1,
+        "select": 2,
+        "rank": 1,
+        "answer": 1
+      },
+      "durationMs": 40621.64391199988,
+      "snapshotUnchanged": true,
+      "returnedMemories": 2,
+      "packedSources": 3,
+      "packingOmissions": 0,
+      "resources": {
+        "reservedAttempts": 10,
+        "physicalRequests": 10,
+        "reservedMicroUsd": 50000,
+        "knownGenerationUsageEstimateMicroUsd": 9087,
+        "knownGenerationInputTokens": 21176,
+        "knownGenerationOutputTokens": 385,
+        "physicalRequestDurationMs": 13963.260562000098,
+        "byPhase": {
+          "selectGroups": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 5217,
+            "knownGenerationOutputTokens": 83,
+            "durationMs": 2793.3136940000113
+          },
+          "select": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 9176,
+            "knownGenerationOutputTokens": 149,
+            "durationMs": 5232.780900000129
+          },
+          "rank": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 6180,
+            "knownGenerationOutputTokens": 75,
+            "durationMs": 3494.3546919999644
+          },
+          "answer": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 603,
+            "knownGenerationOutputTokens": 78,
+            "durationMs": 2442.811275999993
+          }
+        },
+        "unknownOutcomes": 0,
+        "countRouteBilling": "unknown-reservation-not-refunded",
+        "generationCost": "usage-rate-estimate-not-invoice"
+      },
+      "semanticAssessment": {
+        "status": "adjudicated",
+        "ratable": true,
+        "minimalCorrect": false,
+        "fullCorrect": false,
+        "abstains": true,
+        "flags": {
+          "unsupportedAssertion": true,
+          "staleState": false,
+          "proposalUpgrade": false,
+          "unjustifiedCertainty": true
+        },
+        "requestedFactRecoverableFromDelivered": false,
+        "abstentionStatus": "justified",
+        "independentReviewers": [
+          {
+            "reviewer": "A",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": true,
+              "minimalCorrect": false,
+              "fullCorrect": false,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": true,
+                "staleState": false,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": true
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": false,
+              "abstentionStatus": "justified"
+            }
+          },
+          {
+            "reviewer": "B",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": true,
+              "minimalCorrect": false,
+              "fullCorrect": false,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": true,
+                "staleState": false,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": true
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": false,
+              "abstentionStatus": "justified"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "alias": "H6-2",
+      "arm": "C",
+      "status": "completed",
+      "reason": null,
+      "calls": {
+        "selectGroups": 0,
+        "select": 2,
+        "rank": 1,
+        "answer": 1
+      },
+      "durationMs": 33580.56589099998,
+      "snapshotUnchanged": true,
+      "returnedMemories": 1,
+      "packedSources": 1,
+      "packingOmissions": 0,
+      "resources": {
+        "reservedAttempts": 8,
+        "physicalRequests": 8,
+        "reservedMicroUsd": 40000,
+        "knownGenerationUsageEstimateMicroUsd": 5093,
+        "knownGenerationInputTokens": 11794,
+        "knownGenerationOutputTokens": 234,
+        "physicalRequestDurationMs": 10377.112791000167,
+        "byPhase": {
+          "select": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 9176,
+            "knownGenerationOutputTokens": 149,
+            "durationMs": 5283.286372000352
+          },
+          "rank": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 2375,
+            "knownGenerationOutputTokens": 41,
+            "durationMs": 2532.9478869999293
+          },
+          "answer": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 243,
+            "knownGenerationOutputTokens": 44,
+            "durationMs": 2560.878531999886
+          }
+        },
+        "unknownOutcomes": 0,
+        "countRouteBilling": "unknown-reservation-not-refunded",
+        "generationCost": "usage-rate-estimate-not-invoice"
+      },
+      "semanticAssessment": {
+        "status": "adjudicated",
+        "ratable": true,
+        "minimalCorrect": false,
+        "fullCorrect": false,
+        "abstains": true,
+        "flags": {
+          "unsupportedAssertion": false,
+          "staleState": false,
+          "proposalUpgrade": false,
+          "unjustifiedCertainty": false
+        },
+        "requestedFactRecoverableFromDelivered": false,
+        "abstentionStatus": "justified",
+        "independentReviewers": [
+          {
+            "reviewer": "A",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": true,
+              "minimalCorrect": false,
+              "fullCorrect": false,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": false,
+                "staleState": false,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": false
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": false,
+              "abstentionStatus": "justified"
+            }
+          },
+          {
+            "reviewer": "B",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": true,
+              "minimalCorrect": false,
+              "fullCorrect": false,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": true,
+                "staleState": false,
+                "proposalUpgrade": true,
+                "unjustifiedCertainty": false
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": false,
+              "abstentionStatus": "justified"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "alias": "H6-2",
+      "arm": "B",
+      "status": "completed",
+      "reason": null,
+      "calls": {
+        "selectGroups": 1,
+        "select": 2,
+        "rank": 1,
+        "answer": 1
+      },
+      "durationMs": 42006.52660899982,
+      "snapshotUnchanged": true,
+      "returnedMemories": 2,
+      "packedSources": 2,
+      "packingOmissions": 0,
+      "resources": {
+        "reservedAttempts": 10,
+        "physicalRequests": 10,
+        "reservedMicroUsd": 50000,
+        "knownGenerationUsageEstimateMicroUsd": 9080,
+        "knownGenerationInputTokens": 21261,
+        "knownGenerationOutputTokens": 359,
+        "physicalRequestDurationMs": 14020.719533999916,
+        "byPhase": {
+          "selectGroups": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 5217,
+            "knownGenerationOutputTokens": 83,
+            "durationMs": 2791.395891000051
+          },
+          "select": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 9378,
+            "knownGenerationOutputTokens": 155,
+            "durationMs": 5830.104445999721
+          },
+          "rank": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 6341,
+            "knownGenerationOutputTokens": 76,
+            "durationMs": 2816.837544000009
+          },
+          "answer": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 325,
+            "knownGenerationOutputTokens": 45,
+            "durationMs": 2582.381653000135
+          }
+        },
+        "unknownOutcomes": 0,
+        "countRouteBilling": "unknown-reservation-not-refunded",
+        "generationCost": "usage-rate-estimate-not-invoice"
+      },
+      "semanticAssessment": {
+        "status": "adjudicated",
+        "ratable": true,
+        "minimalCorrect": false,
+        "fullCorrect": false,
+        "abstains": true,
+        "flags": {
+          "unsupportedAssertion": false,
+          "staleState": false,
+          "proposalUpgrade": false,
+          "unjustifiedCertainty": false
+        },
+        "requestedFactRecoverableFromDelivered": false,
+        "abstentionStatus": "justified",
+        "independentReviewers": [
+          {
+            "reviewer": "A",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": true,
+              "minimalCorrect": false,
+              "fullCorrect": false,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": false,
+                "staleState": false,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": false
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": false,
+              "abstentionStatus": "justified"
+            }
+          },
+          {
+            "reviewer": "B",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": true,
+              "minimalCorrect": false,
+              "fullCorrect": false,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": false,
+                "staleState": false,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": false
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": false,
+              "abstentionStatus": "justified"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "alias": "H6-2",
+      "arm": "A",
+      "status": "completed",
+      "reason": null,
+      "calls": {
+        "selectGroups": 0,
+        "select": 2,
+        "rank": 1,
+        "answer": 1
+      },
+      "durationMs": 34052.95055900025,
+      "snapshotUnchanged": true,
+      "returnedMemories": 2,
+      "packedSources": 2,
+      "packingOmissions": 0,
+      "resources": {
+        "reservedAttempts": 8,
+        "physicalRequests": 8,
+        "reservedMicroUsd": 40000,
+        "knownGenerationUsageEstimateMicroUsd": 5046,
+        "knownGenerationInputTokens": 11518,
+        "knownGenerationOutputTokens": 273,
+        "physicalRequestDurationMs": 11122.438224000856,
+        "byPhase": {
+          "select": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 9378,
+            "knownGenerationOutputTokens": 153,
+            "durationMs": 6094.300971000455
+          },
+          "rank": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 1815,
+            "knownGenerationOutputTokens": 76,
+            "durationMs": 2387.00680000009
+          },
+          "answer": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 325,
+            "knownGenerationOutputTokens": 44,
+            "durationMs": 2641.130453000311
+          }
+        },
+        "unknownOutcomes": 0,
+        "countRouteBilling": "unknown-reservation-not-refunded",
+        "generationCost": "usage-rate-estimate-not-invoice"
+      },
+      "semanticAssessment": {
+        "status": "adjudicated",
+        "ratable": true,
+        "minimalCorrect": false,
+        "fullCorrect": false,
+        "abstains": true,
+        "flags": {
+          "unsupportedAssertion": false,
+          "staleState": false,
+          "proposalUpgrade": false,
+          "unjustifiedCertainty": false
+        },
+        "requestedFactRecoverableFromDelivered": false,
+        "abstentionStatus": "justified",
+        "independentReviewers": [
+          {
+            "reviewer": "A",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": true,
+              "minimalCorrect": false,
+              "fullCorrect": false,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": false,
+                "staleState": false,
+                "proposalUpgrade": false,
+                "unjustifiedCertainty": false
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": false,
+              "abstentionStatus": "justified"
+            }
+          },
+          {
+            "reviewer": "B",
+            "model": "gpt-6.1-sol",
+            "effort": "high",
+            "first": {
+              "ratable": true,
+              "minimalCorrect": false,
+              "fullCorrect": false,
+              "abstains": true,
+              "flags": {
+                "unsupportedAssertion": true,
+                "staleState": false,
+                "proposalUpgrade": true,
+                "unjustifiedCertainty": false
+              }
+            },
+            "second": {
+              "requestedFactRecoverableFromDelivered": false,
+              "abstentionStatus": "justified"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "accounting": {
+    "physicalRequests": 472,
+    "reservedAttempts": 472,
+    "newReservationMicroUsd": 2360000,
+    "knownGenerationUsageEstimateMicroUsd": 373619,
+    "invoiceCost": "unknown",
+    "countRouteBilling": "unknown-reservation-not-refunded",
+    "cumulativeReservationMicroUsd": 344522281,
+    "cumulativeRequestCount": 60037,
+    "protectedReserveMicroUsd": 30000000,
+    "remainingAfterProtectedMicroUsd": 25477719,
+    "pending": 0,
+    "newUnknownOutcomes": 0,
+    "historicalUnknownOutcomes": 23,
+    "snapshotAt": "2026-10-18T20:05:19.119Z",
+    "notFreshLaunchAuthorization": true
+  },
+  "timing": {
+    "unit": "milliseconds",
+    "durationMs": "instrumented operator row/group/overall elapsed time, not normal product latency",
+    "physicalRequestDurationMs": "includes durable HTTP-intent recording and frozen fetch checks before dispatch, not pure provider latency",
+    "includes": [
+      "artifact/runtime checks",
+      "source and ledger validation",
+      "durable evidence recording"
+    ],
+    "coldRead": "MemoryCore reopened within one operator process; neither a fresh-process nor an OS-cold-cache measurement"
+  },
+  "semanticReview": {
+    "status": "two-pass masked review, primary adjudication and exact-path source trace complete",
+    "publicRecordScope": "Sanitized per-reviewer classifications, flags and disagreement/resolution summaries only; original full source-cited reviewer reports remain private and hash-bound.",
+    "sourcePathDenominators": {
+      "uniqueOriginalStatements": 4,
+      "armsPerStatement": 4,
+      "originalStatementArmPaths": 16,
+      "referenceVisiblePaths": 16,
+      "answerPackedPaths": 12,
+      "answerPackingOmittedPaths": 0,
+      "interpretation": "statement/arm paths, not 16 unique facts or independent semantic failures; original source-time metadata is missing across all 16 paths"
+    },
+    "provenance": {
+      "firstPassReports": [
+        "c92bba566e4439a6697d0cf9df10b900dc29b8a027f4535c59165c41072d7745",
+        "c8e6317357f4e3767e8d5a08349f5cf566b44109d079cfe0e2243919c52d544b"
+      ],
+      "secondPassReports": [
+        "0e2a905a5ca07b7e54c12e7a32e6e1eb2e7a2aae9af4b3f4eb2f1d89e7e80edc",
+        "3df3c771a697ee94f50f71452f63b7f2acb7513df2e5e361b60298e455a12187"
+      ],
+      "firstPassAdjudicationSha256": "b041ff2c8ba2673d6c9c6090f72d536fb0c790b1e4df0ba33dbde35d9a7f60c4",
+      "secondPassAdjudicationSha256": "43d7fdaa68e3632ff6453f01b3163b805302900f17810b145a08dc4075e2c53d",
+      "firstPassFrozenBeforeContextDisclosure": true,
+      "bothPassesFrozenBeforeArmUnmasking": true,
+      "originalReportsUnchanged": true,
+      "exactSecondPassCitationsVerified": 143
+    },
+    "cases": [
+      {
+        "alias": "H6-1",
+        "minimalCorrect": 0,
+        "fullCorrect": 0,
+        "incorrect": 0,
+        "notRatable": 4,
+        "reason": "The only recorded transaction and the later question anchor the same relative weekday phrase to different calendar dates. Target-day truth cannot be established; a reference-number match does not resolve this. No replacement or automatic abstention success."
+      },
+      {
+        "alias": "H6-2",
+        "minimalCorrect": 0,
+        "fullCorrect": 0,
+        "incorrect": 4,
+        "notRatable": 0,
+        "reason": "The complete original history supports an elapsed interval, but all four answers omit it. Their actual answer requests lack source-time anchors, so abstaining from the interval is justified by the delivered context; this does not change first-pass correctness. One answer additionally substitutes the question date for an event date."
+      }
+    ],
+    "disagreements": {
+      "firstPass": {
+        "answerCount": 3,
+        "flagCells": 6,
+        "correctnessDisagreements": 0,
+        "resolutions": [
+          {
+            "alias": "H6-1",
+            "arm": "D",
+            "resolution": "Primary retains B’s unsupported/stale attribution flags for treating the known expense as the later question’s target event; abstention remains not-ratable."
+          },
+          {
+            "alias": "H6-2",
+            "arms": [
+              "A",
+              "C"
+            ],
+            "resolution": "Primary retains A’s conservative reading: abbreviated endpoint wording in a negative availability statement is imprecise but does not unambiguously assert completed installation. B’s contrary flags remain visible."
+          }
+        ]
+      },
+      "secondPass": {
+        "abstentionAndRecoverabilityDisagreements": 0,
+        "resolutions": [
+          {
+            "alias": "H6-1",
+            "arms": [
+              "A",
+              "B"
+            ],
+            "resolution": "Missing temporal linkage is unsupported as an unconditional assertion (A), though B labels it ambiguous. Conditional arithmetic is supported; actual target truth remains not-ratable."
+          },
+          {
+            "alias": "H6-1",
+            "arm": "D",
+            "resolution": "Retain B’s additional temporal-link limitation alongside supported expense and missing-rate descriptions."
+          },
+          {
+            "alias": "H6-2",
+            "arms": [
+              "A",
+              "C"
+            ],
+            "resolution": "Preserve the first-pass conservative endpoint interpretation and B’s dissent; no first-pass grade is rewritten."
+          }
+        ]
+      }
+    },
+    "necessarySourceTrace": {
+      "version": "h6-sanitized-source-loss-v1",
+      "acceptedAt": "2026-10-18T20:24:27.840Z",
+      "privateTraceSha256": "0c888772efbc91380a334a7b702f9c84f5d05218686e62aa784db4f9f609c227",
+      "reportSha256": "96e6ad9afc60ab12fd5e66a8e9f57a486e07e2935fb42dc2cc38be1cb8d3c8c7",
+      "independentlyRejoinedTraces": 16,
+      "inventoryRoutesAgree": true,
+      "rows": [
+        {
+          "alias": "H6-1",
+          "arm": "A",
+          "source": "rate",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-1",
+          "arm": "A",
+          "source": "purchase",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-1",
+          "arm": "B",
+          "source": "rate",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-1",
+          "arm": "B",
+          "source": "purchase",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-1",
+          "arm": "C",
+          "source": "rate",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-1",
+          "arm": "C",
+          "source": "purchase",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": false,
+          "answerPacked": false,
+          "answerPackingOmitted": false,
+          "firstContentLoss": "rank-output",
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-1",
+          "arm": "D",
+          "source": "rate",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": false,
+          "hierarchyRestoredReference": true,
+          "rankVisible": true,
+          "recalled": false,
+          "answerPacked": false,
+          "answerPackingOmitted": false,
+          "firstContentLoss": "rank-output",
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-1",
+          "arm": "D",
+          "source": "purchase",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-2",
+          "arm": "D",
+          "source": "earlier-event",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": false,
+          "hierarchyRestoredReference": false,
+          "rankVisible": false,
+          "recalled": false,
+          "answerPacked": false,
+          "answerPackingOmitted": false,
+          "firstContentLoss": "selection-before-rank",
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-2",
+          "arm": "D",
+          "source": "later-decision",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-2",
+          "arm": "C",
+          "source": "earlier-event",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": false,
+          "hierarchyRestoredReference": false,
+          "rankVisible": false,
+          "recalled": false,
+          "answerPacked": false,
+          "answerPackingOmitted": false,
+          "firstContentLoss": "selection-before-rank",
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-2",
+          "arm": "C",
+          "source": "later-decision",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-2",
+          "arm": "B",
+          "source": "earlier-event",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-2",
+          "arm": "B",
+          "source": "later-decision",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-2",
+          "arm": "A",
+          "source": "earlier-event",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        },
+        {
+          "alias": "H6-2",
+          "arm": "A",
+          "source": "later-decision",
+          "exactOriginalSourceCaptured": true,
+          "referenceActuallyVisible": true,
+          "selectedByFlat": true,
+          "hierarchyRestoredReference": false,
+          "rankVisible": true,
+          "recalled": true,
+          "answerPacked": true,
+          "answerPackingOmitted": false,
+          "firstContentLoss": null,
+          "storedReceiptSourceDatePresent": false,
+          "modelFacingSourceDatePresent": false,
+          "sidecarSourceDateRetained": true
+        }
+      ],
+      "temporalBoundary": "Original source-time labels exist only in ingestion/source-map audit sidecars. Ordinary capture messages and canonical receipts have no source-time field; rank/final source context therefore lacks it. The H6 answer serializer additionally projects only role/content although included audit bindings retain the date. Stored createdAt is ingestion time and cannot substitute.",
+      "interpretation": "A/B preserve both original source statements in each case; C/D each lose one complementary source. These are observations of one stochastic outcome per arm, not causal attribution to IDF or hierarchy. No source excerpt is lost by answer token packing in this run. Missing dates independently prevent the ratable temporal answer even where both event statements arrive.",
+      "decision": "No default promotion or automatic paired24. Preserve frozen failures; fix source-time transport in the shared engine and consumer path, then validate bounded selection of complementary evidence. No answer regeneration or paid rerun of H6.",
+      "primaryIndependentRejoinActualExitCode": 0
+    },
+    "decision": "No default promotion or automatic paired24. Preserve frozen failures; fix source-time transport in the shared engine and consumer path, then validate bounded selection of complementary evidence. No answer regeneration or paid rerun of H6.",
+    "limits": [
+      "N=2 distinct cases with eight correlated outcomes, not eight independent questions.",
+      "No official LongMemEval or competitor score; all original outcomes remain.",
+      "No quality benefit demonstrated for the two opt-in read changes.",
+      "The accepted 16-path trace distinguishes sidecar-only source dates from missing model-facing time provenance and complementary-source selection loss; no runtime fix is claimed."
+    ]
+  },
+  "primaryOfflineCheckerIncident": {
+    "scope": "post-run primary closure audit, not the paid operator or product",
+    "initialActualExitCode": 143,
+    "reason": "comparison-scope mismatch: full historical ledger versus compact aggregate and owned tail; terminated during excessive assertion rendering",
+    "correctedActualExitCode": 0,
+    "frozenArtifactsChanged": false,
+    "ledgerChanged": false,
+    "paidRunRetried": false
+  },
+  "limitations": [
+    "N=2 distinct cases, eight correlated outcomes",
+    "instrumented elapsed/request timings include artifact/runtime/source/ledger/persistence checks; not pure provider or production latency",
+    "reservation is not invoice cost; generation estimate excludes unresolved count-route billing and may omit discounts",
+    "cold-reopened MemoryCore in one operator process, not fresh process or OS-cold-cache measurement",
+    "no full Raw/Memory/Card/relationship/vector architecture validation or competitor score",
+    "v2 has extra model-call allowance; no equal-cost routing-efficiency claim",
+    "one stochastic first outcome per arm does not isolate causal code effects from model variance",
+    "no demonstrated quality benefit; no official score, default promotion or paired24/fresh30 advancement",
+    "hashes and public metadata do not reproduce the private authentic trace or establish anonymization"
+  ]
+}

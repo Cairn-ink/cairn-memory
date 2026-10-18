@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — embedded core experiment
+
+- Add trusted opt-in `sourceRankingPolicy:'bounded-idf-v1'` for source/rationale
+  recall: bounded per-namespace document frequency and maximum individual
+  body/receipt weighted overlap. H5b reads at most 256 memories per short snapshot,
+  checks epoch and generation, and computes outside transactions; synchronous
+  CPU work still occupies its thread. Scan caps, excerpts, model stages and
+  defaults retain their existing contracts. The original H5 resource failure
+  remains recorded. H5b offline elapsed/CPU, actual capture and separate
+  current-image RSS gates passed on Node 22/24; final exact-head reviews/CI and
+  real-model quality remain pending. No default promotion or paid activation.
+- Add source-evidence-only `selectionMode:'moc-hierarchy-v2'`: standalone L1
+  entry, whole-group origin reservation and the default's two flat rounds, with
+  flat fetch priority. Reference-only audits separate observed packing/capacity
+  omissions from unknown unread tails. It permits twenty maps/five model calls;
+  quality and lifecycle cost remain unassessed. Existing modes retain behavior.
+- Add source-evidence-only `selectionMode:'moc-hierarchy-v1'`: bounded private
+  L2→L1 navigation and ordinary-search reserve feed the existing fetch/rank/atomic
+  finalization. Default recall and host behavior stay unchanged. The opt-in allows
+  sixteen maps/four model calls; semantic benefit and lifecycle cost are unassessed.
+- Add dynamic-only OpenAI `selectGroups` with exact reference validation. Existing
+  live guards continue to deny it; this does not authorize paid evaluation.
+
 ## Unreleased — @cairn-ink/memory installer 0.5.3
 
 - Save a new Codex conversation from its first turn after setup or resume. A

@@ -16,6 +16,42 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The [two-case routing × ranking diagnostic](docs/evidence/routing-idf-diagnostic.md)
+  mechanically completed two ordinary writes and eight correlated first
+  read/answer outcomes at reviewed runtime `d46f7d0` (PR #438 ready/unmerged
+  at the checked pre-run snapshot). All snapshots were unchanged and cleanup
+  passed. Frozen masked review/adjudication found four not-ratable H6-1
+  outcomes and four incorrect H6-2 outcomes despite justified context-limited
+  abstention: no quality benefit demonstrated. Accepted exact-path tracing
+  found sidecar-only source dates and complementary-source selection loss;
+  next is shared-engine/consumer time transport, then complementary selection,
+  with offline regressions, not a claimed runtime fix. No official score,
+  equal-cost routing claim, automatic
+  paired24/fresh30 expansion or default promotion follows. US$2.36 reservation
+  is distinct from the US$0.373619 generation
+  usage estimate and unknown count-route billing. Diagnostic timings include
+  audit/persistence overhead, not normal product latency.
+
+- The [one authentic MOC opportunity probe](docs/plans/moc-hierarchy-real-opportunity.md)
+  completed 43 batches and two read/answer outcomes mechanically, but both
+  answers missed the reviewed ratio fact. Its source was retained yet absent
+  from actual flat selection; zero L2/group calls meant no connected-hierarchy
+  opportunity was established. Qualified closed-snapshot literal order puts
+  the necessary memory at 102/203, not a provider-visible position. Standalone-L1
+  entry and relevance ranking with preserved flat coverage are separate next
+  hypotheses, not a proven fix. No paid paired24 advancement or default promotion;
+  formal quality/resource and later fresh30 comparison gates remain unchanged.
+
+- [H5's bounded source-IDF experiment](docs/plans/source-idf-ranking.md) retains
+  its failed worst-case writer-contention gate. The separate
+  [H5b correction](docs/plans/source-idf-page-snapshots.md) uses at most 256 memories
+  per read snapshot, epoch/generation fences and computation outside transactions.
+  Default behavior is unchanged; same-thread CPU work remains synchronous.
+  H5b offline elapsed/CPU, actual capture and separate current-image RSS gates
+  passed on Node 22/24. Final exact-head reviews/CI and real-model quality remain
+  pending; shared-host variance does not establish lightweight behavior or a
+  cross-host resource bound. No default promotion or paid evaluator activation.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It
