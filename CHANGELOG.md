@@ -2,6 +2,14 @@
 
 ## Unreleased — embedded core experiment
 
+- Add explicitly selected evaluation source-time indexed-evidence ingestion and
+  a separately versioned source-tuple answer packer. Exact claimed utterance
+  labels survive actual capture/cold recall into a fully measured frozen request
+  without answer-time source maps. Whole receipt tuples may be omitted by the
+  declared local budget; unknown time stays absent. Existing defaults, comparators,
+  scorers and request goldens remain unchanged. No dispatch/provider/host wiring,
+  semantic score, H6 replay or paid expansion. See the [T2 contract](docs/plans/source-time-consumer.md).
+
 - Add embedded opt-in `captureSourceTime:'claimed-v1'` for ordinary v2/staged
   and indexed-evidence capture. Exact bounded opaque utterance labels survive
   immutable receipt identity, restart and source reads, under existing budgets.

@@ -20,6 +20,8 @@ Repeated original session IDs remain separate indexed occurrences. Prepared
 v2 histories expose opaque occurrence IDs, not those original labels. Derived IDs
 are deterministic and bounded for the core; dates remain source-map metadata,
 not invented extra dialogue fed to the extractor.
+The separately selected source-time producer below also retains each exact date
+as receipt metadata; the original entrypoints continue to use source maps only.
 
 **Lossless source reconstruction is not verbatim engine storage.** The existing
 core normalizes Unicode, folds whitespace, redacts supported secrets and bounds
@@ -118,6 +120,46 @@ duplicate and partial classification) requires the exact source catalog plus
 fields become malformed unknown outcomes. An injected envelope cannot prove
 the caller used the trusted core. Failures carry no success metadata. All
 existing stop rules remain, including no answer from persisted partial evidence.
+
+## Explicit source-time indexed-evidence producer
+
+`planSourceTimeIndexedEvidenceLongMemEvalCase({history,namespace})` and
+`ingestSourceTimeIndexedEvidenceLongMemEvalCase({history,namespace,capture})`
+select `cairn-longmemeval-source-time-indexed-evidence-plan-v1`, with
+`sourceTimePolicy:'session-source-time-claimed-v1'` and
+`captureSourceTime:'claimed-v1'`. Open the actual injected core with both
+`captureSourcePolicy:'indexed-evidence-v1'` and `captureSourceTime:'claimed-v1'`.
+There is no automatic default, experiment wiring or host/provider flag.
+
+Every capture message and indexed window carries the original session `date`
+unchanged as `sourceTime`. This is an opaque producer claim about the utterance,
+not an event date, applicability, authenticated chronology or ordering authority.
+The required existing prepared-history date format is not widened: missing,
+undefined, noncanonical or invalid labels fail before any capture callback.
+Canonical validation accepts at most 128 UTF-16 units and refuses strings that
+would change under normalization, whitespace folding or redaction. It never
+parses, normalizes or invents a date. Unknown time is still supported by ordinary
+core capture with the field omitted, and by the consumer below.
+
+The new producer preserves the old text, roles, source partition and all
+client/session/message/event identities, recomputing actual annotated capture
+digests and window catalogs. `planDigest` binds the new schema/policy, case,
+namespace and ordered actual capture payload digests/labels. Identical replay
+duplicates; changing a date under the same event conflicts. Plans are detached
+and deeply frozen before the first callback; accessor or malformed input fails
+before callback access. Existing stop/partial/failure rules apply unchanged.
+The new producer's detached JSON snapshot has a 64 MiB, 1,000,000-node, depth12
+ceiling; it rejects excess instead of truncating the input history.
+An admitted partial batch never becomes complete merely because its receipts
+persisted. The entire plan remains private source-bearing data.
+
+The separately versioned consumer in `source-time-answer.mjs` accepts actual
+cold source-evidence recall plus local core.get, without any source-map join.
+See [the consumer contract](public-longmemeval-comparison.md#explicit-source-time-answer-consumer)
+and [T2 acceptance](plans/source-time-consumer.md). The owned synthetic demo is
+`npm run demo:longmemeval-source-time`; it closes/removes its fresh workspace on
+success or failure and emits transport facts only. Existing retained demos are
+unchanged. No semantic score, closed-H6 replay or paid expansion follows.
 
 ## Qualified-prefix control (offline only)
 

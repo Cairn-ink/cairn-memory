@@ -1,8 +1,8 @@
 # Known limitations
 
 The [T1 source-time foundation](plans/source-time-preservation.md) is embedded
-core-only: no host, MCP/HTTP/hooks, provider adapter or evaluation ingestion
-producer supplies the optional field yet. It preserves exact bounded opaque
+core-only: T1 itself supplies no host, MCP/HTTP/hooks, provider adapter or
+evaluation ingestion producer. It preserves exact bounded opaque
 producer-claimed utterance labels through capture and retained source reads,
 without date parsing, authenticated chronology, event/applicability inference,
 historical backfill or retrieval/answer-quality improvement. Labels can be false
@@ -13,6 +13,20 @@ causal and automatic-rationale combinations reject explicitly. Schema v19
 requires draining older connections before upgrade. Synthetic scripted
 capture/cold-read tests verify transport only: no H6 replay, score claim,
 evaluation/default promotion or paid authorization is included.
+
+The explicitly selected [T2 evaluation producer/consumer](plans/source-time-consumer.md)
+copies existing required session dates unchanged into claimed receipt labels,
+then packages source-evidence tuples from cold recall authenticated by complete
+local core.get. It needs no answer-time history/source map and never repairs an
+absent label. Only current memories are accepted; this is not a historical
+applicability consumer. Whole tuple budget omission can remove necessary context
+even when other receipts for the same memory fit. Exact labels prove neither
+chronology nor event time, adoption, truth or a correct answer. The synchronous
+trusted counter measures the serialized request plus reserved output; its estimate
+is not provider context-fit proof, an invoice or an execution/freshness lease.
+No asynchronous counter/transport, hosted entrypoint, answer dispatch, scoring or
+paid campaign is connected. Scripted synthetic transport success supplies no
+semantic-quality improvement and does not reopen closed H6 or change old results.
 
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A

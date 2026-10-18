@@ -19,10 +19,12 @@ service must use the same public core, not separate engines.
 - [T1 source-time preservation](docs/plans/source-time-preservation.md) adds a
   core-only opt-in opaque claimed utterance label under immutable identity and
   ordinary source budgets. It performs no temporal inference or backfill; H6
-  remains closed and no evaluation/default promotion follows. Producer wiring
-  plus a reusable exact source-aware answer packer are deferred to T2;
-  complementary-evidence selection evaluation is T3 and needs its own frozen
-  authorization. Host/MCP/HTTP/hooks/provider-adapter schemas stay unchanged.
+  remains closed and no evaluation/default promotion follows. The explicit
+  [T2 evaluation producer and source-time answer packer](docs/plans/source-time-consumer.md)
+  transport exact receipt tuples through cold reads without history joins;
+  they add no host/provider/paid integration or semantic score. Further semantic
+  validation requires a separately frozen and reviewed scope; no candidate is
+  promoted. Host/MCP/HTTP/hooks/provider-adapter schemas stay unchanged.
 
 - The [one authentic MOC opportunity probe](docs/plans/moc-hierarchy-real-opportunity.md)
   completed 43 batches and two read/answer outcomes mechanically, but both
