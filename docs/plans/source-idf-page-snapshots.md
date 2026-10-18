@@ -249,3 +249,88 @@ only CHANGELOG, ROADMAP and local-store documentation, with identical test and
 runtime bytes. These broad runs, primary same-state parity, separate resource
 campaign and final independent dual review/CI are still pending. There is no
 new semantic score, evaluator activation, default promotion or merge.
+
+### Broad and frozen resource observations at 21cec10
+
+Primary full core passed 1211/1211 on each Node version, actual exits 0.
+The remaining twelve checks per version all exited 0: OpenAI318, MCP111,
+artifact93 passed/1 native-Windows skip, workspace25, generic673, validate,
+four applicable demos and both pinned Claude validations. Focused71,
+deadline19 and 168 independent same-state comparisons on 212 normal captures
+also passed with actual exits 0 and unchanged canonical data. Separate
+non-author GPT-6.1 Sol/high Standards and Spec reviews of the full 22-path
+H4-to-21cec10 diff reported no findings. Exact-head CI is still pending.
+
+The frozen H5b resource campaigns at `21cec10` ran sequentially after those
+gates: Node22 18:02:36-18:04:10UTC and Node24 18:04:33-18:06:11UTC. Both
+operators exited 0. Each retained 51 child exits (5 preparation, 38 queries,
+8 captures), all 0 without signal/watchdog; primary checked the owned stores
+were absent after closure. Five relative elapsed/CPU/reported-maxRSS cells
+and all six candidate captures per version passed the encoded gates. The
+12 complete captures committed before query end in 102.019-806.181ms.
+Legacy worst-cell captures still failed `storage_busy` after about 5 seconds;
+ordinary legacy captures completed only after query end. These are separate
+labelled observations and do not change the original H5 failure.
+
+Raw streams are retained in `/tmp/cairn-idf-h5b-primary-xLEMbe`:
+
+- resources-node22.ndjson SHA256 `3d6747982d3eddddd581e87948655b04118ddca4d7010107877cbac2a92a71ba`.
+- resources-node24.ndjson SHA256 `1633e891fe54dadaf59b68e023d091c69342d483a06f60c13b899b62a439f41a`.
+
+Primary identified an important measurement limitation before promotion: Linux
+`getrusage` peak RSS can include pre-exec residency. A separate no-store
+128MiB parent-allocation probe increased a fresh child's reported peak by
+about 90MB while its current-image `/proc/self/status` VmHWM stayed near 49MB.
+Both Node probes exited 0. This agrees with the Linux
+[getrusage documentation](https://man7.org/linux/man-pages/man2/getrusage.2.html)
+that resource metrics survive exec. The reported relative-maxRSS checks remain
+recorded passes, but they cannot alone establish ranking memory cost. Original
+campaigns are closed; no threshold, outcome or metric is rewritten. Supplement
+the memory evidence below before evaluator activation. CPU, elapsed and actual
+capture observations remain valid within their stated synthetic/shared-host scope.
+
+## P8. Prospective current-image RSS supplement
+
+Freeze this section before its helper implementation or measurements. This is
+a separate memory-observation supplement, not a rerun/reclassification of either
+closed campaign and not a runtime or ranking change. The two existing raw
+streams and their reported metrics remain immutable.
+
+Use Linux `/proc/self/status` VmHWM, read immediately after the unchanged
+`queryMeasurement` returns in a fresh query child. Preserve its original
+`peakRssBytes` and add a separately named `currentImagePeakRssBytes` with raw
+KiB/source and child PID. Require exactly one valid integer VmHWM field, safe
+conversion to bytes, and a value at least both recorded rssBefore/rssAfter.
+Missing, malformed or contradictory observations fail; never fall back to the
+contaminated metric. This peak includes current-image startup/core-open and
+small observation/validation overhead; it is not allocation attribution or a
+JS-heap measurement. Do not monkeypatch runtime or process measurement methods.
+
+Reuse all five frozen cell constructors, their query mechanics, exact
+counts/index/masks, separate closed preparation children and byte-identical
+read-only stores. Three alternating old/new pairs per cell, fresh initialized
+query children, 60-second watchdog and all raw observations/exits retained.
+The sole supplemental numerical decision is each cell's median new
+current-image peak <= median old +64MiB, unchanged from the intended memory
+allowance. No contention, model, corpus, provider or ledger calls. Keep timing
+fields as observations only; do not replace the closed campaign's medians.
+Run Node22.16 then24.15, no concurrent heavy acceptance jobs. A failure stops
+this supplement and blocks promotion; do not retry or change cells/thresholds.
+
+One GPT-6.1 Sol/high measurement worker may create only `rss-measure.mjs` and
+`rss-measure.test.mjs` in a new primary-owned private evidence directory. All
+repository runtime, frozen modules, old tests and raw streams remain read-only.
+Primary owns this plan, integration/acceptance and descriptive result updates.
+No new production/evaluation framework is required.
+
+Before measurement, pure parser/median/order/exits/cleanup tests and a real
+parent-inflation control must pass on both runtimes. The control launches the
+same tiny fresh image before/after a touched retained128MiB allocation, verifies
+parent current RSS increases >=96MiB, records both child metrics, requires
+child reported peak increase >=32MiB while current-image peak difference is
+<=16MiB. Retain the allocation until the second child exits. An unexplained
+control failure is a measurement failure, not a reason to relax tolerances.
+The primary repeats key checks and both independent reviewers inspect the
+exact helper hashes and this contract before running the supplement. After
+closure, final docs and the unchanged runtime receive both review axes and
+exact-head CI before any real-model diagnostic.
