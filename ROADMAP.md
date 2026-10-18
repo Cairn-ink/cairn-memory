@@ -26,6 +26,13 @@ service must use the same public core, not separate engines.
   hypotheses, not a proven fix. No paid paired24 advancement or default promotion;
   formal quality/resource and later fresh30 comparison gates remain unchanged.
 
+- [H5's bounded source-IDF experiment](docs/plans/source-idf-ranking.md) retains
+  its failed worst-case writer-contention gate. The separate
+  [H5b correction](docs/plans/source-idf-page-snapshots.md) uses at most 256 memories
+  per read snapshot, epoch/generation fences and computation outside transactions.
+  Default behavior is unchanged; same-thread CPU work remains synchronous.
+  H5b resources and real-model quality are pending, with no default promotion.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It

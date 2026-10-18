@@ -105,8 +105,14 @@ still consume physical capacity. Statistics are private to each authorized
 namespace and one recall snapshot. Query-local typed masks retain at most
 25,200,000 payload bytes per active namespace for the maximum bounded scan and
 2,000 distinct query runs; this excludes metadata and is not a peak-RSS bound.
-Only retained winning passages are reread for labels, under the existing
-`BEGIN IMMEDIATE` transaction, which can block competing writers.
+The opted-in H5b path reads physical pages and retained winners in short read
+snapshots covering at most 256 memories, with up to four receipts per eligible
+memory. Every snapshot checks the namespace epoch and
+exact index availability/generation. Receipt validation, hashing, tokenization,
+masks, scoring, sorting and unchanged excerpts run after the transaction closes;
+a final anchored check precedes the candidate result. The synchronous work can
+still occupy its JavaScript thread. The option-off path keeps its existing
+transaction behavior and known worst-case writer-blocking limitation.
 
 The unchanged 120-code-point excerpt can hide a rare cue even when its passage
 wins. Canonical fetch, whole-source rank packing and final atomic validation
@@ -114,8 +120,12 @@ still decide what reaches the model and caller. Rare overlap proves neither
 support nor current applicability. The option adds no model stage and works
 independently of `selectionMode`. Ordinary recall, automatic rationale discovery,
 public maps and host defaults keep their existing behavior. Resource and
-real-model quality gates remain separate; see the
-[frozen H5 contract](plans/source-idf-ranking.md).
+real-model quality gates remain separate. The original H5 resource campaign
+failed when its legacy worst20000 query exhausted a competing writer's
+five-second reservation timeout; that failure is retained. H5b resource
+acceptance and real-model quality remain pending. See the
+[frozen H5 contract](plans/source-idf-ranking.md) and separate
+[H5b read-snapshot contract](plans/source-idf-page-snapshots.md).
 
 ## Run the synthetic example
 

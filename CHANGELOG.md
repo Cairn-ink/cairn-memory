@@ -4,9 +4,11 @@
 
 - Add trusted opt-in `sourceRankingPolicy:'bounded-idf-v1'` for source/rationale
   recall: bounded per-namespace document frequency and maximum individual
-  body/receipt weighted overlap. Scan caps, excerpts, model stages and defaults
-  retain their existing contracts. Resource fit and semantic benefit remain
-  unassessed.
+  body/receipt weighted overlap. H5b reads at most 256 memories per short snapshot,
+  checks epoch and generation, and computes outside transactions; synchronous
+  CPU work still occupies its thread. Scan caps, excerpts, model stages and
+  defaults retain their existing contracts. The original H5 resource failure
+  remains recorded; H5b resources and real-model quality are pending.
 - Add source-evidence-only `selectionMode:'moc-hierarchy-v2'`: standalone L1
   entry, whole-group origin reservation and the default's two flat rounds, with
   flat fetch priority. Reference-only audits separate observed packing/capacity
