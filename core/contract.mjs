@@ -10,6 +10,7 @@ import { createCaptureDeadline } from './capture-deadline.mjs';
 import { uniqueIds, memoryGuards, placementProposal } from './placement-input.mjs';
 import { countTokens } from './model-budget.mjs';
 import { isSourceContext } from './source-evidence.mjs';
+import { SOURCE_RANKING_VERSION } from './source-ranking.mjs';
 import { classify } from './classification.mjs';
 import { memoryRefs, fetchMemories } from './fetch.mjs';
 import { recallMemories } from './recall.mjs';
@@ -151,7 +152,7 @@ function failure(error) {
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
   object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
-    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview']);
+    'captureDeadlineMs', 'sourceCandidatePolicy', 'sourceRankingPolicy', 'sessionEpisodes', 'decisionReview']);
   const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
   const captureSourcePolicy = policyDescriptor?.value;
@@ -168,6 +169,10 @@ export function openMemoryCore(input) {
       sourceCandidatePolicy !== BOUNDED_KEYSET_SOURCE_CANDIDATES.version)) {
     throw new MemoryStoreError('invalid_input');
   }
+  const sourceRankingDescriptor = Object.getOwnPropertyDescriptor(input, 'sourceRankingPolicy');
+  const sourceRankingPolicy = sourceRankingDescriptor?.value;
+  if (sourceRankingDescriptor && (!Object.hasOwn(sourceRankingDescriptor, 'value') ||
+      sourceRankingPolicy !== SOURCE_RANKING_VERSION)) throw new MemoryStoreError('invalid_input');
   const hasCaptureDeadline = Object.hasOwn(input, 'captureDeadlineMs');
   const captureDeadlineMs = hasCaptureDeadline ? input.captureDeadlineMs : undefined;
   if (hasCaptureDeadline && (!Number.isSafeInteger(captureDeadlineMs) ||
@@ -624,7 +629,8 @@ export function openMemoryCore(input) {
     return mapPage(input);
   }
 
-  function mapPage(input, navigation, { catalogOnly = false } = {}) {
+  function mapPage(input, navigation, { catalogOnly = false, recallL2Only = false,
+    recallStandaloneL1Only = false } = {}) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'purpose', 'parentRef', 'limit', 'cursor', 'tokenBudget']);
@@ -644,6 +650,16 @@ export function openMemoryCore(input) {
       const binding = { v: 1, s: storeId, n: namespaceBinding(ns), o: 'map',
         p: parentRef ? JSON.stringify(parentRef) : '', f: purpose, l: count, b: budget };
       if (catalogOnly) binding.o = 'classification_catalog';
+      if (recallL2Only) {
+        if (parentRef || purpose !== 'recall' || navigation) throw new MemoryStoreError('invalid_input');
+        binding.o = 'recall_l2_catalog';
+      }
+      if (recallStandaloneL1Only) {
+        if (parentRef || purpose !== 'recall' || navigation || catalogOnly || recallL2Only) {
+          throw new MemoryStoreError('invalid_input');
+        }
+        binding.o = 'recall_standalone_l1_catalog_v1';
+      }
       if (navigation) Object.assign(binding, { o: 'recall_map',
         q: navigation.queryDigest, x: QUERY_EXCERPT_VERSION,
         policy: navigation.sourceCandidatePolicy ?? QUERY_CANDIDATE_VERSION,
@@ -654,6 +670,7 @@ export function openMemoryCore(input) {
         physicalPage: BOUNDED_KEYSET_SOURCE_CANDIDATES.page,
         top: BOUNDED_KEYSET_SOURCE_CANDIDATES.top,
       });
+      if (navigation?.sourceRankingPolicy) binding.sourceRankingPolicy = navigation.sourceRankingPolicy;
       const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor, binding);
       if (cursor && (!Number.isSafeInteger(cursor.a.offset) || cursor.a.offset < 0 ||
           Object.keys(cursor.a).length !== 1)) throw new MemoryStoreError('invalid_cursor');
@@ -665,6 +682,8 @@ export function openMemoryCore(input) {
         if (!snapshot) {
           snapshot = runtime.queryCandidateRows(ns, { score: navigation.score, memoryLabel: navigation.excerpt,
             ...(navigation.sourceMode ? { sourceReceiptLimit: SOURCE_QUERY_RECEIPT_LIMIT } : {}),
+            ...(navigation.sourceRankingPolicy ? { sourceRankingPolicy: navigation.sourceRankingPolicy,
+              query: navigation.query } : {}),
             ...(navigation.sourceCandidatePolicy ? { sourceCandidatePolicy: navigation.sourceCandidatePolicy } : {}) });
           navigation.pages.set(key, snapshot);
         }
@@ -674,7 +693,7 @@ export function openMemoryCore(input) {
         page = { ...snapshot, rows: snapshot.rows.slice(offset, offset + count + 1) };
       } else {
         page = runtime.mapRows(ns, { purpose, parentRef, limit: count, offset, expectedEpoch: cursor?.e,
-          catalogOnly });
+          catalogOnly, recallL2Only, recallStandaloneL1Only });
       }
       const capacity = Math.min(count, page.rows.length);
       for (let take = capacity; take >= 0; take--) {
@@ -752,7 +771,8 @@ export function openMemoryCore(input) {
       const contextMode = Object.hasOwn(input, 'contextMode') ? input.contextMode : undefined;
       const selectionMode = input.selectionMode;
       if (Object.hasOwn(input, 'selectionMode') &&
-          (selectionMode !== 'bounded-source-scan' || !isSourceContext(contextMode))) {
+          !(selectionMode === 'bounded-source-scan' && isSourceContext(contextMode) ||
+            ['moc-hierarchy-v1', 'moc-hierarchy-v2'].includes(selectionMode) && contextMode === 'source-evidence')) {
         throw new MemoryStoreError('invalid_input');
       }
       if ((Object.hasOwn(input, 'contextMode') && !isSourceContext(contextMode)) ||
@@ -764,17 +784,38 @@ export function openMemoryCore(input) {
       const navigation = { excerpt: createQueryExcerpt(query), score: createQueryScore(query), pages: new Map(),
         ...(isSourceContext(contextMode) ? { sourceMode: contextMode } : {}),
         ...(sourceCandidatePolicy && isSourceContext(contextMode) ? { sourceCandidatePolicy } : {}),
+        ...(sourceRankingPolicy && isSourceContext(contextMode) ? { sourceRankingPolicy, query } : {}),
         queryDigest: createHmac('sha256', cursorSecret)
           .update(JSON.stringify([QUERY_EXCERPT_VERSION, query])).digest('base64url') };
+      const hierarchy = ['moc-hierarchy-v1', 'moc-hierarchy-v2'].includes(selectionMode);
+      const observedEpochs = new Map();
+      const observed = (request, result) => {
+        if (!result.ok) return result;
+        const ns = contractNamespace(request.namespace);
+        const key = namespaceBinding(ns);
+        if (!namespaces.some(namespace => namespaceBinding(namespace) === key)) throw new MemoryStoreError('invalid_read_set');
+        const epoch = result.value.indexRevision;
+        if (observedEpochs.has(key) && observedEpochs.get(key) !== epoch) throw new MemoryStoreError('index_revision_conflict');
+        observedEpochs.set(key, epoch);
+        return result;
+      };
+      const epochGuards = () => namespaces.flatMap(namespace => {
+        const indexRevision = hierarchy ? observedEpochs.get(namespaceBinding(namespace))
+          : navigation.pages.get(namespaceBinding(namespace))?.epoch;
+        return indexRevision === undefined ? [] : [{ namespace, indexRevision }];
+      });
       const validateFresh = (candidates = []) => runtime.recallSnapshot(candidates.map((candidate) => ({
         namespace: namespaces[candidate.namespaceIndex], memoryId: candidate.memoryId,
         revision: candidate.revision,
-      })), [], namespaces.flatMap((namespace) => {
-        const page = navigation.pages.get(namespaceBinding(namespace));
-        return page ? [{ namespace, indexRevision: page.epoch }] : [];
-      }));
+      })), [], epochGuards());
       return success(await recallMemories({ model, readSet: namespaces.map(publicNamespace), query,
-        limit: count, map: (request) => mapPage(request, navigation), fetch, includeQualification, contextMode, selectionMode,
+        limit: count, map: request => hierarchy ? observed(request, mapPage(request, navigation))
+          : mapPage(request, navigation),
+        ...(hierarchy ? { hierarchyMap: request => observed(request,
+          mapPage(request, undefined, { recallL2Only: !request.parentRef })) } : {}),
+        ...(selectionMode === 'moc-hierarchy-v2' ? { standaloneMap: request => observed(request,
+          mapPage(request, undefined, { recallStandaloneL1Only: true })) } : {}),
+        fetch, includeQualification, contextMode, selectionMode,
         validateFresh,
         recentReceipts: (ref, limit) => runtime.recentReceipts(namespaces[ref.namespaceIndex], ref, limit),
         finalize: (candidates, selected) => runtime.recallSnapshot(candidates.map((candidate) => ({
@@ -782,8 +823,7 @@ export function openMemoryCore(input) {
           revision: candidate.revision, receiptLimit: candidate.receiptCap ?? candidate.item.receipts.length,
           ...(candidate.receiptCap ? { receiptOrder: 'recent' } : {}),
           ...(isSourceContext(contextMode) ? { sourceEvidence: candidate.item } : {}),
-        })), selected, namespaces.map((namespace) => ({ namespace,
-          indexRevision: navigation.pages.get(namespaceBinding(namespace)).epoch })), includeQualification, contextMode),
+        })), selected, epochGuards(), includeQualification, contextMode),
       }));
     } catch (error) { return failure(error); }
   }

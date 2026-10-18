@@ -4,6 +4,7 @@ import { fail } from "./validation.mjs";
 import { QUERY_SCAN_LIMIT, SOURCE_QUERY_RECEIPT_LIMIT,
   BOUNDED_KEYSET_SOURCE_CANDIDATES } from './query-candidates.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
+import { createSourceRanking, SOURCE_RANKING_VERSION } from './source-ranking.mjs';
 
 const namespaceWhere = "owner_id = ? AND scope = ? AND project_id = ?";
 const qualifiedNamespace = (alias) => `${alias}.owner_id = ? AND ${alias}.scope = ? AND ${alias}.project_id = ?`;
@@ -361,7 +362,13 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     THEN moc.title ELSE NULL END`;
 
   function queryCandidateRows(ns, { score, memoryLabel, sourceReceiptLimit = 0,
-    sourceCandidatePolicy = null }) {
+    sourceCandidatePolicy = null, sourceRankingPolicy = null, query }) {
+    if (sourceRankingPolicy !== null) {
+      const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
+      if (sourceRankingPolicy !== SOURCE_RANKING_VERSION || sourceReceiptLimit !== SOURCE_QUERY_RECEIPT_LIMIT ||
+          sourceCandidatePolicy !== null && !keyset) fail('invalid_input');
+      return rankedSourceRows(ns, { query, memoryLabel, keyset });
+    }
     return transaction(db, () => {
       if (![0, SOURCE_QUERY_RECEIPT_LIMIT].includes(sourceReceiptLimit)) fail('invalid_input');
       const keyset = sourceCandidatePolicy === BOUNDED_KEYSET_SOURCE_CANDIDATES.version;
@@ -484,15 +491,141 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
     });
   }
 
+  // Only bounded SQL reads run under snapshots. Epoch AND exact index-state
+  // anchors bind every page; the first staged rebuild can add NULL without an
+  // epoch bump. No source validation, ranking or label callback holds a reader.
+  function rankedSourceRows(ns, { query, memoryLabel, keyset }) {
+    const indexState = db.prepare(`SELECT active_generation FROM namespace_index_state WHERE ${namespaceWhere}`);
+    let anchor;
+    function readSnapshot(work) {
+      db.exec('BEGIN');
+      try {
+        const generation = indexState.get(...boundary(ns))?.active_generation;
+        if (generation === null) fail('index_unavailable');
+        const currentEpoch = epoch(ns);
+        if (anchor && (currentEpoch !== anchor.epoch || generation !== anchor.generation)) {
+          fail('index_revision_conflict');
+        }
+        anchor ??= { epoch: currentEpoch, generation };
+        const result = work();
+        db.exec('COMMIT');
+        return result;
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+    }
+    readSnapshot(() => {});
+    const ranking = createSourceRanking(query);
+    const scan = keyset ? BOUNDED_KEYSET_SOURCE_CANDIDATES.scan : QUERY_SCAN_LIMIT;
+    const page = BOUNDED_KEYSET_SOURCE_CANDIDATES.page;
+    const top = keyset ? BOUNDED_KEYSET_SOURCE_CANDIDATES.top : QUERY_SCAN_LIMIT;
+    const physicalPage = db.prepare(`SELECT id,revision FROM memories INDEXED BY capture_current_memories
+      WHERE ${namespaceWhere} AND deleted=0 AND review_state!='awaiting' AND currentness='current'
+        AND id>? ORDER BY id LIMIT ?`);
+    const sentinel = db.prepare(`SELECT id FROM memories INDEXED BY capture_current_memories
+      WHERE ${namespaceWhere} AND deleted=0 AND review_state!='awaiting' AND currentness='current'
+        AND id>? ORDER BY id LIMIT 1`);
+    const projected = projectPrepare(`SELECT id,revision,content FROM memories WHERE ${namespaceWhere}
+      AND id=? AND revision=? AND deleted=0 AND review_state!='awaiting' AND currentness='current'`);
+    const sources = db.prepare(`SELECT id,memory_id,receipt_key,client,session_id,event_id,role,excerpt
+      FROM receipts INDEXED BY capture_memory_receipts WHERE memory_id=? ORDER BY id LIMIT ?`);
+    let lastId = '';
+    let physicalRows = 0;
+    let receiptReads = 0;
+    while (physicalRows < scan) {
+      const limit = Math.min(page, scan - physicalRows);
+      const batch = readSnapshot(() => physicalPage.all(...boundary(ns), lastId, limit).map(physical => {
+        const memory = projected.get(...boundary(ns), physical.id, physical.revision);
+        return { physical, memory, receipts: memory ? sources.all(memory.id, SOURCE_QUERY_RECEIPT_LIMIT) : [] };
+      }));
+      if (!batch.length) break;
+      const masks = ranking.slab(batch.length);
+      for (let slot = 0; slot < batch.length; slot += 1) {
+        const { physical, memory, receipts } = batch[slot];
+        physicalRows += 1;
+        lastId = physical.id;
+        if (!memory) continue;
+        receiptReads += receipts.length;
+        ranking.add(masks, slot, memory,
+          receipts.map(receipt => validateSourceReceipt(memory.id, receipt, receiptKey)));
+      }
+      if (batch.length < limit) break;
+    }
+    const more = physicalRows === scan && readSnapshot(() => Boolean(sentinel.get(...boundary(ns), lastId)));
+    const stats = ranking.stats();
+    const retained = ranking.top(top);
+    const sourceById = db.prepare(`SELECT id,memory_id,receipt_key,client,session_id,event_id,role,excerpt
+      FROM receipts WHERE memory_id=? AND id=?`);
+    const placementByMemory = projectPrepare(`SELECT r.* FROM moc_memory_refs r
+      JOIN mocs parent ON parent.id=r.moc_id WHERE r.memory_id=? AND r.memory_revision=?
+        AND ${qualifiedNamespace('parent')} AND parent.level=1 AND parent.revision=r.moc_revision
+      ORDER BY parent.canonical_title,parent.id LIMIT 1`);
+    let retainedReceiptReads = 0;
+    const rows = [];
+    for (let start = 0; start < retained.length; start += page) {
+      const batch = readSnapshot(() => retained.slice(start, start + page).map(candidate => {
+        const memory = projected.get(...boundary(ns), candidate.id, candidate.revision);
+        if (!memory) fail('index_revision_conflict');
+        const receipt = candidate.receiptId === undefined ? undefined : sourceById.get(memory.id, candidate.receiptId);
+        if (candidate.receiptId !== undefined && !receipt) fail('storage_error');
+        return { memory, receipt, placement: placementByMemory.get(memory.id, memory.revision, ...boundary(ns)) };
+      }));
+      for (const { memory, receipt, placement } of batch) {
+        if (receipt) retainedReceiptReads += 1;
+        const passage = receipt ? validateSourceReceipt(memory.id, receipt, receiptKey).excerpt : memory.content;
+        const text = memoryLabel(passage);
+        rows.push({ item: placement ? { type: 'ref', ref: memoryRef(placement), label: text }
+          : { type: 'unfiled', ref: { memoryId: memory.id, revision: memory.revision }, label: text } });
+      }
+    }
+    readSnapshot(() => {});
+    return { rows, epoch: anchor.epoch, scanExhausted: !more && stats.eligibleMemories <= top,
+      ranking: { version: SOURCE_RANKING_VERSION, physicalRows, ...stats, receiptReads,
+        retainedRows: retained.length, retainedReceiptReads } };
+  }
+
+  const recallL2Visible = `moc.level = 2 AND EXISTS (SELECT 1 FROM moc_edges edge JOIN mocs child
+    ON child.id = edge.child_id WHERE edge.parent_id = moc.id AND child.level = 1
+    AND child.owner_id = moc.owner_id AND child.scope = moc.scope
+    AND child.project_id = moc.project_id AND edge.parent_revision = moc.revision
+    AND edge.child_revision = child.revision AND EXISTS
+      (SELECT 1 FROM moc_memory_refs mr JOIN memories memory ON memory.id = mr.memory_id
+       WHERE mr.moc_id = child.id AND memory.deleted = 0
+       AND memory.owner_id = child.owner_id AND memory.scope = child.scope
+       AND memory.project_id = child.project_id AND mr.moc_revision = child.revision
+       AND mr.memory_revision = memory.revision))`;
+
   function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label,
-    catalogOnly = false }) {
+    catalogOnly = false, recallL2Only = false, recallStandaloneL1Only = false }) {
     return transaction(db, () => {
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && expectedEpoch !== currentEpoch) fail("cursor_stale");
       const count = limit + 1;
       let rows;
-      if (catalogOnly) {
+      if (recallStandaloneL1Only) {
+        rows = projectPrepare(`SELECT 'moc' row_kind, moc.id moc_id
+          FROM mocs moc WHERE ${qualifiedNamespace('moc')} AND moc.level = 1
+          AND EXISTS (SELECT 1 FROM moc_memory_refs mr JOIN memories memory ON memory.id = mr.memory_id
+            WHERE mr.moc_id = moc.id AND mr.moc_revision = moc.revision
+              AND mr.memory_revision = memory.revision AND memory.deleted = 0
+              AND memory.currentness = 'current' AND memory.review_state != 'awaiting'
+              AND memory.owner_id = moc.owner_id AND memory.scope = moc.scope
+              AND memory.project_id = moc.project_id)
+          AND NOT EXISTS (SELECT 1 FROM moc_edges edge JOIN mocs parent ON parent.id = edge.parent_id
+            WHERE edge.child_id = moc.id AND parent.level = 2
+              AND edge.parent_revision = parent.revision AND edge.child_revision = moc.revision
+              AND parent.owner_id = moc.owner_id AND parent.scope = moc.scope
+              AND parent.project_id = moc.project_id)
+          ORDER BY COALESCE(${titleExpression}, ''), moc.id LIMIT ? OFFSET ?`)
+          .all(...boundary(ns), count, offset);
+      } else if (recallL2Only) {
+        rows = projectPrepare(`SELECT 'moc' row_kind, moc.id moc_id
+          FROM mocs moc WHERE ${qualifiedNamespace('moc')} AND (${recallL2Visible})
+          ORDER BY COALESCE(${titleExpression}, ''), moc.id LIMIT ? OFFSET ?`)
+          .all(...boundary(ns), count, offset);
+      } else if (catalogOnly) {
         // Classification needs the complete topic catalog, not every placement or
         // unfiled body. Filter before paging so memory growth cannot crowd it out.
         rows = projectPrepare(`SELECT 'moc' row_kind, moc.id moc_id
@@ -511,16 +644,7 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
               AND memory.owner_id = moc.owner_id AND memory.scope = moc.scope
               AND memory.project_id = moc.project_id AND mr.moc_revision = moc.revision
               AND mr.memory_revision = memory.revision)) OR
-            (moc.level = 2 AND EXISTS (SELECT 1 FROM moc_edges edge JOIN mocs child
-              ON child.id = edge.child_id WHERE edge.parent_id = moc.id AND child.level = 1
-              AND child.owner_id = moc.owner_id AND child.scope = moc.scope
-              AND child.project_id = moc.project_id AND edge.parent_revision = moc.revision
-              AND edge.child_revision = child.revision AND EXISTS
-                (SELECT 1 FROM moc_memory_refs mr JOIN memories memory ON memory.id = mr.memory_id
-                 WHERE mr.moc_id = child.id AND memory.deleted = 0
-                 AND memory.owner_id = child.owner_id AND memory.scope = child.scope
-                 AND memory.project_id = child.project_id AND mr.moc_revision = child.revision
-                 AND mr.memory_revision = memory.revision))))
+            (${recallL2Visible}))
           UNION ALL
           SELECT CASE WHEN parent.id IS NULL OR child.id IS NULL OR parent.level != 2 OR child.level != 1
                     OR parent.owner_id != child.owner_id OR parent.scope != child.scope
