@@ -25,13 +25,20 @@ const model = {
     process.stderr.write('synthetic_stage:classify\n');
     if (process.argv.includes('--capture-qualification') &&
         input.memories.some(({ content }) => content.includes('STALL_CLASSIFY'))) return new Promise(() => {});
+    if (input.memories.some(({ content }) => content.includes('PAUSE_CLASSIFY'))) {
+      // A bounded synchronous delay exercises the core's late-result deadline
+      // check even while the event loop cannot deliver the timeout callback.
+      process.stderr.write('synthetic_classifier_pause:1700\n');
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1700);
+    }
     return { items: input.memories.map(({ id }) => ({ memoryId: id, parentIds: [],
       newL1: { title: 'Synthetic filing', parentL2Ids: [] } })) };
   },
 };
 const options = { ...parseConfiguration(process.argv.slice(2)), model };
+// The server snapshots this fixed captureDeadlineMs at construction. Every
+// capture on this host uses it; changing options afterward cannot change it.
 const server = createCairnServer(options);
-options.captureDeadlineMs = 120_000;
 const handle = serveStdio(() => server, {
   transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 65536 }),
   onerror: () => { process.stderr.write('synthetic_transport_error\n'); },
