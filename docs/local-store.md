@@ -4,7 +4,8 @@ The additive [S2a model-free core contract](storage-contract.md) provides explic
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate
 the new inspection cursors and [S2b MOC memberships](moc-placement.md). Opening
-v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16/v17 data now upgrades it to v18 for
+v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16/v17/v18 data now upgrades it to v19 for
+[optional claimed source-time preservation](capture.md#optional-claimed-source-time-embedded-only),
 [opt-in decision confirmation](plans/confirmation-state.md),
 [episode storage and explicit procedural tags](#episode-storage-foundation-se-1),
 [opt-in staged capture evidence](staged-capture-evidence.md),
@@ -15,10 +16,20 @@ v1/v3/v4/v5/v6/v7/v8/v9/v10/v11/v12/v13/v14/v15/v16/v17 data now upgrades it to 
 [historical currentness](supersession.md), preserving index generations,
 [conflict hints](conflicts.md), [admission claims](admission-claims.md) and
 the bounded [initial capture classification journal](capture.md).
-Draft-v2 and unknown formats are rejected; older binaries cannot open v18.
+Draft-v2 and unknown formats are rejected; older binaries cannot open v19.
 Stop all older-runtime processes/connections, including idle readers, before
 the upgrade. Previously opened old runtimes are not retroactively fenced;
 mixed-version coexistence is unsupported.
+
+Schema v19 adds nullable receipts.source_time; old rows remain NULL and old
+receipt keys/capture digests stay unchanged. Embedded `captureSourceTime:'claimed-v1'`
+retains bounded canonical opaque utterance labels in immutable receipts for
+ordinary v2/staged and indexed-evidence capture. Unknown stays omitted; no
+backfill, date/timezone parsing, chronology/order inference or clock fallback.
+All upgraded readers return retained annotations even if capture opt-in is
+omitted on reopen. Metadata consumes exact source budgets and can reach the
+configured rank provider; extraction/qualification requests remain unchanged.
+No host/adapter/evaluation producer is wired by this core-only seam.
 
 This is a real SQLite persistence library runnable from public source. It is
 **not itself a standalone memory service**. The shared core now supplies capture
@@ -35,6 +46,99 @@ is required; no provider key or generation calls are needed. It includes potenti
 unrelated sources, excludes staged/history/deleted data and interpretations, and
 fails without partial evidence or fallback. Storage-current does not mean true or
 still applicable today. Existing recall and MCP defaults are unchanged.
+
+The opt-in embedded recall strategy `selectionMode:'moc-hierarchy-v1'` is valid
+only with `contextMode:'source-evidence'`. It navigates a private L2-only current
+catalog, revision-matched L1 children and memory refs, then reserves one existing
+query-candidate page per namespace and one ordinary selection of at most twelve
+fallback refs. Fallback includes eligible unfiled/orphan memories but does not
+guarantee finding them. The deduplicated, fallback-first union enters the existing
+fetch, source packing, rank and atomic `runtime.recallSnapshot` finalization.
+Every observed namespace epoch is checked; errors reject rather than repair or
+silently recover. Public maps, classification catalogs, default recall and hosts
+are unchanged.
+
+This experimental strategy permits at most sixteen navigation maps and four
+model calls, versus the default's maximum three model calls. Existing per-call
+limits remain: 4,000 map tokens, 6,000 model-input tokens, 1,024 model-output
+tokens, an 8,192 minimum model context window and a 30-second model timeout.
+The candidate union is at most 36 total/24 per namespace (24 for one namespace).
+Selection metadata carries reference-only provenance, resource/page observations
+and the actual rank-visible/omitted refs. Selected candidates can be omitted by
+source packing. Overall coverage remains `budget_exhausted`; freshness is atomic
+at finalization, while semantic coverage remains unassessed. This is not an
+equal-budget or demonstrated lightweight/quality improvement. See the
+[prospective integration contract](plans/moc-hierarchy-recall.md).
+
+The separate opt-in `selectionMode:'moc-hierarchy-v2'` also requires
+`contextMode:'source-evidence'`. It adds one private standalone-L1 catalog page
+per namespace alongside the independent L2 lane. A standalone topic has a
+current eligible memory membership and no valid same-namespace parent in the
+active projected index, including parents outside the visited root pages.
+Its provenance contains its actual L1 and memory edge, without an invented L2.
+
+V2 preserves the default's two cursor-following flat rounds, exact navigation
+packing and selection quotas. Flat choices get fetch capacity first; hierarchy
+refs then fill the remaining 36-total/24-per-namespace capacity. Equality of flat
+inputs assumes a stable store/query/counter and the same scripted first-round
+choices. It does not promise identical stochastic choices or later rank packing.
+
+Whole-group selection reserves the first group of each nonempty namespace/origin
+lane before one round-robin pass over the rest. An oversized reserved bundle
+fails explicitly. Titles and reference identities stay whole. Reference-only
+`groupPacking` metadata lists exact observed packed/omitted refs and fit-check
+counts; `partialPages` marks unread tails as unknown. Capacity omissions and
+actual rank-visible/omitted refs are separate. Source evidence uses the existing
+whole-source rank packing and atomic final read.
+
+V2 permits at most 20 navigation maps and five model calls, compared with the
+default's three model calls. There are at most 36 chosen identities and up to
+72 actual fetch page calls. Group packing observes at most 400 distinct groups
+per stage and performs at most N+3 full-request fit checks for N groups.
+Catalog row limits do not bound SQLite work. Default, bounded-source-scan, v1,
+public maps and host settings retain their existing behavior. These are offline
+mechanics bounds, not an equal-cost or measured quality improvement. See the
+[frozen H4 contract](plans/moc-standalone-entry.md).
+
+Trusted callers may independently opt into
+`openMemoryCore({ path, model, sourceRankingPolicy: 'bounded-idf-v1' })` for
+`source-evidence` and `rationale-evidence` recall. Per namespace, it counts each
+query run once per eligible memory across the body and first four validated
+receipts, weights that run by bounded inverse document frequency, then ranks by
+the highest individual body/receipt score. Separate receipts never combine into
+one score. Body wins passage ties, then stable receipt ID; memory ties use ID.
+This is weighted binary overlap, without stemming, segmentation or synonyms.
+
+Ranking does not expand the scan: the default remains the first 1,024 physical
+current rows; the separate `sourceCandidatePolicy:'bounded-keyset-v1'` uses its
+20,000-row cap, 256-row pages and 1,024 retained candidates. Projected-out rows
+still consume physical capacity. Statistics are private to each authorized
+namespace and one recall snapshot. Query-local typed masks retain at most
+25,200,000 payload bytes per active namespace for the maximum bounded scan and
+2,000 distinct query runs; this excludes metadata and is not a peak-RSS bound.
+The opted-in H5b path reads physical pages and retained winners in short read
+snapshots covering at most 256 memories, with up to four receipts per eligible
+memory. Every snapshot checks the namespace epoch and
+exact index availability/generation. Receipt validation, hashing, tokenization,
+masks, scoring, sorting and unchanged excerpts run after the transaction closes;
+a final anchored check precedes the candidate result. The synchronous work can
+still occupy its JavaScript thread. The option-off path keeps its existing
+transaction behavior and known worst-case writer-blocking limitation.
+
+The unchanged 120-code-point excerpt can hide a rare cue even when its passage
+wins. Canonical fetch, whole-source rank packing and final atomic validation
+still decide what reaches the model and caller. Rare overlap proves neither
+support nor current applicability. The option adds no model stage and works
+independently of `selectionMode`. Ordinary recall, automatic rationale discovery,
+public maps and host defaults keep their existing behavior. Resource and
+real-model quality gates remain separate. The original H5 resource campaign
+failed when its legacy worst20000 query exhausted a competing writer's
+five-second reservation timeout; that failure is retained. H5b's closed offline
+resource gates are met; final exact-head delivery/CI and real-model quality
+remain pending. These synthetic observations do not certify a lightweight
+implementation. See the
+[frozen H5 contract](plans/source-idf-ranking.md) and separate
+[H5b read-snapshot contract](plans/source-idf-page-snapshots.md).
 
 ## Run the synthetic example
 
@@ -221,12 +325,12 @@ Episode mode now enables debounced capture through an injected interpretation po
 quick handling, explicit keep and automatic source-bound procedural tags.
 Mode-off capture remains unchanged. See [capture](capture.md#opt-in-session-episodes).
 
-Every open atomically upgrades an older committed format to v18, including with
+Every open atomically upgrades an older committed format to v19, including with
 episodes off. Explicit procedural tags are available immediately in both modes;
 no request triggers a lazy upgrade. Inspection and memory correction/forgetting
 still enforce episode dependencies with the feature off. The host must stop/drain
 **all** older-runtime processes and connections, including idle readers, before
-opening the store for upgrade. Older binaries reject v18 on subsequent opens;
+opening the store for upgrade. Older binaries reject v19 on subsequent opens;
 an already-open old process is not retroactively fenced. There is no downgrade.
 
 The upgrade runs within the existing immediate transaction with foreign keys on.
@@ -269,10 +373,11 @@ admitted inferred decisions in an independent review state. Ordinary reads exclu
 this option is absent. Person-facing hosts may use `list({reviewState:'awaiting'})`
 and `get({includeAwaiting:true})`; model tools must not expose these switches.
 `confirm` and `reject` require an expected revision and durable action ID.
-`openMemoryStore` does not accept this option. Schema v18 eagerly adds
+`openMemoryStore` does not accept this option. The v18 migration introduced
 `memories.review_state`, `confirmation_actions`, `confirmation_supersessions`,
 `confirmation_conflicts` (with durable statuses/results and dropped-hint reasons),
 bound predecessor fingerprints and receipt IDs for held work, and the
-`review_hidden_episodes` view, and updates index eligibility/readers. See the
+`review_hidden_episodes` view, and updated index eligibility/readers. The current
+opener continues to v19. See the
 [contract appendix](plans/confirmation-state.md) for replay, episode visibility,
 and the direct-statement provenance limitation.

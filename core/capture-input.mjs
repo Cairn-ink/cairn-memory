@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
+import { boundedText, denseArray, fail, identifier, object, revision, sourceTimeFields } from './validation.mjs';
 
 const kinds = ['fact', 'preference', 'decision', 'instruction', 'context'];
 
 /** Copy trusted identity and normalize every message before claiming or calling a model. */
-export function captureSnapshot(input, captureQualification, captureSourcePolicy) {
+export function captureSnapshot(input, captureQualification, captureSourcePolicy, captureSourceTime) {
   try {
     const namespace = { ownerId: input.namespace.ownerId, scope: input.namespace.scope,
       projectId: input.namespace.projectId };
@@ -17,7 +17,8 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
       causal = { streamId: identifier(input.causal.streamId), sequence: revision(input.causal.sequence) };
     }
     const messages = denseArray(input.messages, 1, 24).map((message) => {
-      object(message, ['id', 'role', 'content']);
+      object(message, ['id', 'role', 'content', ...(captureSourceTime ? ['sourceTime'] : [])]);
+      if (!captureSourceTime && Object.hasOwn(message, 'sourceTime')) fail('invalid_input');
       const id = identifier(message.id);
       const role = message.role;
       if (!['user', 'assistant'].includes(role)) fail('invalid_input');
@@ -25,13 +26,13 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
           (typeof message.content !== 'string' || !message.content.isWellFormed())) {
         fail('invalid_input');
       }
-      return { id, role, content: boundedText(message.content, 4000) };
+      return { id, role, content: boundedText(message.content, 4000), ...(captureSourceTime ? sourceTimeFields(message) : {}) };
     });
     if (new Set(messages.map((message) => message.id)).size !== messages.length ||
         messages.reduce((sum, message) => sum + message.content.length, 0) > 20000) {
       fail('invalid_input');
     }
-    const payloadDigest = createHash('sha256').update(JSON.stringify([
+    let payloadDigest = createHash('sha256').update(JSON.stringify([
       captureSourcePolicy === 'indexed-evidence-v1' ? 'cairn.capture.indexed-evidence.v1' :
         captureSourcePolicy ? 'cairn.capture.indexed-windows.v1' :
         captureQualification ? 'cairn.capture.v3' : causal ? 'cairn.capture.v2' : 'cairn.capture.v1',
@@ -41,6 +42,10 @@ export function captureSnapshot(input, captureQualification, captureSourcePolicy
       ...(captureQualification ? [captureQualification] : []),
       ...(captureSourcePolicy ? [captureSourcePolicy, 'nonoverlap-800-v1'] : []),
     ]), 'utf8').digest('hex');
+    if (messages.some(message => Object.hasOwn(message, 'sourceTime'))) {
+      payloadDigest = createHash('sha256').update(JSON.stringify(['cairn.capture.source-time.claimed.v1',
+        payloadDigest, messages.map(message => Object.hasOwn(message, 'sourceTime') ? [message.sourceTime] : [])]), 'utf8').digest('hex');
+    }
     return { namespace, client, eventId, sessionId, messages, payloadDigest, ...(causal ? { causal } : {}),
       ...(captureQualification ? { captureQualification } : {}),
       ...(captureSourcePolicy ? { captureSourcePolicy } : {}) };
@@ -95,7 +100,8 @@ export function extractedItems(output, snapshot, retainedMessages, onInvalid = (
         const message = sourceMessages[index];
         return { client: snapshot.client, sessionId: snapshot.sessionId,
           eventId: message.id, role: message.role,
-          excerpt: retainedMessages === undefined ? boundedText(message.content, 800, true) : message.content };
+          excerpt: retainedMessages === undefined ? boundedText(message.content, 800, true) : message.content,
+          ...sourceTimeFields(message) };
       });
       return { content, kind: item.kind, confidence: item.confidence, receipts,
         ...(snapshot.sessionEpisodes && item.procedural === true ? { proceduralProposal: true } : {}),

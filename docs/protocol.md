@@ -1,5 +1,36 @@
 # Compatibility protocol v0.3.0
 
+### Optional embedded claimed-source-time boundary
+
+Embedded `captureSourceTime:'claimed-v1'` retains optional message sourceTime
+only for ordinary source-bound-v2 (including existing staged-v1) and
+indexed-evidence-v1 capture. It is untrusted producer-claimed utterance metadata,
+not event occurrence, applicability, authenticated chronology, namespace identity,
+permission or causal order. Accept only exact canonical 1–128 UTF-16-unit,
+well-formed labels without C0/C1 controls, line/paragraph separators or outer
+whitespace; normalization/redaction must leave the label unchanged. Unknown is
+omission; explicit undefined/null is invalid. Never infer a date/timezone, use
+arrival/current clocks, backfill old rows or obey embedded instructions.
+
+Capture rejects source-bound-v1/unqualified legacy, session episodes, automatic
+rationale and any own causal field with this capability before claims/models/
+writes. Explicit receipt mutation APIs remain strict. Labels are copied through
+trusted source normalization/windows into immutable receipt identities and the
+annotated capture digest; replay with changed/added/removed metadata conflicts.
+Extraction/qualification provider requests do not receive this field. Source
+rank candidates do expose retained labels to the configured rank provider, and
+ordinary source/rationale read projections expose them under exact existing
+whole-item token/byte, namespace, retention and stale-source checks. Reopening
+without opt-in does not conceal already retained labels. No cursor/projection
+policy switch or extra identity fields are added.
+
+Schema v19 transactionally adds nullable receipts.source_time after preserved
+v18; old keys/digests/output shapes and absent annotations remain unchanged.
+Stop/drain all older connections before upgrade; older openers reject v19,
+but already-open binaries cannot be retroactively fenced. This T1 core seam
+does not widen hosted/MCP/HTTP/hooks/provider-adapter schemas or wire evaluation
+producers. It makes no accuracy/default claim and does not reopen frozen H6.
+
 ### Private mixed-source-pair metadata boundary
 
 The evaluation-only `cairn-mem0-source-pair-case-v1` capability and durable

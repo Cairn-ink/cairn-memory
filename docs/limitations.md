@@ -1,5 +1,33 @@
 # Known limitations
 
+The [T1 source-time foundation](plans/source-time-preservation.md) is embedded
+core-only: T1 itself supplies no host, MCP/HTTP/hooks, provider adapter or
+evaluation ingestion producer. It preserves exact bounded opaque
+producer-claimed utterance labels through capture and retained source reads,
+without date parsing, authenticated chronology, event/applicability inference,
+historical backfill or retrieval/answer-quality improvement. Labels can be false
+or hostile and consume the same source budgets; whole items can cease fitting.
+Source rank exposes retained labels to its configured provider, while extraction
+and qualification requests stay unchanged. Unsupported legacy/v1, episode,
+causal and automatic-rationale combinations reject explicitly. Schema v19
+requires draining older connections before upgrade. Synthetic scripted
+capture/cold-read tests verify transport only: no H6 replay, score claim,
+evaluation/default promotion or paid authorization is included.
+
+The explicitly selected [T2 evaluation producer/consumer](plans/source-time-consumer.md)
+copies existing required session dates unchanged into claimed receipt labels,
+then packages source-evidence tuples from cold recall authenticated by complete
+local core.get. It needs no answer-time history/source map and never repairs an
+absent label. Only current memories are accepted; this is not a historical
+applicability consumer. Whole tuple budget omission can remove necessary context
+even when other receipts for the same memory fit. Exact labels prove neither
+chronology nor event time, adoption, truth or a correct answer. The synchronous
+trusted counter measures the serialized request plus reserved output; its estimate
+is not provider context-fit proof, an invoice or an execution/freshness lease.
+No asynchronous counter/transport, hosted entrypoint, answer dispatch, scoring or
+paid campaign is connected. Scripted synthetic transport success supplies no
+semantic-quality improvement and does not reopen closed H6 or change old results.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025
@@ -1509,3 +1537,358 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Evaluation-only MOC hierarchy candidates
+
+The bounded `generateMocCandidates` experiment navigates existing public
+L2→L1→memory maps and returns candidate references plus observed paths. It does
+not fetch, rank, finalize, answer, replace default recall or implement an
+integrated fallback. Every result declares `finalRetrieval:false`,
+`fallbackRequired:true`, `snapshotGuarantee:'per-call-not-atomic'` and
+`semanticCoverage:'unassessed'`. Namespace epoch checks catch observed drift;
+even matching final root observations cannot reproduce the core's private
+atomic recall finalization. A change after a namespace's last read can race it.
+
+Public root maps mix L1 headers, memory refs, L2 groups, edges and unfiled refs.
+Two fixed root pages can end before any L2 is visible. Two bounded child pages
+can omit a header/edge join; one six-row leaf page can omit required memories.
+Orphan L1, unfiled, cross-topic and unvisited evidence may remain inaccessible.
+Empty candidate sets do not establish absence or complete recall. Titles and
+placement are untrusted navigation hints, not truth, adoption, permission or
+current-state proof.
+
+Offline input-only scripted capture/classification verifies actual filing,
+source receipts, greater-than-36 eligible refs, traversal and bounded failure
+behavior. Disabling group selection is a mechanics red control, not a comparison
+against existing flat recall or evidence of real-model quality. Synthetic token
+counters do not measure actual provider tokens or costs. See the prospective
+[H1–H5 contract and execution record](plans/moc-hierarchy-candidates.md).
+An independently frozen real-model opportunity probe, a shared internal
+candidate-strategy seam with existing finalization and bounded fallback, and
+fresh paired acceptance remain required before any paid quality comparison.
+
+The integration stress fixture for more than 200 L1 groups uses public filing
+APIs only to create unrelated structural load; it is not a manually filed
+oracle target or semantic evidence. Ordinary classification reads at most 100
+catalog rows and refuses new groups when its catalog is incomplete, so this
+fixture does not prove normal capture scales to 200 L1 groups. The separate
+greater-than-36 eligible-reference/target fixture uses normal capture and
+classification throughout.
+
+## Opt-in integrated MOC recall
+
+The source-evidence-only `moc-hierarchy-v1` strategy connects bounded hierarchy
+navigation to the existing fetch, atomic source packing, rank and authoritative
+finalization. Its private L2-only catalog avoids mixed-root/L1 crowding, but
+limited pages and untrusted topic titles still miss relevant groups and evidence.
+One ordinary query page per namespace and one twelve-ref selection reserve
+provide bounded unfiled/orphan fallback, not complete recall. Invalid/stale data
+or model failures reject the request; fallback does not hide errors.
+
+Within each routed L1, the leaf page is the first six memory-ID-ordered refs,
+not query-aware within-topic retrieval. A useful later memory can remain unseen
+even when the correct topic was selected. The scripted hierarchy-only target
+does not establish a real target absent from actual flat navigation.
+
+Candidate provenance and actual rank-visible/omitted references are reported
+without source bodies in selection audit. Reserving a candidate slot does not
+guarantee rank visibility: source-mode packing can omit whole candidates. All
+observed namespace epochs and exact returned source evidence are validated in
+the existing final transaction, which establishes freshness rather than semantic
+sufficiency, truth or adoption.
+
+Maximum navigation is sixteen maps, two group calls, one flat select and one
+rank. Four model calls allow local-input/output ceilings of 24,000/4,096,
+versus the default three calls' 18,000/3,072. Per-call limits remain unchanged.
+This is not equal total budget or demonstrated lightweight improvement. SQL
+work/latency and actual provider tokens, physical requests and cost need separate
+measurement. Compact group wire schemas avoid repeated-object schema bloat;
+local tokenizer measurements and fake provider counts are not provider invoices.
+Existing paid guards still reject the new dynamic-only adapter method.
+
+Offline scripted capture/classification and fake HTTP establish integration and
+failure behavior only. Independently frozen real-model opportunity, fresh paired
+24 acceptance, unchanged net≥3/24 quality criteria and lifecycle ceilings remain
+open. Raw archive, Card governance, links, vector fusion and installed-Hermes
+value are not established by this implementation.
+
+## One authentic MOC opportunity probe (2026-10-17)
+
+The [one-case LongMemEvalS development probe](plans/moc-hierarchy-real-opportunity.md)
+completed all 43 ordinary indexed-evidence capture batches and both cold
+source-only read/answer outcomes on an unchanged shared store. Mechanical
+completion is not answer quality: both independent same-family AI reviewers
+judged both answers minimally incorrect and not fully supported. Neither gave
+the required relative-value ratio. One default-answer extra assertion remains
+disputed; the history also does not independently corroborate the question's
+sunset-artwork referent. No official score or binary winner is claimed.
+
+The necessary source was retained but absent from both actual packed flat-select
+inputs: default exposed 69 unique refs across two stages, opt-in exposed 35 in
+its one flat reserve. It reached neither rank nor answer evidence. There were
+203 active memories, but zero L2 creation/parent proposals and no actual group
+calls or selected L1/L2. Thus the intended connected-hierarchy opportunity was
+not established; lower observed opt-in work is not improved routing efficiency.
+Normal classification explicitly permits standalone L1s, whereas H2's private
+entry requires connected L2. A separate synthetic actual-core/adapter control
+can create L2 through optional classification output; this is a topology-entry
+mismatch, not proof of model incapability or a reason to repair the closed case.
+
+A qualified closed-snapshot reconstruction of the unchanged literal scorer puts
+the necessary memory at position 102/203, score 6: 85 higher scores and 16
+earlier-ID ties. Every actual default 69-ref and opt-in 35-ref prefix ID,
+revision and label matches. All four target receipts were considered and its
+existing label contains the ratio cue, so this target is not explained by label truncation.
+Position 102 was not provider-visible. Reconstruction relies on fresh ordinary
+capture without rebuild and complete current snapshots; the deleted store was
+not reopened and arbitrary active-index membership is not independently
+enumerated by the public snapshot. No alternate ranking or fix was evaluated.
+
+The [exact public projection](../evaluation/architecture/moc-hierarchy-real-opportunity-results-20261017.json)
+retains hashes, disagreements, source-path metadata and resource distinctions.
+Its 184 physical requests retained US$0.920000 of reservation; US$0.154336 is a
+known generation usage-rate estimate, not an invoice. Count-route billing stays
+unknown/unrefunded, historical unknowns stay recorded, and the original
+cumulative/protected ledger boundaries remain. Public metadata cannot replay
+the full private authentic trace; no raw history/answer or anonymization
+guarantee is supplied. Fixed default-first order, custom answers and one case
+do not establish broad quality, official accuracy or competitive parity.
+
+No paid paired24 advancement or default promotion follows. Separately examine
+bounded standalone-L1 entry and relevance ranking while preserving ordinary flat
+coverage; standalone-L1 entry alone is not proven to fix the answer. Neither
+hypothesis is implemented or validated. Net≥3/24 with targeted gain, no increased
+unsupported/stale use or new severe failure, and resource gates remain. Later
+fresh30 still requires ≥29 complete and ≥same-batch Mem0 with failures retained. Raw archive,
+Card governance, links/vector fusion and
+installed-Hermes value remain open. No consumed-case retry or replacement.
+
+## H4 standalone entry: offline mechanics, no new semantic result
+
+The separately versioned embedded `moc-hierarchy-v2` adds a bounded private
+standalone-L1 lane and preserves the existing two-round flat opportunity.
+Synthetic ordinary-capture/cold-reopen and fake-HTTP controls exercise exact
+source visibility, reference provenance, group packing and freshness. They do
+not establish a better first answer, realistic routing gain or an equal-cost
+comparison. The earlier closed H3 case remains closed and was not replayed.
+
+The strategy can use five model calls versus the default's three; bounds cover
+returned catalog rows and requests, not SQLite work or provider billing.
+Flat fetch priority preserves selected identities, while source packing can
+still omit evidence before rank/final output. Observed group omissions have
+exact references; unread tails have unknown size. Each namespace's freshness
+anchor is its first trusted observation, not invocation start. Full provider
+wire validation can still reject a request that fits the core envelope.
+
+No host/default promotion or paid evaluation follows. Frequency-aware lexical
+ranking, query-aware leaves and the frozen later quality/resource gates remain
+separate work. See the [prospective H4 contract and execution record](plans/moc-standalone-entry.md).
+
+## H5 bounded source IDF: literal mechanics only
+
+The trusted embedded `sourceRankingPolicy:'bounded-idf-v1'` weights literal query
+runs using per-memory frequency inside each namespace's existing physical scan
+prefix. It scores individual passages and reads only the first four stable
+receipts for navigation statistics. It does not find synonyms, combine separate
+passages into joint support, or infer subject, date, negation or adoption.
+Scripted diagnostic controls deliberately select wrong-person, old-date,
+negated and proposal-only rare-token distractors: four inappropriate selections
+remain recorded for later semantic diagnostics.
+
+The unchanged excerpt can hide a rare cue within a winning passage; independent
+whole-source packing can omit a navigation-visible selected candidate before
+rank. Both failures are retained in synthetic tests. Capture/classification and
+cold-reopen positives establish source plumbing only. No new real-model score,
+lightweight claim, paid-run permission or default/host promotion follows.
+
+One bounded scan retains query-match masks rather than a source-text sidecar.
+The 25,200,000-byte maximum mask payload excludes scalar metadata, temporary
+allocation and delayed garbage collection. Per-namespace processing does not
+establish a process peak-RSS bound. Statistics and retained-winner rereads use
+the existing writer-reserving transaction; competing-writer blocking remains
+a cost. The separately frozen resource gate must pass before evaluator
+activation. See the [H5 contract](plans/source-idf-ranking.md).
+
+The first frozen H5 resource campaign stopped with exit 1 on Node 22.16.0.
+Five cells passed relative elapsed/CPU/extra-RSS checks, but the extreme
+20,000-row/2,000-query-token cell failed competing-writer reservation: the old
+query took about 8.06 seconds and its competing writer failed after the existing
+5-second timeout. New ranking's uncontended median was about 7.09 seconds versus
+8.02 seconds old, but its worst-cell contention was not run after that stop.
+Node 24 resource testing also remains unexecuted. Faster ranking does not resolve
+the long writer-reserving transaction, and H5 is not approved for evaluator or
+default activation. The complete outcome and unchanged gates are recorded in
+the [H5 execution record](plans/source-idf-ranking.md#r5-outcome-stopped-at-writer-contention-not-promoted).
+
+## H5b read snapshots: offline resource gates met, final delivery pending
+
+A separate prospective correction changes only opted-in IDF ranking to bounded
+read snapshots, releasing SQLite transactions before validation, match-mask
+processing and excerpt computation. It anchors both namespace epoch and exact
+index-generation availability; a staged first rebuild cannot be mistaken for
+the earlier absence of an index-state row. Same-namespace changes reject the
+query rather than silently mix populations or retry.
+
+Focused synthetic structural tests demonstrate complete competing foreign
+captures during computation, precise rejection after relevant mutations, and
+rollback/owned-directory cleanup. Deliberate pauses establish these mechanics,
+not actual latency or semantic relevance. Separate unpaused H5b campaigns on
+Node 22.16 and 24.15 passed the frozen elapsed/CPU and complete-capture gates,
+actual exits 0: all 12 candidate captures committed during queries in
+102.019-806.181ms. A later, separately frozen memory-only supplement passed
+all five current-image RSS median gates on both runtimes, also actual exits 0.
+Each supplemental stream retains 80 records and 35 successful child exits
+(5 preparation/30 query), unchanged-store checks and verified owned cleanup.
+Original H5 failure records and thresholds remain unchanged; legacy worst-cell
+captures still reached the existing roughly 5-second timeout.
+
+The original reported `getrusage` peaks include inherited/pre-exec residency
+and remain recorded; they cannot establish ranking memory cost. The supplement
+instead observes Linux current-image VmHWM while preserving those original
+fields. Worst-cell old/new current-image medians were 174,477,312/221,868,032
+bytes on Node 22 and 329,633,792/369,397,760 on Node 24, within the frozen
+64MiB additional-median allowance. Node 24 old trials ranged from 170,459,136
+to 330,563,584 bytes. This substantial variance on a shared WSL host does not
+establish memory efficiency, lightweight behavior or a cross-host bound.
+VmHWM includes startup/core-open and small observation/validation overhead,
+not allocation attribution or JS heap. The hash-bound supplemental helpers
+remain private acceptance evidence, not a packaged benchmark; the
+[execution record](plans/source-idf-page-snapshots.md#p8-execution-record)
+keeps the separate campaigns, full table, trial spread and raw-stream hashes.
+
+Broad core1211, OpenAI318, MCP111, artifact93 passed/1 native-Windows skip,
+workspace25, generic673 and applicable validation/demo gates passed per Node,
+all actual exits 0; 168 independent comparisons on 212 normal captures passed.
+Independent full H4-to-`21cec10` and separate P8 helper Standards/Spec reviews
+reported no findings. Final exact-head reviews and CI remain pending; these
+offline passes provide no new semantic score, default promotion, paid evaluator
+activation or merge authorization.
+
+The option-off path retains its known long-transaction limitation. The new
+path is still synchronous JavaScript and can occupy its own thread for seconds;
+short database snapshots do not make it asynchronous or establish that it is
+lightweight. Worst new uncontended query medians remain about 6.7 seconds. The
+same 120-code-point labels and whole-source packing limitations remain. See the
+[H5b contract](plans/source-idf-page-snapshots.md).
+
+## T3 source-time semantic diagnostic: narrow gain, broader gates open
+
+The [one-shot authored diagnostic](plans/source-time-semantic-results.md)
+completed six shared capture/cold-flat-recall pipelines and twelve answers.
+Deleting only included sourceTime labels gave A 3/6 correct; retaining them gave
+B 6/6, with three paired wins, no losses and three ties. Only Juniper was
+prospectively designed to require repaired labels. Alder already had explicit
+event dates in both arms, so its arithmetic difference is not missing-date causal
+proof. Maple returned no memories: both arms correctly abstained, but safety
+with nonempty unknown-event-date evidence and known utterance labels remains
+unexercised. This conditional answer-use experiment establishes no retrieval
+improvement, broad accuracy, statistical superiority or competitor parity.
+
+The [sanitized evidence](evidence/source-time-semantic-results.json) retains all
+twelve actual contexts/answers, full authored histories/rubrics, two independent
+masked two-pass reviews and primary source-cited adjudication. Both first-pass
+safety disagreements and the one second-pass disagreement remain visible.
+Unsupported answer content was A3/B0; final unsupported-certainty safety labels
+were A2/B0, arithmetic errors A1/B0 and specific predefined severe violations
+A1/B0. Those counts are distinct. No safety judgment remains unresolved after
+the documented primary adjudication; no frozen reviewer report was rewritten.
+
+Measured shared capture/recall used 70 HTTP requests; each answer arm used 12.
+The total new reservation was US$0.470000 and known generation estimate
+US$0.012482, not an invoice. Count billing, production memory/storage overhead
+and lightweight readiness remain unknown. Shared-host elapsed measurements do
+not establish production latency. All 23 historical unknowns and the original
+accounting prefix were retained; newly owned scratch was verified absent.
+
+The primary finds the narrow T3 criterion met only for considering a fresh P4
+design. P4 fixed-24/net-at-least-three, Stage 3 fresh-30 native comparison,
+independent reliability, installed Hermes new-session, resource and default
+adoption gates remain unmet. No gate changes, additional paid work, closed-H6
+replay or historical-result relabeling follows from this checkpoint.
+
+## T4 source-time QA24: complete execution, candidate stopped
+
+The fresh [24-pair authored answer-use comparison](plans/source-time-qa24-results.md)
+completed all 48 cells, actual run exit 0, but both arms were correct on 20/24:
+zero paired wins/losses, 20 both-correct/four both-incorrect. It fails the frozen
+net-at-least-three gate. Retaining labels reduced unsupported questions A4/B3
+but increased stale use A1/B2, introduced Tamar's new severe B failure and left
+Serein B severity unknown and blocking. Supported-correct A18/B20 is secondary
+and cannot replace the full-source correctness metric. T3's six-case gain does
+not establish gain on this QA24 cohort.
+
+The [sanitized packet](evidence/source-time-qa24-results.json) preserves complete
+authored sources, exact two answer messages and answers, both frozen independent
+two-pass judgments, all three field disagreements, three claim-segmentation
+differences and primary source-cited adjudication. No favorable grader selection,
+old-cohort rescoring, replacement or safety relabeling is applied. Correctness
+resolution does not settle Serein's unresolved severe predicate.
+
+Required anchors decline 46 retained → 36 selected → 30 ranked/actual-context;
+complete sets 24 → 15 → 9. The prospective five-case time-label target improves
+0/5 → 1/5, only Fen, whose answer remains wrong. Exact historical full-set coverage
+is not semantic sufficiency: Lyra's omitted future change can be appropriate,
+and Bracken kept the latest approval while missing older history. Astrid's
+empty recall with honest abstention is not retrieval success. Recorded missing
+latest/failed-premise sources locate stage loss, not an internal model cause.
+
+Shared capture/recall used 306 HTTP and each answer arm 48; total 402 reservations
+added US$2.010000 conservatively. Cumulative US$347.002281 at 60,533 requests
+preserves 23 old unknowns, 0 new unknowns/0 pending, with US$22.997719 after the
+protected US$30. Known generation estimate US$0.064988 is not an invoice or
+count-route billing. B added 298 known input tokens, no extra answer calls.
+Only 53 short turns/92 memories, 7,133 source code points/7,367 UTF-8 bytes and 1,508
+local source-text tokens were exercised. Private wall times, temporary SQLite
+size, verified cleanup and mechanical resource passes do not establish realistic
+long-history latency, production storage, host memory or lightweight readiness.
+
+Stop this label-only candidate. The next checkpoint is offline inspection of
+selection/rank/sourceTime seams using existing bounded-source-scan; the native
+mixed runner already has that route but not the T2 time producer/packer. No new
+algorithm/runtime is delivered or tested here. Historical P1–P10/P4, Stage3,
+independent reliability, native Hermes and resource gates remain unchanged.
+Earlier unmerged dependencies and PR #442's retained MCP CI block remain explicit
+in the report. No benchmark, competitive parity, full-architecture acceptance,
+promotion or new paid permission follows.
+
+## T5 bounded-source-scan / source-time QA24 boundary
+
+The [closed T5 development diagnostic](plans/bounded-time-qa24-results.md) uses
+24 new short authored pairs/48 correlated completed cells. A ordinary recall
+was full-source correct 20/24, B existing bounded-source-scan 22/24; wins 8/15/18,
+loss 23, net +2 below the frozen +3 gate. Stop the current two-candidate paid
+sequence and re-scope offline; no third automatic variant or paid authority.
+This does not revise T4 or disprove every memory architecture.
+
+Actual-context supported answers were A16/B18, justified abstentions 3/2,
+unsupported questions 5/4 and unsupported claims 9/7 out of 41/39. Stale use,
+predefined severe violations and unknown safety were 0/0 in this cohort only.
+Definite-value sufficiency 15/15 includes the primary's explicit symmetric
+Seabright clarification; both original sufficient grades remain in the
+[packet](evidence/bounded-time-qa24-results.json). Four field disagreements and
+seven claim-segmentation differences remain; reviewer B's complete enumeration
+is used consistently. Full-source correctness is not actual-context support.
+
+Required-set RANK visibility 19/23→23/23 became only 17/23→18/23 actual required
+contexts. B SELECT is unobserved/null, not zero failures. Entity bridges and
+case 23's upper bound can be visible then dropped by RANK. Case 18's full facts
+were identical across arms with reversed order; its qualification win does not
+prove a new-evidence cause. Pallis already had dates and correct arithmetic;
+unsupported flags reflect a frozen opaque-utterance-label versus definite
+event-time policy tension. No packer omission fixes these failures.
+
+Shared capture 216 HTTP plus A142/B96 totaled 454 requests/227 logical starts,
+54 batches/77 memories and US$2.270000 new conservative reservations. Cumulative
+US$349.272281/60,987 requests preserves 23 historical unknowns, zero new unknowns
+and pending, and US$20.727719 outside protected US$30. Known generation estimate
+US$0.071243 is neither an invoice nor count-route billing. Diagnostic latency
+includes integrity/accounting overhead; temporary closed-store bytes are not
+production storage. Host memory and long-history/lightweight fit are unmeasured.
+
+All B cases used the small complete-map route; >12 per namespace/>24 total
+fallback, the already-native bounded comparator, official benchmark/competitive
+parity, complete raw/memory/card/MOC/relation/vector architecture and installed
+Hermes were not established. Next is offline review of existing source-bound
+assembly and typed-time semantics, not a promised new bundle: prior canonical
+receipt grouping already failed 21→19. Historical P1–P10/P4, Stage 3, independent
+reliability, host/resource and exact-candidate delivery gates remain unchanged.

@@ -19,7 +19,14 @@ export const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
   Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff);
 
 const APPLICATION_ID = 0x43414952;
-const VERSION = CONFIRMATION_SCHEMA_VERSION;
+const VERSION = 19;
+
+// v18 is the preserved confirmation schema. This additive migration never
+// rewrites old receipt keys or invents source labels for historical rows.
+function migrateVersion18(db) {
+  db.exec(`ALTER TABLE receipts ADD COLUMN source_time TEXT
+    CHECK (source_time IS NULL OR (length(source_time) BETWEEN 1 AND 128));`);
+}
 
 function createVersion3(db) {
   db.exec(`
@@ -412,17 +419,20 @@ export function openDatabase(path) {
         migrateVersion12(db);
         migrateVersion13(db);
       }
-      if (!(appId === APPLICATION_ID && version === 17)) {
-        if (!(appId === APPLICATION_ID && version === 16)) {
-          if (!(appId === APPLICATION_ID && version === 15)) {
-            upgradeCommittedSchema();
-            migrateVersion14(db);
+      if (!(appId === APPLICATION_ID && version === CONFIRMATION_SCHEMA_VERSION)) {
+        if (!(appId === APPLICATION_ID && version === 17)) {
+          if (!(appId === APPLICATION_ID && version === 16)) {
+            if (!(appId === APPLICATION_ID && version === 15)) {
+              upgradeCommittedSchema();
+              migrateVersion14(db);
+            }
+            migrateVersion15(db);
           }
-          migrateVersion15(db);
+          migrateVersion16(db);
         }
-        migrateVersion16(db);
+        migrateVersion17(db);
       }
-      migrateVersion17(db);
+      migrateVersion18(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
     });
     return db;
