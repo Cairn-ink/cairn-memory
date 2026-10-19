@@ -1805,3 +1805,48 @@ design. P4 fixed-24/net-at-least-three, Stage 3 fresh-30 native comparison,
 independent reliability, installed Hermes new-session, resource and default
 adoption gates remain unmet. No gate changes, additional paid work, closed-H6
 replay or historical-result relabeling follows from this checkpoint.
+
+## T4 source-time QA24: complete execution, candidate stopped
+
+The fresh [24-pair authored answer-use comparison](plans/source-time-qa24-results.md)
+completed all 48 cells, actual run exit 0, but both arms were correct on 20/24:
+zero paired wins/losses, 20 both-correct/four both-incorrect. It fails the frozen
+net-at-least-three gate. Retaining labels reduced unsupported questions A4/B3
+but increased stale use A1/B2, introduced Tamar's new severe B failure and left
+Serein B severity unknown and blocking. Supported-correct A18/B20 is secondary
+and cannot replace the full-source correctness metric. T3's six-case gain does
+not establish gain on this QA24 cohort.
+
+The [sanitized packet](evidence/source-time-qa24-results.json) preserves complete
+authored sources, exact two answer messages and answers, both frozen independent
+two-pass judgments, all three field disagreements, three claim-segmentation
+differences and primary source-cited adjudication. No favorable grader selection,
+old-cohort rescoring, replacement or safety relabeling is applied. Correctness
+resolution does not settle Serein's unresolved severe predicate.
+
+Required anchors decline 46 retained → 36 selected → 30 ranked/actual-context;
+complete sets 24 → 15 → 9. The prospective five-case time-label target improves
+0/5 → 1/5, only Fen, whose answer remains wrong. Exact historical full-set coverage
+is not semantic sufficiency: Lyra's omitted future change can be appropriate,
+and Bracken kept the latest approval while missing older history. Astrid's
+empty recall with honest abstention is not retrieval success. Recorded missing
+latest/failed-premise sources locate stage loss, not an internal model cause.
+
+Shared capture/recall used 306 HTTP and each answer arm 48; total 402 reservations
+added US$2.010000 conservatively. Cumulative US$347.002281 at 60,533 requests
+preserves 23 old unknowns, 0 new unknowns/0 pending, with US$22.997719 after the
+protected US$30. Known generation estimate US$0.064988 is not an invoice or
+count-route billing. B added 298 known input tokens, no extra answer calls.
+Only 53 short turns/92 memories, 7,133 source code points/7,367 UTF-8 bytes and 1,508
+local source-text tokens were exercised. Private wall times, temporary SQLite
+size, verified cleanup and mechanical resource passes do not establish realistic
+long-history latency, production storage, host memory or lightweight readiness.
+
+Stop this label-only candidate. The next checkpoint is offline inspection of
+selection/rank/sourceTime seams using existing bounded-source-scan; the native
+mixed runner already has that route but not the T2 time producer/packer. No new
+algorithm/runtime is delivered or tested here. Historical P1–P10/P4, Stage3,
+independent reliability, native Hermes and resource gates remain unchanged.
+Earlier unmerged dependencies and PR #442's retained MCP CI block remain explicit
+in the report. No benchmark, competitive parity, full-architecture acceptance,
+promotion or new paid permission follows.

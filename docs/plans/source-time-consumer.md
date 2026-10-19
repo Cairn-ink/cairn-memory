@@ -219,3 +219,18 @@ fresh P4 design only. It clears neither P4, Stage 3, independent reliability,
 installed-host/resource nor default-adoption gates and authorizes no further
 paid work. T2 APIs, public scripted demo, earlier tests and historical results
 remain unchanged; this dependent evidence does not make T2 a public live runner.
+
+## Dependent T4 / QA24 factual closure
+
+The fresh [24-pair source-time answer-use comparison](source-time-qa24-results.md)
+completed all 48 answers on the same T2 runtime. Both arms were correct on
+20/24, with no paired wins or losses; the frozen net-at-least-three gate failed.
+Stale use increased A1/B2, Tamar added a severe B failure and Serein B retained
+unknown severity. Stop this label-only candidate. The [sanitized packet](../evidence/source-time-qa24-results.json)
+preserves every authored source, actual context/answer, independent judgment
+and primary adjudication. T3's narrow six-case gain does not become QA24 gain.
+This shared ordinary-flat-recall experiment did not test the native mixed
+runner's existing bounded-source-scan route or a full new architecture. Next
+checkpoint is offline source selection/rank/time inspection only; T2 APIs,
+historical results and P4/Stage 3/reliability/host/resource gates remain unchanged.
+No additional paid work or promotion is authorized.

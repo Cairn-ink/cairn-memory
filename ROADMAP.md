@@ -31,6 +31,13 @@ service must use the same public core, not separate engines.
   reliability, host/resource or default-promotion gates. No further paid run is
   authorized. Host/MCP/HTTP/hooks/provider-adapter schemas stay unchanged.
 
+  The later [T4 fresh QA24 closure](docs/plans/source-time-qa24-results.md)
+  completed 48 answers but stopped the label-only candidate: A20/24 and B20/24,
+  zero paired gain, increased stale use, a new severe case and unresolved
+  severity. All historical/P4/Stage3/reliability/host/resource gates remain.
+  Next checkpoint is offline selection/rank/sourceTime inspection using existing
+  bounded-source-scan, not a new algorithm, native comparison or paid run.
+
 - The [one authentic MOC opportunity probe](docs/plans/moc-hierarchy-real-opportunity.md)
   completed 43 batches and two read/answer outcomes mechanically, but both
   answers missed the reviewed ratio fact. Its source was retained yet absent
