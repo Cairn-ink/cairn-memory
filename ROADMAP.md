@@ -16,6 +16,48 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- [T1 source-time preservation](docs/plans/source-time-preservation.md) adds a
+  core-only opt-in opaque claimed utterance label under immutable identity and
+  ordinary source budgets. It performs no temporal inference or backfill; H6
+  remains closed and no evaluation/default promotion follows. The explicit
+  [T2 evaluation producer and source-time answer packer](docs/plans/source-time-consumer.md)
+  transport exact receipt tuples through cold reads without history joins;
+  they add no host/provider/paid integration or semantic score. The separate
+  [T3 authored semantic diagnostic](docs/plans/source-time-semantic-results.md)
+  completed six shared recalls and twelve answers: labels-deleted A 3/6 correct,
+  labels-retained B 6/6. Only Juniper was prospectively repair-dependent; Alder
+  already had event dates and Maple retrieved no evidence. The narrow result
+  permits considering a fresh P4 design only, without clearing P4/Stage 3,
+  reliability, host/resource or default-promotion gates. No further paid run is
+  authorized. Host/MCP/HTTP/hooks/provider-adapter schemas stay unchanged.
+
+  The later [T4 fresh QA24 closure](docs/plans/source-time-qa24-results.md)
+  completed 48 answers but stopped the label-only candidate: A20/24 and B20/24,
+  zero paired gain, increased stale use, a new severe case and unresolved
+  severity. All historical/P4/Stage3/reliability/host/resource gates remain.
+  Next checkpoint is offline selection/rank/sourceTime inspection using existing
+  bounded-source-scan, not a new algorithm, native comparison or paid run.
+
+- The [one authentic MOC opportunity probe](docs/plans/moc-hierarchy-real-opportunity.md)
+  completed 43 batches and two read/answer outcomes mechanically, but both
+  answers missed the reviewed ratio fact. Its source was retained yet absent
+  from actual flat selection; zero L2/group calls meant no connected-hierarchy
+  opportunity was established. Qualified closed-snapshot literal order puts
+  the necessary memory at 102/203, not a provider-visible position. Standalone-L1
+  entry and relevance ranking with preserved flat coverage are separate next
+  hypotheses, not a proven fix. No paid paired24 advancement or default promotion;
+  formal quality/resource and later fresh30 comparison gates remain unchanged.
+
+- [H5's bounded source-IDF experiment](docs/plans/source-idf-ranking.md) retains
+  its failed worst-case writer-contention gate. The separate
+  [H5b correction](docs/plans/source-idf-page-snapshots.md) uses at most 256 memories
+  per read snapshot, epoch/generation fences and computation outside transactions.
+  Default behavior is unchanged; same-thread CPU work remains synchronous.
+  H5b offline elapsed/CPU, actual capture and separate current-image RSS gates
+  passed on Node 22/24. Final exact-head reviews/CI and real-model quality remain
+  pending; shared-host variance does not establish lightweight behavior or a
+  cross-host resource bound. No default promotion or paid evaluator activation.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It

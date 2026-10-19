@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — embedded core experiment
+
+- Add explicitly selected evaluation source-time indexed-evidence ingestion and
+  a separately versioned source-tuple answer packer. Exact claimed utterance
+  labels survive actual capture/cold recall into a fully measured frozen request
+  without answer-time source maps. Whole receipt tuples may be omitted by the
+  declared local budget; unknown time stays absent. Existing defaults, comparators,
+  scorers and request goldens remain unchanged. No dispatch/provider/host wiring,
+  semantic score, H6 replay or paid expansion. See the [T2 contract](docs/plans/source-time-consumer.md).
+
+- Add embedded opt-in `captureSourceTime:'claimed-v1'` for ordinary v2/staged
+  and indexed-evidence capture. Exact bounded opaque utterance labels survive
+  immutable receipt identity, restart and source reads, under existing budgets.
+  Schema v19 adds nullable receipt metadata without backfilling old rows or
+  changing unannotated hashes. Stop/drain older connections before upgrading;
+  older binaries reject v19. Labels are untrusted producer claims, not temporal
+  reasoning or event order. No host/adapter/evaluation producer is wired in T1,
+  and H6 remains closed; no score, quality or default promotion is implied.
+
+- Add trusted opt-in `sourceRankingPolicy:'bounded-idf-v1'` for source/rationale
+  recall: bounded per-namespace document frequency and maximum individual
+  body/receipt weighted overlap. H5b reads at most 256 memories per short snapshot,
+  checks epoch and generation, and computes outside transactions; synchronous
+  CPU work still occupies its thread. Scan caps, excerpts, model stages and
+  defaults retain their existing contracts. The original H5 resource failure
+  remains recorded. H5b offline elapsed/CPU, actual capture and separate
+  current-image RSS gates passed on Node 22/24; final exact-head reviews/CI and
+  real-model quality remain pending. No default promotion or paid activation.
+- Add source-evidence-only `selectionMode:'moc-hierarchy-v2'`: standalone L1
+  entry, whole-group origin reservation and the default's two flat rounds, with
+  flat fetch priority. Reference-only audits separate observed packing/capacity
+  omissions from unknown unread tails. It permits twenty maps/five model calls;
+  quality and lifecycle cost remain unassessed. Existing modes retain behavior.
+- Add source-evidence-only `selectionMode:'moc-hierarchy-v1'`: bounded private
+  L2→L1 navigation and ordinary-search reserve feed the existing fetch/rank/atomic
+  finalization. Default recall and host behavior stay unchanged. The opt-in allows
+  sixteen maps/four model calls; semantic benefit and lifecycle cost are unassessed.
+- Add dynamic-only OpenAI `selectGroups` with exact reference validation. Existing
+  live guards continue to deny it; this does not authorize paid evaluation.
+
 ## Unreleased — @cairn-ink/memory installer 0.5.3
 
 - Save a new Codex conversation from its first turn after setup or resume. A

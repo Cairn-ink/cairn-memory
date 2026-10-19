@@ -27,6 +27,12 @@ _Avoid_: Decision, current assertion
 Attributable evidence tying a remembered assertion to captured source text.
 A receipt proves provenance, not the truth or continuing applicability of a claim.
 
+**Claimed source time**:
+An opaque label supplied by a producer for when a source utterance was made.
+It preserves the producer's claim and precision, without authenticating chronology
+or establishing when the described event occurred or a claim applies.
+_Avoid_: Event time, ingestion time, verified timestamp, ordering authority
+
 **Submitted evidence**:
 Source text and speaker roles supplied by a memory client as claims about a
 conversation, not an authenticated transcript or execution permission.
