@@ -234,3 +234,25 @@ runner's existing bounded-source-scan route or a full new architecture. Next
 checkpoint is offline source selection/rank/time inspection only; T2 APIs,
 historical results and P4/Stage 3/reliability/host/resource gates remain unchanged.
 No additional paid work or promotion is authorized.
+
+## Dependent T5 bounded-source-scan QA24 closure
+
+The [closed T5 comparison](bounded-time-qa24-results.md) captured each new case
+once, then cold-reopened the same state for independent whole A ordinary and B
+existing bounded-source-scan recalls, each with its own unchanged T2 pack and
+answer; both retained sourceTime. All 48 answers completed: A20/24, B22/24,
+three paired wins and one loss. Net +2 fails the unchanged at-least +3 P4 gate.
+Stop the current two-candidate paid sequence and re-scope offline; no automatic
+third variant or new paid authority follows. Historical T3/T4 results stand.
+
+The [allowlisted evidence](../evidence/bounded-time-qa24-results.json) retains
+all authored sources/rubrics, exact actual contexts/answers, frozen independent
+grades/disagreements and primary source-cited decisions. Required context sets
+improved 17/23→18/23 while RANK-visible sets improved 19/23→23/23; B SELECT itself
+is not observed, not zero. Rank losses and answer semantics remain separate.
+Pallis dates were present and arithmetic correct: actual-context unsupported
+flags expose the frozen opaque-label/event-time policy tension, not date loss.
+No packer omission repair, new runtime/default, native or long-history transfer,
+full architecture or P4/Stage 3/reliability/host/resource acceptance is claimed.
+Next is offline reuse/inspection of source-bound assembly and typed-time
+semantics, not an implemented third candidate. T2 APIs remain unchanged.

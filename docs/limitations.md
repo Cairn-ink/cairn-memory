@@ -1850,3 +1850,45 @@ independent reliability, native Hermes and resource gates remain unchanged.
 Earlier unmerged dependencies and PR #442's retained MCP CI block remain explicit
 in the report. No benchmark, competitive parity, full-architecture acceptance,
 promotion or new paid permission follows.
+
+## T5 bounded-source-scan / source-time QA24 boundary
+
+The [closed T5 development diagnostic](plans/bounded-time-qa24-results.md) uses
+24 new short authored pairs/48 correlated completed cells. A ordinary recall
+was full-source correct 20/24, B existing bounded-source-scan 22/24; wins 8/15/18,
+loss 23, net +2 below the frozen +3 gate. Stop the current two-candidate paid
+sequence and re-scope offline; no third automatic variant or paid authority.
+This does not revise T4 or disprove every memory architecture.
+
+Actual-context supported answers were A16/B18, justified abstentions 3/2,
+unsupported questions 5/4 and unsupported claims 9/7 out of 41/39. Stale use,
+predefined severe violations and unknown safety were 0/0 in this cohort only.
+Definite-value sufficiency 15/15 includes the primary's explicit symmetric
+Seabright clarification; both original sufficient grades remain in the
+[packet](evidence/bounded-time-qa24-results.json). Four field disagreements and
+seven claim-segmentation differences remain; reviewer B's complete enumeration
+is used consistently. Full-source correctness is not actual-context support.
+
+Required-set RANK visibility 19/23→23/23 became only 17/23→18/23 actual required
+contexts. B SELECT is unobserved/null, not zero failures. Entity bridges and
+case 23's upper bound can be visible then dropped by RANK. Case 18's full facts
+were identical across arms with reversed order; its qualification win does not
+prove a new-evidence cause. Pallis already had dates and correct arithmetic;
+unsupported flags reflect a frozen opaque-utterance-label versus definite
+event-time policy tension. No packer omission fixes these failures.
+
+Shared capture 216 HTTP plus A142/B96 totaled 454 requests/227 logical starts,
+54 batches/77 memories and US$2.270000 new conservative reservations. Cumulative
+US$349.272281/60,987 requests preserves 23 historical unknowns, zero new unknowns
+and pending, and US$20.727719 outside protected US$30. Known generation estimate
+US$0.071243 is neither an invoice nor count-route billing. Diagnostic latency
+includes integrity/accounting overhead; temporary closed-store bytes are not
+production storage. Host memory and long-history/lightweight fit are unmeasured.
+
+All B cases used the small complete-map route; >12 per namespace/>24 total
+fallback, the already-native bounded comparator, official benchmark/competitive
+parity, complete raw/memory/card/MOC/relation/vector architecture and installed
+Hermes were not established. Next is offline review of existing source-bound
+assembly and typed-time semantics, not a promised new bundle: prior canonical
+receipt grouping already failed 21→19. Historical P1–P10/P4, Stage 3, independent
+reliability, host/resource and exact-candidate delivery gates remain unchanged.

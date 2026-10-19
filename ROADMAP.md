@@ -38,6 +38,16 @@ service must use the same public core, not separate engines.
   Next checkpoint is offline selection/rank/sourceTime inspection using existing
   bounded-source-scan, not a new algorithm, native comparison or paid run.
 
+  The subsequent [T5 bounded-source-scan closure](docs/plans/bounded-time-qa24-results.md)
+  completed 48 answer cells from independent arm recalls: A20/24, B22/24, three
+  paired wins and one loss, net +2 below the unchanged +3 gate. Stop the current
+  two-candidate paid sequence and re-scope offline; no automatic third variant.
+  Required contexts improved 17/23→18/23, not guaranteed by 23/23 B RANK visibility;
+  B SELECT itself is unobserved. Pallis dates were present; the opaque-label/event-time
+  contract needs prospective semantic review. Next is inspection/reuse of
+  existing source-bound assembly and typed-time mechanisms, not a new runtime,
+  native/long-history result or passed architecture/reliability/host/resource gate.
+
 - The [one authentic MOC opportunity probe](docs/plans/moc-hierarchy-real-opportunity.md)
   completed 43 batches and two read/answer outcomes mechanically, but both
   answers missed the reviewed ratio fact. Its source was retained yet absent
