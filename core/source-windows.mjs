@@ -1,4 +1,4 @@
-import { boundedText, fail } from './validation.mjs';
+import { boundedText, fail, sourceTimeFields } from './validation.mjs';
 import { extractedItems } from './capture-input.mjs';
 
 const MAX_WINDOW = 800;
@@ -23,13 +23,14 @@ export function sourceWindowCatalog(snapshot) {
       const excerpt = source.slice(excerptStart, excerptEnd);
       if (excerpt !== boundedText(excerpt, MAX_WINDOW, true)) fail('invalid_input');
       entries.push(Object.freeze({ index: entries.length, messageIndex, id: message.id,
-        role: message.role, start: excerptStart, end: excerptEnd, content: excerpt }));
+        role: message.role, start: excerptStart, end: excerptEnd, content: excerpt, ...sourceTimeFields(message) }));
       if (entries.length > MAX_CATALOG) fail('invalid_input');
       start = end;
     }
   }
   return Object.freeze({ entries: Object.freeze(entries),
-    messages: Object.freeze(entries.map(({ id, role, content }) => Object.freeze({ id, role, content }))),
+    messages: Object.freeze(entries.map(entry => Object.freeze({ id: entry.id, role: entry.role,
+      content: entry.content, ...sourceTimeFields(entry) }))),
     input: Object.freeze({ inputMode: 'indexed-windows-v1', messages: Object.freeze(entries.map(
       ({ index, messageIndex, role, content }) => Object.freeze({ index, messageIndex, role, content }))) }),
     coverage: Object.freeze({ sourceWindowCatalog: Object.freeze({ version: 1,
@@ -49,6 +50,7 @@ export function extractedWindowItems(output, snapshot, catalog, onInvalid) {
       const indices = detached.items[position].sourceIndices;
       const identities = item.receipts.map(receipt => JSON.stringify([
         receipt.client, receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt,
+        ...(Object.hasOwn(receipt, 'sourceTime') ? [receipt.sourceTime] : []),
       ]));
       if (new Set(identities).size !== identities.length) {
         diagnose('invalid_extraction_source_duplicate'); fail('invalid_model_output');

@@ -1,0 +1,386 @@
+{
+  "version": "cairn.moc-hierarchy-real-opportunity-results.v2",
+  "observedAt": "2026-10-17",
+  "status": "closed-no-quality-advancement",
+  "officialScore": false,
+  "caseCount": 1,
+  "readOutcomeCount": 2,
+  "runtimeCommit": "743086f3446adc309e6c4f77a959aebf7cd061a0",
+  "model": "gpt-4.1-mini-2025-04-14",
+  "source": {
+    "dataset": "LongMemEvalS s-cleaned",
+    "datasetRevision": "98d7416c24c778c2fee6e6f3006e7a073259d48f",
+    "sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "sourceQuestionIds": [
+      "b86304ba"
+    ],
+    "questionType": "single-session-user",
+    "sessions": 41,
+    "turns": 456,
+    "selection": {
+      "rankingDomain": "cairn.moc-real-opportunity.v1",
+      "seed": "2026-10-17-h3",
+      "rank": "0137369a94afbe96b7512652a51e5caabb0dc3c06e3c951dd4320b9d7da1b752",
+      "priorExcludedCount": 268,
+      "eligibleUnexposedCount": 226,
+      "resultingExcludedCount": 269,
+      "contentInspectedBeforeSelection": false,
+      "replacementOrRetry": false
+    }
+  },
+  "evidenceHashes": {
+    "contract.md": "f68e08c4e4553de4317dd5769922c1d4866d78a151174596af7baa02b1ac611b",
+    "selection.json": "9ca6d94d066dbb19f74a1d998da0fed14d72c309dc4f9184b8908aa53bc3a51c",
+    "exposure.json": "c375ce57140ceb1c7a96f615fced41d8f35e9fb370ef86924cbc8d590312562f",
+    "sources-v1.json": "7f9a1b2855c13b601b3681e86e46a0477ee43c19e0074b44ac228d8f2f5db951",
+    "preparation-receipt.json": "2ef3f9b4f78f50a8040ba399296d0d04e9d43883a8e71f2e3b234e8fe298b4e7",
+    "manifest-v1.json": "a6cc49bd78cc990d4efdc86de0cab49e8423145b88d8a6233d4f55151db58228",
+    "review-clearance-v1.json": "5c5bdbd9f2e7c21c3590fb69b180ae76a073887b9fca245090baef3ebe8148ab",
+    "report.json": "c52820817d0e9c4045ec80cd72ea9bf208c501cd7f455619c5da65347eac9677",
+    "post-closure-audit.json": "472034f5212c94887391d8b93ffd8bb9e7781a4a0f3c3ba144715747c2122a15",
+    "source-path-audit.json": "d4eacd3afc1f0fd7f59b8d7b55f998e58b3491ef2950754087ecd755d7826880",
+    "necessity-review-freeze.json": "ca2bc3f0b0548e3d572ef28c4e8c88d47fc13780778d37864f92deb52a7d53b8",
+    "masked-answer-review.json": "acf45bbc210f2e61e264985837d099ffb214be4c6486a154dd74d45a2b1b92ff",
+    "necessity-standards.json": "4f599f7067c047418660930536a4196671a56ba2081888e9a9d13c069dda322b",
+    "necessity-spec.json": "8f9149222b00fe26635490b172528bed0f51b7df45fcd7a17a9daa6dc6aa4960",
+    "answer-standards.json": "e5a9a958d91ca12375637a8d9308919f401b4e4286f82e9b0f38627955eaf13f",
+    "answer-spec.json": "546040a939f8ab536478181e69e6d8188231b95b478e461378b7f8ff76d2a6f5",
+    "baseline-order-audit.json": "3aa47f5ed302675bfcf5e049744ac387e0f63c9d3cfe90482d503255ca0a233b",
+    "baseline-order-spec-audit.json": "0c668ecfb3ed7b7b15c0a373090c14588b8ca9d186ce47d49bae6a4c348fd8ee"
+  },
+  "mechanical": {
+    "pass": true,
+    "actualProcessExitCode": 0,
+    "plannedBatches": 43,
+    "completedBatches": 43,
+    "activeMemories": 203,
+    "filedMemories": 144,
+    "unfiledMemories": 59,
+    "distinctCurrentPlacementIds": 76,
+    "classificationCalls": 42,
+    "newL1Proposals": 78,
+    "newL2Proposals": 0,
+    "nonemptyParentL2Proposals": 0,
+    "completedReadOutcomes": 2,
+    "snapshotsUnchanged": true,
+    "ownedScratchCleanup": true,
+    "durableRecordCount": 605,
+    "terminalFatal": null
+  },
+  "necessity": {
+    "essentialFacts": 1,
+    "description": "User-reported artwork value equals three times its purchase price.",
+    "sourceRole": "user",
+    "alternativeRole": "assistant-derivative-acknowledgment",
+    "sourceTurnIds": [
+      "lme-turn-42f004367bec6767a1475955cf07ed12c5a5dc47752a74bec8a74cb7b58a73a0",
+      "lme-turn-4f8fc3765a6ed1676adf4c5a65961609d87ae6f1ae2e22d75dd2d03bb70b27ed"
+    ],
+    "retainedMemoryId": "762d13b0-3e5f-4d66-927d-6a5863333d1f",
+    "retainedRevision": 2,
+    "sourceWindows": [
+      [
+        {
+          "batchIndex": 41,
+          "windowIndex": 15,
+          "excerptSha256": "fc7c526c05da667b95a4531a00e55358e76afcc7da9af68434dddc3e8aed5e9d"
+        }
+      ],
+      [
+        {
+          "batchIndex": 41,
+          "windowIndex": 16,
+          "excerptSha256": "90d558f47caf6c8b24b972d6b7243092278353d3f90b2b6f929b39b114a40ad8"
+        }
+      ]
+    ],
+    "presentInBothActualFlatSelectInputs": false,
+    "presentInEitherRankOrAnswer": false,
+    "entityCaveat": "The history does not independently identify the flea-market artwork as a sunset painting; ratio correctness is reference-compatible conditional on the question referent.",
+    "truthCaveat": "Reported relative value, not independently verified appraisal or sale."
+  },
+  "reads": [
+    {
+      "mode": "default",
+      "status": "completed",
+      "reason": null,
+      "calls": {
+        "selectGroups": 0,
+        "select": 2,
+        "rank": 1,
+        "answer": 1
+      },
+      "navigation": {
+        "mode": "default",
+        "actualFlatRefsByStage": [
+          35,
+          34
+        ],
+        "uniqueActualFlatRefs": 69,
+        "actualGroupModelCalls": 0,
+        "selectedL2": null,
+        "selectedL1": null,
+        "hierarchyRootPages": null,
+        "selectedCandidateCount": 4,
+        "rankVisibleCount": 4,
+        "rankPackingOmissions": 0,
+        "recalledMemories": 1,
+        "packedSources": 4,
+        "finalPackingOmissions": 0
+      },
+      "resources": {
+        "physicalRequests": 8,
+        "reservedMicroUsd": 40000,
+        "knownGenerationUsageEstimateMicroUsd": 5722,
+        "knownGenerationInputTokens": 13200,
+        "knownGenerationOutputTokens": 275,
+        "summedPhysicalHttpDurationMs": 11649.82231800002,
+        "byPhase": {
+          "select": {
+            "physicalRequests": 4,
+            "reservationsMicroUsd": 20000,
+            "knownGenerationInputTokens": 9250,
+            "knownGenerationOutputTokens": 152,
+            "durationMs": 6398.80357400002
+          },
+          "rank": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 3190,
+            "knownGenerationOutputTokens": 39,
+            "durationMs": 2396.685887999949
+          },
+          "answer": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 760,
+            "knownGenerationOutputTokens": 84,
+            "durationMs": 2854.332856000052
+          }
+        }
+      },
+      "judgments": [
+        {
+          "reviewer": "answer-standards",
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "reviewSha256": "e5a9a958d91ca12375637a8d9308919f401b4e4286f82e9b0f38627955eaf13f",
+          "minimalCorrectness": "no",
+          "fullySupported": "no",
+          "unsupportedExtraFindings": 1
+        },
+        {
+          "reviewer": "answer-spec",
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "reviewSha256": "546040a939f8ab536478181e69e6d8188231b95b478e461378b7f8ff76d2a6f5",
+          "minimalCorrectness": "no",
+          "fullySupported": "no",
+          "unsupportedExtraFindings": 0
+        }
+      ]
+    },
+    {
+      "mode": "moc-hierarchy-v1",
+      "status": "completed",
+      "reason": null,
+      "calls": {
+        "selectGroups": 0,
+        "select": 1,
+        "rank": 1,
+        "answer": 1
+      },
+      "navigation": {
+        "mode": "moc-hierarchy-v1",
+        "actualFlatRefsByStage": [
+          35
+        ],
+        "uniqueActualFlatRefs": 35,
+        "actualGroupModelCalls": 0,
+        "selectedL2": [],
+        "selectedL1": [],
+        "hierarchyRootPages": [
+          {
+            "namespaceIndex": 0,
+            "stage": "root",
+            "indexRevision": 235,
+            "rows": 0,
+            "exhausted": true,
+            "truncatedBy": null
+          }
+        ],
+        "selectedCandidateCount": 1,
+        "rankVisibleCount": 1,
+        "rankPackingOmissions": 0,
+        "recalledMemories": 0,
+        "packedSources": 0,
+        "finalPackingOmissions": 0
+      },
+      "resources": {
+        "physicalRequests": 6,
+        "reservedMicroUsd": 30000,
+        "knownGenerationUsageEstimateMicroUsd": 2534,
+        "knownGenerationInputTokens": 5943,
+        "knownGenerationOutputTokens": 98,
+        "summedPhysicalHttpDurationMs": 6997.245626000105,
+        "byPhase": {
+          "select": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 4652,
+            "knownGenerationOutputTokens": 42,
+            "durationMs": 2533.473486999981
+          },
+          "rank": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 1130,
+            "knownGenerationOutputTokens": 5,
+            "durationMs": 2150.543476000079
+          },
+          "answer": {
+            "physicalRequests": 2,
+            "reservationsMicroUsd": 10000,
+            "knownGenerationInputTokens": 161,
+            "knownGenerationOutputTokens": 51,
+            "durationMs": 2313.2286630000453
+          }
+        }
+      },
+      "judgments": [
+        {
+          "reviewer": "answer-standards",
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "reviewSha256": "e5a9a958d91ca12375637a8d9308919f401b4e4286f82e9b0f38627955eaf13f",
+          "minimalCorrectness": "no",
+          "fullySupported": "no",
+          "unsupportedExtraFindings": 0
+        },
+        {
+          "reviewer": "answer-spec",
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "reviewSha256": "546040a939f8ab536478181e69e6d8188231b95b478e461378b7f8ff76d2a6f5",
+          "minimalCorrectness": "no",
+          "fullySupported": "no",
+          "unsupportedExtraFindings": 0
+        }
+      ]
+    }
+  ],
+  "reviewerAgreement": {
+    "minimalCorrectnessAndFullySupported": "both reviewers: no for both outcomes",
+    "extraAssertionDisagreements": [
+      {
+        "mode": "default",
+        "description": "One reviewer flags an overcertain appraisal-prerequisite rationale; the other interprets it as context-limited abstention. Disagreement retained."
+      }
+    ],
+    "abstention": "Both lack essential actual answer evidence; contextual abstention is defensible but does not answer the full-history question.",
+    "calibration": "Two independent same-family AI development reviews, not official or calibrated human scoring."
+  },
+  "resources": {
+    "writes": {
+      "physicalRequests": 170,
+      "reservedMicroUsd": 850000,
+      "knownGenerationUsageEstimateMicroUsd": 146080,
+      "knownGenerationInputTokens": 277596,
+      "knownGenerationOutputTokens": 21879,
+      "summedPhysicalHttpDurationMs": 343893.18416500074,
+      "byPhase": {
+        "extract": {
+          "physicalRequests": 86,
+          "reservationsMicroUsd": 430000,
+          "knownGenerationInputTokens": 124896,
+          "knownGenerationOutputTokens": 17719,
+          "durationMs": 217298.05393100038
+        },
+        "classify": {
+          "physicalRequests": 84,
+          "reservationsMicroUsd": 420000,
+          "knownGenerationInputTokens": 152700,
+          "knownGenerationOutputTokens": 4160,
+          "durationMs": 126595.13023400037
+        }
+      }
+    },
+    "physicalRequests": 184,
+    "reservationMicroUsd": 920000,
+    "knownGenerationUsageEstimateMicroUsd": 154336,
+    "totalDiagnosticWallMs": 857935.3773419999,
+    "wallTimeCaveat": "Includes durable evidence, full snapshot and repeated runtime-binding checks; not isolated production latency.",
+    "countRouteBilling": "unknown-reservation-not-refunded",
+    "generationCost": "usage-rate-estimate-not-invoice",
+    "cumulativeReservedMicroUsd": 342162281,
+    "cumulativeRequestCount": 59565,
+    "cumulativeLimitMicroUsd": 400000000,
+    "protectedReserveMicroUsd": 30000000,
+    "remainingOutsideProtectedMicroUsd": 27837719,
+    "immutablePrefixSha256": "bc592e26591f69f3fa1f7de5861abe58fff8afa806d75384b428742a84dc7f1a",
+    "closedLedgerHistorySha256": "a220ed6c5324d032e616effc0614d69011689f259854b7ced8ebf75aff4dfe85",
+    "newUnknown": 0,
+    "historicalUnknown": 23
+  },
+  "decision": {
+    "mechanicalGate": "pass",
+    "flatInvisibleRetainedSource": "observed",
+    "connectedHierarchyOpportunity": "inconclusive-not-established-no-L2",
+    "semanticGain": "not-established",
+    "advancePaired24": false,
+    "promoteDefault": false,
+    "nextDirection": "Separately investigate bounded standalone-L1 entry with preserved ordinary-search coverage, then a lightweight relevance-ranking hypothesis. The existing literal rank places the necessary memory outside both observed prefixes; no new ranking, hierarchy repair or future paid run is established here.",
+    "formalQualityGate": "net>=3/24 correct; targeted gain; no increased unsupported/stale use or new severe failure; report lifecycle resources",
+    "subsequentComparisonGate": "fresh30>=29 completed and >=same-batch Mem0 with failures retained in denominator"
+  },
+  "limitations": [
+    "One case, default-first order, custom source-only answer, no official judge and no Mem0 arm.",
+    "No actual two-level group traversal occurred; lower observed opt-in cost is not improved routing efficiency.",
+    "H2 has one flat reserve page versus default two rounds; candidate opportunities are unequal.",
+    "Normal classification permits standalone L1s; a zero-L2 store cannot exercise an L2-only entry.",
+    "Primary/source bindings and frozen reviews are private retained evidence; public metadata cannot independently replay full authentic traces.",
+    "No consumed-case retry or silent replacement. No raw archive, Card governance, link discovery, vector fusion, installed-Hermes gain or competitive parity established.",
+    "The 102nd position is a qualified closed-snapshot reconstruction, not a provider-visible row, an alternative-method evaluation or proof that standalone-L1 entry alone would fix the answer."
+  ],
+  "priorAcceptedProjectionSha256": "b075d90c699907ac55ee994b53b2ac95bd0ba2ad73767778a146383544f91a66",
+  "baselineOrderReconstruction": {
+    "method": "Post-closure reconstruction of the unchanged pinned literal scorer and label policy, independently checked against every actual select-input ID, revision and label.",
+    "activeRows": 203,
+    "physicalScanLimit": 1024,
+    "receiptLimitPerMemory": 4,
+    "necessaryMemoryId": "762d13b0-3e5f-4d66-927d-6a5863333d1f",
+    "necessaryRevision": 2,
+    "necessaryRankOneBased": 102,
+    "necessaryDistinctMatchedTerms": 6,
+    "higherScoringRows": 85,
+    "equalScoreRowsBeforeById": 16,
+    "labelSource": "interpretation",
+    "necessaryReceiptsConsidered": 4,
+    "labelContainsEssentialRatioCue": true,
+    "actualPrefixChecks": [
+      {
+        "mode": "default",
+        "stages": [
+          35,
+          34
+        ],
+        "actualUnique": 69,
+        "allIdsRevisionsLabelsMatch": true
+      },
+      {
+        "mode": "moc-hierarchy-v1",
+        "stages": [
+          35
+        ],
+        "actualUnique": 35,
+        "allIdsRevisionsLabelsMatch": true
+      }
+    ],
+    "policy": "Equal weight for each distinct matching whole Unicode letter/number token; no stopword filter, stemming, synonym expansion or inverse-document-frequency weighting. Receipt replaces body only on a strictly higher score; score ties sort by memory ID.",
+    "membershipQualification": "Reconstruction relies on this fresh store ordinary-capture path with no index rebuild, plus complete current-memory snapshots. Exact observed prefixes corroborate it. The deleted SQLite store was not reopened; arbitrary active-index membership is not independently enumerated by the public snapshot.",
+    "interpretation": "The necessary reference and answer-bearing label fall beyond both actual flat prefixes. For this target, source loss, receipt-cap exclusion, physical 1024-row scan limit and label truncation do not explain the omission.",
+    "providerSawRank102": false,
+    "alternativeRankingEvaluated": false,
+    "fixValidated": false
+  }
+}

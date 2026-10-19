@@ -17,10 +17,14 @@ import { createQualificationStorage } from './claim-qualification-storage.mjs';
 import { sourceEvidence, isSourceContext } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { createRationaleStorage } from './rationale-storage.mjs';
-import { fail, object } from "./validation.mjs";
+import { fail, object, sourceTimeLabel } from "./validation.mjs";
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
+const receiptDto = ({ source_time, ...row }) => {
+  try { return { ...row, ...(source_time == null ? {} : { sourceTime: sourceTimeLabel(source_time) }) }; }
+  catch { fail('storage_error'); }
+};
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input) {
@@ -89,9 +93,9 @@ export function createMemoryRuntime(input) {
     const key = receiptKey(receipt);
     const receiptId = randomUUID();
     const changes = db.prepare(`INSERT OR IGNORE INTO receipts
-      (id, memory_id, receipt_key, client, session_id, event_id, role, excerpt, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(receiptId, id, key, receipt.client,
-      receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt, now).changes;
+      (id, memory_id, receipt_key, client, session_id, event_id, role, excerpt, created_at, source_time)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(receiptId, id, key, receipt.client,
+      receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt, now, receipt.sourceTime ?? null).changes;
     if (changes) inserted.push(receiptId);
     return changes;
   }
@@ -99,14 +103,14 @@ export function createMemoryRuntime(input) {
   function legacyDto(memory) {
     if (!memory) return null;
     const receipts = db.prepare(`SELECT client, session_id AS sessionId,
-      event_id AS eventId, role, excerpt, created_at AS createdAt
+      event_id AS eventId, role, excerpt, created_at AS createdAt, source_time
       FROM receipts WHERE memory_id = ? ORDER BY created_at, receipt_key`).all(memory.id);
     return {
       id: memory.id, content: memory.content, kind: memory.kind,
       scope: memory.scope, projectId: memory.project_id || null,
       origin: memory.origin, confidence: memory.confidence, revision: memory.revision,
       createdAt: memory.created_at, updatedAt: memory.updated_at,
-      receipts: receipts.map((receipt) => ({ ...receipt })),
+      receipts: receipts.map(receiptDto),
     };
   }
 
@@ -376,7 +380,7 @@ export function createMemoryRuntime(input) {
         WHERE ${where} AND id = ? AND deleted = 0`).get(...boundary(ns), id);
       if (!memory || (memory.review_state === 'awaiting' && !(decisionReview && includeAwaiting))) fail("memory_not_found");
       let sql = `SELECT id, client, session_id AS sessionId, event_id AS eventId,
-        role, excerpt, created_at AS createdAt FROM receipts WHERE memory_id = ?`;
+        role, excerpt, created_at AS createdAt, source_time FROM receipts WHERE memory_id = ?`;
       const params = [id];
       if (anchor) {
         sql += " AND (created_at > ? OR (created_at = ? AND id > ?))";
@@ -385,7 +389,7 @@ export function createMemoryRuntime(input) {
       sql += " ORDER BY created_at ASC, id ASC LIMIT ?";
       params.push(count + 1);
       return { memory: { ...metadataDto(memory), content: memory.content },
-        receipts: db.prepare(sql).all(...params).map((receipt) => ({ ...receipt })),
+        receipts: db.prepare(sql).all(...params).map(receiptDto),
         ...(proceduralStorage.inspect(id) ? { procedural: proceduralStorage.inspect(id) } : {}),
         placements: mocStorage.placementRefs(ns, id),
         conflicts: conflictStorage.inspect(ns, id),
@@ -397,17 +401,17 @@ export function createMemoryRuntime(input) {
 
   function receiptPrefix(id, offset, count) {
     return db.prepare(`SELECT id, client, session_id AS sessionId, event_id AS eventId,
-      role, excerpt, created_at AS createdAt FROM receipts WHERE memory_id = ?
+      role, excerpt, created_at AS createdAt, source_time FROM receipts WHERE memory_id = ?
       ORDER BY created_at, id LIMIT ? OFFSET ?`).all(id, count, offset)
-      .map((row) => ({ ...row }));
+      .map(receiptDto);
   }
 
   // A capped recall receipt list: most recent first, ties broken by ID.
   function receiptRecent(id, count) {
     return db.prepare(`SELECT id, client, session_id AS sessionId, event_id AS eventId,
-      role, excerpt, created_at AS createdAt FROM receipts WHERE memory_id = ?
+      role, excerpt, created_at AS createdAt, source_time FROM receipts WHERE memory_id = ?
       ORDER BY created_at DESC, id LIMIT ?`).all(id, count)
-      .map((row) => ({ ...row }));
+      .map(receiptDto);
   }
 
   // Read before ranking only; the final recall snapshot rereads the same list.

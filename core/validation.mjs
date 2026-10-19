@@ -47,6 +47,25 @@ export function boundedText(value, max, truncate = false) {
   return result;
 }
 
+/** Opaque producer claim: reject any transformation instead of guessing a date. */
+export function sourceTimeLabel(value) {
+  if (typeof value !== 'string' || value.length < 1 || value.length > 128 ||
+      !value.isWellFormed() || /[\x00-\x1f\x7f-\x9f\u2028\u2029]/u.test(value) ||
+      value.trim() !== value || boundedText(value, 128) !== value) fail('invalid_input');
+  return value;
+}
+
+export function sourceTimeFields(value) {
+  return Object.hasOwn(value, 'sourceTime') ? { sourceTime: sourceTimeLabel(value.sourceTime) } : {};
+}
+
+/** Preserve legacy field order, appending only an actually retained annotation. */
+export function receiptFromRow(row) {
+  return { client: row.client, sessionId: row.session_id, eventId: row.event_id,
+    role: row.role, excerpt: row.excerpt,
+    ...(row.source_time == null ? {} : { sourceTime: sourceTimeLabel(row.source_time) }) };
+}
+
 export function fingerprint(content) {
   return createHash("sha256").update(content.toLowerCase()).digest("hex");
 }

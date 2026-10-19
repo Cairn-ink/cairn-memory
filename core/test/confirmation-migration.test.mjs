@@ -37,7 +37,7 @@ test('CF1 eager v17 migration preserves old values, revisions and epoch; actual 
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, 17);
   const before = tables(db);
   openMemoryCore({ path }).close();
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 19);
   const after = tables(db);
   for (const [name, rows] of Object.entries(before)) {
     assert.deepEqual(after[name].map(row => Object.fromEntries(Object.keys(rows[0] ?? {}).map(key => [key, row[key]]))),
@@ -76,7 +76,11 @@ test('CF1 option-off bytes match frozen main baseline on existing capture fixtur
   assert.equal(fixture.base, 'c558593bd7dc4700a09235aeb8ebbd93184a0ea4');
   for (const [i, { config, capture, reads }] of fixture.cases.entries()) {
     const path = join(ws.path, `parity-${i}.sqlite`);
-    assert.equal(bytes(await captureEpisodeParity(root, path, config)), bytes(capture));
+    const actual = await captureEpisodeParity(root, path, config);
+    actual.rows.receipts = actual.rows.receipts.map(({ source_time, ...row }) => {
+      assert.equal(source_time, null); return row;
+    });
+    assert.equal(bytes(actual), bytes(capture));
     assert.equal(await readOutputs(openMemoryCore, path), reads);
   }
 });

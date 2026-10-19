@@ -9,6 +9,13 @@ The bundled demonstration uses entirely synthetic dialogue and scripted models.
 Its answers and scores verify the runner and scorer wiring, not the quality of
 a real model, human usefulness, or a public LongMemEval benchmark score.
 
+The separately selected [source-time producer and answer packer](public-longmemeval-comparison.md#explicit-source-time-answer-consumer)
+retains opaque utterance labels through real cold source receipts and measures
+individual role/content/time tuples without answer-time history joins. It has no
+answer dispatch or scorer and does not change this comparison, the public/mixed
+comparators, their templates or any frozen result. Its budget can omit individual
+whole receipt tuples, so its evidence semantics differ from these card-level arms.
+
 ## Run the synthetic check
 
 From the source checkout with Node 22.16 or 24:
