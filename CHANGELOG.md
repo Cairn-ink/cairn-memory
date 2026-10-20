@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — local private Card engine preview
+
+- Add optional `private-cards-local-v1` to the shared core/SQLite runtime:
+  explicitly disclosed local submitted note → authored draft → private
+  confirmation/edit/delete, with CAS, content-free replay and invalidation.
+  Source deletion purges note/draft text and retains confirmed authored bodies
+  privately with unavailable support. Default stays off; this partial V1 adds
+  no chat capture, full Raw, model calls, common retrieval, MCP or publication.
+  See [local integration contract](docs/private-cards-local.md) and the
+  synthetic `examples/private-cards.mjs` close/reopen example.
+- Explicit opt-in uses additive schema 20; unselected schema 18 is unchanged.
+  New code reopens v20 while disabled without dropping data; older binaries
+  reject it. Stop mixed-version writers before migration; no production or
+  user-database migration is performed by this preview.
+
 ## Unreleased — @cairn-ink/memory installer 0.5.3
 
 - Save a new Codex conversation from its first turn after setup or resume. A

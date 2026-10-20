@@ -1,5 +1,30 @@
 # Compatibility protocol v0.3.0
 
+### Explicit local submitted-note/Card boundary
+
+The opt-in [local private Card preview](private-cards-local.md) adds only
+explicitly submitted bounded notes and private authored Cards to the existing
+SQLite runtime. Default construction and existing capture/Memory DTOs do not
+change. It is not full Raw, chat capture/backfill, publication, common current
+retrieval, hosted encryption or production authorization. Full Raw gates remain
+separate. The trusted host chooses `local-plain-v1` and disclosed one-off
+`submitted-note-v1`; unsupported storage configurations refuse.
+
+New note/title/body fields preserve formatting after existing best-effort
+redaction. They are sensitive plaintext under local filesystem protection, not
+anonymized or authenticated truth. The host passes an opaque authority outside
+serialized inputs and verifies independently obtained exact user intent,
+payload/scope/revision/action class and revocable access generation. A model
+boolean, role, namespace or JSON grant cannot supply authority. Core uses keyed
+source/action identities; no plaintext body enters operation/effect metadata.
+
+Note deletion purges active logical source rows and bound drafts. Confirmed
+authored current bodies retain their separate owner-private policy with support
+unavailable and original ref metadata only. This does not promise physical WAL,
+free-page or backup erasure. The versioned same-owner source-byte cap counts
+retained redacted note bytes, not all database/body/metadata/backup bytes; no
+existing Raw counter is changed and Raw is unimplemented in this slice.
+
 ### Private mixed-source-pair metadata boundary
 
 The evaluation-only `cairn-mem0-source-pair-case-v1` capability and durable
