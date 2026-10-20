@@ -252,6 +252,21 @@ No new classifier/model call is required for this first deterministic interface.
   filing, stale/deleted source, mapping activation/revocation/staleness,
   scope isolation, restart, migrations and old Memory map compatibility on both
   Node versions. Independent dual review and final combined gates still apply.
+- **M07 Reviewed topic recovery:** `refreshCardTopic` takes the exact existing
+  topic ID/revision, expected Card index revision, an explicitly supplied title
+  and 1–5 exact eligible Card refs under a bounded organization grant. Replace
+  title-support bindings atomically, preserve the topic ID/level and refuse
+  stale/foreign refs or a canonical title collision. Advance topic/index
+  versions without editing Card content/applicability or auto-activating a
+  mapping. Existing guarded hierarchy references follow the refreshed topic;
+  changed Card memberships still require explicit placement. Test edit/rebind →
+  stale topic → refresh same topic → place fresh Card → explicit mapping review,
+  including CAS, authority callback races, replay, restart and installed MCP.
+
+The M07 addition addresses an independently reproduced P2 on integrated
+candidate `6e43240`: stale topic bindings had no recovery path, while replacing
+the same title was correctly refused as a duplicate. It is a lifecycle repair,
+not permission to reuse stale labels or silently refresh mapping authority.
 
 ## Observed implementation checkpoint
 
