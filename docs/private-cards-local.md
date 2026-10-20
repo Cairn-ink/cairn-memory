@@ -5,10 +5,14 @@
 private draft/confirm/edit/cancel/delete, source-note deletion, content-free
 operation replay and invalidation effects. Existing Memory APIs are unchanged.
 It also supports an explicit retained-receipt Memory interpretation input with
-transactional invalidation. This remains **partial V1**, not full Raw RL1, typed
-Card MOC/common retrieval, installed MCP, publication or product integration.
-Full Raw G1/G2 and hosted approval gates remain unresolved. The product team
-owns product integration; no product UI/runtime migration is included.
+transactional invalidation. The integrated local preview adds
+[common evidence reads](private-evidence-local.md),
+[typed organization](private-organization-local.md), and
+[installed MCP with real-TTY private confirmation](private-card-terminal-review.md).
+This is bounded local source/Memory/Card behavior, not completion of full Raw
+RL1/G1/G2, hosted approval/encryption, publication or product integration.
+Core owns private Cards; the product supplies UI, authority and publication
+around that core. See [the run/handoff guide](private-engine-v1-local.md).
 
 Run `node examples/private-cards.mjs` with Node 22.16 or 24. It creates a fresh
 synthetic SQLite file, closes/reopens it and performs no model or network call.
@@ -62,6 +66,10 @@ note deletion, confirmation, confirmed edits and confirmed deletion. Before
 confirming, the host shows/obtains approval for the exact inspected draft's
 title, body, bindings and revision. Core binds confirmation to that revision;
 confirmation records private curation, never truth, adoption or publication.
+An optional explicit applicability choice is displayed and bound to that same
+confirmation payload; omission remains unknown. Card placement and mapping
+proposal use bounded `organization` authority. Mapping activation/refresh/removal
+requires independent `explicit-user` authority and is not exposed by MCP startup.
 
 ## Implemented methods
 
@@ -79,11 +87,18 @@ data and requires no authority. No new method accepts a serialized grant.
 | `getCard` | `cardId,responseByteLimit?` | `{card}` or `{card:null}` |
 | `listCards` | `states:['draft'|'confirmed'],limit?,cursor?` | `{cards,coverage,nextCursor}` metadata only |
 | `editCardDraft` | `cardId,expectedRevision,actionId,title,body,bindings` | mutation receipt |
-| `confirmCardDraft`, `cancelCardDraft`, `deleteKnowledgeCard` | `cardId,expectedRevision,actionId` | mutation receipt |
-| `editKnowledgeCard` | draft-edit fields plus `applicability:'unknown'` | mutation receipt |
+| `confirmCardDraft` | `cardId,expectedRevision,actionId,applicability?` | mutation receipt |
+| `cancelCardDraft`, `deleteKnowledgeCard` | `cardId,expectedRevision,actionId` | mutation receipt |
+| `editKnowledgeCard` | draft-edit fields plus `applicability:'current'|'historical'|'conflict'|'unknown'` | mutation receipt |
 | `inspectCardOperation` | `operationActionId` | `{operation}` or `{operation:null}` |
 | `listCardEffects` | `limit?,cursor?` | `{effects,coverage,nextCursor}` |
 | `getPrivateCardUsage` | none | explicit `submitted-note-usage-v1` projection |
+
+The same facade advertises `selectEvidence`, `fetchEvidence`,
+`revalidateEvidence`, `mapEvidence`, `applyCardPlacement`,
+`proposeEvidenceMapping`, `reviewEvidenceMapping` and `listEvidenceMappings`.
+Their typed refs, bounds and qualification rules are documented in the linked
+read and organization contracts; existing Memory DTOs remain unchanged.
 
 The existing note variants of `createCardDraft.input` are `{title,body,sources:[NoteSourceRef]}` or
 `{title,body,authoredInput:{text,occurredAt}}`. The latter saves note+draft
@@ -123,7 +138,8 @@ Memory. Filing-only invalidation is deliberately conservative; no unchanged-
 meaning equivalence is claimed. The schema trigger runs even through a
 feature-off or legacy opener. Drafts cancel once and lose title/body/all bindings.
 Confirmed authored current bodies remain private and report unavailable support;
-applicability stays unknown. Original successful actions replay their original
+their prior applicability review no longer applies to the changed revision.
+Original successful actions replay their original
 content-free receipts without reviving cancelled content. A failed enclosing
 Memory mutation rolls back its dependent Card/effect changes too.
 
@@ -158,9 +174,14 @@ store, method, source/filter and page size; any namespace mutation makes them
 
 ## Retention, invalidation and replay
 
-Attribution is unassessed, commitment unknown and applicability always unknown.
+Attribution is unassessed and commitment unknown. Applicability defaults to
+unknown; an explicit confirmation choice or confirmed edit can review current,
+historical, conflict or unknown applicability for the resulting exact revision.
+`support.applicabilityReviewedRevision` identifies that revision; invalidation
+resets the effective review to unknown/null. Availability never overrides it.
 Available canonical required sources yield support `eligible`; this describes
-retained evidence only. There is no current-evidence API/filtering claim.
+retained evidence only. Current common reads require eligible support plus an
+explicit current review; unsupported authored artifacts remain qualified history.
 Deleting a note purges its active logical text/bytes, cancels every bound draft
 once at r+1 and purges that draft's title/body/bindings. Confirmed authored current
 bodies remain private, with original note-reference metadata and support
@@ -194,16 +215,17 @@ retention/erasure policies and should not present this preview as hosted-safe.
 
 ## Schema and handoff
 
-Unselected fresh/existing v18 stays v18. Existing v20 can reopen feature-off
-without migration. Explicit private-Card opt-in now creates/upgrades to additive
-v21: the original v20 note/Card tables plus metadata-only Memory/receipt bindings
-and invalidation triggers in the same SQLite file. Old v20 note contents and
-refs are preserved. Version 19 was reserved for unimplemented future Raw; no
-v19 feature/migration is claimed.
-The new binary can reopen v21 with the feature off without dropping retained
-data or disabling invalidation; old openers reject v21. Operators must stop
+Unselected fresh/existing v18 stays v18. Explicit private-Card opt-in now upgrades
+v18/v20/v21/v22 to additive v23 in the same SQLite file: v20 note/Card data,
+v21 metadata-only Memory/receipt bindings and invalidation, v22 applicability
+reviews, and v23 typed Card MOCs/mappings. Existing note contents and refs are
+preserved. Version 19 was reserved for unimplemented future Raw; no v19
+feature/migration is claimed.
+The new binary can reopen retained v20/v21/v22/v23 with the feature off without
+dropping data; installed invalidation triggers remain effective. Old binaries
+reject newer schemas. Operators must stop
 mixed-version writers before upgrading and follow backup/inventory/restore gates
-for actual deployment. No
-user database is migrated by the tests/example. Future Raw must choose the next
-real available version rather than assuming v19 was applied. The implementation
-does not install a tool adapter or authorize production flag enablement.
+for actual deployment. No user database is migrated by the tests/example. Future
+Raw must choose the next real available version rather than assuming v19 was
+applied. The installed tool adapter remains default-off; its availability does
+not authorize production flag enablement or product migration.

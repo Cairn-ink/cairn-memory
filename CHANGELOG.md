@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased — integrated local private engine preview
+
+- Add exact-namespace `selectEvidence`, `fetchEvidence` and `revalidateEvidence`
+  over canonical Memory/Card records. Current Cards require eligible sources and
+  an explicit review of that exact revision; literal overlap and bounded coverage
+  make no semantic-quality claim. Invalidation never carries a current review
+  into a changed revision.
+- Add two typed MOC views, bounded Card placement and proposed/active/removed
+  topic mappings in the same core. Filing changes no Card authorship or meaning;
+  mapping navigation grants no permission or evidence support. Activation,
+  refresh and removal require separate explicit-user authority.
+- Add default-off installed local MCP read/draft/organization tools plus a
+  separate `review-card` command requiring real controlling-TTY confirmation of
+  an exact draft revision and optional applicability choice. MCP itself cannot
+  confirm a Card or activate mappings. This is local operator approval, not
+  remote ChatGPT authentication.
+- Opt-in schema 23 composes the earlier note/receipt source support with review
+  and typed organization metadata. Existing v18/v20/v21/v22 data upgrades
+  additively; feature-off reopening preserves data and invalidation triggers.
+  These checks perform no user-store migration; production enablement and release
+  remain separate decisions.
+  Full Raw, hosted safety, product integration, publication and semantic quality
+  remain separate. See [the local run/handoff guide](docs/private-engine-v1-local.md).
+
 ## Unreleased — explicit retained-receipt Card support
 
 - Add authored Memory → Card support selected with
@@ -10,7 +34,8 @@
 - Add schema 21 metadata and transactional invalidation on every Memory revision,
   including filing, correction, retirement and forgetting through feature-off
   or legacy openers. Drafts cancel and purge; confirmed authored bodies remain
-  private with unavailable support. This is not full Raw or common retrieval.
+  private with unavailable support. This source slice alone adds no full Raw;
+  common retrieval is integrated by the later preview above.
   See [the local Card guide](docs/private-cards-local.md).
 
 ## Unreleased — local private Card engine preview
@@ -20,7 +45,8 @@
   confirmation/edit/delete, with CAS, content-free replay and invalidation.
   Source deletion purges note/draft text and retains confirmed authored bodies
   privately with unavailable support. Default stays off; this partial V1 adds
-  no chat capture, full Raw, model calls, common retrieval, MCP or publication.
+  no chat capture, full Raw, model calls or publication. Common reads and local
+  MCP were integrated by the later preview above.
   See [local integration contract](docs/private-cards-local.md) and the
   synthetic `examples/private-cards.mjs` close/reopen example.
 - Explicit opt-in uses additive schema 20; unselected schema 18 is unchanged.

@@ -140,5 +140,8 @@ Run `node tools/testing/run.mjs core/test/private-evidence.test.mjs` on Node
 22.16 and 24.15. The suite uses owned synthetic workspaces, no model/provider
 calls, and a fresh child process for restart evidence. Passing it establishes
 bounded traversal and lifecycle behavior, not semantic quality, full Raw,
-hosted safety, product integration or deployment readiness. Organization has its
-own targeted checks and separate installed integration gate.
+hosted safety, product integration or deployment readiness. Targeted installed
+read/organization and terminal lifecycle checks also passed on both Node versions;
+final combined full-core/MCP/artifact checks, independent dual review and
+latest-head CI are underway. The delivery PR will record the final candidate and
+evidence; see [the integrated run/handoff guide](private-engine-v1-local.md).
