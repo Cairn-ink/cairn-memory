@@ -25,6 +25,10 @@ const namespace = { ownerId: 'synthetic-installed-private-card', scope: 'persona
 const otherNamespace = { ...namespace, scope: 'project', projectId: 'synthetic-other-project' };
 const text = 'Synthetic provided note: I chose to inspect receipts before confirming a Card.';
 const body = 'Inspect the provided note before confirming this synthetic Card.';
+const memoryBody = 'A separately authored private Card supported by retained Memory receipts.';
+const memoryExcerpts = ['Synthetic retained Memory receipt one.', 'Synthetic retained Memory receipt two.'];
+const memoryReceipt = (eventId, excerpt) => ({ client: 'synthetic-installed', sessionId: 'memory-card', eventId,
+  role: 'user', excerpt });
 const tokens = new WeakMap(), grants = new WeakMap();
 const canonical = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
   ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
@@ -81,6 +85,7 @@ try {
   const capabilities = ok(core.getPrivateCardCapabilities());
   assert.equal(capabilities.version, 'private-cards-local-v1');
   assert.deepEqual(capabilities.sourceTypes, ['submitted-note', 'receipt']);
+  assert.deepEqual(capabilities.memorySourcePolicies, ['retained-receipts-v1']);
   assert.deepEqual(capabilities.drafting, ['authored']);
   for (const field of ['raw', 'currentEvidence', 'modelAssisted', 'publication']) assert.equal(capabilities[field], false);
   assert.equal(capabilities.methods.some(name => /capture|raw|conversation/i.test(name)), false);
@@ -115,12 +120,37 @@ try {
     }));
     assert.equal(confirmed.state, 'confirmed');
     const dependentDraft = ok(call('createCardDraft', { ...draftInput, actionId: 'dependent-draft' }));
+    let memory;
+    for (const [index, excerpt] of memoryExcerpts.entries()) {
+      memory = ok(core.admit({ namespace, memory: { content: 'Synthetic installed Memory interpretation.', kind: 'context' },
+        receipts: [memoryReceipt(`receipt-${index}`, excerpt)] })).memory;
+    }
+    const memoryInput = { actionId: 'memory-draft', drafting: 'authored', input: {
+      sourcePolicy: 'retained-receipts-v1', memoryRefs: [{ type: 'memory', namespace,
+        memoryId: memory.id, revision: memory.revision }], title: 'Synthetic Memory Card', body: memoryBody,
+    } };
+    const memoryDraft = ok(call('createCardDraft', memoryInput));
+    assert.deepEqual(Object.keys(memoryDraft).sort(), ['bodyRevision', 'effectCount', 'id', 'revision', 'state'].sort());
+    const memoryDetail = ok(call('getCard', { cardId: memoryDraft.id })).card;
+    const actualReceipts = ok(core.get({ namespace, memoryId: memory.id })).receipts;
+    assert.deepEqual(memoryDetail.bindings.map(binding => binding.receiptId).sort(), actualReceipts.map(row => row.id).sort());
+    assert.equal(memoryDetail.bindings.length, 2);
+    for (const binding of memoryDetail.bindings) {
+      assert.equal(binding.dependency, 'memory-interpretation');
+      assert.deepEqual(binding.memoryRef, memoryInput.input.memoryRefs[0]);
+      assert.equal(binding.source.completeness, 'excerpt-only');
+    }
+    const memoryConfirmed = ok(call('confirmCardDraft', { cardId: memoryDraft.id,
+      expectedRevision: memoryDraft.revision, actionId: 'confirm-memory-card' }));
+    const memoryDependentDraft = ok(call('createCardDraft', { ...memoryInput, actionId: 'memory-dependent-draft' }));
     assert.equal(ok(call('getPrivateCardUsage', {})).submittedNoteBytes, Buffer.byteLength(text));
-    writeFileSync(statePath, JSON.stringify({ source, confirmed, dependentDraft }), { flag: 'wx', mode: 0o600 });
-    evidence = { state: confirmed.state };
-  } else {
-    assert.equal(phase, 'restart-delete');
-    const { source, confirmed, dependentDraft } = JSON.parse(readFileSync(statePath, 'utf8'));
+    writeFileSync(statePath, JSON.stringify({ source, confirmed, dependentDraft, memory: { id: memory.id, revision: memory.revision },
+      memoryInput, memoryDraft, memoryConfirmed, memoryDependentDraft, memorySources: memoryDetail.bindings.map(binding => binding.source) }),
+      { flag: 'wx', mode: 0o600 });
+    evidence = { state: confirmed.state, memoryCardState: memoryConfirmed.state, actualReceiptCount: actualReceipts.length };
+  } else if (phase === 'restart-delete') {
+    const { source, confirmed, dependentDraft, memory, memoryInput, memoryDraft, memoryConfirmed,
+      memoryDependentDraft, memorySources } = JSON.parse(readFileSync(statePath, 'utf8'));
     const coldCard = ok(call('getCard', { cardId: confirmed.id })).card;
     assert.equal(coldCard.state, 'confirmed');
     assert.equal(coldCard.body, body);
@@ -153,7 +183,65 @@ try {
     assert.equal(deletedCard, null);
     assert.ok(ok(call('listCardEffects', { limit: 20 })).effects.some(effect =>
       effect.kind === 'card_deleted' && effect.entity.id === retained.id));
-    evidence = { confirmedRetainedAfterSourceDelete: true, dependentDraftRemoved: true, deletedCard };
+    const coldMemoryCard = ok(call('getCard', { cardId: memoryConfirmed.id })).card;
+    assert.equal(coldMemoryCard.body, memoryBody);
+    assert.equal(coldMemoryCard.state, 'confirmed');
+    assert.equal(coldMemoryCard.support.status, 'eligible');
+    assert.deepEqual(coldMemoryCard.bindings.map(binding => binding.source), memorySources);
+    const coldExcerpts = memorySources.map(source => {
+      const result = ok(call('getSource', { source }));
+      assert.deepEqual(result.source, source);
+      assert.equal(result.coverage.completeness, 'excerpt-only');
+      assert.equal(result.coverage.conversationCoverage, 'unknown');
+      return result.parts.map(part => part.text).join('');
+    });
+    assert.deepEqual(coldExcerpts.sort(), [...memoryExcerpts].sort());
+    const featureOff = openMemoryCore({ path: databasePath, model });
+    try {
+      assert.equal(featureOff.getCard, undefined);
+      const corrected = ok(featureOff.correct({ namespace, memoryId: memory.id, expectedRevision: memory.revision,
+        content: 'Changed installed Memory interpretation.', kind: 'context',
+        receipt: memoryReceipt('corrected', 'Changed synthetic receipt.') })).memory;
+      const unsupported = ok(call('getCard', { cardId: memoryConfirmed.id })).card;
+      assert.equal(unsupported.revision, memoryConfirmed.revision + 1);
+      assert.equal(unsupported.body, memoryBody);
+      assert.equal(unsupported.support.status, 'unavailable');
+      assert.equal(unsupported.support.applicability, 'unknown');
+      assert.deepEqual(unsupported.bindings.map(binding => binding.source), memorySources);
+      assert.equal(ok(call('getCard', { cardId: memoryDependentDraft.id })).card, null);
+      for (const source of memorySources) refused(call('getSource', { source }), 'source_unavailable');
+      const invalidations = ok(call('listCardEffects', { limit: 20 })).effects.filter(effect =>
+        effect.actionId === `memory-revision-${memory.id}-${corrected.revision}`);
+      assert.deepEqual(invalidations.map(effect => effect.entity.id).sort(), [memoryConfirmed.id, memoryDependentDraft.id].sort());
+      assert.equal(ok(featureOff.forget({ namespace, memoryId: corrected.id, expectedRevision: corrected.revision })).forgotten, true);
+      const forgottenSupport = ok(call('getCard', { cardId: memoryConfirmed.id })).card;
+      assert.equal(forgottenSupport.revision, unsupported.revision + 1);
+      assert.equal(forgottenSupport.body, memoryBody);
+      assert.equal(forgottenSupport.support.status, 'unavailable');
+    } finally { featureOff.close(); }
+    assert.deepEqual(ok(call('createCardDraft', memoryInput)), memoryDraft);
+    evidence = { confirmedRetainedAfterSourceDelete: true, dependentDraftRemoved: true, deletedCard,
+      receiptSourcesReadAfterRestart: true, featureOffCorrectionInvalidated: true, featureOffForgetInvalidated: true };
+  } else {
+    assert.equal(phase, 'restart-invalidated');
+    const { confirmed, memoryInput, memoryDraft, memoryConfirmed, memoryDependentDraft, memorySources } =
+      JSON.parse(readFileSync(statePath, 'utf8'));
+    assert.equal(ok(call('getCard', { cardId: confirmed.id })).card, null);
+    const retained = ok(call('getCard', { cardId: memoryConfirmed.id })).card;
+    assert.equal(retained.state, 'confirmed');
+    assert.equal(retained.revision, memoryConfirmed.revision + 2);
+    assert.equal(retained.body, memoryBody);
+    assert.equal(retained.bodyRevision, memoryConfirmed.bodyRevision);
+    assert.equal(retained.support.status, 'unavailable');
+    assert.equal(retained.support.applicability, 'unknown');
+    assert.deepEqual(retained.bindings.map(binding => binding.source), memorySources);
+    assert.equal(ok(call('getCard', { cardId: memoryDependentDraft.id })).card, null);
+    for (const source of memorySources) refused(call('getSource', { source }), 'source_unavailable');
+    const beforeReplay = ok(call('listCardEffects', { limit: 20 })).effects;
+    for (const prose of [memoryBody, ...memoryExcerpts]) assert.equal(JSON.stringify(beforeReplay).includes(prose), false);
+    assert.deepEqual(ok(call('createCardDraft', memoryInput)), memoryDraft);
+    assert.deepEqual(ok(call('listCardEffects', { limit: 20 })).effects, beforeReplay);
+    evidence = { unsupportedMemoryCardPersisted: true, cancelledMemoryDraftAbsent: true, contentFreeReplayStable: true };
   }
 } finally { core.close(); }
 assert.equal(modelCalls, 0);

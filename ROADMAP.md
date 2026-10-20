@@ -16,6 +16,17 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The opt-in [private Card source slice](docs/private-cards-local.md) supports
+  authored notes and explicit excerpt-only `retained-receipts-v1` Memory
+  dependencies. Synthetic core and installed-archive restart tests verify
+  transactional draft cancellation and retained-but-unsupported confirmed
+  bodies after Memory changes, including feature-off writers. Full Raw, common
+  reads, installed MCP confirmation, product integration and semantic quality
+  remain separate [completion gates](docs/plans/private-engine-v1-completion.md).
+  The [known limitations](docs/limitations.md) retain the development-only MCP
+  client OAuth advisory and zero-runtime-vulnerability audit distinction; no
+  forced upgrade is included.
+
 - The [offline long-history stage gate](docs/plans/long-history-stage-gate.md)
   locates loss across public capture, cold receipts, candidate map, selection,
   ranking, final recall and answer packing on finite synthetic families. It

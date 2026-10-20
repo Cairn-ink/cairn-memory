@@ -13,7 +13,7 @@ const modules = [...['input', 'schema', 'storage', 'facade'].map(name => `core/p
   'core/card-receipt-sources.mjs'];
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
-test('installed private Cards retain an explicit provided note across process restart and cascade source deletion',
+test('installed private Cards preserve note and receipt-backed lifecycles across fresh processes and feature-off mutations',
   { timeout: 120000 }, async t => {
     const workspace = createTestWorkspace(t, { prefix: 'cairn-installed-private-cards-' });
     const root = workspace.path;
@@ -54,12 +54,22 @@ test('installed private Cards retain an explicit provided note across process re
     };
     const first = run('create');
     assert.equal(first.state, 'confirmed');
+    assert.equal(first.memoryCardState, 'confirmed');
+    assert.equal(first.actualReceiptCount, 2);
     assert.equal(existsSync(databasePath), true);
     const cold = run('restart-delete');
     assert.notEqual(first.pid, cold.pid, 'restart must use a different Node process');
     assert.equal(cold.confirmedRetainedAfterSourceDelete, true);
     assert.equal(cold.dependentDraftRemoved, true);
     assert.equal(cold.deletedCard, null);
+    assert.equal(cold.receiptSourcesReadAfterRestart, true);
+    assert.equal(cold.featureOffCorrectionInvalidated, true);
+    assert.equal(cold.featureOffForgetInvalidated, true);
+    const invalidated = run('restart-invalidated');
+    assert.equal(new Set([first.pid, cold.pid, invalidated.pid]).size, 3, 'all stages use fresh Node processes');
+    assert.equal(invalidated.unsupportedMemoryCardPersisted, true);
+    assert.equal(invalidated.cancelledMemoryDraftAbsent, true);
+    assert.equal(invalidated.contentFreeReplayStable, true);
     await workspace.cleanup();
     assert.equal(existsSync(root), false, 'installed project, manifest and SQLite files were removed');
   });
