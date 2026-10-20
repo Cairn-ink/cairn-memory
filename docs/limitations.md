@@ -1,15 +1,30 @@
 # Known limitations
 
-The opt-in [local private Card slice](private-cards-local.md) supports authored
-note Cards and explicit `retained-receipts-v1` drafting from exact current
-Memory refs. Receipt sources are excerpt-only, not complete conversations;
-required interpretation dependencies invalidate transactionally on every
-Memory revision, including feature-off writers. Drafts cancel and purge;
-confirmed authored bodies remain private with unavailable support. Synthetic
-SQLite and installed-archive subprocess tests verify these mechanics, not
-semantic support, truth, adoption or product usability. Full Raw, common
-current reads, installed MCP confirmation and product integration remain
-separate [completion gates](plans/private-engine-v1-completion.md).
+The opt-in [integrated local engine preview](private-engine-v1-local.md) owns
+submitted notes, retained Memory receipt excerpts, Memories and private authored
+Cards in one core. It includes exact-namespace common reads, explicitly reviewed
+current Card applicability, two typed MOC views, bounded Card placement and
+explicit navigation mappings. Installed local MCP supports read/draft/organization
+operations; a separate real-TTY command confirms an exact private draft and may
+record an explicitly chosen applicability review. Default startup remains off for
+these additions. Memory writes never automatically promote a Card.
+
+Receipt sources remain excerpt-only with unknown conversation coverage. Required
+Memory revisions invalidate dependents transactionally, including feature-off
+writers: drafts cancel and purge; confirmed authored bodies remain private with
+unavailable support and no carried-forward current review. Targeted synthetic
+installed source/Card and H/R/M stdio/TTY lifecycle checks passed on Node 22.16
+and 24.15 with actual exit 0. Final combined full-core/MCP/artifact checks,
+independent dual review and latest-head CI are still underway; the delivery PR
+will record final evidence. These checks establish mechanics, not semantic
+support, truth, adoption, product usability or full conversation capture.
+
+Full Raw, hosted encryption/approval, remote ChatGPT authentication, publication,
+product UI/integration and semantic quality remain separate
+[completion gates](plans/private-engine-v1-completion.md). The product integrates
+this core's Cards and supplies its UI, authority and publication decisions; it
+does not need a second Card engine. Mapping activation/refresh/removal remains a
+trusted host API; MCP startup cannot grant that explicit-user authority.
 
 The recorded MCP dependency audit found a high-severity OAuth advisory in the
 development-only client dependency; the keyless synthetic checks do not use

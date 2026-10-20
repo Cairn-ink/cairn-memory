@@ -460,29 +460,31 @@ test('D2/D3 ordered reconciliation expiry preserves predecessor and rejects new 
     .get().high_water, 1);
 });
 
-test('D4 rationale-only expiry is honest; ordinary classifier failure still runs best-effort rationale', async t => {
-  const source = 'I chose A because it supports offline work.';
-  let relates = 0;
-  const slow = rationaleModel();
-  slow.relate = () => { relates++; return new Promise(() => {}); };
-  const timed = fixture(t, { model: slow, captureDeadlineMs: 1_000,
-    captureQualification: 'source-bound-v2', captureRationale: 'source-bound-v1' });
-  const expired = ok(await timed.core.capture(input('rationale-wait', source)));
-  assert.equal(expired.classification.status, 'applied');
-  assert.equal(expired.rationale.status, 'failed');
-  assert.equal(expired.rationale.error.code, 'model_timeout');
-  assert.equal(relates, 1);
-  assert.equal(count(timed.db, 'rationale_edges'), 0);
-
-  const spoof = rationaleModel();
-  spoof.classify = () => { throw new Error('model_timeout'); };
-  const ordinary = fixture(t, { model: spoof, captureDeadlineMs: 2000,
-    captureQualification: 'source-bound-v2', captureRationale: 'source-bound-v1' });
-  const result = ok(await ordinary.core.capture(input('provider-spoof', source)));
-  assert.equal(result.classification.status, 'failed');
-  assert.equal(result.classification.error.code, 'classification_failed');
-  assert.equal(result.rationale.status, 'reviewed');
-  assert.equal(count(ordinary.db, 'rationale_edges'), 1);
+test('D4 rationale-only expiry is honest; ordinary classifier failure still runs best-effort rationale', () => {
+  const child = fileURLToPath(new URL('../testing/capture-rationale-deadline-clock-child.mjs', import.meta.url));
+  const run = (mode, mutation) => spawnSync(process.execPath,
+    [child, mode, ...(mutation ? [mutation] : [])], { encoding: 'utf8', timeout: 10_000,
+      env: { TMPDIR: tmpdir(), TMP: tmpdir(), TEMP: tmpdir() } });
+  // Real wall time before rationale dispatch is not part of this fixture's
+  // premise. Advance the real core's monotonic clock at the boundary under test;
+  // separate tests above continue to cover pending-adapter real timer expiry.
+  for (const mode of ['adapter-expiry', 'before-dispatch-expiry', 'provider-spoof']) {
+    const actual = run(mode);
+    assert.equal(actual.status, 0, `${mode}: ${actual.stderr}`);
+    assert.deepEqual(JSON.parse(actual.stdout), { mode,
+      relates: mode === 'before-dispatch-expiry' ? 0 : 1,
+      packingExpiries: mode === 'before-dispatch-expiry' ? 1 : 0,
+      classification: mode === 'provider-spoof' ? 'failed' : 'applied',
+      classificationError: mode === 'provider-spoof' ? 'classification_failed' : null,
+      rationale: mode === 'provider-spoof' ? 'reviewed' : 'failed',
+      rationaleError: mode === 'provider-spoof' ? null : 'model_timeout',
+      edges: mode === 'provider-spoof' ? 1 : 0,
+      signalAborted: mode === 'adapter-expiry', coreDeadlineSignal: mode === 'adapter-expiry' });
+  }
+  const mutant = run('adapter-expiry', 'omit-rationale-call-deadline');
+  assert.equal(mutant.status, 2, mutant.stderr);
+  assert.match(mutant.stderr, /rationale adapter must be aborted by the shared deadline/u);
+  assert.equal(JSON.parse(mutant.stdout).signalAborted, false);
 });
 
 test('D1/D5 concurrent captures do not share a deadline or block a standalone classification', async t => {

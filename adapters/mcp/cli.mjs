@@ -16,6 +16,8 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID] --source-snapshot current-admitted-v1
   cairn-memory --db PATH --owner ID [--project ID] --recall-context source-evidence
   cairn-memory --db PATH --owner ID [--project ID] --classification-recovery guarded-v1
+  cairn-memory --db PATH --owner ID [--project ID] --private-cards local-v1
+  cairn-memory review-card --db PATH --owner ID [--project ID] --card ID --revision N [--applicability current|historical|conflict|unknown]
   cairn-memory --db PATH --owner ID [--project ID] --session-episodes-access episode-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1 --session-episodes episode-v1 [--session-episodes-draft-batches 8]
 
@@ -23,6 +25,23 @@ Keep the database outside node_modules; its parent directory must exist.
 Reuse the exact database, owner and project across sessions.
 Normal startup waits for an MCP client on stdin; stdout is protocol-only.
 Tools: remember_memory, recall_memory, inspect_memory, correct_memory, forget_memory.
+--private-cards local-v1 adds bounded keyless private Card read/draft/cancel tools.
+Drafting uses already retained Memory receipts (excerpt-only, unknown conversation
+coverage), never automatic promotion, a provider or new source capture. MCP
+confirmation always returns approval_required. The separate review-card command
+shows the exact untrusted draft, bindings and scope on /dev/tty and requires typed
+confirmation of its ID/revision. No --yes, environment or piped approval exists.
+Local plaintext only; private confirmation is curation, not truth or publication.
+The same opt-in adds select_evidence, fetch_evidence and revalidate_evidence for
+bounded typed canonical reads. Literal word overlap is not semantic retrieval.
+Current Card reads require eligible support and an explicit current review.
+review-card --applicability records a separately displayed choice, bound into
+the typed confirmation phrase. Omission preserves unknown applicability.
+The same opt-in adds map_evidence, apply_card_placement, propose_evidence_mapping
+and list_evidence_mappings for bounded typed navigation. Filing and mapping
+proposals are organization, not evidence support or current applicability.
+Mapping activation/refresh/removal requires a separate trusted host API; no MCP
+tool can issue that explicit-user grant. Navigation introduces no model calls.
 --classification-recovery guarded-v1 adds classify_unfiled_memories for an
 explicit request with inspected current unfiled memory IDs and revisions. It
 sends bounded memory content to the configured model and may incur charges.
@@ -103,7 +122,7 @@ export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
-    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client']);
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
@@ -115,6 +134,7 @@ export function parseConfiguration(args) {
   identifier(values.get('--owner'));
   if (values.has('--project')) identifier(values.get('--project'));
   if (!values.get('--db').trim() || values.get('--db').includes('\0')) throw new Error('invalid_mcp_configuration');
+  if (values.has('--private-cards') && values.get('--private-cards') !== 'local-v1') throw new Error('invalid_mcp_configuration');
   if (values.has('--capture-qualification')
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
     throw new Error('invalid_mcp_configuration');
@@ -161,6 +181,7 @@ export function parseConfiguration(args) {
   }
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
+    ...(values.has('--private-cards') ? { privateCards: 'local-v1' } : {}),
     ...(values.has('--client') ? { client: values.get('--client') } : {}),
     ...(values.has('--session') ? { sessionId: values.get('--session') } : {}),
     ...(values.has('--read-client') ? { readClient: values.get('--read-client') } : {}),
@@ -179,6 +200,10 @@ export function parseConfiguration(args) {
 
 export async function start(args = process.argv.slice(2), env = process.env) {
   if (args.length === 1 && args[0] === '--help') { console.log(help); return; }
+  if (args[0] === 'review-card') {
+    const { reviewCard } = await import('./review-card.mjs');
+    return reviewCard(args.slice(1));
+  }
   const check = args[0] === '--check-config';
   const config = parseConfiguration(check ? args.slice(1) : args);
   const key = env.OPENAI_API_KEY;
@@ -191,6 +216,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       recallModel: key ? DEFAULT_MODEL : null,
       recall: key ? 'configured-not-verified' : 'model_not_configured',
       cloudProcessing: Boolean(key), automaticCapture: false,
+      ...(config.privateCards ? { privateCards: 'local-v1', cardConfirmation: 'separate-local-tty-required',
+        cardSourcePolicy: 'retained-receipts-v1' } : {}),
       ...(config.sessionEpisodesAccess || config.sessionEpisodes ? { sessionEpisodesAccess: 'episode-v1',
         sessionContextTokenizer: 'o200k_base', episodeGeneration: 'awaiting-trusted-session-producer',
         episodeGenerationEnabled: false } : {}),

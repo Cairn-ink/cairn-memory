@@ -23,8 +23,10 @@ capture, provider, publication, hosted encryption or full-Raw gate changes.
 The opt-in [local private Card preview](private-cards-local.md) adds
 explicitly submitted bounded notes and private authored Cards to the existing
 SQLite runtime. Default construction and existing capture/Memory DTOs do not
-change. It is not full Raw, chat capture/backfill, publication, common current
-retrieval, hosted encryption or production authorization. Full Raw gates remain
+change. The integrated opt-in also exposes bounded common current/history reads,
+typed Memory/Card navigation and installed local MCP access. It is not full Raw,
+chat capture/backfill, publication, hosted encryption or production authorization.
+Full Raw gates remain
 separate. The trusted host chooses `local-plain-v1` and disclosed one-off
 `submitted-note-v1`; unsupported storage configurations refuse.
 
@@ -42,6 +44,40 @@ unavailable and original ref metadata only. This does not promise physical WAL,
 free-page or backup erasure. The versioned same-owner source-byte cap counts
 retained redacted note bytes, not all database/body/metadata/backup bytes; no
 existing Raw counter is changed and Raw is unimplemented in this slice.
+
+### Local evidence, organization and terminal authority
+
+The [integrated local preview](private-engine-v1-local.md) uses the same canonical
+source/Memory/Card runtime. Common reads require opaque exact-namespace read
+authority; current Cards require both eligible canonical support and an explicit
+current applicability review bound to that exact Card revision. A changed Card
+revision clears the effective review through revision mismatch. History can inspect retained
+authored bodies with unavailable support, never purged source text or old bodies.
+Literal scan budgets and partial coverage are not semantic recall or a hard
+whole-call I/O/deadline guarantee. Signed snapshots bind store, scope, refs,
+source/content fences and generations without persisting private bodies in core
+operation/effect metadata.
+
+Schema 22 adds review metadata and schema 23 adds typed Card topics, exact
+revision bindings and mapping metadata. Memory navigation keeps the existing
+authoritative index; Card IDs never enter old Memory DTOs. Source-bound labels
+and stale memberships are hidden when their support changes. Filing preserves
+Card authorship/applicability; mappings are explicit navigation, not independent
+corroboration, permission or truth. Default literal selection does not expand
+through mappings. These metadata and labels remain sensitive local data.
+
+The opt-in MCP process fixes its namespace at startup and grants only bounded
+read, draft and organization operations. A serialized token, role or confirmation
+flag cannot issue explicit-user authority. MCP confirmation refuses
+`approval_required`; a separate local POSIX `review-card` command displays the
+escaped exact payload/scope/revision and optional applicability choice on its
+controlling TTY, then requires the exact typed phrase and canonical revalidation.
+Piped answers, environment approval and `--yes` are unsupported. Mapping review
+remains a separately trusted host API. Local terminal approval does not
+authenticate a remote ChatGPT user or protect against arbitrary local execution.
+No hosted HTTP schema, default capture, provider or authentication surface is
+widened. Product UI/authority/publication integrate this core rather than owning
+a second Card engine.
 
 ### Private mixed-source-pair metadata boundary
 

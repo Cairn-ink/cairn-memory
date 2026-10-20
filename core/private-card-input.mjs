@@ -1,15 +1,19 @@
 import { createHmac } from 'node:crypto';
 import { redactSecrets } from '../plugins/cairn-memory/lib/redact.mjs';
 import { denseArray, fail, identifier, object, revision } from './validation.mjs';
+import { APPLICABILITY, EVIDENCE_METHODS, evidenceInput } from './private-evidence-input.mjs';
+import { ORGANIZATION_METHODS, ORGANIZATION_READS, organizationInput } from './private-organization-input.mjs';
 
 export const CARD_METHODS = Object.freeze([
   'submitSourceNote', 'getSource', 'deleteSourceNote', 'createCardDraft', 'getCard',
   'listCards', 'editCardDraft', 'confirmCardDraft', 'cancelCardDraft',
   'editKnowledgeCard', 'deleteKnowledgeCard', 'inspectCardOperation',
   'listCardEffects', 'getPrivateCardUsage',
+  ...EVIDENCE_METHODS,
+  ...ORGANIZATION_METHODS,
 ]);
 export const CARD_READS = new Set(['getSource', 'getCard', 'listCards',
-  'inspectCardOperation', 'listCardEffects', 'getPrivateCardUsage']);
+  'inspectCardOperation', 'listCardEffects', 'getPrivateCardUsage', ...EVIDENCE_METHODS, ...ORGANIZATION_READS]);
 export const OWNER_NOTE_CAP = 200_000_000;
 
 export function privateCardOptions(value) {
@@ -127,6 +131,8 @@ export function pageLimit(value = 20) {
 }
 export function validateCardCall(method, input) {
   const ns = cardNamespace(input.namespace);
+  if (EVIDENCE_METHODS.includes(method)) { evidenceInput(method, input, ns); return ns; }
+  if (ORGANIZATION_METHODS.includes(method)) { organizationInput(method, input, ns); return ns; }
   const allowed = {
     submitSourceNote: ['actionId', 'text', 'occurredAt'],
     getSource: ['source', 'limit', 'cursor'],
@@ -135,7 +141,7 @@ export function validateCardCall(method, input) {
     getCard: ['cardId', 'responseByteLimit'], listCards: ['states', 'limit', 'cursor'],
     editCardDraft: ['cardId', 'expectedRevision', 'actionId', 'title', 'body', 'bindings'],
     editKnowledgeCard: ['cardId', 'expectedRevision', 'actionId', 'title', 'body', 'bindings', 'applicability'],
-    confirmCardDraft: ['cardId', 'expectedRevision', 'actionId'],
+    confirmCardDraft: ['cardId', 'expectedRevision', 'actionId', 'applicability'],
     cancelCardDraft: ['cardId', 'expectedRevision', 'actionId'],
     deleteKnowledgeCard: ['cardId', 'expectedRevision', 'actionId'],
     inspectCardOperation: ['operationActionId'], listCardEffects: ['limit', 'cursor'],
@@ -149,6 +155,8 @@ export function validateCardCall(method, input) {
   if (method === 'getCard' && !Object.hasOwn(input, 'cardId')) fail('invalid_input');
   if (method === 'deleteSourceNote') identifier(input.sourceId);
   if (method === 'inspectCardOperation') identifier(input.operationActionId);
+  if (method === 'confirmCardDraft' && input.applicability !== undefined &&
+      !APPLICABILITY.includes(input.applicability)) fail('invalid_input');
   if (Object.hasOwn(input, 'cursor') && (typeof input.cursor !== 'string' || input.cursor.length > 8192)) fail('invalid_cursor');
   if (['listCards', 'listCardEffects', 'getSource'].includes(method)) pageLimit(input.limit);
   if (method === 'listCards') {
@@ -174,7 +182,7 @@ export function validateCardCall(method, input) {
   if (method === 'editCardDraft' || method === 'editKnowledgeCard') {
     identifier(input.cardId); cardText(input.title, 200); cardText(input.body, 20_000);
     refs(input.bindings, ns);
-    if (method === 'editKnowledgeCard' && input.applicability !== 'unknown') fail('invalid_input');
+    if (method === 'editKnowledgeCard' && !APPLICABILITY.includes(input.applicability)) fail('invalid_input');
   }
   for (const methodName of ['confirmCardDraft', 'cancelCardDraft', 'deleteKnowledgeCard']) {
     if (methodName === method) identifier(input.cardId);

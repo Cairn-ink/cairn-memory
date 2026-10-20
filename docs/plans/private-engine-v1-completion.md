@@ -1,7 +1,9 @@
 # Private engine V1 completion
 
-Status: implementation in progress, not a passing result. User requested the
-complete usable system on 2026-10-20 after the local Card slice merged.
+Status: the local implementation now includes the L/H/R/M packets below.
+This is not itself a passing delivery result: final combined gates, fixed-diff
+reviews and latest-head CI are recorded against the exact candidate in the
+delivery PR. User requested the complete usable system on 2026-10-20 after the local Card slice merged.
 Fixed starting main: `9a00e82de25243f0d87a4304e0e9cbb6c42a2add`.
 Product integration and deployment remain the product team's responsibility.
 
@@ -252,6 +254,21 @@ No new classifier/model call is required for this first deterministic interface.
   filing, stale/deleted source, mapping activation/revocation/staleness,
   scope isolation, restart, migrations and old Memory map compatibility on both
   Node versions. Independent dual review and final combined gates still apply.
+- **M07 Reviewed topic recovery:** `refreshCardTopic` takes the exact existing
+  topic ID/revision, expected Card index revision, an explicitly supplied title
+  and 1–5 exact eligible Card refs under a bounded organization grant. Replace
+  title-support bindings atomically, preserve the topic ID/level and refuse
+  stale/foreign refs or a canonical title collision. Advance topic/index
+  versions without editing Card content/applicability or auto-activating a
+  mapping. Existing guarded hierarchy references follow the refreshed topic;
+  changed Card memberships still require explicit placement. Test edit/rebind →
+  stale topic → refresh same topic → place fresh Card → explicit mapping review,
+  including CAS, authority callback races, replay, restart and installed MCP.
+
+The M07 addition addresses an independently reproduced P2 on integrated
+candidate `6e43240`: stale topic bindings had no recovery path, while replacing
+the same title was correctly refused as a duplicate. It is a lifecycle repair,
+not permission to reuse stale labels or silently refresh mapping authority.
 
 ## Observed implementation checkpoint
 
@@ -278,3 +295,25 @@ OAuth advisory; the current checks use synthetic keyless stdio, not OAuth.
 `npm audit --prefix adapters/mcp --omit=dev --json` reported zero runtime
 vulnerabilities (exit 0). The full dev audit returned exit 1. No forced SDK
 upgrade or claim of a clean development dependency audit is included here.
+
+## Integrated delivery checkpoint
+
+The source slice shipped in PR #447 at main
+`5a00394c7a3c967498ec7d0769cef4120da20869`. The H/R/M integration is based on
+that exact commit. The rebased candidate `fd11dc2` has the same tree
+(`69d64111be514fe16e3a69cf6ca957271220d195`) as its pre-rebase candidate;
+no user or product worktree was changed.
+
+The common-read and organization worker and the MCP/installed-test worker each
+used GPT 6.1 Sol/high. The independent Spec review found the stale-topic recovery
+gap documented in M07; the core and adapter workers implemented the bounded
+repair. Their focused checks passed on both Node 22.16 and 24.15 (78 core checks
+and 11 adapter/installed checks respectively, each actual exit 0). These worker
+results do not substitute for primary combined checks or final dual review.
+The primary's final documentation edits only reconcile integration status and
+handoff wording; runtime implementation remains delegated.
+
+The delivery PR records primary commands, actual exit codes, the final commit,
+independent Standards/Spec reports and latest-head CI. Full Raw prerequisites,
+hosted identity/approval and product integration remain separate; neither
+passing synthetic tests nor this local implementation closes those gates.

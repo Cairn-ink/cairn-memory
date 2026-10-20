@@ -1,5 +1,25 @@
 # Local MCP source preview
 
+Private Cards are an explicit local opt-in: add `--private-cards local-v1` (or
+`privateCards: 'local-v1'` to `createCairnServer`). This adds bounded keyless
+inspection, receipt-backed authored drafts, draft cancellation and typed common
+evidence selection/fetch/revalidation, typed maps, Card placement/topic refresh and mapping
+proposals. Organization does not confirm or activate mappings. Confirmation
+requires the separate `review-card` terminal command; the MCP confirmation tool
+always returns `approval_required`. See [local terminal review](private-card-terminal-review.md)
+for exact commands, tool arguments, authority and support limitations. An optional
+terminal `--applicability current|historical|conflict|unknown` choice is displayed
+and included in its typed confirmation phrase; current Card evidence requires
+both eligible source support and an explicit current review. Default
+startup retains its existing five tools.
+
+When a Card changes, its old topic title may become null and its old membership
+may disappear. Use `refresh_card_topic` with the existing exact topic/index refs,
+a reviewed title and 1–5 eligible current Card refs to refresh that topic on the
+same ID/level. Then explicitly place the updated Card refs. This organization
+action does not edit the Card, review applicability or activate mappings; see
+[the organization contract](private-organization-local.md).
+
 `recall_memory` can opt into `contextMode: "source-evidence"` to rank and return
 complete retained sources instead of generated summaries and qualification
 labels. In this mode, omit includeQualification or set it false; explicit true

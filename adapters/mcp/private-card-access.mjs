@@ -1,0 +1,39 @@
+import { isDeepStrictEqual } from 'node:util';
+
+const reads = new Set(['getCard', 'listCards', 'getSource', 'inspectCardOperation', 'listCardEffects',
+  'selectEvidence', 'fetchEvidence', 'revalidateEvidence', 'mapEvidence', 'listEvidenceMappings']);
+const drafts = new Set(['createCardDraft', 'cancelCardDraft']);
+const organization = new Set(['applyCardPlacement', 'refreshCardTopic', 'proposeEvidenceMapping']);
+
+// Local process configuration grants only these bounded read/draft/organization operations.
+// This module has no explicit-user grant constructor.
+export function createScopedCardAccess(namespace) {
+  const scope = structuredClone(namespace);
+  const tokens = new WeakMap(), grants = new WeakMap();
+  const authority = {
+    authorize(request, token) {
+      const expected = tokens.get(token);
+      if (!expected || !isDeepStrictEqual(request.namespace, scope) ||
+          request.method !== expected.method || !isDeepStrictEqual(request.input, expected.input) ||
+          !(request.actionClass === 'read' && reads.has(request.method) ||
+            request.actionClass === 'draft' && drafts.has(request.method) ||
+            request.actionClass === 'organization' && organization.has(request.method))) return null;
+      const grant = Object.freeze({});
+      const { input, ...binding } = request;
+      grants.set(grant, { ...binding, accessGeneration: 1 });
+      return grant;
+    },
+    isCurrent(grant) { return grants.get(grant) ?? null; },
+  };
+  return {
+    configuration: { version: 'private-cards-local-v1', source: 'submitted-note-v1',
+      storage: 'local-plain-v1', disclosure: 'explicit-submitted-note-v1', authority },
+    call(core, method, input) {
+      const payload = { ...input, namespace: structuredClone(scope) };
+      const token = Object.freeze({});
+      tokens.set(token, { method, input: structuredClone(payload) });
+      try { return core[method](payload, token); }
+      finally { tokens.delete(token); }
+    },
+  };
+}
