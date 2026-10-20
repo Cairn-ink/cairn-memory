@@ -1,7 +1,9 @@
 # Memory architecture alignment
 
-Status: agreed design direction, not implemented capability or benchmark success.
-Recorded 2026-10-15 against public main `ad274b6117f86446fbf0ff16f503ae69d0278ce5`.
+Status: agreed engine ownership and design requirements; technical contract
+pending owner review. No implementation or benchmark success is claimed.
+Recorded 2026-10-15 against public main `ad274b6117f86446fbf0ff16f503ae69d0278ce5`;
+ownership and acceptance sequence updated by owner decision on 2026-10-20.
 This is a bounded architecture addendum to the [single reliability plan][reliability], not another roadmap.
 The pinned plan is in open PR #422, not merged behavior.
 
@@ -41,40 +43,58 @@ It authorizes no raw search or read-triggered model work: recall continues to
 use Memories and episodes. Existing capture allowlists, notice, retention,
 namespace, deletion and production gates remain authoritative.
 
-The latest checkpoint is **STOP the closed readable-source presentation probe**.
+The retained evaluation checkpoint is **STOP the closed readable-source presentation probe**.
 Its required-conclusion gain was zero, without a baseline agreed-incorrect
 opportunity. No effective successor is selected. Existing failures and all closed
 results remain retained; this architecture agreement does not repair them.
 
-## Three roles, with optional paths
+## Settled ownership: one public engine, three data roles, optional paths
 
 ```text
-Permitted, redacted Raw/source evidence
-   |                         |
-   | capture/interpret       | direct authoring from sources is possible
-   v                         v
-Memory -----------------> proposed Knowledge Card
-   | optional derivation       |
-   |                           | explicit human confirmation before sharing
-   |                           v
-   |                      governed shared Card
-   +---- source bindings, record revisions, attribution and lineage -----+
+Same public engine
+  Permitted, redacted Raw/Source -> Memory
+             |                       |
+             +---- retained sources <-+ original-source lookup for drafting
+                          |
+                          v
+                   private Card draft -> confirmed private Knowledge Card
+                          |                    |
+                          +---- edit/cancel     +---- edit/delete
+
+Product/harness: explicit authorized publication into a governed destination
 ```
 
 Raw preserves permitted source evidence; Memory is the engine's source-backed
 remembered interpretation; a Knowledge Card is an authored or curated knowledge
-artifact governed by its host. These are roles, not a mandatory three-step
+artifact that may remain private. These are roles, not a mandatory three-step
 pipeline or three model calls. A Memory may be durable. A Card is not inherently
 truer than a Memory, and a Raw-to-Card path need not create an intermediate
-Memory. The full raw archive remains a future implementation contract.
+Memory. A retained receipt or episode excerpt is not a full Raw archive. Full
+Raw and the Card lifecycle below remain target contracts, not shipped features.
 
-Private and shared Card governance belongs to the product/host boundary.
-Memory-to-Card derivation is optional; sharing requires explicit human
-confirmation and authorized scope. Never silently overwrite a human-authored
-Card. Preserve provenance and version links through derivation and updates.
-When a supporting source changes, mark derived material stale/needs review;
-do not copy an obsolete interpretation into a new current answer.
-No private issue/corpus contents or raw/sharing authority are added.
+The 2026-10-20 decision supersedes this addendum's earlier host-only Card and
+Card-query ownership. It assigns all three canonical object kinds to the same
+public memory engine; adapters must not duplicate its Card implementation.
+
+| Public engine owns | Product or harness owns |
+| --- | --- |
+| Raw/Source, Memory and Knowledge Card storage/lifecycle; Card creation from retained sources or Memory-triggered original-source drafting; draft confirmation, cancellation, editing and deletion. | UI and final answer rendering; collections, team/community publication and moderation; destination ACLs, quotas and explicit sharing authority. |
+| Source identity/available version and Memory ID/revision provenance, invalidation, Memory and Card MOC organization/mapping, shared typed bounded evidence reads and coverage. | Authentication and trusted scope supplied to core; capture notice/controls and host encryption ports under the existing raw contract; publication attachments and consumption of engine invalidation. |
+
+Local standalone must work without hosted Cairn services. Model providers remain
+an explicit injected choice; using a remote provider can send bounded model input
+over the network. This requirement does not waive RL-0 implementation, notice,
+retention, deletion, encryption or production gates.
+
+Private Card confirmation requires a trusted user action and is distinct from
+publication; model output cannot grant that authority. No automatic mass Card
+publication or private-to-shared scope expansion follows from capture, drafting,
+confirmation, retrieval or MOC filing. Source support, adoption evidence and
+authorization remain separate checks. Source changes/deletion invalidate affected
+support and derived applicability without silently overwriting a human Card.
+Authored content may remain under its own lifecycle, but stale evidence must be
+blocked in engine evidence reads, not merely marked in the UI. Exact deletion,
+attachment and surviving-support effects need the technical owner review below.
 
 ## Retrieval: two responsibilities, not two fixed model calls
 
@@ -119,69 +139,110 @@ a graph database. Topic similarity never shares ACLs. Multiple copies derived
 from one source are not independent corroboration. Stale index hits/edges cannot
 resurrect forgotten records or present superseded evidence as current.
 
-The public core's present query boundary is Memory/episodes. Any future Card
-query contract belongs at the host boundary and reuses the shared engine where
-applicable; the diagram does not announce a unified Card API or second engine.
-MOC routing, lexical fusion, local embeddings and broader relationships remain
-unselected hypotheses requiring separate evidence before default promotion.
+The public core's present query boundary is Memory/episodes. The target shared
+engine read contract includes typed Memory/Card evidence and bounded authorized
+source anchors; it does not authorize arbitrary Raw full-text search. A response
+is a revalidated snapshot for its authorized scope, not perpetual permission;
+consumers must not reuse it after relevant scope/source/version changes as if
+still current. Receipts have no independent revision to invent.
 
-## Next smallest packet: inspect losses before choosing a mechanism
+One engine/common retrieval contract does not require one physical merged MOC
+tree. The latest product request is two typed Memory/Card indexes with explicit,
+scoped, revision-bound and revocable mappings. A title match cannot merge topics
+or widen ACLs. Unmapped/unfiled records must remain recallable under their own
+scope; mapping removal cannot erase canonical content. The mapping schema and
+traversal bounds need owner review. MOC routing, lexical fusion, local embeddings
+and broader relationships remain unselected retrieval mechanisms requiring
+separate evidence before default promotion.
 
-The next packet is offline, source-free in its public reporting, and changes no
-retrieval algorithm. Primary owns scope, classification acceptance and any
-successor selection; one bounded worker traces retained RQ12/RQ19/RQ22 evidence
-from the closed canonical comparison using existing first verdicts only.
-No rerun, rescore, new labels or old-case tuning is permitted.
+## Design review before implementation
 
-Deliver a three-row public boundary table with content-free aliases, digests and
-check results; keep source IDs and owner/session bindings in local retained
-artifacts. Trace these possible losses: extraction/link absent;
-retrieved but not packed; packed but misused. Distinguish missing observations
-from observed absence and mark unavailable evidence unknown. Record selected,
-fetched and actually sent evidence separately. The table must show whether an
-intervention has a real opportunity to change the failed boundary; increased
-source presence does not prove better answer use or a model-internal cause.
+Settled ownership above is sufficient to prepare a reviewable design, not an
+approved schema. Before implementation, the technical-contract owner must review
+the following observable requirements and resolve their exact representation:
 
-Only after this inspection may primary select at most one falsifiable mechanism
-with opportunity evidence and freeze a prospective probe. A bounded,
-source-grounded event/state relationship probe is a candidate, not the selected
-successor, an implementation or an observed quality gain. If evidence does not
-support it, record stop/re-scope rather than inventing a treatment.
-
-Before implementation, map existing fields/contracts to an input/output manifest;
-receipts have no independent revision. Add schema only for demonstrated gaps:
-
-| Input or output | Required identity/qualification |
+| Contract area | Required review result |
 | --- | --- |
-| Source and canonical record | Canonical memory ID/revision; immutable source ID + content digest/span, lineage; source version only where its backing contract supports one. |
-| Event/state observation | Event time distinct from ingestion time; unknown times remain unknown. |
-| Attribution and authority | Source author, claimant/subject as applicable, authorized namespace/scope. |
-| Commitment and record state | Proposed versus confirmed/adopted; current, historical, forgotten or unresolved. |
-| Relationship proposal | Typed edge, direction, endpoint IDs/revisions, supporting anchors and support/review status. |
-| Evidence output | Included/omitted/unknown evidence, applicability and stale/review qualifications, bounded expansion trace. |
+| Objects and lifecycle | Identity/scope/version and transitions for Raw/Source, Memory and private Card; source- or Memory-initiated drafting; explicit confirm/cancel/edit/delete, retries and concurrent changes. Confirmation is not sharing. |
+| Provenance and invalidation | Source IDs/digests/spans and supported source versions; Memory IDs/revisions; attribution, commitment and applicability. Source/Memory correction, forgetting, deletion and loss of support invalidate dependents without rewriting human content or restoring forgotten text. Protect private provenance across publication. |
+| Event and relationship evidence | Event time distinct from ingestion time, with unknown times explicit; typed directed links bind endpoint IDs/revisions, supporting anchors and support/review status. Reuse current rationale guards; a model proposal is not a verified premise or adopted decision. |
+| Organization | Two typed MOCs and explicit bounded mappings; revision/scope guards, revocation and unfiled fallback; placement preservation only for reviewed safe transitions. |
+| Shared reads | Typed authorized evidence, bounded source anchors, paging/budgets, included/omitted/unknown coverage, stale/review qualifications and final canonical revalidation. Preserve explicit history without presenting it as current. |
+| Local storage and migration | Restart-safe transactions, cancellation/retry/deletion fences, schema compatibility, migration/rollback limits and cleanup. Reuse existing core fields before adding schema; never infer missing raw or source versions. |
+| Sharing attachment | Engine-owned Card versus host-owned destination/publication records; explicit destination authority, copied versus referenced support, private provenance projection, withdrawal/invalidation and durable cross-boundary effects. No assumed cross-database transaction. |
 
-Freeze only a necessary relationship vocabulary subset, direction and traversal
-cap. Normal capture/extraction must create any relationships tested for semantic
-success; hand-authored or oracle edges establish mechanics only. Neither a
-source citation nor a valid edge shape proves the relationship's meaning.
+The owner-reviewed output must identify existing contracts, demonstrated gaps,
+exact state transitions and required conformance fixtures. It must also say
+which proposed capabilities below enter the first slice and which remain later.
+This document does not settle field names, API signatures or an approved V1
+schema by implication.
 
-One acceptance example: a source adopted A because its price was within an
-explicit budget; a supported new quote exceeds that budget, while B is only
-proposed. Expected qualification: "A needs reconfirmation," not "B was adopted."
-An unverified edge alone only warrants `reconfirmation-suggested`; sources must
-establish the premise change. Preserve A's historical rationale.
-Negative controls include a late-imported older event, a similar claim in the
-wrong scope, unrelated/unsupported edges, and a changed price still within the
-budget, which must not blindly invalidate A. Controls must fail unsafe mechanisms.
-Do not change retrieval and interpretation together, or enable vector retrieval
-in the same comparison.
+## Product capability proposals: constraints, not blanket V1 approval
 
-Outputs are the boundary table, existing-field mapping, evidence-backed
-advance/revise/stop recommendation, and, only if justified, one prospective
-probe contract with exact artifact/model/rubric and resource ceilings.
-Primary verifies the packet and obtains separate nonauthor Standards/Spec
-review; no runtime implementation or paid execution is authorized by this
-docs-only delivery.
+These proposals inform the review above. A product capability request does not
+by itself approve a schema, a paid maintenance job or a V1 release commitment.
+
+| Proposal | Required boundary before adoption |
+| --- | --- |
+| E1: topic overview | Exact authorized namespace and bounded traversal/counts; deduplicate descendants in a DAG and expose partial/unknown coverage. An added-time view uses actual addition time, not an arbitrary record revision timestamp. |
+| E2: generated topic summaries | Optional later derived cache, neither a fourth canonical layer nor a user-authored Card. Bind every sentence to support IDs/versions; support changes immediately make old summary evidence ineligible. Explicit budgeted maintenance uses an injected model, never a read-triggered paid call. UI staleness alone is insufficient. Not mandatory standalone V1. |
+| E3: two-MOC mapping | Engine-owned typed Memory/Card indexes, scoped revision-bound revocable mappings and unfiled recall as specified above; no title-based merge or ACL inheritance. |
+| E4: source invalidation | Propagate changed/removed support through Memory, Card and derived evidence, with private provenance protected. Authored Card retention does not preserve invalid source authority. |
+| E5: placement preservation | Same-scope navigation-only changes with unchanged content may preserve placement atomically. Semantic or scope changes require revalidation/reclassification or unfiled fallback; no blind inheritance. |
+| E6: reverse source navigation | Bounded links from Memory to actually retained episode/source references. No recovery claim for deleted or never-retained originals. |
+| E7: Raw navigation | Paged retained-source navigation under existing RL-0 policies and gates; expose unknown times, scope and partial coverage. No Raw full-text search expansion. |
+| E8: both-valid conflict dismissal | A trusted human decision binds to the exact pair of versions and scope; changed evidence requires renewed review. It does not establish universal truth. A model-supplied human-confirmed label is not authority, and existing qualification transition guards remain. |
+| E9: shared evidence | A common typed bounded read over the authorized set, including source anchors, with final scope/version/source checks. No arbitrary Raw search or invented receipt revision; consumers use a fresh snapshot rather than permanent authorization. |
+
+## Acceptance sequence
+
+1. **Design review:** complete the technical-contract review above before runtime
+   implementation. Retain unresolved questions explicitly rather than marking
+   this requirements document an approved implementation contract.
+2. **Local usable slice:** implement only the reviewed bounded source/Memory/Card
+   path, with local persistence and inspection. Demonstrating a useful slice is
+   not completion of standalone V1 or semantic reliability.
+3. **Full standalone V1:** require reliable bounded reads, source invalidation,
+   lifecycle and scope safety, and actual MCP use in a new session after a
+   process restart.
+   A scripted in-process demonstration alone cannot pass this gate. Hosted
+   product integration is not a prerequisite for standalone acceptance.
+4. **Product adapter and migration:** reuse the accepted engine through a
+   separately tested adapter. Existing product UX stays unchanged absent explicit
+   signoff; publication and migration retain their own safety/production gates.
+
+Acceptance follows one decision over time: A is adopted because its price is
+within a recorded budget; a supported new price exceeds that budget; B is only
+proposed; A needs reconfirmation, with no adopted B inferred. If the source later
+explicitly adopts B, record the change while preserving A's historical rationale.
+An unverified challenge only warrants `reconfirmation-suggested` until source
+support establishes the premise change. Source support never grants execution or
+publication authority.
+
+Controls cover a late-imported older event, a similar claim in the wrong scope,
+an unrelated/unsupported edge and a changed price still within budget. Lifecycle
+fixtures also cover correction, forgetting with retained Raw exclusions, cancelled
+drafts, idempotent retry/restart, scope revocation, source/Card deletion and
+cleanup without resurrecting removed evidence. Normal capture/extraction must
+create relationships used for semantic acceptance; hand-authored/oracle links
+establish mechanics only. Neither a citation nor a valid edge proves meaning.
+
+Report mechanical conformance, real-model semantic reliability and installed-host
+evidence separately. No full benchmark success, new paid scope or changed budget
+follows from this sequence. Freeze any prospective probe's baseline, exact
+artifact/model/rubric, vocabulary/direction, traversal cap and resource ceilings;
+do not change retrieval and interpretation together or add vectors in the same
+comparison.
+
+## Historical diagnostic packet
+
+The earlier three-case loss inspection and its NEXT instructions are historical,
+not current pending work or a selected successor. Keep its closed evidence and
+first verdicts unchanged. Its useful diagnostic distinctions remain extraction/
+link absent, retrieved but not packed, and packed but misused; missing observation
+is unknown, not observed absence. Increased source presence alone proves neither
+better answer use nor a model-internal cause. Any new experiment needs a fresh
+prospective contract and the unchanged reliability/resource gates below.
 
 ## Preserve milestones, denominators and resource gates
 
@@ -214,14 +275,12 @@ no reset. Historical balances are not current affordability. Later paid work
 requires separately frozen/reviewed scope and a fresh conservative affordability
 check under that original budget; this document supplies no spending authority.
 
-## Is the planning concrete enough?
+## Delivery boundary
 
-Yes for the next bounded offline packet; no for implementing the whole system.
-The goal, evidence boundaries and next decision suffice for retained-loss
-inspection without a broad product redesign. Before implementation, freeze its paired baseline,
-artifact, model, rubric, relationship vocabulary/direction, traversal cap and
-resource ceilings. Choose fusion/embedding backend only when that experiment
-is scheduled.
+This addendum records settled ownership and design acceptance requirements.
+Technical-contract owner review remains pending; no runtime work or paid execution
+is authorized by this docs-only delivery. Choose fusion/embedding backends only
+with an independently justified, frozen experiment.
 
 One bounded actual GPT-6.1 Sol/high worker authors these docs; primary owns final
 verification, fixed-candidate independent reviews, commit and PR delivery. Base

@@ -4,9 +4,14 @@ See the [delivery roadmap](plans/delivery-roadmap.md) for remaining work,
 delegation, acceptance gates and the public-core/hosted migration sequence.
 
 The [memory architecture alignment](plans/memory-architecture-alignment.md)
-records proposed data roles and retrieval responsibilities alongside current
-capability boundaries. It is a planning addendum, not shipped behavior or a
-replacement for the reliability plan and its unchanged gates.
+records the agreed target: the same public engine owns Raw/Source, Memory and
+private Knowledge Card lifecycles, provenance, invalidation and typed bounded
+reads, including Memory/Card MOC mapping. Products own UI, publication,
+destination governance and answer rendering, and reuse this engine. Full Raw
+and Card contracts are not shipped; technical-contract owner review precedes
+implementation. This planning addendum preserves the reliability gates and raw
+policy, and does not change current hosted behavior or product UX. Standalone
+does not require hosted Cairn services; model providers remain injected choices.
 
 Cairn Memory is moving toward a shared open-source memory core. The public
 repository now includes local storage and injected capture/recall orchestration
