@@ -204,7 +204,11 @@ export async function captureEpisodeMessages(options) {
     messages: snapshot.messages, eventStart: snapshot.eventStart, eventEnd: snapshot.eventEnd,
     eventTimeCoverage: snapshot.eventTimeCoverage };
   delete batch.origin;
-  const checked = runtime.validateEpisodeBatch(ns, batch);
+  // Raw registration and the existing episode/admission reservation precede
+  // every duplicate/processing return and any lazy provider work.
+  let registered = options.rawRegistration
+    ? runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true }, options.rawRegistration) : undefined;
+  const checked = registered ?? runtime.validateEpisodeBatch(ns, batch);
   if (checked.processing) return { processing: true,
     episode: { status: 'processing' }, admission: { status: 'processing' } };
   if (checked.overlap) return { duplicate: true, overlap: true,
@@ -216,7 +220,7 @@ export async function captureEpisodeMessages(options) {
     if (pending) lazy = await auxiliary({ runtime, ns, model, episodeId: pending,
       generation: batch.generation, trigger: 'lazy' });
   }
-  const registered = runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
+  registered ??= runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
   const episodeId = registered.episodeId;
   if (registered.processing) return { processing: true,
     episode: { id: episodeId, status: 'processing' }, admission: { status: 'processing' } };

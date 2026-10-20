@@ -114,6 +114,147 @@ are integrated. Public capabilities cannot lead their protection mechanisms.
 
 ## Work and verification record
 
+### P2 contract: join real capture registration
+
+Fixed dependency: P1 `0be04cdcc9e5a88b3702bf915510da810d5e797a` (PR #449,
+not merged when this packet started). Worktree `raw-local-v1-capture`, branch
+`feat/raw-local-v1-capture`. Main remains `cd6d1ad`; this is an explicitly
+dependent delivery, not permission to merge either PR.
+
+P2 is an internal local integration, default-off and synthetic-only. Reuse the
+actual capture/admission/episode implementation; do not create a test-only
+parallel algorithm or add a host/product store. Public constructor inputs,
+legacy capture request/response fields and advertised capabilities remain
+unchanged. A narrowly scoped internal construction seam may connect the new
+journal to the existing core; document it and keep the usable Raw entrypoint
+out of the installed runtime until P3/P4. Never accept transaction callbacks,
+trusted controls or permissions from a wire/model input.
+
+| ID | Required observable result |
+| --- | --- |
+| P2-01 | The real ordinary and staged admission paths commit Raw parts, content-free event/part identities, usage and admission reservation atomically; the real episode path also includes its event and observation. Force a failure after either side and observe no partial state from a fresh connection. No crypto/model callback runs in the write transaction. |
+| P2-02 | Only newly registered first parts contribute to the existing bounded, normalized model projection. A batch of continuations makes zero extract/qualify/classify/episode calls and creates no admission or accepted-batch increment. A mixed batch contributes only its fresh first parts and counts once. Exact replay, overlapping parts with a new event and cold restart do not repeat completed first-part interpretation or charge bytes twice. Bind the projection to the frozen Raw identity; caller mutation cannot swap it. |
+| P2-03 | Successful Raw registration survives subsequent extraction/qualification failure, staging release/expiry and capacity bypass. Report source saving separately from interpretation. Preserve legacy capacity refusal; the internal new path may bypass full staging without claiming staged evidence. Existing model input and time budgets are unchanged. |
+| P2-04 | Real namespace pause/project-stop and owner/client Raw-off controls close affected pending assemblies and release only their unused reservations in the same control transaction, including with episode mode off. Resume/re-enable never backfills closed attempts. Other namespaces, clients and owners are unchanged. |
+| P2-05 | Pause/project/client-control changes or a session deletion fence during asynchronous sealing refuse the prepared registration before any model work and leave no new partial writes. After successful registration, a later pause/project stop/deletion cannot publish new stale Memory from the in-flight model result. Do not claim the later P3 source cascade is implemented merely by this fence. |
+| P2-06 | Ordered-capture proofs are taken after Raw's registration epoch advance so normal capture does not conflict with itself; an actual concurrent change still refuses stale admission. Episode registration precedes interpretation for the new path, including lazy work and early duplicate/overlap/processing branches. Preserve all legacy behavior when internal Raw is absent. |
+| P2-07 | Replay after a lost acknowledgement returns recorded Raw dispositions and correct processing/completion status without resealing or recharging. Raw-off/quota/notice skips still permit eligible first-part Memory capture; crypto failure permits neither registration nor interpretation. Changed same-event/part payload refuses without echoing source or callback errors. |
+| P2-08 | Exercise both supported client identities, episodes on/off, staged/unstaged and ordered configurations with real SQLite and new processes. Retain explicit failures; fixtures clean up on success and failure. Run core on Node 22.16/24.15, generic validation, affected demos, public/installed compatibility and independent Standards/Spec review on one final committed diff. |
+
+Full D5 deletion/cascade, D6 source-span exclusions, Raw-to-Card resolution,
+client producers/setup, wire v2 schemas and installed Raw lifecycle remain P3/P4.
+No real transcripts, paid calls, production migration, publication, deployment
+or automatic merge. The product team keeps its previously validated pin.
+
+Primary owns this contract, shared-file coordination and independent acceptance.
+One GPT 6.1 Sol/high worker owns bounded implementation and tests; separate
+non-author GPT 6.1 Sol/high reviewers own Standards and Spec after the candidate
+is frozen. Record actual model fallback, correction rounds and exit codes below.
+
+P2 construction decision: keep the strict public `openMemoryCore` wrapper and
+add a trusted internal builder for the uninstalled Raw factory. The builder
+must reuse the same capture/runtime functions; request/model fields cannot
+select or inject its trusted hooks. A separately opted additive schema v25
+(`rawCapture:true` internally) records the content-free event-to-first-part
+projection binding and capture generation. P1-only opening still uses v24;
+ordinary/private opening still uses v18/v23. Current option-off openers preserve
+v25 and old openers refuse it. Verify migration rollback, not just the version
+number. Only the import closure necessary for legacy installed operation is
+packaged; the usable Raw factory stays uninstalled.
+
+Registration precedes staging clock/expiry maintenance, with ordered proof
+acquisition after both. Invalid first-part registration must roll back inside
+the transaction, not commit Raw and throw an admission error afterward. Raw-off
+after successful registration does not cancel Memory processing: its scope is
+Raw saving only. Namespace pause/project-stop/session deletion do fence later
+Memory publication. A newly enabled client may submit a new higher-ordinal
+message after a closed old suffix, but must never reopen/backfill that suffix.
+
+The internal result separates saved-source outcome from the existing
+interpretation success/error envelope. It is not the public v2 wire
+acknowledgement and cannot authorize a future client to advance its cursor
+merely because the outer operation registered Raw successfully. Valid exact
+Raw with a whitespace-only first part remains saveable; an empty normalized
+projection performs no model work and reports that limitation, without a
+placeholder or pulling later continuation text into first-part extraction.
+
+P2 control closure is through the internal Raw factory. Arbitrary option-off
+v25 writers still need P3's mutation-safety integration before any real Raw
+capability is exposed. The durable admission guard already rejects publication
+after namespace/session fences; that is not a claim that all option-off control
+writers release pending Raw reservations. The product pin stays unchanged.
+
+Legacy episode coverage must not be silently backfilled into Raw. A first Raw
+projection colliding with a legacy-owned message or event refuses the whole
+registration transaction with `event_payload_conflict`, including a mixed
+legacy/fresh batch. The legacy event and its original interpretation remain
+unchanged. This is a safe protocol boundary, not cross-protocol replay support.
+
+### P2 verification and correction record, 2026-10-21
+
+Implementation worker: `/root/raw_p2_capture_impl61`, actual requested model
+`gpt-6.1-sol`, high effort, no fallback. Primary owns the separate acceptance
+suite and integration. Reviewers and final committed candidate are recorded in
+the PR after the verification gate; no author self-review counts as independent.
+Agent token/cost data is unavailable; no live memory-provider calls or paid API
+experiments were made.
+
+Two defects were detected before candidate freeze and retained as evidence:
+
+- A legacy episode/new Raw identity collision saved Raw but did not establish
+  the claimed new admission ownership. Four regression cases first exited 1,
+  then all four passed after rejection moved inside the registration transaction.
+  Completed, active, mixed and same-event legacy cases are covered.
+- The initial full Node 22 run (1,311/1,313 passed, two failures, actual exit 1)
+  exposed two regressions from the same eager optional-schema probe:
+  an eager optional-schema probe required `prepare()` from an existing `exec()`
+  failure-classification seam, and an episode-off path made an extra query.
+  Deferring the probe until actual episode publication restored both seams;
+  the two focused existing cases passed with exit 0 on Node 22. That
+  initial full run is not presented as verification of the corrected candidate.
+
+The frozen actual P1 database opener was independently compared with
+`git show 0be04cd:core/database.mjs`: one file, 19,853 bytes, identical after
+removing its explanatory header and relocating imports. The first comparison
+found one extra trailing newline, which was removed before the exact match.
+
+Primary acceptance uses its own request construction/splitter, not the worker's
+fixture implementation. Twenty tests pass on both Node 22.16 and 24.15 (actual
+exit 0 each): long Unicode reconstruction across a real new process, stable
+replay/usage, live overlap, blank first parts, rollback from a fresh connection
+including failure at the final episode observation update, pause during model
+work, durable session fences and same-owner namespace/client isolation. These
+are mechanical scripted-model results, not semantic accuracy evidence.
+
+Additional completed gates: P2's three checked-in suites pass 73/73 on both
+Node versions (exit 0 each); generic `npm test` passes 635/635 on Node 24
+(exit 0); `npm run validate` and maintainer plugin validation each exit 0.
+`demo:store`, `demo:admission`, `demo:capture`, and `demo:episodes` each exit 0
+on both versions (eight invocations). `NODE_DISABLE_COMPILE_CACHE=1 npm run
+test:workspace-lifecycle` passes 25/25 on each version, exit 0, including
+subprocess success/failure/catchable-termination cleanup. Demos retain their
+documented synthetic artifacts; no historical scratch sweep is performed.
+
+Corrected full `npm run test:core` passes 1,317/1,317 on each Node version,
+zero failures/skips, actual exit 0 (22.16: 395.2 seconds; 24.15: 420.5 seconds).
+Serial `npm run test:mcp` passes 125/125 on each version, exit 0. Serial
+`npm run test:artifact` passes 94 tests on each version, zero failures, one
+native Windows-only skip on WSL, exit 0. These exercise the existing installed
+surface, not an installed Raw capability. No fixture deadlines were enlarged.
+
+Primary cross-checks the P2 file inventory using `git diff --name-only` plus
+untracked files and independently Git porcelain status: 20 files agree,
+including tests, fixtures and both docs. The 18 changed core files retain the
+same path/content SHA-256 before and after final full-core validation:
+`ba9af8de5ceb8cf5fb02aa390b09237353b15bb9b35695d1c9210e60687ed14c`.
+The candidate is committed only after these gates. Independent review and
+latest-head CI are not claimed by this pre-commit record; their final SHA,
+separate Standards/Spec reports and outcomes are recorded in the delivery PR.
+Local full logs and primary acceptance are in
+`/tmp/cairn-raw-p2-evidence.xAB4IQ`, not a portable test dependency. No outstanding
+worker process remains at this checkpoint. No two unsuccessful correction
+rounds on the same defect or model fallback occurred.
+
 Primary: plan/integration/acceptance. Implementation: one bounded GPT 6.1 Sol
 worker, high effort. Independent Standards and Spec reviewers: separate
 non-authors on one fixed committed candidate. Requested/actual model and

@@ -25,12 +25,12 @@ const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
-export function createMemoryRuntime(input) {
+export function createMemoryRuntime(input, internal) {
   object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards"]);
   const privateCards = privateCardOptions(input.privateCards);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
-  const db = openDatabase(input.path, { privateCards: Boolean(privateCards) });
+  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), rawCapture: Boolean(internal?.rawCapture) });
   let identity;
   try {
     identity = db.prepare(`SELECT store_id AS storeId, cursor_secret AS cursorSecret
@@ -538,11 +538,14 @@ export function createMemoryRuntime(input) {
     evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch,
     recordHeldRetirement: (previous, replacement, linked) => recordHeldRetirement(db, previous, replacement, linked) });
   const stagedEvidence = createStagedEvidenceStorage({ db });
+  let rawCapture;
+  try { rawCapture = internal?.attachRaw?.(db); }
+  catch (error) { db.close(); throw error; }
   const episodeReads = createEpisodeReads({ db, epoch, decisionReview });
   const proceduralStorage = createProceduralStorage({ db, activeRow: visibleRow, advanceEpoch, epoch });
   const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview });
   let episodes;
-  try { episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch, forgetMutation }); }
+  try { episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture }); }
   catch (error) { db.close(); throw error; }
   stagedEvidence.setEpisodes(episodes);
   const admissionStorage = createAdmissionStorage({
@@ -596,7 +599,7 @@ export function createMemoryRuntime(input) {
     startEpisodeAttempt(ns, input) { ready(); return episodes.startAttempt(ns, input); },
     settleEpisodeAttempt(ns, input) { ready(); return episodes.settleAttempt(ns, input); },
     episodeSessionKey(ns, client, sessionId) { ready(); return episodes.sessionKey(ns, client, sessionId); },
-    reserveEpisodeBatch(ns, input) { ready(); return episodes.reserveBatch(ns, input); },
+    reserveEpisodeBatch(ns, input, registration) { ready(); return episodes.reserveBatch(ns, input, registration); },
     setEpisodePolicy(ns,input) { ready(); return episodes.setPolicy(ns,input); },
     claimEpisodeWriter(ns, input) { ready(); return episodes.claimWriter(ns, input); },
     releaseEpisodeWriter(ns, input) { ready(); return episodes.releaseWriter(ns, input); },
@@ -624,7 +627,7 @@ export function createMemoryRuntime(input) {
       ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals, deadline);
     },
     getRationale(ns, ref, view) { ready(); return rationaleStorage.inspect(ns, ref, view); },
-    claimOrdered(ns, snapshot, deadline) { ready(); return orderedStorage.claim(ns, snapshot, deadline); },
+    claimOrdered(ns, snapshot, deadline, registration) { ready(); return orderedStorage.claim(ns, snapshot, deadline, registration); },
     discoverOrdered(ns, snapshot, order, items) {
       ready(); return orderedStorage.discover(ns, snapshot, order, items);
     },
@@ -635,13 +638,13 @@ export function createMemoryRuntime(input) {
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
-    claimCapturedAdmission(ns, input, deadline) {
-      ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline);
+    claimCapturedAdmission(ns, input, deadline, registration) {
+      ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline, registration);
     },
-    claimCaptureEvidence(ns, input, deadline) {
+    claimCaptureEvidence(ns, input, deadline, registration) {
       ready();
       if (input.view === undefined) fail('invalid_input');
-      return admissionStorage.claimAdmission(ns, input, undefined, input.view, deadline);
+      return admissionStorage.claimAdmission(ns, input, undefined, input.view, deadline, registration);
     },
     inspectCaptureEvidence(ns, input) { ready(); return stagedEvidence.inspect(ns, input); },
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },

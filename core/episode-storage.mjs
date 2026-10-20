@@ -54,7 +54,11 @@ export function episodeMetadata(ns, row) {
 }
 
 /** All write seams are model-free. SE-2 owns scheduling and provider calls. */
-export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation }) {
+export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture }) {
+  // Cleanup-only callers need only exec; defer the optional schema probe until
+  // a real episode publication attempt, preserving that legacy failure seam.
+  let rawCaptureAvailable;
+  const hasRawCapture = () => rawCaptureAvailable ??= Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'").get());
   const read = (ns, id) => db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND id=?`)
     .get(...boundary(ns), id);
   const event = (ns, input) => input.keepActionId ? null : db.prepare(`SELECT * FROM episode_events WHERE ${eventWhere}`)
@@ -160,7 +164,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     for (const current of seen) invalidate(ns, current, preserveInterval);
   }
   function setControl(ns, input, project = false) {
-    if (!options) fail('episode_mode_required');
+    if (!options && !rawCapture) fail('episode_mode_required');
     if (project && ns.scope !== 'project') fail('invalid_input');
     return transaction(db, () => {
       if (getControl(ns).generation !== input.expectedGeneration) fail('generation_conflict');
@@ -171,6 +175,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       db.prepare(`INSERT INTO episode_controls(owner_id,scope,project_id,generation,paused,enabled) VALUES(?,?,?,?,?,?)
         ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=excluded.generation,paused=excluded.paused,enabled=excluded.enabled`)
         .run(...boundary(ns), next.generation, +next.paused, +next.enabled);
+      if (next.paused || !next.enabled) rawCapture?.closePending({ ownerId: ns.ownerId, namespace: ns, reason: 'capture_barrier' });
       if (project && !flag) {
         for (const registered of db.prepare(`SELECT client,event_id FROM episode_events WHERE ${where}
           AND (admission!='completed' OR disposition=0)`).all(...boundary(ns))) {
@@ -205,7 +210,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     db.prepare(`UPDATE episode_events SET admission='pending' WHERE ${eventWhere}`).run(...eventKey(ns,input));
     return registered.policy;
   }
-  function reserveBatch(ns, input) {
+  function reserveBatch(ns, input, registration) {
     if (!options) fail('episode_mode_required');
     object(input, ['client','clientLabel','sessionId','eventId','payloadDigest','generation','view',
       'eventStart','eventEnd','eventTimeCoverage','writerToken','messages','acquireWriter']);
@@ -219,12 +224,14 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     const ledger = messageLedger(input.messages);
     stagedEvidence.serializeView(input.view, true); // Validate before registration, including overlaps.
     const identity = sessionKey(ns, input.client, input.sessionId);
-    return transaction(db, () => {
+    const result = transaction(db, () => {
+      registration?.commit();
       let row = db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND client=? AND session_key=?`)
         .get(...boundary(ns), input.client, identity);
       if (row?.deleted) fail('capture_evidence_closed');
       const prior = event(ns, input);
       if (prior) {
+        if (registration && !registration.replay) fail('event_payload_conflict');
         if (prior.episode_id !== row?.id || prior.payload_digest !== input.payloadDigest) fail('event_payload_conflict');
         const denied = guard(ns, input); if (denied) fail(denied);
         return { episodeId: row.id, sessionKey: identity, position: prior.position, staging: prior.staging, duplicate: true,
@@ -234,6 +241,9 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       assertControl(ns, input.generation);
       if (db.prepare(`SELECT 1 FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns, input))) fail('event_payload_conflict');
       const { fresh, unfinished } = messageCoverage(ns, row, input.client, ledger);
+      // A legacy covered message cannot be silently archived as a new Raw
+      // first part without its own atomic admission reservation. No backfill.
+      if (registration && fresh.length !== ledger.length) fail('event_payload_conflict');
       if (!fresh.length) return { episodeId: row.id, sessionKey: identity, position: row.observed, overlap: true, processing: unfinished };
       const now = stagedEvidence.touch(ns, true), received = new Date(now).toISOString();
       db.prepare(`INSERT OR IGNORE INTO episode_controls(owner_id,scope,project_id,generation,paused,enabled) VALUES(?,?,?,'initial',0,1)`).run(...boundary(ns));
@@ -290,6 +300,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       return { episodeId: row.id, sessionKey: identity, position, staging: staged ? 'staged' : 'not-staged', duplicate: false, messageIds,
         ...(input.acquireWriter ? captureWriter(read(ns, row.id)) : {}) };
     });
+    registration?.accept();
+    return result;
   }
   // Preserve all reasons and keep terminal fences stronger than diagnostic failures.
   function mergeGap(ns, input, reason) {
@@ -444,6 +456,14 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     if (!claim || claim.finished || claim.expires_at <= Date.now() || claim.revision !== row.revision || claim.source_fence !== row.source_fence) fail('stale_episode');
     // A pre-pause attempt can finish; project stop increments its source fence.
     if (control(ns)?.enabled === 0) fail('capture_disabled');
+    if (hasRawCapture() && db.prepare(`SELECT 1 FROM episode_events e JOIN raw_capture_events r
+      USING(owner_id,scope,project_id,client,event_id) WHERE e.episode_id=? AND e.position=?`)
+      .get(row.id, claim.watermark)) {
+      const current = getControl(ns);
+      if (current.paused || current.generation !== claim.generation) fail('capture_disabled');
+      if (db.prepare(`SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)
+        .get(...boundary(ns), row.client, row.session_key)) fail('capture_evidence_closed');
+    }
     return { row, claim };
   }
   function startAttempt(ns, input) {

@@ -152,6 +152,11 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
+  return createMemoryCore(input);
+}
+
+/** Internal construction seam. Public openMemoryCore never forwards extensions. */
+export function createMemoryCore(input, internal) {
   object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
     'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview', 'privateCards']);
   const privateCards = privateCardOptions(input.privateCards);
@@ -195,7 +200,7 @@ export function openMemoryCore(input) {
   if (sessionEpisodes && (captureQualification !== 'source-bound-v2' || captureEvidence !== 'staged-v1')) throw new MemoryStoreError('invalid_input');
   const model = input.model;
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
-  const runtime = createMemoryRuntime({ path: input.path, ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
+  const runtime = (internal?.createRuntime ?? createMemoryRuntime)({ path: input.path, ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
   const { storeId, cursorSecret } = runtime.identity;
 
   function namespaceBinding(ns) {
@@ -856,7 +861,7 @@ export function openMemoryCore(input) {
     });
   }
 
-  async function capture(input, keepInput) {
+  async function capture(input, keepInput, rawRegistration) {
     try {
       let deadline = sessionEpisodes || captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs);
       runtime.ready();
@@ -866,13 +871,13 @@ export function openMemoryCore(input) {
       const captureKey = value => keepInput ? { ...value, [keepAdmissionKey]: true } : value;
       if ((captureEvidence || evidenceOnly) && Object.hasOwn(input, 'causal')) throw new MemoryStoreError('invalid_input');
       return success(await (keepInput ? keepEpisodeCapture : sessionEpisodes ? captureEpisodeMessages : captureMessages)({ model, captureQualification, captureSourcePolicy,
-        runtime, ns, sessionEpisodes, keepInput,
+        runtime, ns, sessionEpisodes, keepInput, rawRegistration,
         startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
         operations: { claimAdmission: value => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
-        }, deadline)),
+        }, deadline, rawRegistration)),
           finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline),
           abandonAdmission: (value, retryable) => sessionEpisodes && retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
@@ -883,7 +888,7 @@ export function openMemoryCore(input) {
           applyInitialPlacement: value => applyInitialPlacement(captureKey(value), deadline),
           claimCaptureEvidence: value => invoke(() => runtime.claimCaptureEvidence(ns, {
             ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS, view: value.view,
-          }, deadline)),
+          }, deadline, rawRegistration)),
           assertCaptureEvidence: value => invoke(() => runtime.assertCaptureEvidence(ns, {
             ...admissionKey(captureKey(value)), token: contractId(value.token),
           })),
@@ -901,7 +906,7 @@ export function openMemoryCore(input) {
           }),
           classifyPlacement: value => classifyPlacementValidated(value, deadline), applyPlacement,
           ordered: {
-            claim: snapshot => invoke(() => runtime.claimOrdered(ns, snapshot, deadline)),
+            claim: snapshot => invoke(() => runtime.claimOrdered(ns, snapshot, deadline, rawRegistration)),
             prepare(snapshot, order, extracted) {
               return invoke(() => {
                 const items = admissionItems(extracted.map(({ sourceIndices, ...item }) => item));
@@ -1096,6 +1101,7 @@ export function openMemoryCore(input) {
     });
   }
 
+  internal?.attachCapture?.((input, registration) => capture(input, undefined, registration));
   return Object.freeze({
     ...createPrivateCardFacade(runtime.privateCards, privateCards, runtime.ready),
     sessionStartContext, closeEpisodeNextStep, listEpisodes, listMemoriesByTime, getEpisode, forgetEpisode, correctEpisode, releaseEpisodeCorrection,

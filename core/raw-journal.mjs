@@ -54,6 +54,9 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy 
     const deleted = db.prepare(`SELECT deleted FROM session_episodes WHERE ${where} AND client=? AND session_key=?`)
       .get(...rawBoundary(ns),client,session);
     if (deleted?.deleted) fail('conversation_deleted');
+    if (db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_session_fences'").get() &&
+        db.prepare(`SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)
+          .get(...rawBoundary(ns),client,session)) fail('conversation_deleted');
     return { epoch: epoch(ns), capture: control ? { ...control } : null, raw: getRawCaptureControl({ ownerId: ns.ownerId,client }) };
   }
   function policy(input) {
@@ -80,7 +83,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy 
     if ((!previous && index !== 0) || (previous && (previous.next_index !== index || previous.next_start !== message.part.start))) fail('raw_part_out_of_order');
     if (!previous) {
       const last = shadow ? shadow.last : id && db.prepare('SELECT ordinal,next_start,total_units,assembly_state,reason FROM raw_messages WHERE conversation_id=? ORDER BY ordinal DESC LIMIT 1').get(id);
-      const discardedSuffix = last?.assembly_state === 'closed' && last.reason === 'capture_barrier';
+      const discardedSuffix = last?.assembly_state === 'closed' && ['capture_barrier','tool_off'].includes(last.reason);
       if (last && (message.messageOrdinal <= last.ordinal || (last.next_start !== last.total_units && !discardedSuffix))) fail('raw_part_out_of_order');
     }
     const bytes = (previous?.received_bytes ?? 0) + Buffer.byteLength(message.content);
@@ -227,13 +230,13 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy 
     return transaction(db,() => commitRegistration(token));
   }
 
-  function closePendingInside({ ownerId,client,namespace,reason }) {
+  function closePendingInside({ ownerId,client,namespace,sessionKey: session,reason }) {
     const ns = namespace === undefined ? null : rawNamespace(namespace);
     identifier(ownerId); if (client !== undefined) rawClient(client);
     if (!['tool_off','capture_barrier'].includes(reason) || (ns && ns.ownerId !== ownerId)) fail('invalid_input');
     const rows = db.prepare(`SELECT m.*,c.owner_id,c.scope,c.project_id FROM raw_messages m JOIN raw_conversations c ON c.id=m.conversation_id
-      WHERE c.owner_id=? AND m.assembly_state='pending'${client === undefined ? '' : ' AND c.client=?'}${ns ? ' AND c.scope=? AND c.project_id=?' : ''}`)
-      .all(ownerId,...(client === undefined ? [] : [client]),...(ns ? [ns.scope,ns.projectId] : []));
+      WHERE c.owner_id=? AND m.assembly_state='pending'${client === undefined ? '' : ' AND c.client=?'}${ns ? ' AND c.scope=? AND c.project_id=?' : ''}${session === undefined ? '' : ' AND c.session_key=?'}`)
+      .all(ownerId,...(client === undefined ? [] : [client]),...(ns ? [ns.scope,ns.projectId] : []),...(session === undefined ? [] : [session]));
     const touched = new Map(); let released = 0;
     for (const row of rows) {
       released += row.reserved_bytes;
@@ -286,5 +289,6 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy 
   }
   const getConversation = createRawReads({ db,identity,epoch,open,digest,partDigest });
   return Object.freeze({ prepareRegistration,commitRegistration,register,getConversation,getRawUsage,
-    getRawCaptureControl,setRawCaptureControl,closePending });
+    getRawCaptureControl,setRawCaptureControl,closePending,
+    sessionKey: (namespace, client, sessionId) => sessionKey(rawNamespace(namespace), rawClient(client), identifier(sessionId)) });
 }

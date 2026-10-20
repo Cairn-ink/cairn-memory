@@ -1,5 +1,27 @@
 /** Internal, opt-in journal only. No capture or public capability is installed. */
 export const RAW_SCHEMA_VERSION = 24;
+export const RAW_CAPTURE_SCHEMA_VERSION = 25;
+
+/** Content-free ownership of a first-part projection; admission remains shared. */
+export function installRawCapture(db) {
+  db.exec(`
+    CREATE TABLE raw_capture_events (
+      owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+      client TEXT NOT NULL, event_id TEXT NOT NULL, conversation_id TEXT NOT NULL,
+      session_key TEXT NOT NULL, first_message_ids TEXT NOT NULL, eligible_message_ids TEXT NOT NULL,
+      projection_digest TEXT NOT NULL, binding_digest TEXT NOT NULL, capture_generation TEXT NOT NULL,
+      staging TEXT NOT NULL DEFAULT 'none' CHECK(staging IN ('none','staged','not-staged')),
+      PRIMARY KEY(owner_id,scope,project_id,client,event_id),
+      FOREIGN KEY(owner_id,scope,project_id,client,event_id)
+        REFERENCES raw_events(owner_id,scope,project_id,client,event_id)
+    ) STRICT;
+    CREATE TABLE raw_session_fences (
+      owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
+      client TEXT NOT NULL, session_key TEXT NOT NULL,
+      PRIMARY KEY(owner_id,scope,project_id,client,session_key)
+    ) STRICT;
+  `);
+}
 
 export function installRawJournal(db) {
   db.exec(`
