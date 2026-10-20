@@ -1,11 +1,11 @@
 import { denseArray, fail, identifier, object, revision } from './validation.mjs';
 import { evidenceRef } from './private-evidence-input.mjs';
-import { placementProposal } from './placement-input.mjs';
+import { placementProposal, placementTitle } from './placement-input.mjs';
 
 export const ORGANIZATION_METHODS = Object.freeze(['mapEvidence', 'applyCardPlacement',
-  'proposeEvidenceMapping', 'reviewEvidenceMapping', 'listEvidenceMappings']);
+  'refreshCardTopic', 'proposeEvidenceMapping', 'reviewEvidenceMapping', 'listEvidenceMappings']);
 export const ORGANIZATION_READS = Object.freeze(['mapEvidence', 'listEvidenceMappings']);
-export const ORGANIZATION_WRITES = Object.freeze(['applyCardPlacement', 'proposeEvidenceMapping']);
+export const ORGANIZATION_WRITES = Object.freeze(['applyCardPlacement', 'refreshCardTopic', 'proposeEvidenceMapping']);
 export function topicRef(value) {
   object(value, ['mocId', 'revision']);
   return { mocId: identifier(value.mocId), revision: revision(value.revision) };
@@ -16,10 +16,16 @@ function page(input) {
   if (input.cursor !== undefined && (typeof input.cursor !== 'string' || input.cursor.length > 8192)) fail('invalid_cursor');
   return limit;
 }
+function selectedCardRefs(value, ns) {
+  const refs = denseArray(value, 1, 5).map(ref => evidenceRef(ref, ns));
+  if (refs.some(ref => ref.type !== 'card') || new Set(refs.map(ref => ref.cardId)).size !== refs.length) fail('invalid_input');
+  return refs;
+}
 export function organizationInput(method, input, ns) {
   const allowed = {
     mapEvidence: ['type', 'purpose', 'parentRef', 'limit', 'cursor'],
     applyCardPlacement: ['actionId', 'refs', 'expectedIndexRevision', 'proposal'],
+    refreshCardTopic: ['actionId', 'topicRef', 'expectedIndexRevision', 'title', 'refs'],
     proposeEvidenceMapping: ['actionId', 'memoryTopic', 'cardTopic', 'expectedMemoryIndexRevision', 'expectedCardIndexRevision'],
     reviewEvidenceMapping: ['actionId', 'mappingId', 'expectedRevision', 'state', 'memoryTopic', 'cardTopic', 'expectedMemoryIndexRevision', 'expectedCardIndexRevision'],
     listEvidenceMappings: ['type', 'mocId', 'limit', 'cursor'],
@@ -34,9 +40,11 @@ export function organizationInput(method, input, ns) {
     return { type: input.type, purpose, limit, ...(input.parentRef === undefined ? {} : { parentRef: topicRef(input.parentRef) }) };
   }
   identifier(input.actionId);
+  if (method === 'refreshCardTopic') return { topicRef: topicRef(input.topicRef),
+    expectedIndexRevision: revision(input.expectedIndexRevision), title: placementTitle(input.title),
+    refs: selectedCardRefs(input.refs, ns) };
   if (method === 'applyCardPlacement') {
-    const refs = denseArray(input.refs, 1, 5).map(value => evidenceRef(value, ns));
-    if (refs.some(ref => ref.type !== 'card') || new Set(refs.map(ref => ref.cardId)).size !== refs.length) fail('invalid_input');
+    const refs = selectedCardRefs(input.refs, ns);
     object(input.proposal, ['items']);
     const items = denseArray(input.proposal.items, 1, 5).map(item => {
       object(item, ['cardId', 'parentIds', 'newL1']);

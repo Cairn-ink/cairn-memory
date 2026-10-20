@@ -1,7 +1,7 @@
 # Typed local evidence organization
 
 The optional private Card facade exposes deterministic `mapEvidence`,
-`applyCardPlacement`, `proposeEvidenceMapping`, `reviewEvidenceMapping` and
+`applyCardPlacement`, `refreshCardTopic`, `proposeEvidenceMapping`, `reviewEvidenceMapping` and
 `listEvidenceMappings`. Every method uses the existing exact-namespace opaque
 authority protocol and shared SQLite transaction. No classifier or model call
 is introduced. [Common evidence reads](private-evidence-local.md) continue to
@@ -78,6 +78,37 @@ Success is a content-free operation receipt with `cardRefs`, `createdMocRefs`
 and `indexRevision`; call map separately for derived titles. Exact action replay
 does not recreate stale organization or expose old bodies.
 
+## Explicit topic recovery (M07)
+
+An edited or rebound Card has a new exact revision, so its old topic title support
+becomes stale even if the authored body did not change. Refresh that existing
+topic explicitly instead of creating a duplicate canonical title:
+
+```js
+core.refreshCardTopic({namespace, actionId,
+  topicRef: {mocId, revision: inspectedTopicRevision}, expectedIndexRevision,
+  title: 'Tea experiments',
+  refs: [{type:'card',namespace,cardId,revision,bodyRevision}],
+}, organizationAuthority);
+```
+
+The operation accepts 1–5 unique exact confirmed Card refs with eligible current
+canonical source support, an exact topic/index version and a deliberately supplied
+title under the existing placement title validator. The old topic may have a null
+stale title. Refresh replaces its title-support bindings atomically and preserves
+topic ID/level, refusing wrong scope, unavailable/stale refs and another same-level
+topic's canonical title. No schema migration or model call is added.
+
+Success is a content-free receipt with `id`, the new topic `revision`,
+`state:'completed'`, `bodyRevision:null`, `effectCount:0`, `topicRef`, `level`,
+`cardRefs` and the new Card `indexRevision`. Existing guarded hierarchy references
+follow the new topic version. Card bodies/revisions/applicability are unchanged;
+stale Card memberships require a separate fresh `applyCardPlacement`. Mapping
+navigation also stays stale until separately reviewed through explicit-user
+`reviewEvidenceMapping`. Refresh never supplies mapping review authority. Exact
+action replay returns the original receipt across restart without refreshing
+later state or copying title/body text into the operation ledger.
+
 ## Proposed and reviewed mappings
 
 ```js
@@ -113,7 +144,7 @@ implicit mapping traversal, graph expansion or generated summarization.
 Mappings neither grant read permission nor establish evidence support.
 
 The MCP host may grant bounded read and organization operations, including
-placement and proposal. It must never mint explicit-user mapping activation,
+placement, topic refresh and proposal. It must never mint explicit-user mapping activation,
 refresh or removal authority. Those remain trusted host APIs pending a separately
 verified user-action interface.
 

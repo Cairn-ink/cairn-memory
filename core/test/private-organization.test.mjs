@@ -32,7 +32,7 @@ function fixture(t) {
   const db = new DatabaseSync(path); ws.defer(() => db.close());
   return { ws, path, db, options, host, get core() { return core; },
     call(method, input, actionClass = ['mapEvidence', 'listEvidenceMappings', 'getCard', 'inspectCardOperation', 'selectEvidence', 'fetchEvidence'].includes(method) ? 'read' :
-      ['applyCardPlacement', 'proposeEvidenceMapping'].includes(method) ? 'organization' : 'explicit-user') {
+      ['applyCardPlacement', 'refreshCardTopic', 'proposeEvidenceMapping'].includes(method) ? 'organization' : 'explicit-user') {
       const token = {}; tokens.set(token, { method, input: structuredClone(input), actionClass }); return core[method](input, token);
     },
     reopen(on = true) { core.close(); core = openMemoryCore({ path, ...(on ? { privateCards: options } : {}), model: { countTokens: () => 1 } }); },
@@ -252,4 +252,138 @@ test('M02 filing an unknown-applicability Card never promotes it to current evid
   assert.equal(ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card.support.applicability, 'unknown');
   assert.equal(ok(f.call('selectEvidence', { namespace: ns, query: 'tea', types: ['card'], intent: 'current' })).items.length, 0);
   assert.equal(ok(f.call('selectEvidence', { namespace: ns, query: 'tea', types: ['card'], intent: 'history' })).items.length, 1);
+});
+
+function editCard(f, ref, actionId = 'edit-card') {
+  const detail = ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card;
+  const changed = ok(f.call('editKnowledgeCard', { namespace: ns, cardId: ref.cardId,
+    expectedRevision: detail.revision, actionId, title: detail.title, body: detail.body,
+    bindings: detail.bindings.map(binding => binding.source), applicability: 'current' }));
+  return { ...ref, revision: changed.revision, bodyRevision: changed.bodyRevision };
+}
+function refreshInput(f, ref, topic, actionId = 'refresh-topic', title = 'Tea L1 one') {
+  return { namespace: ns, actionId, topicRef: { mocId: topic.mocId, revision: topic.revision },
+    expectedIndexRevision: ok(f.call('mapEvidence', map())).indexRevision, title, refs: [ref] };
+}
+
+test('M07 same-body edit recovers existing topic IDs/hierarchy, then explicit placement and mapping review', t => {
+  const f = fixture(t), original = card(f), c = ok(f.call('applyCardPlacement', place(f, original))), m = memoryTopic(f);
+  const l1 = c.createdMocRefs.find(topic => topic.level === 'L1'), l2 = c.createdMocRefs.find(topic => topic.level === 'L2');
+  const pair = endpoints(f, m, c), proposed = ok(f.call('proposeEvidenceMapping', { namespace: ns, actionId: 'propose-recovery', ...pair }));
+  const active = ok(f.call('reviewEvidenceMapping', { namespace: ns, actionId: 'activate-recovery',
+    mappingId: proposed.id, expectedRevision: proposed.revision, state: 'active', ...pair }));
+  const fresh = editCard(f, original);
+  assert.equal(fresh.bodyRevision, original.bodyRevision);
+  const beforeCard = ok(f.call('getCard', { namespace: ns, cardId: fresh.cardId })).card;
+  let page = ok(f.call('mapEvidence', map()));
+  assert.equal(page.items.filter(item => item.type === 'topic').every(item => item.topic.title === null), true);
+  const stalePlacement = { namespace: ns, actionId: 'stale-topic-placement', refs: [fresh],
+    expectedIndexRevision: page.indexRevision, proposal: { items: [{ cardId: fresh.cardId, parentIds: [l1.mocId] }] } };
+  error(f.call('applyCardPlacement', stalePlacement), 'evidence_unavailable');
+  error(f.call('applyCardPlacement', place(f, fresh, 'duplicate-recovery', { proposal: {
+    items: [{ cardId: fresh.cardId, parentIds: [], newL1: { title: 'Tea L1 one', parentL2Ids: [] } }] } })), 'moc_title_conflict');
+  const request = refreshInput(f, fresh, l1), refreshed = ok(f.call('refreshCardTopic', request));
+  assert.deepEqual(refreshed.topicRef, { mocId: l1.mocId, revision: l1.revision + 1 });
+  assert.equal(refreshed.level, 'L1');
+  page = ok(f.call('mapEvidence', map()));
+  assert.equal(page.items.find(item => item.type === 'topic' && item.topic.id === l1.mocId).topic.title, 'Tea L1 one');
+  assert.equal(page.items.find(item => item.type === 'topic' && item.topic.id === l2.mocId).topic.revision, l2.revision);
+  assert.equal(page.items.some(item => item.type === 'ref' && item.ref.childType === 'card'), false);
+  let edge = page.items.find(item => item.type === 'ref' && item.ref.childType === 'topic').ref;
+  assert.equal(edge.parentId, l2.mocId); assert.equal(edge.childId, l1.mocId);
+  assert.equal(edge.childRevision, refreshed.revision);
+  const refreshedRoot = ok(f.call('refreshCardTopic', refreshInput(f, fresh, l2, 'refresh-root', 'Tea L2 one')));
+  page = ok(f.call('mapEvidence', map()));
+  edge = page.items.find(item => item.type === 'ref' && item.ref.childType === 'topic').ref;
+  assert.equal(edge.parentRevision, refreshedRoot.revision); assert.equal(edge.childRevision, refreshed.revision);
+  const mappingAfterTopics = ok(f.call('listEvidenceMappings', map('card', { mocId: l1.mocId }))).items[0];
+  assert.equal(mappingAfterTopics.revision, active.revision); assert.equal(mappingAfterTopics.navigable, false);
+  assert.deepEqual(ok(f.call('getCard', { namespace: ns, cardId: fresh.cardId })).card, beforeCard);
+  ok(f.call('applyCardPlacement', { ...stalePlacement, actionId: 'fresh-topic-placement', expectedIndexRevision: page.indexRevision }));
+  page = ok(f.call('mapEvidence', map()));
+  assert.equal(page.items.some(item => item.type === 'ref' && item.ref.childType === 'card' && item.ref.childRevision === fresh.revision), true);
+  const currentTopic = page.items.find(item => item.type === 'topic' && item.topic.id === l1.mocId).topic;
+  const review = { namespace: ns, actionId: 'review-recovered-mapping', mappingId: proposed.id,
+    expectedRevision: active.revision, state: 'active', ...pair,
+    cardTopic: { mocId: currentTopic.id, revision: currentTopic.revision }, expectedCardIndexRevision: page.indexRevision };
+  error(f.call('reviewEvidenceMapping', review, 'organization'), 'authority_required');
+  ok(f.call('reviewEvidenceMapping', review));
+  assert.equal(ok(f.call('listEvidenceMappings', map('card', { mocId: l1.mocId }))).items[0].navigable, true);
+  f.reopen();
+  assert.deepEqual(ok(f.call('refreshCardTopic', request)), refreshed);
+  assert.equal(ok(f.call('mapEvidence', map())).indexRevision, page.indexRevision);
+  assert.equal(ok(f.call('mapEvidence', map())).items.find(item => item.type === 'topic' && item.topic.id === l1.mocId).topic.revision, currentTopic.revision);
+  error(f.call('refreshCardTopic', { ...request, title: 'Changed replay' }), 'action_conflict');
+  const metadata = JSON.stringify(f.db.prepare("SELECT * FROM card_operations WHERE method='refreshCardTopic'").all());
+  assert.equal(metadata.includes('Tea L1 one'), false); assert.equal(metadata.includes(beforeCard.body), false);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 23);
+});
+
+test('M07 refresh strictly guards title/refs/CAS/scope/collision and rolls back every write on failure', t => {
+  const f = fixture(t), original = card(f), placed = ok(f.call('applyCardPlacement', place(f, original)));
+  const fresh = editCard(f, original), second = card(f, 'collision');
+  ok(f.call('applyCardPlacement', place(f, second, 'collision')));
+  const l1 = placed.createdMocRefs.find(topic => topic.level === 'L1');
+  const request = refreshInput(f, fresh, l1, 'refresh-guarded', 'Reviewed recovery');
+  error(f.call('refreshCardTopic', request, 'draft'), 'authority_required');
+  for (const extra of [{ title: '' }, { title: 'x'.repeat(121) }, { refs: [] },
+    { refs: Array.from({ length: 6 }, () => fresh) }, { refs: [fresh, fresh] }, { humanConfirmed: true }]) {
+    error(f.call('refreshCardTopic', { ...request, ...extra }), 'invalid_input');
+  }
+  error(f.call('refreshCardTopic', { ...request, refs: [{ ...fresh, namespace: foreign }] }), 'scope_changed');
+  error(f.call('refreshCardTopic', { ...request, namespace: foreign, expectedIndexRevision: 1,
+    refs: [{ ...fresh, namespace: foreign }] }), 'moc_not_found');
+  error(f.call('refreshCardTopic', { ...request, expectedIndexRevision: 999 }), 'index_revision_conflict');
+  error(f.call('refreshCardTopic', { ...request, topicRef: { ...request.topicRef, revision: 999 } }), 'revision_conflict');
+  error(f.call('refreshCardTopic', { ...request, refs: [second, original] }), 'revision_conflict');
+  error(f.call('refreshCardTopic', { ...request, title: '  Ｔｅａ Ｌ１ collision  ' }), 'moc_title_conflict');
+  const before = f.db.prepare('SELECT * FROM card_mocs WHERE id=?').get(l1.mocId);
+  const bindings = f.db.prepare('SELECT * FROM card_moc_title_sources WHERE moc_id=?').all(l1.mocId);
+  f.db.exec("CREATE TRIGGER fail_refresh BEFORE INSERT ON card_moc_title_sources BEGIN SELECT RAISE(ABORT,'synthetic failure'); END");
+  error(f.call('refreshCardTopic', request), 'storage_error');
+  f.db.exec('DROP TRIGGER fail_refresh');
+  assert.deepEqual(f.db.prepare('SELECT * FROM card_mocs WHERE id=?').get(l1.mocId), before);
+  assert.deepEqual(f.db.prepare('SELECT * FROM card_moc_title_sources WHERE moc_id=?').all(l1.mocId), bindings);
+  assert.equal(ok(f.call('mapEvidence', map())).indexRevision, request.expectedIndexRevision);
+  assert.equal(ok(f.call('inspectCardOperation', { namespace: ns, operationActionId: request.actionId })).operation, null);
+  const refreshed = ok(f.call('refreshCardTopic', request));
+  assert.equal(refreshed.topicRef.mocId, l1.mocId);
+  assert.equal(ok(f.call('mapEvidence', map())).items.find(item => item.type === 'topic' && item.topic.id === l1.mocId).topic.title, 'Reviewed recovery');
+  const source = ok(f.call('getCard', { namespace: ns, cardId: fresh.cardId })).card.bindings[0].source;
+  ok(f.call('deleteSourceNote', { namespace: ns, actionId: 'unavailable-refresh', sourceId: source.sourceId, expectedRevision: 1 }));
+  const unavailable = ok(f.call('getCard', { namespace: ns, cardId: fresh.cardId })).card;
+  error(f.call('refreshCardTopic', refreshInput(f, { ...fresh, revision: unavailable.revision }, refreshed.topicRef,
+    'refresh-unavailable', 'Unavailable label')), 'evidence_unavailable');
+});
+
+test('M07 authority callback races cannot refresh a topic against changed sources or revoked access', t => {
+  const f = fixture(t), original = card(f), placed = ok(f.call('applyCardPlacement', place(f, original)));
+  const l1 = placed.createdMocRefs.find(topic => topic.level === 'L1');
+  const request = refreshInput(f, original, l1, 'racing-refresh');
+  f.host.checks = 0; f.host.hook = count => { if (count === 2) editCard(f, original, 'host-edit'); };
+  error(f.call('refreshCardTopic', request), 'index_revision_conflict');
+  f.host.hook = null;
+  assert.equal(ok(f.call('inspectCardOperation', { namespace: ns, operationActionId: request.actionId })).operation, null);
+  assert.equal(f.db.prepare('SELECT revision FROM card_mocs WHERE id=?').get(l1.mocId).revision, l1.revision);
+  const detail = ok(f.call('getCard', { namespace: ns, cardId: original.cardId })).card;
+  const freshRequest = refreshInput(f, { ...original, revision: detail.revision }, l1, 'revoked-refresh');
+  f.host.checks = 0; f.host.hook = count => { if (count === 2) f.host.enabled = false; };
+  error(f.call('refreshCardTopic', freshRequest), 'scope_changed');
+  f.host.hook = null; f.host.enabled = true;
+  assert.equal(ok(f.call('inspectCardOperation', { namespace: ns, operationActionId: freshRequest.actionId })).operation, null);
+  assert.equal(f.db.prepare('SELECT revision FROM card_mocs WHERE id=?').get(l1.mocId).revision, l1.revision);
+});
+
+test('M07 maximum five title sources remain exact required bindings without silent prefix recovery', t => {
+  const f = fixture(t), first = card(f), placed = ok(f.call('applyCardPlacement', place(f, first)));
+  const refs = [first, ...Array.from({ length: 4 }, (_, index) => card(f, `support-${index}`))];
+  const l1 = placed.createdMocRefs.find(topic => topic.level === 'L1');
+  const request = { ...refreshInput(f, first, l1, 'refresh-five', 'Five reviewed sources'), refs };
+  ok(f.call('refreshCardTopic', request));
+  let label = ok(f.call('mapEvidence', map())).items.find(item => item.type === 'topic' && item.topic.id === l1.mocId).topic;
+  assert.equal(label.title, 'Five reviewed sources');
+  assert.deepEqual(label.titleSources.map(ref => ref.cardId).sort(), refs.map(ref => ref.cardId).sort());
+  editCard(f, refs.at(-1), 'change-fifth');
+  label = ok(f.call('mapEvidence', map())).items.find(item => item.type === 'topic' && item.topic.id === l1.mocId).topic;
+  assert.equal(label.title, null); assert.equal(label.titleSources.length, 5);
 });

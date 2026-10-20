@@ -20,7 +20,7 @@ export function memoryGuards(input, ids) {
   return guards;
 }
 
-function title(input) {
+export function placementTitle(input) {
   const clean = boundedText(input, 240);
   if ([...clean].length > 120) fail('invalid_input');
   return clean;
@@ -35,8 +35,8 @@ export function placementProposal(input, requestedIds) {
     const result = { memoryId: identifier(item.memoryId), parentIds: uniqueIds(item.parentIds, 3) };
     if (item.newL1 !== undefined) {
       object(item.newL1, ['title', 'parentL2Ids', 'newL2Title']);
-      result.newL1 = { title: title(item.newL1.title), parentL2Ids: uniqueIds(item.newL1.parentL2Ids, 3) };
-      if (item.newL1.newL2Title !== undefined) result.newL1.newL2Title = title(item.newL1.newL2Title);
+      result.newL1 = { title: placementTitle(item.newL1.title), parentL2Ids: uniqueIds(item.newL1.parentL2Ids, 3) };
+      if (item.newL1.newL2Title !== undefined) result.newL1.newL2Title = placementTitle(item.newL1.newL2Title);
     }
     return result;
   });

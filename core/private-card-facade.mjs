@@ -34,8 +34,8 @@ export function createPrivateCardFacade(storage, options, ready) {
           actionClass: read ? 'read' : ORGANIZATION_WRITES.includes(method) ? 'organization' : method === 'createCardDraft' && payload.input.authoredInput !== undefined
             ? 'explicit-user' : ['createCardDraft', 'editCardDraft', 'cancelCardDraft'].includes(method) ? 'draft' : 'explicit-user',
           actionId: read ? null : payload.actionId,
-          targetId: payload.cardId ?? payload.mappingId ?? payload.mocId ?? payload.sourceId ?? payload.source?.sourceId ?? payload.source?.receiptId ?? payload.operationActionId ?? payload.actionId ?? null,
-          expectedRevision: payload.expectedRevision ?? payload.source?.revision ?? payload.source?.memoryRevision ?? null,
+          targetId: payload.cardId ?? payload.mappingId ?? payload.mocId ?? payload.topicRef?.mocId ?? payload.sourceId ?? payload.source?.sourceId ?? payload.source?.receiptId ?? payload.operationActionId ?? payload.actionId ?? null,
+          expectedRevision: payload.expectedRevision ?? payload.topicRef?.revision ?? payload.source?.revision ?? payload.source?.memoryRevision ?? null,
           payloadBinding: storage.payloadBinding([method, payload]), input: payload });
         if (!authority || typeof authority !== 'object') fail('authority_required');
         // Both host callbacks run outside the SQLite transaction. No callback,
@@ -66,7 +66,7 @@ export function createPrivateCardFacade(storage, options, ready) {
         scanBodyUnits: 2_000_000, deadlineMs: 5000, refs: 24, receiptMetadata: 16 },
       semanticRelevance: false, typedCardMoc: true },
     organization: { version: 'typed-evidence-organization-v1', methods: [...ORGANIZATION_METHODS],
-      actionClasses: { applyCardPlacement: 'organization', proposeEvidenceMapping: 'organization', reviewEvidenceMapping: 'explicit-user' },
+      actionClasses: { applyCardPlacement: 'organization', refreshCardTopic: 'organization', proposeEvidenceMapping: 'organization', reviewEvidenceMapping: 'explicit-user' },
       maxCards: 5, maxParents: 3, maxActiveMappingsPerTopic: 16,
       defaultPageLimit: 20, maxPageLimit: 50, maxCardMapScanRows: 256, implicitSelectionExpansion: false },
     raw: false, modelAssisted: false, publication: false,

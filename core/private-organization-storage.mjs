@@ -135,6 +135,27 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
     return { id: actionId, revision: cardIndex(ns), state: 'completed', bodyRevision: null, effectCount: 0,
       cardRefs: input.refs, createdMocRefs: created.map(group => ({ mocId: group.id, revision: 1, level: `L${group.level}` })), indexRevision: cardIndex(ns) };
   }
+  function refreshTopic(ns, input) {
+    if (input.expectedIndexRevision !== cardIndex(ns)) fail('index_revision_conflict');
+    // The old title may be stale: only exact topic identity/version is required.
+    const row = topic(ns, input.topicRef.mocId);
+    if (!row) fail('moc_not_found');
+    if (row.revision !== input.topicRef.revision) fail('revision_conflict');
+    input.refs.forEach(ref => currentCard(ns, ref));
+    const canonical = key(input.title);
+    if (db.prepare(`SELECT 1 FROM card_mocs WHERE ${where} AND level=? AND canonical_title=? AND id!=?`)
+      .get(...boundary(ns), row.level, canonical, row.id)) fail('moc_title_conflict');
+    db.prepare('UPDATE card_mocs SET title=?,canonical_title=? WHERE id=?').run(input.title, canonical, row.id);
+    db.prepare('DELETE FROM card_moc_title_sources WHERE moc_id=?').run(row.id);
+    for (const ref of input.refs) db.prepare('INSERT INTO card_moc_title_sources VALUES(?,?,?,?)')
+      .run(row.id, ref.cardId, ref.revision, ref.bodyRevision);
+    // Advance hierarchy endpoint versions, never stale Card membership refs.
+    bump(new Set([row.id]));
+    advanceIndex(ns);
+    return { id: row.id, revision: row.revision + 1, state: 'completed', bodyRevision: null, effectCount: 0,
+      topicRef: { mocId: row.id, revision: row.revision + 1 }, level: `L${row.level}`,
+      cardRefs: input.refs, indexRevision: cardIndex(ns) };
+  }
   function endpointPair(ns, input, unavailable = false) {
     if (memoryIndex(ns) !== input.expectedMemoryIndexRevision || cardIndex(ns) !== input.expectedCardIndexRevision) fail('index_revision_conflict');
     const memory = memoryTopicInside(ns, input.memoryTopic), card = cardTopicInside(ns, input.cardTopic, unavailable);
@@ -271,6 +292,7 @@ export function createPrivateOrganizationStorage({ db, identity, cardDetailInsid
   return Object.freeze({ call(method, ns, original, accessGeneration) {
     const input = organizationInput(method, original, ns);
     if (method === 'applyCardPlacement') return placement(ns, input, original.actionId);
+    if (method === 'refreshCardTopic') return refreshTopic(ns, input);
     if (method === 'proposeEvidenceMapping' || method === 'reviewEvidenceMapping') return mapping(ns, method, input);
     return paged(method, ns, original, input, accessGeneration);
   } });
