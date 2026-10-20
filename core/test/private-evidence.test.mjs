@@ -7,6 +7,7 @@ import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { stripOrganizationFixture } from '../testing/private-organization-fixture.mjs';
+import { createPrivateEvidenceStorage } from '../private-evidence-storage.mjs';
 
 const ns = { ownerId: 'synthetic-owner', scope: 'project', projectId: 'evidence' };
 const other = { ...ns, projectId: 'other' };
@@ -180,6 +181,31 @@ test('R03 scan deadline reports a bounded partial prefix instead of complete cov
   assert.equal(result.coverage.byType.memory.partial, true);
   assert.ok(result.coverage.scannedRows < 1024);
   assert.ok(result.nextCursor);
+});
+
+test('R03 row-budget exhaustion peeks only at IDs without reading another candidate body', t => {
+  const f = fixture(t); admit(f, 'first candidate'); admit(f, 'second candidate');
+  const db = f.db(), reads = [];
+  const reader = { prepare(sql) {
+    const statement = db.prepare(sql);
+    return { get(...args) { reads.push({ sql, args }); return statement.get(...args); },
+      all(...args) { reads.push({ sql, args }); return statement.all(...args); } };
+  } };
+  const identity = db.prepare('SELECT store_id AS storeId,cursor_secret AS cursorSecret FROM store_metadata').get();
+  const storage = createPrivateEvidenceStorage({ db: reader, identity,
+    cardDetailInside() { assert.fail('Memory-only unmatched scan must not read a Card'); },
+    receiptRefInside() { assert.fail('Unmatched scan must not fetch selected source data'); } });
+  const result = storage.call('selectEvidence', ns,
+    select({ query: 'absent', types: ['memory'], scanRows: 1 }), 1);
+  assert.equal(result.coverage.scannedRows, 1); assert.equal(result.coverage.reason, 'row_budget');
+  assert.equal(result.items.length, 0);
+  const candidates = reads.filter(read => /FROM memories WHERE/.test(read.sql));
+  assert.equal(candidates.length, 2);
+  assert.match(candidates[0].sql, /^SELECT \* FROM memories/);
+  assert.match(candidates[1].sql, /^SELECT id FROM memories/);
+  assert.deepEqual(candidates[0].args, [ns.ownerId, ns.scope, ns.projectId, '']);
+  const firstId = db.prepare('SELECT id FROM memories ORDER BY id LIMIT 1').get().id;
+  assert.deepEqual(candidates[1].args, [ns.ownerId, ns.scope, ns.projectId, firstId]);
 });
 
 test('R04 canonical filed/unfiled Memory enumeration and qualified history omit purged content', t => {

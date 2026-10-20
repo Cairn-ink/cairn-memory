@@ -127,10 +127,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
     let turn = previous?.turn ?? 0, scannedRows = 0, scannedBodyUnits = 0, stopped = null;
     const byType = Object.fromEntries(input.types.map(type => [type, { scanned: 0, included: 0, partial: true }]));
     const exhausted = new Set(), blocked = new Set(), matches = [], queryWords = words(input.query);
-    function next(type) {
-      const row = type === 'memory' ? db.prepare(`SELECT * FROM memories WHERE ${where}
+    function next(type, metadataOnly = false) {
+      const columns = metadataOnly ? 'id' : '*';
+      const row = type === 'memory' ? db.prepare(`SELECT ${columns} FROM memories WHERE ${where}
         AND deleted=0 AND id>? ORDER BY id LIMIT 1`).get(...boundary(ns), after[type]) :
-        db.prepare(`SELECT * FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
+        db.prepare(`SELECT ${columns} FROM private_cards WHERE ${where} AND state='confirmed' AND id>? ORDER BY id LIMIT 1`)
           .get(...boundary(ns), after[type]);
       return row;
     }
@@ -154,7 +155,7 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       byType[type].included++;
     }
     // A metadata-only bounded peek tells callers which streams actually ended.
-    for (const type of input.types) if (!blocked.has(type) && !next(type)) exhausted.add(type);
+    for (const type of input.types) if (!blocked.has(type) && !next(type, true)) exhausted.add(type);
     const complete = exhausted.size === input.types.length;
     for (const type of input.types) byType[type].partial = !exhausted.has(type);
     matches.sort((left, right) => right.score - left.score || input.types.indexOf(left.type) - input.types.indexOf(right.type) ||

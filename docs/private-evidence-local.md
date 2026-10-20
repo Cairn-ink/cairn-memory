@@ -37,6 +37,11 @@ core.selectEvidence({
 and card; `intent` is current or history. The shown budgets are defaults. Maxima
 are 24 items, 1,024 scanned rows, 2,000,000 scanned body units and a 5,000 ms scan
 deadline. Each continuation page receives that same one shared allowance.
+These are literal-comparison scan allowances, not total database-I/O limits or a
+hard whole-call timeout. A bounded candidate can be read to measure its exact
+UTF-16 size before declining it for insufficient remaining body allowance.
+Final canonical/source validation and snapshot construction separately reread up
+to 24 selected whole items; those reads do not enlarge the literal scan prefix.
 
 Canonical Memory and confirmed Card streams alternate before applying the shared
 budget. Both filed and unfiled Memories participate. Query/record words are
