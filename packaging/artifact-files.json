@@ -84,6 +84,8 @@
   "core/prompts/recall-select.md",
   "adapters/mcp/cli.mjs",
   "adapters/mcp/server.mjs",
+  "adapters/mcp/private-card-access.mjs",
+  "adapters/mcp/review-card.mjs",
   "adapters/openai/classification-wire.mjs",
   "adapters/openai/index.mjs",
   "adapters/openai/prompts/qualify-candidates-pool.md",
