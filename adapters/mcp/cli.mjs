@@ -37,6 +37,11 @@ bounded typed canonical reads. Literal word overlap is not semantic retrieval.
 Current Card reads require eligible support and an explicit current review.
 review-card --applicability records a separately displayed choice, bound into
 the typed confirmation phrase. Omission preserves unknown applicability.
+The same opt-in adds map_evidence, apply_card_placement, propose_evidence_mapping
+and list_evidence_mappings for bounded typed navigation. Filing and mapping
+proposals are organization, not evidence support or current applicability.
+Mapping activation/refresh/removal requires a separate trusted host API; no MCP
+tool can issue that explicit-user grant. Navigation introduces no model calls.
 --classification-recovery guarded-v1 adds classify_unfiled_memories for an
 explicit request with inspected current unfiled memory IDs and revisions. It
 sends bounded memory content to the configured model and may incur charges.

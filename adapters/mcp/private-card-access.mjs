@@ -1,10 +1,11 @@
 import { isDeepStrictEqual } from 'node:util';
 
 const reads = new Set(['getCard', 'listCards', 'getSource', 'inspectCardOperation', 'listCardEffects',
-  'selectEvidence', 'fetchEvidence', 'revalidateEvidence']);
+  'selectEvidence', 'fetchEvidence', 'revalidateEvidence', 'mapEvidence', 'listEvidenceMappings']);
 const drafts = new Set(['createCardDraft', 'cancelCardDraft']);
+const organization = new Set(['applyCardPlacement', 'proposeEvidenceMapping']);
 
-// Local process configuration grants only these bounded read/draft operations.
+// Local process configuration grants only these bounded read/draft/organization operations.
 // This module has no explicit-user grant constructor.
 export function createScopedCardAccess(namespace) {
   const scope = structuredClone(namespace);
@@ -15,7 +16,8 @@ export function createScopedCardAccess(namespace) {
       if (!expected || !isDeepStrictEqual(request.namespace, scope) ||
           request.method !== expected.method || !isDeepStrictEqual(request.input, expected.input) ||
           !(request.actionClass === 'read' && reads.has(request.method) ||
-            request.actionClass === 'draft' && drafts.has(request.method))) return null;
+            request.actionClass === 'draft' && drafts.has(request.method) ||
+            request.actionClass === 'organization' && organization.has(request.method))) return null;
       const grant = Object.freeze({});
       const { input, ...binding } = request;
       grants.set(grant, { ...binding, accessGeneration: 1 });

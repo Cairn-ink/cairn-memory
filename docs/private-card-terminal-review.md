@@ -62,6 +62,10 @@ The opt-in tools are:
 | `select_evidence` | `query,types:['memory'|'card'],intent:'current'|'history'`, optional `limit,scanRows,scanBodyUnits,deadlineMs,cursor`; bounded metadata selection with honest coverage. |
 | `fetch_evidence` | `refs,intent`, optional `responseByteLimit`; exact typed canonical items plus opaque snapshot. Omit namespace in refs. |
 | `revalidate_evidence` | `snapshot`, optional `responseByteLimit`; fresh whole items or a fixed error without stale text. |
+| `map_evidence` | `type:'memory'|'card'`, optional `purpose,parentRef,limit,cursor`; bounded typed topic/ref/unfiled navigation. |
+| `apply_card_placement` | `actionId,refs,expectedIndexRevision,proposal`; organize 1–5 exact confirmed Card refs without namespace, with at most three parents per item. |
+| `propose_evidence_mapping` | `actionId,memoryTopic,cardTopic,expectedMemoryIndexRevision,expectedCardIndexRevision`; proposed same-level topic metadata only. |
+| `list_evidence_mappings` | `type,mocId`, optional `limit,cursor`; versioned mapping metadata, state and qualified navigability. |
 
 Source refs use either receipt fields
 `{type:'receipt',memoryId,memoryRevision,receiptId,contentIdentity,completeness:'excerpt-only'}`
@@ -163,9 +167,60 @@ effective current review, so restarting or navigating history cannot silently
 restore current applicability. See [the common-read contract](private-evidence-local.md)
 for complete coverage, authority and provenance limits.
 
+## Typed navigation and explicit organization
+
+The same opt-in exposes `map_evidence({type:'memory'})` and
+`map_evidence({type:'card'})`. Both return typed topic/ref/unfiled metadata,
+index revision, coverage and continuation. Optional `purpose` is `recall` or
+`classification`; an exact `parentRef:{mocId,revision}` narrows direct children.
+L2 topics contain L1 topics, and L1 topics contain their own typed records.
+Default pages contain 20 items, max 50, within the same 64 KiB core envelope.
+Card pages examine at most 256 physical candidates per page; skipped/stale rows
+consume that allowance and partial coverage remains explicit. Card IDs never
+enter the old Memory map DTO. No model/classifier is called.
+
+Inspect a confirmed Card and the current Card index, then explicitly file it:
+
+```json
+{
+  "actionId": "place-private-card-1",
+  "refs": [{"type":"card","cardId":"INSPECTED_CARD_ID","revision":2,"bodyRevision":1}],
+  "expectedIndexRevision": 3,
+  "proposal": {"items":[{
+    "cardId":"INSPECTED_CARD_ID",
+    "parentIds":[],
+    "newL1":{"title":"Review plans","parentL2Ids":[],"newL2Title":"Personal practice"}
+  }]}
+}
+```
+
+Pass this to `apply_card_placement`, substituting the actual inspected IDs and
+revisions. The strict shared placement grammar accepts up to five unique Card
+refs and three parents per item. An empty parent list without `newL1` unfiles.
+It requires eligible canonical source support, exact Card/body/index revisions,
+and same-namespace parent topics at the expected levels. Failed placement rolls
+back atomically and leaves the authored Card retrievable. Filing preserves Card
+authorship, body/revision and applicability review; common current/history reads
+remain available regardless of filing. Source invalidation hides obsolete Card
+membership and derived topic titles without purging the independent authored
+confirmed body.
+
+`propose_evidence_mapping` accepts same-level exact
+`memoryTopic:{mocId,revision}` and `cardTopic:{mocId,revision}`, both expected
+index revisions, and an action ID. The proposal is metadata with
+`state:'proposed'` and `navigable:false`. Use `list_evidence_mappings` for its
+current state, endpoint/index versions, navigability and reason. Startup grants
+only the two bounded organization actions (placement and proposal), alongside
+the explicitly advertised read/draft methods. A namespace, serialized grant,
+claimed role, confirmation flag or tool invocation cannot mint `explicit-user`
+authority. Mapping activation, reviewed refresh and removal remain the trusted
+core `reviewEvidenceMapping` host API; no MCP tool exposes that action. Mappings
+do not expand read permission, prove source support or implicitly change literal
+selection. See [the organization contract](private-organization-local.md).
+
 The synthetic tests exercise actual stdio and installed processes, real PTY
 keystrokes, stale review and cold restart without keys or provider requests.
 Synthetic operator keystrokes are test evidence only; they do not claim a real
 person approved a Card or demonstrate semantic quality. Full Raw, hosted safety,
-publication, model-assisted drafting, typed Card MOC and product UI are separate
+publication, model-assisted drafting, mapping review UI and product UI are separate
 gates; the adapter uses the core's implemented common-read facade.

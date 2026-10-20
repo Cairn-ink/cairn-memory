@@ -3,7 +3,8 @@
 Private Cards are an explicit local opt-in: add `--private-cards local-v1` (or
 `privateCards: 'local-v1'` to `createCairnServer`). This adds bounded keyless
 inspection, receipt-backed authored drafts, draft cancellation and typed common
-evidence selection/fetch/revalidation. Confirmation
+evidence selection/fetch/revalidation, typed maps, Card placement and mapping
+proposals. Organization does not confirm or activate mappings. Confirmation
 requires the separate `review-card` terminal command; the MCP confirmation tool
 always returns `approval_required`. See [local terminal review](private-card-terminal-review.md)
 for exact commands, tool arguments, authority and support limitations. An optional

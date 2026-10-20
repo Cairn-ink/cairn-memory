@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact, command, packageName } from '../build.mjs';
 import { ok, call, host, review } from '../../adapters/mcp/test/card-support.mjs';
+import { organizeCard } from '../../adapters/mcp/test/organization-support.mjs';
 
-test('H04/H05/R08 installed stdio and PTY review preserve current evidence snapshots until canonical invalidation',
+test('H04/H05/R08/M06 installed stdio preserves reviewed evidence, typed organization and restart fences',
   { timeout: 120000 }, async t => {
     const workspace = createTestWorkspace(t, { prefix: 'cairn-installed-private-card-mcp-' });
     const root = workspace.path;
@@ -19,7 +21,8 @@ test('H04/H05/R08 installed stdio and PTY review preserve current evidence snaps
     const installed = join(root, 'node_modules', packageName);
     const required = ['adapters/mcp/cli.mjs', 'adapters/mcp/server.mjs', 'adapters/mcp/private-card-access.mjs',
       'adapters/mcp/review-card.mjs', 'bin/cairn-memory.mjs', 'core/private-evidence-input.mjs',
-      'core/private-evidence-schema.mjs', 'core/private-evidence-storage.mjs'];
+      'core/private-evidence-schema.mjs', 'core/private-evidence-storage.mjs',
+      'core/private-organization-input.mjs', 'core/private-organization-schema.mjs', 'core/private-organization-storage.mjs'];
     for (const file of required) {
       assert.ok(artifact.files.includes(file));
       assert.equal(createHash('sha256').update(readFileSync(join(installed, file))).digest('hex'), artifact.sourceHashes[file]);
@@ -53,6 +56,9 @@ test('H04/H05/R08 installed stdio and PTY review preserve current evidence snaps
     terminal.answer(`CONFIRM ${draft.id} ${draft.revision} APPLICABILITY current`);
     const approved = await terminal.done;
     assert.equal(approved.code, 0, approved.output);
+    const reviewedCard = ok(await call(local.client, 'inspect_private_card', { cardId: draft.id })).card;
+    const organized = await organizeCard({ client: local.client, path, memory, card: reviewedCard,
+      coreModule: pathToFileURL(join(installed, 'core/index.mjs')).href });
     const request = { query: 'review', types: ['memory', 'card'], intent: 'current' };
     const selected = ok(await call(local.client, 'select_evidence', request));
     assert.deepEqual(selected.items.map(item => item.type).sort(), ['card', 'memory']);
@@ -69,6 +75,11 @@ test('H04/H05/R08 installed stdio and PTY review preserve current evidence snaps
     assert.equal(confirmed.revision, draft.revision + 1);
     assert.equal(confirmed.support.applicability, 'current');
     assert.deepEqual(ok(await call(local.client, 'revalidate_evidence', { snapshot: fetched.snapshot })).items, fetched.items);
+    const restartMap = ok(await call(local.client, 'map_evidence', { type: 'card' }));
+    assert.equal(restartMap.items.some(item => item.type === 'ref' && item.ref.childType === 'card' && item.ref.childId === draft.id), true);
+    const restartMappings = ok(await call(local.client, 'list_evidence_mappings', { type: 'card', mocId: organized.cardTopic.mocId }));
+    assert.equal(restartMappings.items[0].state, 'proposed');
+    assert.equal(restartMappings.items[0].navigable, false);
     const corrected = ok(await call(local.client, 'correct_memory', { memoryId: memory.id,
       expectedRevision: memory.revision, content: 'Synthetic installed review is Friday.' })).memory;
     assert.equal(ok(await call(local.client, 'inspect_private_card', { cardId: pending.id })).card, null);
@@ -77,6 +88,9 @@ test('H04/H05/R08 installed stdio and PTY review preserve current evidence snaps
     assert.equal(unsupported.support.applicability, 'unknown');
     assert.equal(unsupported.support.applicabilityReviewedRevision, null);
     assert.equal(unsupported.body, input.body);
+    const invalidatedMap = ok(await call(local.client, 'map_evidence', { type: 'card' }));
+    assert.equal(invalidatedMap.items.some(item => item.type === 'ref' && item.ref.childType === 'card'), false);
+    assert.equal(invalidatedMap.items.filter(item => item.type === 'topic').every(item => item.topic.title === null), true);
     const stale = await call(local.client, 'revalidate_evidence', { snapshot: fetched.snapshot });
     assert.equal(stale.error.code, 'snapshot_stale');
     assert.equal(Object.hasOwn(stale, 'value'), false);
@@ -97,6 +111,7 @@ test('H04/H05/R08 installed stdio and PTY review preserve current evidence snaps
     assert.equal(ok(await call(cold.client, 'select_evidence', { ...request, types: ['card'] })).items.length, 0);
     const coldHistory = ok(await call(cold.client, 'select_evidence', { ...request, types: ['card'], intent: 'history' }));
     assert.equal(coldHistory.items.length, 1);
+    assert.equal(ok(await call(cold.client, 'list_evidence_mappings', { type: 'card', mocId: organized.cardTopic.mocId })).items[0].navigable, false);
     await cold.client.close();
     t.diagnostic('Actual installed stdio + synthetic terminal subprocesses: no key; fetch abort guard stayed inactive (zero provider calls).');
     await workspace.cleanup();
