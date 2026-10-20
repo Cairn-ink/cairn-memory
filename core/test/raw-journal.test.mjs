@@ -14,6 +14,8 @@ import { collectRaw,localPlainPort,rawFixture,rawNamespace as ns,rawRequest,spli
 const code = value => error => error.code === value && error.message === value;
 const usage = f => f.journal.getRawUsage({ ownerId: ns.ownerId });
 const count = (db,table) => db.prepare(`SELECT count(*) n FROM ${table}`).get().n;
+const rawSnapshot = f => Object.fromEntries(['raw_conversations','raw_messages','raw_parts','raw_events','raw_owner_usage','namespace_epochs']
+  .map(table => [table,f.db.prepare(`SELECT * FROM ${table}`).all()]));
 
 test('P1-01 default v18 and private v23 migrate empty to coherent v24; option-off preserves both engines', async t => {
   for (const privateCards of [false,true]) {
@@ -221,4 +223,128 @@ test('P1-08 opaque prepared registration joins an enclosing transaction and all 
   assert.equal(usage(f).revision,0);
   transaction(f.db,() => f.journal.commitRegistration(prepared));
   assert.equal(usage(f).savedBytes,request.messages[0].part.totalBytes);
+});
+
+for (const client of ['claude-code','codex']) test(`R1 mixed final continuation and next first part register atomically for ${client}`, async t => {
+  const f = rawFixture(t), parts = splitRaw('abcdef',{ size: 3 });
+  const first = await f.journal.register(rawRequest(parts[0],{ client }));
+  const next = splitRaw('next',{ id: 'next',ordinal: 2 })[0];
+  const request = rawRequest(parts[1],{ client,eventId: 'mixed',messages: [parts[1],next] });
+  const result = await f.journal.register(request);
+  assert.equal(result.conversationId,first.conversationId);
+  assert.deepEqual(result.parts,[{ messageId: 'message',index: 1,saved: true,reason: null },
+    { messageId: 'next',index: 0,saved: true,reason: null }]);
+  assert.equal(count(f.db,'raw_parts'),3); assert.equal(usage(f).savedBytes,10); assert.equal(usage(f).reservedBytes,0);
+  const page = await f.journal.getConversation({ namespace: ns,conversationId: first.conversationId });
+  assert.deepEqual(page.messages.map(message=>message.parts.map(part=>part.text).join('')),['abcdef','next']);
+  assert.equal(page.conversation.coverage.completeMessages,2);
+  const after = usage(f);
+  assert.deepEqual(await f.journal.register(request),result);
+  const overlap = await f.journal.register({ ...request,eventId: 'mixed-overlap' });
+  assert.deepEqual(overlap.parts,result.parts); assert.deepEqual(usage(f),after);
+});
+
+for (const variant of ['reversed continuation','nonfinal continuation','skipped nonfinal continuation','new incomplete predecessor','new reversed ordinals','new reused ordinal']) {
+  test(`R1 ${variant} refuses the whole batch before any seal callback`, async t => {
+    let seals = 0;
+    const port = localPlainPort(), seal = port.sealRaw;
+    port.sealRaw = async value => { seals++; return seal(value); };
+    const f = rawFixture(t,{ port });
+    const next = splitRaw('next',{ id: 'next',ordinal: 2 })[0];
+    let messages;
+    if (variant.startsWith('new ')) {
+      const first = splitRaw(variant === 'new incomplete predecessor' ? 'abcdef' : 'abc',{ size: 3 })[0];
+      messages = variant === 'new reversed ordinals' ? [next,first]
+        : [first,variant === 'new reused ordinal' ? { ...next,messageOrdinal: 1 } : next];
+    } else {
+      const parts = splitRaw(variant === 'reversed continuation' ? 'abcdef' : 'abcdefghi',{ size: 3 });
+      if (variant === 'skipped nonfinal continuation') f.state.reason = 'notice_required';
+      await f.journal.register(rawRequest(parts[0]));
+      messages = variant === 'reversed continuation' ? [next,parts[1]] : [parts[1],next];
+    }
+    seals = 0;
+    const before = rawSnapshot(f);
+    await assert.rejects(f.journal.register(rawRequest(messages[0],{ eventId: 'invalid-mixed',messages })),
+      code(variant === 'new reused ordinal' ? 'event_payload_conflict' : 'raw_part_out_of_order'));
+    assert.equal(seals,0); assert.deepEqual(rawSnapshot(f),before);
+  });
+}
+
+test('R1 a complete first message permits the next new message in a fresh batch', async t => {
+  const f = rawFixture(t);
+  const first = splitRaw('first')[0], next = splitRaw('next',{ id: 'next',ordinal: 2 })[0];
+  const request = rawRequest(first,{ eventId: 'two-first-parts',messages: [first,next] });
+  const result = await f.journal.register(request);
+  assert.deepEqual(result.parts.map(part=>part.saved),[true,true]);
+  assert.equal(count(f.db,'raw_parts'),2); assert.equal(usage(f).savedBytes,9); assert.equal(usage(f).reservedBytes,0);
+  const page = await f.journal.getConversation({ namespace: ns,conversationId: result.conversationId });
+  assert.equal(page.conversation.rawState,'saved'); assert.equal(page.conversation.coverage.completeMessages,2);
+});
+
+for (const client of ['claude-code','codex']) test(`R1 completed predecessor overlap permits the next first part without resealing for ${client}`, async t => {
+  let seals = 0;
+  const port = localPlainPort(), seal = port.sealRaw;
+  port.sealRaw = async value => { seals++; return seal(value); };
+  const f = rawFixture(t,{ port }), parts = splitRaw('abcdef',{ size: 3 });
+  for (const part of parts) await f.journal.register(rawRequest(part,{ client }));
+  const next = splitRaw('next',{ id: 'next',ordinal: 2 })[0];
+  seals = 0;
+  const result = await f.journal.register(rawRequest(parts[1],{ client,eventId: 'completed-overlap',messages: [parts[1],next] }));
+  assert.deepEqual(result.parts.map(part=>part.saved),[true,true]);
+  assert.equal(seals,1); assert.equal(count(f.db,'raw_parts'),3); assert.equal(usage(f).savedBytes,10);
+  const before = rawSnapshot(f);
+  await assert.rejects(f.journal.register(rawRequest(next,{ client,eventId: 'reversed-completed',messages: [next,parts[1]] })),code('raw_part_out_of_order'));
+  assert.deepEqual(rawSnapshot(f),before); assert.equal(seals,1);
+});
+
+for (const existingPrefix of [false,true]) test(`R1 later seal failure leaves every journal effect unchanged, existing prefix=${existingPrefix}`, async t => {
+  let f, seals = 0, failAt = null, before;
+  const port = localPlainPort(), seal = port.sealRaw;
+  port.sealRaw = async value => {
+    seals++;
+    assert.equal(f.db.isTransaction,false);
+    if (before) assert.deepEqual(rawSnapshot(f),before);
+    if (seals === failAt) throw new Error('SYNTHETIC_LATER_SEAL_FAILURE');
+    return seal(value);
+  };
+  f = rawFixture(t,{ port });
+  const parts = splitRaw('abcdef',{ size: 3 });
+  if (existingPrefix) await f.journal.register(rawRequest(parts[0]));
+  const first = existingPrefix ? parts[1] : splitRaw('first')[0];
+  const next = splitRaw('next',{ id: 'next',ordinal: 2 })[0];
+  const request = rawRequest(first,{ eventId: 'later-seal-failure',messages: [first,next] });
+  seals = 0; failAt = 2; before = rawSnapshot(f);
+  await assert.rejects(f.journal.register(request),code('raw_crypto_unavailable'));
+  assert.equal(seals,2); assert.deepEqual(rawSnapshot(f),before);
+  assert.equal(count(f.db,'raw_parts'),existingPrefix ? 1 : 0);
+  assert.equal(usage(f).savedBytes,existingPrefix ? 3 : 0); assert.equal(usage(f).reservedBytes,existingPrefix ? 3 : 0);
+  failAt = null;
+  const result = await f.journal.register(request);
+  assert.deepEqual(result.parts.map(part=>part.saved),[true,true]); assert.equal(usage(f).reservedBytes,0);
+});
+
+for (const reason of ['tool_off','notice_required','raw_disabled','quota_reached']) test(`R1 ${reason} final gap advances transport before the next eligible first part`, async t => {
+  let seals = 0;
+  const port = localPlainPort(), seal = port.sealRaw;
+  port.sealRaw = async value => { seals++; return seal(value); };
+  const f = rawFixture(t,{ port,capBytes: reason === 'quota_reached' ? 1 : 200000000 });
+  if (reason === 'tool_off') f.journal.setRawCaptureControl({ ownerId: ns.ownerId,client: 'claude-code',enabled: false,expectedRevision: 0 });
+  else if (reason === 'notice_required') f.state.reason = reason;
+  else if (reason === 'raw_disabled') f.reopen({ mode: 'off' });
+  const parts = splitRaw('abcdef',{ size: 3 });
+  const first = await f.journal.register(rawRequest(parts[0]));
+  assert.equal(first.parts[0].reason,reason); assert.equal(seals,0);
+  if (reason === 'tool_off') f.journal.setRawCaptureControl({ ownerId: ns.ownerId,client: 'claude-code',enabled: true,expectedRevision: 1 });
+  else if (reason === 'notice_required') { f.state.reason = null; f.state.generation = 'eligible'; }
+  else if (reason === 'raw_disabled') f.reopen({ mode: 'raw-v1' });
+  const next = splitRaw('x',{ id: 'next',ordinal: 2 })[0];
+  const request = rawRequest(parts[1],{ eventId: 'skipped-final-and-next',messages: [parts[1],next] });
+  const result = await f.journal.register(request);
+  assert.deepEqual(result.parts,[{ messageId: 'message',index: 1,saved: false,reason },{ messageId: 'next',index: 0,saved: true,reason: null }]);
+  assert.equal(seals,1); assert.equal(usage(f).savedBytes,1); assert.equal(usage(f).reservedBytes,0);
+  const page = await f.journal.getConversation({ namespace: ns,conversationId: first.conversationId });
+  assert.deepEqual(page.messages[0].parts.map(part=>part.text),[null,null]);
+  assert.equal(page.messages[1].parts[0].text,'x');
+  const after = usage(f);
+  assert.deepEqual(await f.journal.register(request),result); assert.deepEqual(usage(f),after); assert.equal(seals,1);
 });

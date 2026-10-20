@@ -66,7 +66,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy 
   }
   function partDigest(message) { return digest(['raw-part-v1',message.id,message.messageOrdinal,message.role,message.occurredAt,
     message.part.index,message.part.start,message.part.totalUnits,message.part.totalBytes,message.content]); }
-  function validateMessage(id, message) {
+  function validateMessage(id, message, shadow) {
     const previous = id && messageRow(id,message.id), index = message.part.index;
     if (previous && (previous.ordinal !== message.messageOrdinal || previous.role !== message.role || previous.occurred_at !== message.occurredAt ||
         previous.total_units !== message.part.totalUnits || previous.total_bytes !== message.part.totalBytes)) fail('event_payload_conflict');
@@ -78,8 +78,8 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy 
     const ordinal = id && db.prepare('SELECT message_id FROM raw_messages WHERE conversation_id=? AND ordinal=?').get(id,message.messageOrdinal);
     if (ordinal && ordinal.message_id !== message.id) fail('event_payload_conflict');
     if ((!previous && index !== 0) || (previous && (previous.next_index !== index || previous.next_start !== message.part.start))) fail('raw_part_out_of_order');
-    if (!previous && id) {
-      const last = db.prepare('SELECT ordinal,next_start,total_units,assembly_state,reason FROM raw_messages WHERE conversation_id=? ORDER BY ordinal DESC LIMIT 1').get(id);
+    if (!previous) {
+      const last = shadow ? shadow.last : id && db.prepare('SELECT ordinal,next_start,total_units,assembly_state,reason FROM raw_messages WHERE conversation_id=? ORDER BY ordinal DESC LIMIT 1').get(id);
       const discardedSuffix = last?.assembly_state === 'closed' && last.reason === 'capture_barrier';
       if (last && (message.messageOrdinal <= last.ordinal || (last.next_start !== last.total_units && !discardedSuffix))) fail('raw_part_out_of_order');
     }
@@ -110,21 +110,39 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy 
       prepared.set(token,{ input,session,eventDigest,authority,fence,id,revision,duplicate });
       return token;
     }
-    const sealedParts = new Map();
-    let available = (usageRow(ns.ownerId)?.cap_bytes ?? capBytes) - (usageRow(ns.ownerId)?.saved_bytes ?? 0) - (usageRow(ns.ownerId)?.reserved_bytes ?? 0);
+    const sealedParts = new Map(), sealMessages = [];
+    const usage = usageRow(ns.ownerId);
+    let available = (usage?.cap_bytes ?? capBytes) - (usage?.saved_bytes ?? 0) - (usage?.reserved_bytes ?? 0);
+    // There is at most one part per message in a batch. Only the latest
+    // message's projected progress is needed by the next new message's order
+    // check; existing message/part identities still validate against SQL.
+    const shadow = { last: row && db.prepare('SELECT ordinal,next_start,total_units,assembly_state,reason FROM raw_messages WHERE conversation_id=? ORDER BY ordinal DESC LIMIT 1').get(row.id) };
+    let previousOrdinal = 0;
     // Clone/freeze once before the first await. The port never receives mutable
     // caller input or a reference to the private prepared record.
     freeze(input);
     for (const message of input.messages) {
-      const { previous,priorPart } = validateMessage(row?.id,message);
+      if (message.messageOrdinal === previousOrdinal) fail('event_payload_conflict');
+      if (message.messageOrdinal < previousOrdinal) fail('raw_part_out_of_order');
+      previousOrdinal = message.messageOrdinal;
+      const { previous,priorPart } = validateMessage(row?.id,message,shadow);
       if (priorPart) continue;
       let reason = previous?.reason ?? disposition(input,authority,fence);
       if (!previous && reason === null) {
         if (message.part.totalBytes > available) reason = 'quota_reached';
         else available -= message.part.totalBytes;
       }
+      const end = message.part.start+message.content.length;
+      if (!shadow.last || message.messageOrdinal >= shadow.last.ordinal) {
+        shadow.last = { ordinal: message.messageOrdinal,next_start: end,total_units: message.part.totalUnits,
+          assembly_state: reason === null ? end === message.part.totalUnits ? 'complete' : 'pending' : 'closed',reason };
+      }
       if (reason !== null || previous?.assembly_state === 'closed') continue;
-      const context = freeze(rawContext(ns,input.client,session,id,message));
+      sealMessages.push({ message,context: freeze(rawContext(ns,input.client,session,id,message)) });
+    }
+    // Validate the complete projected sequence before invoking any port. No
+    // ledger/usage writes occur until commit revalidates the real SQL sequence.
+    for (const { message,context } of sealMessages) {
       if (db.isTransaction) fail('raw_transaction_active');
       try {
         const result = rawSealed(await seal({ ownerId: ns.ownerId,context,text: message.content }));

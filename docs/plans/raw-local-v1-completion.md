@@ -121,8 +121,10 @@ commands/results will be recorded when known; no model cost is inferred.
 
 ### P1 verification, 2026-10-21
 
-Runtime changes remain frozen for final gates and independent review. No review
-pass or completed public Raw capability is claimed yet.
+The first frozen candidate was `91846e650b8a66f443eec9bfcae5c86bdbd24188`.
+The following evidence precedes the review correction recorded below; it is not
+presented as verification of later changes. No completed public Raw capability
+is claimed.
 
 | Check | Observed result |
 | --- | --- |
@@ -177,6 +179,39 @@ handle both quote forms exited 0 without changing the fixture.
 The reviewed candidate and independent Standards/Spec results will be recorded
 in the delivery PR, followed by latest-head CI evidence. Local commands are not
 a substitute for that final delivery gate.
+
+### Review correction R1: legal mixed batch
+
+Two non-author reviewers independently inspected `91846e6`, both configured
+GPT 6.1 Sol/high with no reported fallback. Standards found no actionable
+violation and one optional duplicated recursive-freeze helper. That minor
+helper refactor is deferred; the intentional frozen old-opener copy remains
+compatibility evidence.
+
+Spec found one correctness blocker: preparation validated every part against
+unchanged pre-batch state. A legal batch that finishes the previous message and
+then starts a new message incorrectly failed `raw_part_out_of_order`. This
+violates the permitted ordered multi-message batch in the Raw contract. Both
+reviewer probes confirmed it; primary independently reproduced the rejection,
+then wrote an expected-success regression that exited 1 before the fix.
+The earlier 27-test suite had missed this case, so its green result was not
+sufficient for P1 acceptance.
+
+Correction round 1 by the same bounded implementer projects the latest message
+progress sequentially and validates the whole batch before the first seal
+callback. Commit-time validation still checks real SQL state. Seventeen new
+cases cover both clients, new/continuing complete and incomplete predecessors,
+reversed/reused ordinals, completed overlap, four skipped dispositions followed
+by an eligible message, later-seal rollback and stable replay/usage.
+
+The corrected Raw suites passed 44/44 on each Node version, actual exit 0.
+Primary independently reran those suites with its new-process and mixed-batch
+acceptance: 46/46 on each version, actual exit 0. The same primary mixed-batch
+test had exited 1 on the original candidate. Only the internal journal and its
+Raw test file changed at runtime; packaged database/schema and public capture
+files are unchanged from their serial MCP/artifact gates. Final-head CI will
+repeat the full suites. Both independent reviews must inspect the corrected
+fixed commit; do not ship the first candidate.
 
 ## Existing contract coverage, before this packet
 
