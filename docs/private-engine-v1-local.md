@@ -97,6 +97,10 @@ the Memory or Card index; `apply_card_placement` organizes at most five inspecte
 Cards without changing their authorship or applicability. Unfiled records remain
 available. Mapping proposals are explicit navigation metadata; activation,
 refresh and removal require the trusted core host API and are not MCP tools.
+After a Card edit or source rebind, use `refresh_card_topic` with the exact topic
+and index revisions plus fresh supporting Card refs to recover a stale topic
+label. Refile changed Card memberships explicitly; this does not reactivate a
+mapping or change Card applicability.
 
 Restart with the same configuration, correct/forget the underlying Memory, and
 inspect again: dependent drafts cancel, current reads exclude unsupported Cards,
@@ -118,10 +122,10 @@ responsibilities.
 
 Targeted installed source/Card and H/R/M tests passed on Node 22.16 and 24.15,
 including real stdio, synthetic PTY keystrokes, restart and invalidation. Those
-synthetic keystrokes do not claim that a real user approved a Card. Final combined
-full-core/MCP/artifact checks, independent Standards/Spec reviews and latest-head
-CI are underway; primary records final commands, exit codes and candidate SHA in
-the delivery PR before handoff. No semantic score or complete Raw/hosted/product
+synthetic keystrokes do not claim that a real user approved a Card. Delivery
+requires final combined full-core/MCP/artifact checks, independent Standards/Spec
+reviews and latest-head CI; consult the delivery PR for the observed commands,
+exit codes and exact candidate SHA. No semantic score or complete Raw/hosted/product
 acceptance follows. The recorded development-only MCP client OAuth advisory is
 distinct from the zero-vulnerability runtime-only audit; no SDK upgrade or clean
 development-audit claim is made here. See [known limitations](limitations.md).
