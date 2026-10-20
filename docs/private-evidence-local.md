@@ -5,7 +5,8 @@ The optional local `privateCards` facade now exposes `selectEvidence`,
 takes `(input, opaqueAuthority)` and returns the existing success/error envelope.
 Use the trusted host construction described in [private Cards](private-cards-local.md).
 No new store, model, network call, vector search or product integration exists.
-Typed Card MOC/mapping is a subsequent organization packet.
+Typed Card MOC/mapping is described in the separate
+[organization interface](private-organization-local.md).
 
 ## Reviewed applicability
 
@@ -124,13 +125,15 @@ or `scope_changed` at the final grant check. Errors contain no stale body.
 
 ## Storage boundary and synthetic gate
 
-Opting in migrates v18/v20/v21 additively to v22; feature-off reopening preserves
-the retained schema and source invalidation triggers. The v22 addition stores
-only applicability/reviewed-revision metadata. Stop mixed-version writers before
+The read packet introduced additive v22 applicability/review metadata; the typed
+organization packet now advances opt-in v18/v20/v21/v22 stores to v23.
+Feature-off reopening preserves the retained schema and invalidation triggers.
+Stop mixed-version writers before
 deployment; no user-store or production migration is authorized by these tests.
 
 Run `node tools/testing/run.mjs core/test/private-evidence.test.mjs` on Node
 22.16 and 24.15. The suite uses owned synthetic workspaces, no model/provider
 calls, and a fresh child process for restart evidence. Passing it establishes
 bounded traversal and lifecycle behavior, not semantic quality, full Raw,
-hosted safety, typed Card MOC, product integration or deployment readiness.
+hosted safety, product integration or deployment readiness. Organization has its
+own targeted checks and separate installed integration gate.

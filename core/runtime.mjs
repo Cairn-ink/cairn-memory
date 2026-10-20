@@ -43,7 +43,10 @@ export function createMemoryRuntime(input) {
   let closed = false;
   let mocStorage;
   const ready = () => { if (closed) fail("store_closed"); };
-  const cardStorage = privateCards ? createPrivateCardStorage({ db, identity, ready }) : undefined;
+  const internalNamespace = ns => ({ ...ns, projectId: ns.projectId ?? '' });
+  const cardStorage = privateCards ? createPrivateCardStorage({ db, identity, ready,
+    memoryMapInside: (ns, request) => mocStorage.mapRowsInside(internalNamespace(ns), request),
+    memoryTopicInside: (ns, ref) => mocStorage.topicInside(internalNamespace(ns), ref) }) : undefined;
 
   function activeRow(ns, id) {
     return db.prepare(`SELECT * FROM memories WHERE ${where} AND id = ? AND deleted = 0`)

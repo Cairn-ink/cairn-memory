@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { redactSecrets } from '../plugins/cairn-memory/lib/redact.mjs';
 import { denseArray, fail, identifier, object, revision } from './validation.mjs';
 import { APPLICABILITY, EVIDENCE_METHODS, evidenceInput } from './private-evidence-input.mjs';
+import { ORGANIZATION_METHODS, ORGANIZATION_READS, organizationInput } from './private-organization-input.mjs';
 
 export const CARD_METHODS = Object.freeze([
   'submitSourceNote', 'getSource', 'deleteSourceNote', 'createCardDraft', 'getCard',
@@ -9,9 +10,10 @@ export const CARD_METHODS = Object.freeze([
   'editKnowledgeCard', 'deleteKnowledgeCard', 'inspectCardOperation',
   'listCardEffects', 'getPrivateCardUsage',
   ...EVIDENCE_METHODS,
+  ...ORGANIZATION_METHODS,
 ]);
 export const CARD_READS = new Set(['getSource', 'getCard', 'listCards',
-  'inspectCardOperation', 'listCardEffects', 'getPrivateCardUsage', ...EVIDENCE_METHODS]);
+  'inspectCardOperation', 'listCardEffects', 'getPrivateCardUsage', ...EVIDENCE_METHODS, ...ORGANIZATION_READS]);
 export const OWNER_NOTE_CAP = 200_000_000;
 
 export function privateCardOptions(value) {
@@ -130,6 +132,7 @@ export function pageLimit(value = 20) {
 export function validateCardCall(method, input) {
   const ns = cardNamespace(input.namespace);
   if (EVIDENCE_METHODS.includes(method)) { evidenceInput(method, input, ns); return ns; }
+  if (ORGANIZATION_METHODS.includes(method)) { organizationInput(method, input, ns); return ns; }
   const allowed = {
     submitSourceNote: ['actionId', 'text', 'occurredAt'],
     getSource: ['source', 'limit', 'cursor'],

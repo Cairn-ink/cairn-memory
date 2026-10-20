@@ -4,6 +4,8 @@ import { fail } from './validation.mjs';
 import { EVIDENCE_METHODS } from './private-evidence-input.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { cardApplicabilityInside, reviewCardApplicabilityInside } from './private-evidence-schema.mjs';
+import { ORGANIZATION_METHODS, ORGANIZATION_READS } from './private-organization-input.mjs';
+import { createPrivateOrganizationStorage } from './private-organization-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { cardText, keyed, noteInput, OWNER_NOTE_CAP, pageLimit, refs, sourceRef } from './private-card-input.mjs';
 
@@ -15,7 +17,7 @@ const attribution = () => ({ sourceAuthor: null, claimant: null, subject: null,
   eventTime: null, commitment: 'unknown', status: 'unassessed' });
 
 /** Uses the same canonical SQLite handle as all existing Memory operations. */
-export function createPrivateCardStorage({ db, identity, ready }) {
+export function createPrivateCardStorage({ db, identity, ready, memoryMapInside, memoryTopicInside }) {
   const secret = identity.cursorSecret;
   const binding = (purpose, value) => keyed(secret, purpose, [identity.storeId, value]);
   const receiptSources = createCardReceiptSources(db, binding);
@@ -274,6 +276,8 @@ export function createPrivateCardStorage({ db, identity, ready }) {
   const evidence = createPrivateEvidenceStorage({ db, identity,
     cardDetailInside: (ns, id) => detail(ns, card(ns, id)),
     receiptRefInside: (ns, memory, receipt) => receiptSources.refInside(ns, memory, receipt) });
+  const organization = createPrivateOrganizationStorage({ db, identity, memoryMapInside, memoryTopicInside,
+    cardDetailInside: (ns, id) => detail(ns, card(ns, id)) });
   return Object.freeze({
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id) { ready(); return detail(ns, card(ns, id)); },
@@ -284,13 +288,14 @@ export function createPrivateCardStorage({ db, identity, ready }) {
       ready();
       return transaction(db, () => {
         if (EVIDENCE_METHODS.includes(method)) return evidence.call(method, ns, input, context.accessGeneration);
+        if (ORGANIZATION_READS.includes(method)) return organization.call(method, ns, input, context.accessGeneration);
         if (isRead) return read(method, ns, input);
         const old = db.prepare(`SELECT * FROM card_operations WHERE ${where} AND action_id=?`).get(...boundary(ns), input.actionId);
         if (old) {
           if (old.payload_binding !== payloadBinding || old.method !== method) fail('action_conflict');
           return JSON.parse(old.result);
         }
-        const result = mutate(method, ns, input);
+        const result = ORGANIZATION_METHODS.includes(method) ? organization.call(method, ns, input, context.accessGeneration) : mutate(method, ns, input);
         if (size(result) > 65536) fail('context_item_too_large');
         const target = result.source?.sourceId ?? result.id;
         db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')

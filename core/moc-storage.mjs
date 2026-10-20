@@ -485,8 +485,8 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
   }
 
   function mapRows(ns, { purpose, parentRef, limit, offset, expectedEpoch, memoryLabel = label,
-    catalogOnly = false }) {
-    return transaction(db, () => {
+    catalogOnly = false }, inside = false) {
+    const work = () => {
       assertIndexAvailable(ns);
       const currentEpoch = epoch(ns);
       if (expectedEpoch !== undefined && expectedEpoch !== currentEpoch) fail("cursor_stale");
@@ -667,10 +667,20 @@ export function createMocStorage({ db, epoch, advanceEpoch, memoryDto, invalidat
           label: row.child_type === "memory" ? memoryLabel(row.content) : visibleTitle(
             db.prepare("SELECT * FROM mocs WHERE id = ?").get(row.child_id)) } };
       }), epoch: currentEpoch };
-    });
+    };
+    return inside ? work() : transaction(db, work);
   }
 
   return Object.freeze({ applyPlacement, linkMocs, classificationSnapshot, mapRows, queryCandidateRows,
     placementRefs, mocDto, invalidateMemory,
+    // Internal callers already hold the shared transaction and read authority.
+    mapRowsInside: (ns, input) => mapRows(ns, input, true),
+    topicInside(ns, ref) {
+      assertIndexAvailable(ns);
+      const row = projectPrepare(`SELECT * FROM mocs WHERE ${namespaceWhere} AND id=?`).get(...boundary(ns), ref.mocId);
+      if (!row) fail('moc_not_found');
+      if (row.revision !== ref.revision) fail('revision_conflict');
+      return { id: row.id, revision: row.revision, level: `L${row.level}`, title: visibleTitle(row) };
+    },
     assertEpoch(ns, expected) { return transaction(db, () => assertEpochValue(ns, expected)); } });
 }

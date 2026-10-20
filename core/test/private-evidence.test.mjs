@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 import test from 'node:test';
 import { openMemoryCore } from '../contract.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
+import { stripOrganizationFixture } from '../testing/private-organization-fixture.mjs';
 
 const ns = { ownerId: 'synthetic-owner', scope: 'project', projectId: 'evidence' };
 const other = { ...ns, projectId: 'other' };
@@ -258,9 +259,9 @@ test('R06 final authority callbacks cannot return stale selected/fetched/revalid
   error(f.call('selectEvidence', select()), 'scope_changed');
 });
 
-test('R07 opt-in schema22 and feature-off reopening preserve authored data and reset stale reviews', t => {
+test('R07 opt-in latest schema and feature-off reopening preserve authored data and reset stale reviews', t => {
   const f = fixture(t), ref = review(f, makeCard(f));
-  const db = f.db(); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 22);
+  const db = f.db(); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 23);
   f.reopen(false); assert.equal(f.core.getPrivateCardCapabilities, undefined); f.reopen();
   assert.equal(ok(f.call('fetchEvidence', fetch([ref]))).items.length, 1);
   // Existing source invalidation increments revision; reviews never follow it.
@@ -273,21 +274,23 @@ test('R07 v18/v20/v21 opt-in migrations preserve exact existing note/Card conten
   const f = fixture(t), ref = makeCard(f), card = ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card;
   let db = f.db();
   f.core.close();
+  stripOrganizationFixture(db);
   db.exec('DROP TABLE card_applicability_reviews; PRAGMA user_version=21');
   f.reopen(false); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 21);
-  f.reopen(); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 22);
+  f.reopen(); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 23);
   assert.deepEqual(ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card, card);
   f.core.close();
+  stripOrganizationFixture(db);
   db.exec('DROP TABLE card_applicability_reviews; DROP TRIGGER card_memory_revision_invalidation; DROP TRIGGER card_memory_purge; DROP TABLE card_memory_bindings; PRAGMA user_version=20');
   f.reopen(false); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 20);
-  f.reopen(); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 22);
+  f.reopen(); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 23);
   assert.deepEqual(ok(f.call('getCard', { namespace: ns, cardId: ref.cardId })).card, card);
   const workspace = createTestWorkspace(t), path = join(workspace.path, 'v18.sqlite');
   let core = openMemoryCore({ path }); core.close();
   db = new DatabaseSync(path); workspace.defer(() => db.close());
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
   core = openMemoryCore({ path, privateCards: f.host.options }); workspace.defer(() => core.close());
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 22);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 23);
 });
 
 test('R08 retained receipt to reviewed current Card to feature-off correction/forget and qualified history', t => {

@@ -2,6 +2,7 @@ import { isStorageBusy } from './database.mjs';
 import { MemoryStoreError, fail } from './validation.mjs';
 import { CARD_METHODS, CARD_READS, deepFreeze, snapshot, validateCardCall } from './private-card-input.mjs';
 import { APPLICABILITY, EVIDENCE_DEFAULTS } from './private-evidence-input.mjs';
+import { ORGANIZATION_METHODS, ORGANIZATION_WRITES } from './private-organization-input.mjs';
 
 const fields = ['method', 'namespace', 'actionClass', 'actionId', 'targetId', 'expectedRevision', 'payloadBinding'];
 function verified(value, request) {
@@ -30,10 +31,10 @@ export function createPrivateCardFacade(storage, options, ready) {
         if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 200_000) fail('invalid_input');
         const ns = validateCardCall(method, payload), read = CARD_READS.has(method);
         const request = deepFreeze({ method, namespace: ns,
-          actionClass: read ? 'read' : method === 'createCardDraft' && payload.input.authoredInput !== undefined
+          actionClass: read ? 'read' : ORGANIZATION_WRITES.includes(method) ? 'organization' : method === 'createCardDraft' && payload.input.authoredInput !== undefined
             ? 'explicit-user' : ['createCardDraft', 'editCardDraft', 'cancelCardDraft'].includes(method) ? 'draft' : 'explicit-user',
           actionId: read ? null : payload.actionId,
-          targetId: payload.cardId ?? payload.sourceId ?? payload.source?.sourceId ?? payload.source?.receiptId ?? payload.operationActionId ?? payload.actionId ?? null,
+          targetId: payload.cardId ?? payload.mappingId ?? payload.mocId ?? payload.sourceId ?? payload.source?.sourceId ?? payload.source?.receiptId ?? payload.operationActionId ?? payload.actionId ?? null,
           expectedRevision: payload.expectedRevision ?? payload.source?.revision ?? payload.source?.memoryRevision ?? null,
           payloadBinding: storage.payloadBinding([method, payload]), input: payload });
         if (!authority || typeof authority !== 'object') fail('authority_required');
@@ -63,7 +64,11 @@ export function createPrivateCardFacade(storage, options, ready) {
       types: ['memory', 'card'], intents: ['current', 'history'], selection: 'literal-unicode-word-overlap',
       defaults: { ...EVIDENCE_DEFAULTS }, limits: { limit: 24, scanRows: 1024,
         scanBodyUnits: 2_000_000, deadlineMs: 5000, refs: 24, receiptMetadata: 16 },
-      semanticRelevance: false, typedCardMoc: false },
+      semanticRelevance: false, typedCardMoc: true },
+    organization: { version: 'typed-evidence-organization-v1', methods: [...ORGANIZATION_METHODS],
+      actionClasses: { applyCardPlacement: 'organization', proposeEvidenceMapping: 'organization', reviewEvidenceMapping: 'explicit-user' },
+      maxCards: 5, maxParents: 3, maxActiveMappingsPerTopic: 16,
+      defaultPageLimit: 20, maxPageLimit: 50, maxCardMapScanRows: 256, implicitSelectionExpansion: false },
     raw: false, modelAssisted: false, publication: false,
   } });
   return result;
