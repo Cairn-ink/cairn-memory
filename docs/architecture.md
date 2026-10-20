@@ -3,6 +3,19 @@
 See the [delivery roadmap](plans/delivery-roadmap.md) for remaining work,
 delegation, acceptance gates and the public-core/hosted migration sequence.
 
+The [memory architecture alignment](plans/memory-architecture-alignment.md)
+records the agreed target: the same public engine owns Raw/Source, Memory and
+private Knowledge Card lifecycles, provenance, invalidation and typed bounded
+reads, including Memory/Card MOC mapping. Products own UI, publication,
+destination governance and answer rendering, and reuse this engine. Full Raw
+and Card contracts are not shipped; technical-contract owner review precedes
+implementation. This planning addendum preserves the reliability gates and raw
+policy, and does not change current hosted behavior or product UX. Standalone
+does not require hosted Cairn services; model providers remain injected choices.
+The draft [three-layer engine contract](plans/three-layer-engine-contract.md)
+specifies proposed lifecycle, provenance, typed reads and standalone acceptance
+for owner review; its APIs and retention choices are not approved implementation.
+
 Cairn Memory is moving toward a shared open-source memory core. The public
 repository now includes local storage and injected capture/recall orchestration
 (`core/`). The deployed service remains unchanged until a separately staged migration.

@@ -5,6 +5,28 @@ claims from their evidence; they are not a statement of shipped capabilities.
 
 ## Language
 
+**Raw/Source**:
+Retained permitted source evidence, distinct from its interpretation.
+A receipt or episode excerpt does not establish full-source retention.
+_Avoid_: Complete tool transcript, guaranteed truth, recoverable deleted source
+
+**Memory**:
+A source-backed remembered interpretation that may remain durable without
+becoming a Card. Source attribution does not prove its meaning or adoption.
+_Avoid_: Raw text, verified truth, mandatory intermediate stage
+
+**Knowledge Card**:
+An authored or curated knowledge artifact that may remain private.
+A Card is not inherently truer than a Memory.
+_Avoid_: Automatically shared knowledge, truth upgrade
+
+**Private Card promotion**:
+Optional derivation from retained sources, possibly initiated by a Memory and
+drafted from its original sources, followed by explicit confirmation. It does
+not grant publication, destination access or broader scope; sharing requires
+separate authorization.
+_Avoid_: Automatic publication, mandatory three-stage pipeline, truth upgrade
+
 **Current assertion**:
 A remembered claim presented as applicable now within its subject and scope.
 _Avoid_: Latest message, guaranteed truth

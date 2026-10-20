@@ -452,6 +452,13 @@ session identity and fence; late batches fail `conversation_deleted`.
 | Pending asks/unconfirmed Action Capture previews | Withdraw those sourced from this conversation. | Withdraw asks about the forgotten memory. | Delete. |
 | Confirmed Action Captures, Commitments, promoted cards | Keep their collection records and own excerpts (ADR 0002/0003 in the host). | Keep. | Host H6-E P3. |
 
+Ownership caveat: the final row describes existing host collection records and
+their retention policy, not ownership of the proposed canonical private
+Knowledge Card store. The [three-layer engine draft](three-layer-engine-contract.md)
+places new Card lifecycle/provenance/invalidation in the public engine, with
+independent authored-body retention still requiring owner review. This does not
+waive D5/D6 source deletion/exclusions, host collection erasure or any RL gate.
+
 Core atomically persists finite, content-free host-effect records (conversation/
 affected memory IDs, kind and action identity) with deletion. The host's own
 collection lineage locates related pending ask/preview IDs; core does not pretend
