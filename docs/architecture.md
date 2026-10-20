@@ -12,6 +12,9 @@ and Card contracts are not shipped; technical-contract owner review precedes
 implementation. This planning addendum preserves the reliability gates and raw
 policy, and does not change current hosted behavior or product UX. Standalone
 does not require hosted Cairn services; model providers remain injected choices.
+The draft [three-layer engine contract](plans/three-layer-engine-contract.md)
+specifies proposed lifecycle, provenance, typed reads and standalone acceptance
+for owner review; its APIs and retention choices are not approved implementation.
 
 Cairn Memory is moving toward a shared open-source memory core. The public
 repository now includes local storage and injected capture/recall orchestration

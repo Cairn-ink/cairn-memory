@@ -177,6 +177,11 @@ which proposed capabilities below enter the first slice and which remain later.
 This document does not settle field names, API signatures or an approved V1
 schema by implication.
 
+The proposed [three-layer engine contract](three-layer-engine-contract.md)
+supplies concrete objects, APIs, transitions, source fences, typed reads and
+standalone acceptance fixtures for that review. It remains a draft requiring
+owner decisions; it is not runtime approval or evidence of passing behavior.
+
 ## Product capability proposals: constraints, not blanket V1 approval
 
 These proposals inform the review above. A product capability request does not
