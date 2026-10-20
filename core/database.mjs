@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { migrateVersion17, CONFIRMATION_SCHEMA_VERSION } from './confirmation-schema.mjs';
 import { fail } from "./validation.mjs";
 import { installPrivateCards, installCardMemorySources, PRIVATE_CARD_SCHEMA_VERSION } from './private-card-schema.mjs';
+import { installPrivateEvidence, PRIVATE_EVIDENCE_SCHEMA_VERSION } from './private-evidence-schema.mjs';
 import { migrateVersion6, installIndexReaders } from "./index-schema.mjs";
 import { migrateVersion8 } from './ordered-capture-schema.mjs';
 import { migrateVersion9 } from './claim-qualification-schema.mjs';
@@ -284,11 +285,19 @@ export function openDatabase(path, { privateCards = false } = {}) {
     transaction(db, () => {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
-      if (appId === APPLICATION_ID && version === PRIVATE_CARD_SCHEMA_VERSION) return;
+      if (appId === APPLICATION_ID && version === PRIVATE_EVIDENCE_SCHEMA_VERSION) return;
+      if (appId === APPLICATION_ID && version === PRIVATE_CARD_SCHEMA_VERSION) {
+        if (privateCards) {
+          installPrivateEvidence(db);
+          db.exec(`PRAGMA user_version = ${PRIVATE_EVIDENCE_SCHEMA_VERSION};`);
+        }
+        return;
+      }
       if (appId === APPLICATION_ID && version === 20) {
         if (privateCards) {
           installCardMemorySources(db);
-          db.exec(`PRAGMA user_version = ${PRIVATE_CARD_SCHEMA_VERSION};`);
+          installPrivateEvidence(db);
+          db.exec(`PRAGMA user_version = ${PRIVATE_EVIDENCE_SCHEMA_VERSION};`);
         }
         return;
       }
@@ -296,7 +305,8 @@ export function openDatabase(path, { privateCards = false } = {}) {
         if (privateCards) {
           installPrivateCards(db);
           installCardMemorySources(db);
-          db.exec(`PRAGMA user_version = ${PRIVATE_CARD_SCHEMA_VERSION};`);
+          installPrivateEvidence(db);
+          db.exec(`PRAGMA user_version = ${PRIVATE_EVIDENCE_SCHEMA_VERSION};`);
         }
         return;
       }
@@ -446,7 +456,8 @@ export function openDatabase(path, { privateCards = false } = {}) {
       if (privateCards) {
         installPrivateCards(db);
         installCardMemorySources(db);
-        db.exec(`PRAGMA user_version = ${PRIVATE_CARD_SCHEMA_VERSION};`);
+        installPrivateEvidence(db);
+        db.exec(`PRAGMA user_version = ${PRIVATE_EVIDENCE_SCHEMA_VERSION};`);
       }
     });
     return db;

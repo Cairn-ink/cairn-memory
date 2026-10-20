@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { fail } from './validation.mjs';
+import { EVIDENCE_METHODS } from './private-evidence-input.mjs';
+import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
+import { cardApplicabilityInside, reviewCardApplicabilityInside } from './private-evidence-schema.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { cardText, keyed, noteInput, OWNER_NOTE_CAP, pageLimit, refs, sourceRef } from './private-card-input.mjs';
 
@@ -90,8 +93,11 @@ export function createPrivateCardStorage({ db, identity, ready }) {
       reasons: [available ? 'unassessed' : values.some(ref => ref.type === 'receipt') ? 'memory_changed' : 'source_deleted'] };
   }
   function metadata(ns, row) {
+    const review = cardApplicabilityInside(db, row);
     return { id: row.id, namespace: ns, revision: row.revision, state: row.state,
-      bodyRevision: row.body_revision, origin: 'authored', support: { ...support(ns, getRefs(row.id)), checkedAt: row.updated_at },
+      bodyRevision: row.body_revision, origin: 'authored', support: { ...support(ns, getRefs(row.id)),
+        applicability: review.applicability,
+        applicabilityReviewedRevision: review.reviewedRevision, checkedAt: row.updated_at },
       createdAt: row.created_at, updatedAt: row.updated_at, confirmedAt: row.confirmed_at };
   }
   function detail(ns, row) {
@@ -173,6 +179,7 @@ export function createPrivateCardStorage({ db, identity, ready }) {
       validateRefs(ns, getRefs(row.id), [], row.id);
       db.prepare(`UPDATE private_cards SET state='confirmed',revision=revision+1,body_revision=1,
         confirmed_at=?,updated_at=? WHERE id=?`).run(now(), now(), row.id);
+      if (input.applicability !== undefined) reviewCardApplicabilityInside(db, row.id, row.revision + 1, input.applicability);
       return receipt(card(ns, row.id));
     }
     const selected = validateRefs(ns, input.bindings, confirmed ? getRefs(row.id) : [], row.id);
@@ -181,6 +188,7 @@ export function createPrivateCardStorage({ db, identity, ready }) {
     db.prepare('UPDATE private_cards SET revision=revision+1,title=?,body=?,body_revision=?,updated_at=? WHERE id=?')
       .run(title, body, bodyRevision, now(), row.id);
     putRefs(row.id, selected);
+    if (confirmed) reviewCardApplicabilityInside(db, row.id, row.revision + 1, input.applicability);
     effect(ns, 'evidence_invalidated', 'card', row.id, row.revision + 1, input.actionId);
     return receipt(card(ns, row.id), 1);
   }
@@ -263,15 +271,19 @@ export function createPrivateCardStorage({ db, identity, ready }) {
       if (!items.length) fail('context_item_too_large');
     }
   }
+  const evidence = createPrivateEvidenceStorage({ db, identity,
+    cardDetailInside: (ns, id) => detail(ns, card(ns, id)),
+    receiptRefInside: (ns, memory, receipt) => receiptSources.refInside(ns, memory, receipt) });
   return Object.freeze({
     // Internal shared-read seams: caller owns scope authorization and transaction.
     cardDetailInside(ns, id) { ready(); return detail(ns, card(ns, id)); },
     cardMetadataInside(ns, row) { ready(); return metadata(ns, row); },
     receiptRefInside(ns, memoryRow, receiptRow) { ready(); return receiptSources.refInside(ns, memoryRow, receiptRow); },
     payloadBinding: value => binding('card-action-v1', value),
-    call(method, ns, input, payloadBinding, isRead) {
+    call(method, ns, input, payloadBinding, isRead, context) {
       ready();
       return transaction(db, () => {
+        if (EVIDENCE_METHODS.includes(method)) return evidence.call(method, ns, input, context.accessGeneration);
         if (isRead) return read(method, ns, input);
         const old = db.prepare(`SELECT * FROM card_operations WHERE ${where} AND action_id=?`).get(...boundary(ns), input.actionId);
         if (old) {

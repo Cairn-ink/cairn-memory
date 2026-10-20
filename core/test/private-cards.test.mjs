@@ -57,7 +57,7 @@ const draftCall = (actionId = 'draft', source, namespace = ns, body = 'Authored 
   actionId, drafting: 'authored', input: { title: 'Private title', body,
     ...(source ? { sources: [source] } : { authoredInput: { text: 'Explicit submitted note', occurredAt: null } }) } });
 
-test('C01/C07 default stays v18, opt-in upgrades only synthetic store, disabled reopen preserves v21', t => {
+test('C01/C07 default stays v18, opt-in upgrades only synthetic store, disabled reopen preserves v22', t => {
   const workspace = createTestWorkspace(t), path = join(workspace.path, 'legacy.sqlite');
   let core = openMemoryCore({ path });
   assert.equal(core.createCardDraft, undefined); assert.equal(core.getPrivateCardCapabilities, undefined); core.close();
@@ -65,7 +65,7 @@ test('C01/C07 default stays v18, opt-in upgrades only synthetic store, disabled 
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
   assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name LIKE 'card_%'").get().n, 0); db.close();
   const trusted = host(); core = openMemoryCore({ path, privateCards: trusted.options }); core.close();
-  db = new DatabaseSync(path); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 21); db.close();
+  db = new DatabaseSync(path); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 22); db.close();
   core = openMemoryCore({ path }); assert.equal(core.submitSourceNote, undefined); core.close();
   const legacy = openMemoryStore({ path }); legacy.close();
   assert.throws(() => openMemoryCore({ path, privateCards: { ...trusted.options, storage: 'hosted-aes' } }), { code: 'source_unavailable' });
@@ -218,11 +218,13 @@ test('C08 cancellation and deletion purge logical bodies/bindings; operations an
   assert.deepEqual(ok(f.call('listCardEffects', { namespace: ns, limit: 1 })), effects);
 });
 
-test('C09 capabilities advertise exact authored local subset, not Raw/common retrieval/async operations', t => {
+test('C09 capabilities advertise exact authored local subset and bounded common reads', t => {
   const f = fixture(t), capabilities = ok(f.core.getPrivateCardCapabilities());
   assert.equal(capabilities.version, 'private-cards-local-v1'); assert.equal(capabilities.raw, false);
-  assert.equal(capabilities.currentEvidence, false); assert.equal(capabilities.modelAssisted, false);
-  for (const name of ['cancelCardOperation', 'resolveSourceReferences', 'selectEvidence', 'fetchEvidence']) assert.equal(f.core[name], undefined);
+  assert.equal(capabilities.currentEvidence, true); assert.equal(capabilities.modelAssisted, false);
+  assert.equal(capabilities.evidenceReads.typedCardMoc, false);
+  for (const name of ['cancelCardOperation', 'resolveSourceReferences']) assert.equal(f.core[name], undefined);
+  for (const name of ['selectEvidence', 'fetchEvidence', 'revalidateEvidence']) assert.equal(typeof f.core[name], 'function');
   const usage = ok(f.call('getPrivateCardUsage', { namespace: ns }));
   assert.equal(usage.version, 'submitted-note-usage-v1'); assert.equal(usage.raw, 'not-implemented');
 });
@@ -267,13 +269,13 @@ test('C07 unimplemented v19 and future schema versions refuse without migration'
   const f = fixture(t), draft = ok(f.call('createCardDraft', draftCall()));
   f.core.close();
   const db = new DatabaseSync(f.path); t.after(() => db.close());
-  for (const version of [19, 22, 999]) {
+  for (const version of [19, 23, 999]) {
     db.exec(`PRAGMA user_version=${version}`);
     assert.throws(() => openMemoryCore({ path: f.path, privateCards: f.trusted.options }), { code: 'unsupported_database' });
     assert.equal(db.prepare('PRAGMA user_version').get().user_version, version);
     assert.equal(db.prepare('SELECT state FROM private_cards WHERE id=?').get(draft.id).state, 'draft');
   }
-  db.exec('PRAGMA user_version=21');
+  db.exec('PRAGMA user_version=22');
 });
 
 const childSource = `

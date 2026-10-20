@@ -261,13 +261,13 @@ test('L05 additive v20 migration preserves existing note Cards and disabled open
     input: { title: 'Existing v20 note Card', body: 'Old current body', authoredInput: { text: 'Old note evidence', occurredAt: null } } }));
   const before = f.inspect(note.id);
   f.core.close();
-  // Exact v20 tables are unchanged by v21. Remove only the additive empty slice
+  // Exact v20 tables are unchanged by v21/v22. Remove only the additive empty slices
   // to construct a historical-layout fixture without depending on git history.
-  f.db.exec('DROP TRIGGER card_memory_revision_invalidation; DROP TRIGGER card_memory_purge; DROP TABLE card_memory_bindings; PRAGMA user_version=20;');
+  f.db.exec('DROP TABLE card_applicability_reviews; DROP TRIGGER card_memory_revision_invalidation; DROP TRIGGER card_memory_purge; DROP TABLE card_memory_bindings; PRAGMA user_version=20;');
   const off = f.off(); assert.equal(off.getPrivateCardCapabilities, undefined);
   assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 20);
   const upgraded = openMemoryCore({ path: f.path, privateCards: f.privateCards }); f.ws.defer(() => upgraded.close());
-  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 21);
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 22);
   assert.deepEqual(ok(f.call('getCard', { namespace: ns, cardId: note.id }, upgraded)).card, before);
   assert.equal(ok(f.call('getSource', { namespace: ns, source: before.bindings[0].source }, upgraded)).parts[0].text, 'Old note evidence');
 });
