@@ -191,9 +191,10 @@ compatibility evidence.
 Spec found one correctness blocker: preparation validated every part against
 unchanged pre-batch state. A legal batch that finishes the previous message and
 then starts a new message incorrectly failed `raw_part_out_of_order`. This
-violates the permitted ordered multi-message batch in the Raw contract. Both
-reviewer probes confirmed it; primary independently reproduced the rejection,
-then wrote an expected-success regression that exited 1 before the fix.
+violates the permitted ordered multi-message batch in the Raw contract. The
+Spec reviewer's probes confirmed it on both Node versions; primary independently
+reproduced the rejection, then wrote an expected-success regression that exited
+1 before the fix.
 The earlier 27-test suite had missed this case, so its green result was not
 sufficient for P1 acceptance.
 
