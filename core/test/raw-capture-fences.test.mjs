@@ -74,7 +74,7 @@ test('P2-05 actual episode deletion during seal refuses suffix/fresh event and p
   const { openRawCaptureCore } = await import('../raw-capture.mjs');
   const second = openRawCaptureCore({ path: f.path, model: f.model }, { mode: 'raw-v1', port,
     readPolicy: () => ({ generation: 'notice', reason: null }) });
-  t.after(() => second.close());
+  f.workspace.defer(() => second.close());
   const calls = f.calls.length;
   assert.equal((await second.captureRaw(request(splitRaw('Synthetic late message', { id: 'late', ordinal: 2 })[0]))).ok, false);
   assert.equal(count(f.db, 'raw_events'), 1); assert.equal(f.calls.length, calls);
@@ -187,7 +187,7 @@ test('P2-06 expired episode staging advances epoch after Raw commit and before o
   const before = f.db.prepare('SELECT epoch FROM namespace_epochs').get().epoch;
   const { openRawCaptureCore } = await import('../raw-capture.mjs');
   const other = openRawCaptureCore({ path: f.path, model: f.model }, { mode: 'raw-v1',port: localPlainPort(),
-    readPolicy: () => ({ generation: 'notice-1',reason: null }) }); t.after(() => other.close());
+    readPolicy: () => ({ generation: 'notice-1',reason: null }) }); f.workspace.defer(() => other.close());
   const result = completed(await other.captureRaw(request(splitRaw('Synthetic ordered next source', { id: 'next',ordinal: 3 })[0],
     { causal: { streamId: 'after-expiry',sequence: 1 } })));
   assert.equal(result.admission.memories.length, 1);

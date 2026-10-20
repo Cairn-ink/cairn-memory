@@ -80,7 +80,8 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
     }
     const serialized = stagedView === undefined ? null : stagedEvidence.serializeView(stagedView);
     const result = transaction(db, () => {
-      registration?.commit();
+      const registeredRaw = registration?.commit();
+      if (registeredRaw?.observation) return { rawReplay: registeredRaw.observation };
       const now = time(ns, input, serialized !== null);
       const row = read(ns, input);
       const refuse = closed => { if (registration) fail(closed); return { closed }; };

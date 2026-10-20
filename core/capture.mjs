@@ -136,6 +136,7 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const claim = episodeRun ? episodeRun.claim : snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
     : captureEvidence ? unwrap(operations.claimCaptureEvidence({ ...key, view: retained }))
       : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
+  if (claim.rawReplay) return claim.rawReplay;
   if (claim.processing || claim.duplicate) return { ...claim, ...coverage,
     ...(captureRationale ? { rationale: { status: 'not-run', reason: claim.processing ? 'processing' : 'duplicate',
       previousOutcome: 'unavailable' } } : {}) };

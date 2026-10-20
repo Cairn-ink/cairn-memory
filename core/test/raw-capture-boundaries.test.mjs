@@ -12,12 +12,12 @@ test('P2-08 separate v25 opt-in migrates genuine v24, preserves option-off state
   const f = rawFixture(t);
   const before = await f.journal.register(request(splitRaw('Synthetic pre-P2 saved source')[0]));
   assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 24);
-  const db = openDatabase(f.path, { rawCapture: true }); t.after(() => db.close());
+  const db = openDatabase(f.path, { rawCapture: true }); f.workspace.defer(() => db.close());
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, 25);
   assert.equal(count(db, 'raw_capture_events'), 0); assert.equal(count(db, 'raw_parts'), 1);
   assert.throws(() => oldOpen(f.path), { code: 'unsupported_database' });
-  const ordinary = openMemoryCore({ path: f.path }); t.after(() => ordinary.close());
-  const reader = openDatabase(f.path); t.after(() => reader.close());
+  const ordinary = openMemoryCore({ path: f.path }); f.workspace.defer(() => ordinary.close());
+  const reader = openDatabase(f.path); f.workspace.defer(() => reader.close());
   assert.equal(reader.prepare('PRAGMA user_version').get().user_version, 25);
   assert.equal(reader.prepare('SELECT id FROM raw_conversations').get().id, before.conversationId);
   assert.equal(count(reader, 'raw_parts'), 1);
@@ -106,7 +106,7 @@ test('P2-02/07 existing P1-only first part never invents interpretation or a pen
   await f.journal.register(source);
   const { openRawCaptureCore } = await import('../raw-capture.mjs');
   const core = openRawCaptureCore({ path: f.path }, { mode: 'raw-v1',port: localPlainPort(),
-    readPolicy: () => ({ generation: 'notice-1',reason: null }) }); t.after(() => core.close());
+    readPolicy: () => ({ generation: 'notice-1',reason: null }) }); f.workspace.defer(() => core.close());
   const result = completed(await core.captureRaw({ ...source,eventId: 'new-overlap' }));
   assert.equal(result.reason, 'no-eligible-first-part'); assert.equal(count(f.db, 'admission_claims'), 0);
 });
@@ -129,7 +129,7 @@ for (const state of ['completed','live','mixed','same-event']) test(`P2-01/02 le
     const result = await f.core.captureRaw({ ...source, ...(state === 'mixed' ? { messages: [...source.messages,
       splitRaw('Synthetic fresh mixed member', { id: 'fresh',ordinal: 2 })[0]] } : {}) });
     assert.deepEqual(result, { ok: false,error: { code: 'event_payload_conflict',retryable: false } });
-    const fresh = openDatabase(f.path); t.after(() => fresh.close());
+    const fresh = openDatabase(f.path); f.workspace.defer(() => fresh.close());
     for (const table of ['raw_parts','raw_messages','raw_events','raw_capture_events','raw_owner_usage']) assert.equal(count(fresh, table), 0, table);
     assert.deepEqual(fresh.prepare('SELECT * FROM admission_claims').all(), claims);
     assert.deepEqual(fresh.prepare('SELECT * FROM episode_events').all(), events);

@@ -208,6 +208,7 @@ export async function captureEpisodeMessages(options) {
   // every duplicate/processing return and any lazy provider work.
   let registered = options.rawRegistration
     ? runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true }, options.rawRegistration) : undefined;
+  if (registered?.rawReplay) return registered.rawReplay;
   const checked = registered ?? runtime.validateEpisodeBatch(ns, batch);
   if (checked.processing) return { processing: true,
     episode: { status: 'processing' }, admission: { status: 'processing' } };

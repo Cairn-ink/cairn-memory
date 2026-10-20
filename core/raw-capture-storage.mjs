@@ -65,6 +65,27 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       .get(...rawBoundary(input.namespace))?.generation ?? 'initial';
     if (profile.sessionEpisodes && context.episodeContext.generation !== generation) fail('generation_conflict');
     const token = await journal.prepareRegistration(input);
+    // A same-event winner may have committed while sealing awaited. Select
+    // observation before any model preflight; commit still checks atomically.
+    const replay = Boolean(previous || binding(input));
+
+    function admissionState(eventId) {
+      const admission = db.prepare(`SELECT * FROM admission_claims WHERE ${where}`)
+        .get(...rawBoundary(input.namespace), input.client, eventId);
+      if (admission?.state === 'completed') return { admission, state: 'completed' };
+      const evidence = db.prepare(`SELECT state,expires_at FROM staged_capture_evidence WHERE ${where}`)
+        .get(...rawBoundary(input.namespace), input.client, eventId);
+      const watermark = evidence && db.prepare('SELECT watermark FROM staged_capture_clocks WHERE owner_id=? AND scope=? AND project_id=?')
+        .get(...rawBoundary(input.namespace))?.watermark;
+      if (evidence && (evidence.state !== 'pending' || evidence.expires_at <= Math.max(Date.now(), watermark ?? 0))) {
+        return { admission, state: 'incomplete' };
+      }
+      const writer = admission?.state === 'reserved' && db.prepare(`SELECT writer_expires_at FROM session_episodes
+        WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?`)
+        .get(...rawBoundary(input.namespace), input.client, sessionKey);
+      return { admission, state: admission?.lease_expires_at > Date.now() || writer?.writer_expires_at > Date.now()
+        ? 'processing' : 'incomplete' };
+    }
 
     function emptyOutcome() {
       const overlap = input.messages.filter(message => message.part.index === 0 && !firstIds.includes(message.id));
@@ -75,14 +96,9 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
         const origin = owner && binding({ ...input, eventId: owner.first_event_id });
         if (!origin || !JSON.parse(origin.eligible_message_ids).includes(message.id)) continue;
         interpreted = true;
-        const admission = db.prepare(`SELECT state,lease_expires_at FROM admission_claims WHERE ${where}`)
-          .get(...rawBoundary(input.namespace), input.client, owner.first_event_id);
-        if (admission?.state === 'completed') continue;
-        const writer = admission?.state === 'reserved' && db.prepare(`SELECT writer_expires_at FROM session_episodes
-          WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?`)
-          .get(...rawBoundary(input.namespace), input.client, sessionKey);
-        if (admission?.lease_expires_at > Date.now() || writer?.writer_expires_at > Date.now()) processing = true;
-        else incomplete = true;
+        const { state } = admissionState(owner.first_event_id);
+        if (state === 'processing') processing = true;
+        else if (state !== 'completed') incomplete = true;
       }
       return processing ? { processing: true, admission: { status: 'processing' } }
         : incomplete ? { status: 'incomplete', reason: 'interpretation-incomplete' }
@@ -102,11 +118,50 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(...key(input), result.conversationId, sessionKey,
           JSON.stringify(firstIds), JSON.stringify(messages.map(message => message.id)), projectionDigest, bindingDigest, generation);
       }
-      return result;
+      return { raw: result, ...(existing && snapshot ? { observation: replayInside(existing) } : {}) };
     }
     let accepted = false;
-    return Object.freeze({ input: projection, hasProjection: Boolean(snapshot), replay: Boolean(previous),
-      emptyOutcome, commit,
+
+    // Called only under the same transaction that revalidates/commits Raw.
+    // It observes shared admission state without acquiring interpretation work.
+    function replayInside(recorded) {
+      const currentGeneration = db.prepare('SELECT generation FROM episode_controls WHERE owner_id=? AND scope=? AND project_id=?')
+        .get(...rawBoundary(input.namespace))?.generation ?? 'initial';
+      if (recorded.capture_generation !== currentGeneration) fail('capture_evidence_closed');
+      const { admission, state } = admissionState(input.eventId);
+      if (admission && admission.payload_digest !== projectionDigest) fail('event_payload_conflict');
+      if (state === 'processing') return { processing: true, admission: { status: 'processing' } };
+      if (state !== 'completed') return { status: 'incomplete', reason: 'interpretation-incomplete' };
+      let reconciliation;
+      if (projection.causal) {
+        const ordered = db.prepare(`SELECT stream_id,sequence,reconciliation FROM capture_events WHERE ${where}`).get(...key(input));
+        if (!ordered || ordered.stream_id !== projection.causal.streamId || ordered.sequence !== projection.causal.sequence ||
+            !ordered.reconciliation) fail('capture_order_conflict');
+        reconciliation = JSON.parse(ordered.reconciliation);
+      }
+      const memoryIds = JSON.parse(admission.memory_ids), suppressedCount = admission.suppressed_count;
+      const episode = profile.sessionEpisodes && db.prepare(`SELECT episode_id FROM episode_events WHERE ${where}`).get(...key(input));
+      return { duplicate: true, memoryIds, suppressedCount,
+        ...(reconciliation ? { reconciliation } : {}),
+        ...(profile.captureRationale ? { rationale: { status: 'not-run',reason: 'duplicate',previousOutcome: 'unavailable' } } : {}),
+        ...(episode ? { episode: { id: episode.episode_id, status: 'not-run', reason: 'replay' },
+          admission: { status: 'completed', memoryIds, suppressedCount } } : {}) };
+    }
+
+    function observeReplay() {
+      if (!snapshot) fail('invalid_input');
+      const result = transaction(db, () => {
+        // Exact source identity and current namespace/session authority still
+        // pass through the journal. Staging is never a Raw read permission.
+        const committed = commit();
+        if (!committed.observation) fail('invalid_input');
+        return committed.observation;
+      });
+      accepted = true;
+      return result;
+    }
+    return Object.freeze({ input: projection, hasProjection: Boolean(snapshot), replay,
+      emptyOutcome, commit, observeReplay,
       accept: () => { accepted = true; },
       commitOnly: () => { const result = transaction(db, commit); accepted = true; return result; },
       result: () => { const row = accepted && rawEvent(input); return row ? JSON.parse(row.result) : null; },

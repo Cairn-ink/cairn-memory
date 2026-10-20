@@ -84,8 +84,18 @@ uses only its fresh first parts. Blank or otherwise ineligible canonical first
 parts retain exact Raw and explicitly report `no-eligible-first-part`; a later
 continuation cannot become substitute model input. Exact replay and new-event
 overlap retain original ownership. A live original claim reports processing;
-failed/expired interpretation remains explicitly incomplete without a new-event
-retry. An intentionally absent interpretation does not invent a pending job.
+failed/expired interpretation remains explicitly incomplete without a retry.
+Exact durable replay observes the existing claim after revalidating source
+identity, profile and current namespace/session fences. It never renews a lease,
+restages text, touches staging expiry or invokes a provider. Completed admission
+stays completed even after its staging expires; failed/expired ownership stays
+incomplete while the original Raw disposition remains available. Ordered replay
+returns its recorded reconciliation. An intentionally absent interpretation does
+not invent a pending job.
+The admission/episode registration transaction repeats the durable-binding check,
+so another process winning during sealing or before the claim turns the slower
+identical request into an observation. A different-event stale registration still
+refuses. This private short-circuit is never accepted from request/model fields.
 New Raw first parts that collide with an already covered legacy episode message
 (including a mixed batch) refuse atomically instead of backfilling that source
 without its own admission reservation. Frozen legacy batches keep their legacy
@@ -171,7 +181,7 @@ The frozen `core/testing/raw-v23-database.mjs` is the actual pre-Raw opener from
 `cd6d1ad32ac3d6f5926c6846e8c6d27645bb7c9a`, with only relative imports relocated,
 so old-opener refusal remains testable in shallow CI checkouts.
 
-The three `core/test/raw-capture*.test.mjs` suites additionally exercise actual
+The four `core/test/raw-capture*.test.mjs` suites additionally exercise actual
 P2 admission/episode transactions, controls/fences, bounded model projections,
 ordered proofs, staged bypass, replay, migration and independent child processes.
 `core/testing/raw-v24-database.mjs` freezes the actual P1 opener from

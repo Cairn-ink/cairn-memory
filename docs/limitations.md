@@ -1569,3 +1569,48 @@ passed all 125 cases on each runtime, and artifact tests passed 94 with one
 native Windows-only skip on each runtime; all four commands exited 0. No runtime
 or fixture deadline was relaxed. These later results do not erase the initial
 failures or establish that concurrent execution will never hit those deadlines.
+
+## Internal Raw capture P2: registration mechanics only
+
+The [local Raw V1 plan](plans/raw-local-v1-completion.md) records the bounded,
+synthetic-only P2 integration and its final gates. It joins the existing capture
+engine internally; it exposes no installed Raw capability. D5 independent-source
+deletion, D6 forgotten-span exclusions, Raw → Card, arbitrary option-off control
+closure, client adoption and production enablement remain later work. The local
+fixtures establish lifecycle mechanics, not extraction quality or semantic truth.
+
+Retained development failures include legacy episode/source identity collisions
+that saved Raw without a new admission reservation (four red regressions), and
+an eager schema probe that broke two legacy cleanup/query-count tests in the
+first full Node 22 run (1,311 passed, two failed, actual exit 1). Narrow fixes
+refuse those collisions atomically and defer the optional schema probe; the
+first reviewed candidate subsequently passed 1,317 core tests on each supported
+runtime, actual exit 0. Those greens missed the replay issue below.
+
+Independent review of `05f4a94` found that staging failure/expiry could hide
+already saved Raw on an identical retry. The new replay regressions initially
+reported six passed and ten failed, actual exit 1. A further four-case red probe
+showed that untouched staging past wall-clock expiry or its persisted watermark
+could still be reported as processing. The correction observes durable replay
+without renewing leases, restaging, invoking models or mutating expiry; completed
+admission wins over staging expiry, while failed/expired jobs stay incomplete.
+Source identity, profile, namespace and session fences still apply. The final
+plan/PR records corrected verification and independent review; earlier green
+results do not substitute for those gates or erase these retained failures.
+
+Further scheduling probes retained six held-seal failures (two completed-winner
+controls passed) and two failed-winner cases in a separate process, each command
+exiting 1 before the atomic correction. Detecting replay only before an await
+was insufficient: the real claim/reservation transaction must observe an existing
+durable binding before acquiring any work. The correction also moves all nine
+secondary P2 test resources onto their owning workspace's deferred cleanup;
+Linux's ability to unlink open SQLite files was not evidence of correct teardown
+ordering. No independent-review or final-gate pass is inferred from these fixes.
+
+The atomic correction passed 1,350 core tests on each supported runtime, actual
+exit 0. Two later red cases (actual exit 1) showed that a same-event winner during
+sealing must also be selected as observation before model-budget preflight. The
+final internal-only correction adds that post-await selection recheck while
+retaining the transaction's authoritative check. Those full-core results precede
+this last correction; corrected focused tests, independent review and final-head
+CI are recorded separately in the plan/PR.

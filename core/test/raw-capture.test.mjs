@@ -16,7 +16,7 @@ for (const kind of ['ordinary','staged','episode']) for (const client of ['claud
     assert.equal(count(f.db, 'admission_claims'), 1);
     assert.equal(count(f.db, 'raw_capture_events'), 1);
     if (kind === 'episode') assert.equal(f.db.prepare('SELECT state,payload FROM staged_capture_evidence').get().state, 'released');
-    const fresh = openDatabase(f.path); t.after(() => fresh.close());
+    const fresh = openDatabase(f.path); f.workspace.defer(() => fresh.close());
     assert.equal(count(fresh, 'raw_parts'), 1);
     assert.equal(f.calls.find(call => call.method === 'extract').input.messages[0].content.startsWith('A 😀'), true);
     assert.equal(f.db.prepare('SELECT session_id FROM receipts LIMIT 1').get().session_id.startsWith('s1:'), true);
@@ -52,7 +52,7 @@ for (const kind of ['ordinary','staged','episode']) for (const target of ['raw_p
     const f = fixture(t, { kind });
     f.db.exec(`CREATE TRIGGER synthetic_registration_failure AFTER INSERT ON ${target} BEGIN SELECT RAISE(ABORT,'synthetic private failure'); END;`);
     assert.equal((await f.core.captureRaw(request(splitRaw('Synthetic atomic evidence')[0], {}, kind))).ok, false);
-    const fresh = openDatabase(f.path); t.after(() => fresh.close());
+    const fresh = openDatabase(f.path); f.workspace.defer(() => fresh.close());
     for (const table of ['raw_parts','raw_events','raw_messages','raw_capture_events','raw_owner_usage','admission_claims','episode_events','session_episodes']) {
       assert.equal(count(fresh, table), 0, table);
     }

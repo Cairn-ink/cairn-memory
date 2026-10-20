@@ -1,10 +1,10 @@
 import { openRawCaptureCore } from '../raw-capture.mjs';
 import { localPlainPort } from './raw-fixtures.mjs';
 
-const [path, encoded] = process.argv.slice(2);
+const [path, encoded, outcome] = process.argv.slice(2);
 const request = JSON.parse(encoded), calls = [];
 const core = openRawCaptureCore({ path, model: { contextWindow: 8192, countTokens: () => 1,
-  extract: () => { calls.push('extract'); return { items: [] }; } } }, {
+  extract: () => { calls.push('extract'); if (outcome === 'fail') throw Error('Synthetic process extraction failure'); return { items: [] }; } } }, {
   mode: 'raw-v1', port: localPlainPort(), readPolicy: () => ({ generation: 'notice-1', reason: null }),
 });
 try {

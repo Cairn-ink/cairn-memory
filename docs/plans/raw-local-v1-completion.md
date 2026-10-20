@@ -190,7 +190,7 @@ registration transaction with `event_payload_conflict`, including a mixed
 legacy/fresh batch. The legacy event and its original interpretation remain
 unchanged. This is a safe protocol boundary, not cross-protocol replay support.
 
-### P2 verification and correction record, 2026-10-21
+### P2 first-candidate verification and correction record, 2026-10-21
 
 Implementation worker: `/root/raw_p2_capture_impl61`, actual requested model
 `gpt-6.1-sol`, high effort, no fallback. Primary owns the separate acceptance
@@ -254,6 +254,108 @@ Local full logs and primary acceptance are in
 `/tmp/cairn-raw-p2-evidence.xAB4IQ`, not a portable test dependency. No outstanding
 worker process remains at this checkpoint. No two unsuccessful correction
 rounds on the same defect or model fallback occurred.
+
+### P2 independent-review correction checkpoint
+
+The first candidate was `05f4a94f4073a9ca986e73fefa7f48be22201941`,
+reviewed against fixed P1 base `0be04cdcc9e5a88b3702bf915510da810d5e797a`.
+Separate non-author GPT 6.1 Sol/high reviewers found two documented-standard
+violations and one P2-07 defect. These findings block delivery of that candidate:
+
+- Secondary SQLite/core handles at nine test sites were registered with
+  `t.after` after workspace cleanup. They must use `workspace.defer` so handles
+  close before removal. Passing Linux tests alone did not establish that order.
+- P2 retained failures and limitations also belong in `docs/limitations.md`,
+  as required by `CONTRIBUTING.md`, not only in this detailed plan.
+- An exact staged replay after interpretation failure or staging expiry lost
+  the already saved Raw acknowledgement. The independent primary added six
+  selected red cases: all six failed, actual exit 1, on Node 22.16. The cases
+  also exposed that ordinary failed replay could attempt interpretation again.
+  Neither behavior satisfies observable replay of the original saved event.
+
+Correction design: exact existing eligible event replay revalidates identity,
+policy and namespace/session generation inside the existing Raw journal
+transaction, then observes durable admission state. It never reacquires work,
+renews a lease, reseals source or invokes a model. Completed work reports a
+duplicate completion, live work reports processing, and failed/expired work
+reports incomplete. Fresh events keep the original atomic registration path;
+pause/project/session fences and payload mismatch refusals remain in force.
+
+Primary acceptance then reproduced two additional scheduling boundaries before
+the correction was frozen: a still-pending staging row whose expiry has elapsed
+could incorrectly look like live processing (two cases, actual exit 1), and
+two same-event calls racing asynchronous sealing could still fall back into the
+original claim path (two cases, actual exit 1). These are retained separately
+from the six original red cases, which already passed after the first fix.
+The observer must use effective staging expiry without mutating its clock.
+Authoritative replay detection also belongs inside the actual admission/episode
+registration transaction, not only in a pre-transaction Boolean. The private
+registration hook can return an observation short-circuit to the shared capture
+orchestrator before any lease or provider work; legacy calls without this trusted
+hook remain unchanged. Primary approved this bounded shared-orchestrator change.
+
+The same implementation worker owns this correction packet. Primary adds
+independent acceptance for both clients, cold replay after staging expiry,
+ordinary/staged failure, live/expired leases and racing duplicate registration.
+A final candidate requires
+affected gates and both independent review axes again. The prior green counts
+above are evidence for the first candidate, not substitutes for these checks.
+The optional four-line recursive-freeze duplication heuristic is deferred:
+it is not a documented violation, and sharing it would add packaging/import
+coordination unrelated to this correctness correction.
+
+### P2 corrected-source verification checkpoint
+
+The correction's four checked-in Raw capture suites pass 106/106 on both
+Node 22.16 and 24.15, zero failures/skips, actual exit 0 each. Primary's
+independently constructed suite passes 32/32 on both versions, actual exit 0,
+including the cold/replay, effective-expiry and competing-writer cases above.
+`npm run validate` and maintainer plugin validation each exit 0; all eight
+`demo:store` / `demo:admission` / `demo:capture` / `demo:episodes` invocations
+also exit 0 on this corrected source. Full core and installed compatibility
+are rerun before the corrected candidate is committed.
+
+Both full core runs on that unchanged atomic-replay source completed with
+1,350/1,350 passed, zero failures/skips, actual exit 0 each (396.3 seconds each).
+These full runs precede one final internal-only selection correction: a winner
+can register while the original call awaits sealing, so selection must recheck
+the durable binding after that await instead of unnecessarily reaching model
+preflight. A held-seal/over-budget counter probe reproduced the omission; the
+primary's two selected regression cases failed with actual exit 1. The existing
+atomic transaction hook remains necessary for later cross-process races.
+
+Do not label those 1,350-case runs as verification of this final selection
+change. Both-runtime focused suites and primary acceptance are rerun on the
+last source, and the final reviewed PR head must pass the full CI matrix before
+delivery. The selection change does not alter the installed/shared capture
+orchestrator already exercised by the full runs. Installed compatibility is
+still rerun serially to avoid the documented P1 load-sensitive deadlines.
+
+The 20 changed core files have path/content SHA-256
+`75a754723fc3f747f8fb4881217574b7761339e6c5d9cced8bc389bc430ed594`.
+Primary cross-checked the complete 23-file P2 inventory by two independent
+routes: base diff plus untracked paths, and committed path history plus Git
+porcelain status. Both agree, including the new replay suite and limitations
+record. The actual frozen P1 opener remains byte-identical after its documented
+header/import normalization (one file, 19,853 bytes, actual exit 0).
+
+After the last selection correction, all four checked-in P2 suites pass 108/108
+on each runtime, actual exit 0. Primary acceptance passes 34/34 on each runtime,
+actual exit 0. The final 20-core-file path/content digest is
+`8a7ec326012487f92cb6ee9d926cf7cfb131c32fbc1c0024c28ecfbf77ede9c6`;
+the 23-file P2 inventory is unchanged. The owned-workspace lifecycle gate was
+also rerun: 25/25 passed on each runtime, actual exit 0, including subprocess
+success, assertion/setup failure and catchable-interruption cleanup. No
+historical-directory cleanup or user-data access was performed.
+
+Final serial compatibility reruns on the last source: MCP passes 125/125 on
+each runtime, actual exit 0; artifact installation passes 94 tests with zero
+failures and one native Windows-only skip on each runtime, actual exit 0
+(22.16: 77.1 seconds; 24.15: 87.1 seconds). The native Windows CI job remains
+required. These gates exercise existing installed behavior, not installed Raw.
+No test deadline was enlarged. No worker or primary test process remains at
+candidate freeze. Separate final-head independent reviews and latest-head CI
+are recorded in the delivery PR, rather than retroactively claiming them here.
 
 Primary: plan/integration/acceptance. Implementation: one bounded GPT 6.1 Sol
 worker, high effort. Independent Standards and Spec reviewers: separate
