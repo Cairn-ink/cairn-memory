@@ -56,9 +56,9 @@ test('H02 real stdio is default-off, bounded and never accepts serialized author
   await plain.client.close();
   const active = await host(workspace, path);
   const tools = (await active.client.listTools()).tools;
-  assert.equal(tools.length, 14);
+  assert.equal(tools.length, 17);
   const cardTools = tools.filter(tool => !['remember_memory', 'recall_memory', 'inspect_memory', 'correct_memory', 'forget_memory'].includes(tool.name));
-  assert.equal(cardTools.length, 9);
+  assert.equal(cardTools.length, 12);
   for (const tool of cardTools) {
     assert.equal(tool.inputSchema.additionalProperties, false);
     assert.equal(Object.hasOwn(tool.inputSchema.properties, 'namespace'), false);
@@ -168,6 +168,8 @@ test('H03 real PTY shows exact payload then requires independent typed approval;
   assert.equal(card.state, 'confirmed');
   assert.equal(card.revision, draft.revision + 1);
   assert.equal(card.body, draft.body);
+  assert.equal(card.support.applicability, 'unknown');
+  assert.equal(card.support.applicabilityReviewedRevision, null);
 });
 
 test('H03 wrong answer and terminal EOF never confirm; exact stale revision also refuses', options, async t => {

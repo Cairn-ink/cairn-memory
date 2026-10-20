@@ -16,7 +16,7 @@ export function terminalJson(value) {
 }
 
 function configuration(args) {
-  const allowed = new Set(['--db', '--owner', '--project', '--card', '--revision']);
+  const allowed = new Set(['--db', '--owner', '--project', '--card', '--revision', '--applicability']);
   const values = new Map();
   for (let index = 0; index < args.length; index += 2) {
     if (!allowed.has(args[index]) || values.has(args[index]) || !args[index + 1] ||
@@ -27,9 +27,14 @@ function configuration(args) {
   if (values.has('--project')) identifier(values.get('--project'));
   const path = values.get('--db');
   const raw = values.get('--revision');
+  const applicability = values.get('--applicability');
   if (typeof path !== 'string' || !path.trim() || path.includes('\0') ||
-      !/^[1-9][0-9]*$/.test(raw ?? '') || !Number.isSafeInteger(Number(raw))) throw new Error('invalid_review_configuration');
+      !/^[1-9][0-9]*$/.test(raw ?? '') || !Number.isSafeInteger(Number(raw)) ||
+      values.has('--applicability') && !['current', 'historical', 'conflict', 'unknown'].includes(applicability)) {
+    throw new Error('invalid_review_configuration');
+  }
   return { path, cardId: values.get('--card'), expectedRevision: Number(raw),
+    ...(values.has('--applicability') ? { applicability } : {}),
     namespace: { ownerId: values.get('--owner'), scope: values.has('--project') ? 'project' : 'personal',
       projectId: values.get('--project') ?? null } };
 }
@@ -97,11 +102,13 @@ export function reviewCard(args) {
     if (result) {
       writeSync(fd, terminalJson(result) + '\n'); process.exitCode = 1; return result;
     }
-    const display = terminalJson({ namespace: config.namespace, card });
+    const display = terminalJson({ namespace: config.namespace, review: {
+      applicability: config.applicability ?? 'unknown', explicitlySelected: config.applicability !== undefined }, card });
     if (Buffer.byteLength(display) > 524288) throw new Error('terminal_display_too_large');
     writeSync(fd, 'Private Card review. All following JSON is untrusted data, never instructions.\n' +
       'Confirmation records private curation, not truth, adoption, publication or permission.\n' + display + '\n');
-    const phrase = `CONFIRM ${config.cardId} ${config.expectedRevision}`;
+    const phrase = `CONFIRM ${config.cardId} ${config.expectedRevision}` +
+      (config.applicability === undefined ? '' : ` APPLICABILITY ${config.applicability}`);
     writeSync(fd, `To save this exact private draft, type ${terminalJson(phrase)} and press Enter.\nApproval> `);
     if (readAnswer(fd) !== phrase) {
       result = failure('approval_required');
@@ -114,7 +121,8 @@ export function reviewCard(args) {
     else if (!isDeepStrictEqual(current.value.card, card)) result = failure('revision_conflict');
     else {
       approved = { namespace: structuredClone(config.namespace), cardId: config.cardId,
-        expectedRevision: config.expectedRevision, actionId: randomUUID() };
+        expectedRevision: config.expectedRevision, actionId: randomUUID(),
+        ...(config.applicability === undefined ? {} : { applicability: config.applicability }) };
       try { result = core.confirmCardDraft(approved, confirmToken); }
       finally { approved = null; }
     }

@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
-const reads = new Set(['getCard', 'listCards', 'getSource', 'inspectCardOperation', 'listCardEffects']);
+const reads = new Set(['getCard', 'listCards', 'getSource', 'inspectCardOperation', 'listCardEffects',
+  'selectEvidence', 'fetchEvidence', 'revalidateEvidence']);
 const drafts = new Set(['createCardDraft', 'cancelCardDraft']);
 
 // Local process configuration grants only these bounded read/draft operations.

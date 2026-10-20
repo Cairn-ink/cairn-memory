@@ -59,6 +59,9 @@ The opt-in tools are:
 | `inspect_private_card_operation` | `operationActionId`; bounded content-free operation result. |
 | `list_private_card_effects` | Optional `limit`/`cursor`; bounded durable content-free effects. |
 | `confirm_private_card_draft` | `cardId,expectedRevision,actionId`; always refuses `approval_required`. |
+| `select_evidence` | `query,types:['memory'|'card'],intent:'current'|'history'`, optional `limit,scanRows,scanBodyUnits,deadlineMs,cursor`; bounded metadata selection with honest coverage. |
+| `fetch_evidence` | `refs,intent`, optional `responseByteLimit`; exact typed canonical items plus opaque snapshot. Omit namespace in refs. |
+| `revalidate_evidence` | `snapshot`, optional `responseByteLimit`; fresh whole items or a fixed error without stale text. |
 
 Source refs use either receipt fields
 `{type:'receipt',memoryId,memoryRevision,receiptId,contentIdentity,completeness:'excerpt-only'}`
@@ -76,6 +79,15 @@ Inspect the draft first, then run this separately from the MCP protocol:
 ```sh
 cairn-memory review-card --db /absolute/path/memory.sqlite --owner local-person --card EXACT_CARD_ID --revision 1
 ```
+
+To also review the resulting Card's applicability in that same atomic action,
+append `--applicability current`, `historical`, `conflict` or `unknown`. The
+command displays the exact choice separately from the untrusted draft. Its typed
+phrase then becomes `CONFIRM CARD_ID REVISION APPLICABILITY current` (or the exact
+other choice). A generic confirmation phrase cannot approve that review.
+Omitting the flag preserves the original confirmation phrase and unknown
+applicability; neither source availability nor ordinary confirmation implies
+current applicability. No MCP tool grants this review authority.
 
 Include the same `--project PROJECT` when applicable. From a repository checkout,
 replace `cairn-memory` with `node adapters/mcp/cli.mjs` in both commands.
@@ -122,9 +134,38 @@ confirmed. Source inspection cannot recover forgotten receipt text. Effects
 notify consumers; consumers must revalidate canonical state and must not treat
 an effect or old confirmation as new permission.
 
+Common evidence tools use the same canonical engine and exact namespace. For
+example, call `select_evidence` with
+`{query:'review',types:['memory','card'],intent:'current'}`. Selection returns
+typed refs and qualification/support metadata without body text. Defaults are
+12 matches, 128 scanned rows, 256,000 body units and a 1,000 ms deadline; maxima
+are 24, 1,024, 2,000,000 and 5,000 ms. Literal Unicode word overlap is a bounded
+navigation aid, not semantic ranking or a promise of complete recall. Use the
+returned coverage and continuation cursor.
+
+Pass 1–24 selected refs to `fetch_evidence`, removing only each ref's namespace;
+the server reinserts its configured scope. A Memory ref is
+`{type:'memory',memoryId,revision}` and a Card ref is
+`{type:'card',cardId,revision,bodyRevision}`. Fetch returns whole canonical items,
+explicit state/support/provenance and an opaque snapshot. Receipt/note text is
+read separately through `read_private_card_source`. Optional whole-response
+`responseByteLimit` defaults/maxes at 65,536 bytes; there is no partial-body
+fallback. `revalidate_evidence({snapshot})` performs the final canonical check
+before using those items. A source/Memory/Card or namespace generation change
+returns `snapshot_stale` with no stale body. Foreign/tampered snapshots refuse.
+An unchanged snapshot survives a new process with the same store and scope.
+
+Current intent includes active visible Memories and confirmed Cards whose
+canonical required support is eligible and whose exact revision was explicitly
+reviewed current. History returns retained authored artifacts with qualifications;
+it does not recover forgotten sources or previous bodies. Invalidation clears the
+effective current review, so restarting or navigating history cannot silently
+restore current applicability. See [the common-read contract](private-evidence-local.md)
+for complete coverage, authority and provenance limits.
+
 The synthetic tests exercise actual stdio and installed processes, real PTY
 keystrokes, stale review and cold restart without keys or provider requests.
 Synthetic operator keystrokes are test evidence only; they do not claim a real
 person approved a Card or demonstrate semantic quality. Full Raw, hosted safety,
-publication, model-assisted drafting, common evidence retrieval and product UI
-are separate gates; this adapter does not invent another retrieval engine.
+publication, model-assisted drafting, typed Card MOC and product UI are separate
+gates; the adapter uses the core's implemented common-read facade.

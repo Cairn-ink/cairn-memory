@@ -17,7 +17,7 @@ Usage:
   cairn-memory --db PATH --owner ID [--project ID] --recall-context source-evidence
   cairn-memory --db PATH --owner ID [--project ID] --classification-recovery guarded-v1
   cairn-memory --db PATH --owner ID [--project ID] --private-cards local-v1
-  cairn-memory review-card --db PATH --owner ID [--project ID] --card ID --revision N
+  cairn-memory review-card --db PATH --owner ID [--project ID] --card ID --revision N [--applicability current|historical|conflict|unknown]
   cairn-memory --db PATH --owner ID [--project ID] --session-episodes-access episode-v1
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v2 --capture-evidence staged-v1 --session-episodes episode-v1 [--session-episodes-draft-batches 8]
 
@@ -32,6 +32,11 @@ confirmation always returns approval_required. The separate review-card command
 shows the exact untrusted draft, bindings and scope on /dev/tty and requires typed
 confirmation of its ID/revision. No --yes, environment or piped approval exists.
 Local plaintext only; private confirmation is curation, not truth or publication.
+The same opt-in adds select_evidence, fetch_evidence and revalidate_evidence for
+bounded typed canonical reads. Literal word overlap is not semantic retrieval.
+Current Card reads require eligible support and an explicit current review.
+review-card --applicability records a separately displayed choice, bound into
+the typed confirmation phrase. Omission preserves unknown applicability.
 --classification-recovery guarded-v1 adds classify_unfiled_memories for an
 explicit request with inspected current unfiled memory IDs and revisions. It
 sends bounded memory content to the configured model and may incur charges.

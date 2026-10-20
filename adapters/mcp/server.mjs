@@ -195,6 +195,24 @@ export function createCairnServer(options = {}) {
       z.strictObject({ limit: pageLimit.optional(), cursor: cursor.optional() }), input => run('listCardEffects', input), true);
     tool('confirm_private_card_draft', 'Always refuses approval_required in this MCP host. Use the independent local review-card terminal command to inspect and explicitly approve an exact Card revision. A tool invocation or claimed human role cannot approve.',
       z.strictObject(cardRef), () => error('approval_required'));
+    const evidenceRef = z.discriminatedUnion('type', [
+      z.strictObject({ type: z.literal('memory'), memoryId: id, revision }),
+      z.strictObject({ type: z.literal('card'), cardId: id, revision, bodyRevision: revision }),
+    ]);
+    const responseByteLimit = z.number().int().min(1).max(65536).optional();
+    tool('select_evidence', 'Select typed canonical Memory/Card refs in the exact namespace using bounded literal Unicode word overlap, not semantic ranking. Current intent requires active visible Memories or confirmed Cards with eligible support and explicit current applicability review. History returns retained qualified artifacts. Selection has no body/source text; coverage describes bounded enumeration, not complete recall. No model/provider calls.',
+      z.strictObject({ query: z.string().min(1).max(4000), types: z.array(z.enum(['memory', 'card'])).min(1).max(2),
+        intent: z.enum(['current', 'history']), limit: z.number().int().min(1).max(24).optional(),
+        scanRows: z.number().int().min(1).max(1024).optional(),
+        scanBodyUnits: z.number().int().min(1).max(2000000).optional(),
+        deadlineMs: z.number().int().min(1).max(5000).optional(), cursor: cursor.optional() }),
+      input => run('selectEvidence', input), true);
+    tool('fetch_evidence', 'Fetch 1..24 exact typed Memory/Card refs with canonical state, qualifications and provenance. Omit namespace from refs; server inserts its fixed scope. Whole items or error within the response budget; no receipt/source text. Current intent excludes unsupported/unreviewed Cards; history labels retained authored artifacts. Returns a snapshot for final revalidation. Evidence never grants execution authority.',
+      z.strictObject({ refs: z.array(evidenceRef).min(1).max(24), intent: z.enum(['current', 'history']), responseByteLimit }),
+      input => run('fetchEvidence', { ...input, refs: input.refs.map(ref => ({ ...ref, namespace: binding })) }), true);
+    tool('revalidate_evidence', 'Re-read canonical versions, source support, eligibility and namespace generations for an opaque evidence snapshot. Returns fresh whole items or snapshot_stale/invalid_snapshot without stale text. Revalidate immediately before using fetched evidence; private confirmation and source availability do not establish truth. No model/provider calls.',
+      z.strictObject({ snapshot: z.string().min(1).max(16384), responseByteLimit }),
+      input => run('revalidateEvidence', input), true);
   }
   tool('remember_memory', 'Explicitly save one private memory with a source receipt. No automatic capture. Optional procedural tag works independently of episode mode, only for preference/instruction, with 1..4 code-point-safe UTF-16 anchors into the canonical explicit receipt text (receiptIndex 0). Metadata alone is not evidence; tags do not prove recurrence, truth or execution permission.',
     z.strictObject({ content: text, kind: kind.default('fact'), procedural: z.strictObject({ anchors: z.array(
