@@ -14,6 +14,7 @@ import { migrateVersion10 } from './qualified-transition-schema.mjs';
 import { migrateVersion11 } from './rationale-schema.mjs';
 import { migrateVersion12 } from './staged-evidence-schema.mjs';
 import { migrateVersion13 } from './classification-journal-schema.mjs';
+import { installRawJournal, RAW_SCHEMA_VERSION } from './raw-schema.mjs';
 
 import { migrateVersion14, migrateVersion15, migrateVersion16 } from './episode-schema.mjs';
 
@@ -265,7 +266,8 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path, { privateCards = false } = {}) {
+export function openDatabase(path, { privateCards = false, rawConversations = false } = {}) {
+  if (typeof rawConversations !== 'boolean') fail('invalid_input');
   if (typeof path !== "string" || !path.trim() || path.includes("\0")) fail("invalid_path");
   if (path !== ":memory:") {
     path = resolve(path);
@@ -286,16 +288,24 @@ export function openDatabase(path, { privateCards = false } = {}) {
     transaction(db, () => {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
+      if (appId === APPLICATION_ID && version === RAW_SCHEMA_VERSION) {
+        for (const name of ['raw_conversations','raw_messages','raw_parts','raw_events','raw_owner_usage','raw_capture_controls',
+          'private_cards','card_notes','card_applicability_reviews','evidence_mappings']) {
+          if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
+        }
+        return;
+      }
+      function upgrade() {
       if (appId === APPLICATION_ID && version === PRIVATE_ORGANIZATION_SCHEMA_VERSION) return;
       if (appId === APPLICATION_ID && version === PRIVATE_EVIDENCE_SCHEMA_VERSION) {
-        if (privateCards) {
+        if (privateCards || rawConversations) {
           installPrivateOrganization(db);
           db.exec(`PRAGMA user_version = ${PRIVATE_ORGANIZATION_SCHEMA_VERSION};`);
         }
         return;
       }
       if (appId === APPLICATION_ID && version === PRIVATE_CARD_SCHEMA_VERSION) {
-        if (privateCards) {
+        if (privateCards || rawConversations) {
           installPrivateEvidence(db);
           installPrivateOrganization(db);
           db.exec(`PRAGMA user_version = ${PRIVATE_ORGANIZATION_SCHEMA_VERSION};`);
@@ -303,7 +313,7 @@ export function openDatabase(path, { privateCards = false } = {}) {
         return;
       }
       if (appId === APPLICATION_ID && version === 20) {
-        if (privateCards) {
+        if (privateCards || rawConversations) {
           installCardMemorySources(db);
           installPrivateEvidence(db);
           installPrivateOrganization(db);
@@ -312,7 +322,7 @@ export function openDatabase(path, { privateCards = false } = {}) {
         return;
       }
       if (appId === APPLICATION_ID && version === VERSION) {
-        if (privateCards) {
+        if (privateCards || rawConversations) {
           installPrivateCards(db);
           installCardMemorySources(db);
           installPrivateEvidence(db);
@@ -464,12 +474,18 @@ export function openDatabase(path, { privateCards = false } = {}) {
       }
       migrateVersion17(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
-      if (privateCards) {
+      if (privateCards || rawConversations) {
         installPrivateCards(db);
         installCardMemorySources(db);
         installPrivateEvidence(db);
         installPrivateOrganization(db);
         db.exec(`PRAGMA user_version = ${PRIVATE_ORGANIZATION_SCHEMA_VERSION};`);
+      }
+      }
+      upgrade();
+      if (rawConversations) {
+        installRawJournal(db);
+        db.exec(`PRAGMA user_version = ${RAW_SCHEMA_VERSION};`);
       }
     });
     return db;

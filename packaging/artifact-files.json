@@ -41,6 +41,7 @@
   "core/conflict-storage.mjs",
   "core/contract.mjs",
   "core/database.mjs",
+  "core/raw-schema.mjs",
   "core/fetch.mjs",
   "core/index-schema.mjs",
   "core/index-storage.mjs",

@@ -1542,3 +1542,30 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Internal Raw journal P1: synthetic foundation only
+
+The [internal local Raw journal](raw-local-journal.md) is a default-off storage
+and read foundation tested with synthetic local fixtures. It does not expose
+public Raw capture, installed hooks, Raw → Card support or source-deletion
+integration. It establishes no production readiness or semantic score, and does
+not authorize real transcript retention, operational migration or deployment.
+The remaining packets and final verification outcomes belong in the
+[local Raw V1 completion plan](plans/raw-local-v1-completion.md).
+
+Retained failures under simultaneous core, generic and package test load:
+
+- The first Node 24 MCP run reported 124 passed and 1 failed, exit code 1.
+- The first Node 22 artifact run reported 93 passed, 1 failed and 1 Windows-only
+  skip, exit code 1.
+
+An independent eight-case H4 matrix exercised real stdio on the baseline and
+candidate with Node 22 and 24 and controlled delay: four cases passed and four
+reproduced the exact failure. It establishes the shared 1,500 ms deadline as a
+sufficient cause, not the precise latency of the original failed runs. The H5
+evidence is only a family-level probe before model work; it is not a reproduction
+of the installed H5 failure. After the competing core load ended, serial MCP
+passed all 125 cases on each runtime, and artifact tests passed 94 with one
+native Windows-only skip on each runtime; all four commands exited 0. No runtime
+or fixture deadline was relaxed. These later results do not erase the initial
+failures or establish that concurrent execution will never hit those deadlines.

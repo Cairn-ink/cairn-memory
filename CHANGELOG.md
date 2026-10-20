@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — internal local Raw journal foundation
+
+- Add a default-off, model-free internal Raw journal in the existing SQLite
+  store: exact paged parts, immutable keyed replay identities, whole-message
+  owner reservations, usage snapshots and asynchronous seal/open fences.
+  Explicit internal opt-in upgrades compatible synthetic stores additively to
+  schema 24; current option-off openers preserve it and pre-Raw openers refuse it.
+- This P1 slice adds no public capture/MCP/hooks capability, Raw → Card source
+  support, public deletion integration or hosted encryption. Tests use synthetic
+  local plaintext fixtures only; no operational migration or production
+  enablement is authorized. See [the internal boundary](docs/raw-local-journal.md).
+
 ## Unreleased — integrated local private engine preview
 
 - Add exact-namespace `selectEvidence`, `fetchEvidence` and `revalidateEvidence`
