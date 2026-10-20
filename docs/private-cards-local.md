@@ -4,7 +4,8 @@
 `openMemoryCore` SQLite runtime. It implements an explicitly submitted note,
 private draft/confirm/edit/cancel/delete, source-note deletion, content-free
 operation replay and invalidation effects. Existing Memory APIs are unchanged.
-This is S0-note + S1 + note invalidation, **partial V1**, not full Raw RL1, typed
+It also supports an explicit retained-receipt Memory interpretation input with
+transactional invalidation. This remains **partial V1**, not full Raw RL1, typed
 Card MOC/common retrieval, installed MCP, publication or product integration.
 Full Raw G1/G2 and hosted approval gates remain unresolved. The product team
 owns product integration; no product UI/runtime migration is included.
@@ -54,7 +55,7 @@ owns authentication, exact-scope access, generation/revocation checks and the
 verified user-intent channel. An initial missing/bad grant returns
 `authority_required`; final revocation/generation change returns `scope_changed`.
 
-Reads require exact-scope read authority too. Draft creation from existing notes,
+Reads require exact-scope read authority too. Draft creation from existing sources,
 draft edits and cancellation use `actionClass:'draft'`. Authored-input creation
 retains a new note and requires `explicit-user`, as do separate note submission,
 note deletion, confirmation, confirmed edits and confirmed deletion. Before
@@ -84,18 +85,62 @@ data and requires no authority. No new method accepts a serialized grant.
 | `listCardEffects` | `limit?,cursor?` | `{effects,coverage,nextCursor}` |
 | `getPrivateCardUsage` | none | explicit `submitted-note-usage-v1` projection |
 
-`createCardDraft.input` is exactly `{title,body,sources:[NoteSourceRef]}` or
+The existing note variants of `createCardDraft.input` are `{title,body,sources:[NoteSourceRef]}` or
 `{title,body,authoredInput:{text,occurredAt}}`. The latter saves note+draft
 atomically, with no orphan note on failure. `occurredAt` is null or canonical
 UTC (`2026-10-20T00:00:00.000Z`). Note refs are core-issued
 `{type:'submitted-note',namespace,sourceId,revision,contentIdentity,
 completeness:'provided-note'}`. Identity is opaque HMAC bound to store, exact
 scope, purpose and exact saved redacted text. Unknown source, foreign note,
-deleted note, tampered identity, Raw/receipt refs or model-assisted drafting
-refuse before retaining input. Memory-ref derivation is unsupported.
+deleted note, tampered identity, Raw refs or model-assisted drafting refuse
+before retaining input. Direct `sources` drafting remains note-only.
 
-Each draft has 1–16 unique required same-namespace notes, at most 64,000 total
-UTF-8 source bytes. There are no trigger Memory interpretations/context bindings.
+An additional explicit authored variant is:
+
+```js
+{ title, body, sourcePolicy: 'retained-receipts-v1', memoryRefs: [
+  { type: 'memory', namespace, memoryId, revision }
+] }
+```
+
+It resolves 1–6 unique exact same-namespace current Memory refs to **all** their
+1–16 actual retained receipts. Zero or too many receipts refuses atomically;
+there is no silent prefix selection. Foreign/stale/deleted/historical/awaiting
+Memories refuse. This mode uses existing evidence, not a new source archive or
+implicit Card promotion. It makes zero model calls. Its refs are
+`{type:'receipt',namespace,memoryId,memoryRevision,receiptId,contentIdentity,
+completeness:'excerpt-only'}`. Receipts have no independent invented revision.
+The HMAC binds store, namespace, Memory version, actual receipt identity and
+exact retained text/attribution metadata. `getSource` returns exactly that
+retained excerpt with `conversationCoverage:'unknown'`, never a complete Raw
+conversation. No Memory/receipt prose is copied into dependency rows or effects.
+
+Receipt bindings are required `memory-interpretation` dependencies, with an
+explicit `memoryRef` and `receiptId`. Any Memory revision invalidates them,
+including receipt additions, explicit promotion, filing, correction, retirement,
+confirmation/rejection and episode forgetting where those paths revise a
+Memory. Filing-only invalidation is deliberately conservative; no unchanged-
+meaning equivalence is claimed. The schema trigger runs even through a
+feature-off or legacy opener. Drafts cancel once and lose title/body/all bindings.
+Confirmed authored current bodies remain private and report unavailable support;
+applicability stays unknown. Original successful actions replay their original
+content-free receipts without reviving cancelled content. A failed enclosing
+Memory mutation rolls back its dependent Card/effect changes too.
+
+Each Memory supports at most 128 live dependent Cards, counted once per Card
+even when it has several receipts. Over-bound Card writes or invariant-violating
+Memory fanout fail `dependency_limit_reached` atomically. New creation accepts
+only canonical current sources. Confirmed edits may retain exact existing old
+unavailable refs; new refs must resolve. To obtain fresh refs for an explicit
+reviewed rebind, create an intentionally authored draft from the current Memory
+refs, inspect its core-issued source bindings, then use those in the existing
+`editKnowledgeCard.bindings` input and cancel the temporary draft. There is no
+silent reinterpretation or new edit-time model work. Editing accepts the union
+of core-issued note and receipt refs, within the same 16-binding bound.
+
+Each draft has 1–16 unique required same-namespace source refs, at most 64,000
+total UTF-8 source bytes. Note refs remain source-only; receipt refs require the
+exact Memory interpretation. There are no locator-only/context bindings.
 Each note supports at most 128 live drafts/confirmed Cards, enforced in the
 transaction, including rebinds. A further binding fails
 `dependency_limit_reached` atomically. Deletion verifies this invariant and
@@ -114,7 +159,7 @@ store, method, source/filter and page size; any namespace mutation makes them
 ## Retention, invalidation and replay
 
 Attribution is unassessed, commitment unknown and applicability always unknown.
-Available canonical required notes yield support `eligible`; this describes
+Available canonical required sources yield support `eligible`; this describes
 retained evidence only. There is no current-evidence API/filtering claim.
 Deleting a note purges its active logical text/bytes, cancels every bound draft
 once at r+1 and purges that draft's title/body/bindings. Confirmed authored current
@@ -149,12 +194,16 @@ retention/erasure policies and should not present this preview as hosted-safe.
 
 ## Schema and handoff
 
-Unselected fresh/existing v18 stays v18. Explicit opt-in creates additive v20
-note/Card/binding/operation/effect/usage tables in the same SQLite file. Version
-19 was reserved for unimplemented future Raw; no v19 feature/migration is claimed.
-The new binary can reopen v20 with the feature off without dropping retained
-data; old openers reject v20. Operators must stop mixed-version writers before
-upgrading and follow backup/inventory/restore gates for actual deployment. No
+Unselected fresh/existing v18 stays v18. Existing v20 can reopen feature-off
+without migration. Explicit private-Card opt-in now creates/upgrades to additive
+v21: the original v20 note/Card tables plus metadata-only Memory/receipt bindings
+and invalidation triggers in the same SQLite file. Old v20 note contents and
+refs are preserved. Version 19 was reserved for unimplemented future Raw; no
+v19 feature/migration is claimed.
+The new binary can reopen v21 with the feature off without dropping retained
+data or disabling invalidation; old openers reject v21. Operators must stop
+mixed-version writers before upgrading and follow backup/inventory/restore gates
+for actual deployment. No
 user database is migrated by the tests/example. Future Raw must choose the next
 real available version rather than assuming v19 was applied. The implementation
 does not install a tool adapter or authorize production flag enablement.

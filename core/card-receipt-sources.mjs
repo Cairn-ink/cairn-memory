@@ -1,0 +1,43 @@
+import { fail } from './validation.mjs';
+import { cardMemoryRefs, sourceRef } from './private-card-input.mjs';
+
+/** Canonical reads only; never persists Memory text or copies receipt excerpts. */
+export function createCardReceiptSources(db, binding) {
+  function memory(ns, id, revision) {
+    const row = db.prepare(`SELECT id,revision FROM memories WHERE id=? AND owner_id=? AND scope=?
+      AND project_id=? AND deleted=0 AND currentness='current' AND review_state!='awaiting'`)
+      .get(id, ns.ownerId, ns.scope, ns.projectId ?? '');
+    if (!row || row.revision !== revision) fail('source_unavailable');
+    return row;
+  }
+  function refFor(ns, current, row) {
+    return { type: 'receipt', namespace: ns, memoryId: current.id, memoryRevision: current.revision,
+      receiptId: row.id, contentIdentity: binding('retained-receipt-content-v1',
+        [ns, current.id, current.revision, row.id, row.client, row.session_id, row.event_id, row.role, row.excerpt]),
+      completeness: 'excerpt-only' };
+  }
+  function resolve(ns, ref) {
+    sourceRef(ref, ns);
+    const current = memory(ns, ref.memoryId, ref.memoryRevision);
+    const row = db.prepare('SELECT * FROM receipts WHERE id=? AND memory_id=?').get(ref.receiptId, current.id);
+    if (!row || refFor(ns, current, row).contentIdentity !== ref.contentIdentity) fail('source_unavailable');
+    return { text: row.excerpt, byte_count: Buffer.byteLength(row.excerpt, 'utf8') };
+  }
+  function refInside(ns, memoryRow, receiptRow) {
+    const current = memory(ns, memoryRow.id, memoryRow.revision);
+    const row = db.prepare('SELECT * FROM receipts WHERE id=? AND memory_id=?').get(receiptRow.id, current.id);
+    if (!row) fail('source_unavailable');
+    return refFor(ns, current, row);
+  }
+  function fromMemories(ns, values) {
+    const result = [];
+    for (const ref of cardMemoryRefs(values, ns)) {
+      const current = memory(ns, ref.memoryId, ref.revision);
+      const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY id LIMIT 17').all(current.id);
+      if (!receipts.length || result.length + receipts.length > 16) fail('source_unavailable');
+      result.push(...receipts.map(row => refFor(ns, current, row)));
+    }
+    return result;
+  }
+  return { resolve, fromMemories, refInside };
+}

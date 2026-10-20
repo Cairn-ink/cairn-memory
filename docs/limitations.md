@@ -1,5 +1,23 @@
 # Known limitations
 
+The opt-in [local private Card slice](private-cards-local.md) supports authored
+note Cards and explicit `retained-receipts-v1` drafting from exact current
+Memory refs. Receipt sources are excerpt-only, not complete conversations;
+required interpretation dependencies invalidate transactionally on every
+Memory revision, including feature-off writers. Drafts cancel and purge;
+confirmed authored bodies remain private with unavailable support. Synthetic
+SQLite and installed-archive subprocess tests verify these mechanics, not
+semantic support, truth, adoption or product usability. Full Raw, common
+current reads, installed MCP confirmation and product integration remain
+separate [completion gates](plans/private-engine-v1-completion.md).
+
+The recorded MCP dependency audit found a high-severity OAuth advisory in the
+development-only client dependency; the keyless synthetic checks do not use
+OAuth. The runtime-only audit
+(`npm audit --prefix adapters/mcp --omit=dev --json`) returned zero vulnerabilities
+and exit 0; the full development audit returned exit 1. No forced dependency
+upgrade or clean-development-audit claim is included in this slice.
+
 The [offline long-history stage gate](plans/long-history-stage-gate.md) uses
 scripted visible-input-only models and exact synthetic source receipts. A
 default 1,024-ID candidate prefix can miss a retained target among 1,025

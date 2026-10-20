@@ -66,7 +66,29 @@ try {
   assert.equal(call('getPrivateCardUsage', { namespace }, 'read').submittedNoteBytes, 0);
   assert.ok(call('listCardEffects', { namespace, limit: 10 }, 'read').effects.length >= 2);
   assert.equal(confirmed.bodyRevision, 1);
+  const memory = core.admit({ namespace, memory: { content: 'Compare short tea steeping times.', kind: 'context' },
+    receipts: [{ client: 'synthetic-example', sessionId: 'tasting', eventId: 'memory-source', role: 'user',
+      excerpt: 'Compare 90 s and 120 s.' }] });
+  assert.equal(memory.ok, true);
+  const memoryDraft = call('createCardDraft', { namespace, actionId: 'synthetic-memory-card', drafting: 'authored', input: {
+    sourcePolicy: 'retained-receipts-v1', memoryRefs: [{ type: 'memory', namespace,
+      memoryId: memory.value.memory.id, revision: memory.value.memory.revision }],
+    title: 'A curated tasting question', body: 'Compare the two steeping times during the next tasting.',
+  } }, 'draft');
+  const memoryDetail = call('getCard', { namespace, cardId: memoryDraft.id }, 'read').card;
+  assert.equal(memoryDetail.bindings[0].dependency, 'memory-interpretation');
+  assert.equal(call('getSource', { namespace, source: memoryDetail.bindings[0].source }, 'read').coverage.completeness, 'excerpt-only');
+  call('confirmCardDraft', { namespace, cardId: memoryDraft.id, expectedRevision: 1,
+    actionId: 'synthetic-confirm-memory-card' }, 'explicit-user');
+  core.close(); core = openMemoryCore({ path, privateCards });
+  assert.equal(core.correct({ namespace, memoryId: memory.value.memory.id, expectedRevision: memory.value.memory.revision,
+    content: 'Compare longer tea steeping times.', kind: 'context', receipt: { client: 'synthetic-example',
+      sessionId: 'tasting', eventId: 'revised-memory', role: 'user', excerpt: 'Compare 120 s and 180 s.' } }).ok, true);
+  const retainedMemoryCard = call('getCard', { namespace, cardId: memoryDraft.id }, 'read').card;
+  assert.equal(retainedMemoryCard.support.status, 'unavailable');
+  assert.equal(retainedMemoryCard.body, memoryDetail.body);
   console.log('PASS: explicit note + draft → inspect → confirm → reopen → delete source → qualified private body → delete Card → content-free replay');
+  console.log('PASS: retained Memory receipts → authored Card → reopen → Memory correction → unsupported private authored body');
   console.log('Synthetic host intent only; zero model/provider/network calls. No installed MCP, full Raw, common retrieval or publication claim.');
   console.log(`Synthetic SQLite database retained at ${path}`);
 } finally { core.close(); }

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — explicit retained-receipt Card support
+
+- Add authored Memory → Card support selected with
+  `sourcePolicy:'retained-receipts-v1'`. The engine resolves all bounded retained
+  receipts from exact current Memory refs, with excerpt-only coverage and
+  required Memory interpretation dependencies. It retains no new source copy
+  and makes no model call. Existing note inputs remain compatible.
+- Add schema 21 metadata and transactional invalidation on every Memory revision,
+  including filing, correction, retirement and forgetting through feature-off
+  or legacy openers. Drafts cancel and purge; confirmed authored bodies remain
+  private with unavailable support. This is not full Raw or common retrieval.
+  See [the local Card guide](docs/private-cards-local.md).
+
 ## Unreleased — local private Card engine preview
 
 - Add optional `private-cards-local-v1` to the shared core/SQLite runtime:

@@ -57,7 +57,7 @@ const draftCall = (actionId = 'draft', source, namespace = ns, body = 'Authored 
   actionId, drafting: 'authored', input: { title: 'Private title', body,
     ...(source ? { sources: [source] } : { authoredInput: { text: 'Explicit submitted note', occurredAt: null } }) } });
 
-test('C01/C07 default stays v18, opt-in upgrades only synthetic store, disabled reopen preserves v20', t => {
+test('C01/C07 default stays v18, opt-in upgrades only synthetic store, disabled reopen preserves v21', t => {
   const workspace = createTestWorkspace(t), path = join(workspace.path, 'legacy.sqlite');
   let core = openMemoryCore({ path });
   assert.equal(core.createCardDraft, undefined); assert.equal(core.getPrivateCardCapabilities, undefined); core.close();
@@ -65,7 +65,7 @@ test('C01/C07 default stays v18, opt-in upgrades only synthetic store, disabled 
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, 18);
   assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name LIKE 'card_%'").get().n, 0); db.close();
   const trusted = host(); core = openMemoryCore({ path, privateCards: trusted.options }); core.close();
-  db = new DatabaseSync(path); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 20); db.close();
+  db = new DatabaseSync(path); assert.equal(db.prepare('PRAGMA user_version').get().user_version, 21); db.close();
   core = openMemoryCore({ path }); assert.equal(core.submitSourceNote, undefined); core.close();
   const legacy = openMemoryStore({ path }); legacy.close();
   assert.throws(() => openMemoryCore({ path, privateCards: { ...trusted.options, storage: 'hosted-aes' } }), { code: 'source_unavailable' });
@@ -267,13 +267,13 @@ test('C07 unimplemented v19 and future schema versions refuse without migration'
   const f = fixture(t), draft = ok(f.call('createCardDraft', draftCall()));
   f.core.close();
   const db = new DatabaseSync(f.path); t.after(() => db.close());
-  for (const version of [19, 21, 999]) {
+  for (const version of [19, 22, 999]) {
     db.exec(`PRAGMA user_version=${version}`);
     assert.throws(() => openMemoryCore({ path: f.path, privateCards: f.trusted.options }), { code: 'unsupported_database' });
     assert.equal(db.prepare('PRAGMA user_version').get().user_version, version);
     assert.equal(db.prepare('SELECT state FROM private_cards WHERE id=?').get(draft.id).state, 'draft');
   }
-  db.exec('PRAGMA user_version=20');
+  db.exec('PRAGMA user_version=21');
 });
 
 const childSource = `

@@ -86,7 +86,17 @@ export const keyed = (secret, purpose, value) => createHmac('sha256', secret)
   .update(JSON.stringify([purpose, value])).digest('base64url');
 
 export function sourceRef(value, ns) {
-  // Raw, receipt and Memory paths are unsupported and refuse before retention.
+  if (value?.type === 'receipt') {
+    object(value, ['type', 'namespace', 'memoryId', 'memoryRevision', 'receiptId', 'contentIdentity', 'completeness']);
+    const scope = cardNamespace(value.namespace);
+    if (JSON.stringify(scope) !== JSON.stringify(ns)) fail('source_unavailable');
+    identifier(value.memoryId); identifier(value.receiptId); revision(value.memoryRevision);
+    if (value.completeness !== 'excerpt-only' || typeof value.contentIdentity !== 'string' ||
+        !/^[A-Za-z0-9_-]{43}$/.test(value.contentIdentity)) fail('source_unavailable');
+    return { type: 'receipt', namespace: scope, memoryId: value.memoryId,
+      memoryRevision: value.memoryRevision, receiptId: value.receiptId,
+      contentIdentity: value.contentIdentity, completeness: 'excerpt-only' };
+  }
   if (value?.type !== 'submitted-note') fail('source_unavailable');
   object(value, ['type', 'namespace', 'sourceId', 'revision', 'contentIdentity', 'completeness']);
   const scope = cardNamespace(value.namespace);
@@ -99,7 +109,16 @@ export function sourceRef(value, ns) {
 }
 export function refs(value, ns) {
   const result = denseArray(value, 1, 16).map(ref => sourceRef(ref, ns));
-  if (new Set(result.map(ref => ref.sourceId)).size !== result.length) fail('invalid_input');
+  if (new Set(result.map(ref => `${ref.type}:${ref.sourceId ?? ref.receiptId}`)).size !== result.length) fail('invalid_input');
+  return result;
+}
+export function cardMemoryRefs(value, ns) {
+  const result = denseArray(value, 1, 6).map(ref => {
+    object(ref, ['type', 'namespace', 'memoryId', 'revision']);
+    if (ref.type !== 'memory' || JSON.stringify(cardNamespace(ref.namespace)) !== JSON.stringify(ns)) fail('source_unavailable');
+    return { type: 'memory', namespace: ns, memoryId: identifier(ref.memoryId), revision: revision(ref.revision) };
+  });
+  if (new Set(result.map(ref => ref.memoryId)).size !== result.length) fail('invalid_input');
   return result;
 }
 export function pageLimit(value = 20) {
@@ -142,10 +161,14 @@ export function validateCardCall(method, input) {
   if (method === 'getSource') sourceRef(input.source, ns);
   if (method === 'createCardDraft') {
     if (input.drafting !== 'authored') fail('source_unavailable');
-    object(input.input, ['sources', 'authoredInput', 'title', 'body']);
-    if (Object.hasOwn(input.input, 'sources') === Object.hasOwn(input.input, 'authoredInput')) fail('invalid_input');
+    object(input.input, ['sources', 'authoredInput', 'memoryRefs', 'sourcePolicy', 'title', 'body']);
+    if (['sources', 'authoredInput', 'memoryRefs'].filter(key => Object.hasOwn(input.input, key)).length !== 1) fail('invalid_input');
+    if (Object.hasOwn(input.input, 'memoryRefs')) {
+      if (input.input.sourcePolicy !== 'retained-receipts-v1') fail('invalid_input');
+      cardMemoryRefs(input.input.memoryRefs, ns);
+    } else if (Object.hasOwn(input.input, 'sourcePolicy')) fail('invalid_input');
     if (input.input.authoredInput !== undefined) noteInput(input.input.authoredInput);
-    else refs(input.input.sources, ns);
+    else if (input.input.sources !== undefined && refs(input.input.sources, ns).some(ref => ref.type !== 'submitted-note')) fail('source_unavailable');
     cardText(input.input.title, 200); cardText(input.input.body, 20_000);
   }
   if (method === 'editCardDraft' || method === 'editKnowledgeCard') {
