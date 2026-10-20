@@ -148,20 +148,29 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
           admission: { status: 'completed', memoryIds, suppressedCount } } : {}) };
     }
 
-    function observeReplay() {
+    function observeReplay(onlyRecorded = false) {
       if (!snapshot) fail('invalid_input');
       const result = transaction(db, () => {
+        if (onlyRecorded) {
+          if (!binding(input)) return null;
+          // Observation must never repair an orphan binding by registering new
+          // source. The existing receipt makes journal commit a guarded replay.
+          if (!rawEvent(input)) fail('event_payload_conflict');
+        }
         // Exact source identity and current namespace/session authority still
         // pass through the journal. Staging is never a Raw read permission.
         const committed = commit();
         if (!committed.observation) fail('invalid_input');
         return committed.observation;
       });
-      accepted = true;
+      if (result) accepted = true;
       return result;
     }
     return Object.freeze({ input: projection, hasProjection: Boolean(snapshot), replay,
       emptyOutcome, commit, observeReplay,
+      // A winner can commit even during a failing model preflight. Only an
+      // unaccepted attempt may observe that winner; it never acquires work.
+      observeFailedInterpretation: () => !accepted && snapshot ? observeReplay(true) : null,
       accept: () => { accepted = true; },
       commitOnly: () => { const result = transaction(db, commit); accepted = true; return result; },
       result: () => { const row = accepted && rawEvent(input); return row ? JSON.parse(row.result) : null; },

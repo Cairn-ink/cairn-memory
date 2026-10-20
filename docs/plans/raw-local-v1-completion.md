@@ -362,6 +362,118 @@ worker, high effort. Independent Standards and Spec reviewers: separate
 non-authors on one fixed committed candidate. Requested/actual model and
 commands/results will be recorded when known; no model cost is inferred.
 
+### P2 final-observation correction checkpoint
+
+The second frozen candidate was `1433a296721208cc4ab2a988e7ed8b440ef9327f`.
+Standards review found zero documented violations and the same optional low
+freeze-helper duplication. Spec review found one remaining moderate P2-07
+boundary: a competing process can save the identical event during model-budget
+preflight, then that preflight refuses before the atomic claim hook is reached.
+The slower request reports only `context_budget_exceeded`, omitting the saved
+Raw and its durable interpretation state. The earlier post-sealing check does
+not cover this later schedule. No source loss was demonstrated; the error is
+an incomplete response about already committed state.
+
+Primary independently reproduced this on the committed candidate with twelve
+two-client cases: ten failed, two fresh-event controls passed, actual exit 1.
+The cases cover failed/completed winners, session/pause/payload barriers and
+absence of a winner. A separate process performs the competing capture; parent
+model calls stay zero. The response must not erase a current authority barrier
+or manufacture registration when no identical durable event exists.
+
+The bounded correction moves the final observation decision to the internal
+Raw factory/storage boundary for an interpretation failure before acceptance.
+In one transaction, require an existing binding first, then revalidate exact
+identity and current namespace/session/generation authority before observing it.
+No new claim, registration, lease, staging change or model retry is permitted.
+An ordinary fresh oversized request retains its zero-write preflight refusal.
+The existing atomic claim observer remains necessary for successful preflight.
+Both thrown failures and returned failure envelopes must reach the same guard.
+This is not another early timing check and needs no public wire change.
+
+The existing GPT 6.1 Sol/high worker owns the bounded runtime/test correction;
+primary owns independent acceptance and this record. Both independent axes
+must review the next committed candidate against the same P1 base. Earlier
+full-core and focused results remain explicitly attached to their earlier
+sources, not claimed for this correction. Full core starts only after the new
+source is frozen, followed by latest-head CI; no push has occurred yet.
+
+Final-observation focused verification passes all four P2 suites, 146/146 on
+Node 22.16 and 24.15, zero failures/skips, actual exit 0 each (20.6 and 41.5
+seconds). Primary's independently built suite passes 46/46 on each runtime,
+actual exit 0, including separate-process failing-preflight races, completed and
+failed winners, authority/payload refusals, and the unchanged zero-write control.
+The checked-in suite also covers episode/staged profiles, throwing counters and
+a deliberately corrupted orphan binding; that corruption fixture temporarily
+disables foreign keys only in its owned synthetic database. No receipt repair
+is allowed. All worker-owned test processes have finished.
+
+Primary cross-checks 23 P2 paths by base diff plus untracked paths against
+committed path history plus porcelain status; both lists agree. The frozen
+20-core-file path/content digest is
+`2e310e24cf7f3c4093408261eeef64ec5f2adfc5e00f0b8a10b2c97a49ab4bb0`.
+Only the two internal, uninstalled Raw runtime modules changed after the prior
+candidate; shared/public capture code did not. Generic JSON validation,
+maintainer plugin validation and `git diff --check` each exited 0.
+
+The subsequent unchanged-source full-core runs each finished 1,389/1,390, one
+failure, zero skips, actual exit 1 (Node 22.16: 409.7 seconds; Node 24.15: 410.1
+seconds). Both fail the existing D3 initial-classification journal rollback
+case, returning an outer `model_timeout` instead of reaching its expected
+post-admission failure envelope. These are failures, not full-suite passes.
+All new Raw cases passed. The exact original D3 case then passes alone on both
+versions, actual exit 0; this alone does not establish the cause or resolve the
+failed full gate. Primary and the existing worker are isolating the deadline
+precondition, against actual P1 where available, without changing runtime
+deadlines or weakening assertions. Final independent review/push remains held.
+
+The targeted feedback loop now distinguishes the deadline premise: the worker's
+twelve controlled probes cover P1/current source, both runtimes and real-journal,
+logical-journal and logical-pre-admission timing. All mechanism assertions exit
+0. The real delayed journal hook executes once, not multiple times. Advancing
+only pre-journal admission time to 601 ms reproduces the outer timeout with no
+Memory/receipt/journal left and zero journal-hook hits; the original success
+expectation is red (exit 1). Advancing only after the real journal UPDATE instead
+retains admission and rolls its journal back to `not_started`. Primary separately
+reproduces both states on actual clean P1 and current source: the original D3
+success prerequisite fails with exit 2 in the early-expiry control, while the
+intended journal-boundary assertions exit 0. This supports a baseline-shared
+timing precondition problem; the original full logs cannot retrospectively prove
+the exact historical expiry site. No shared-core behavior difference is shown.
+
+Primary approved a test-only deterministic correction using an isolated child
+clock at the real journal mutation, preserving the original 600 ms budget, plus
+a transaction-post-work-check mutation control. Runtime deadlines and all Raw
+runtime source stay frozen. The throwaway diagnostic harnesses live under the
+local evidence `debug/` directory, not in production code. Initial diagnostic
+harness errors (a proxy method binding and a too-specific SQL matcher) were
+corrected there and are not classified as product failures.
+
+The test-only correction now passes the full 19-case deadline file on each
+runtime, actual exit 0. The intentionally broken transaction child exits 2 with
+the specific journal-rollback assertion on both versions; the parent requires
+that failure, checks cold database state and verifies its workspace is empty
+after normal/control/assertion-failure children. Primary reran that parent on
+both runtimes, actual exit 0. Only the D3 test and its new isolated helper changed;
+runtime deadlines and the already verified Raw implementation remain unchanged.
+The resulting 25-path P2 inventory agrees across the two independent routes;
+22 changed core paths have SHA-256
+`a935e0dcaaa2cbfbee3b2dbf8798b1a396b49f13ffe764e1491f0433720a9879`.
+Final full-core runs are now serialized by runtime, with original failures
+retained and no deadline enlargement. Their actual outcomes are recorded below
+when complete, before candidate freeze and independent review.
+
+Both serialized final-source full-core runs have now completed: 1,390/1,390
+passed on Node 22.16 and 24.15, zero failures/skips, actual exit 0 each (401.9
+and 388.1 seconds). The command captured each npm exit separately, and the
+serial supervisor itself exited 0 after the second run. The 22-core-file digest
+above is unchanged. Primary's independent inventory also agrees for the full
+36-path diff against main `cd6d1ad`; no unrelated primary-worktree changes are
+included. JSON validation and diff checks exit 0 after the full runs. All owned
+worker and primary test processes have finished before candidate freeze. Both
+review axes and all applicable latest-head CI remain required before delivery;
+their final reports, exact head and remote results belong in the delivery PR.
+
 ### P1 verification, 2026-10-21
 
 The first frozen candidate was `91846e650b8a66f443eec9bfcae5c86bdbd24188`.

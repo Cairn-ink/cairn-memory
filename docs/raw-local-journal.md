@@ -96,6 +96,13 @@ The admission/episode registration transaction repeats the durable-binding check
 so another process winning during sealing or before the claim turns the slower
 identical request into an observation. A different-event stale registration still
 refuses. This private short-circuit is never accepted from request/model fields.
+If interpretation fails before accepting its own registration, finalization also
+checks for an identical durable winner, including one committed during token
+counting. This observation requires both the binding and its Raw receipt inside
+one transaction, revalidates the same identity and authority fences, and never
+registers or repairs source. Without a recorded winner, the original refusal
+remains unchanged and preflight still writes nothing. An already accepted
+attempt retains its own interpretation failure rather than hiding it as replay.
 New Raw first parts that collide with an already covered legacy episode message
 (including a mixed batch) refuse atomically instead of backfilling that source
 without its own admission reservation. Frozen legacy batches keep their legacy

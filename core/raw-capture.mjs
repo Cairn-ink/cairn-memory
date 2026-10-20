@@ -27,11 +27,17 @@ export function openRawCaptureCore(input, rawOptions) {
         runtime.ready();
         const registration = await storage.prepare(request);
         let interpretation;
-        if (registration.hasProjection && registration.replay) interpretation = success(registration.observeReplay());
-        else if (registration.hasProjection) interpretation = await capture(registration.input, registration);
-        else {
-          registration.commitOnly();
-          interpretation = success(registration.emptyOutcome());
+        try {
+          if (registration.hasProjection && registration.replay) interpretation = success(registration.observeReplay());
+          else if (registration.hasProjection) interpretation = await capture(registration.input, registration);
+          else {
+            registration.commitOnly();
+            interpretation = success(registration.emptyOutcome());
+          }
+        } catch (error) { interpretation = failure(error); }
+        if (!interpretation.ok) {
+          const observation = registration.observeFailedInterpretation();
+          if (observation) interpretation = success(observation);
         }
         const raw = registration.result();
         return raw ? success({ raw, interpretation }) : interpretation;

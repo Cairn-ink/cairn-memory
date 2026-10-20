@@ -3,12 +3,107 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { openDatabase } from '../database.mjs';
-import { fixture, ns, request, splitRaw, localPlainPort, completed, ok, count, usage } from '../testing/raw-capture-fixtures.mjs';
+import { fixture, config, ns, request, splitRaw, localPlainPort, completed, ok, count, usage } from '../testing/raw-capture-fixtures.mjs';
 
 const claim = (db, eventId) => db.prepare('SELECT * FROM admission_claims WHERE event_id=?').get(eventId);
 const error = (result, code) => assert.deepEqual(result, { ok: false, error: { code, retryable: false } });
+const processWinner = (f, input, outcome = 'fail', options = {}) => {
+  const child = spawnSync(process.execPath, [fileURLToPath(new URL('../testing/raw-capture-process.mjs', import.meta.url)),
+    f.path, JSON.stringify(input), outcome, JSON.stringify(options)], { encoding: 'utf8',timeout: 15000 });
+  assert.equal(child.status, 0, child.stderr);
+  const winner = JSON.parse(child.stdout);
+  ok(winner.result);
+  return winner;
+};
 
 for (const client of ['claude-code','codex']) {
+  for (const kind of ['ordinary','staged','episode']) for (const outcome of ['fail','complete']) {
+    test(`P2-07 final observation ${kind} ${client}: ${outcome} winner during failing preflight retains recorded Raw`, async t => {
+      let f, winner, beforeClaim, active = false;
+      const input = request(splitRaw('Synthetic final preflight observation')[0], { client }, kind);
+      f = fixture(t, { kind, model: { countTokens: () => {
+        if (!active) {
+          active = true; winner = processWinner(f, input, outcome, config(kind));
+          beforeClaim = claim(f.db, input.eventId);
+        }
+        return 8192;
+      } } });
+      const result = ok(await f.core.captureRaw(input)), observed = ok(result.interpretation);
+      assert.deepEqual(result.raw, winner.result.value.raw);
+      if (outcome === 'fail') assert.equal(observed.status, 'incomplete');
+      else assert.equal(observed.duplicate, true);
+      assert.equal(f.calls.length, 0); assert.deepEqual(usage(f.core), winner.usage.value);
+      const fresh = openDatabase(f.path); f.workspace.defer(() => fresh.close());
+      assert.equal(count(fresh, 'raw_events'), 1); assert.equal(count(fresh, 'raw_capture_events'), 1);
+      assert.equal(count(fresh, 'admission_claims'), 1); assert.equal(count(fresh, 'memories'), 0);
+      assert.deepEqual(claim(fresh, input.eventId), beforeClaim);
+    });
+  }
+
+  test(`P2-07 final observation ${client}: throwing preflight counter also observes a durable winner`, async t => {
+    let f, winner, active = false;
+    const input = request(splitRaw('Synthetic throwing counter observation')[0], { client });
+    f = fixture(t, { model: { countTokens: () => {
+      if (!active) { active = true; winner = processWinner(f, input); }
+      throw Error('Synthetic tokenizer failure');
+    } } });
+    const result = ok(await f.core.captureRaw(input));
+    assert.equal(ok(result.interpretation).status, 'incomplete');
+    assert.deepEqual(result.raw, winner.result.value.raw);
+    assert.equal(f.calls.length, 0); assert.deepEqual(usage(f.core), winner.usage.value);
+  });
+
+  for (const kind of ['ordinary','staged','episode']) test(`P2-07 final observation ${kind} ${client}: fresh failing preflight still writes nothing`, async t => {
+    const f = fixture(t, { kind,model: { countTokens: () => 8192 } });
+    error(await f.core.captureRaw(request(splitRaw('Synthetic fresh oversized refusal')[0], { client }, kind)), 'context_budget_exceeded');
+    const fresh = openDatabase(f.path); f.workspace.defer(() => fresh.close());
+    for (const table of ['raw_events','raw_capture_events','raw_parts','admission_claims','staged_capture_evidence','memories']) {
+      assert.equal(count(fresh, table), 0, table);
+    }
+    assert.equal(f.calls.length, 0);
+  });
+
+  for (const barrier of ['source','profile','digest','pause','generation','session','project','different-event','orphan']) {
+    test(`P2-07 final observation ${client}: failing preflight cannot bypass ${barrier}`, async t => {
+      let f, winner, beforeClaim, active = false;
+      const namespace = barrier === 'project' ? { ...ns,scope: 'project',projectId: 'synthetic-project' } : ns;
+      const input = request(splitRaw('Synthetic guarded final observation')[0], { client,namespace });
+      f = fixture(t, { model: { countTokens: () => {
+        if (!active) {
+          active = true;
+          const changed = barrier === 'source' ? { ...input,messages: [{ ...input.messages[0],role: 'assistant' }] }
+            : barrier === 'different-event' ? { ...input,eventId: 'different-winner' } : input;
+          winner = processWinner(f, changed, 'fail', barrier === 'profile' ? config('staged') : {});
+          if (barrier === 'digest') f.db.prepare('UPDATE admission_claims SET payload_digest=?').run('a'.repeat(64));
+          if (['pause','generation'].includes(barrier)) {
+            const control = ok(f.core.setCapturePaused({ namespace,expectedGeneration: 'initial',paused: true }));
+            if (barrier === 'generation') ok(f.core.setCapturePaused({ namespace,expectedGeneration: control.generation,paused: false }));
+          }
+          if (barrier === 'project') ok(f.core.setProjectCapture({ namespace,expectedGeneration: 'initial',enabled: false }));
+          if (barrier === 'session') ok(f.core.fenceSession({ namespace,client,sessionId: input.sessionId }));
+          if (barrier === 'orphan') {
+            // Normal FK enforcement forbids this state. Even a corrupt fixture
+            // must not turn observational fallback into receipt repair.
+            f.db.exec('PRAGMA foreign_keys=OFF; DELETE FROM raw_events; PRAGMA foreign_keys=ON;');
+          }
+          beforeClaim = claim(f.db, changed.eventId);
+        }
+        return 8192;
+      } } });
+      const result = await f.core.captureRaw(input);
+      const code = ['source','profile','digest','orphan'].includes(barrier) ? 'event_payload_conflict'
+        : ['pause','project'].includes(barrier) ? 'capture_disabled'
+          : barrier === 'generation' ? 'capture_evidence_closed'
+            : barrier === 'session' ? 'conversation_deleted' : 'context_budget_exceeded';
+      error(result, code);
+      assert.equal(f.calls.length, 0); assert.deepEqual(usage(f.core), winner.usage.value);
+      const fresh = openDatabase(f.path); f.workspace.defer(() => fresh.close());
+      assert.equal(count(fresh, 'raw_events'), barrier === 'orphan' ? 0 : 1); assert.equal(count(fresh, 'raw_capture_events'), 1);
+      assert.equal(count(fresh, 'admission_claims'), 1); assert.equal(count(fresh, 'memories'), 0);
+      assert.deepEqual(claim(fresh, beforeClaim.event_id), beforeClaim);
+    });
+  }
+
   test(`P2-07 R1 ${client}: cold exact completed replay preserves Raw after actual staging expiry`, async t => {
     let seals = 0;
     const port = localPlainPort(), seal = port.sealRaw;

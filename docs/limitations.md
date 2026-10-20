@@ -1614,3 +1614,28 @@ final internal-only correction adds that post-await selection recheck while
 retaining the transaction's authoritative check. Those full-core results precede
 this last correction; corrected focused tests, independent review and final-head
 CI are recorded separately in the plan/PR.
+
+A subsequent independent review found that a winner committed during token
+counting could still be hidden when that preflight then refused the slower
+attempt. The new 34-case probe retained 26 failures and eight passing controls,
+actual exit 1. A centralized final observation now requires an unaccepted
+interpretation attempt and an existing identical binding plus Raw receipt;
+it cannot create source, retry interpretation or bypass identity/control fences.
+The expanded regression coverage includes failed/completed winners, throwing
+counters, fresh zero-write refusals and corrupt orphan bindings. Earlier full
+suite greens precede this correction; the plan/PR records its separate final
+focused, full-suite and independent-review gates.
+
+The subsequent full-core runs retained 1,389 passes and one failure on each
+runtime, actual exit 1: the existing D3 journal-begin fixture expected admission
+to finish inside a 600 ms wall-clock budget before injecting a 900 ms delay.
+The unchanged selected case passed in isolation on both runtimes. Controlled
+clock probes on clean P1 and the candidate reproduced both outcomes: expiry
+before admission commits returns an outer timeout and rolls admission back;
+expiry after the journal UPDATE retains admission and rolls the journal back.
+The hook executed once when reached. This establishes a baseline-shared timing
+precondition, not the exact historical expiry site, which was not instrumented.
+The test-only correction keeps the 600 ms deadline, controls time only in an
+isolated child at the actual SQL boundary, checks cold state and cleanup, and
+requires a removed post-work-check mutant to fail. Runtime deadline behavior
+and production clocks are unchanged; the plan/PR records the new final gates.
