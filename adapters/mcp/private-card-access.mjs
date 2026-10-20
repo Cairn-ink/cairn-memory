@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 const reads = new Set(['getCard', 'listCards', 'getSource', 'inspectCardOperation', 'listCardEffects',
   'selectEvidence', 'fetchEvidence', 'revalidateEvidence', 'mapEvidence', 'listEvidenceMappings']);
 const drafts = new Set(['createCardDraft', 'cancelCardDraft']);
-const organization = new Set(['applyCardPlacement', 'proposeEvidenceMapping']);
+const organization = new Set(['applyCardPlacement', 'refreshCardTopic', 'proposeEvidenceMapping']);
 
 // Local process configuration grants only these bounded read/draft/organization operations.
 // This module has no explicit-user grant constructor.

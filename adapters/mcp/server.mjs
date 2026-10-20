@@ -229,6 +229,10 @@ export function createCairnServer(options = {}) {
           newL1: z.strictObject({ title: topicTitle, parentL2Ids: z.array(id).max(3), newL2Title: topicTitle.optional() }).optional(),
         })).min(1).max(5) }) }),
       input => run('applyCardPlacement', { ...input, refs: input.refs.map(ref => ({ ...ref, namespace: binding })) }), false, true);
+    tool('refresh_card_topic', 'Explicitly refresh an existing Card topic title and its supporting eligible Card revisions, preserving topic ID and level. Requires exact topic/index revisions and 1..5 inspected confirmed Card refs; namespace is startup-fixed. Recovers stale/null derived titles without changing Card content, applicability, membership or mapping approval. Refresh topic labels first, then explicitly place current Card refs to recover stale membership. Local organization only; no model or explicit-user grant.',
+      z.strictObject({ actionId: id, topicRef, expectedIndexRevision: revision, title: topicTitle,
+        refs: z.array(cardEvidenceRef).min(1).max(5) }),
+      input => run('refreshCardTopic', { ...input, refs: input.refs.map(ref => ({ ...ref, namespace: binding })) }), false, true);
     tool('propose_evidence_mapping', 'Propose metadata linking exact same-level Memory/Card topics with current endpoint/index revisions in the configured namespace. Proposal stays nonnavigable until a separately trusted host explicitly reviews it. This tool grants no activation/removal authority, read permission, evidence support, semantic relation or implicit traversal. Local, bounded and model-free.',
       z.strictObject({ actionId: id, ...endpoints }), input => run('proposeEvidenceMapping', input));
     tool('list_evidence_mappings', 'List bounded navigation-only mapping metadata for one exact typed topic, default 20/max 50. State, endpoint/index versions, navigable and reason qualify every mapping. Proposed/stale/removed mappings cannot expand navigation. No source/body text, provider call or activation permission.',

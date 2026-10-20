@@ -56,9 +56,9 @@ test('H02 real stdio is default-off, bounded and never accepts serialized author
   await plain.client.close();
   const active = await host(workspace, path);
   const tools = (await active.client.listTools()).tools;
-  assert.equal(tools.length, 21);
+  assert.equal(tools.length, 22);
   const cardTools = tools.filter(tool => !['remember_memory', 'recall_memory', 'inspect_memory', 'correct_memory', 'forget_memory'].includes(tool.name));
-  assert.equal(cardTools.length, 16);
+  assert.equal(cardTools.length, 17);
   for (const tool of cardTools) {
     assert.equal(tool.inputSchema.additionalProperties, false);
     assert.equal(Object.hasOwn(tool.inputSchema.properties, 'namespace'), false);

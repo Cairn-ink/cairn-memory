@@ -64,6 +64,7 @@ The opt-in tools are:
 | `revalidate_evidence` | `snapshot`, optional `responseByteLimit`; fresh whole items or a fixed error without stale text. |
 | `map_evidence` | `type:'memory'|'card'`, optional `purpose,parentRef,limit,cursor`; bounded typed topic/ref/unfiled navigation. |
 | `apply_card_placement` | `actionId,refs,expectedIndexRevision,proposal`; organize 1–5 exact confirmed Card refs without namespace, with at most three parents per item. |
+| `refresh_card_topic` | `actionId,topicRef:{mocId,revision},expectedIndexRevision,title,refs`; refresh an existing topic title against 1–5 eligible current Card refs, preserving its ID and level. |
 | `propose_evidence_mapping` | `actionId,memoryTopic,cardTopic,expectedMemoryIndexRevision,expectedCardIndexRevision`; proposed same-level topic metadata only. |
 | `list_evidence_mappings` | `type,mocId`, optional `limit,cursor`; versioned mapping metadata, state and qualified navigability. |
 
@@ -205,12 +206,23 @@ remain available regardless of filing. Source invalidation hides obsolete Card
 membership and derived topic titles without purging the independent authored
 confirmed body.
 
+To recover an existing topic after a Card edit or reviewed source rebinding,
+inspect the now-eligible Card and map the existing topics. Call
+`refresh_card_topic` with the exact `topicRef:{mocId,revision}`, current
+`expectedIndexRevision`, reviewed `title` and 1–5 exact Card refs without
+namespace. Refresh each stale L1/L2 title separately on the same topic ID and
+level. This changes only topic title/support metadata and topic/index revisions;
+it does not restore stale membership. Follow with explicit
+`apply_card_placement` using the updated Card refs and refreshed parent IDs.
+Stale/foreign refs, title collisions and bounds refuse atomically. Card authorship,
+applicability review and mapping activation remain unchanged.
+
 `propose_evidence_mapping` accepts same-level exact
 `memoryTopic:{mocId,revision}` and `cardTopic:{mocId,revision}`, both expected
 index revisions, and an action ID. The proposal is metadata with
 `state:'proposed'` and `navigable:false`. Use `list_evidence_mappings` for its
 current state, endpoint/index versions, navigability and reason. Startup grants
-only the two bounded organization actions (placement and proposal), alongside
+only the bounded organization actions (placement, topic refresh and proposal), alongside
 the explicitly advertised read/draft methods. A namespace, serialized grant,
 claimed role, confirmation flag or tool invocation cannot mint `explicit-user`
 authority. Mapping activation, reviewed refresh and removal remain the trusted

@@ -5,9 +5,9 @@ import { openMemoryCore } from '../../../core/contract.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { createScopedCardAccess } from '../private-card-access.mjs';
 import { namespace, ok, call, host, review } from './card-support.mjs';
-import { organizeCard } from './organization-support.mjs';
+import { organizeCard, recoverCardTopics } from './organization-support.mjs';
 
-test('M01–M06 real stdio typed organization preserves canonical retrieval and never grants mapping activation',
+test('M01–M07 real stdio organization recovers stale topics and never grants mapping activation',
   { timeout: 35000 }, async t => {
     const workspace = createTestWorkspace(t, { prefix: 'cairn-mcp-organization-' });
     const path = join(workspace.path, 'memory.sqlite');
@@ -33,11 +33,18 @@ test('M01–M06 real stdio typed organization preserves canonical retrieval and 
       assert.equal(access.call(core, 'reviewEvidenceMapping', { actionId: 'cannot-activate', mappingId: organized.proposed.id,
         expectedRevision: organized.proposed.revision, state: 'active', ...organized.endpoints }).error.code, 'authority_required');
     } finally { core.close(); }
+    const recovered = await recoverCardTopics({ client: local.client, path, card });
     const foreign = await host(workspace, path, { owner: 'synthetic-other-owner' });
     assert.deepEqual(ok(await call(foreign.client, 'map_evidence', { type: 'card' })).items, []);
     assert.deepEqual(ok(await call(foreign.client, 'list_evidence_mappings', { type: 'card', mocId: organized.cardTopic.mocId })).items, []);
     const foreignProposal = await call(foreign.client, 'propose_evidence_mapping', { actionId: 'foreign-proposal', ...organized.endpoints });
     assert.equal(foreignProposal.ok, false);
+    const foreignRefresh = await call(foreign.client, 'refresh_card_topic', { actionId: 'foreign-topic-refresh',
+      topicRef: { mocId: recovered.topics[0].id, revision: recovered.topics[0].revision },
+      expectedIndexRevision: ok(await call(foreign.client, 'map_evidence', { type: 'card' })).indexRevision,
+      title: 'Foreign refresh', refs: [{ type: 'card', cardId: recovered.card.id,
+        revision: recovered.card.revision, bodyRevision: recovered.card.bodyRevision }] });
+    assert.equal(foreignRefresh.ok, false);
     const first = ok(await call(local.client, 'map_evidence', { type: 'card', limit: 1 }));
     assert.equal(first.coverage.partial, true);
     assert.equal((await call(local.client, 'map_evidence', { type: 'memory', limit: 1, cursor: first.nextCursor })).error.code, 'invalid_cursor');

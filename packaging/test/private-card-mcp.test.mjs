@@ -7,7 +7,7 @@ import test from 'node:test';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact, command, packageName } from '../build.mjs';
 import { ok, call, host, review } from '../../adapters/mcp/test/card-support.mjs';
-import { organizeCard } from '../../adapters/mcp/test/organization-support.mjs';
+import { organizeCard, recoverCardTopics } from '../../adapters/mcp/test/organization-support.mjs';
 
 test('H04/H05/R08/M06 installed stdio preserves reviewed evidence, typed organization and restart fences',
   { timeout: 120000 }, async t => {
@@ -116,4 +116,47 @@ test('H04/H05/R08/M06 installed stdio preserves reviewed evidence, typed organiz
     t.diagnostic('Actual installed stdio + synthetic terminal subprocesses: no key; fetch abort guard stayed inactive (zero provider calls).');
     await workspace.cleanup();
     assert.equal(existsSync(root), false);
+  });
+
+test('M07 installed MCP explicitly recovers stale topic titles and memberships on the existing IDs',
+  { timeout: 120000 }, async t => {
+    const workspace = createTestWorkspace(t, { prefix: 'cairn-installed-topic-refresh-' });
+    const root = workspace.path, artifact = buildArtifact();
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'synthetic-topic-refresh-install',
+      private: true, version: '0.0.0' }), { flag: 'wx' });
+    command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
+      artifact.artifactPath], root, artifact.userconfig);
+    const installed = join(root, 'node_modules', packageName);
+    for (const file of ['core/private-organization-input.mjs', 'core/private-organization-storage.mjs',
+      'adapters/mcp/server.mjs', 'adapters/mcp/private-card-access.mjs']) {
+      assert.equal(createHash('sha256').update(readFileSync(join(installed, file))).digest('hex'), artifact.sourceHashes[file]);
+    }
+    const executable = join(root, 'node_modules/.bin/cairn-memory'), path = join(root, 'synthetic.sqlite');
+    let local = await host(workspace, path, { command: executable });
+    const memory = ok(await call(local.client, 'remember_memory', { content: 'Synthetic topic recovery review source' })).memory;
+    const draft = ok(await call(local.client, 'create_private_card_draft', { actionId: 'recovery-draft',
+      title: 'Review recovery', body: 'Synthetic review plan', memoryRefs: [{ memoryId: memory.id, revision: memory.revision }] }));
+    const terminal = review(workspace, path, draft, { command: executable, extra: ['--applicability', 'current'] });
+    await terminal.prompt;
+    terminal.answer(`CONFIRM ${draft.id} ${draft.revision} APPLICABILITY current`);
+    const confirmed = await terminal.done;
+    assert.equal(confirmed.code, 0, confirmed.output);
+    const card = ok(await call(local.client, 'inspect_private_card', { cardId: draft.id })).card;
+    const coreModule = pathToFileURL(join(installed, 'core/index.mjs')).href;
+    const organized = await organizeCard({ client: local.client, path, memory, card, coreModule });
+    const recovered = await recoverCardTopics({ client: local.client, path, card, coreModule });
+    assert.equal(recovered.card.support.applicability, 'current');
+    const mapped = ok(await call(local.client, 'map_evidence', { type: 'card' }));
+    assert.equal(mapped.items.some(item => item.type === 'ref' && item.ref.childType === 'card'), true);
+    assert.equal(ok(await call(local.client, 'list_evidence_mappings', { type: 'card', mocId: organized.cardTopic.mocId })).items[0].navigable, false);
+    await local.client.close();
+    local = await host(workspace, path, { command: executable });
+    const restarted = ok(await call(local.client, 'map_evidence', { type: 'card' }));
+    assert.deepEqual(restarted.items, mapped.items);
+    assert.deepEqual(ok(await call(local.client, 'inspect_private_card', { cardId: card.id })).card, recovered.card);
+    assert.equal(ok(await call(local.client, 'list_evidence_mappings', { type: 'card', mocId: organized.cardTopic.mocId })).items[0].state, 'proposed');
+    await local.client.close();
+    await workspace.cleanup();
+    assert.equal(existsSync(root), false);
+    t.diagnostic('Synthetic exact-payload host edit only; real installed refresh/placement stdio; no model approval or mapping activation.');
   });
