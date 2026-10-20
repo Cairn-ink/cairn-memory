@@ -1,12 +1,16 @@
 # Three-layer engine contract
 
-Status: **DRAFT FOR OWNER REVIEW; implementation is not approved**.
+Status: **Future full-V1 contract remains DRAFT FOR OWNER REVIEW**. The separately
+authorized bounded local implementation is recorded in the
+[execution addendum](#execution-addendum-bounded-local-private-cards).
 Recorded 2026-10-20; baseline public main
 `ad274b6117f86446fbf0ff16f503ae69d0278ce5`, inspected documentation candidate
 `18f01e385f895f2402aea3e849eee1dc712454db`. This contract makes the
 [architecture agreement](memory-architecture-alignment.md) reviewable. Every new
-object, field, method, limit and capability below is proposed, not an existing API.
-It changes no executable, schema, permission, retention default or release.
+object, field, method, limit and capability in the original full-V1 proposal is
+prospective unless selected by that addendum. The local slice's exact implemented
+API and limitations are in [the local guide](../private-cards-local.md); default
+retention and full Raw/hosted/production gates remain unchanged.
 
 The same public engine owns Raw/Source, Memory and private Knowledge Cards,
 their provenance, invalidation, two typed MOCs and bounded common evidence reads.
@@ -650,6 +654,75 @@ frozen/reviewed new paid scope plus conservative affordability check remain;
 historical balances are not current affordability. This draft authorizes **no
 paid work**, benchmark rerun or real user/production database access. Mechanism,
 semantic quality and installed-host evidence must be reported separately.
+
+## Execution addendum: bounded local private Cards
+
+The authorized implementation slice is **S0-note + S1 + note invalidation**,
+partial V1. Product integration belongs to the product team. Full retained Raw,
+its unknown G1/G2 gates, typed Card MOC/common retrieval and installed MCP remain
+later work; this slice does not claim those gates or current-query filtering.
+It uses the existing `openMemoryCore` and SQLite runtime, with explicit trusted
+host selection of `private-cards-local-v1`, `submitted-note-v1`, disclosed
+one-off submission and `local-plain-v1`. Default is off; no chat capture,
+backfill, model, provider, vector API, publication or hosted encryption is added.
+
+Schema 20 adds only local note/Card/operation/effect/usage tables. Schema 19 was
+reserved for future Raw and is unimplemented; it is not an applied prerequisite.
+Unselected v18 remains v18; only explicit opt-in upgrades v18 to v20. New code
+can reopen v20 with the capability off without deleting data. Old openers reject
+v20. Operators must stop mixed-version writers before any migration. No user
+database is migrated here; future Raw must use the next real available version.
+
+Authored notes and Cards retain exact redacted formatting, required same-scope
+note refs, unknown applicability and unassessed attribution. Confirmation records
+private curation. Notes are immutable; deletion purges note text, cancels bound
+drafts once and preserves confirmed current authored bodies privately with lost
+support. CAS, content-free operation replay and durable effects share one atomic
+transaction. Only the current Card body is retained. A trusted host port, outside
+serialized arguments, binds exact scope, action class, payload, action ID, target,
+revision and access generation; no model boolean or claimed role is authority.
+
+Acceptance roster: C01 default/legacy unchanged; C02 atomic authored note+draft,
+zero model calls and exact formatting/provenance; C03 CAS/replay/restart lifecycle;
+C04 forged/wrong-scope/changed/revoked grants refuse without leak; C05 source
+deletion cancels drafts and retains unsupported confirmed authorship without
+resurrection; C06 UTF-16/redaction/cap/response/cursor bounds; C07 fresh18,
+explicit20/reopen/migration/old-opener rejection; C08 logical purge/content-free
+audit/effects; C09 truthful capability and explicit versioned note usage.
+Synthetic checks use the owned workspace runner on Node 22.16 and 24; results
+are recorded after execution. This is implementation authorization for this
+bounded local opt-in slice, not production-flag or full RL1 authorization.
+
+Worker implementation checkpoint (2026-10-20): base
+`82fa5bc53c03c06194beee67c900651706db5dd7`, isolated
+`feat/private-card-engine-v1`; worker model/effort comes from the primary's
+dispatch record, bounded by primary acceptance/review. C01–C09 targeted suite
+`node tools/testing/run.mjs core/test/private-cards.test.mjs` passed 17/17,
+exit **0**, with actual Node **22.16.0** and **24.15.0**. It includes real
+concurrent SQLite writers (owner quota and confirm/cancel CAS), atomic quota/
+fanout refusal, callback-time source invalidation, revocation/forged/stale
+tokens, source formatting, purge/replay and unsupported schema versions. The
+synthetic `node examples/private-cards.mjs` close/reopen lifecycle passed both
+versions, exit **0**. An earlier malformed-Unicode test-helper failure (exit 1)
+was corrected to pass bad input to the API rather than reject in the helper;
+no production failure or provider call occurred. A manual actual pre-v20
+opener check passed both versions; the unit suite deliberately does not depend
+on historical git objects unavailable in shallow CI. Primary repeats cross-
+version and installed-artifact acceptance independently.
+
+The live-dependent cap is 128 per note, with atomic admission/rebinding checks;
+this bounds note deletion to 128 affected Cards. Only completed synchronous
+operations persist in this slice; failed transactions roll back without an
+operation row. Pending leases/provider cancellation/full Operation failure
+states remain future work. The worker changed 13 files, cross-checked using
+`git diff --name-only` plus untracked files against independent porcelain
+status. Runtime entrypoints are the optional facade spread on `openMemoryCore`,
+its same-runtime storage attachment and opt-in database opening; the existing
+`core/index.mjs` re-export needs no new parallel engine. The source example,
+unit suite, protocol, local guide and changelog are included. Packaging/CI and
+installed-import checks have a separate owner. Primary owns final combined
+checks, exact candidate commit and independent Standards/Spec reviews; this
+checkpoint does not mark those gates or full V1 complete.
 
 ## 12. Owner review: decisions and implementation gate
 

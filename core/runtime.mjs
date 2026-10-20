@@ -18,16 +18,19 @@ import { sourceEvidence, isSourceContext } from './source-evidence.mjs';
 import { createQualifiedTransitionStorage } from './qualified-transition-storage.mjs';
 import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object } from "./validation.mjs";
+import { privateCardOptions } from './private-card-input.mjs';
+import { createPrivateCardStorage } from './private-card-storage.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input) {
-  object(input, ["path", "sessionEpisodes", "decisionReview"]);
+  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards"]);
+  const privateCards = privateCardOptions(input.privateCards);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
-  const db = openDatabase(input.path);
+  const db = openDatabase(input.path, { privateCards: Boolean(privateCards) });
   let identity;
   try {
     identity = db.prepare(`SELECT store_id AS storeId, cursor_secret AS cursorSecret
@@ -40,6 +43,7 @@ export function createMemoryRuntime(input) {
   let closed = false;
   let mocStorage;
   const ready = () => { if (closed) fail("store_closed"); };
+  const cardStorage = privateCards ? createPrivateCardStorage({ db, identity, ready }) : undefined;
 
   function activeRow(ns, id) {
     return db.prepare(`SELECT * FROM memories WHERE ${where} AND id = ? AND deleted = 0`)
@@ -608,6 +612,7 @@ export function createMemoryRuntime(input) {
     closeEpisodeNextStep(ns, input) { ready(); return episodes.closeNextStep(ns, input); },
     sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
+    privateCards: cardStorage,
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recentReceipts, recallSnapshot, sourceSnapshot,

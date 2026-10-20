@@ -355,10 +355,14 @@ test('CF1 mixed retirement batch immediately applies the independent non-awaitin
 });
 
 for (const resolution of ['confirm', 'reject']) test(`CF1 ${resolution} restores or drops durable conflict hints`, t => {
+  const fixedTime = 1_800_000_000_000;
+  t.mock.method(Date, 'now', () => fixedTime);
   const f = fixture(t);
   const target = ok(f.core.admit({ namespace: ns, memory: { content: 'Earlier direct context', kind: 'context' }, receipts: [receipt('target')] })).memory;
   const key = { namespace: ns, client: 'trusted', eventId: 'conflicting', payloadDigest: 'c'.repeat(64) };
   const token = ok(f.core.claimAdmission({ ...key, leaseMs: 1000 })).token;
+  assert.equal(f.db.prepare("SELECT lease_expires_at FROM admission_claims WHERE event_id='conflicting'").get().lease_expires_at,
+    fixedTime + 1000);
   ok(f.core.finishAdmission({ ...key, token, items: [{ content, kind: 'decision', confidence: 0.8, receipts: [receipt('inferred')],
     conflictHints: [{ memoryId: target.id, expectedRevision: target.revision, relation: 'contradicts' }] }] }));
   const memory = queue(f.core)[0];

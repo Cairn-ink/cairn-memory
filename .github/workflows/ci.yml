@@ -104,6 +104,7 @@ jobs:
       # test:core includes the episode suites on both runtimes.
       - run: npm run demo:episodes
       - run: npm run demo:session-context
+      - run: npm run demo:private-cards
       - run: npm run demo:capture
       - run: npm run demo:conflicts
       - run: npm run demo:rebuild

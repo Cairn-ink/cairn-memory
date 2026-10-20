@@ -1,4 +1,6 @@
 import { decisionReviewOption } from './confirmation-storage.mjs';
+import { privateCardOptions } from './private-card-input.mjs';
+import { createPrivateCardFacade } from './private-card-facade.mjs';
 import { contextInput, assembleSessionContext } from './session-context.mjs';
 import { rangeInput, rangeOrder, validateRangeAnchor, rangePage, envelopeText } from './episode-reads.mjs';
 import { isStorageBusy } from './database.mjs';
@@ -151,7 +153,8 @@ function failure(error) {
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
   object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
-    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview']);
+    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview', 'privateCards']);
+  const privateCards = privateCardOptions(input.privateCards);
   const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
   const captureSourcePolicy = policyDescriptor?.value;
@@ -192,7 +195,7 @@ export function openMemoryCore(input) {
   if (sessionEpisodes && (captureQualification !== 'source-bound-v2' || captureEvidence !== 'staged-v1')) throw new MemoryStoreError('invalid_input');
   const model = input.model;
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
-  const runtime = createMemoryRuntime({ path: input.path, ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
+  const runtime = createMemoryRuntime({ path: input.path, ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
   const { storeId, cursorSecret } = runtime.identity;
 
   function namespaceBinding(ns) {
@@ -1094,6 +1097,7 @@ export function openMemoryCore(input) {
   }
 
   return Object.freeze({
+    ...createPrivateCardFacade(runtime.privateCards, privateCards, runtime.ready),
     sessionStartContext, closeEpisodeNextStep, listEpisodes, listMemoriesByTime, getEpisode, forgetEpisode, correctEpisode, releaseEpisodeCorrection,
     getCaptureControl, setCapturePaused, setProjectCapture, setProceduralMemory,
     listReviewTransitions, listReviewConflicts,

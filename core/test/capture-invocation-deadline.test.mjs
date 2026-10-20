@@ -12,6 +12,7 @@ import { callModel, isCoreModelDeadlineSignal } from '../model-call.mjs';
 import { reviewCapturedRationale } from '../automatic-rationale.mjs';
 import { transaction } from '../database.mjs';
 import { rationaleModel } from '../testing/rationale-model.mjs';
+import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 
 const namespace = { ownerId: 'capture-deadline-synthetic', scope: 'personal', projectId: null };
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
@@ -360,40 +361,67 @@ test('D3 placement expiry rolls back filing and applied journal while retaining 
   assert.ok(counterfactual.mocs > 0, 'the removed post-work check permits a durable placement');
 });
 
-test('D3/D4 rationale commit expiry rolls back edges but keeps admitted sources and applied placement', async t => {
-  const { core, db } = fixture(t, { model: rationaleModel(), captureDeadlineMs: 600,
-    captureQualification: 'source-bound-v2', captureRationale: 'source-bound-v1' });
-  const delayed = delayAfterSql('INSERT INTO rationale_edges', 900);
-  try {
-    const result = ok(await core.capture(input('rationale-precommit',
-      'I chose A because it supports offline work.')));
-    assert.equal(delayed.reached(), 1);
-    assert.equal(result.classification.status, 'applied');
-    assert.equal(result.rationale.status, 'failed');
-    assert.equal(result.rationale.error.code, 'model_timeout');
-    assert.equal(count(db, 'rationale_edges'), 0);
-    assert.equal(count(db, 'receipts'), 1);
-    assert.equal(db.prepare("SELECT status FROM capture_initial_classification WHERE event_id='rationale-precommit'")
-      .get().status, 'applied');
-  } finally { delayed.restore(); }
+test('D3/D4 rationale commit expiry rolls back edges but keeps admitted sources and applied placement', t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-rationale-clock-parent-' });
+  const child = fileURLToPath(new URL('../testing/capture-rationale-clock-child.mjs', import.meta.url));
+  const run = mutation => spawnSync(process.execPath,
+    [child, workspace.path, ...(mutation ? ['remove-post-work-check'] : [])],
+    { encoding: 'utf8', env: {}, timeout: 10_000 });
+  const actual = run(false);
+  assert.equal(actual.status, 0, actual.stderr);
+  const observed = JSON.parse(actual.stdout);
+  assert.equal(observed.reached, 1);
+  assert.deepEqual(observed.inside, { edges: 1, memories: 1, receipts: 1,
+    claim: 'completed', journal: 'applied' });
+  assert.deepEqual(observed.after, { edges: 0, memories: 1, receipts: 1,
+    claim: 'completed', journal: 'applied' });
+  assert.equal(observed.classification, 'applied');
+  assert.equal(observed.rationale, 'failed');
+  assert.equal(observed.rationaleErrorCode, 'model_timeout');
+  const mutant = run(true);
+  assert.equal(mutant.status, 2, mutant.stderr);
+  assert.match(mutant.stderr, /RATIONALE_ROLLBACK_ASSERTION_FAILED:rationale edge must roll back/u);
+  const counterfactual = JSON.parse(mutant.stdout);
+  assert.equal(counterfactual.reached, 1);
+  assert.deepEqual(counterfactual.inside, observed.inside);
+  assert.equal(counterfactual.after.edges, 1);
+  assert.equal(counterfactual.after.memories, 1);
+  assert.equal(counterfactual.after.receipts, 1);
+  assert.equal(counterfactual.after.journal, 'applied');
 });
 
-test('D3 staged final admission rolls back qualified evidence when receipt work crosses deadline', async t => {
-  const { core, db } = fixture(t, { model: rationaleModel(), captureDeadlineMs: 600,
-    captureQualification: 'source-bound-v2', captureEvidence: 'staged-v1' });
-  const delayed = delayAfterSql('INSERT OR IGNORE INTO receipts', 900);
-  try {
-    const result = await core.capture(input('staged-final'));
-    assert.equal(delayed.reached(), 1);
-    assert.equal(result.error.code, 'model_timeout');
-    for (const table of ['memories', 'receipts', 'capture_initial_classification']) {
-      assert.equal(count(db, table), 0, table);
-    }
-    assert.equal(db.prepare("SELECT state FROM admission_claims WHERE event_id='staged-final'").get().state,
-      'pending');
-    assert.notEqual(db.prepare("SELECT state FROM staged_capture_evidence WHERE event_id='staged-final'")
-      .get().state, 'admitted');
-  } finally { delayed.restore(); }
+test('D3 staged final admission rolls back qualified evidence when receipt work crosses deadline', t => {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-staged-admission-parent-' });
+  const child = fileURLToPath(new URL('../testing/capture-staged-admission-clock-child.mjs', import.meta.url));
+  const run = mutation => spawnSync(process.execPath,
+    [child, workspace.path, ...(mutation ? ['remove-post-work-check'] : [])],
+    { encoding: 'utf8', env: {}, timeout: 10_000 });
+  const actual = run(false);
+  assert.equal(actual.status, 0, actual.stderr);
+  const observed = JSON.parse(actual.stdout);
+  assert.equal(observed.reached, 1);
+  assert.equal(observed.insideReceipt.receipts, 1);
+  assert.equal(observed.insideReceipt.claim, 'pending');
+  assert.equal(observed.insideReceipt.staged, 'pending');
+  assert.equal(observed.insideCompleted.qualifications, 1);
+  assert.equal(observed.insideCompleted.anchors, 1);
+  assert.equal(observed.insideCompleted.claim, 'completed');
+  assert.equal(observed.insideCompleted.staged, 'admitted');
+  assert.deepEqual(observed.after, { memories: 0, receipts: 0, journal: 0,
+    qualifications: 0, anchors: 0, claim: 'pending', staged: 'failed' });
+  assert.equal(observed.errorCode, 'model_timeout');
+  const mutant = run(true);
+  assert.equal(mutant.status, 2, mutant.stderr);
+  assert.match(mutant.stderr, /STAGED_ADMISSION_ROLLBACK_ASSERTION_FAILED:staged memory must roll back/u);
+  const counterfactual = JSON.parse(mutant.stdout);
+  assert.equal(counterfactual.reached, 1);
+  assert.deepEqual(counterfactual.insideReceipt, observed.insideReceipt);
+  assert.deepEqual(counterfactual.insideCompleted, observed.insideCompleted);
+  assert.equal(counterfactual.after.memories, 1);
+  assert.equal(counterfactual.after.receipts, 1);
+  assert.equal(counterfactual.after.qualifications, 1);
+  assert.equal(counterfactual.after.claim, 'completed');
+  assert.equal(counterfactual.after.staged, 'admitted');
 });
 
 test('D2/D3 cumulative extraction plus v1/v2 qualification exhausts one budget before admission', () => {
