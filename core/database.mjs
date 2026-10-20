@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { migrateVersion17, CONFIRMATION_SCHEMA_VERSION } from './confirmation-schema.mjs';
 import { fail } from "./validation.mjs";
-import { installPrivateCards, PRIVATE_CARD_SCHEMA_VERSION } from './private-card-schema.mjs';
+import { installPrivateCards, installCardMemorySources, PRIVATE_CARD_SCHEMA_VERSION } from './private-card-schema.mjs';
 import { migrateVersion6, installIndexReaders } from "./index-schema.mjs";
 import { migrateVersion8 } from './ordered-capture-schema.mjs';
 import { migrateVersion9 } from './claim-qualification-schema.mjs';
@@ -256,6 +256,9 @@ export function transaction(db, work, check) {
     return result;
   } catch (error) {
     db.exec("ROLLBACK");
+    if (error?.code === 'ERR_SQLITE_ERROR' && error.message === 'card_dependency_limit_reached') {
+      fail('dependency_limit_reached');
+    }
     throw error;
   }
 }
@@ -282,9 +285,17 @@ export function openDatabase(path, { privateCards = false } = {}) {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
       if (appId === APPLICATION_ID && version === PRIVATE_CARD_SCHEMA_VERSION) return;
+      if (appId === APPLICATION_ID && version === 20) {
+        if (privateCards) {
+          installCardMemorySources(db);
+          db.exec(`PRAGMA user_version = ${PRIVATE_CARD_SCHEMA_VERSION};`);
+        }
+        return;
+      }
       if (appId === APPLICATION_ID && version === VERSION) {
         if (privateCards) {
           installPrivateCards(db);
+          installCardMemorySources(db);
           db.exec(`PRAGMA user_version = ${PRIVATE_CARD_SCHEMA_VERSION};`);
         }
         return;
@@ -434,6 +445,7 @@ export function openDatabase(path, { privateCards = false } = {}) {
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
       if (privateCards) {
         installPrivateCards(db);
+        installCardMemorySources(db);
         db.exec(`PRAGMA user_version = ${PRIVATE_CARD_SCHEMA_VERSION};`);
       }
     });

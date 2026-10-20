@@ -2,7 +2,25 @@
 
 ### Explicit local submitted-note/Card boundary
 
-The opt-in [local private Card preview](private-cards-local.md) adds only
+The separately selected `retained-receipts-v1` Card drafting input resolves
+existing exact current Memory revisions and their complete bounded retained
+receipt set. It creates metadata-only required interpretation dependencies;
+it does not duplicate Memory text or receipt excerpts into a source archive.
+Receipt refs contain private Memory/receipt identifiers, bound Memory revision
+and a store/scope/purpose/content-bound HMAC. They are sensitive provenance, not
+anonymized records, authenticated speaker identity, adoption or truth. Their
+coverage is `excerpt-only` with conversation coverage unknown; full Raw requests
+still refuse. The existing trusted exact-scope host grant covers each operation.
+
+Schema 21 invalidates interpretation-dependent Cards on every Memory revision
+inside the same SQLite transaction, even for feature-off or legacy writers.
+Conservative filing-only invalidation does not claim meaning changed. Cancelling
+a draft purges all source dependency rows and text; confirmed authored current
+bodies retain their separately disclosed private policy with support unavailable.
+Effects/operation receipts contain no copied Memory/receipt text. No default
+capture, provider, publication, hosted encryption or full-Raw gate changes.
+
+The opt-in [local private Card preview](private-cards-local.md) adds
 explicitly submitted bounded notes and private authored Cards to the existing
 SQLite runtime. Default construction and existing capture/Memory DTOs do not
 change. It is not full Raw, chat capture/backfill, publication, common current

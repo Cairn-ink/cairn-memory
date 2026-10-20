@@ -32,8 +32,8 @@ export function createPrivateCardFacade(storage, options, ready) {
           actionClass: read ? 'read' : method === 'createCardDraft' && payload.input.authoredInput !== undefined
             ? 'explicit-user' : ['createCardDraft', 'editCardDraft', 'cancelCardDraft'].includes(method) ? 'draft' : 'explicit-user',
           actionId: read ? null : payload.actionId,
-          targetId: payload.cardId ?? payload.sourceId ?? payload.source?.sourceId ?? payload.operationActionId ?? payload.actionId ?? null,
-          expectedRevision: payload.expectedRevision ?? payload.source?.revision ?? null,
+          targetId: payload.cardId ?? payload.sourceId ?? payload.source?.sourceId ?? payload.source?.receiptId ?? payload.operationActionId ?? payload.actionId ?? null,
+          expectedRevision: payload.expectedRevision ?? payload.source?.revision ?? payload.source?.memoryRevision ?? null,
           payloadBinding: storage.payloadBinding([method, payload]), input: payload });
         if (!authority || typeof authority !== 'object') fail('authority_required');
         // Both host callbacks run outside the SQLite transaction. No callback,
@@ -54,7 +54,8 @@ export function createPrivateCardFacade(storage, options, ready) {
   result.getPrivateCardCapabilities = () => ({ ok: true, value: {
     version: 'private-cards-local-v1', source: 'submitted-note-v1', storage: 'local-plain-v1',
     disclosure: 'explicit-submitted-note-v1', methods: [...CARD_METHODS],
-    drafting: ['authored'], sourceTypes: ['submitted-note'], applicability: ['unknown'],
+    drafting: ['authored'], sourceTypes: ['submitted-note', 'receipt'],
+    memorySourcePolicies: ['retained-receipts-v1'], applicability: ['unknown'],
     usageProjection: 'submitted-note-usage-v1', responseByteLimit: 65536,
     currentEvidence: false, raw: false, modelAssisted: false, publication: false,
   } });
