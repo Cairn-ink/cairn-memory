@@ -17,6 +17,7 @@
   "core/private-card-schema.mjs",
   "core/private-card-storage.mjs",
   "core/private-card-facade.mjs",
+  "core/card-receipt-sources.mjs",
   "core/staged-evidence-schema.mjs",
   "core/staged-evidence-storage.mjs",
   "core/automatic-qualification.mjs",

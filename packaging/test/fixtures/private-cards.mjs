@@ -80,7 +80,7 @@ let evidence;
 try {
   const capabilities = ok(core.getPrivateCardCapabilities());
   assert.equal(capabilities.version, 'private-cards-local-v1');
-  assert.deepEqual(capabilities.sourceTypes, ['submitted-note']);
+  assert.deepEqual(capabilities.sourceTypes, ['submitted-note', 'receipt']);
   assert.deepEqual(capabilities.drafting, ['authored']);
   for (const field of ['raw', 'currentEvidence', 'modelAssisted', 'publication']) assert.equal(capabilities[field], false);
   assert.equal(capabilities.methods.some(name => /capture|raw|conversation/i.test(name)), false);

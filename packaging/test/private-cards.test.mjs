@@ -9,7 +9,8 @@ import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact, command, packageName } from '../build.mjs';
 
 const fixture = fileURLToPath(new URL('./fixtures/private-cards.mjs', import.meta.url));
-const modules = ['input', 'schema', 'storage', 'facade'].map(name => `core/private-card-${name}.mjs`);
+const modules = [...['input', 'schema', 'storage', 'facade'].map(name => `core/private-card-${name}.mjs`),
+  'core/card-receipt-sources.mjs'];
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
 test('installed private Cards retain an explicit provided note across process restart and cascade source deletion',
