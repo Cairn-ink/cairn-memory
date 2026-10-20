@@ -52,7 +52,7 @@ objects within the same SQLite store, with strict fields and bounded arrays.
 
 | Object | Proposed fields and types / invariants |
 | --- | --- |
-| `CardDraft` | `{id:Id,namespace:Namespace,revision:Revision,state:'draft',title:string,body:string,origin:'authored'|'model-assisted',bindings:SourceBinding[],triggerMemoryRefs:MemoryRef[],support:Support,createdAt:UTC,updatedAt:UTC}`. At most 16 bindings and 6 triggers; generated draft text is untrusted. |
+| `CardDraft` | `{id:Id,namespace:Namespace,revision:Revision,state:'draft',title:string,body:string,origin:'authored'|'model-assisted',bindings:SourceBinding[],triggerMemoryRefs:MemoryRef[],support:Support,createdAt:UTC,updatedAt:UTC}`. At most 16 bindings and 6 triggers; generated draft text is untrusted. Source invalidation cancels the whole draft (§5); no bodyless draft state exists. |
 | `KnowledgeCard` | `{id:Id,namespace:Namespace,revision:Revision,state:'confirmed',bodyRevision:Revision,title:string,body:string,origin,bindings,triggerMemoryRefs,support,createdAt:UTC,updatedAt:UTC,confirmedAt:UTC}`. Confirmation preserves the draft ID, increments revision, and sets bodyRevision 1. |
 | `Support` | `{status:'eligible'|'needs-review'|'unavailable',applicability:'current'|'historical'|'conflict'|'unknown',reasons:ReasonCode[],checkedAt:UTC}`. Lifecycle state and applicability are separate; confirmed does not mean currently applicable or true. |
 | `CardTombstone` | `{id,namespace,revision,state:'cancelled'|'deleted',endedAt:UTC}` plus content-free operation/audit identities. No title, body, excerpts, generated rationale or copied source text. IDs are never reused. |
@@ -132,8 +132,9 @@ encryption/key lifecycle follow the existing source policy after approval.
 ## 3. Proposed finite API and authority
 
 Expose these methods only with opt-in advertised `private-cards-v1` and, for
-shared reads, `typed-evidence-v1`; the note path additionally needs
-`submitted-note-v1`. Names are proposals on `openMemoryCore`'s shared facade.
+shared reads, `typed-evidence-v1`; anchor resolution additionally needs
+`source-reference-v1`, and notes need `submitted-note-v1`. Names are proposals on
+`openMemoryCore`'s shared facade.
 All arguments are strict and all results use the existing envelope. The host
 supplies `authority` separately from the serialized/model-controlled `input`.
 
@@ -168,6 +169,7 @@ their existing signatures. Every mutation of an existing object requires R.
 | --- | --- | --- |
 | `submitSourceNote({N,A,text,occurredAt:null|UTC},G)` | `{source:NoteSourceRef}`; revision 1, same action replay gives same source | `source_unavailable`, `quota_reached`, `raw_crypto_unavailable` |
 | `getSource({N,source:SourceRef,B,cursor?},G)` | `{source,parts,coverage,nextCursor}`; exact saved source only | `source_unavailable`, `revision_conflict`, `cursor_stale`, `context_item_too_large` |
+| `resolveSourceReferences({N,anchors:[{rawAnchor,expectedConversationRevision}],B},G)` | `{sources:RawSourceRef[],coverage}`; read-only, 1–16 explicit retained anchors, no source text | `source_unavailable`, `source_excluded`, `raw_crypto_unavailable`, `revision_conflict`, `context_item_too_large` |
 | `deleteSourceNote({N,sourceId,R,A},G)` | `MutationReceipt` and durable invalidation | `source_not_found`, `revision_conflict` |
 | `createCardDraft({N,A,input,drafting:'authored'|'model-assisted',modelBudget?},G)` | `MutationReceipt` for draft revision 1 | `source_unavailable`, `source_excluded`, `model_unavailable`, `model_budget_exceeded`, `operation_cancelled` |
 | `getCard({N,cardId,responseByteLimit?},G)` | `{card:CardDraft|KnowledgeCard|null}`; qualified owner-private inspection, default/max 65,536-byte whole envelope | `context_item_too_large` |
@@ -216,6 +218,27 @@ exact requested retained source/span, at code-point boundaries and ≤4,000 unit
 each. Core supplies offsets; coverage distinguishes complete provided source from
 an incomplete conversation. No additional surrounding text is fetched implicitly.
 
+`resolveSourceReferences` mints core-owned refs from permitted retained Raw
+without a Memory, Card, submitted note or model. `rawAnchor` is exactly RL-0's
+`{conversationId,messageId,start,end,precision}`; its existing `getConversation`
+and `rawAnchor` DTOs remain unchanged. The caller supplies actual retained-message
+coordinates, never a search query, guessed substring offset or normalized-text
+offset. Validate positive expected conversation revision, exact namespace,
+half-open UTF-16/code-point bounds, retained redacted parts and D5/D6 exclusions.
+G fixes that namespace outside model/tool args; input N must match it exactly.
+`whole-message` requires its complete saved message; `exact` requires the entire
+selected span saved contiguously. Opaque content identity is core-keyed and binds
+that exact source content, not just the coarse conversation revision.
+Use B's source-byte/deadline and whole-response ceilings; resolve all supplied
+anchors or return a fixed error with no partial refs/text. Coverage describes
+only those anchors, never a complete conversation. Authorized retained reads
+remain available during pause/raw-off as RL-0 specifies; no capture/notice/control
+barrier may be bypassed to save missing text. Opening uses the approved read port
+outside locks, then canonical scope/revision/part identities/exclusion fences are
+rechecked before returning refs. Missing/deleted/foreign/skipped source shares
+`source_unavailable`; unrelated append requires fresh coarse read/re-resolution
+but does not invalidate an unchanged exact content identity or establish adoption.
+
 `createCardDraft.input` is exactly one of:
 `{sources:SourceRef[],title,body}`; `{memoryRefs:MemoryRef[],title,body}`; or
 `{authoredInput:{text,occurredAt},title,body}`. In model-assisted mode title/body
@@ -247,9 +270,10 @@ background retries, vector service, topic summary or three-call pipeline.
 | Draft r | Edit at R=r with trusted action for new payload; revalidate all supplied bindings | Draft r+1; replace body, purge previous draft body, invalidate prior projections |
 | Draft r | Confirm at R=r with trusted action covering reviewed title/body/bindings; require currently eligible required support | Confirmed r+1/bodyRevision 1; confirmation is private authorship/curation, not truth or publication |
 | Draft r | Cancel at R=r, or cancelling pending creation by operation A before its commit | Cancelled r+1 tombstone, or cancelled creation ledger without a Card; purge generated text/source copies |
+| Draft r | Any bound source invalidates, including context-only source (§5); internal source-mutation transaction, no new user grant | Cancelled r+1 tombstone; purge the whole draft, cancel pending writes and emit content-free effects atomically |
 | Confirmed r | Edit at R=r with trusted reviewed payload/bindings/applicability; title/body change increments bodyRevision, binding-only review does not | Confirmed r+1; invalidate dependent projections/attachments; current body only; unavailable support remains blocked unless actually replaced/revalidated |
 | Confirmed r | Delete at R=r with trusted action | Deleted r+1 tombstone; purge body, draft payloads, placements and private copied excerpts; emit effects |
-| Cancelled/deleted | Any new lifecycle action | Refuse `card_state_conflict` without resurrection; exact completed action replay is handled first |
+| Cancelled/deleted | Any new lifecycle action after exact completed replay lookup | Stale R refuses `revision_conflict`; matching R refuses `card_state_conflict`; no resurrection |
 
 Use one namespace-scoped action ledger. Bind A to method, complete canonical
 payload, scope, target and R before asynchronous work. Exact completed replay
@@ -303,6 +327,26 @@ dependent interpretation is current again. Existing safe filing preservation
 requires verified unchanged content/source/qualification, not a revision guess.
 
 ## 5. Invalidation and independent authorship
+
+For an already persisted draft, V1 cancels the whole draft when **any** bound
+source/support becomes changed, excluded, deleted or revoked, including
+context-only bindings because copy-free separation is not assumed. Locator-only
+trigger changes with unchanged eligible sources retain §4's exception. The source
+mutation transaction replaces draft revision r with a cancelled tombstone r+1,
+purges title/body/bindings/private copies, advances affected index/namespace
+generations and emits `evidence_invalidated` effects under its stable cause action
+identity. Repeated invalidation is a no-op on that tombstone; no second revision
+or duplicate effect. Pending operations on it become cancelled with incremented
+operation revisions and `operation_cancelled`; late workers cannot commit.
+Pending creation with no Card yet rechecks the same source fences before any
+persistence; prepared plaintext stays ephemeral and is discarded on refusal.
+Completed operation receipts remain immutable: retrying original create/edit A
+returns its original content-free receipt, never the purged draft or resurrection.
+After restart `getCard` is null, listings omit it and old cursors are stale.
+For a known same-scope tombstone, a new edit/confirm/cancel action with old R fails
+`revision_conflict`; matching current R fails `card_state_conflict`. Foreign or
+missing IDs retain `card_not_found`. This automatic transition does not change
+the separate confirmed-authored-body retention policy below.
 
 | Mutation | Canonical eligibility effect and required action |
 | --- | --- |
@@ -552,7 +596,7 @@ nonexhaustive callers to inspect, mechanically expanding before each runtime PR.
 
 | Slice / dependency | Components to reuse or add | Observable done condition |
 | --- | --- | --- |
-| S0 shared sources; owner-approved source policy and verified Raw gates first | Existing `core/database.mjs`, `runtime.mjs`, RL-1/RL-2 source/lineage work; proposed `core/card-source-input.mjs` and optional note store | Exact saved source anchors and unavailable coverage; no excerpt masquerade; D5/D6, read/control/crypto and restart fences pass. Unknown prerequisite evidence blocks this slice. |
+| S0 shared sources; owner-approved source policy and verified Raw gates first | Existing `core/database.mjs`, `runtime.mjs`, RL-1/RL-2 source/lineage work; proposed `core/card-source-input.mjs`, anchor resolver and optional note store | Bare retained Raw anchors resolve to bounded core-owned refs without Memory/Card/model; exact identities/unavailable coverage and D5/D6/read/control/crypto/restart fences pass. No excerpt masquerade; unknown prerequisite evidence blocks this slice. |
 | S1 Card store/lifecycle; depends S0 | Proposed `core/card-schema.mjs`, `card-storage.mjs`, `card-input.mjs`; extend existing `contract.mjs`/runtime, not legacy DTOs | Model-free source → draft → confirm/edit/delete and cancel/retry races work in synthetic stores, with trusted action and current-body-only retention. |
 | S2 provenance/invalidation; depends S1 | Existing correction/forget/supersession/episode paths, proposed shared source dependency/effect storage | Every §5 mutation blocks stale current evidence before effects drain; surviving independent source rules and no-resurrection fixtures pass after restart. |
 | S3 typed MOC/common reads; depends S2 | Existing MOC/index/fetch/rationale helpers, proposed typed Card projection/mapping and evidence facade | Same-scope typed routing, unfiled fallback, bounded per-path coverage and final canonical revalidation; stale Cards/summaries cannot enter current evidence. |
@@ -586,12 +630,12 @@ create links used for S, rather than inserting oracle relationships.
 | T04 M | Bind a Card to one Raw span, append an unrelated message, refresh coarse source read | Old cursor stales; unchanged exact content identity remains eligible, no automatic Card invalidation. |
 | T05 M/S | Similar assertions in another namespace; try refs/mappings/relationship expansion across it | No foreign content or access; wrong-scope claim cannot update the local decision. |
 | T06 M | A cached generated topic summary depends on corrected/forgotten support; read current through all paths | Stale summary is excluded before recomputation/effect drain, not merely badged. If summary feature absent, capability is unavailable; no fabricated cache is used. |
-| T07 M/S | Forget/correct a Memory with Raw retained, retry same/paraphrased source-span drafting or extraction after restart | D6 excludes the forgotten span, fresh action/event IDs cannot resurrect it, dependent drafts/caches purge; disjoint anchors remain usable. |
-| T08 M | Create/edit draft; race double-confirm, confirm/cancel, edit/delete; repeat original A after terminal state and restart | One CAS winner, no resurrection, exact replay returns original receipt; changed payload under A refuses. Cancellation/forget between provider call and commit publishes nothing stale. |
+| T07 M/S | Persist drafts with required and context-only source bindings; forget/correct their Memory with Raw retained; retry span-based drafting/extraction after restart | D6 excludes affected anchors; each affected draft is cancelled once at r+1 with no title/body/bindings left, get is null/list omits, effects persist once. Original operation receipt remains content-free; new IDs cannot resurrect it. Caches purge; disjoint anchors remain usable. |
+| T08 M | Create/edit draft; race double-confirm, confirm/cancel, edit/delete and source invalidation; replay original A and stale/new CAS actions after restart | One CAS winner, no resurrection; original A returns its original content-free receipt even after automatic cancellation, changed payload refuses. Old R fails revision_conflict; current tombstone R fails card_state_conflict. Pending operations cancel/fence late commits; no stale provider output persists. |
 | T09 M | Two independent source conversations support a Memory/Card; delete one, then review surviving support | D5 preserves actual surviving Memory/receipt, removes deleted-source text. Required Card loss blocks current use until trusted review; independent sources count correctly, duplicate receipts do not inflate corroboration. |
 | T10 M/H | Delete a confirmed Card with active index/ref and pending publication effect; restart and drain | Body/private copies vanish, old refs fail, effects are idempotent; no reattachment or stale published support through delayed drain. |
 | T11 M | Active same-scope typed mapping, then revoke it; query previously mapped/unfiled Card | Traversal stops immediately; canonical content remains recallable in its own authorized type, no ACL change. |
-| T12 M/H | Explicit complete provided note, approved note capability, authored source → Card with no Memory/provider | Exactly note source + private draft/confirmation persist; zero model calls; completeness is provided-note, never conversation-complete. Capability absent refuses before retention. |
+| T12 M/H | (a) Navigate bare retained Raw, resolve actual anchors and author/confirm a Card with no Memory/note/model. (b) Submit complete provided note under approved note capability and author/confirm a Card with no Memory/provider | (a) Bounded core-owned exact refs enable Raw → Card with zero model calls; bad/forgotten/foreign anchors refuse, unrelated append needs fresh coarse resolution but unchanged content stays valid. (b) Exactly note source + private draft/confirmation persist; zero model calls; provided-note never means conversation-complete. Missing capability refuses before retention. |
 | T13 M/H | Ordinary capture hook and existing Memory `confirm` run; inspect Card store/tools | No automatic Card creation/publication or expanded authority; old tool/DTO shape remains compatible. |
 | T14 H | Install exact generated artifact, create private draft through new MCP tools, confirm through actual verified host/CLI intent adapter, stop server, start new process/new session and read/forget | Capability/version/scope match, lifecycle/evidence/fences survive actual stdio restart. Missing approval adapter refuses; stale draft approval fails. A source-checkout demo, model flag or mock client cannot substitute. |
 | T15 M | Synthetic oversized/Unicode source, many topics, cyclic mappings, time/byte/page limits, missing source/crypto | Finite work/response, explicit per-path exhaustion/unknown/unavailable counts, no false completeness, no guessed offsets/plaintext fallback or network/model read. |
