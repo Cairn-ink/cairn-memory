@@ -1,12 +1,12 @@
-# Internal local Raw journal, capture, lineage and deletion (P1/P2/P3a/P3b)
+# Internal local Raw journal, capture, lineage, deletion and sources (P1/P2/P3a/P3b/P3c)
 
-This is the storage/read foundation in
-[the local V1 plan](plans/raw-local-v1-completion.md), not completed Raw capture
-or the whole RL-1 package. It is default-off and authorized only for pure-local,
-synthetic development and tests. It adds no public capture mutation, MCP tool,
-client hook, Raw → Card resolver, hosted encryption or production enablement.
-P2 adds an internal factory that joins the existing bounded capture engine;
-ordinary public capture retains its existing request and response contract.
+These are the internal local mechanisms in
+[the V1 plan](plans/raw-local-v1-completion.md), not completed installed/hosted
+Raw V1. They are default-off and authorized only for pure-local synthetic
+development and tests. P2 joins the existing bounded capture engine; P3c adds
+explicit Raw references and authored Cards through the same private engine.
+No public Raw mutation, MCP tool, client hook, hosted encryption or production
+enablement is added. Ordinary public capture keeps its existing wire contract.
 
 ## Internal boundary
 
@@ -19,8 +19,9 @@ reject it; stop old writers before any future migration. This packet migrates
 only owned synthetic fixtures, never an operational database.
 
 `createRawJournal({ db, mode, port, capBytes, readPolicy })` is an internal source
-module and is not part of the installed runtime manifest. Only its schema module
-is packaged because the existing database opener statically imports that module.
+module and is not part of the installed runtime manifest. Canonical DB-only
+schema/input/authority dependencies are packaged for ordinary selected-store
+enforcement; the journal, async reader and usable factory stay uninstalled.
 No installed Raw capability is advertised. The internal journal provides:
 
 - `prepareRegistration(input)`: validate exact namespace and camel-case message
@@ -192,8 +193,9 @@ Exact replay continues to observe its recorded outcome without model work.
 
 P3a alone is **not completed P3 or Raw V1**. The separately selected P3b
 packet below adds D5's live-source cascade, conversation deletion,
-reservation/control closure and withdrawal effects. P3c still must implement
-asynchronous Raw resolution and bare Raw-to-Card support. No public Raw anchors,
+reservation/control closure and withdrawal effects. P3a/P3b alone do not include
+the asynchronous Raw resolution and bare Raw-to-Card support described below
+in the internal P3c section. No public Raw anchors,
 installed Raw capability or re-extraction job is introduced here; RL-9 owns the
 later explicit re-extraction workflow.
 
@@ -273,9 +275,90 @@ payload-free unbound jobs do not block. Pause/project-stop and client-off share
 DB-only reservation closure; accepted parts remain, late suffixes never backfill,
 and a fresh higher-ordinal message may save after resume/on.
 
-This implements only internal synthetic D5/D6 mechanics. Raw resolution and bare
-Raw-to-Card remain P3c; installed/client Raw lifecycle and host effect consumption
+This P3b slice implements only internal synthetic D5/D6 mechanics. Raw resolution
+and bare Raw-to-Card are the separate internal P3c slice below; installed/client
+Raw lifecycle and host effect consumption
 remain P4. The factory must not be exposed before those packets and acceptance.
+
+## Internal P3c source references and authored Cards
+
+Only the uninstalled factory's own boolean `sources:true` selects schema 28,
+implying deletion and lineage, with the existing trusted private-Card authority.
+Public constructor fields, ordinary capabilities and synchronous note/receipt
+methods remain unchanged. The actual frozen v27 opener refuses 28. Migration
+adds metadata bindings and an indexed Raw part start lookup, not source backfill.
+`core/testing/raw-v27-database.mjs` freezes the actual opener from
+`50230c0390a0e035b8d15f0cdeb9c335f97e3ffb`: 22,229 bytes after removing its
+header and undoing only relative-import relocation.
+
+`resolveSourceReferences({namespace,anchors,budgets?},authority)` is asynchronous.
+It resolves all 1–16 explicit `{rawAnchor,expectedConversationRevision}` entries
+or returns an error without partial references. An anchor is the existing
+`{conversationId,messageId,start,end,precision}` on original redacted UTF-16 text,
+with code-point boundaries and contiguous saved coverage. Whole-message precision
+requires the entire saved message, not a bounded receipt/prefix. No substring or
+normalized-offset inference occurs. Success is `{sources,coverage}`; coverage is
+`{status:'complete',included:<anchor count>,omitted:0,conversationCoverage:'unknown'}`.
+
+A reference is exactly `{type:'raw',namespace,conversationId,messageId,
+span:{start,end,precision},contentIdentity}`. Its opaque core-keyed identity binds
+the store/scope, span, immutable source metadata, keyed content digests, sealed
+fingerprints and format/key version. It excludes assembly state, conversation
+revision and locator Memory filing. Unchanged saved prefixes survive completion
+and unrelated append; re-encryption requires explicit re-resolution. Only verified
+asynchronous decoding mints a reference. Later authored Card writes synchronously
+recompute its bounded canonical manifest and D5/D6 authority, without a crypto
+port or host callback under the write lock. No Memory, note, model call or stored
+Raw text copy is manufactured for source-only Cards.
+
+Raw-only `getSource({namespace,source,limit?,cursor?,budgets?},authority)` is async;
+note/receipt variants remain synchronous and reject `budgets`. Limit defaults to
+20/max 50. Parts are `{start,end,text}` with absolute original offsets, no extra
+surrounding text and at most 4,000 units. Coverage is
+`{status:'complete'|'budget_exhausted',completeness:'selected-raw-span',
+conversationCoverage:'unknown',included:<part count>,omitted:0|null}`.
+Source cursors bind the exact reference, normalized budgets, limit and trusted
+access generation. A changed budget is `invalid_cursor`; a revoked generation
+is `cursor_stale`. Unrelated append does not invalidate an unchanged reference.
+
+The budgets allowlist is `sourceByteLimit,scanRowLimit,deadlineMs,responseByteLimit`:
+defaults 16,000/128/1,000/65,536; maxima 64,000/1,024/5,000/65,536. Anchors share
+one allowance, reusing cached covered intervals and unique enclosing parts.
+Metadata and `length(sealed)` are checked before BLOB loading/opening; only the
+two existing formats and their exact payload sizes are accepted. Port opening
+occurs outside transactions, followed by host-generation and final canonical
+rechecks without callbacks afterward. A deadline cannot preempt an uncooperative
+port; its late output is discarded. Preparation errors are nonretryable
+`source_budget_exceeded`, `source_timeout`, or `context_item_too_large` for an
+indivisible response. Missing/foreign/deleted/skipped sources are unavailable.
+
+Every Raw source page authenticates its **complete selected reference** within
+the caller's byte/row budgets, charging each unique enclosing part once across
+snapshot, recheck and opening. Paging bounds returned/opened plaintext, not
+whole-reference authentication work: a reference larger than 16,000 bytes needs
+an explicit larger budget even for `limit:1`. There is no cheap-pagination claim
+or hidden fixed-64k bypass. Current Card writes retain the aggregate 64,000-byte
+source ceiling, conservatively counting enclosing parts and deduplicating only
+identical canonical parts, not equal text. At most 128 live draft/confirmed Cards
+may depend on one conversation across all spans; cancellation/deletion frees room.
+
+D5/D6 source mutations invalidate bound Cards in the same transaction, including
+already-open option-off writers. Drafts purge body/bindings; confirmed authored
+body and bounded typed metadata remain private while current evidence becomes
+unavailable. Multiple affected spans do not multiply Card invalidation. Exact
+create replay remains its original content-free receipt, not a resurrected draft.
+The shared canonical checks also cover evidence, snapshots and typed Card MOCs.
+Raw-only provenance uses `selected-raw-span`; mixed sources including Raw use
+`mixed-sources`, with `corroboration:'not-assessed'`. Old note/receipt output and
+note-only usage remain unchanged; `getRawUsage` remains separate.
+
+An ordinary private-Card facade encountering required Raw bindings fails
+`source_unavailable` for get/list/evidence/organization/source-consuming writes,
+rather than returning an unsupported DTO or silently claiming complete results.
+Cancellation, deletion and content-free action inspection remain available by ID.
+This mixed-store browsing limitation is deliberate; no installed Raw reader is
+advertised. Capture pause/raw-off do not revoke separately authorized retained
+source reads, and missing read crypto never enables capture or a decoder fallback.
 
 ## Storage and reads
 
@@ -352,7 +435,7 @@ processes, asynchronous reads, CAS and bounded effects. The actual v26 opener in
 `99b09855358176786d86765d009faba4777867f6` (21,414 bytes after removing its header
 and undoing only relative-import relocation).
 
-These establish internal P1/P2/P3a/P3b mechanics. Raw → Card, installed Raw
+These establish internal P1/P2/P3a/P3b/P3c mechanics. Installed Raw
 lifecycle, production controls/encryption and semantic
 quality remain later packets and acceptance gates in the plan. Existing
 installed/public compatibility tests do not establish installed Raw capability.

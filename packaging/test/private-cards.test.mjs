@@ -10,7 +10,7 @@ import { buildArtifact, command, packageName } from '../build.mjs';
 
 const fixture = fileURLToPath(new URL('./fixtures/private-cards.mjs', import.meta.url));
 const modules = [...['input', 'schema', 'storage', 'facade'].map(name => `core/private-card-${name}.mjs`),
-  'core/card-receipt-sources.mjs'];
+  'core/card-receipt-sources.mjs','core/card-raw-sources.mjs','core/raw-source-input.mjs','core/raw-source-schema.mjs'];
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
 test('installed private Cards preserve note and receipt-backed lifecycles across fresh processes and feature-off mutations',
@@ -28,6 +28,9 @@ test('installed private Cards preserve note and receipt-backed lifecycles across
     command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
       artifact.artifactPath], root, artifact.userconfig);
     const installed = join(root, 'node_modules', packageName);
+    for (const name of ['raw-source-reader','raw-capture','raw-journal']) {
+      assert.equal(existsSync(join(installed,`core/${name}.mjs`)),false);
+    }
     for (const file of modules) {
       assert.ok(artifact.files.includes(file), `${file} must be in the inspected archive`);
       const bytes = readFileSync(join(installed, file));

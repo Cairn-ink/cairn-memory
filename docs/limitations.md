@@ -1801,3 +1801,86 @@ ordinary supersede on a qualified Memory. History now uses real qualified
 binding/transition, preserving the existing refusal. Correction logs, including
 all reds and setup failures, are under
 `/tmp/cairn-raw-p3b-evidence.xOAiQk/review-correction-*.log`.
+
+## Internal Raw sources P3c: bounded local references, not installed Raw adoption
+
+The [source packet](plans/raw-local-v1-sources.md) opts into schema 28 through
+the uninstalled factory and existing trusted private-Card authority. Authored
+Cards reuse the current lifecycle, ledger, evidence and typed organization engine;
+no synthetic Memory/note, model call or retained Raw-text copy is required.
+Only canonical DB/schema/input modules enter installed static import closure:
+`core/raw-source-schema.mjs`, `core/raw-source-input.mjs`, and
+`core/card-raw-sources.mjs`. The async reader and usable factory stay uninstalled.
+Ordinary mixed-store browsing fails closed on required Raw-backed Cards while
+deletion/cancellation/content-free operation inspection remain available by ID.
+New source capability does not complete P4 clients, installed lifecycle, hosted
+crypto/notice/production gates or host effect consumption.
+
+Source budgets charge full enclosing parts shared across anchors, not selected
+substring bytes. Each page authenticates the entire selected reference within
+the caller's byte/row limits, even when returning one part. Large references
+require an explicit larger budget; there is no cheap-pagination or latency claim
+for an uncooperative crypto port. Re-encryption invalidates existing identities
+and requires re-resolution. Raw and note usage projections remain separate.
+
+Retained runtime reds include partially overlapping anchors: the first cached
+prefix was reread/charged while extending a later anchor, refusing a request
+whose actual distinct parts fit. The worker's two-client regression failed 0/2,
+actual exit 1; the shared indexed collector now seeks only uncovered intervals,
+including left/right extension and gaps between cached islands. Full bounds
+coverage then passed 15/15 on Node 22.16, actual exit 0, without raising limits.
+
+A real pre-P3a keep also exposed a D6 hole: its receipt contained consumer B's
+identity while exact keep metadata proved original already-saved Raw A. After
+upgrade, option-off forget succeeded but left zero A exclusions and an eligible
+source-only A Card (0/2, actual exit 1). The shared exclusion seam now reuses
+P3b's canonical keep-origin resolver before stamped-tuple fallback. Forget and
+correction exclude the proven origin with existing exact maps/conservative
+whole-message fallback; missing/ambiguous proof refuses before mutation instead
+of guessing. The six-case legacy regression then passed, actual exit 0. No source
+text matching, union of ambiguous roots or provenance backfill was introduced.
+
+A subsequent actual-P2 differential probe found an ordinary-memory regression:
+after consumer-source proof was removed, no-Raw legacy keep forget/correct still
+worked on P3b but failed on the initial P3c source (four baseline passes/four
+candidate failures, actual exit 1). The checked-in two-client regression also
+failed all 12 operation/foreign-namespace cases before correction, actual exit 1.
+The exclusion seam now first checks for Raw in the exact owner/scope/project
+namespace. With none, ordinary mutation keeps its previous behavior; foreign
+Raw is neither authority nor a mutation target. Missing keep proof still refuses
+atomically when target-namespace Raw exists. The retained differential and
+tracked-red logs are `worker-no-raw-legacy-first22.log` and
+`worker-no-raw-tracked-red22.log` in the evidence directory below.
+
+The frozen `compat-final` Node 22 full-core run retained one failure:
+1,613/1,614, actual exit 1. The unchanged serialization-deadline test returned
+the expected `model_timeout`, but its assumption that a 500 ms budget reached
+the 700 ms serialization hook failed (`serialized=0`, expected 1). Controlled
+probes on actual P3b and P3c, on both runtimes, reproduce that exact assertion
+with a 600 ms pre-output delay; controls reach serialization. No Memory,
+receipt, initial-classification or MOC rows are written, though the expected
+content-free pending claim remains. This demonstrates baseline-shared timing
+sensitivity, not the uninstrumented historical scheduler/expiration path.
+The first probe's nonexistent-table instrumentation error is retained separately.
+
+The first `compat-bounded` scheduling attempt put the concurrency option after
+file arguments and did not enforce the intended limit; it was deliberately
+stopped (core exit 143, matrix exit 1, empty owned scratch). The corrected
+`compat-scheduled` run keeps the same 104-file roster, assertions and product
+deadlines, placing `--test-concurrency=4` before the files. Its 22 Node 22
+commands all exit 0, including full core 1,614/1,614; Node 24 verification is
+still pending at this checkpoint. Neither that result nor an isolated green
+rerun erases the original failure. The earlier pre-correction candidate's
+intentional interruption is also retained in the [packet plan](plans/raw-local-v1-sources.md).
+The usable Raw factory/reader remain uninstalled; the product pin is unchanged.
+
+Fixture-development failures remain separate: a 50/52 run expected exclusion
+before the mandatory concurrent coarse-revision fence; a fresh-revision check
+now proves exclusion afterward. An 11/13 bounds run reused an event ID across
+different sessions and correctly conflicted. The initial legacy correction
+matrix passed 4/6 because its correction request used admission-shaped fields
+rather than the existing strict correction DTO. Those commands exited 1; fixture
+fixes did not relax runtime validation. Logs are retained under
+`/tmp/cairn-raw-p3c-evidence.n7PShP/worker-*.log`. Final frozen-source gates and
+independent reviews are recorded separately in the plan/PR; earlier green runs
+are not final-source evidence or measured semantic quality.

@@ -20,6 +20,7 @@ import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
+import { createRawCardInvalidation } from './card-raw-sources.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
@@ -34,9 +35,10 @@ export function createMemoryRuntime(input, internal) {
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
   const db = openDatabase(input.path, { privateCards: Boolean(privateCards), rawCapture: Boolean(internal?.rawCapture),
-    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion) });
+    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources) });
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);
+  const rawCards = createRawCardInvalidation(db);
   let deletion;
   let identity;
   try {
@@ -51,7 +53,7 @@ export function createMemoryRuntime(input, internal) {
   let mocStorage;
   const ready = () => { if (closed) fail("store_closed"); };
   const internalNamespace = ns => ({ ...ns, projectId: ns.projectId ?? '' });
-  const cardStorage = privateCards ? createPrivateCardStorage({ db, identity, ready,
+  const cardStorage = privateCards ? createPrivateCardStorage({ db, identity, ready, rawSources: Boolean(internal?.rawSources),
     memoryMapInside: (ns, request) => mocStorage.mapRowsInside(internalNamespace(ns), request),
     memoryTopicInside: (ns, ref) => mocStorage.topicInside(internalNamespace(ns), ref) }) : undefined;
 
@@ -237,7 +239,7 @@ export function createMemoryRuntime(input, internal) {
 
   function correct(ns, id, value, expectedRevision, projection = {}) {
     ready();
-    return transaction(db, () => {
+    return transaction(db, () => rawCards.mutate(ns,'memory-correct-'+id+'-'+expectedRevision,() => {
       const current = visibleRow(ns, id);
       if (!current) fail("memory_not_found");
       if (current.revision !== expectedRevision) fail("revision_conflict");
@@ -267,10 +269,13 @@ export function createMemoryRuntime(input, internal) {
         ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}),
         ...(projection.detail ? { detail: detailDto(memory) } : {}),
         indexRevision: advanceEpoch(ns) };
-    });
+    }));
   }
 
   function forgetMutation(ns, id, expectedRevision, reason = 'forgotten') {
+    return rawCards.mutate(ns,'memory-forget-'+id,() => forgetMutationInside(ns,id,expectedRevision,reason));
+  }
+  function forgetMutationInside(ns, id, expectedRevision, reason) {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
@@ -659,6 +664,7 @@ export function createMemoryRuntime(input, internal) {
     sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     privateCards: cardStorage,
+    rawSourceReader: internal?.rawSources ? rawCapture?.sourceReader : undefined,
     previewDeleteConversation(input) { ready(); return deletion.preview(input); },
     deleteConversation(input) { ready(); return deletion.remove(input); },
     listRawEffects(input) { ready(); return deletion.list(input); },

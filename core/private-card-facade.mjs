@@ -20,16 +20,17 @@ function failure(error) {
   return { ok: false, error: { code, retryable: code === 'storage_busy' } };
 }
 
-export function createPrivateCardFacade(storage, options, ready) {
+export function createPrivateCardFacade(storage, options, ready, rawReader) {
   if (!options) return {};
   const result = {};
-  for (const method of CARD_METHODS) {
+  const methods = [...CARD_METHODS, ...(rawReader ? ['resolveSourceReferences'] : [])];
+  for (const method of methods) {
     result[method] = (input, authority) => {
       try {
         ready();
         const payload = snapshot(input);
         if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 200_000) fail('invalid_input');
-        const ns = validateCardCall(method, payload), read = CARD_READS.has(method);
+        const ns = validateCardCall(method, payload, Boolean(rawReader)), read = CARD_READS.has(method) || method === 'resolveSourceReferences';
         const request = deepFreeze({ method, namespace: ns,
           actionClass: read ? 'read' : ORGANIZATION_WRITES.includes(method) ? 'organization' : method === 'createCardDraft' && payload.input.authoredInput !== undefined
             ? 'explicit-user' : ['createCardDraft', 'editCardDraft', 'cancelCardDraft'].includes(method) ? 'draft' : 'explicit-user',
@@ -43,6 +44,19 @@ export function createPrivateCardFacade(storage, options, ready) {
         const grant = options.authority.authorize(request, authority);
         if (!grant || typeof grant !== 'object' || typeof grant.then === 'function') fail('authority_required');
         const generation = verified(options.authority.isCurrent(grant, request), request);
+        if (rawReader && (method === 'resolveSourceReferences' || method === 'getSource' && payload.source.type === 'raw')) {
+          return (async () => {
+            try {
+              const prepared = await rawReader.prepare(method, ns, payload, generation);
+              let current;
+              try { current = verified(options.authority.isCurrent(grant, request), request); }
+              catch { fail('scope_changed'); }
+              if (current !== generation) fail('scope_changed');
+              const value = prepared.finish();
+              return { ok: true, value };
+            } catch (error) { return failure(error); }
+          })();
+        }
         let finalGeneration;
         try { finalGeneration = verified(options.authority.isCurrent(grant, request), request); }
         catch { fail('scope_changed'); }
@@ -55,8 +69,8 @@ export function createPrivateCardFacade(storage, options, ready) {
   }
   result.getPrivateCardCapabilities = () => ({ ok: true, value: {
     version: 'private-cards-local-v1', source: 'submitted-note-v1', storage: 'local-plain-v1',
-    disclosure: 'explicit-submitted-note-v1', methods: [...CARD_METHODS],
-    drafting: ['authored'], sourceTypes: ['submitted-note', 'receipt'],
+    disclosure: 'explicit-submitted-note-v1', methods: [...methods],
+    drafting: ['authored'], sourceTypes: ['submitted-note', 'receipt', ...(rawReader ? ['raw'] : [])],
     memorySourcePolicies: ['retained-receipts-v1'], applicability: [...APPLICABILITY],
     confirmationApplicability: 'explicit-optional-review',
     usageProjection: 'submitted-note-usage-v1', responseByteLimit: 65536,
@@ -69,7 +83,7 @@ export function createPrivateCardFacade(storage, options, ready) {
       actionClasses: { applyCardPlacement: 'organization', refreshCardTopic: 'organization', proposeEvidenceMapping: 'organization', reviewEvidenceMapping: 'explicit-user' },
       maxCards: 5, maxParents: 3, maxActiveMappingsPerTopic: 16,
       defaultPageLimit: 20, maxPageLimit: 50, maxCardMapScanRows: 256, implicitSelectionExpansion: false },
-    raw: false, modelAssisted: false, publication: false,
+    raw: Boolean(rawReader), modelAssisted: false, publication: false,
   } });
   return result;
 }

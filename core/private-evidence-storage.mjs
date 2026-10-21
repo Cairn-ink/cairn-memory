@@ -63,7 +63,8 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
       const sources = card.bindings.map(binding => binding.source);
       return { ...cardMetadata(card), title: card.title, body: card.body,
         qualification: { applicability: card.support.applicability, attribution: 'unassessed', commitment: 'unknown' },
-        provenance: { sources, completeness: sources.every(source => source.type === 'submitted-note') ?
+        provenance: { sources, completeness: sources.some(source => source.type === 'raw') ?
+          sources.every(source => source.type === 'raw') ? 'selected-raw-span' : 'mixed-sources' : sources.every(source => source.type === 'submitted-note') ?
           'provided-note' : 'excerpt-only', conversationCoverage: 'unknown', meaning: 'unassessed',
         support: card.support.status, corroboration: 'not-assessed',
         coverage: { status: 'complete', included: sources.length, omitted: 0 } },

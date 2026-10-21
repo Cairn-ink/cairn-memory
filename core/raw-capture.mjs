@@ -13,9 +13,13 @@ const invoke = work => { try { return success(work()); } catch (error) { return 
 
 /** Synthetic/internal construction only; intentionally absent from installed files. */
 export function openRawCaptureCore(input, rawOptions) {
+  const sourcesDescriptor = Object.getOwnPropertyDescriptor(rawOptions, 'sources');
+  if (sourcesDescriptor && (!Object.hasOwn(sourcesDescriptor, 'value') || typeof sourcesDescriptor.value !== 'boolean')) fail('invalid_input');
+  const sources = sourcesDescriptor?.value === true;
+  if (sources && !input.privateCards) fail('authority_required');
   const deletionDescriptor = Object.getOwnPropertyDescriptor(rawOptions, 'deletion');
   if (deletionDescriptor && (!Object.hasOwn(deletionDescriptor, 'value') || typeof deletionDescriptor.value !== 'boolean')) fail('invalid_input');
-  const deletion = deletionDescriptor?.value === true;
+  const deletion = sources || deletionDescriptor?.value === true;
   const descriptor = Object.getOwnPropertyDescriptor(rawOptions, 'lineage');
   if (descriptor && (!Object.hasOwn(descriptor, 'value') || typeof descriptor.value !== 'boolean')) fail('invalid_input');
   const lineage = deletion || descriptor?.value === true;
@@ -23,10 +27,12 @@ export function openRawCaptureCore(input, rawOptions) {
     'captureEvidence','captureRationale','sessionEpisodes'].filter(key => Object.hasOwn(input, key)).map(key => [key,input[key]])));
   let storage, capture, runtime;
   const core = createMemoryCore(input, {
+    rawSources: sources,
     createRuntime: config => (runtime = createMemoryRuntime(config, { rawCapture: true,
+      rawSources: sources,
       rawLineage: lineage === true,
       rawDeletion: deletion,
-      attachRaw: db => (storage = createRawCaptureStorage({ db, profile, ...rawOptions })) })),
+      attachRaw: db => (storage = createRawCaptureStorage({ db, profile, ...rawOptions, sources })) })),
     attachCapture: operation => { capture = operation; },
   });
   return Object.freeze({ ...core,

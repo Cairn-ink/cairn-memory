@@ -988,3 +988,49 @@ identical long nine-suite run. Fixed-commit dual review and latest-head CI remai
 required before delivery. Primary owns that plan and independent verification;
 the implementation worker owns runtime/storage/tests and minimal reference
 docs. P3c source resolution and P4 installed/client integration remain separate.
+
+### P3b accepted delivery and P3c start
+
+P3b corrected candidate `50230c0390a0e035b8d15f0cdeb9c335f97e3ffb` is
+[PR #452](https://github.com/Cairn-ink/cairn-memory/pull/452), ready and mergeable,
+not merged. Both non-author GPT 6.1 Sol/high review axes accepted that exact
+complete packet: zero Standards breaches (one optional low-severity helper
+duplication) and zero Spec findings. Each independently ran 76 deletion cases,
+actual exit 0. Spec also verified actual frozen-P2 keep and source-graph CAS
+reproductions positively; all scratch processes finished. Primary post-commit
+47-case acceptance passed both runtimes, actual exit 0, no residue.
+
+Latest-head CI has 31/31 SUCCESS. Run `39545949895` completed on that exact
+candidate; merge candidate `b3c5176d7a00b2ee49cba250de23a5443c5074ac` has the
+same `ff6159425e7de5e99ce26d83604a37814bde2e9b` tree as the reviewed head,
+independent diff exit 0. No CI rerun, merge, release or deployment occurred.
+The product keeps `cd6d1ad`; #453 receives the scoped handoff, not a pin-change
+instruction. Durable effects still do not claim completed host withdrawal.
+
+P3c now proceeds from that fixed base in `feat/raw-local-v1-sources`, isolated
+worktree `raw-local-v1-sources`. Its [concrete acceptance contract](raw-local-v1-sources.md)
+adds exact Raw source resolution to the same authored Card engine, transactional
+D5/D6 support invalidation, bounded async reads and ordinary-writer safety.
+The primary owns 32 independent acceptance cases; one GPT 6.1 Sol/high worker
+implements runtime/tests. Default public behavior and installed Raw exposure
+remain unchanged pending P4. No passing P3c result is inferred from P3b's matrix.
+
+### P3c final offline checkpoint
+
+P3c's final frozen-source44-command matrix now passes on Node22.16.0/24.15.0,
+actual exit0 throughout: primary44/44 each, packet60/60 each, full core1,614/1,614
+each, generic635/635 each, MCP125/125 each, installed synthetic rationale4/4
+each and workspace lifecycle25/25 each. Artifacts pass94 each with the one
+explicit native-Windows-only WSL skip; validation and all12 demos also exit0.
+The [packet record](raw-local-v1-sources.md#final-offline-matrix-before-candidate-commit)
+retains earlier runtime regressions, fixture failures, timing diagnosis and
+intentional interruptions. Final core uses the unchanged104-file roster with
+four local workers; product deadlines/assertions and remote CI are unchanged.
+
+All eight owned parent workspaces are empty and removed. Two independent
+inventories agree on30 P3c paths,26 non-document paths, unchanged across the
+full gates. Candidate commit, both independent reviews and latest-head CI still
+precede delivery. This completes neither installed Raw capture nor the whole
+local V1. P4 next connects bounded complete-record preparation, whole-message
+redaction and exact retry parts to the same core, then the actual installed
+client/local-transport lifecycle. Existing product pin remains `cd6d1ad`.

@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { transaction } from './database.mjs';
 import { rawNamespace, rawBoundary } from './raw-input.mjs';
 import { fail, identifier, object, revision } from './validation.mjs';
+import { createRawCardInvalidation } from './card-raw-sources.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const publicNs = ns => ({ ...ns, projectId: ns.projectId || null });
@@ -10,6 +11,7 @@ const size = value => Buffer.byteLength(JSON.stringify({ ok: true, value }));
 
 /** One model-free live-source plan for preview, conversation delete and old episode delete. */
 export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, removeReceipts, advanceEpoch }) {
+  const rawCards = createRawCardInvalidation(db);
   const key = Buffer.from(db.prepare('SELECT cursor_secret FROM store_metadata WHERE singleton=1').get().cursor_secret, 'hex');
   const hash = value => createHmac('sha256', key).update(JSON.stringify(value)).digest('base64url');
   const target = (ns, id) => db.prepare(`SELECT * FROM raw_conversations WHERE ${where} AND id=?`).get(...rawBoundary(ns), id);
@@ -110,7 +112,11 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
       VALUES(?,?,?,?,?,?,?,?,?)`).run(randomUUID(), ...rawBoundary(ns), source.type, source.id, type, id, actionId);
   }
   function cascade(ns, row, source, actionId) {
+    return rawCards.mutate(ns,actionId,() => cascadeInside(ns,row,source,actionId));
+  }
+  function cascadeInside(ns, row, source, actionId) {
     const root = rootOf(row), plan = planInside(ns, root);
+    if (source.type === 'conversation') rawCards.collect(ns,[{ conversationId: row.id }]);
     db.prepare('INSERT OR IGNORE INTO raw_session_fences VALUES(?,?,?,?,?)').run(...rawBoundary(ns), root.client, root.sessionKey);
     closeJobs(ns, plan.jobs);
     db.prepare(`DELETE FROM raw_job_sources WHERE ${where} AND source_client=? AND session_key=?`)

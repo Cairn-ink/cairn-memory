@@ -5,6 +5,7 @@ import { rawBoundary, rawClient, rawContext, rawNamespace, rawPolicy, rawRegistr
 import { createRawReads } from './raw-reads.mjs';
 import { createRawControlStorage } from './raw-control-storage.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
+import { createRawSourceReader } from './raw-source-reader.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const clock = () => new Date().toISOString();
@@ -14,7 +15,7 @@ const freeze = value => {
 };
 
 /** Internal model-free seam. Hosts must not expose this before P2 controls/lineage. */
-export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy }) {
+export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy, sources = false }) {
   const rawControls = createRawControlStorage(db);
   const sourceRoots = createRawSourceRoots(db);
   const configureCap = capBytes !== undefined;
@@ -279,7 +280,9 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy 
     catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   const getConversation = createRawReads({ db,identity,epoch,open,digest,partDigest });
+  const sourceReader = sources ? createRawSourceReader({ db,identity,open,partDigest }) : undefined;
   return Object.freeze({ prepareRegistration,commitRegistration,register,getConversation,getRawUsage,
+    sourceReader,
     getRawCaptureControl,setRawCaptureControl,closePending,
     sessionKey: (namespace, client, sessionId) => sessionKey(rawNamespace(namespace), rawClient(client), identifier(sessionId)) });
 }

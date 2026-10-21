@@ -1,11 +1,13 @@
 import { createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
+import { createRawCardInvalidation } from './card-raw-sources.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId || ''];
 /** Schema-presence driven: current option-off writers enforce retained fences. */
 export function createRawLineageStorage(db) {
   const roots = createRawSourceRoots(db);
+  const rawCards = createRawCardInvalidation(db);
   let available;
   const enabled = () => available === true || (available = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'").get()));
   const digest = value => createHmac('sha256', Buffer.from(db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret, 'hex'))
@@ -68,21 +70,36 @@ export function createRawLineageStorage(db) {
   function excludeMemory(ns, memoryId) {
     if (!enabled()) return;
     if (!db.isTransaction) fail('raw_transaction_required');
+    // An opted-in schema may serve ordinary-only namespaces too. There is no
+    // retained Raw to exclude there; missing legacy keep proof must not turn
+    // ordinary correction/forgetting into a new provenance-repair requirement.
+    if (!db.prepare('SELECT 1 FROM raw_conversations WHERE owner_id=? AND scope=? AND project_id=? LIMIT 1')
+      .get(...boundary(ns))) return;
     // Resolve before any receipt/source purge; historical Memory is included.
     const receipts = db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(memoryId);
     const values = receipts.flatMap(receipt => {
       const stored = db.prepare(`SELECT conversation_id AS conversationId,message_id AS messageId,start,end,precision
         FROM raw_receipt_lineage WHERE receipt_id=?`).all(receipt.id);
-      return stored.length ? stored : anchors(ns, { client: receipt.client, sessionId: receipt.session_id,
+      if (stored.length) return stored;
+      const authority = roots.receipt(ns,receipt);
+      if (authority.legacyKeep) {
+        if (authority.unknown) fail('raw_lineage_unavailable');
+        return authority.roots.flatMap(root => anchors(ns,{ client: root.client,sessionId: root.sessionKey,
+          eventId: receipt.event_id,role: receipt.role,excerpt: receipt.excerpt }));
+      }
+      return anchors(ns, { client: receipt.client, sessionId: receipt.session_id,
         eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt });
     });
     if (!values.length) return;
-    db.prepare(`INSERT INTO raw_exclusion_clocks VALUES(?,?,?,1) ON CONFLICT(owner_id,scope,project_id)
-      DO UPDATE SET generation=generation+1`).run(...boundary(ns));
-    const generation = db.prepare('SELECT generation FROM raw_exclusion_clocks WHERE owner_id=? AND scope=? AND project_id=?')
-      .get(...boundary(ns)).generation;
-    const insert = db.prepare('INSERT OR IGNORE INTO raw_source_exclusions VALUES(?,?,?,?,?)');
-    for (const anchor of values) insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation);
+    return rawCards.mutate(ns,'source-exclusion-'+memoryId,() => {
+      rawCards.collect(ns,values);
+      db.prepare(`INSERT INTO raw_exclusion_clocks VALUES(?,?,?,1) ON CONFLICT(owner_id,scope,project_id)
+        DO UPDATE SET generation=generation+1`).run(...boundary(ns));
+      const generation = db.prepare('SELECT generation FROM raw_exclusion_clocks WHERE owner_id=? AND scope=? AND project_id=?')
+        .get(...boundary(ns)).generation;
+      const insert = db.prepare('INSERT OR IGNORE INTO raw_source_exclusions VALUES(?,?,?,?,?)');
+      for (const anchor of values) insert.run(anchor.conversationId, anchor.messageId, anchor.start, anchor.end, generation);
+    });
   }
   function filter(ns, receipts) {
     if (!enabled()) return receipts.map((_, index) => index);
