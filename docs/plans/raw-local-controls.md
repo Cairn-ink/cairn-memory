@@ -477,3 +477,9 @@ both independent review axes remain required before delivery. Evidence is in
 `/tmp/cairn-raw-b2b-evidence.CV8jdu`; those local logs are not portable test
 dependencies. No model-quality score is inferred.
 
+The first candidate's full base-to-HEAD whitespace check found an extra blank
+line at this new plan's EOF (actual exit 2). The earlier working-tree-only
+check did not include the then-untracked plan. Primary removes that whitespace
+and checks the staged/full candidate diff; all 27 author files remain frozen.
+Committed primary tests and both review axes must identify the corrected HEAD,
+not silently reuse the first candidate's identity.
