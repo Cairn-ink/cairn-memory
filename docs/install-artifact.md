@@ -5,6 +5,14 @@ host. It does not publish to npm, deploy a service or create a second engine.
 The preview name/version is `cairn-memory-local-preview@0.0.0-preview.1`;
 a future registry release needs a separate naming/version/release decision.
 
+The archive includes the [asynchronous topic reader](topic-overview.md) and its
+fixed Worker closure. The installed regression independently walks imports and
+the Worker URL, compares the five reader modules with the archive allowlist and
+source hashes, and executes public reads from installed bytes in a separate
+synthetic process. It checks lazy startup, bounded continuation, counts, optional
+refs, unchanged database bytes and awaited close. No checkout runtime fallback
+or model service is used.
+
 ## Build and inspect
 
 Use Node >=22.16, npm and `tar` from the repository root:

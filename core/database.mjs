@@ -21,8 +21,11 @@ export const STORAGE_BUSY_TIMEOUT_MS = 5_000;
 export const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
   Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff);
 
-const APPLICATION_ID = 0x43414952;
+export const APPLICATION_ID = 0x43414952;
 const VERSION = CONFIRMATION_SCHEMA_VERSION;
+// Existing layouts accepted without an upgrade by the ordinary opener.
+export const READ_SCHEMA_VERSIONS = Object.freeze([VERSION, 20, PRIVATE_CARD_SCHEMA_VERSION,
+  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION]);
 
 function createVersion3(db) {
   db.exec(`
