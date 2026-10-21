@@ -1,11 +1,14 @@
 import { pathToFileURL } from 'node:url';
 import { identifier } from '../../core/validation.mjs';
 import { DEFAULT_MODEL } from '../openai/profiles.mjs';
+import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profile.mjs';
 
 const help = `Cairn Memory — local stdio MCP developer preview
 
 Usage:
   cairn-memory --help
+  cairn-memory [--check-config] --retained-raw-profile ABS
+  cairn-memory review-card --retained-raw-profile ABS --card ID --revision N [--applicability current|historical|conflict|unknown]
   cairn-memory --check-config --db PATH --owner ID [--project ID]
   cairn-memory --db PATH --owner ID [--project ID] [--client KEY] [--session ID] [--read-client KEY]
   cairn-memory --db PATH --owner ID [--project ID] --capture-qualification source-bound-v1
@@ -25,6 +28,12 @@ Keep the database outside node_modules; its parent directory must exist.
 Reuse the exact database, owner and project across sessions.
 Normal startup waits for an MCP client on stdin; stdout is protocol-only.
 Tools: remember_memory, recall_memory, inspect_memory, correct_memory, forget_memory.
+--retained-raw-profile selects one existing private schema29 store and exact namespace.
+It is exclusive, Linux/WSL + Node>=22.16, and keyless: it never inspects a model key.
+It keeps the 22 private Card tools and adds list_raw_conversations,
+read_raw_conversation and resolve_source_references. Raw capture stays off.
+Draft from resolved Raw sources or existing Memory refs; confirmation still needs
+the separate controlling-terminal review. --check-config does not read the profile.
 --private-cards local-v1 adds bounded keyless private Card read/draft/cancel tools.
 Drafting uses already retained Memory receipts (excerpt-only, unknown conversation
 coverage), never automatic promotion, a provider or new source capture. MCP
@@ -122,13 +131,17 @@ export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
-    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards']);
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
       throw new Error('invalid_mcp_configuration');
     }
     values.set(args[i], args[i + 1]);
+  }
+  if (values.has('--retained-raw-profile')) {
+    if (values.size !== 1 || !retainedProfilePath(values.get('--retained-raw-profile'))) throw new Error('invalid_mcp_configuration');
+    return { retainedRawProfile: values.get('--retained-raw-profile') };
   }
   if (!values.get('--db') || !values.get('--owner')) throw new Error('invalid_mcp_configuration');
   identifier(values.get('--owner'));
@@ -201,11 +214,31 @@ export function parseConfiguration(args) {
 export async function start(args = process.argv.slice(2), env = process.env) {
   if (args.length === 1 && args[0] === '--help') { console.log(help); return; }
   if (args[0] === 'review-card') {
+    if (args.includes('--retained-raw-profile')) {
+      const { reviewRetainedRawCard } = await import('./retained-raw.mjs');
+      return reviewRetainedRawCard(args.slice(1));
+    }
     const { reviewCard } = await import('./review-card.mjs');
     return reviewCard(args.slice(1));
   }
   const check = args[0] === '--check-config';
   const config = parseConfiguration(check ? args.slice(1) : args);
+  if (config.retainedRawProfile) {
+    assertRetainedRuntime();
+    if (check) {
+      console.log(JSON.stringify({ ok: true, mode: 'configuration-check',
+        retainedRawProfile: 'local-raw-retained-profile-v1', privateCards: 'local-v1',
+        cardConfirmation: 'separate-local-tty-required', modelKeyInspected: false,
+        profileRead: false, databaseOpened: false, providerContacted: false,
+        cloudProcessing: false, automaticCapture: false, recall: 'model_not_configured',
+        unverified: ['profile-readiness', 'database-readiness'] }, null, 2));
+      return;
+    }
+    const { prepareRetainedRawServer } = await import('./retained-raw.mjs');
+    const factory = await prepareRetainedRawServer({ profilePath: config.retainedRawProfile });
+    const stdio = await import('@modelcontextprotocol/server/stdio');
+    return startStdio(factory, stdio);
+  }
   const key = env.OPENAI_API_KEY;
   if (key && (typeof key !== 'string' || !key.trim() || /[\r\n]/.test(key))) {
     throw new Error('invalid_mcp_configuration');
@@ -253,6 +286,10 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     const { countOpenAITokens } = await import('../openai/index.mjs');
     model = { countTokens: countOpenAITokens };
   }
+  return startStdio(() => createCairnServer({ ...config, model }), { serveStdio, StdioServerTransport });
+}
+
+function startStdio(factory, { serveStdio, StdioServerTransport }) {
   let handle;
   let closing = false;
   const stop = () => {
@@ -261,7 +298,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     void handle.close().catch(() => { console.error('cairn_mcp_close_failed'); })
       .finally(() => { process.stdin.destroy(); });
   };
-  handle = serveStdio(() => createCairnServer({ ...config, model }), {
+  handle = serveStdio(factory, {
     transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 65536 }),
     onerror: () => { console.error('cairn_mcp_transport_error'); queueMicrotask(stop); },
   });

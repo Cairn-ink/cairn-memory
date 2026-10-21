@@ -7,14 +7,21 @@ before production G1/G2 receipts. Default-off; no real-user data, paid calls,
 publication, deployment or operational database migration.
 
 Current checkpoint (2026-10-21): storage/capture/source/invalidation and local
-controls/one-shot/transport packets are delivered as reviewed, unmerged PRs;
-the [durable worker packet](raw-local-worker.md) passed primary acceptance and
-all38 final local gates, and awaits committed dual review and latest-head CI.
-Step3 still needs explicit local host/setup and control rearm. Step4's combined
-installed lifecycle and the T01–T18/RL acceptance map are not complete. Separate
-source/schema compatibility and any missing Raw-enabled MCP/review-card seam
-must be resolved or explicitly left unavailable; retained-receipt excerpts do
-not substitute for full Raw. Product pins/flags and semantic scores are unchanged.
+controls/one-shot/transport packets are delivered as reviewed, unmerged PRs.
+The [durable worker](raw-local-worker.md) is ready/unmerged as#462, and the
+[explicit foreground host](raw-local-host.md) as#463; both have committed dual
+review, primary acceptance and31 successful latest-head checks. Step3 still needs
+control rearm, the qualified duplicate-evidence policy and actual automatic
+client setup/activation. The [retained Raw MCP/terminal bridge](raw-retained-mcp.md)
+has accepted existing-store/indexed-discovery mechanics, the bounded adapter
+and independent installed Raw-to-authored-Card lifecycle cases on both supported
+Node versions. Its48 combined gates passed on both runtimes, actual exits0,
+including owned scratch cleanup. Final committed focused acceptance, dual review
+and PR delivery remain pending; this subset is not acceptance of all of Step4.
+Step4's combined installed lifecycle and T01–T18/RL acceptance map are not complete.
+Separate source/schema compatibility must be resolved or explicitly unavailable;
+retained-receipt excerpts do not substitute for full Raw. Product pins/flags and
+semantic scores are unchanged.
 
 ## What "V1 done" means
 

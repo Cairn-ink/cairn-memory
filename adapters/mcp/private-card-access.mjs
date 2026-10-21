@@ -7,15 +7,16 @@ const organization = new Set(['applyCardPlacement', 'refreshCardTopic', 'propose
 
 // Local process configuration grants only these bounded read/draft/organization operations.
 // This module has no explicit-user grant constructor.
-export function createScopedCardAccess(namespace) {
+export function createScopedCardAccess(namespace, { rawSources = false } = {}) {
   const scope = structuredClone(namespace);
   const tokens = new WeakMap(), grants = new WeakMap();
+  let closed = false;
   const authority = {
     authorize(request, token) {
       const expected = tokens.get(token);
-      if (!expected || !isDeepStrictEqual(request.namespace, scope) ||
+      if (closed || !expected || !isDeepStrictEqual(request.namespace, scope) ||
           request.method !== expected.method || !isDeepStrictEqual(request.input, expected.input) ||
-          !(request.actionClass === 'read' && reads.has(request.method) ||
+          !(request.actionClass === 'read' && (reads.has(request.method) || rawSources && request.method === 'resolveSourceReferences') ||
             request.actionClass === 'draft' && drafts.has(request.method) ||
             request.actionClass === 'organization' && organization.has(request.method))) return null;
       const grant = Object.freeze({});
@@ -23,9 +24,10 @@ export function createScopedCardAccess(namespace) {
       grants.set(grant, { ...binding, accessGeneration: 1 });
       return grant;
     },
-    isCurrent(grant) { return grants.get(grant) ?? null; },
+    isCurrent(grant) { return closed ? null : grants.get(grant) ?? null; },
   };
   return {
+    revoke() { closed = true; },
     configuration: { version: 'private-cards-local-v1', source: 'submitted-note-v1',
       storage: 'local-plain-v1', disclosure: 'explicit-submitted-note-v1', authority },
     call(core, method, input) {

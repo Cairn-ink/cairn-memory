@@ -125,7 +125,8 @@ scope. The process waits for MCP JSON-RPC on stdin; stdout is protocol-only.
 Configure an MCP client's local command to use that executable and those args.
 This does not certify a specific named client or remote connector.
 
-`--check-config` must be the first argument. It checks argument and key syntax,
+For the ordinary arguments above, `--check-config` must be the first argument.
+It checks argument and key syntax,
 prints a JSON report and exits without opening a database or making network
 requests. It does not verify database readiness, credential validity or model
 availability. Paths, owner/project IDs and keys are not printed in its report.
@@ -140,6 +141,42 @@ but model recall is not offline. MCP does not capture conversations automaticall
 The recall adapter uses the pinned default model `gpt-4.1-mini-2025-04-14`.
 Explicit remember bypasses model extraction. The experimental extraction profile
 is only a programmatic adapter option, not a CLI switch or a recall quality promise.
+
+## Keyless retained Raw inspection and authored Cards
+
+The same private archive has a separate Linux/WSL, Node >=22.16 path for an
+already existing compatible schema 29 store. It is not the capture host above
+or an installer-generated profile; it grants no capture consent, provider access,
+permission change or quota reconfiguration. Keep the database outside `app/`.
+
+Create the exact owner-selected profile described in the
+[retained Raw/TTY walkthrough](../docs/private-card-terminal-review.md#retained-raw-profile):
+own-UID regular profile/database files 0600 and immediate directories 0700,
+canonical host ancestors, exact store ID obtained from trusted already-opened
+host/SDK inspection, and an existing namespace. No store ID guessing or migration
+for discovery is supported. Then configure the installed executable:
+
+```sh
+./node_modules/.bin/cairn-memory --check-config --retained-raw-profile /absolute/private/retained.json
+./node_modules/.bin/cairn-memory --retained-raw-profile /absolute/private/retained.json
+```
+
+Do not combine this exclusive option with ordinary database/owner/model/capture
+flags. Its syntax/runtime check reads no profile, database or API key. Actual
+MCP negotiation validates readiness; an empty-stdin exit is not such a probe.
+Default startup remains five tools, ordinary private Cards remain 22, and this
+profile exposes 25. Public discovery/read/resolve supplies actual Raw references
+for explicit authored drafts without a fake Memory. MCP confirmation refuses;
+the separate `review-card --retained-raw-profile ...` controlling-TTY command
+reinspects and confirms only the exact displayed revision and bindings.
+
+Only local-plain UTF-8 sources are decoded; gaps/skips remain visible, with no
+provider fallback. A cold restart can inspect the same Card/source; deleting a
+source cancels drafts and leaves confirmed text unsupported rather than erasing
+that authored body. See the linked guide for exact arguments, limits and logical
+deletion caveats. These offline synthetic archive checks do not establish
+semantic quality, real-client activation, native macOS/Windows support or a
+public registry release.
 
 ## Inspect, correct and delete
 

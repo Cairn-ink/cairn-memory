@@ -1,5 +1,43 @@
 # Known limitations
 
+## Retained Raw MCP and authored Cards
+
+The [retained-profile path](private-card-terminal-review.md#retained-raw-profile)
+is a synthetic-tested installable private preview, not a newly published package,
+real-client qualification, semantic-quality result or completed Raw V1. It uses
+an already compatible schema 29 store; existing-only opening refuses creation
+and migration. Necessary metadata/structure validation is not a full SQL-hash
+manifest, historical-data scan or protection against malicious same-owner DDL.
+Linux/WSL with Node >=22.16 is the initial boundary; native macOS/Windows
+retained-profile verification is not claimed.
+
+The separate private profile freezes namespace/store authority across SDK
+negotiation fallback. Identity/permission checks detect file/parent replacement,
+not every same-inode content edit; restart to reconfigure. Capture consent and
+capture `readPolicy` are not retained-read authority. Fixed Raw off mode changes
+no consent, cap or permissions, enables no automatic capture and creates no
+provider. It decodes only valid UTF-8 `local-plain-v1` with null key version,
+preserving BOM/Unicode; encrypted/unknown formats have no guessed fallback.
+
+Discovery returns bounded indexed metadata, not proof of saving, interpretation
+or complete coverage. Reads expose pending/skipped regions and still compute
+conversation aggregates; bounded pages do not imply constant-time large-history
+latency. Resolve only inspected saved spans. Explicit author text and separate
+real-TTY exact-revision confirmation are required; a long message does not become
+a Card automatically, and source support is not truth or adoption. Source
+deletion cancels bound drafts while confirmed authored text can remain with
+support unavailable. Logical deletion does not erase SQLite/WAL/free pages/backups.
+
+Retained author reds were fixture issues: an SDK constant imported from the wrong
+export, a synthetic seed decoder stripping BOM, and missing expected revision.
+The packaging Node 22 run initially passed 12/13 with actual exit 1: invalid
+profile negotiation correctly closed, but the fixture expected a numeric JSON-RPC
+code rather than SDK `CONNECTION_CLOSED`; only its predicate changed, not runtime.
+Primary's initial wrong-store check used EOF without negotiation, so the lazy SDK
+factory never opened core; a real handshake corrected the harness. No runtime
+workaround was introduced. Syntax-only `--check-config` intentionally reads no
+profile/database/API key and cannot establish store readiness.
+
 ## Explicit local host (B4c)
 
 The [foreground local host](raw-local-journal.md#explicit-local-host-b4c)

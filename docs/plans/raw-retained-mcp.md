@@ -1,6 +1,8 @@
 # Next packet: discover retained Raw and author a Card through installed MCP
 
-Status: core-only milestone authorized, 2026-10-21; not delivered or accepted.
+Status: core, MCP/TTY, installed acceptance and both-runtime combined gates passed,
+2026-10-21. Final committed acceptance, independent review and PR delivery follow;
+this is not full Raw V1 acceptance or public release.
 Initial fixed base:96fd4c64e719427e594b7600702294f7313e88e2 (reviewed B4b).
 Worktree:/home/chichieh/Github/cairn-memory-worktrees/raw-retained-mcp.
 Branch:feat/raw-retained-mcp. B4c changes no core files, so this bounded core work
@@ -314,3 +316,348 @@ review and primary committed acceptance; draftPR463 is awaiting latest-head CI.
 Integrate that exact accepted commit before adapter/installed freeze and record
 the new base. No source mutation is authorized while the author prepares the
 bounded read-only MCP/TTY integration proposal.
+
+## B4c integration and bounded MCP/TTY freeze
+
+B4c PR463 now has31 successful checks and four successful exact-head workflows;
+the GitHub merge preview has the exact candidate tree. No merge performed.
+Primary locally rebased the clean core-only milestone e8a2405847971de00cc22b4b07638ea1799a8b1f
+onto accepted728fbf4767fb8d7d8131c46239cabb4a7619f412. Resulting core commit:
+43afb3cfccc8f6f24ba36f9af096d5f44458c354. The next fixed incremental delivery base
+is728fbf; the worktree retains the single core milestone43afb3 above that base.
+Before adapter edits, primary reran all11 core cases on this combined tree on
+both runtimes: actual0/null, no skip or retry, owned workspace removed. Outer
+session62146 was reaped with actual0. Independent inventories still agree11
+changed paths;1833 frozen sources SHA256
+1d3963e8359466fe585d5815de2f328be6a867de0b25ca873e02a34ae6b336ef.
+Evidence:primary-b4c-integrated-core-{freeze,report}.json and per-runtime logs.
+
+Same author/model/effort, now authorized only these10 adapter paths:
+adapters/mcp/cli.mjs,adapters/mcp/server.mjs,
+adapters/mcp/private-card-access.mjs,adapters/mcp/review-card.mjs;
+new adapters/mcp/retained-raw-profile.mjs,adapters/mcp/retained-raw.mjs,
+adapters/mcp/test/retained-raw-profile.test.mjs,
+adapters/mcp/test/retained-raw.test.mjs,
+adapters/mcp/test/retained-raw-review.test.mjs,
+adapters/mcp/test/retained-raw-support.mjs.
+Reuse existing card-review-pty.py unchanged. No core, docs, package/manifest,
+CI, setup or packaging changes in this milestone. No commits/pushes/PRs by author.
+
+One local MCP node_modules symlink may target the existing reviewed install at
+/home/chichieh/Github/cairn-memory-worktrees/raw-local-v1-sources/adapters/mcp/node_modules.
+First prove the new link location absent and target realpath/package identities
+match the14 MCP entries in the earlier dependency freeze. No install, deletion,
+shared-target mutation or OpenAI/root dependency link. Primary freezes these
+identities before running adapter acceptance.
+
+Freeze the proposed profile and CLI names above. Runtime refusal must precede
+SQLite-dependent imports. Profile module has no SDK/SQLite/provider imports;
+read at most65537 bytes through owned O_NOFOLLOW, reject above65536, strict UTF-8
+JSON, closed fields, UID/mode and descriptor/path/parent identity checks.
+Retained --check-config is syntax/runtime only: no profile/DB/key inspection,
+provider, automatic capture or mutation. It works with a nonexistent profile.
+
+Freeze async createRetainedRawServer({profilePath}) and reviewRetainedRawCard(args).
+CLI prepares one immutable profile snapshot per process and gives serveStdio a
+synchronous factory rechecking that snapshot. The actual SDK can create/discard
+a negotiation probe; it must not rebind store or namespace by rereading a changed
+profile on its second factory call. Test the actual fallback, not only a mocked
+factory. Legacy createCairnServer remains synchronous and keeps its option list.
+Both paths share an internal registration builder; no caller core/authority
+override. New startup codes:invalid_mcp_configuration,
+retained_raw_runtime_unavailable,invalid_retained_raw_profile,
+retained_raw_profile_changed. Existing core/tool errors remain intact.
+
+Fixed Raw decoder: local-plain-v1, null keyVersion, fatal UTF-8 with ignoreBOM:true
+to preserve a legitimate leading BOM. sealRaw refuses. Core verifies source
+length/digest. mode:off/configureCap:false/no capBytes/provider; capture permission
+remains separate. Server cleanup irreversibly revokes Card/source grants before
+its first await and before closing core, including construction/transport close.
+In-flight async reads must encounter the existing scope_changed publication fence.
+
+Freeze exact extra tools: list_raw_conversations,read_raw_conversation,
+resolve_source_references. Existing default5/private22 remain unchanged;
+retained mode has exactly25. All inputs strict; namespace only from profile.
+List uses client(enum),limit?,cursor?; read uses conversationId,limit?,cursor?.
+Resolve uses1..16 {rawAnchor:{conversationId,messageId,start,end,precision},
+expectedConversationRevision}; precision exact/whole-message, safe integers and
+end>start. Optional positive budgets:sourceByteLimit<=64000,scanRowLimit<=1024,
+deadlineMs<=5000,responseByteLimit<=65536; retain existing defaults.
+
+Only retained mode adds Raw source DTO {type:'raw',conversationId,messageId,
+span:{start,end,precision},contentIdentity:43-base64url}; namespace is injected.
+read_private_card_source allows budgets only for Raw. Authored drafts have exact
+XOR memoryRefs(existing1..6) or sources(Raw1..16), with actionId/title/body.
+Reject mixed references/grants/foreign/stale/invented sources; no authoredInput
+bypass, automatic Card, implied Memory, source copying or capture tool.
+MCP confirmation remains approval_required. Shared synchronous terminal body
+preserves controlling TTY, escaped/bounded display, exact phrase/applicability,
+post-prompt profile/source reinspection, revision CAS and resource closure.
+
+Author's focused matrix covers profile/runtime rejection, actual negotiation,
+rosters/schemas, public discovery, partial/skipped coverage, exact Unicode/BOM,
+malformed/encrypted source, revoked async read, no quota/provider work, real TTY
+confirm/refuse/stale/cancel cleanup. Add affected existing configuration, stdio,
+Card, receipt, evidence, organization and PTY-framing tests on both Node versions.
+Retain all red results with diagnosis. Stop at this bounded checkpoint for main
+inspection and independent acceptance, not a user decision. Installed packaging
+and the final affected matrix/dual review follow as separate bounded stages.
+
+## Primary independent MCP acceptance freeze
+
+Before adapter implementation or reading its new tests, primary authored8 real
+stdio/TTY acceptance cases in the same evidence directory, primary-mcp.test.mjs,
+SHA256 b8968d4a5a64a56082a540b0b0b851bbd2dd695f2b4d04aa404fed00c08b1d99.
+Syntax check exits0. They have not yet run against an implemented adapter.
+
+M01 syntax-only check with missing profile and throwing credential accessor;
+M02 malformed/mixed/private profile refusal without DB creation; M03 real
+default5/private22/retained25 roster and both-client exact scoped Unicode reads;
+M04 public discovery -> Raw draft -> MCP refusal -> real controlling TTY exact
+confirmation -> fresh MCP sees same Card/source without manufactured Memory;
+M05 delete source while actual TTY waits prevents confirmation and purges draft;
+M06 mixed/forged/foreign/stale sources cannot create Card/authority; M07 prior
+Memory-receipt draft behavior remains; M08 invalid UTF-8/encrypted source does
+not produce a fallback. Public APIs derive all IDs; only synthetic stores,
+network-forbidden subprocesses and owned cleanup. Main retains any fixture
+failure and its correction separately rather than weakening expected behavior.
+
+## Primary installed acceptance freeze
+
+Before authoring packaging integration, primary separately authored3 cases in
+primary-installed.test.mjs in the evidence directory, SHA256
+d08231f0c4d75517e3ceccfae8299047ded3f57bd23c63144c0b01d0abfadeea.
+Syntax check exits0; no behavioral installed result yet. Build the actual private
+npm archive, install pinned production dependencies offline with scripts disabled,
+and run the installed binary/engine in fresh processes, not a source alias.
+I01 compares package manifest, actual tar inventory and installed file walk,
+checks installed source hashes and literal relative-import references, and runs
+syntax-only retained configuration without opening a missing profile/DB.
+I02 public discovery -> bare Raw draft -> MCP approval refusal -> real TTY exact
+confirmation -> cold MCP same source/Card, then confirmed-source deletion retains
+authored body but invalidates support. I03 deleting source during actual review
+prevents confirmation and purges the pending draft. Both success/refusal paths
+own cleanup. No SQL-derived IDs, real data, network/provider or paid calls.
+
+Primary runner serializes supported runtimes, stops after first failed gate,
+records actual close/exit and test totals, freezes source plus14 MCP dependency
+realpaths/package hashes, and checks all owned scratch is removed. Actual core,
+MCP and installed receipts are separate: a syntax pass is not behavioral evidence.
+
+Packaging preflight independently compares literal relative imports from the167
+listed runtime modules (428 edges) with base/current added runtime files: both
+identify exactly4 required additions, existing-store.mjs,
+raw-conversation-list.mjs,retained-raw-profile.mjs and retained-raw.mjs under their
+respective core/adapters/mcp directories. Receipt:primary-package-preflight.json.
+Primary also refreshed only the existing parent plan's checkpoint paragraph;
+historical evidence and its four workstreams remain unchanged. No other plan
+or product tracker is created, and no packaging author writes are authorized
+before the bounded adapter acceptance checkpoint.
+
+## Bounded adapter receipt and primary M02 diagnosis
+
+Author completed exactly the frozen10 adapter paths, with no core edits or
+commits. Main read all6 runtime paths and4 test/support paths, and independently
+checked the file hashes in
+/tmp/cairn-retained-adapter-evidence.Q171yd/author-adapter-freeze.json:
+aggregate205afefea5db5372b5be691cf5b4a331c53762682b1c5bf828bc6b06fb14af75.
+Focused3 new suites17/17 and affected7 existing suites50/50 pass on both
+Node22.16 and24.15, all actual0/null and owned workspaceRemoved:true. Main
+personally inspected the4 JSON receipts and corresponding log counts/cleanup.
+Retain author's first missing-SDK-export fixture failure and later two fixture
+failures (BOM in close-race fixture and missing expectedRevision); their corrected
+tests do not change runtime behavior or remove the separate BOM test.
+
+Primary original8-case run adapter-v1 stopped with actual1 on Node22.16:7/8
+passed, M02 expected exit1 but got0. Node24 was not run. Outer session88271
+was reaped with actual1; owned workspace was removed. Preserve original test
+SHA b8968d4a5a64a56082a540b0b0b851bbd2dd695f2b4d04aa404fed00c08b1d99,
+primary-adapter-v1-{freeze,report}.json and its Node22 log without rewriting.
+The source/dependency freeze remained unchanged. Narrow M02 invocation reproduced
+the same red in0.5s. No broad bisection was warranted for this deterministic case.
+
+Following diagnosing-bugs, primary disclosed three falsifiable alternatives:
+no request reached the lazy SDK factory; wrong-store binding really bypassed
+the guard; or an actual refusal used a different process/protocol error channel.
+The independent diagnostic used one synthetic store, unchanged runtime and the
+same wrong-store profile. EOF produced exit0, direct construction rejected with
+unsupported_database, and actual SDK negotiation rejected with JSON-RPC-32603
+Internal server error. The SDK only invokes its factory after negotiation input;
+ordinary EOF never opened the core. A correct-store constructor succeeded.
+Therefore the original M02 was testing the wrong seam, not finding a store-ID
+bypass. The diagnostic's own first run lacked Raw opt-in, and its second expected
+stderr instead of the protocol error; both actual1 results are retained in tool
+receipts/comments. Final diagnostic actual0. No product change was made.
+
+Preserve the original8-case source. Primary v2 changes only M02 to send a real
+SDK negotiation for wrong-store identity and assert exact protocol rejection,
+not an arbitrary EOF exit status. All profile-shape, permissions, no-create and
+mixed-flag checks remain. No timeout qualifies as the expected refusal. The
+single M02 v2 regression passes with actual0. New full8-case frozen file:
+primary-mcp-v2.test.mjs, SHA256
+5c40db17bab711c628423bce1df2691e069580c7983e41cba6bc3bada16c1446.
+Full two-runtime v2 acceptance is next; this paragraph is not its pass claim.
+
+The subsequent primary-adapter-v2 run passed all8 cases on BOTH Node22.16 and
+24.15, actual0/null, no skips. Outer session20044 reaped with actual0 and owned
+workspace removed. Main personally parsed both exit records and log totals and
+checked workspace absence. Source1839 files/hash and14 dependency identities
+are identical to the original red run:
+a16267b653ff312e4301121761f9c89aab55e81ea2522678c7b375242fc1ab93,
+dependency8e373ed11fa4f1754fa38e8f9e01b541a39f5ee59f98fc2808cb3d1dca63e595.
+Independent diff/untracked and full blob/mode inventories agree22 changed paths.
+The scoped runtime is accepted for installed integration; no merge/public release.
+
+## Bounded packaging/docs assignment
+
+Continue with the same nonreviewer author, actual GPT6.1Sol/high, same worktree,
+base728fbf and core HEAD43afb3. Preserve the accepted10 adapter files and all
+core files unchanged. Primary owns this plan and the parent checkpoint.
+The author may change only these10 paths:
+
+- packaging/artifact-files.json
+- packaging/test/retained-raw-mcp.test.mjs (new)
+- packaging/test/fixtures/retained-raw-mcp.mjs (new, only if the test needs it)
+- docs/raw-local-journal.md
+- docs/standalone-mcp.md
+- docs/private-card-terminal-review.md
+- docs/private-cards-local.md
+- docs/limitations.md
+- packaging/README.md
+- CHANGELOG.md
+
+Add exactly the4 missing runtime modules identified by the independent preflight;
+do not replace or reorder the existing manifest. Do not change package versions,
+dependencies, build/install scripts, CI, setup, flags/pins or product files.
+No new dependency link/install is authorized for this finite packet; the accepted
+MCP link and existing offline artifact cache suffice unless an actual prerequisite
+failure proves otherwise. Never stage the local dependency symlink.
+
+Installed tests must build/inspect the actual private archive, offline install
+with scripts disabled into an owned project, then use its installed engine and
+binary. Derive source IDs through public APIs, never SQL inventions. Cover strict
+profile/mixed/wrong-store refusal through actual negotiation, default5/private22/
+retained25 rosters, public Raw discovery/Unicode without Memory, authored draft,
+MCP approval refusal, actual controlling-PTY approval and cold source/Card
+reopen, plus source deletion during approval and unsupported confirmed Card
+after deletion. Report actual child/outer exit codes and clean owned scratch.
+No key, model/network fallback, real transcripts or client activation.
+
+Docs must distinguish the keyless retained-profile path from ordinary/provider
+MCP and from B4c capture. Include the exact closed profile, private Linux/WSL
+runtime/path requirements, already-existing schema29/store requirement and how
+to obtain storeId from trusted existing host/SDK inspection (do not guess it).
+Show list -> read -> resolve -> draft -> separate terminal review -> cold inspect,
+with public returned IDs and explicit user-authored Card text. A long message
+does not automatically become a Card; no fake Memory prerequisite. Explain
+syntax-only check versus actual MCP negotiation readiness; empty stdin is not a
+store-validation probe. Preserve default receipts-only behavior outside the new
+opt-in. Clearly describe partial/skipped coverage, local-plain-only decoding,
+no provider/automatic capture/permission changes, no constant-time conversation
+read claim, logical deletion and lack of semantic/real-client qualification.
+This is an installable synthetic-tested preview, not a newly published package.
+
+Run the new installed suite and existing packaging private-card-mcp,
+raw-conversations and local-host suites on both supported runtimes. Freeze exact
+source hashes/modes and actual commands; retain every red with its cause. Stop
+at the bounded author checkpoint for primary independent installed3, direct diff
+inspection and the final combined affected matrix. Do not commit/push/open PR.
+
+## Packaging and independent installed acceptance
+
+The author froze exactly the assigned10 packaging/docs paths. Main read the
+final docs and installed fixture/test, verified every file hash/mode against
+/tmp/cairn-retained-package-evidence.JpymDi/author-package-freeze.json and checked
+both durable logs/exit records and the absence of their owned workspaces.
+The four-suite packet passed13/13 on Node22.16 and24.15, actual0/null. Preserve
+the initial Node22 actual1,12/13 result: strict-profile negotiation correctly
+closed but its test expected numeric JSON-RPC error instead of SDK-local
+CONNECTION_CLOSED. Only that fixture predicate changed, not runtime behavior.
+Nested budgets now have finite valid-input/top-level-lookalike refusal checks;
+the fixture also asserts nested Raw interpretation success rather than only
+outer source retention. Accepted core/adapter hashes remain unchanged.
+
+Main's prior advice that budgets were top-level was mistaken. Direct rereading
+of the accepted server schema confirmed the existing nested budgets object.
+The author corrected docs to match it; no API change was made to accommodate
+that advice. The retained source/code and independently authored tests, not a
+recollection of them, remain authoritative.
+
+Primary independently froze the combined32-path delta using git diff/untracked
+and a complete base/current blob-and-mode comparison: both inventories match.
+Source1841 files SHA256
+d4fbe39d23c54806a81e8a3489474405520f6fe32efcb786793676d3c9a9fa20,
+plus the same14 MCP dependency identities. The original independently authored
+installed3 test file was not modified. Both supported runtimes passed3/3,
+actual0/null, no skips, outer session88741 reaped actual0, and owned workspace
+removed. Main parsed each log's counts, report codes and actual cleanup.
+Evidence:primary-installed-v1-{freeze,report}.json and two runtime logs.
+Actual archive, manifest and installed inventory agree177 files; all installed
+source hashes and444 literal relative-import edges resolve, including exactly
+the4 new runtime modules. This establishes only the bounded installed subset,
+not complete correction/forget V1, actual client activation or semantic quality.
+
+## Final combined gate preparation
+
+Before freezing the complete candidate, primary will add only the missing
+OpenAI tokenizer and native-validator local dependency links to the same
+already verified raw-local-v1-sources shared installs. Verify absent destinations,
+all18 dependency realpaths/package hashes and native validator version before
+use. No install, shared dependency mutation, package/version/lockfile change or
+dependency-link staging is authorized. The accepted MCP link stays unchanged.
+
+Primary owns an immutable48-command manifest:24 gates on each of Node22.16 and
+24.15. Mechanically enumerate test paths using directory listing and independent
+rg inventory, and freeze all source/dependency identities before execution.
+Run core, MCP, artifact, generic, JSON validation, local adapter/transport,
+worker, host, host import, workspace lifecycle, all12 core demos and both native
+plugin validators. Core/artifact/generic concurrency4, MCP/local/transport/worker
+and workspace concurrency2, host concurrency1. The sole expected skip is the
+existing artifact native-Windows platform case; no other skip becomes a pass.
+Use isolated home/temp and no forwarded provider credentials. Stop on the first
+red, preserve actual exit/signal and logs, check all scratch ownership/cleanup,
+and verify frozen source/dependencies before and after every gate. Heartbeats,
+20-minute per-gate/90-minute whole deadlines and actual progress inspection
+support foreground supervision; a PID or unchanged counter alone is not health.
+
+After these gates, retain focused primary core11/MCP8/installed3 evidence on
+the exact delivery candidate, commit only mechanically checked intended files,
+and request independent nonauthor Standards and Spec reviews against fixed
+base728fbf. Main owns integration and acceptance; no merge, release or activation.
+
+Preparation completed: all18 inherited dependency realpaths/package hashes match;
+both additional destinations were absent and now point only to the verified
+shared installs. Native validator is2.1.260. No package installation or shared
+dependency edit occurred. Final-v1 freeze again independently agrees on32
+changed paths and1841 source files, SHA256
+f036014de172f3bf671a0607606914daa41c2d99b962cdf51b1f791981791f9e.
+The external48-command manifest and its runner/validator hashes were written
+before execution. Source hashes exclude only this evolving evidence plan and
+the three local dependency symlinks; the parent plan is frozen normally.
+
+The explicitly required public-registry metadata preparation also completed
+through the owned runner: env -i with Node22.16 and no forwarded credentials,
+node tools/testing/run.mjs --script packaging/prepare-cache.mjs, outer
+session66284 reaped actual0. It made package metadata requests only, no model
+calls. The final48 matrix was then supervised in session57753.
+
+The final-v1 matrix subsequently completed all48 gates with actual0/null,
+outer session57753 reaped actual0. Main separately parsed all48 logs, compared
+their counts with the report, checked every owned scratch roster, and verified
+sourceUnchanged:true and actual removal of the owned workspace. Both runtimes:
+core1752/1752; MCP151/151; artifact115 passed and1 native-Windows-only skip;
+generic635/635; local30/30; transport34/34; worker59/59; host41/41;
+workspace-lifecycle25/25. JSON validation, host import, all12 demos and both
+native plugin validators also exited0. This is mechanical/synthetic evidence,
+not a semantic score, real-client activation or completed V1.
+
+Only a retained-failure explanation in docs/limitations.md and the two existing
+plan/checkpoint files may change after this full-matrix freeze. No runtime,
+test, manifest, dependency or CI change is authorized for that finalization.
+Primary will independently compare the final source against the frozen matrix,
+confirm precisely that documentation-only delta, and rerun JSON validation and
+the original independent core11/MCP8/installed3 on both runtimes at the committed
+candidate. Both nonauthor review axes inspect the complete32-path incremental
+diff against728fbf, including those final documents. Their final-SHA reports,
+latest-head CI and remote delivery receipt belong in the PR; prior test hashes
+remain preserved rather than relabelled as runs against a later documentation SHA.

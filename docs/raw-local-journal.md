@@ -6,8 +6,10 @@ Raw V1. They are default-off and authorized only for pure-local synthetic
 development and tests. P2 joins the existing bounded capture engine; P3c adds
 explicit Raw references and authored Cards through the same private engine.
 The explicit public constructor and private artifact now compose those same
-mechanisms. No MCP tool, client hook, hosted encryption or production enablement
-is added. Ordinary public capture keeps its existing wire contract.
+mechanisms. The separate opt-in retained profile now exposes bounded MCP
+inspection and authored Raw-backed Cards, as described below; the constructor
+alone adds no MCP tool, client hook, hosted encryption or production enablement.
+Ordinary public capture keeps its existing wire contract.
 
 ## Explicit public constructor (P4b-B1)
 
@@ -32,7 +34,7 @@ receiver and opaque host state; validated method references/configuration are
 snapshotted without invoking accessors or copying key material. Both capture
 and retained reads sanitize port failures; no decoder is guessed when absent.
 
-The selected facade adds `captureRaw`, `getConversation`, `getRawUsage`,
+The selected facade adds `captureRaw`, `listRawConversations`, `getConversation`, `getRawUsage`,
 `getRawCaptureControl`, `setRawCaptureControl`, `fenceSession`,
 `previewDeleteConversation`, `deleteConversation` and `listRawEffects`, using
 the camel-case core DTOs below and the existing result envelopes. This is not
@@ -51,6 +53,35 @@ not installed Claude/Codex capture, setup, transport, cursor or MCP acceptance.
 The [bounded skipped-tail correction](limitations.md#public-raw-constructor-p4b-b1)
 covers ordinary pause/resume with known identities; lost-client-state recovery
 and complete installed-hook acceptance remain separate.
+
+## Existing-store discovery and retained MCP
+
+The optional `existingStore:{version:'schema29-existing-v1',storeId}` selects an
+actual existing-only SQLite connection: no missing-file creation, initialization
+or schema migration. It requires the exact application/schema 29/store identity
+and necessary structural metadata. Ordinary construction remains unchanged;
+this option is not blanket read-only access or full hostile-DDL attestation.
+Explicit trusted SDK cap configuration remains explicit. The retained MCP host
+instead supplies `mode:'off',configureCap:false` and no cap, changing no quota.
+
+The synchronous public `listRawConversations({namespace,client,limit?,cursor?})`
+needs no Card capability. It selects an exact namespace and `claude-code` or
+`codex`, defaults to 20 and permits at most 50 items. Existing session-key index
+order, not chronological order, uses keyset pagination and at most 51 SQL rows;
+there is no history count or join. The signed cursor binds store, namespace,
+client, limit and deletion epoch. Reuse all bindings, or start a new listing
+after a stale cursor. Results include metadata, `nextCursor`, `complete`,
+`budget_exhausted` and `evidenceTrust`; metadata is not saving/completion coverage.
+`getConversation` still computes aggregates: bounded output is not a constant-time
+large-history read guarantee.
+
+The separate [retained-profile MCP and terminal guide](private-card-terminal-review.md#retained-raw-profile)
+shows the closed private profile and public list/read/resolve/draft/review/cold-read
+workflow. It uses the existing Raw/Memory/Card engine without fake Memory,
+automatic Cards, capture or a provider. The owner-selected profile is retained
+read authority, not B3 capture configuration or a capture `readPolicy` grant.
+Only Linux/WSL and Node >=22.16 are supported initially. Ordinary MCP and the
+B4c capture host keep their independent defaults and authority boundaries.
 
 ## Durable local authority (B2b)
 

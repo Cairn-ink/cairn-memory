@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — retained Raw inspection and authored Cards
+
+- Add an exclusive keyless retained-profile MCP path for an existing private
+  schema 29/store, with indexed discovery, paged Raw reads and source resolution.
+- Allow explicitly authored Card drafts from resolved Raw without a Memory.
+  Keep ordinary receipt drafts and default rosters unchanged; confirmation still
+  requires the separate controlling-TTY exact revision review.
+- Include the shared runtime and synthetic installed lifecycle checks. No
+  automatic Cards, capture/consent/quota change, client activation, semantic
+  quality result, registry publication or release is added.
+
 ## Unreleased — explicit local capture host
 
 - Add owner-operated foreground status, preparation, initialization and bounded

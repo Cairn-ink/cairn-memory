@@ -51,7 +51,11 @@ function readAnswer(fd) {
 }
 
 export function reviewCard(args) {
-  const config = configuration(args);
+  return reviewConfiguredCard(configuration(args));
+}
+
+/** Internal shared terminal path. No prompt/approval callback is accepted. */
+export function reviewConfiguredCard(config, retained) {
   // No injectable prompt/approval callback, --yes, env switch or protocol stdin.
   // A caller with arbitrary local execution already controls this local store;
   // this channel does not claim remote identity authentication or hosted safety.
@@ -87,10 +91,13 @@ export function reviewCard(args) {
       },
       isCurrent(grant) { return grants.get(grant) ?? null; },
     };
-    core = openMemoryCore({ path: config.path, privateCards: {
+    retained?.profile.check();
+    core = openMemoryCore({ path: config.path,
+      ...(retained ? { existingStore: retained.existingStore, rawConversations: retained.rawConversations } : {}), privateCards: {
       version: 'private-cards-local-v1', source: 'submitted-note-v1', storage: 'local-plain-v1',
       disclosure: 'explicit-submitted-note-v1', authority,
     } });
+    retained?.profile.check();
     const get = () => core.getCard({ namespace: config.namespace, cardId: config.cardId }, readToken);
     const inspected = get();
     const card = inspected.ok ? inspected.value.card : null;
@@ -116,6 +123,7 @@ export function reviewCard(args) {
     }
     // Re-read the whole inspected payload after the operator interaction. Core
     // then enforces its own canonical CAS/source fences during synchronous commit.
+    retained?.profile.check();
     const current = get();
     if (!current.ok) result = current;
     else if (!isDeepStrictEqual(current.value.card, card)) result = failure('revision_conflict');
@@ -130,7 +138,6 @@ export function reviewCard(args) {
     if (!result.ok) process.exitCode = 1;
     return result;
   } finally {
-    core?.close();
-    closeSync(fd);
+    try { core?.close(); } finally { closeSync(fd); }
   }
 }
