@@ -875,7 +875,9 @@ export function createMemoryCore(input, internal) {
         startAdmission: () => (deadline = captureDeadlineMs === undefined ? undefined : createCaptureDeadline(captureDeadlineMs)),
         captureRationale, captureEvidence,
         deadline, input: { ...input, namespace },
-        operations: { claimAdmission: value => invoke(() => runtime.claimCapturedAdmission(ns, {
+        operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
+          assertCaptureSources: sources => runtime.assertCaptureSources(ns, sources),
+          claimAdmission: value => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration)),
           finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline),

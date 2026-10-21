@@ -20,6 +20,7 @@ import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
+import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
@@ -30,7 +31,8 @@ export function createMemoryRuntime(input, internal) {
   const privateCards = privateCardOptions(input.privateCards);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
-  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), rawCapture: Boolean(internal?.rawCapture) });
+  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), rawCapture: Boolean(internal?.rawCapture), rawLineage: Boolean(internal?.rawLineage) });
+  const rawLineage = createRawLineageStorage(db);
   let identity;
   try {
     identity = db.prepare(`SELECT store_id AS storeId, cursor_secret AS cursorSecret
@@ -92,7 +94,7 @@ export function createMemoryRuntime(input, internal) {
 
   const receiptKey = receipt => createHash("sha256").update(JSON.stringify(receipt)).digest("hex");
 
-  function attach(id, receipt, now, inserted = []) {
+  function attach(id, receipt, now, inserted = [], origin = 'independent') {
     const key = receiptKey(receipt);
     const receiptId = randomUUID();
     const changes = db.prepare(`INSERT OR IGNORE INTO receipts
@@ -100,6 +102,12 @@ export function createMemoryRuntime(input, internal) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(receiptId, id, key, receipt.client,
       receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt, now).changes;
     if (changes) inserted.push(receiptId);
+    if (rawLineage.enabled()) {
+      const memory = db.prepare('SELECT owner_id,scope,project_id FROM memories WHERE id=?').get(id);
+      const actual = changes ? receiptId : db.prepare('SELECT id FROM receipts WHERE memory_id=? AND receipt_key=?').get(id, key).id;
+      rawLineage.attach({ ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id }, actual, receipt,
+        changes ? origin : 'unknown');
+    }
     return changes;
   }
 
@@ -152,6 +160,7 @@ export function createMemoryRuntime(input, internal) {
   function admit(ns, value, projection = {}) {
     ready();
     return transaction(db, () => {
+      rawLineage.assertReceipts(ns, value.receipts);
       assertNotSuppressed(ns, value.fingerprint);
       conflictStorage.validateTargets(ns, value.conflictHints);
       const result = admitMutation(ns, value, projection);
@@ -165,7 +174,9 @@ export function createMemoryRuntime(input, internal) {
   // Caller owns the transaction, including admission-claim completion when used
   // in a batch. Explicit and inferred writes share all mutation/invalidation rules.
   function admitMutation(ns, value, projection = {}) {
+    rawLineage.assertReceipts(ns, value.receipts);
     assertNotSuppressed(ns, value.fingerprint);
+    const receiptOrigin = !projection.automatic && value.origin === 'explicit' ? 'independent' : 'unknown';
     const insertedReceiptIds = [];
     const existing = db.prepare(`SELECT * FROM memories WHERE ${where}
       AND fingerprint = ? AND deleted = 0`).get(...boundary(ns), value.fingerprint);
@@ -173,7 +184,7 @@ export function createMemoryRuntime(input, internal) {
     if (existing) {
       if (value.qualification !== undefined && value.content !== existing.content) fail('qualification_conflict');
       let changed = false;
-      for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now, insertedReceiptIds)) || changed;
+      for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now, insertedReceiptIds, receiptOrigin)) || changed;
       qualificationStorage.bind(existing, value.qualification, value.receipts, true, value.content);
       const explicit = value.origin === "explicit";
       const reviewState = explicit && existing.review_state === 'awaiting' ? 'none' : existing.review_state;
@@ -207,7 +218,7 @@ export function createMemoryRuntime(input, internal) {
       (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?)`).run(id, ...boundary(ns),
       value.fingerprint, value.content, value.kind, value.origin, value.confidence, now, now,
       decisionReview && projection.automatic && value.origin === 'agent-inferred' && value.kind === 'decision' ? 'awaiting' : 'none');
-    for (const receipt of value.receipts) attach(id, receipt, now, insertedReceiptIds);
+    for (const receipt of value.receipts) attach(id, receipt, now, insertedReceiptIds, receiptOrigin);
     const memory = activeRow(ns, id);
     qualificationStorage.bind(memory, value.qualification, value.receipts, false, value.content);
     return { memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: false,
@@ -226,6 +237,7 @@ export function createMemoryRuntime(input, internal) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
+      rawLineage.excludeMemory(ns, id);
       stagedEvidence.purgeNamespace(ns);
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
       const now = new Date().toISOString();
@@ -252,6 +264,7 @@ export function createMemoryRuntime(input, internal) {
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
       suppress(ns, current.fingerprint);
+      rawLineage.excludeMemory(ns, id);
       stagedEvidence.purgeNamespace(ns);
       const now = new Date().toISOString();
       const effects = conflictStorage.invalidateMemory(id, { reason });
@@ -550,7 +563,7 @@ export function createMemoryRuntime(input, internal) {
   stagedEvidence.setEpisodes(episodes);
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
-    classificationJournal, episodes, proceduralStorage,
+    classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
@@ -638,6 +651,8 @@ export function createMemoryRuntime(input, internal) {
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
+    filterCaptureSources(ns, sources) { ready(); return rawLineage.filter(ns, sources); },
+    assertCaptureSources(ns, sources) { ready(); rawLineage.assertReceipts(ns, sources); },
     claimCapturedAdmission(ns, input, deadline, registration) {
       ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline, registration);
     },

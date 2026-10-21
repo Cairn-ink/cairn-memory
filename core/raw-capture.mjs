@@ -2,7 +2,7 @@ import { createMemoryCore } from './contract.mjs';
 import { createMemoryRuntime } from './runtime.mjs';
 import { createRawCaptureStorage } from './raw-capture-storage.mjs';
 import { isStorageBusy } from './database.mjs';
-import { MemoryStoreError } from './validation.mjs';
+import { fail, MemoryStoreError } from './validation.mjs';
 
 const success = value => ({ ok: true, value });
 const failure = error => {
@@ -13,11 +13,15 @@ const invoke = work => { try { return success(work()); } catch (error) { return 
 
 /** Synthetic/internal construction only; intentionally absent from installed files. */
 export function openRawCaptureCore(input, rawOptions) {
+  const descriptor = Object.getOwnPropertyDescriptor(rawOptions, 'lineage');
+  if (descriptor && (!Object.hasOwn(descriptor, 'value') || typeof descriptor.value !== 'boolean')) fail('invalid_input');
+  const lineage = descriptor?.value === true;
   const profile = structuredClone(Object.fromEntries(['captureQualification','captureSourcePolicy',
     'captureEvidence','captureRationale','sessionEpisodes'].filter(key => Object.hasOwn(input, key)).map(key => [key,input[key]])));
   let storage, capture, runtime;
   const core = createMemoryCore(input, {
     createRuntime: config => (runtime = createMemoryRuntime(config, { rawCapture: true,
+      rawLineage: lineage === true,
       attachRaw: db => (storage = createRawCaptureStorage({ db, profile, ...rawOptions })) })),
     attachCapture: operation => { capture = operation; },
   });

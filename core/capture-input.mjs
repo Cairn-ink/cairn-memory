@@ -63,7 +63,7 @@ export function retainedSourceView(snapshot) {
 }
 
 /** The extractor chooses indices; all receipt identity and text comes from the trusted source view. */
-export function extractedItems(output, snapshot, retainedMessages, onInvalid = () => {}) {
+export function extractedItems(output, snapshot, retainedMessages, onInvalid = () => {}, sourceReceipts) {
   let reason = 'invalid_extraction_output_shape';
   try {
     const sourceMessages = retainedMessages ?? snapshot.messages;
@@ -93,7 +93,8 @@ export function extractedItems(output, snapshot, retainedMessages, onInvalid = (
       }
       const receipts = indices.map((index) => {
         const message = sourceMessages[index];
-        return { client: snapshot.client, sessionId: snapshot.sessionId,
+        return { client: sourceReceipts?.[index]?.client ?? snapshot.client,
+          sessionId: sourceReceipts?.[index]?.sessionId ?? snapshot.sessionId,
           eventId: message.id, role: message.role,
           excerpt: retainedMessages === undefined ? boundedText(message.content, 800, true) : message.content };
       });

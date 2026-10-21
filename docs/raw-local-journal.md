@@ -1,4 +1,4 @@
-# Internal local Raw journal and capture registration (P1/P2)
+# Internal local Raw journal, capture and lineage (P1/P2/P3a)
 
 This is the storage/read foundation in
 [the local V1 plan](plans/raw-local-v1-completion.md), not completed Raw capture
@@ -52,7 +52,7 @@ these fields or forward construction extensions. The usable factory and its
 capture-storage module remain absent from the installed artifact manifest.
 No capabilities, MCP tools, client producers or HTTP wire versions are added.
 
-Only this internal construction opts into additive schema **25**. Genuine P1
+Without the separate lineage selection below, this construction opts into schema **25**. Genuine P1
 schema 24 stores migrate transactionally; the new capture ownership and session
 fence records start empty, with no inferred backfill. `rawConversations:true`
 alone still creates schema 24. Option-off current openers preserve schema 25;
@@ -138,13 +138,64 @@ finish. Episode prose publication is also fenced for the new path.
 `fenceSession({namespace,client,sessionId})` is a narrow internal tombstone seam
 for episode-off race/restart fixtures. Existing episode deletion tombstones also
 fence registration and publication. This is not `deleteConversation`: full D5
-source cascades, D6 forgotten-span exclusions and host withdrawal effects remain
-P3. The factory must remain unavailable to real capture clients until those
+source cascades and host withdrawal effects remain P3b; P3a's separately selected
+D6 mechanics are described below. The factory must remain unavailable to real capture clients until those
 protections and installed-client acceptance are complete. Arbitrary option-off
 v25 writers do not yet join Raw reservation closure to their control changes;
 that mutation-safety work remains P3. The durable admission guard already checks
 namespace/session fences for existing Raw admissions, but does not establish all
 option-off control or source mutations as complete.
+
+## Internal P3a lineage and exclusions
+
+The same uninstalled factory accepts the separate own boolean option
+`rawOptions.lineage:true`, transactionally selecting additive schema **26**.
+Omission/false does not upgrade P2's schema 25. Public constructor fields remain
+unchanged. Current option-off writers preserve an existing 26 store and enforce
+its exclusions, including a connection opened before another current connection
+selects lineage. The frozen P2 opener refuses 26; this is not mixed-version writer
+support or authorization to migrate user data.
+
+Core prepares source maps before asynchronous sealing/model work and commits them
+with the original first-part registration. Stored metadata contains keyed receipt
+identities, conversation/message IDs and half-open UTF-16 spans, not source text
+or a raw session ID. Whitespace-only normalization has validated exact offsets;
+NFKC changes, redaction and ambiguous historical projection use whole-message
+precision. The mapping follows the existing twice-normalized bounded projection,
+including cuts exposed by normalization expansion. Repeated equal windows bind
+all matching positions conservatively; substring search never guesses an offset.
+The entire retained prefix/window is covered, not only a fact's selected wording.
+Provenance also exists for policy-skipped Raw, without inventing a saved anchor.
+
+Receipt insertion and dedup attachment share the same resolver across capture,
+ordered/manual finish, explicit admission and episode keep. Keep uses each
+source's origin episode client/session, not its new action identity. Existing
+v25 evidence can resolve only from a unique exact scoped client/session/message
+tuple; without a historical position map it covers the whole message. No source
+content or precise historical positions are backfilled. Per-receipt origins
+distinguish proven independent explicit evidence, derived sources and unknown
+evidence. Missing legacy origin is unknown, not independent; explicit promotion
+of a Memory or duplicate receipt cannot launder that uncertainty. Known Raw
+identity remains derived even when supplied through an explicit API.
+
+Forget/correction persist exclusions before removing receipts or invalidating
+episode sources, in the same transaction. Failure rolls both changes back.
+Exclusions retain only source identities/spans and a scoped fence generation;
+Raw text and its usage remain unchanged. Extraction filters excluded provider
+windows, preserving original message provenance after reindexing. Trusted
+freshness checks run after token counting, in the actual invocation microtask
+and after response; admission rechecks current anchors inside its transaction.
+Any overlapping source refuses with `source_excluded`, even under a new event
+ID or paraphrased assertion. Disjoint windows and genuinely unrelated explicit
+receipts remain eligible; ordinary fingerprint suppression still applies.
+Exact replay continues to observe its recorded outcome without model work.
+
+This is **not completed P3 or Raw V1**. P3b still must replace legacy
+`forgetEpisode` over-deletion with D5's live-source cascade, conversation deletion,
+reservation/control closure and withdrawal effects. P3c still must implement
+asynchronous Raw resolution and bare Raw-to-Card support. No public Raw anchors,
+installed Raw capability or re-extraction job is introduced here; RL-9 owns the
+later explicit re-extraction workflow.
 
 ## Storage and reads
 
@@ -195,7 +246,13 @@ ordered proofs, staged bypass, replay, migration and independent child processes
 `0be04cdcc9e5a88b3702bf915510da810d5e797a`, with only an explanatory header and
 relative import relocation. All fixtures use synthetic owned workspaces.
 
-These establish internal P1/P2 mechanics. Precise source deletion/exclusion,
+`core/test/raw-lineage.test.mjs` adds actual P3a mutation/admission, mapping,
+legacy/option-off, cold-process, migration and exclusion-race fixtures.
+`core/testing/raw-v25-database.mjs` freezes the P2 opener from
+`9a7bbe59c9c0ec72227310cece43fce7ac589c6e`, with only an explanatory header and
+relative import relocation.
+
+These establish internal P1/P2/P3a mechanics. Precise source deletion,
 Raw → Card, installed Raw lifecycle, production controls/encryption and semantic
 quality remain later packets and acceptance gates in the plan. Existing
 installed/public compatibility tests do not establish installed Raw capability.

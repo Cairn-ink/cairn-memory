@@ -598,3 +598,216 @@ https://github.com/wsxqaza12/cairn-wiki/issues/453#issuecomment-6298041894.
 Product #490 is a separately owned local adapter, not approval to migrate or
 deploy. Its capacity/import/multi-namespace and hosted gaps stay explicit;
 completion of this journal does not close those product requirements.
+
+## P3 execution contract: source lineage before source consumers
+
+Started 2026-10-21 against fixed P2 head
+`9a7bbe59c9c0ec72227310cece43fce7ac589c6e` (PR #450, not merged).
+Worktree `raw-local-v1-lineage`, branch `feat/raw-local-v1-lineage`.
+P1 #449 and P2 #450 remain dependent open deliveries; no merge is implied.
+
+Source authority is the decided D5/D6 and RawSourceRef contract in
+[`raw-layer-contract.md`](raw-layer-contract.md), plus the private Card rules in
+[`three-layer-engine-contract.md`](three-layer-engine-contract.md). This is an
+implementation subdivision, not another architecture or a weaker V1 gate.
+
+The integration audit identifies three coupled but separately reviewable units:
+
+1. **P3a — lineage and exclusions.** Record where retained evidence came from,
+   before model interpretation; use it to prevent forgotten/corrected source
+   spans from being admitted again. This is the current implementation packet.
+2. **P3b — source deletion.** Use the same live provenance for D5's independent
+   support decision, atomic conversation/legacy-episode deletion, reservation
+   release, invalidation and durable content-free withdrawal effects.
+3. **P3c — source consumers.** Resolve exact Raw references asynchronously
+   outside write locks, then reuse the existing authored private Card engine.
+   Bare Raw must support a Card without a fake Memory or submitted note.
+
+Review each coherent candidate before its dependent delivery. Continue to the
+next unit without a routine owner decision; pause only for an actual authority
+or product-policy conflict. The complete P3 gate still requires all three units.
+No unit exposes a usable installed Raw capability, changes the product pin, or
+claims source deletion/Card integration before that behavior is verified.
+
+### P3a observable acceptance
+
+| ID | Required behavior and evidence |
+| --- | --- |
+| P3a-01 | A separately selected additive internal schema preserves existing stores and creates no synthetic historical source content. Default public opening remains unchanged; current option-off writers preserve and honor existing lineage/exclusions. A frozen pre-change opener refuses the newer store. Forced migration failure rolls back version and new records together. |
+| P3a-02 | Core creates a bounded source-position mapping while it still has exact selected/redacted first-part text. Verify the mapping against the exact existing NFKC/redaction/whitespace/truncation projection. No substring search guesses positions. Half-open spans use original UTF-16 code-point boundaries. Ambiguity, redaction transformation or unavailable historical mapping uses conservative whole-message precision, never a fabricated exact span. |
+| P3a-03 | Actual ordinary, retained-prefix, indexed-window, ordered and episode/explicit-keep admission paths attach durable exact-namespace/client/session/message provenance to every relevant live receipt, including dedup attachment to an existing Memory or receipt. Binding metadata contains no source text or raw session ID. A new admission/event ID is not new independent support. No model/wire field can assert a trusted source identity. |
+| P3a-04 | A receipt's entire retained prefix/window is covered, not just wording of its derived fact. Distinct windows with equal text cannot silently bind to the first occurrence. Source lineage exists even when saving Raw was skipped, but an unavailable saved source never becomes a valid public Raw anchor. Existing v25 records are linked only from provable actual metadata; uncertain provenance is explicit, not invented. |
+| P3a-05 | Before forget or correction removes receipts, persist content-free exclusions for their covered original source spans in the same transaction. Exclusions survive reopen, episode invalidation and current option-off writers while Raw remains retained. An injected failure rolls back both exclusion and Memory mutation. Ordinary correction keeps its existing replacement/suppression semantics. |
+| P3a-06 | Same-source exact or paraphrased candidates with changed admission/event IDs cannot return after forget/correction. Any overlapping proposed source anchor excludes the candidate; a provably disjoint span remains eligible. Whole-message fallback deliberately excludes the whole message. Existing fingerprint suppression still applies independently. |
+| P3a-07 | When source anchors are known before dispatch, excluded source text is not sent to a provider. Recheck exclusions at publication so an in-flight result cannot bypass a concurrent forget/correction. Test exclusion appearing during asynchronous model work from a separate connection, and a cold process opening the changed store. No provider/crypto/host callback runs under a SQLite write lock. |
+| P3a-08 | Exact replay observes the recorded admission rather than reinterpreting. Continuations remain zero-model work; first-part extraction budgets, staging/ordered/episode guards and Raw retention remain unchanged. Explicit genuinely independent remember still works; derived episode keep or capture cannot launder its origin by calling itself explicit. Do not claim semantic suppression of genuinely new unlinked manual text. |
+| P3a-09 | Same-message IDs in another owner, project, client or session do not inherit exclusions. A foreign/forged source cannot be attached. Exercise both supported clients, saved/skipped Raw, current/historical Memory receipts, duplicate attachment, legacy metadata, malformed inputs and success/failure workspace cleanup. |
+| P3a-10 | Primary independently exercises user-visible mutation/admission behavior, not only SQL helper outputs. Run affected suites and full core on Node 22.16/24.15, generic tests/validation, relevant demos, package/import regressions, then independent Standards and Spec on the same final commit. Record actual exit codes and distinguish scripted mechanical evidence from semantic quality. |
+
+### P3b/P3c mandatory follow-on checks
+
+- D5 preview and commit use the same actual live source graph and revision CAS.
+  Test only-source deletion, independent second conversation, explicit receipt,
+  dedup/keep aliases, historical Memory, stale links and ambiguous legacy lineage.
+  Preserve content/currentness only with provable surviving support; invalidate
+  affected receipts, relations, episode prose and current evidence atomically.
+- Raw deletion releases saved and reserved bytes exactly once, preserves the
+  session tombstone and content-free action replay, and clears obsolete spans.
+  Existing `forgetEpisode` routes through that cascade, including an option-off
+  opener; it must not over-delete independently supported Memory or leave Raw
+  behind. Namespace/client controls must also close pending reservations through
+  option-off writers before this unit passes.
+- Withdrawal effects are finite, durable, content-free and retryable after
+  restart. Their existence is not proof that a product host has consumed them.
+- Raw resolution validates 1–16 exact scoped anchors, byte/response bounds,
+  availability, code-point boundaries, D6 and final authority after asynchronous
+  opening. Failure returns no partial successful references. No model, fake
+  Memory, synthetic submitted note or callback inside a write lock is allowed.
+- An unrelated append or Memory filing does not change an unchanged Raw span's
+  content identity. Actual loss/exclusion of required support cancels and purges
+  drafts; confirmed authored Cards retain only their private current body and
+  stop qualifying as current evidence until the existing trusted review/rebind.
+  Replay cannot resurrect a cancelled/deleted artifact. Exercise ordinary Card
+  reads, common evidence, pagination, organization and restart, not only creation.
+
+Primary owns the plan, integration and independent acceptance. Actual P3a
+implementation is assigned to `/root/raw_p2_capture_impl61`, configured
+GPT 6.1 Sol/high, after its read-only seam audit; separate non-author reviewers
+follow candidate freeze. No model fallback was reported.
+No paid model, real transcript, operational database, production gate waiver,
+release, deployment or benchmark change is authorized by this packet.
+
+### P3a pre-implementation evidence
+
+The primary's independently constructed acceptance suite used the actual
+internal Raw capture and public Memory mutation/capture APIs, with synthetic
+scripted extraction. On the fixed P2 baseline, all ten cases failed at the
+specific expected assertion that a known forgotten/corrected source must
+refuse; actual exit 1 on Node 22.16. This confirms the documented missing P3a
+behavior, not a completed P2 guarantee or test-setup failure.
+
+Cases cover both clients, saved and policy-skipped Raw, option-off correction
+and forget, a new legacy capture event ID, and an explicit alias of the original
+receipt. The same suite will also require zero new extractor calls for excluded
+source and successful independent-session/explicit-receipt writes after the fix.
+Evidence lives at `/tmp/cairn-raw-p3-evidence.67nhhd/primary-before.log` and
+`primary-lineage.test.mjs`; this is not final acceptance or a semantic score.
+
+The selected construction seam is
+`openRawCaptureCore(coreOptions, { ...rawOptions, lineage: true })` inside the
+uninstalled internal factory. It opts into additive schema v26; omission retains
+P2's v25 selection. Public `openMemoryCore` does not accept that option. Once
+lineage exists in a store, current option-off writers must enforce it, including
+a connection opened before another current connection opts into v26. Do not
+cache absent schema forever. No production mixed-writer migration is performed.
+
+The mapping deliberately stays conservative: unchanged NFKC/redaction text can
+map whitespace-normalized and bounded prefixes/windows to exact original spans;
+transformations that are not proven by this mapper use whole-message precision.
+Repeated equal windows retain all possible matching mapped spans, not the first
+substring occurrence. This bounded mechanical mapping is not semantic alignment.
+
+Primary expanded acceptance to 26 cases. The intermediate, unfrozen snapshot
+passed 22 and failed four (actual exit 1): indexed-window filtering used a whole
+message identity and over-blocked disjoint retained windows. The correction must
+filter the actual model-facing window catalog, preserving index-to-source binding.
+The same snapshot passed both clients' in-flight and pre-dispatch microtask
+forget fences, failed-mutation rollback, exact UTF-16 prefix mapping, option-off
+reopen and already-open-before-upgrade checks. This observation is diagnostic,
+not final reviewed acceptance; rerun the complete suite after implementation.
+
+Primary then passed the 26-case intermediate suite on Node 22.16 and 24.15
+(actual exit 0 each), and expanded it to 30 cases for cross-owner/project/client
+isolation and forgetting from a cold option-off process. The expanded Node
+22.16 run passed 30/30, actual exit 0. These are development checkpoints;
+final-head runs and independent reviews remain required.
+
+Direct inspection also found two origin-classification gaps before freeze:
+an explicit duplicate could assign a previously unclassified legacy receipt
+`independent`, and the legacy store's inferred `remember` could be treated as
+explicit merely because it did not use automatic admission. The implementation
+now classifies a missing-origin duplicate as unknown, preserves an already
+proven independent origin, and requires actual explicit input origin for new
+independent receipts. Raw-derived identity always wins. The worker added
+regressions for both gaps plus legacy facade forget/correct; primary must
+recheck these through the complete final suite, not assume the patch suffices.
+
+The frozen v25 opener was independently compared with `core/database.mjs` at
+the fixed P2 base: after only its documented header/import relocation, all
+20,608 bytes match, actual exit 0. This establishes the old-writer regression's
+provenance; it does not authorize a mixed-version production deployment.
+
+### P3b seam audit retained for the next packet
+
+The implementation worker completed a read-only audit while the primary ran
+P3a's final gates; no P3b code is in this candidate. Its required design checks:
+
+- Raw conversation revision currently advances on append/closure, not receipt
+  support changes. Adding independent support can change preview counts without
+  a Raw append. Bind deletion CAS to the actual source graph as well; a cursor
+  epoch that is not part of `expectedRevision` cannot meet this requirement.
+- Resolve affected current/historical Memories from live receipts, not bounded
+  episode links or `Memory.origin`. Unknown legacy provenance must refuse with
+  `raw_lineage_unavailable`, not be invented as independent or silently deleted.
+- After Raw rows disappear, new-event legacy capture still needs the durable
+  session tombstone before dispatch and publication. Account for staged pending
+  work whose old admission key alone does not identify its source session.
+- Factor pending-reservation closure into shared model-free storage so current
+  option-off control setters can enforce it without a crypto port or Raw factory.
+- Reuse ordinary forgetting for source-only Memory; give surviving multi-source
+  Memory a receipt-removal/invalidation mutation. One transaction must cover
+  source-consumer invalidation, usage release, tombstone, content-free action
+  replay and durable finite host effects. Host delivery is a separate gate.
+
+### P3a combined pre-commit verification record
+
+All work uses new synthetic owned workspaces, no live models or user database.
+Evidence directory: `/tmp/cairn-raw-p3-evidence.67nhhd`.
+
+| Gate | Observed result | Evidence |
+| --- | --- | --- |
+| Primary independent behavioral suite | 30/30 on Node 22.16 and 24.15; actual exit 0 each | `primary-combined-node22.log`, `primary-combined-node24.log` |
+| Worker affected suites | 271/271 on both runtimes; actual exit 0 each; includes 50 new lineage cases | `worker-stable-focused22.log`, `worker-stable-focused24.log` |
+| Full core | 1,440/1,440 on Node 22.16 and 24.15; actual exit 0 each | `core-v22.16.0.log`, `core-v24.15.0.log` |
+| Generic plugin/architecture | 635/635 on Node 22.16, actual exit 0 | `generic-node22.log` |
+| JSON and maintainer Claude plugin validation | Both actual exit 0 | `validate.log`, `plugin-validation.log` |
+| Twelve relevant demos | All twelve on each runtime; 24 commands, actual exit 0 each | `demo-*-v22.16.0.log`, `demo-*-v24.15.0.log` |
+| Workspace lifecycle | 25/25 each runtime; actual exit 0 each | `workspace-v22.16.0.log`, `workspace-v24.15.0.log` |
+| Actual MCP stdio | 125/125 each runtime; actual exit 0 each | `mcp-v22.16.0.log`, `mcp-v24.15.0.log` |
+| Built/installed artifact | 94 passed, zero failed, one native-Windows skip on each runtime; actual exit 0 each | `artifact-v22.16.0.log`, `artifact-v24.15.0.log` |
+| Installed rationale synthetic HTTP | 4/4 each runtime, zero skips; actual exit 0 each | `installed-rationale-v22.16.0.log`, `installed-rationale-v24.15.0.log` |
+
+Commands use the owned `tools/testing/run.mjs` runner. Full core is
+`npm run test:core`; generic is `npm test`. Demos use its `--script` mode for
+`examples/{local-store,historical-evidence,moc-placement,recall,admission,
+session-episodes,session-context,private-cards,capture,conflicts,index-rebuild,
+recall-continuation}.mjs`, so gate scratch is removed after execution.
+Workspace verification is `NODE_DISABLE_COMPILE_CACHE=1 npm run test:workspace-lifecycle`.
+MCP and installed artifact commands are `npm run test:mcp` and
+`npm run test:artifact`, run serially after full core. The Linux/WSL artifact
+gate does not count the skipped native-Windows lifecycle as a pass.
+The opt-in installed rationale command is
+`CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node tools/testing/run.mjs evaluation/live/test/rationale-pilot.test.mjs`.
+It uses fake HTTP, not live credentials. The artifact dependency cache was
+prepared with `node tools/testing/run.mjs --script packaging/prepare-cache.mjs`
+(public registry metadata only, actual exit 0).
+Each runtime is selected explicitly through its Node/NPM path; exit status is
+captured before printing any log excerpt.
+
+The worker's focused command is `node tools/testing/run.mjs` with these nine
+checked-in files: `raw-lineage.test.mjs`, `raw-capture.test.mjs`,
+`raw-capture-boundaries.test.mjs`, `raw-capture-fences.test.mjs`,
+`raw-capture-replay.test.mjs`, `capture.test.mjs`,
+`indexed-evidence-capture.test.mjs`, `ordered-capture.test.mjs` and
+`episode-mode-parity.test.mjs`, all under `core/test/`.
+
+The primary cross-checked `git diff --name-only HEAD` plus untracked files
+against independent porcelain status: **23 paths agree**. The verification
+snapshot hashes all **20 non-document paths**, including tests, subprocess
+helpers and the packaging manifest; a subsequent comparison matched exactly.
+Only the primary-owned verification plan changed during those runs. Package
+checks and the repeated final-source comparison passed; `git diff --check`
+also returned actual exit 0. The candidate commit must match these verified
+bytes. Fixed-commit independent Standards/Spec review and latest-head CI are
+still required; their exact SHA/results belong in the delivery PR. This table
+is not a declaration that P3b, P3c, installed Raw, or the complete V1 ships.

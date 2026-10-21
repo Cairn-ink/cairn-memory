@@ -812,7 +812,10 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (!getControl(ns).enabled) fail('capture_disabled');
       if (row.revision !== input.expectedRevision) fail('revision_conflict');
       const denied = keepGuard(ns, key); if (denied) fail(denied);
-      const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? ORDER BY ordinal,id LIMIT 17').all(row.id);
+      const sources = db.prepare(`SELECT s.*,e.client AS originClient,e.session_key AS originSessionKey
+        FROM episode_sources s JOIN session_episodes e ON e.id=s.origin_episode_id
+        WHERE s.episode_id=? AND e.owner_id=? AND e.scope=? AND e.project_id=? ORDER BY s.ordinal,s.id LIMIT 17`)
+        .all(row.id, ...boundary(ns));
       if (!sources.length || sources.length > 16) fail('episode_sources_unavailable');
       if (!prior) {
         // Independent, transactionally allocated per-episode action ordinal.

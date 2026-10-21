@@ -1639,3 +1639,30 @@ The test-only correction keeps the 600 ms deadline, controls time only in an
 isolated child at the actual SQL boundary, checks cold state and cleanup, and
 requires a removed post-work-check mutant to fail. Runtime deadline behavior
 and production clocks are unchanged; the plan/PR records the new final gates.
+
+## Internal Raw lineage P3a: not complete source deletion
+
+The [local completion plan](plans/raw-local-v1-completion.md) separates P3a's
+lineage/exclusion mechanics from mandatory P3b deletion and P3c Raw-to-Card.
+The separately selected schema 26 records no synthetic historical text. Exact
+whitespace maps are supported; NFKC/redaction ambiguity falls back to the whole
+message, and equal windows conservatively cover every matching position.
+Legacy unknown receipt provenance is not evidence of independent support.
+These scripted fixtures establish source fences, not semantic model quality.
+Installed Raw capability, the D5 cascade (including old `forgetEpisode`), Raw
+Card resolution and real re-extraction remain unavailable.
+
+The primary independently reproduced missing D6 guards on the fixed P2 baseline in the expected-red P3a acceptance.
+Worker fixture-development runs also retained four failed commands: 24/26
+passed with an invalid indexed-profile setup, 30/32 passed when the disjoint
+fixture accidentally reused a suppressed assertion fingerprint, and 46/48
+passed when its purported unique Unicode prefix actually repeated across four
+windows. Those were corrected fixture premises, not weakened suppression or
+mapping rules. A later 269/271 run passed the expanded source-map assertions but
+its legacy resubmission incorrectly exceeded the unchanged normalized 4,000-unit
+input limit; the fixture now resubmits the actual bounded canonical projection.
+Primary inspection additionally caught missing-origin duplicate
+promotion and inferred legacy-receipt classification gaps during implementation;
+the regression suite distinguishes unknown from genuinely independent evidence.
+Final focused/full gates and independent reviews are recorded in the plan/PR;
+earlier greens do not substitute for final-source verification.

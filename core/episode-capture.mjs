@@ -283,6 +283,7 @@ export async function keepEpisodeCapture(options) {
     payloadDigest: kept.key.payloadDigest, sessionId: kept.sessionKey,
     messages: kept.sources.map(source =>
       ({ id: source.message_id, role: source.role, content: source.text })),
+    sourceReceipts: kept.sources.map(source => ({ client: source.originClient, sessionId: source.originSessionKey })),
     captureQualification: 'source-bound-v2', sessionEpisodes: 'episode-v1' };
   const operations = { ...options.operations,
     assertCaptureEvidence: value => {

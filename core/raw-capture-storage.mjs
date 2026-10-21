@@ -5,6 +5,8 @@ import { rawBoundary, rawRegistration, rawNamespace } from './raw-input.mjs';
 import { captureSnapshot } from './capture-input.mjs';
 import { episodeSnapshot } from './episode-input.mjs';
 import { episodeText } from './episode-storage.mjs';
+import { rawSourceMap } from './raw-source-map.mjs';
+import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { boundedText, fail, identifier, object, revision } from './validation.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?';
@@ -18,6 +20,7 @@ const hash = value => createHash('sha256').update(JSON.stringify(value)).digest(
 /** Internal only: joins the real admission/episode transaction, never interprets. */
 export function createRawCaptureStorage({ db, profile, ...options }) {
   const journal = createRawJournal({ db, ...options });
+  const lineage = createRawLineageStorage(db);
   const binding = input => db.prepare(`SELECT * FROM raw_capture_events WHERE ${where}`).get(...key(input));
   const rawEvent = input => db.prepare(`SELECT result FROM raw_events WHERE ${where}`).get(...key(input));
 
@@ -60,6 +63,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     const snapshot = messages.length ? profile.sessionEpisodes ? episodeSnapshot(projection)
       : captureSnapshot(projection, profile.captureQualification, profile.captureSourcePolicy) : null;
     const projectionDigest = snapshot?.payloadDigest ?? hash(['raw-capture-empty-v1', sessionKey, input.eventId, firstIds, bindingDigest]);
+    const maps = lineage.enabled() ? input.messages.filter(message => messages.some(value => value.id === message.id)).map(rawSourceMap) : [];
     if (previous && previous.projection_digest !== projectionDigest) fail('event_payload_conflict');
     const generation = db.prepare('SELECT generation FROM episode_controls WHERE owner_id=? AND scope=? AND project_id=?')
       .get(...rawBoundary(input.namespace))?.generation ?? 'initial';
@@ -113,6 +117,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       if (existing) {
         if (existing.binding_digest !== bindingDigest || existing.projection_digest !== projectionDigest) fail('event_payload_conflict');
       } else {
+        lineage.register(result.conversationId, maps);
         db.prepare(`INSERT INTO raw_capture_events(owner_id,scope,project_id,client,event_id,conversation_id,
           session_key,first_message_ids,eligible_message_ids,projection_digest,binding_digest,capture_generation)
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(...key(input), result.conversationId, sessionKey,

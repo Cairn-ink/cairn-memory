@@ -42,6 +42,8 @@
   "core/contract.mjs",
   "core/database.mjs",
   "core/raw-schema.mjs",
+  "core/raw-lineage-schema.mjs",
+  "core/raw-lineage-storage.mjs",
   "core/fetch.mjs",
   "core/index-schema.mjs",
   "core/index-storage.mjs",

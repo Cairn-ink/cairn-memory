@@ -7,7 +7,7 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch,
-  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage }) {
+  conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, assertSources }) {
   const hasRawCapture = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'").get());
   function rawGuard(ns, input) {
     if (!hasRawCapture || input.keepActionId) return null;
@@ -132,6 +132,7 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
       let suppressedCount = 0;
       const activeItems = [];
       for (const item of input.items) {
+        assertSources?.(ns, item.receipts);
         // Check before deduplication; one suppressed input contributes one count.
         if (isSuppressed(ns, item.fingerprint)) {
           suppressedCount++;

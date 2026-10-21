@@ -15,6 +15,7 @@ import { migrateVersion11 } from './rationale-schema.mjs';
 import { migrateVersion12 } from './staged-evidence-schema.mjs';
 import { migrateVersion13 } from './classification-journal-schema.mjs';
 import { installRawJournal, RAW_SCHEMA_VERSION, installRawCapture, RAW_CAPTURE_SCHEMA_VERSION } from './raw-schema.mjs';
+import { installRawLineage, RAW_LINEAGE_SCHEMA_VERSION } from './raw-lineage-schema.mjs';
 
 import { migrateVersion14, migrateVersion15, migrateVersion16 } from './episode-schema.mjs';
 
@@ -266,8 +267,9 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false } = {}) {
-  if (typeof rawConversations !== 'boolean' || typeof rawCapture !== 'boolean') fail('invalid_input');
+export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false } = {}) {
+  if ([rawConversations, rawCapture, rawLineage].some(value => typeof value !== 'boolean')) fail('invalid_input');
+  rawCapture ||= rawLineage;
   rawConversations ||= rawCapture;
   if (typeof path !== "string" || !path.trim() || path.includes("\0")) fail("invalid_path");
   if (path !== ":memory:") {
@@ -289,18 +291,26 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
     transaction(db, () => {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
-      if (appId === APPLICATION_ID && [RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION].includes(version)) {
+      if (appId === APPLICATION_ID && [RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION, RAW_LINEAGE_SCHEMA_VERSION].includes(version)) {
         for (const name of ['raw_conversations','raw_messages','raw_parts','raw_events','raw_owner_usage','raw_capture_controls',
           'private_cards','card_notes','card_applicability_reviews','evidence_mappings']) {
           if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
         }
-        if (version === RAW_CAPTURE_SCHEMA_VERSION) {
+        if (version >= RAW_CAPTURE_SCHEMA_VERSION) {
           for (const name of ['raw_capture_events', 'raw_session_fences']) {
             if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
           }
         } else if (rawCapture) {
           installRawCapture(db);
           db.exec(`PRAGMA user_version = ${RAW_CAPTURE_SCHEMA_VERSION};`);
+        }
+        if (version === RAW_LINEAGE_SCHEMA_VERSION) {
+          for (const name of ['raw_source_maps','raw_receipt_lineage','raw_receipt_origins','raw_exclusion_clocks','raw_source_exclusions']) {
+            if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
+          }
+        } else if (rawLineage) {
+          installRawLineage(db);
+          db.exec(`PRAGMA user_version = ${RAW_LINEAGE_SCHEMA_VERSION};`);
         }
         return;
       }
@@ -498,6 +508,10 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
         if (rawCapture) {
           installRawCapture(db);
           db.exec(`PRAGMA user_version = ${RAW_CAPTURE_SCHEMA_VERSION};`);
+          if (rawLineage) {
+            installRawLineage(db);
+            db.exec(`PRAGMA user_version = ${RAW_LINEAGE_SCHEMA_VERSION};`);
+          }
         }
       }
     });
