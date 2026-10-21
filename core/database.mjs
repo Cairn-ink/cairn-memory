@@ -5,6 +5,7 @@ import { assertNoLocalAuthority, installLocalAuthority, validateLocalAuthority, 
 import { closeSync, lstatSync, mkdirSync, openSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { existingStoreOption, existingStorePath, validateExistingStore } from './existing-store.mjs';
 import { migrateVersion17, CONFIRMATION_SCHEMA_VERSION } from './confirmation-schema.mjs';
 import { fail } from "./validation.mjs";
 import { installPrivateCards, installCardMemorySources, PRIVATE_CARD_SCHEMA_VERSION } from './private-card-schema.mjs';
@@ -270,12 +271,26 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false } = {}) {
+export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, existingStore } = {}) {
   if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
   rawDeletion ||= rawSources || localControls;
   rawLineage ||= rawDeletion;
   rawCapture ||= rawLineage;
   rawConversations ||= rawCapture;
+  if (existingStore !== undefined) {
+    const option = existingStoreOption(existingStore), location = existingStorePath(path);
+    const db = new DatabaseSync(location.uri, { timeout: STORAGE_BUSY_TIMEOUT_MS });
+    try {
+      location.check();
+      db.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
+      validateExistingStore(db, option);
+      location.check();
+      return db;
+    } catch (error) {
+      try { db.close(); } catch { /* Preserve the construction failure. */ }
+      throw error;
+    }
+  }
   if (typeof path !== "string" || !path.trim() || path.includes("\0")) fail("invalid_path");
   if (path !== ":memory:") {
     path = resolve(path);

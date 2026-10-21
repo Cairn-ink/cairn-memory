@@ -3,6 +3,7 @@ import { transaction } from './database.mjs';
 import { fail, identifier, object } from './validation.mjs';
 import { rawBoundary, rawClient, rawContext, rawNamespace, rawPolicy, rawRegistration, rawSealed, RAW_CLIENTS } from './raw-input.mjs';
 import { createRawReads } from './raw-reads.mjs';
+import { createRawConversationList } from './raw-conversation-list.mjs';
 import { createRawControlStorage } from './raw-control-storage.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawSourceReader } from './raw-source-reader.mjs';
@@ -289,8 +290,9 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, configureCa
     catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   const getConversation = createRawReads({ db,identity,epoch,open,digest,partDigest });
+  const listRawConversations = createRawConversationList({ db,identity,epoch });
   const sourceReader = sources ? createRawSourceReader({ db,identity,open,partDigest }) : undefined;
-  return Object.freeze({ prepareRegistration,commitRegistration,register,getConversation,getRawUsage,
+  return Object.freeze({ prepareRegistration,commitRegistration,register,getConversation,listRawConversations,getRawUsage,
     sourceReader,
     getRawCaptureControl,setRawCaptureControl,closePending,
     sessionKey: (namespace, client, sessionId) => sessionKey(rawNamespace(namespace), rawClient(client), identifier(sessionId)) });

@@ -30,25 +30,21 @@ const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
-  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards"]);
+  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "existingStore"]);
   const privateCards = privateCardOptions(input.privateCards);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
   const db = openDatabase(input.path, { privateCards: Boolean(privateCards), rawCapture: Boolean(internal?.rawCapture),
-    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls) });
+    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore });
+  try {
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);
   const rawCards = createRawCardInvalidation(db);
   let deletion;
   let identity;
-  try {
-    identity = db.prepare(`SELECT store_id AS storeId, cursor_secret AS cursorSecret
+  identity = db.prepare(`SELECT store_id AS storeId, cursor_secret AS cursorSecret
       FROM store_metadata WHERE singleton = 1`).get();
-    if (!identity) fail("unsupported_database");
-  } catch (error) {
-    db.close();
-    throw error;
-  }
+  if (!identity) fail("unsupported_database");
   let closed = false;
   let mocStorage;
   const ready = () => { if (closed) fail("store_closed"); };
@@ -581,16 +577,14 @@ export function createMemoryRuntime(input, internal) {
     recordHeldRetirement: (previous, replacement, linked) => recordHeldRetirement(db, previous, replacement, linked) });
   const stagedEvidence = createStagedEvidenceStorage({ db });
   let rawCapture;
-  try { rawCapture = internal?.attachRaw?.(db); }
-  catch (error) { db.close(); throw error; }
+  rawCapture = internal?.attachRaw?.(db);
   const episodeReads = createEpisodeReads({ db, epoch, decisionReview });
   const proceduralStorage = createProceduralStorage({ db, activeRow: visibleRow, advanceEpoch, epoch });
   const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview });
   let episodes;
-  try { episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch,
+  episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch,
     forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots,
-    deleteEpisode: (ns, input) => sourceRoots.enabled() ? deletion.forgetEpisode(ns, input) : undefined }); }
-  catch (error) { db.close(); throw error; }
+    deleteEpisode: (ns, input) => sourceRoots.enabled() ? deletion.forgetEpisode(ns, input) : undefined });
   stagedEvidence.setEpisodes(episodes);
   deletion = createRawDeletionStorage({ db, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
@@ -728,4 +722,8 @@ export function createMemoryRuntime(input, internal) {
     epoch(ns) { ready(); return epoch(ns); },
     close() { if (!closed) { db.close(); closed = true; } },
   });
+  } catch (error) {
+    try { db.close(); } catch { /* Preserve the construction failure. */ }
+    throw error;
+  }
 }

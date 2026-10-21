@@ -1,5 +1,6 @@
 import { decisionReviewOption } from './confirmation-storage.mjs';
 import { rawOptions } from './raw-options.mjs';
+import { existingStoreOption } from './existing-store.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { types } from 'node:util';
 import { composeRawCore } from './raw-composition.mjs';
@@ -158,13 +159,18 @@ function failure(error) {
 export function openMemoryCore(input) {
   if (input && typeof input === 'object' && types.isProxy(input)) throw new MemoryStoreError('invalid_input');
   if (!input || typeof input !== 'object' || Array.isArray(input)) return createMemoryCore(input);
+  if ('existingStore' in input) {
+    input = ownData(input, ['path','model','captureQualification','captureSourcePolicy','captureRationale','captureEvidence',
+      'captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes','decisionReview','privateCards','rawConversations','existingStore']);
+    input.existingStore = existingStoreOption(input.existingStore);
+  }
   let descriptor;
   try { descriptor = Object.getOwnPropertyDescriptor(input, 'rawConversations'); }
   catch { throw new MemoryStoreError('invalid_input'); }
   if (!descriptor) return createMemoryCore(input);
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
   ownData(input, ['path','model','captureQualification','captureSourcePolicy','captureRationale','captureEvidence',
-    'captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes','decisionReview','privateCards','rawConversations']);
+    'captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes','decisionReview','privateCards','rawConversations','existingStore']);
   const options = rawOptions(descriptor.value);
   const fields = Object.getOwnPropertyDescriptors(input);
   delete fields.rawConversations;
@@ -177,7 +183,7 @@ export function openMemoryCore(input) {
 /** Internal construction seam. Public openMemoryCore never forwards extensions. */
 export function createMemoryCore(input, internal) {
   object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
-    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview', 'privateCards']);
+    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview', 'privateCards', 'existingStore']);
   const privateCards = privateCardOptions(input.privateCards);
   const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
@@ -219,7 +225,10 @@ export function createMemoryCore(input, internal) {
   if (sessionEpisodes && (captureQualification !== 'source-bound-v2' || captureEvidence !== 'staged-v1')) throw new MemoryStoreError('invalid_input');
   const model = input.model;
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
-  const runtime = (internal?.createRuntime ?? createMemoryRuntime)({ path: input.path, ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
+  const runtime = (internal?.createRuntime ?? createMemoryRuntime)({ path: input.path,
+    ...(input.existingStore ? { existingStore: input.existingStore } : {}),
+    ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
+  try {
   const { storeId, cursorSecret } = runtime.identity;
 
   function namespaceBinding(ns) {
@@ -1139,4 +1148,8 @@ export function createMemoryCore(input, internal) {
       return success(null);
     },
   });
+  } catch (error) {
+    try { runtime.close(); } catch { /* Preserve the construction failure. */ }
+    throw error;
+  }
 }

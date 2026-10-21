@@ -48,6 +48,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       } catch (error) { return failure(error); }
     },
     getConversation: async input => { try { runtime.ready(); return success(await storage.getConversation(input)); } catch (error) { return failure(error); } },
+    listRawConversations: input => invoke(() => { runtime.ready(); return storage.listRawConversations(input); }),
     getRawUsage: input => invoke(() => { runtime.ready(); return storage.getRawUsage(input); }),
     getRawCaptureControl: input => invoke(() => { runtime.ready(); return storage.getRawCaptureControl(input); }),
     setRawCaptureControl: input => invoke(() => { runtime.ready(); return storage.setRawCaptureControl(input); }),
