@@ -558,7 +558,8 @@ export function createMemoryRuntime(input, internal) {
   const proceduralStorage = createProceduralStorage({ db, activeRow: visibleRow, advanceEpoch, epoch });
   const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview });
   let episodes;
-  try { episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture }); }
+  try { episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch,
+    forgetMutation, rawCapture, sourceAuthority: rawLineage }); }
   catch (error) { db.close(); throw error; }
   stagedEvidence.setEpisodes(episodes);
   const admissionStorage = createAdmissionStorage({

@@ -248,6 +248,18 @@ relative import relocation. All fixtures use synthetic owned workspaces.
 
 `core/test/raw-lineage.test.mjs` adds actual P3a mutation/admission, mapping,
 legacy/option-off, cold-process, migration and exclusion-race fixtures.
+Episode drafting uses the same exclusion authority before batch/precompact,
+end and lazy interpretation, including retained passages with no Memory link.
+Filtered messages keep their original omission positions; inherited passages
+retain their origin episode's client/session/message identity. Freshness checks
+validate the actual prepared input after token counting, at dispatch and after
+the response. Publication repeats source checks inside its transaction, including
+sources reattached for pinned fields or step closure. An excluded reattachment
+fails rather than publishing new prose. The immediate episode error can report
+`source_excluded`; the existing finite durable attempt outcome remains
+`episode_failed`, preserving consumed-attempt/debounce and closed replay rules.
+`core/test/raw-lineage-episodes.test.mjs` covers provider input, cold published
+state, zero-Memory passages, inherited origins, concurrency and rollback.
 `core/testing/raw-v25-database.mjs` freezes the P2 opener from
 `9a7bbe59c9c0ec72227310cece43fce7ac589c6e`, with only an explanatory header and
 relative import relocation.

@@ -54,7 +54,7 @@ export function episodeMetadata(ns, row) {
 }
 
 /** All write seams are model-free. SE-2 owns scheduling and provider calls. */
-export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture }) {
+export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture, sourceAuthority }) {
   // Cleanup-only callers need only exec; defer the optional schema probe until
   // a real episode publication attempt, preserving that legacy failure seam.
   let rawCaptureAvailable;
@@ -547,6 +547,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       });
       const selected = new Set(sources.map(s => `${s.origin_episode_id}:${s.event_id}:${s.message_id}`));
       if (selected.size !== sources.length) fail('invalid_input');
+      assertDraftSources(ns, sources);
       const anchors = value => denseArray(value, 1, 4).map(anchor => {
         object(anchor, ['sourceIndex','start','end']);
         if (!Number.isSafeInteger(anchor.sourceIndex)) fail('invalid_input');
@@ -644,6 +645,9 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const cited = new Set(Object.values(record.anchors).flat().map(anchor => anchor.sourceId));
       sources = sources.filter(source => cited.has(source.id));
       if (sources.length > 16) fail('invalid_input');
+      // Pinned fields and step closure can reattach sources not in this request.
+      // Validate those original identities too, before any publication mutation.
+      assertDraftSources(ns, sources);
       object(input.modelMetadata, ['adapter','model','profile','promptVersion','digest','portVersion']);
       record.modelMetadata = {};
       for (const field of ['adapter','model','profile']) record.modelMetadata[field] = input.modelMetadata[field] == null ? null : episodeText(input.modelMetadata[field], 100);
@@ -701,6 +705,14 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       return { revision: row.revision+1 };
     });
   }
+  function draftReceipt(ns, source) {
+    const origin = live(ns, source.origin_episode_id);
+    return { client: origin.client, sessionId: origin.session_key,
+      eventId: source.message_id, role: source.role, excerpt: source.text };
+  }
+  function assertDraftSources(ns, sources) {
+    if (sourceAuthority?.enabled()) sourceAuthority.assertReceipts(ns, sources.map(source => draftReceipt(ns, source)));
+  }
   // Bounded live staging, plus at most 16 durable passages. No source read drafts.
   function draftSnapshot(ns, input) {
     return transaction(db, () => {
@@ -710,11 +722,19 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         JOIN staged_capture_evidence s USING(owner_id,scope,project_id,client,event_id)
         WHERE e.episode_id=? AND e.position<=? AND e.disposition=0 AND s.payload IS NOT NULL
         AND e.generation=? ORDER BY e.position DESC LIMIT 64`).all(row.id, claim.watermark, claim.generation);
-      const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? ORDER BY ordinal,id').all(row.id);
+      const priorSources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? ORDER BY ordinal,id').all(row.id);
+      const eligible = receipts => sourceAuthority?.filter(ns, receipts) ?? receipts.map((_, index) => index);
+      const priorReceipts = priorSources.map(source => draftReceipt(ns, source));
+      const sources = eligible(priorReceipts).map(index => ({ ...priorSources[index], receipt: priorReceipts[index] }));
       const target = db.prepare('SELECT event_id,staging,gap FROM episode_events WHERE episode_id=? AND position=?').get(row.id, claim.watermark);
-      return { episodeId: row.id, client: row.client, revision: row.revision, sourceFence: row.source_fence,
-        targetEventId: target.event_id, missingReason: target.staging === 'not-staged' ? 'capacity' : target.gap ?? 'missing_evidence', events: events.map(event => ({ eventId: event.event_id,
-          position: event.position, view: JSON.parse(event.payload) })), sources, record: JSON.parse(row.record) };
+      return { episodeId: row.id, client: row.client, sessionKey: row.session_key, revision: row.revision, sourceFence: row.source_fence,
+        targetEventId: target.event_id, missingReason: target.staging === 'not-staged' ? 'capacity' : target.gap ?? 'missing_evidence', events: events.map(event => {
+          const view = JSON.parse(event.payload);
+          return { eventId: event.event_id, position: event.position, view,
+            sourceIndices: eligible(view.messages.map(message => ({ client: row.client,
+              sessionId: row.session_key, eventId: message.id, role: message.role, excerpt: message.content }))) };
+        }),
+        sources, priorSourceCount: priorSources.length, record: JSON.parse(row.record) };
     });
   }
   function captureState(ns, input) {

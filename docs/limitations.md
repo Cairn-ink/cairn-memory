@@ -1666,3 +1666,24 @@ promotion and inferred legacy-receipt classification gaps during implementation;
 the regression suite distinguishes unknown from genuinely independent evidence.
 Final focused/full gates and independent reviews are recorded in the plan/PR;
 earlier greens do not substitute for final-source verification.
+
+Independent Spec review then found an episode-mode D6 gap on the frozen P3a
+candidate: ordinary capture refused an excluded source, but a later option-off
+episode capture could send it to the interpreter and publish a gist/passage
+before extraction refused. The checked-in regression first reproduced both
+clients (two positive controls passed, two exact leak assertions failed, exit 1).
+The correction applies existing lineage authority to prepared episode inputs and
+transactional publication, including zero-Memory prior passages, inherited
+origin identities, pinned fields and step closure. Existing durable attempt codes
+still record `episode_failed`; the immediate episode error may be
+`source_excluded`, and a closed failed replay remains `capture_evidence_closed`
+without another provider call. This does not implement P3b deletion of old prose.
+
+Retained correction-development failures were fixture issues: an initial 0/4
+run also reused an unqualified assertion in qualified positive controls; a
+16/30 run used the wrong strict correction/reservation shapes; a 28/30 run
+passed public-shaped namespaces directly to normalized internal runtime calls;
+and a 36/38 run incorrectly expected an open-job error on closed replay. Each
+command exited 1 and its evidence remains retained. These are distinct from the
+specific provider-leak red and do not justify weakening source guards or legacy
+validation. Final-source verification is recorded separately in the plan/PR.

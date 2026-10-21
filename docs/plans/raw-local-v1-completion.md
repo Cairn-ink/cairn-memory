@@ -734,7 +734,7 @@ recheck these through the complete final suite, not assume the patch suffices.
 
 The frozen v25 opener was independently compared with `core/database.mjs` at
 the fixed P2 base: after only its documented header/import relocation, all
-20,608 bytes match, actual exit 0. This establishes the old-writer regression's
+20,594 bytes match, actual exit 0. This establishes the old-writer regression's
 provenance; it does not authorize a mixed-version production deployment.
 
 ### P3b seam audit retained for the next packet
@@ -811,3 +811,141 @@ also returned actual exit 0. The candidate commit must match these verified
 bytes. Fixed-commit independent Standards/Spec review and latest-head CI are
 still required; their exact SHA/results belong in the delivery PR. This table
 is not a declaration that P3b, P3c, installed Raw, or the complete V1 ships.
+
+### P3a fixed-candidate review and episode correction
+
+The first candidate, `efbf9aab033f27a10ff5a630ceee4692733dc9bb`, matched
+all 23 verified working paths and all 20 non-document hashes. Independent
+GPT 6.1 Sol/high non-authors reviewed the same fixed P2 base and candidate.
+Standards found no documented breach, one verification-byte-count typo (corrected
+above after `git cat-file -s` independently confirmed 20,594), and an optional
+duplicated request-rebuild assignment. Spec found a **high-severity P3a-07 gap**;
+this candidate is not accepted or delivered despite its passing original suites.
+
+The deterministic sequence is ordinary Raw capture, forget its Memory, then
+capture the same scoped client/session/message through an option-off episode
+core using a new event. Final Memory admission correctly returns
+`source_excluded`, but episode interpretation ran first and had already stored
+a gist plus an episode source. Both clients exhibit the defect. No concurrent
+mutation or ambiguous source identity is needed.
+
+Primary independently built `primary-episode-exclusion.test.mjs` under the
+existing evidence directory. Two repeated runs and a mode/identity isolation
+probe each pass two unexcluded controls and fail the two specific provider-leak
+assertions, actual exit 1, in approximately 1.5–2.4 seconds. Identical scoped
+HMAC identities match; ordinary capture rejects the same source. The first
+development probe additionally hit a qualification-conflict in its positive
+control because it deduplicated an unqualified assertion into a newly qualified
+one; using a distinct second assertion fixes that premise without changing
+the source or either negative case. All evidence is retained.
+
+The ranked diagnostic hypotheses were (1) missing episode dispatch/publication
+checks, (2) wrong identity across capture modes, and (3) only a concurrent stale
+snapshot. The controlled probe supports (1) and rules out (2)/(3) as necessary
+causes. Correction round 1 is delegated to the original implementation worker:
+put regression tests on actual episode providers and cold stored state, then
+guard batch/precompact/end/lazy and inherited sources using shared lineage,
+including exclusion races before dispatch and at transactional publication.
+P3b implementation waits for this correction, final-source reruns and renewed
+independent review; this is not a new product decision or authority request.
+
+Primary expanded the episode acceptance in
+`primary-episode-consumers.test.mjs`: 10 cases, two passing existing in-model
+publication fences and eight specific failures, actual exit 1. Precompact,
+end and lazy drafting each reuse an excluded prior passage in both clients
+when the episode retained that passage without an admitted Memory link. Both
+token-count microtask cases also dispatch after exclusion. The prepared request's
+actual source identities must be rechecked, not merely a newly filtered snapshot
+that could silently validate an older request. Final primary acceptance now
+contains 44 cases (30 original, four mode-switch controls/cases, ten consumers).
+
+On the round-1 working patch, those independently constructed 44 cases pass
+on Node 22.16, actual exit 0 (`primary-expanded-working44.log`). This confirms
+the dispatch/consumer hypothesis for the exercised paths; it is not final
+acceptance. The worker is additionally testing original-source identity,
+reattached pinned gist/step/closure sources, replay and cold publication. Any
+full-suite result above predates this runtime correction and must not be
+presented as verification of the corrected candidate.
+
+The correction is frozen with 38 new checked-in episode cases. The worker's
+final two-file suite (`raw-lineage.test.mjs` and
+`raw-lineage-episodes.test.mjs`) passes 88/88 on Node 22.16 and 24.15, actual
+exit 0 each, in 42.502 and 60.216 seconds. Primary's final independent 44-case
+suite also passes on both versions, actual exit 0 each. The first full corrected
+core run passes 1,478/1,478 on Node 22.16, actual exit 0, in 393.056 seconds;
+remaining final-source gates are tracked below before delivery. The worker's
+earlier 155/155 affected-suite run is contextual only because it started before
+the final inherited-source test strengthening and snapshot cleanup.
+
+One correction round addressed the diagnosed episode-authority gap; no primary
+implementation takeover or model fallback occurred. The optional duplicated
+request-rebuild assignment remains deferred: it is a nonblocking heuristic,
+not part of the episode correction. No schema/public API or D5 behavior was
+added by this correction. Source freeze was independently verified against
+Git diff and base-tree/filesystem blob comparisons: 24 paths agree and all
+21 non-document hashes remain identical throughout the final runs.
+The cumulative dependent branch is separately cross-checked against main
+`cd6d1ad32ac3d6f5926c6846e8c6d27645bb7c9a`: 46 paths agree by Git diff and
+independent base-tree/filesystem comparison. That larger diff includes the
+already reviewed P1 #449 and P2 #450; the P3a review base remains the exact P2
+head above. The 24-path packet count must not be presented as the cumulative
+PR-against-main file count.
+
+### Read-only follow-on audit while final P3a gates run
+
+No P3b/P3c runtime implementation is included by this audit. Primary prepared
+18 independent P3b cases from the agreed contract, in addition to the retained
+four expected-red legacy-delete probes. They are future acceptance, not a new
+passing gate. The implementation worker audited the P3c seams read-only:
+
+- Reuse Raw's snapshot/open/recheck pattern for exactly selected spans, not
+  whole-conversation pagination. Crypto opens stay outside SQLite write locks;
+  prepared sources require final synchronous canonical validation at Card commit.
+- Preserve the existing private Card lifecycle. Add content-free Raw bindings;
+  note-FK bindings and Memory-revision bindings cannot impersonate bare Raw.
+  No fake Memory, submitted note or model call is needed for authored creation.
+- Raw content identity must bind scoped immutable source/span content, not a
+  conversation revision, namespace epoch or Memory filing revision. Source-read
+  authority is distinct from the capture pause/off switch and from D6 eligibility.
+- Extend existing draft cancellation, confirmed authored-body retention,
+  evidence eligibility and organization checks. Option-off invalidation must
+  work without a crypto port. D5 deletion remains the prerequisite.
+- Before implementation, pin bounds for tiny-part scans and Raw-dependent Card
+  fanout, plus Raw `getSource` coordinates and coverage. The existing 128 caps
+  apply to notes/Memories, not automatically to Raw. These are remaining P3c
+  contract details, not an implemented or installed capability.
+
+### P3a corrected final-source local verification
+
+All commands below completed on the unchanged 21-path non-document snapshot.
+The primary captured each command's actual exit status before printing any log
+excerpt. Every listed command exited 0. Both runtimes are selected explicitly
+as Node 22.16.0 and 24.15.0; no TypeScript gate exists in this JavaScript repo.
+
+| Gate | Final result | Evidence under `/tmp/cairn-raw-p3-evidence.67nhhd` |
+| --- | --- | --- |
+| Primary independent behavior | 44/44 on each runtime, zero failures/skips | `corrected-primary44-v22.16.0.log`, `corrected-primary44-v24.15.0.log` |
+| Worker lineage plus episode regression | 88/88 on each runtime, zero failures/skips | `worker-correction-final88-22.log`, `worker-correction-final88-24.log` |
+| Full core | 1,478/1,478 each; 393.056 s / 440.678 s | `corrected-core-v22.16.0.log`, `corrected-core-v24.15.0.log` |
+| Generic plugin/architecture | 635/635 on Node 22.16 | `corrected-generic-node22.log` |
+| JSON / maintainer plugin validation | Both exit 0 | `corrected-validate.log`, `corrected-plugin-validation.log` |
+| Actual MCP stdio | 125/125 each runtime | `corrected-mcp-v22.16.0.log`, `corrected-mcp-v24.15.0.log` |
+| Built/installed artifact | 94 passed, zero failed, one native-Windows skip each runtime | `corrected-artifact-v22.16.0.log`, `corrected-artifact-v24.15.0.log` |
+| Installed rationale with synthetic HTTP | 4/4 each runtime, zero skips | `corrected-installed-rationale-v22.16.0.log`, `corrected-installed-rationale-v24.15.0.log` |
+| Workspace lifecycle | 25/25 each runtime | `corrected-workspace-v22.16.0.log`, `corrected-workspace-v24.15.0.log` |
+| Twelve relevant demos | 24 commands, all exit 0 | `corrected-demo-*-v22.16.0.log`, `corrected-demo-*-v24.15.0.log` |
+
+Commands are the same explicit owned-runner/npm commands recorded in the
+first-candidate table above, now repeated against the corrected source. Core,
+generic, MCP, artifact and installed-rationale suites ran serially to avoid
+overlapping timing-sensitive gates. The workspace gate disables the parent
+Node compile cache as documented. Demo log names are cross-checked against the
+12 executed examples on each runtime; every announced owned runner root is
+checked absent after completion. The demo's own “retained” message describes
+its inner behavior, not the wrapper's completed cleanup.
+
+No real transcript, user database or paid provider was used. These tests prove
+the exercised mechanical contracts, not semantic quality or installed Raw
+availability. Fixed-commit Standards/Spec review and latest-head CI are still
+required and will be recorded in the PR; no merge, release, deployment or
+product-pin change is part of this packet.
