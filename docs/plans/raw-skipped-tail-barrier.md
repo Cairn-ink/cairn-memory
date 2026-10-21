@@ -198,3 +198,59 @@ reviewers inspect the same fixed base and candidate. Their results and actual
 post-commit exits belong in the PR record, not an unverified completion claim.
 Remote latest-head CI and mergeability must pass before ready/unmerged; this
 candidate neither merges dependencies nor completes the later local setup.
+
+## Remote CI correction: terminal test framing, not Raw semantics
+
+Initial candidate `52b7d825c5cdd2715bd57fc6c6713f02ab29439c` passed both review
+axes and committed primary 17/17 plus workspace 25/25 on each Node, actual exit 0.
+It is PR #458, still draft. Remote CI run 39594344678 / job 119202824244 fails
+the Node 24 MCP suite: H03 expected the complete displayed `bindings`, but the
+PTY fixture announced a prompt while only a quoted fake `Approval> ` in the
+untrusted body had arrived. Artifact steps consequently did not execute.
+The first narrow real H03 local rerun passes 1/1, actual exit 0; that does not explain
+or clear the remote failure.
+
+Primary minimizes through the actual checked-in Python PTY supervisor with a
+synthetic two-chunk display, no core/database/provider. Its unchanged
+`primary-pty-framing.test.mjs` fails 1/1 on both supported Nodes, actual exit 1, for
+the same missing-complete-bindings assertion. It observes normal child/supervisor
+exit 0 and exactly one prematurely emitted prompt; the test failure is not a
+process crash. Old and candidate supervisor/H03/production-review sources are
+identical. Raw runtime is not involved in this reproduction.
+
+Ranked predictions: substring matching an embedded marker yields premature
+events only when the display is fragmented; omitted production bindings would
+also fail without the synthetic renderer; character/PTY truncation would not
+depend specifically on an ASCII embedded marker. Use deterministic fragmented
+and coalesced output, actual prompt fragmentation, spoofed-only/no-prompt EOF,
+and the original real H03 approval/restart/negative cases to distinguish them.
+
+Authorized correction is test-only, owned by the original B2a implementer:
+`adapters/mcp/test/fixtures/card-review-pty.py`, a new focused
+`adapters/mcp/test/card-review-pty-framing.test.mjs`, and a synthetic helper
+fixture only if needed. Primary owns this record. Do not edit production
+`review-card.mjs`, its authorization/display, Raw runtime, existing H03
+assertions or timeouts. Match the actual prompt frame rather than arbitrary
+quoted text. Preserve bounded output/deadline, child cleanup and single prompt
+notification. No weakened checks or blind CI retry.
+
+After correction run both full MCP suites, focused terminal/primary framing
+and public/installed Raw checks on each Node; verify all original eight author
+hashes unchanged. Freeze an incremental correction commit, then both independent
+review axes must reassess the full fixed-base/final-head diff. Rerun all remote
+checks on that new head; retain the original failed run and local red evidence.
+B2b may develop from the already reviewed parent but must integrate this exact
+test-only correction before its own final verification/delivery.
+
+The minimal correction requires the marker at a line start and at the current
+output suffix. The author adds nine actual-PTY cases: fragmented/coalesced quoted
+markers, three real-prompt split points, single notification, quoted-only EOF
+and no-prompt EOF. Before correction, three pass and six fail (actual exit 1).
+After correction, all nine plus the eight unchanged real private-card tests
+pass 17/17 on each Node (actual exit 0). Both full MCP suites pass 134/134,
+actual exit 0, with no skips. Their supervisor is reaped at exit 0, and primary
+independently verifies all eight original author hashes and both owned workspace
+removals. The unchanged primary fragmented-display oracle independently passes
+1/1 on both Nodes (actual exit 0). Production authorization/display and existing
+H03 assertions are unchanged. Final committed acceptance, both independent
+review axes and new-head remote CI are still required before readiness.
