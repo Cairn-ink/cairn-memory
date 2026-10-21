@@ -1,5 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import { createLocalRawHost, localHostResult } from './local-host.mjs';
+import { rearmResult } from './local-rearm-state.mjs';
 
 export const localHostExit = result => result.reason === 'unexpected_failure' ? 1 :
   result.status === 'blocked' ? 2 : ['busy','waiting'].includes(result.status) ? 3 : 0;
@@ -15,9 +16,16 @@ export async function runLocalHostCli(args = process.argv.slice(2)) {
     let result;
     try {
       if (!Array.isArray(args) || args[0] !== '--profile' || typeof args[1] !== 'string' ||
-          !['status','prepare','initialize','run'].includes(args[2])) throw Error();
+          !['status','prepare','initialize','run','rearm-status','rearm'].includes(args[2])) throw Error();
       const action = args[2], host = createLocalRawHost({ profilePath:args[1] });
-      if (action === 'status' || action === 'prepare') {
+      if (action === 'rearm-status') {
+        if (args.length !== 3) throw Error();
+        result = await host.rearmStatus({ signal:controller.signal });
+      } else if (action === 'rearm') {
+        if (args.length !== 11 || args[3] !== '--expected-revision' || !/^(0|[1-9]\d*)$/.test(args[4]) ||
+          !Number.isSafeInteger(Number(args[4])) || args[5] !== '--action-id' || args[7] !== '--session' || args[9] !== '--source') throw Error();
+        result = await host.rearm({ expectedRevision:Number(args[4]),actionId:args[6],sessionId:args[8],sourcePath:args[10] },{ signal:controller.signal });
+      } else if (action === 'status' || action === 'prepare') {
         if (args.length !== 3) throw Error();
         result = await host[action]({ signal:controller.signal });
       } else {
@@ -25,7 +33,8 @@ export async function runLocalHostCli(args = process.argv.slice(2)) {
             args.length === 9 && (action !== 'initialize' || args[7] !== '--start' || !['beginning','eof'].includes(args[8]))) throw Error();
         result = await host[action]({ sessionId:args[4],sourcePath:args[6],...(args.length === 9 ? { start:args[8] } : {}) },{ signal:controller.signal });
       }
-    } catch { result = localHostResult('blocked','invalid_input'); }
+    } catch { result = ['rearm-status','rearm'].includes(args?.[2]) ? rearmResult(args[2] === 'rearm-status','blocked','invalid_input')
+      : localHostResult('blocked','invalid_input'); }
     return { result,exitCode:signalExit ?? localHostExit(result) };
   } finally { for (const [signal,handler] of handlers) process.off(signal,handler); }
 }

@@ -11,8 +11,8 @@ controls/one-shot/transport packets are delivered as reviewed, unmerged PRs.
 The [durable worker](raw-local-worker.md) is ready/unmerged as#462, and the
 [explicit foreground host](raw-local-host.md) as#463; both have committed dual
 review, primary acceptance and31 successful latest-head checks. Step3 still needs
-control rearm, the qualified duplicate-evidence policy and actual automatic
-client setup/activation. The [retained Raw MCP/terminal bridge](raw-retained-mcp.md)
+control rearm and actual automatic client setup/activation. The
+[retained Raw MCP/terminal bridge](raw-retained-mcp.md)
 has accepted existing-store/indexed-discovery mechanics, the bounded adapter
 and independent installed Raw-to-authored-Card lifecycle cases on both supported
 Node versions. Its48 combined gates passed on both runtimes, actual exits0,
@@ -26,10 +26,20 @@ installed cases pass on both runtimes. After strengthening an existing deadline
 test's provider-entry premise, all37 affected local cases pass on both runtimes;
 the retained reds and diagnosis remain explicit. Its48 combined commands now
 pass on both runtimes, actual exits0/null, with source/dependency hashes and
-owned cleanup independently verified. The only post-gate changes update these
-two planning records; a separate delivery freeze must confirm that boundary.
-This packet still needs exact-commit acceptance, committed independent reviews
-and latest-head CI delivery.
+owned cleanup independently verified. The final delivery freeze confirmed that
+only its two planning records changed after those gates.
+The qualified duplicate packet is now ready/unmerged as#465 at363c1da: exact-commit
+primary core13/installed5 acceptance passed on both runtimes, independent
+Standards/Spec reported zero actionable findings, and all31 checks/4 latest-head
+workflow runs succeeded. Merge-preview tree equality and the20 incremental
+paths were independently verified, actual ready-proof exit0. The next isolated
+packet is [explicit local rearm](raw-local-rearm.md): preserve session identity
+and ordinal while skipping paused content at one frozen EOF. Its implementation
+and primary source13/recovery2/installed5 acceptance pass on each supported Node
+runtime. All28 affected contributor commands passed with actual exits0/null;
+source/dependency hashes,18 incremental paths and owned cleanup were independently
+checked. Final committed-candidate acceptance, independent double review and CI
+are still pending at this checkpoint, so this is not yet a ready delivery.
 Step4's combined installed lifecycle and T01–T18/RL acceptance map are not complete.
 Separate source/schema compatibility must be resolved or explicitly unavailable;
 retained-receipt excerpts do not substitute for full Raw. Product pins/flags and

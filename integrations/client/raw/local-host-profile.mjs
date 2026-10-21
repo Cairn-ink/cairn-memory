@@ -34,7 +34,7 @@ export async function readHostProfile(profilePath) {
     for (const parent of new Set([dirname(input.configPath),dirname(input.stateRoot),dirname(input.identityKeyPath)]))
       await checkedPath(parent,{ directory:true });
     await checkedPath(input.home,{ directory:true });
-    const locations = { profilePath,markerPath:profilePath+'.prepared.json',lockPath:profilePath+'.prepare.lock',
+    const locations = { profilePath,markerPath:profilePath+'.prepared.json',lockPath:profilePath+'.prepare.lock',rearmPath:profilePath+'.rearm.json',
       stateRoot:input.stateRoot,identityKeyPath:input.identityKeyPath,configPath:input.configPath };
     const canonical = await Promise.all(Object.values(locations).map(canonicalHostPath));
     for (let a = 0; a < canonical.length; a++) for (let b = a+1; b < canonical.length; b++)
@@ -49,7 +49,7 @@ export async function readHostProfile(profilePath) {
       await checkedPath(installationPath);
     }
     return Object.freeze({ ...input,installation:Object.freeze(installation),profilePath,
-      markerPath:locations.markerPath,lockPath:locations.lockPath,profileDigest:sha(text) });
+      markerPath:locations.markerPath,lockPath:locations.lockPath,rearmPath:locations.rearmPath,profileDigest:sha(text) });
   } catch { fail('profile_invalid'); }
 }
 
@@ -59,7 +59,7 @@ export async function readHostConfiguration(profile) {
   catch { fail('config_invalid'); }
   if (snapshot.config.authority.client !== profile.installation.client) fail('authority_changed');
   try {
-    const forbidden = await Promise.all([profile.stateRoot,profile.identityKeyPath,profile.profilePath,profile.markerPath,profile.lockPath]
+    const forbidden = await Promise.all([profile.stateRoot,profile.identityKeyPath,profile.profilePath,profile.markerPath,profile.lockPath,profile.rearmPath]
       .map(canonicalHostPath));
     const [database,usage] = await Promise.all([snapshot.config.databasePath,snapshot.config.usage.root].map(canonicalHostPath));
     if (forbidden.some(value => overlaps(value,database) || overlaps(value,usage))) fail('profile_invalid');

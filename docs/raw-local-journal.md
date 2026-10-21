@@ -176,7 +176,7 @@ The private0600 profile has exactly these fields:
 
 All paths are normalized absolute paths. Profile/config/key/state parents and
 home must already be private0700 directories. State/key must be separate new
-leaves and may not overlap configuration, marker/lock, database or usage paths,
+leaves and may not overlap configuration, preparation/rearm sidecars, database or usage paths,
 including through ancestor aliases. `configDigest` is SHA256 of the exact UTF-8
 configuration text read by the bounded private reader. Codex's existing private
 qualification configuration/cache location and Claude's owned installation
@@ -192,6 +192,8 @@ node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json 
 node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json prepare
 node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json initialize --session SESSION --source /private/source.jsonl
 node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json run --session SESSION --source /private/source.jsonl
+node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json rearm-status
+node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json rearm --expected-revision 0 --action-id 00000000-0000-4000-8000-000000000001 --session SESSION --source /private/source.jsonl
 ```
 
 Initialization defaults to a verified complete-record EOF, with no historical
@@ -210,7 +212,8 @@ new0700 state root,0600 random installation key and compatible B4b root/sessions
 The ready marker binds the profile/config/authority/key and root inode. Complete
 unchanged preparation is idempotent; creating/partial/lost/foreign state refuses
 without repair. The marker lives outside key/state so their loss stays visible.
-No command clears blocked sessions, refreshes generations or rearms capture.
+Ordinary preparation/initialization/run never clears blocked sessions or refreshes
+authority. The separately explicit rearm operation below has a narrower boundary.
 
 Programmatic trusted callers import `createLocalRawHost` from
 `integrations/client/raw/local-host.mjs` with `{profilePath}`. It exposes
@@ -221,6 +224,83 @@ signals must be native AbortSignals. Results have exactly
 `{version:'local-raw-host-v1',status,reason,worker}`. `worker` is null or the
 unchanged B4b summary. Host readiness is not saved coverage or completed Memory.
 Raw retention and Memory interpretation remain separately observable.
+
+### Explicit authority-only rearm
+
+After an operator has already re-enabled the authoritative controls, a trusted
+caller may invoke `rearmStatus({signal?})` and
+`rearm({expectedRevision,actionId,sessionId,sourcePath},{signal?})`. The CLI tokens
+above are fixed and ordered; revision is a canonical nonnegative safe integer,
+and action ID is a canonical lowercase UUIDv4. These operations never set controls,
+look up a provider key, grant retained-read authority or enable automatic hooks.
+
+Both new result DTOs have exactly `{version,status,reason,revision,pending}`.
+Versions are `local-raw-rearm-status-v1` and `local-raw-rearm-result-v1`;
+status is ready/waiting/blocked/busy. Revision is the last completed global action,
+not a pending successor; revision/pending may be null when state is unknown.
+Success reports rearmed/replayed. A pending status reports rearm_pending and the
+prior completed revision. Existing host DTOs and CLI exit conventions are unchanged.
+Rearm status reports action metadata readiness only: it does not refresh SQL
+permission or prove controls are currently enabled. Ordinary host status and an
+actual rearm invocation check permission separately.
+
+Revision 0 observes no global action record alongside valid preparation. It is
+not proof that rearm never happened: the unchanged preparation marker has no
+historical sentinel, and status does not enumerate sessions. A selected session
+with a committed receipt/positive revision refuses if global history is missing
+or older. Rearm cannot repair lost history or lower/reuse that known revision.
+
+Rearm requires the same store, target, namespace, client, installation key/root,
+session/wire identity and issued ordinal, with genuinely changed enabled authority.
+All non-authority configuration values and optional-field presence stay unchanged,
+including duplicate policy, provider, usage, database, Raw settings and timeouts.
+Changing configuration/policy by hand is not rearm. Partial preparation or lost
+claims/keys/root/cursors still refuses without identity regeneration.
+
+An unblocked pending-null cursor needs exact authoritative SQL high-water and
+first-part/event/admission ownership. A pending continuation is eligible only
+after its original bounded source/planner binding is proved and SQL records its
+message closed by capture_barrier/tool_off, with zero reservation and a completed
+first interpretation or explicit no-eligible-first-part result. Missing admission
+alone is not success. First-part, incomplete/processing, unknown/deleted, quota,
+exhausted and other blocked work refuses; no closed suffix or old interpretation
+is retried. Earlier deliberate discards require their recognized committed receipt.
+
+Each action freezes one complete EOF, verifies the same source inode/old anchor,
+and skips to that exact boundary without scanning paused content for case A.
+Claude waits for a fresh user boundary, as at EOF initialization. Same-action
+recovery/replay never selects a newer EOF after append; after later capture it
+does no cursor/config publication or additional model work. Superseded requests
+refuse. Keep the action ID and expected revision to resume that exact action.
+
+One global predecessor authority pair permits separately selecting another
+one-generation-behind session with its own SQL/source proof and frozen EOF.
+A later authority transition replaces that predecessor; older or unknown
+authority refuses. There is no bulk cursor migration or unbounded history map.
+
+Global pending intent gates new host starts. Per-session pending receipts also
+gate direct workers under their session lock before source access; committed
+receipts bind positive cursor rearmRevision in both directions. Omitted revisions
+remain valid only for untouched sessions without rearm artifacts. A terminal
+session receipt is durable before config/profile/preparation activation and
+permanently forbids that action from rewriting its cursor, even if a direct
+worker subsequently progresses while global recovery is pending. Unknown third
+states refuse; ambiguous writes are inspected, never rolled back blindly.
+Normal runs do not hold the global preparation lock across their execution.
+
+Direct workers now refresh configuration and actual SQL permission under their
+session lock before source access. Even a no-work invocation refuses after real
+revocation; eligible legacy cursor encoding remains unchanged. Normal runs do
+not acquire the rearm historical SQL ownership checks.
+
+Sidecars remain private files below 64 KiB in owned 0700 directories. Source
+opening retains Linux owned-regular/no-symlink checks, not a new transcript 0600
+requirement. Case A uses content-free stored ownership consistency, not Raw
+decoding or historical source-file attestation. Case B retains the 32 MiB record,
+128 MiB aggregate-read, scratch and deadline ceilings. SQL and filesystem reads
+cannot form one transaction; already-read bytes/dispatched costs cannot be undone.
+The 4 KiB source anchor does not authenticate every historical byte. This is
+synthetic-tested infrastructure, not native client activation or completed V1.
 
 CLI exits are0 for ready/progress,3 for waiting/busy,2 for blocked and1 for an
 unexpected sanitized failure. Caught INT/TERM/HUP exit130/143/129 after child
@@ -292,7 +372,8 @@ makes it earlier. These cooldowns do NOT prove an orphan died. Registered core
 events observe completed/processing/incomplete without reacquiring interpretation;
 an event never registered may acquire its first interpretation. Known no-PID
 failure can retry the same pending next invocation under the same cap. Confirmed
-refusals/source mutation stay blocked; rearm/operator recovery is separate.
+refusals/source mutation stay blocked; the host's explicit rearm above accepts
+only its proved authority-transition cases, not generic worker recovery/reset.
 
 Results are frozen `local-raw-worker-v1` summaries with ready/progress/waiting/
 busy/blocked status, fixed content-free reason, completed/dispatched record/part

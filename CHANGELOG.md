@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — explicit local authority rearm
+
+- Add trusted rearm status/CAS actions for one established session after controls
+  were independently re-enabled. Preserve identity/ordinal and non-authority
+  configuration; skip only one frozen complete EOF without retrying old work.
+- Add bounded intent/terminal receipts, one retained predecessor and direct-worker
+  permission/receipt checks. Terminal replay never rewinds later cursor progress;
+  missing or older global history refuses when the selected session proves it.
+- Include synthetic source/crash and actual offline archive checks. Revision 0 is
+  absence observation, not historical proof. No controls are enabled, native
+  client activated, semantic score measured or full V1/release claimed.
+
 ## Unreleased — optional matching qualified evidence
 
 - Add the trusted `append-matching-evidence-v1` capture policy for exact canonical
@@ -32,8 +44,10 @@
 - Bind private configuration and installation identity with an external durable
   preparation marker. Interrupted/lost identity refuses without repair. Keep
   pending progress through cancellation and await actual child teardown.
-- Include synthetic installed archive and permission checks. Automatic hooks,
-  rearm, retained-source MCP/Card review and completed local V1 remain separate.
+- Include synthetic installed archive and permission checks. This host slice did
+  not include rearm or retained-source MCP/Card review; later explicit slices
+  above retain their separate authority boundaries. Automatic hooks and completed
+  local V1 remain separate.
 
 ## Unreleased — durable opt-in local Raw worker
 

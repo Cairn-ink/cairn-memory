@@ -13,6 +13,8 @@ import { checkHostPermission } from './local-host-permission.mjs';
 import { inspectPreparation, prepareHost } from './local-host-preparation.mjs';
 import { detectRunningHost, boundBinary, cachedQualification, hasQualifiedCreator } from '../../codex/qualification.mjs';
 import { sessionSourceMetadata } from '../../codex/session-source.mjs';
+import { executeRearm, checkHostRearm } from './local-host-rearm.mjs';
+import { rearmResult } from './local-rearm-state.mjs';
 
 const dependencies = new AsyncLocalStorage();
 // Trusted-code-only dependency scope, absent from every profile and CLI DTO.
@@ -42,7 +44,7 @@ function operation(value, deps) {
   if (signal !== undefined) add.call(signal,'abort',cancel,{ once:true });
   if (cancelled) controller.abort();
   const timer = setTimeout(() => controller.abort(),Math.max(0,end-performance.now()-2000));
-  return { signal:controller.signal, check() {
+  return { signal:controller.signal,remaining:() => Math.max(0,Math.floor(end-performance.now())),check() {
     if (controller.signal.aborted || performance.now() >= end-2000) fail(cancelled ? 'cancelled' : 'work_limit');
   }, close() { clearTimeout(timer); if (signal !== undefined) remove.call(signal,'abort',cancel); } };
 }
@@ -66,8 +68,10 @@ export function createLocalRawHost(value) {
       op = operation(callOptions,deps); op.check();
       hostRuntime();
       await runtimeFiles(); op.check();
+      if (action === 'rearm' || action === 'rearmStatus') return await executeRearm(profilePath,selection,op,deps,action === 'rearmStatus');
       const selected = ['initialize','run'].includes(action) ? hostSelection(selection,action === 'initialize') : null;
       const profile = await readHostProfile(profilePath), config = await readHostConfiguration(profile); op.check();
+      await checkHostRearm(profile,config); op.check();
       await checkHostPermission(config); op.check();
       if (action === 'prepare') {
         await prepareHost(profile,config,() => op.check()); op.check();
@@ -79,13 +83,14 @@ export function createLocalRawHost(value) {
       let selectedPath,privatePaths;
       try {
         [selectedPath,...privatePaths] = await Promise.all([selected.sourcePath,profile.stateRoot,profile.identityKeyPath,
-          profile.profilePath,profile.markerPath,profile.lockPath,profile.configPath,config.databasePath,config.usage.root].map(canonicalHostPath));
+          profile.profilePath,profile.markerPath,profile.lockPath,profile.rearmPath,profile.configPath,config.databasePath,config.usage.root].map(canonicalHostPath));
       } catch { fail('source_unqualified'); }
       if (privatePaths.some(path => overlaps(selectedPath,path))) fail('invalid_input');
       async function freshPermission() {
         const finalProfile = await readHostProfile(profilePath);
         if (finalProfile.profileDigest !== profile.profileDigest) fail('preparation_invalid');
         const finalConfig = await readHostConfiguration(finalProfile);
+        await checkHostRearm(finalProfile,finalConfig);
         if (await inspectPreparation(finalProfile,finalConfig) !== 'ready') fail('preparation_invalid');
         await checkHostPermission(finalConfig); op.check();
       }
@@ -125,9 +130,11 @@ export function createLocalRawHost(value) {
     } catch (error) {
       let reason = hostReasons.includes(error.reason) || workerReasons.includes(error.reason) ? error.reason : 'unexpected_failure';
       try { op?.check(); } catch (stopped) { reason = stopped.reason; }
+      if (action === 'rearm' || action === 'rearmStatus') return rearmResult(action === 'rearmStatus',reason === 'state_busy' ? 'busy':'blocked',reason);
       return localHostResult(reason === 'state_busy' ? 'busy' : 'blocked',reason);
     } finally { op?.close(); }
   }
   return Object.freeze({ status:(options = {}) => execute('status',null,options),prepare:(options = {}) => execute('prepare',null,options),
-    initialize:(selection,options = {}) => execute('initialize',selection,options),run:(selection,options = {}) => execute('run',selection,options) });
+    initialize:(selection,options = {}) => execute('initialize',selection,options),run:(selection,options = {}) => execute('run',selection,options),
+    rearmStatus:(options = {}) => execute('rearmStatus',null,options),rearm:(selection,options = {}) => execute('rearm',selection,options) });
 }

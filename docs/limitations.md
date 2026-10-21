@@ -1,5 +1,52 @@
 # Known limitations
 
+## Explicit authority-only local rearm
+
+The [explicit rearm path](raw-local-journal.md#explicit-authority-only-rearm)
+adopts already-enabled authority for one established session. It does not enable
+controls, recover unknown identity, retry old interpretation, read retained Raw
+under capture permission, activate a native client or establish semantic quality.
+The same key/store/target/namespace/client/session and issued ordinal survive;
+one frozen complete EOF skips paused content. Only clean pending-null state or
+a proved SQL-closed continuation with completed/no-eligible first-part ownership
+qualifies. Incomplete, first-part, unknown/deleted, quota/exhausted and other
+blocked states refuse rather than reset.
+
+Rearm status reports action metadata, not fresh SQL permission or enabled controls.
+Status revision 0 observes an absent global action record; it cannot prove no
+historical rearm because there is no new sentinel or session enumeration. A
+selected session's positive revision/committed receipt refuses missing or older
+global history before publication. Only one predecessor authority pair is kept;
+sessions older than it cannot be implicitly adopted. Same-action replay retains
+its original EOF and never rewrites a cursor after terminal publication or later
+progress. Missing/contradictory receipt/revision pairs refuse, not repair.
+
+Case A checks content-free SQL ownership, event/part/binding and completed
+admission consistency, not historical source-file attestation or semantic truth.
+Case B reconstructs only its already-authorized bounded original record. Existing
+32 MiB/128 MiB/scratch/deadline limits remain; a source inode plus 4 KiB anchor is
+not a complete historical checksum. Filesystem and SQL cannot share an atomic
+transaction. Later revocation cannot undo source reads or dispatched costs, and
+Raw-only controls do not retroactively cancel eligible admitted interpretation.
+Normal direct workers now reject revoked no-work permission before source
+access; eligible legacy cursor encoding and SQL-free transport fixtures remain.
+
+The first source run passed 2/14, actual exit 1: a new fixture supplied a trailing
+runtime-root slash, while reused bounded source helpers needed the host's private
+remaining-budget accessor. The fixture was normalized and that accessor added
+without changing timeout ceilings. The expanded run passed 38/40, exit 1, because
+two new incomplete/processing fixtures violated the existing pending-claim CHECK
+before reaching rearm; only those fixture fields changed. A separate source-close
+regression failed 0/1, exit 1: actual close rejection skipped key zeroing. Nested
+finally now guarantees zeroing while the outer fixed failure remains visible;
+durable ready state is not rolled back. All original reds remain retained.
+
+Focused synthetic checks include actual SIGKILL, rename/fsync ambiguity and cold
+publication recovery. These do not promise cleanup after arbitrary SIGKILL/host
+crash or preemption of an uninterruptible kernel hang. Linux/WSL and the two
+supported Node runtimes are the tested boundary; no native macOS/Windows, provider,
+paid-call, installation activation, completed local V1 or new score is claimed.
+
 ## Optional matching qualified duplicate evidence
 
 The explicit `captureQualifiedDuplicates:'append-matching-evidence-v1'` policy
@@ -98,8 +145,9 @@ tests exercise them against synthetic ancestry and caches. No automatic hook,
 daemon, session discovery, qualification probe or background retry is installed.
 
 Preparation creates only a fresh key/state and an external durable intent/ready
-marker. Partial creation, missing established identity and authority drift
-refuse without repair or rearm. Deleting all owner state is outside that loss
+marker. Ordinary preparation refuses partial creation, missing established
+identity and authority drift without repair. The separate authority-only rearm
+above does not regenerate that identity. Deleting all owner state is outside that loss
 detection guarantee. Deadlines initiate cancellation with teardown reserve;
 actual child close remains required even if it exceeds the nominal155seconds.
 Confirmed worker ready/progress survives a late abort; waiting/blocked outcomes
@@ -124,7 +172,8 @@ identical-content/new-receipt qualification conflicts remain unchanged.
 The explicit [local worker](raw-local-journal.md#durable-local-worker-b4b)
 joins the real private-archive producer→transport→one-shot/core path using
 synthetic sources and fake HTTP. It is not automatic Claude/Codex hooks, setup,
-pause/resume rearm, full conversation coverage, Card promotion or completed V1.
+full conversation coverage, Card promotion or completed V1. The separate explicit
+host rearm above is not generic worker reset or failed-interpretation retry.
 Only Linux verified-source capture is implemented; Node20 smoke tests pure
 import, not capture. Normal process exit and saved Raw alone are not completion.
 Observed saved/skipped acknowledgements are not unique-row or quality scores.

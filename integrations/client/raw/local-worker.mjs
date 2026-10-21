@@ -5,6 +5,7 @@ import { workerOptions, workerContext, workerOperation, summary, fault } from '.
 import { loadIdentity, bindRoot, readSession, initializeSession } from './local-worker-state.mjs';
 import { runProgress } from './local-worker-progress.mjs';
 import { sourceBudget, openWorkerSource, qualifySource, sourceSize, completeBoundary, cursorSource, verifyCursorSource, sourceReason } from './local-worker-source.mjs';
+import { checkHostPermission } from './local-host-permission.mjs';
 
 export function createLocalRawWorker(value) {
   const options = workerOptions(value);
@@ -21,6 +22,14 @@ export function createLocalRawWorker(value) {
       identity = await loadIdentity(options,context,operation);
       await bindRoot(options,identity,initialize,operation);
       return await stateLock(identity.lockPath,async () => {
+        try {
+          config = (await readConfigurationSnapshot(options.transport.configPath)).config;
+          if (JSON.stringify(localAuthorityInput(config.authority)) !== JSON.stringify(options.authority)) fault('authority_changed');
+          await checkHostPermission(config);
+        } catch (error) {
+          if (['cancelled','work_limit','authority_changed'].includes(error.reason)) throw error;
+          fault(error.reason === 'capture_disabled' ? 'authority_changed':error.reason === 'store_invalid' || error.code === 'invalid_local_capture_configuration' ? 'config_invalid':'state_invalid');
+        }
         operation.check(); cursor = await readSession(identity,options.authority.client);
         if (!initialize && !cursor) fault('state_invalid');
         bytes = sourceBudget(operation);

@@ -149,6 +149,8 @@
   "integrations/client/raw/local-host-profile.mjs",
   "integrations/client/raw/local-host-permission.mjs",
   "integrations/client/raw/local-host-preparation.mjs",
+  "integrations/client/raw/local-host-rearm.mjs",
+  "integrations/client/raw/local-rearm-state.mjs",
   "integrations/client/raw/local-host-cli.mjs",
   "integrations/client/raw/claude.mjs",
   "integrations/client/raw/codex.mjs",

@@ -4,6 +4,8 @@ import { opendir } from 'node:fs/promises';
 import { checkedPath, privateDirectory, privateRead, privateWrite } from '../private-state.mjs';
 import { stateLock } from '../state-lock.mjs';
 import { fault, exact, integer, digest, reasons } from './local-worker-input.mjs';
+import { ownData } from '../../../core/local-authority-input.mjs';
+import { assertSessionRearm } from './local-rearm-state.mjs';
 
 export const keyed = (key, purpose, value) => createHmac('sha256',key).update(JSON.stringify(['local-raw-worker-v1',purpose,value]));
 export async function loadIdentity(options, context, operation) {
@@ -18,7 +20,7 @@ export async function loadIdentity(options, context, operation) {
     const wireSessionId = 'localv2_' + keyed(key,'wire-session',binding).digest('hex');
     const authorityCommitment = keyed(key,'authority',authority).digest('hex');
     const directory = join(options.stateRoot,'sessions');
-    return { key,keyCommitment,sessionKey,wireSessionId,authorityCommitment,directory,
+    return { key,keyCommitment,sessionKey,wireSessionId,authorityCommitment,directory,stateRoot:options.stateRoot,
       claimPath: join(directory,sessionKey+'.claim.json'), cursorPath: join(directory,sessionKey+'.json'), lockPath: join(directory,sessionKey+'.lock') };
   } catch (error) { if (error?.reason === 'cancelled' || error?.reason === 'work_limit') throw error; fault('key_invalid'); }
 }
@@ -65,7 +67,10 @@ function validProjection(value, cursor) {
       part.end-part.start > 4000 || (part.index === 0 ? part.start !== 0 : part.start === 0)) fault('state_invalid');
 }
 export function validateCursor(value, identity, client) {
-  const cursor = exact(value,['version','sessionKey','wireSessionId','authorityCommitment','epoch','offset','issuedOrdinal','source','selection','pending','blockedReason']);
+  const fields = ['version','sessionKey','wireSessionId','authorityCommitment','epoch','offset','issuedOrdinal','source','selection','pending','blockedReason'];
+  const data = ownData(value,[...fields,'rearmRevision']);
+  const cursor = exact(data,[...fields,...(Object.hasOwn(data,'rearmRevision') ? ['rearmRevision']:[])]);
+  if (Object.hasOwn(cursor,'rearmRevision') && !integer(cursor.rearmRevision,1)) fault('state_invalid');
   const source = exact(cursor.source,['identity','anchor']), anchor = exact(source.anchor,['start','end','commitment']);
   if (cursor.version !== 'local-raw-cursor-v1' || cursor.sessionKey !== identity.sessionKey || cursor.wireSessionId !== identity.wireSessionId ||
       cursor.epoch !== 0 || !integer(cursor.offset) || !integer(cursor.issuedOrdinal) || !digest(cursor.authorityCommitment) ||
@@ -92,15 +97,17 @@ export function validateCursor(value, identity, client) {
   }
   return cursor;
 }
-export async function readSession(identity, client) {
+export async function readSession(identity, client, rearming = false) {
   try {
     const claimText = await privateRead(identity.claimPath,{ missing:true }), cursorText = await privateRead(identity.cursorPath,{ missing:true });
-    if (claimText === undefined && cursorText === undefined) return null;
+    if (claimText === undefined && cursorText === undefined) { if (!rearming) await assertSessionRearm(identity,null); return null; }
     if (claimText === undefined || cursorText === undefined) fault('state_invalid');
     const claim = exact(JSON.parse(claimText),['version','sessionKey','wireSessionId','keyCommitment']);
     if (claim.version !== 'local-raw-claim-v1' || claim.sessionKey !== identity.sessionKey ||
         claim.wireSessionId !== identity.wireSessionId || claim.keyCommitment !== identity.keyCommitment) fault('state_invalid');
-    return validateCursor(JSON.parse(cursorText),identity,client);
+    const cursor = validateCursor(JSON.parse(cursorText),identity,client);
+    if (!rearming) await assertSessionRearm(identity,cursor);
+    return cursor;
   } catch (error) { if (error.reason === 'authority_changed') throw error; fault('state_invalid'); }
 }
 export async function writeCursor(identity, cursor) {
