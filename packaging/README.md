@@ -94,6 +94,15 @@ registry installation command is provided.
 
 ## Manual archive install and start
 
+The private archive also contains an explicit Linux local capture host. Its
+owner-operated profile, status/prepare/initialize/run grammar and refusal codes
+are documented in [the local Raw guide](../docs/raw-local-journal.md#explicit-local-host-b4c).
+This entry requires an existing schema29 store and separately recorded current
+capture consent. It does not install automatic Claude/Codex hooks, create a
+database, grant consent or configure an MCP Raw/Card review interface. The
+bounded evidence uses synthetic sources and fake HTTP; no real-client activation
+or semantic-quality claim follows from the archive checks.
+
 Use Node >=22.16 and npm, with the downloaded local archive's SHA-256 verified
 against its accompanying build report. Create a local installation directory,
 then run there:

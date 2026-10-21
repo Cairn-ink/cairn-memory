@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — explicit local capture host
+
+- Add owner-operated foreground status, preparation, initialization and bounded
+  capture through the existing private worker/transport/core. Check durable
+  capture permission before source access; preserve lazy provider credentials
+  and exact-event keyless replay.
+- Bind private configuration and installation identity with an external durable
+  preparation marker. Interrupted/lost identity refuses without repair. Keep
+  pending progress through cancellation and await actual child teardown.
+- Include synthetic installed archive and permission checks. Automatic hooks,
+  rearm, retained-source MCP/Card review and completed local V1 remain separate.
+
 ## Unreleased — durable opt-in local Raw worker
 
 - Add explicit initialization and bounded local-v2 worker progress through the

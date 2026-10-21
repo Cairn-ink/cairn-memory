@@ -123,6 +123,88 @@ constructors retain their separately selected24–28 layouts. B2b by itself adds
 installer, hook, transport, credential/provider policy, cursor or operational
 migration. Synthetic programmatic installed tests do not complete local V1.
 
+## Explicit local host (B4c)
+
+On Linux with Node >=22.16, the private artifact includes
+`integrations/client/raw/local-host-cli.mjs`. This foreground entry uses one
+existing schema29 store and explicitly owner-selected source/session. It grants
+no SQL consent, Raw notice, provider access or native-hook attestation. The
+digest-bound B3 configuration remains the only store/target/namespace/client,
+generation, provider and usage configuration. Runtime and Node come from the
+installed module and running process; a profile cannot override either.
+
+The private0600 profile has exactly these fields:
+
+```js
+{ version:'local-raw-host-profile-v1',configPath,configDigest,stateRoot,
+  identityKeyPath,home,installation }
+// installation is exactly one of:
+{ client:'claude-code',pluginRoot }
+{ client:'codex',qualificationConfigPath }
+```
+
+All paths are normalized absolute paths. Profile/config/key/state parents and
+home must already be private0700 directories. State/key must be separate new
+leaves and may not overlap configuration, marker/lock, database or usage paths,
+including through ancestor aliases. `configDigest` is SHA256 of the exact UTF-8
+configuration text read by the bounded private reader. Codex's existing private
+qualification configuration/cache location and Claude's owned installation
+directory must exist. No provider credential is read by status, preparation or
+initialization; the existing one-shot adapter looks up its selected environment
+credential only when eligible model work is required. Completed replay can remain
+keyless. An installation key is always required for established state.
+
+From the installed package directory, the complete CLI grammar is:
+
+```sh
+node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json status
+node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json prepare
+node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json initialize --session SESSION --source /private/source.jsonl
+node integrations/client/raw/local-host-cli.mjs --profile /private/profile.json run --session SESSION --source /private/source.jsonl
+```
+
+Initialization defaults to a verified complete-record EOF, with no historical
+backfill. Only initialize accepts `--start beginning` or `--start eof`; beginning
+is an explicit owner-selected import. Each run is a separate bounded invocation,
+never an internal drain/retry loop. No stdin hook/MCP payload is accepted. Claude
+uses the profile-bound plugin root and explicit owner selector. Codex checks the
+running host, bound binary and existing qualification cache, then its permitted
+source header/creator; missing qualification and automation refuse without a
+probe or hosted fallback.
+
+Status is nonmutating and never reads a transcript or qualifies a host. Prepare
+serializes on `profilePath+'.prepare.lock'`, publishes a durable creating intent
+at `profilePath+'.prepared.json'` before creating any identity, then creates a
+new0700 state root,0600 random installation key and compatible B4b root/sessions.
+The ready marker binds the profile/config/authority/key and root inode. Complete
+unchanged preparation is idempotent; creating/partial/lost/foreign state refuses
+without repair. The marker lives outside key/state so their loss stays visible.
+No command clears blocked sessions, refreshes generations or rearms capture.
+
+Programmatic trusted callers import `createLocalRawHost` from
+`integrations/client/raw/local-host.mjs` with `{profilePath}`. It exposes
+`status({signal?})`, `prepare({signal?})`,
+`initialize({sessionId,sourcePath,start?},{signal?})` and
+`run({sessionId,sourcePath},{signal?})`; DTOs are closed own-data objects and
+signals must be native AbortSignals. Results have exactly
+`{version:'local-raw-host-v1',status,reason,worker}`. `worker` is null or the
+unchanged B4b summary. Host readiness is not saved coverage or completed Memory.
+Raw retention and Memory interpretation remain separately observable.
+
+CLI exits are0 for ready/progress,3 for waiting/busy,2 for blocked and1 for an
+unexpected sanitized failure. Caught INT/TERM/HUP exit130/143/129 after child
+teardown. The nominal155-second budget includes preflight and reserves teardown;
+actual child close is awaited even after the deadline. Confirmed ready/progress
+is preserved if cancellation races its return. Other worker outcomes may carry
+an outer work_limit/cancelled reason with unchanged nested pending/progress.
+Content-free reasons distinguish profile/config/store/preparation failures,
+capture_disabled, authority_changed, unavailable/unqualified runtime/host/source,
+invalid_input and the existing worker reasons. No path, session ID, source text,
+credential or raw exception prose is returned.
+
+This is synthetic private-artifact capture integration, not automatic client
+installation, a retained-source MCP/Card review interface or completed V1.
+
 ## Durable local worker (B4b)
 
 Trusted local callers may explicitly import `createLocalRawWorker` from

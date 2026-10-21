@@ -16,6 +16,8 @@ const allowed = new Set([
   // Separate opt-in namespace, rooted by private versioned root.json/key binding;
   // it never adopts the legacy Claude capture cursor.
   "integrations/client/raw/local-worker-state.mjs",
+  // Creates/inspects only the explicitly prepared private local-v2 root.
+  "integrations/client/raw/local-host-preparation.mjs",
 ]);
 async function sources(path) {
   const out = [];
@@ -33,6 +35,20 @@ test("sessions namespaces have exact audited owners; legacy Claude and local wor
     ...(await sources(join(root, "plugins"))),
   ]) {
     const source = await readFile(file, "utf8");
+    if (relative(root, file) === "integrations/client/raw/local-host-preparation.mjs") {
+      assert.equal((source.match(/['"`]sessions['"`]/g) ?? []).length, 2);
+      assert.equal(
+        (source.match(/checkedPath\(join\(profile\.stateRoot,'sessions'\),\{ directory:true \}\)/g) ?? []).length,
+        1,
+        "preparation inspects only its profile-bound private sessions directory",
+      );
+      assert.equal(
+        (source.match(/mkdir\(join\(profile\.stateRoot,'sessions'\),\{ mode:0o700 \}\)/g) ?? []).length,
+        1,
+        "preparation creates that directory exclusively, without recursive adoption",
+      );
+      assert.doesNotMatch(source, /capture-cursor|\bcaptureCursorPath\b|\bwriteCaptureCursor\b/);
+    }
     if (relative(root, file).endsWith("/pairing.mjs")) {
       const detector = source.slice(
         source.indexOf("async function hasClaudeEvidenceImpl"),

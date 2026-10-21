@@ -50,6 +50,8 @@
     "test:local": "node tools/testing/run.mjs adapters/local/test/*.test.mjs",
     "test:local-transport": "node integrations/client/testing/run.mjs --isolated-host integrations/client/test/local-transport*.test.mjs",
     "test:local-worker": "node integrations/client/testing/run.mjs --isolated-host integrations/client/test/local-worker*.test.mjs integrations/client/test/file-lock-monotonic.test.mjs",
+    "test:local-host": "node integrations/client/testing/run.mjs --isolated-host --import ./integrations/client/test/fixtures/local-host-observer.mjs integrations/client/test/local-host.test.mjs",
+    "test:local-host-import": "node tools/testing/run.mjs --script integrations/client/test/fixtures/local-host-import.mjs",
     "test:local-transport-import": "node tools/testing/run.mjs --script integrations/client/test/fixtures/local-transport-import.mjs",
     "validate": "node scripts/validate-json.mjs",
     "test:experiment-budget": "node tools/testing/run.mjs evaluation/experiment-budget/test/ledger.test.mjs evaluation/experiment-budget/test/bound-ledger.test.mjs evaluation/experiment-budget/test/embedding-ledger-migration.test.mjs evaluation/experiment-budget/test/bound-embedding-ledger.test.mjs evaluation/experiment-budget/test/request-cap-v2-ledger.test.mjs",

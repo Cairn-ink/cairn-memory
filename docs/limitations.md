@@ -1,5 +1,42 @@
 # Known limitations
 
+## Explicit local host (B4c)
+
+The [foreground local host](raw-local-journal.md#explicit-local-host-b4c)
+checks current SQL capture authority before source/header access and before
+dispatching the existing worker. SQLite permission snapshots and filesystem
+reads are separate operations. A later revocation cannot unread bytes already
+opened; registration/publication fences still prevent stale Memory. Capture
+consent does not authorize retained Raw reads, which retain their own policy.
+
+The owner explicitly selects one source/session. Claude's private profile and
+installation binding are trusted caller configuration, not native-hook
+attestation. Codex requires actual host/binary/cache/header helpers; the bounded
+tests exercise them against synthetic ancestry and caches. No automatic hook,
+daemon, session discovery, qualification probe or background retry is installed.
+
+Preparation creates only a fresh key/state and an external durable intent/ready
+marker. Partial creation, missing established identity and authority drift
+refuse without repair or rearm. Deleting all owner state is outside that loss
+detection guarantee. Deadlines initiate cancellation with teardown reserve;
+actual child close remains required even if it exceeds the nominal155seconds.
+Confirmed worker ready/progress survives a late abort; waiting/blocked outcomes
+may carry an outer cancellation reason with the unchanged nested summary.
+
+Retained focused reds found a personal namespace normalization mismatch and a
+derived runtime trailing slash; corrections remain in the host. Ancestor aliases
+could place preparation under usage, while the Linux source opener already
+refused aliased source traversal; canonical host comparisons now refuse both
+before preparation/source dispatch. A held real child exposed missing outer
+deadline reporting, corrected without changing worker identity or progress.
+Separate fixture errors (missing home and treating an incomplete reply as saved
+acknowledgement progress) are retained as fixture failures. Installed evidence
+uses fake HTTP injected by a test-only exact-child spawn wrapper; production
+profiles cannot choose executables, runtime roots, environment or test seams.
+No real model calls, user sources, automatic Cards, source-to-Card lifecycle or
+completed V1 claim is made. The existing identical-content/new-receipt
+qualification conflict remains a separate capture-usability limitation.
+
 ## Durable local worker (B4b)
 
 The explicit [local worker](raw-local-journal.md#durable-local-worker-b4b)

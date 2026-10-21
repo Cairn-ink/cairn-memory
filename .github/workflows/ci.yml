@@ -52,6 +52,7 @@ jobs:
       - run: npm test
       - run: npm run validate
       - run: npm run test:local-transport-import
+      - run: npm run test:local-host-import
 
   pairing:
     runs-on: ubuntu-latest
@@ -153,6 +154,8 @@ jobs:
       - run: npm run test:local-transport
       # Explicit local-v2 worker remains opt-in; no installed client hook is enabled.
       - run: npm run test:local-worker
+      # Explicit owner-operated foreground entry; automatic hooks stay unchanged.
+      - run: npm run test:local-host
 
   mcp:
     runs-on: ubuntu-latest
