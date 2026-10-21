@@ -39,6 +39,7 @@ export function classifyRawAcknowledgement(status,input,frozenRequest) {
   if (status===429) {
     if (!closed(input,['error','resetAt']) || input.error!=='quota_reached' || Object.hasOwn(input,'resetAt') &&
       (typeof input.resetAt!=='string' || input.resetAt.length>65500 || !utcInstant(input.resetAt))) acknowledgementError();
+    if (Buffer.byteLength(JSON.stringify(input))>65536) acknowledgementError();
     return decision('quota_reached');
   }
   if (![200,202].includes(status)) return decision('refused');
@@ -54,5 +55,6 @@ export function classifyRawAcknowledgement(status,input,frozenRequest) {
     outstanding.delete(part.messageId);
   }
   if (outstanding.size || status===202 && input.processing!==true) acknowledgementError();
+  if (Buffer.byteLength(JSON.stringify(input))>65536) acknowledgementError();
   return decision(input.processing ? 'processing':'complete');
 }

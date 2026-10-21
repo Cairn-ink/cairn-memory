@@ -21,6 +21,13 @@ failures remain in the primary evidence with focused regressions.
 A 20 MiB/32 MiB-heap run was an initial checkpoint, not proof against
 whole-string retention because V8 may store ASCII strings using one byte.
 
+The P4a Spec review exposed a missing complete-envelope byte check for quota
+acknowledgements: valid long fractional timestamps let 65,537/65,538-byte JSON
+responses pass. The independent boundary probe initially passed 2/4 (exit 1),
+and the tracked regression also failed before correction. Acknowledgement
+validation now checks the full serialized envelope after bounded shape checks;
+65,536 bytes remains accepted, and quota still does not authorize advancement.
+
 The final resource probe streams a 32 MiB assignment prefix with a bounded
 synthetic secret under a 32 MiB old-space limit, instrumenting actual I/O, live
 scratch bytes/files and cleanup. Its explicit 300-second allowance does not

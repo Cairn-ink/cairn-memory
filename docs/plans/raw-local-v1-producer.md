@@ -717,3 +717,57 @@ historical temporary directories or user processes were touched. This completes
 local frozen-source gates, not fixed-candidate review or remote PR acceptance.
 The supervising outer execution also terminated with actual exit0; a report
 file alone was not substituted for the process result.
+
+### First fixed-candidate review and bounded correction
+
+The first local candidate `e8e5b11257528bfd04f1d21dc4e8cbfac8ca4fa1` is
+not pushed. Primary repeated the producer→actual core→reopened reader,
+fresh-process replay, protocol, ordinal and property-order paths on that commit:
+28/28 on Node22.16 (20.471s) and24.15 (28.362s), both actual exit0.
+The28 worker hashes still match the earlier20-command matrix; the worktree was
+clean. Current CONTRIBUTING, scripts and CI configuration were inspected again.
+
+Independent non-author GPT6.1Sol/high Standards review finds zero documented
+breaches and one optional Repeated Switches observation in the client selection
+policy. This is not a functional or privacy finding. Keep the current explicit
+two-client policy boundary; future installed closure work may gather the policy
+selection without changing this packet's behavior.
+
+Independent non-author GPT6.1Sol/high Spec review requests one low correction:
+the429 quota acknowledgement accepts65,537/65,538 serialized bytes when an
+otherwise valid UTC timestamp has a long fractional component. The existing
+65,500-character field check does not bound the full JSON envelope. It never
+grants progress, but violates the pinned65,536-byte boundary. Primary's separate
+four-case oracle accepts65,535/65,536 and requires refusal at65,537/65,538;
+before correction it passes2/4, actual exit1, retained as
+`p4-primary-ack-limit-before22.log`. No provider or database was involved.
+
+The author receives only a bounded protocol/test correction: measure the full
+acknowledgement size after shape bounds and keep exact-limit acceptance. The
+independent probes remain unchanged. Repeat the entire new producer roster and
+focused primary cases on both runtimes plus validation/generated parity, then
+freeze a new candidate for both review axes. Previous broad compatibility
+results remain tied to the earlier unchanged legacy closure, not relabelled as
+a newly executed full matrix. Latest-head CI still runs the complete required
+matrix. No v1 parser, core behavior, resource setting or installed capability is
+changed to fix this boundary.
+
+### Acknowledgement correction accepted locally
+
+The bounded correction changes only protocol validation, its regression and
+the retained-failure note; primary owns the two additional plan records.
+The immutable independent four-case byte oracle now passes4/4 on each runtime;
+the separate Spec oracle also passes unchanged. The explicit new producer roster
+is38/38 on both Node22.16/24.15. Validation, client bundle parity and setup-runtime
+parity also pass on both. All12 affected commands and the supervising runner
+exit0; every gate leaves only its synthetic home, and the owned workspace is
+removed at completion. The initial failing probes remain preserved.
+
+Primary inspected the complete correction and all12 actual command statuses in
+`worker-p4-ack-gates.log`; the author reports outer session18930 exit0. Two
+independent inventory routes again agree on30 cumulative packet paths/28 worker
+paths, including exactly3 changed worker paths since the first candidate.
+`worker-p4-ack-freeze.sha256` preserves the new worker snapshot separately from
+the original matrix freeze. The original20-command broad matrix is not claimed
+as a rerun on changed protocol bytes. Post-commit integrated primary checks,
+both independent reviews and latest-head full CI still gate delivery.

@@ -23,6 +23,21 @@ test('request snapshots and exact acknowledgements are deeply immutable',() => {
   assert.deepEqual(classifyRawAcknowledgement(429,{ error:'quota_reached' },accepted),{ disposition:'quota_reached' });
   assert.deepEqual(classifyRawAcknowledgement(500,{ private:'discard' },accepted),{ disposition:'refused' });
 });
+test('quota acknowledgements bound the complete serialized envelope inclusively',() => {
+  for (const bytes of [null,65536,65537,65538]) {
+    const value = { error:'quota_reached',resetAt:'2026-01-01T00:00:00.1Z' };
+    if (bytes!==null) {
+      const extra = bytes-Buffer.byteLength(JSON.stringify(value));
+      value.resetAt=value.resetAt.replace('.1Z','.'+'1'.repeat(extra+1)+'Z');
+      assert.equal(Buffer.byteLength(JSON.stringify(value)),bytes);
+    }
+    const before = JSON.stringify(value); Object.freeze(value);
+    if (bytes===null || bytes===65536) {
+      assert.deepEqual(classifyRawAcknowledgement(429,value,body()),{ disposition:'quota_reached' });
+    } else assert.throws(() => classifyRawAcknowledgement(429,value,body()),{ code:'invalid_capture_ack',message:'invalid_capture_ack' });
+    assert.equal(JSON.stringify(value),before);
+  }
+});
 test('closed request/ack structures, calendar, Unicode and numeric bounds reject',() => {
   for (const change of [b=>b.ownerId='foreign',b=>b.messages.extra=true,b=>b.messages=new Array(1),
     b=>b.messages.push(b.messages[0]),b=>b.messages[0].message_ordinal=Infinity,

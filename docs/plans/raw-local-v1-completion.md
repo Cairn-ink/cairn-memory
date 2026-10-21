@@ -1105,3 +1105,14 @@ paths, with28 worker paths hash-frozen. The supervised matrix ends with277
 observed owned processes accounted for, none running, and its private tmux
 server/socket/workspace absent. Fixed-candidate dual review and latest-head CI
 remain gates before delivery; this is not yet installed Raw capture.
+
+The first fixed-candidate Spec review found one acknowledgement-envelope size
+boundary that the green roster missed. It cannot advance a cursor incorrectly,
+but exceeds the declared byte limit. A bounded correction and new dual review
+are required; the producer plan retains the red probe and earlier evidence.
+
+The bounded acknowledgement correction now passes all12 affected commands on
+Node22.16/24.15, including38/38 new-producer tests and both independent byte
+oracles. Every command and the outer runner exit0; owned temporary residue is
+empty. It awaits the corrected fixed-candidate reviews and remote CI, not a
+new user decision or broader permission.
