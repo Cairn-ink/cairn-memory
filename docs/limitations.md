@@ -1,11 +1,58 @@
 # Known limitations
 
+## Durable local worker (B4b)
+
+The explicit [local worker](raw-local-journal.md#durable-local-worker-b4b)
+joins the real private-archive producer→transport→one-shot/core path using
+synthetic sources and fake HTTP. It is not automatic Claude/Codex hooks, setup,
+pause/resume rearm, full conversation coverage, Card promotion or completed V1.
+Only Linux verified-source capture is implemented; Node20 smoke tests pure
+import, not capture. Normal process exit and saved Raw alone are not completion.
+Observed saved/skipped acknowledgements are not unique-row or quality scores.
+
+State continuity is fail-closed, not repair: lost claims/cursors/root/key,
+authority drift and confirmed interpretation/refusal keep visible failure and
+high-water identity. An invocation given the wrong inode/path refuses without
+rewriting an otherwise valid cursor; supplying the original inode with matching
+anchor/pending bytes can resume that same identity/cadence. A confirmed pending
+byte mutation during progress persists a block which later restoration does not
+clear. There is no silent epoch reset or new-session fallback. Historical bytes
+earlier than the bounded completed-offset anchor are not rehashed every time.
+
+Cooldown is not orphan-death proof. After parent death, safety relies on exact
+event registration/admission in the existing core: registered events cannot
+reacquire interpretation; never-registered events may acquire their first work.
+No wake-up polling or automatic retry exists inside a run. Confirmed incomplete,
+quota/authority/deletion refusals and exhausted recovery require later operator
+or host recovery, not a changed credential/config filename. Existing qualified
+dedup can refuse identical extracted content with different evidence bindings
+as qualification_conflict/incomplete; this worker does not change that rule.
+Raw notice/saving and Memory consent remain separate. Plain Raw is not encryption,
+and deleting all owner state is not prevented. SIGKILL/kernel hangs cannot promise
+scratch/orphan cleanup; tests explicitly reap only their owned descendants.
+
+Retained M2 reds exposed stale corrective writes after uncertain cursor
+publication, hidden cancellation, malformed pending cadence combinations and
+wall-clock-based lock acquisition. Corrections preserve possibly published
+state without overwriting/refunding identity, retain fixed cancellation reasons,
+validate cross-field states and use monotonic acquisition time without changing
+ownership/reaping. Separate syntax/readback/fake-extraction fixture failures are
+retained, not presented as model or core regressions. Bounded source/read reserves
+can stop before dispatch; the finite ceilings do not guarantee throughput.
+
+The first final matrix stopped at generic634/635, actual exit1: retaining the
+old generated Claude lock conflicted with the unchanged bundle reproducibility
+map. The same monotonic three-line correction is synchronized into that generated
+copy and the setup copy, without changing capture/recall/pause algorithms,
+versions, schemas or module inventory. The original failed matrix is retained;
+its reproducibility check is not weakened or exempted.
+
 ## Local process transport (B4a)
 
 The opt-in [local transport](raw-local-journal.md#local-process-transport-b4a)
 connects a trusted host to one fixed one-shot entrypoint. It is not wired into
-automatic host capture, setup, hooks or a durable cursor, and does not complete
-local V1. Synthetic subprocess/fake-HTTP archive checks establish mechanisms,
+automatic host capture, setup or hooks. B4b separately supplies an explicit
+durable worker; neither packet completes local V1. Synthetic subprocess/fake-HTTP archive checks establish mechanisms,
 not real model quality or user transcript coverage. Full integration is tested
 only on Node22.16/24.15; the separate Node20 CI smoke tests pure import without
 SQLite, not Node20 capture. Exact stable runtimes >=22.16 are accepted without
@@ -149,8 +196,9 @@ both installed cases already passed. The original failure remains retained.
 
 ## Internal Raw producer foundation (P4a)
 
-The [uninstalled producer](raw-local-journal.md#internal-producer-foundation-p4a)
-prepares synthetic authorized records; it is not installed Claude/Codex Raw
+The [internal producer](raw-local-journal.md#internal-producer-foundation-p4a)
+prepares synthetic authorized records; B4b ships its required private primitives,
+but it is not automatic installed Claude/Codex Raw
 capture, an HTTP endpoint, a cursor writer or completed local V1. Privacy policy
 and best-effort secret redaction do not prove semantic truth, full transcript
 coverage or permission. Pending identities require the host's original trusted

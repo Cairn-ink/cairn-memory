@@ -37,6 +37,31 @@ function snapshot(input,options) {
     state:budget(settings(options.limits),options.signal) };
 }
 
+async function verifySource(read,binding,key,state,expected) {
+  const check = keyed(key,'source',binding);
+  for (let at=binding.range.start;at<binding.range.end;) {
+    const bytes = await read(at,Math.min(state.limits.bufferBytes,binding.range.end-at)); check.update(bytes); at += bytes.length;
+  }
+  if (expected!==check.digest('hex')) refuse('raw_source_changed');
+  state.check();
+}
+
+// Recheck the exact canonical source binding without reparsing or retaining
+// source text. Publication callers supply the original pre-record selection.
+export async function verifyRawRecordSource(input,options,expectedSourceIdentity) {
+  let copied;
+  try { copied = snapshot(input,options); } catch { refuse(); }
+  const { source,binding,key,state } = copied;
+  try {
+    if (typeof expectedSourceIdentity!=='string' || !/^[a-f0-9]{64}$/.test(expectedSourceIdentity)) refuse();
+    const read = sourceReader(source,state);
+    if (binding.client==='codex') await checkCodexHeader(read,binding,state);
+    await verifySource(read,binding,key,state,expectedSourceIdentity);
+    return true;
+  } catch (error) { sourceFailure(error); }
+  finally { key.fill(0); }
+}
+
 export async function prepareRawRecord(input,options) {
   let copied;
   try { copied = snapshot(input,options); } catch (error) { if (error.code==='raw_source_invalid') throw error; refuse(); }
@@ -53,8 +78,11 @@ export async function prepareRawRecord(input,options) {
     await parseRecord(read,binding.range,state,selected.visitor,bytes => hash.update(bytes));
     const view = await selected.finish();
     const result = binding.client==='claude-code' ? await selectClaude(view,binding,state):policy.select(view,binding);
-    if (result.reason) return freeze({ disposition:'excluded',reason:result.reason,nextSelectionState:result.nextSelectionState });
     const sourceIdentity = hash.digest('hex');
+    if (result.reason) {
+      await verifySource(read,binding,key,state,sourceIdentity);
+      return freeze({ disposition:'excluded',reason:result.reason,nextSelectionState:result.nextSelectionState,sourceIdentity });
+    }
     const file = await redact(view.file,owner,state);
     const content = keyed(key,'content',{ client:binding.client,role:result.role });
     let totalBytes = 0;
@@ -67,11 +95,7 @@ export async function prepareRawRecord(input,options) {
       const bytes = Buffer.from((await file.bytes(at*2,end*2)).toString('utf16le'),'utf8');
       content.update(bytes); totalBytes += bytes.length; at = end;
     }
-    const check = keyed(key,'source',binding);
-    for (let at=binding.range.start;at<binding.range.end;) {
-      const bytes = await read(at,Math.min(state.limits.bufferBytes,binding.range.end-at)); check.update(bytes); at += bytes.length;
-    }
-    if (sourceIdentity!==check.digest('hex')) refuse('raw_source_changed');
+    await verifySource(read,binding,key,state,sourceIdentity);
     const uuid = view.fields.get('uuid'), uuidKind = view.kinds.get('uuid');
     if (binding.client==='claude-code' && uuidKind!==undefined && uuid!==null && uuid!=='' && !identifier(uuid)) refuse();
     const id = binding.client==='codex' ? codexMessageId(binding):identifier(uuid) ? uuid:

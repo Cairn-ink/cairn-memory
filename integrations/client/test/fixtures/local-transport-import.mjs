@@ -8,7 +8,9 @@ export async function resolve(specifier, context, next) {
   return next(specifier, context);
 }`), import.meta.url);
 const { createLocalCaptureTransport } = await import('../../raw/local-transport.mjs');
+const { createLocalRawWorker } = await import('../../raw/local-worker.mjs');
 const { readConfigurationSnapshot } = await import('../../../../adapters/local/configuration.mjs');
 assert.equal(typeof createLocalCaptureTransport, 'function');
+assert.equal(typeof createLocalRawWorker, 'function');
 assert.equal(typeof readConfigurationSnapshot, 'function');
-console.log('local transport pure import: no eager SQLite');
+console.log('local transport/worker pure import: no eager SQLite');

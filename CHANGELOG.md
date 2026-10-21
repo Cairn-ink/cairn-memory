@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — durable opt-in local Raw worker
+
+- Add explicit initialization and bounded local-v2 worker progress through the
+  existing producer, supervised transport and qualified one-shot engine. Private
+  keyed claims/cursors preserve exact part identity, issued ordinals and bounded
+  recovery across fresh processes without storing transcript text or raw IDs.
+- Recheck selected and excluded source commitments before advancement; retain
+  incomplete/refused work rather than silently skipping or resetting identity.
+  Contended shared/generated-lock acquisition now uses monotonic time without
+  changing owner liveness/reaping or capture/recall/pause algorithms.
+- Include the required private-archive closure and synthetic installed checks.
+  No automatic hooks, setup/rearm, hosted/v1 rewrite, Card promotion, completed
+  local V1 or production enablement is included.
+
 ## Unreleased — supervised opt-in local process transport
 
 - Add an explicit host API for fixed-runtime, authority-bound capture-v2

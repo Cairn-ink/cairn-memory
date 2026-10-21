@@ -6,7 +6,7 @@
     "integrations/client/common-profile.mjs": "8c9fab55e95e0eaf92f963155433ef357bc8d9bae1843c2c149182f363644ad5",
     "integrations/client/config.mjs": "e0cd0b8c69a9b56265d2db4ae477c5aa3719a0f7eb7851155ff3d9ac43dca0d3",
     "integrations/client/control-state.mjs": "946162802f32afd7037ca3be3f9c178eb04843aa501a92d09821155374e4443e",
-    "integrations/client/file-lock.mjs": "5e97d7fd3b29956ce09599aafa62d88d8bc408009b6df985881d523c08ae641f",
+    "integrations/client/file-lock.mjs": "16a6ef3992c242c17fba14395596cfad334bf5cdf36b142fca80a372ba760949",
     "integrations/client/hosted-contract.mjs": "39ce7dcb60b91ab7bf815bd0085f278e9cc5d0f9798b9b5d27e7b7655fd217d1",
     "integrations/client/hosted-pause.mjs": "f4782d2c3e1f4103778990af93805be918eab67768708e70f28f12610a114d30",
     "integrations/client/hosted-schemas.mjs": "fda2e6b4f6feda316300819e1a199dd25f7462b9f47e33bff950c3c4f95ba8ce",

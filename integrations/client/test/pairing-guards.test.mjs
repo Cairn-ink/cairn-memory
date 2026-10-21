@@ -13,6 +13,9 @@ const allowed = new Set([
   "integrations/client/bundle.mjs",
   "integrations/client/pairing.mjs",
   "plugins/cairn-memory/lib/pairing.mjs",
+  // Separate opt-in namespace, rooted by private versioned root.json/key binding;
+  // it never adopts the legacy Claude capture cursor.
+  "integrations/client/raw/local-worker-state.mjs",
 ]);
 async function sources(path) {
   const out = [];
@@ -24,7 +27,7 @@ async function sources(path) {
   }
   return out;
 }
-test("sessions namespace belongs only to Claude capture; F0 never ships", async () => {
+test("sessions namespaces have exact audited owners; legacy Claude and local worker stay separate; F0 never ships", async () => {
   for (const file of [
     ...(await sources(join(root, "integrations"))),
     ...(await sources(join(root, "plugins"))),

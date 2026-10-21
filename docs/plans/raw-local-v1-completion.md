@@ -6,6 +6,16 @@ Owner approval: 2026-10-21, local synthetic development/tests/PRs may proceed
 before production G1/G2 receipts. Default-off; no real-user data, paid calls,
 publication, deployment or operational database migration.
 
+Current checkpoint (2026-10-21): storage/capture/source/invalidation and local
+controls/one-shot/transport packets are delivered as reviewed, unmerged PRs;
+the [durable worker packet](raw-local-worker.md) passed primary acceptance and
+all38 final local gates, and awaits committed dual review and latest-head CI.
+Step3 still needs explicit local host/setup and control rearm. Step4's combined
+installed lifecycle and the T01–T18/RL acceptance map are not complete. Separate
+source/schema compatibility and any missing Raw-enabled MCP/review-card seam
+must be resolved or explicitly left unavailable; retained-receipt excerpts do
+not substitute for full Raw. Product pins/flags and semantic scores are unchanged.
+
 ## What "V1 done" means
 
 The goal remains one lightweight, reliable memory engine for MCP and harnesses.

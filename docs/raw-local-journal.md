@@ -123,6 +123,71 @@ constructors retain their separately selected24–28 layouts. B2b by itself adds
 installer, hook, transport, credential/provider policy, cursor or operational
 migration. Synthetic programmatic installed tests do not complete local V1.
 
+## Durable local worker (B4b)
+
+Trusted local callers may explicitly import `createLocalRawWorker` from
+`integrations/client/raw/local-worker.mjs`. Closed options are `stateRoot`,
+`identityKeyPath`, B4a's explicit `nodeExecutable`, `runtimeRoot`, `configPath`,
+`expectedAuthority`, `home`, and optional `env`. No automatic host imports it.
+The caller supplies freshly authorized `sessionId`, `sourcePath`, `pluginRoot`
+and `formatAuthority` to both `initialize(context,{signal})` and
+`run(context,{signal})`. Claude requires its trusted absolute plugin root and
+null format authority; Codex requires null plugin root and its existing exact
+qualified format DTO. Config/full authority is checked before opening source;
+this library does not independently grant consent or discover transcripts.
+Future hooks must establish current permission before supplying a source.
+
+The private state root and0600 key file must already exist. The key is exactly
+32 bytes encoded as64 lowercase hex characters, optionally one newline. Explicit
+initialize binds `root.json`, an immutable per-session claim and a separate
+closed cursor under existing process-owned locks. Normal run never initializes
+or repairs them. Lost established cursor/key/root refuses rather than starting
+over; missing root with nonempty sessions cannot be adopted. Purpose-separated
+HMACs bind target/store/namespace/client/session without exposing raw identities.
+Shared and generated lock acquisition uses monotonic time; ownership still
+depends on process liveness, never elapsed lock age.
+The persisted pending projection omits raw sessionId, messageId, projectId and
+occurredAt; fresh preparation reconstructs all four and verifies the complete
+planner identity. Wire identity and issued ordinal do not rotate with a source
+path, credential or supplied generation change.
+
+Initialize defaults to verified LF-terminated EOF (or an empty file); explicit
+`start:'beginning'` is for authorized synthetic/import use. Partial EOF waits
+without arming. Claude's EOF state excludes assistant output until a non-machine
+user boundary, including an empty user record. Reinitialization preserves the
+existing offset and any visible block. Run streams existing selection and whole
+message redaction, reserves an ordinal/pending before dispatch, and advances a
+part only on a strict completed reply plus fresh source proof. Final part alone
+advances record/selection. Excluded records require the same stable commitment
+proof and consume no ordinal. Complete200 Raw skips advance with skipped counts,
+not saved-coverage claims; incomplete interpretation never advances.
+
+Each invocation is bounded by155000ms including teardown,64 completed records,
+32 transport parts,32MiB scan span/record and128MiB total source reads. The
+remaining budget is passed to B4a, not restarted per part. Full-range proof plus
+8192 anchor bytes and, for Codex,65537 header bytes is reserved before dispatch.
+Insufficient budget leaves prepared pending without spending an attempt; these
+are ceilings, not a guarantee every allowed record or32 parts fit one run.
+Appends are allowed. Reopened inode/device, a keyed4096-byte completed-offset
+anchor and the complete pending range must still match before advancement.
+
+Processing or uncertain delivery preserves the same event. Recovery occurs
+only on a new invocation, at most one submission in that call and four total
+submissions per event. Persisted eligibility is startedAt+280000ms before call,
+or max(lastAttemptAt,observedClose)+125000ms after observed close; rollback never
+makes it earlier. These cooldowns do NOT prove an orphan died. Registered core
+events observe completed/processing/incomplete without reacquiring interpretation;
+an event never registered may acquire its first interpretation. Known no-PID
+failure can retry the same pending next invocation under the same cap. Confirmed
+refusals/source mutation stay blocked; rearm/operator recovery is separate.
+
+Results are frozen `local-raw-worker-v1` summaries with ready/progress/waiting/
+busy/blocked status, fixed content-free reason, completed/dispatched record/part
+counts, bytesAdvanced, hasPending, remainingWork, nextEligibleAt and per-call
+savedParts/skippedParts. Counts describe observed acknowledgements, not unique
+rows or semantic truth. The private archive runs this explicit worker through
+B4a and B3; existing automatic Claude/Codex capture remains v1.
+
 ## Local process transport (B4a)
 
 Trusted hosts may explicitly import `createLocalCaptureTransport` from
@@ -242,11 +307,12 @@ installed hooks or completed local V1.
 
 ## Internal producer foundation (P4a)
 
-`integrations/client/raw/index.mjs` is an uninstalled, synthetic-only producer
-foundation. It prepares an exact authorized JSONL record from an already-open
+`integrations/client/raw/index.mjs` remains an internal producer entry, not an
+automatic client hook. B4b's private archive includes the primitives its explicit
+worker needs. They prepare an exact authorized JSONL record from an already-open
 positional source handle. It does not enumerate transcripts, acquire permission,
 publish a cursor, install a hook or add an HTTP route. Existing Claude/Codex
-capture remains v1; installed transport and lifecycle work belongs to P4b.
+capture remains v1; full installed-host lifecycle work remains separate.
 
 The helper exports are:
 
@@ -254,7 +320,11 @@ The helper exports are:
   record byte ranges one at a time; an unfinished tail refuses.
 - `prepareRawRecord(input, {identityKey,limits?,signal?})`: stream and validate
   the complete record, apply the layout's privacy/turn policy, redact the whole
-  joined message, then return an excluded disposition or a private handle.
+  joined message, then return an excluded disposition with keyed sourceIdentity
+  or a private handle. Both paths recheck the complete source commitment.
+- `verifyRawRecordSource(input, options, expectedSourceIdentity)`: prove the
+  current bounded source against canonical PRE-record bindings without parsing
+  or retaining its text again; used on the freshly reopened publication source.
 - `planRawBatch({message,projectId,position})`: produce one frozen v2 part/body,
   content-free pending manifest and proposed next position. Only a completed,
   matching acknowledgement permits the host to adopt that next position.
