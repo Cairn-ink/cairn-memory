@@ -27,18 +27,21 @@ test('P3c-01 schema28 stays additive and migration failure atomically preserves 
 test('P3c-01 migration rollback after trigger replacement preserves the actual v27 writer and receipt invalidation', t => {
   const f = sourceFixture(t), path = f.workspace.path+'/after-trigger-v27.sqlite';
   const initial = openDatabase(path,{ rawDeletion: true });
-  const oldTrigger = initial.prepare("SELECT sql FROM sqlite_master WHERE name='card_memory_revision_invalidation'").get().sql;
-  initial.close();
+  let oldTrigger;
+  try { oldTrigger = initial.prepare("SELECT sql FROM sqlite_master WHERE name='card_memory_revision_invalidation'").get().sql; }
+  finally { initial.close(); }
   const old = openMemoryCore({ path,privateCards:f.host.options });
-  const memory = ok(old.admit({ namespace:ns,memory:{ content:'Synthetic ordinary support.',kind:'fact' },
-    receipts:[{ client:'synthetic',sessionId:'ordinary',eventId:'ordinary',role:'user',excerpt:'Synthetic ordinary support.' }] })).memory;
-  const card = ok(f.host.call(old,'createCardDraft',{ namespace:ns,actionId:'draft',drafting:'authored',input:{
-    sourcePolicy:'retained-receipts-v1',memoryRefs:[{ type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision }],
-    title:'Synthetic title',body:'Synthetic authored body.',
-  } }));
-  const confirmed = ok(f.host.call(old,'confirmCardDraft',{ namespace:ns,cardId:card.id,expectedRevision:card.revision,
-    actionId:'confirm',applicability:'current' }));
-  old.close();
+  let memory,card,confirmed;
+  try {
+    memory = ok(old.admit({ namespace:ns,memory:{ content:'Synthetic ordinary support.',kind:'fact' },
+      receipts:[{ client:'synthetic',sessionId:'ordinary',eventId:'ordinary',role:'user',excerpt:'Synthetic ordinary support.' }] })).memory;
+    card = ok(f.host.call(old,'createCardDraft',{ namespace:ns,actionId:'draft',drafting:'authored',input:{
+      sourcePolicy:'retained-receipts-v1',memoryRefs:[{ type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision }],
+      title:'Synthetic title',body:'Synthetic authored body.',
+    } }));
+    confirmed = ok(f.host.call(old,'confirmCardDraft',{ namespace:ns,cardId:card.id,expectedRevision:card.revision,
+      actionId:'confirm',applicability:'current' }));
+  } finally { old.close(); }
   const exec = DatabaseSync.prototype.exec; let replaced = false;
   DatabaseSync.prototype.exec = function(sql) {
     const result = exec.call(this,sql);

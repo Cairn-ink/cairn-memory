@@ -590,3 +590,32 @@ axes against the original P3b base. Prior review findings and timing failures
 remain in this record. Post-commit primary acceptance, final review findings
 and latest-head CI must be recorded in delivery; this matrix alone does not
 authorize publication, merging, installed Raw capability or a semantic score.
+
+### Test-lifecycle correction after the fixed-candidate review
+
+Candidate `63098c1` passed the independent Spec review, including the unchanged
+mixed-invalidation reproduction,87 source tests and exact17-object old/default
+schema comparison, all actual exit0. Standards found a low-severity documented
+cleanup breach in the new migration regression: a throwing initial trigger
+query or assertion during old-core setup could bypass the explicit close before
+migration. The optional duplicate part-key helper observation is deferred; it
+is not a correctness defect or justification for changing the frozen runtime.
+
+The same GPT6.1Sol/high worker made a test-only correction: two `try/finally`
+blocks guarantee the early closes without changing the migration operation,
+assertions, test name, runtime or schema. Primary independently injected an
+error into the actual checked-in test's initial trigger query and old-core
+Memory insertion. On both Node22.16/24.15, all four intentional test children
+exit1 as expected, while the observed SQLite handle closes exactly once and
+`isOpen` is false at process exit. Both supervising probes exit0 and all owned
+scratch is removed. A passing teardown probe does not relabel the intentional
+failed child as a passing feature test.
+
+`dedup-cleanup-source-freeze.json` preserves the new snapshot; all previous
+matrix evidence is retained. The affected source suite passes12/12 on each
+runtime, actual exits0. Primary's49-case packet also passes49/49 on each,
+actual exits0 (16.192s/16.161s), and both owned parents are empty and removed.
+Independent comparison proves only `core/test/raw-sources.test.mjs` differs
+among the28 non-document frozen paths. Both independent review axes must
+inspect the next exact commit. The44-command matrix remains evidence for the
+identical runtime; its test fixture differs only in the cleanup correction.

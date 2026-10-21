@@ -1059,3 +1059,13 @@ both independent review axes and latest-head CI are still required. P4's bounded
 producer preflight may proceed read-only; dependent implementation waits for
 accepted P3c. The separate installed Recall deadline repair does not change this
 branch, the Raw capability boundary, or the product pin.
+
+The following fixed-candidate review found one test-only failure-teardown gap;
+the migration fixture now guarantees both early database/core closures. Four
+independent injected-error cases on both runtimes preserve the expected child
+failure while closing the real SQLite handle exactly once, with no owned
+scratch left. Runtime bytes are unchanged. The affected suite12/12 and primary
+rerun49/49 pass on both runtimes, actual exits0; both review axes still gate
+the corrected candidate. The detailed P3c plan
+retains the distinction between historical full-matrix and test-only follow-up
+evidence. P4 remains dependent on accepted P3c rather than on a guessed pass.
