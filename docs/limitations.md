@@ -1,5 +1,14 @@
 # Known limitations
 
+## Claude recall hook application deadline
+
+Recall now shares a 2,500ms cooperative application budget across setup/input,
+local waits and HTTP, under the unchanged 3s host timeout; the existing narrower
+2s HTTP/fallback budget and pause/identity checks remain. Optional recall-success
+telemetry is omitted, with no detached queue. CPU, startup scheduling and
+uncooperative filesystem/kernel stalls are not hard-preemptible; synthetic
+child-process timings are not a universal SLA or native Claude verification.
+
 The opt-in [integrated local engine preview](private-engine-v1-local.md) owns
 submitted notes, retained Memory receipt excerpts, Memories and private authored
 Cards in one core. It includes exact-namespace common reads, explicitly reviewed

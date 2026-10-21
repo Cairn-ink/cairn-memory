@@ -31,6 +31,18 @@ import { INVALID_ENDPOINT, credentialDescription, readCredentialState, recordCre
   recordCredentialConfiguration } from "../lib/credential-state.mjs";
 
 const action = process.argv[2] ?? "status";
+// One recall-only application budget, before setup or stdin awaits. The HTTP
+// timeout remains narrower. Cooperative waits cancel and clean up naturally;
+// this cannot preempt synchronous CPU or an uncooperative filesystem operation.
+const recallController = action === 'recall' ? new AbortController() : undefined;
+const recallEnd = recallController ? performance.now() + 2500 : undefined;
+const expireRecall = () => { recallController.abort(new Error('recall_timeout')); process.stdin.destroy(); };
+const recallTimer = recallController ? setTimeout(expireRecall, 2500) : undefined;
+const recallSignal = recallController?.signal;
+function checkRecall() {
+  if (recallController && performance.now() >= recallEnd && !recallSignal.aborted) expireRecall();
+  recallSignal?.throwIfAborted();
+}
 const observedAt = new Date().toISOString();
 const configuredEndpoint =
   process.env.CLAUDE_PLUGIN_OPTION_API_ENDPOINT ?? "https://cairn.ink";
@@ -56,8 +68,10 @@ try {
 }
 
 async function input() {
+  checkRecall();
   let text = "";
-  for await (const chunk of process.stdin) text += chunk;
+  for await (const chunk of process.stdin) { checkRecall(); text += chunk; }
+  checkRecall();
   if (!text.trim()) return {};
   try {
     return JSON.parse(text);
@@ -87,8 +101,9 @@ async function telemetry(event) {
 
 // Recheck the existing local barrier after asynchronous quota-state work.
 // The network start itself stays synchronous under the control lock.
-async function dispatchActive(generation, start) {
+async function dispatchActive(generation, start, signal) {
   const dispatch = await startIfActive(dataDir, generation, () => {
+    checkRecall();
     // Observe actual authenticated fetches, before the transport sanitizes errors.
     // Unauthenticated telemetry and locally blocked requests are not evidence.
     const operation = start();
@@ -96,32 +111,36 @@ async function dispatchActive(generation, start) {
       const outcome = [401, 403].includes(response.status) ? "rejected" :
         response.ok ? "ok" : response.status === 429 ? "server-busy" : "server-error";
       await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome,
-        at: new Date().toISOString() }).catch(() => {});
+        at: new Date().toISOString() }, { signal }).catch(() => {});
       return response;
     }, async (error) => {
       await recordCredentialAuth(credentialDir, { endpoint, observedAt, outcome: "unreachable",
-        at: new Date().toISOString() }).catch(() => {});
+        at: new Date().toISOString() }, { signal }).catch(() => {});
       throw error;
     });
-  });
+  }, { signal });
   if (!dispatch.started) throw new Error("dispatch_not_started");
   return dispatch.operation;
 }
 
 async function recall(hookInput) {
+  checkRecall();
   if (!token) return;
   const query = prepareRecallQuery(hookInput.prompt);
   if (query === undefined) return;
   const control = await readControlState(dataDir);
+  checkRecall();
   if (control.paused) return;
   const projectId = await clientProjectId(clientOptions, hookInput.cwd, binding);
+  checkRecall();
   const sessionId = optionalHostSessionId(hookInput.session_id);
   const result = await post(
     "/api/memory/recall",
     { query, ...(projectId === undefined ? {} : { project_id: projectId }), limit: 6,
       ...(sessionId === undefined ? {} : { session_id: sessionId }) },
-    2_000, true, (start) => dispatchActive(control.generation, start),
+    2_000, true, (start) => dispatchActive(control.generation, start, recallSignal), recallSignal,
   );
+  checkRecall();
   if (!Array.isArray(result?.memories) || result.memories.length === 0) return;
   const lines = result.memories.map((memory) => {
     const receipt = memory.receipts?.[0];
@@ -130,7 +149,8 @@ async function recall(hookInput) {
       : "";
     return `- [${memory.id}] (${memory.origin}, ${memory.scope}, confidence ${Number(memory.confidence).toFixed(2)}${source}) ${memory.content}`;
   });
-  const emitted = await runIfActive(dataDir, control.generation, () => {
+  await runIfActive(dataDir, control.generation, () => {
+    checkRecall();
     process.stdout.write(
       JSON.stringify({
         hookSpecificOutput: {
@@ -141,8 +161,8 @@ async function recall(hookInput) {
         },
       }),
     );
-  });
-  if (emitted) await telemetry("recall_succeeded");
+  }, { signal: recallSignal });
+  // Optional recall-success telemetry must not extend the synchronous host hook.
 }
 
 async function capture(hookInput, requestedGeneration) {
@@ -394,8 +414,9 @@ try {
       process.env.CLAUDE_PLUGIN_DATA = resolve(rest[1]);
     }
   }
-  clientOptions = { client: "claude", pairingRecord };
+  clientOptions = { client: "claude", pairingRecord, ...(recallSignal ? { signal: recallSignal } : {}) };
   binding = await resolveClient(clientOptions);
+  checkRecall();
   if (!binding.enabled) {
     if (["status", "pause", "resume"].includes(action)) {
       process.stdout.write(
@@ -418,7 +439,8 @@ try {
       if (["start", "recall", "capture", "capture-detached"].includes(action)) {
         await recordCredentialConfiguration(credentialDir, {
           configured: Boolean(token), endpoint, observedAt, resetAuth: action === "start",
-        }).catch(() => {});
+        }, { signal: recallSignal }).catch(() => {});
+        checkRecall();
       }
       if (action === "start") await telemetry("plugin_started");
       else if (action === "recall") await recall(hookInput);
@@ -443,4 +465,6 @@ try {
     process.stderr.write(`Cairn automatic memory control failed (${error?.message ?? "unknown"}).\n`);
     process.exitCode = 1;
   }
+} finally {
+  clearTimeout(recallTimer);
 }

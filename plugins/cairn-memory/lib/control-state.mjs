@@ -134,11 +134,12 @@ export async function setPaused(dataDir, paused, { rotate = false } = {}) {
  * Call `start` synchronously under the pause lock when a generation is active.
  * Promise work returned by `start` deliberately runs outside the lock.
  */
-export async function startIfActive(dataDir, generation, start) {
+export async function startIfActive(dataDir, generation, start, { signal } = {}) {
   let operation;
   let started = false;
   const acquired = await withFileLock(paths(dataDir).lock, async () => {
     const current = await readControlState(dataDir);
+    signal?.throwIfAborted();
     if (current.paused || current.generation !== generation) return;
     operation = Promise.resolve(start());
     // The control lock still has a few filesystem cleanup awaits before this
@@ -146,18 +147,19 @@ export async function startIfActive(dataDir, generation, start) {
     // an unhandled rejection during that gap; callers still observe it below.
     operation.catch(() => {});
     started = true;
-  }, { timeoutMs: 250, pollMs: 10 });
+  }, { timeoutMs: 250, pollMs: 10, signal });
   return { acquired, started, operation };
 }
 
 /** Run a synchronous side effect only while the generation remains active. */
-export async function runIfActive(dataDir, generation, run) {
+export async function runIfActive(dataDir, generation, run, { signal } = {}) {
   let ran = false;
   const acquired = await withFileLock(paths(dataDir).lock, async () => {
     const current = await readControlState(dataDir);
+    signal?.throwIfAborted();
     if (current.paused || current.generation !== generation) return;
     run();
     ran = true;
-  }, { timeoutMs: 250, pollMs: 10 });
+  }, { timeoutMs: 250, pollMs: 10, signal });
   return acquired && ran;
 }

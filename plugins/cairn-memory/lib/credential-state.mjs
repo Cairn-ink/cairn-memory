@@ -33,16 +33,19 @@ export async function readCredentialState(root) {
   } catch { return undefined; }
 }
 
-async function update(root, work) {
+async function update(root, work, { signal } = {}) {
+  signal?.throwIfAborted();
   await mkdir(root, { recursive: true, mode: 0o700 });
   // Claude Code owns this directory and may create it with host-default modes.
   // Require the owner's real directory; the observation leaf itself is 0600.
   const info = await lstat(root);
+  signal?.throwIfAborted();
   if (!info.isDirectory() || info.isSymbolicLink() ||
       (process.getuid && info.uid !== process.getuid())) throw new Error("invalid_credential_root");
   const path = pathFor(root);
   await withFileLock(path + ".lock", async () => {
     const state = await work(await readCredentialState(root));
+    signal?.throwIfAborted();
     if (!state) return;
     await check(path);
     const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
@@ -50,18 +53,19 @@ async function update(root, work) {
     try {
       try { await file.writeFile(JSON.stringify(state)); await file.sync(); }
       finally { await file.close(); }
+      signal?.throwIfAborted();
       await rename(temporary, path);
       await notifyWrite(path);
     } finally {
       await unlink(temporary).catch((error) => { if (error.code !== "ENOENT") throw error; });
     }
-  }, { timeoutMs: 100, pollMs: 10, validatePath: check,
+  }, { timeoutMs: 100, pollMs: 10, validatePath: check, signal,
     read: (path) => privateRead(path, { missing: true, portable: true }) });
 }
 
 export async function recordCredentialConfiguration(root, {
   configured, endpoint, observedAt, resetAuth = false,
-}) {
+}, options) {
   endpoint = observationEndpoint(endpoint);
   if (typeof configured !== "boolean" || !instant(observedAt)) throw new Error("invalid_credential_state");
   await update(root, (previous) => {
@@ -69,17 +73,17 @@ export async function recordCredentialConfiguration(root, {
     if (previous && previous.observed_at > observedAt) return;
     const auth = !resetAuth && configured && previous?.configured && previous.endpoint === endpoint ? previous.auth : null;
     return { version: 1, configured, endpoint, observed_at: observedAt, auth };
-  });
+  }, options);
 }
 
-export async function recordCredentialAuth(root, { endpoint, observedAt, outcome, at }) {
+export async function recordCredentialAuth(root, { endpoint, observedAt, outcome, at }, options) {
   if (!outcomes.has(outcome) || !instant(at)) throw new Error("invalid_credential_state");
   await update(root, (previous) => {
     // An older in-flight request cannot validate a newer hook's configuration.
     if (!previous?.configured || previous.endpoint === INVALID_ENDPOINT || previous.endpoint !== endpoint ||
         previous.observed_at !== observedAt || previous.auth?.at > at) return;
     return { ...previous, auth: { outcome, at } };
-  });
+  }, options);
 }
 
 export function credentialDescription(state, { hasToken = false } = {}) {

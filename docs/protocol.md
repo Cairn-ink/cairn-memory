@@ -512,6 +512,16 @@ dispatch callback. Other 400s, authentication,
 rate limits, outages, malformed successes and network errors do not downgrade.
 This avoids a separate probe and a stale capability cache.
 
+The Claude recall hook additionally starts one 2,500ms application deadline
+before asynchronous setup/input, within its unchanged 3s host timeout. Its
+signal cancels cooperative stdin, identity/control/quota/credential lock waits
+and HTTP; fallback cannot reset either deadline. Final pause/identity authority
+still wins over context injection. Optional `recall_succeeded` telemetry is
+omitted rather than awaited after output or queued in a detached worker.
+This cannot preempt synchronous CPU or uncooperative kernel/filesystem work;
+it is not a universal 2.5s process-exit guarantee. Other hook actions retain
+their existing budgets.
+
 Claude sends this field on its existing prompt recall and injects returned
 memories through its existing untrusted context output. SessionStart has no
 conversation-id field or hook memory read. Codex hook prompt context remains

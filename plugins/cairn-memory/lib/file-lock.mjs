@@ -5,8 +5,14 @@ import { dirname } from "node:path";
 
 const OWNER_PATTERN = /^([1-9][0-9]*)-([a-f0-9-]{36})$/;
 
-function wait(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function wait(milliseconds, signal) {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const done = () => { signal?.removeEventListener('abort', abort); resolve(); };
+    const timer = setTimeout(done, milliseconds);
+    const abort = () => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(signal.reason); };
+    signal?.addEventListener('abort', abort, { once: true });
+  });
 }
 
 function processIsAlive(pid) {
@@ -36,7 +42,8 @@ async function readOwner(path, read = readFile) {
   }
 }
 
-async function reapDeadOwner(path, owner, processIsAlive, context, read) {
+async function reapDeadOwner(path, owner, processIsAlive, context, read, signal) {
+  signal?.throwIfAborted();
   if (processIsAlive(owner.pid, owner) !== false) return;
 
   // A token-specific marker elects exactly one reaper. It prevents a
@@ -51,6 +58,7 @@ async function reapDeadOwner(path, owner, processIsAlive, context, read) {
     flag: "wx",
   });
   try {
+    signal?.throwIfAborted();
     await link(reaperOwnerPath, reaperPath);
   } catch (error) {
     if (error?.code === "EEXIST") {
@@ -61,6 +69,9 @@ async function reapDeadOwner(path, owner, processIsAlive, context, read) {
     throw error;
   }
   const current = await readOwner(path, read);
+  // Election commits this tiny recovery step. Cancellation must not strand a
+  // dead lock behind its permanent marker; finish the token check and cleanup
+  // before the acquisition loop observes abort. Never unlink a successor.
   if (
     current?.pid === owner.pid &&
     current.token === owner.token &&
@@ -86,21 +97,23 @@ export async function withFileLock(
   path,
   work,
   { timeoutMs = 30_000, pollMs = 100, context, validateOwner = async () => {},
-    isAlive = processIsAlive, validatePath = async () => {}, read = readFile } = {},
+    isAlive = processIsAlive, validatePath = async () => {}, read = readFile, signal } = {},
 ) {
+  signal?.throwIfAborted();
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const token = randomUUID();
   const owner = { pid: process.pid, token, ...context };
   const ownerPath = `${path}.owner-${owner.pid}-${token}`;
-  await writeFile(ownerPath, JSON.stringify(owner), {
-    mode: 0o600,
-    flag: "wx",
-  });
-
-  const deadline = Date.now() + timeoutMs;
-  let acquired = false;
+  let acquired = false, ownerCreated = false;
   try {
+    signal?.throwIfAborted();
+    await writeFile(ownerPath, JSON.stringify(owner), { mode: 0o600, flag: 'wx' });
+    ownerCreated = true;
+    // Preserve the existing acquisition window after owner publication. A caller's
+    // independent signal still cancels setup and is checked before acquisition.
+    const deadline = Date.now() + timeoutMs;
     while (!acquired && Date.now() < deadline) {
+      signal?.throwIfAborted();
       try {
         await link(ownerPath, path);
         acquired = true;
@@ -109,10 +122,11 @@ export async function withFileLock(
         await validatePath(path);
         const existing = await readOwner(path, read);
         if (existing) await validateOwner(existing);
-        if (existing) await reapDeadOwner(path, existing, isAlive, context, read);
-        if (!acquired) await wait(pollMs);
+        if (existing) await reapDeadOwner(path, existing, isAlive, context, read, signal);
+        if (!acquired) await wait(pollMs, signal);
       }
     }
+    signal?.throwIfAborted();
     if (!acquired) return false;
     await work();
     return true;
@@ -123,6 +137,6 @@ export async function withFileLock(
         await unlink(path).catch(() => {});
       }
     }
-    await unlink(ownerPath).catch(() => {});
+    if (ownerCreated) await unlink(ownerPath).catch(() => {});
   }
 }
