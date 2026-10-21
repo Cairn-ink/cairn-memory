@@ -47,6 +47,7 @@
     "test:artifact": "node tools/testing/run.mjs packaging/test/*.test.mjs",
     "eval:semantic": "node examples/semantic-evaluation.mjs",
     "test:openai": "npm test --prefix adapters/openai",
+    "test:local": "node tools/testing/run.mjs adapters/local/test/*.test.mjs",
     "validate": "node scripts/validate-json.mjs",
     "test:experiment-budget": "node tools/testing/run.mjs evaluation/experiment-budget/test/ledger.test.mjs evaluation/experiment-budget/test/bound-ledger.test.mjs evaluation/experiment-budget/test/embedding-ledger-migration.test.mjs evaluation/experiment-budget/test/bound-embedding-ledger.test.mjs evaluation/experiment-budget/test/request-cap-v2-ledger.test.mjs",
     "test:mem0-native-gateway": "node tools/testing/run.mjs evaluation/experiment-budget/test/mem0-native-gateway.test.mjs",

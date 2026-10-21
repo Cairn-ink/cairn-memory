@@ -148,6 +148,7 @@ jobs:
       - run: npm ci --prefix adapters/openai
       - run: npm run test:openai
       - run: npm run demo:openai-offline
+      - run: npm run test:local
 
   mcp:
     runs-on: ubuntu-latest

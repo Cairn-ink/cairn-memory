@@ -12,12 +12,17 @@ is added. Ordinary public capture keeps its existing wire contract.
 ## Explicit public constructor (P4b-B1)
 
 `openMemoryCore({path, model?, privateCards?, rawConversations})` accepts the
-closed option `{mode:'raw-v1'|'off', port?, capBytes?, readPolicy, localAuthority?}`. Omission
+closed option `{mode:'raw-v1'|'off', port?, capBytes?, configureCap?, readPolicy, localAuthority?}`. Omission
 keeps the ordinary facade. Explicit undefined/null, unknown properties, symbols
 and accessors refuse before opening or migrating SQLite. Enabled mode requires
 an explicit positive safe-integer cap and a `raw-seal-v1` port with both
 `sealRaw` and `openRaw`. Off mode may omit cap/port; an explicitly undefined
 cap/port is invalid. Omitting the cap when reopening preserves durable usage/cap.
+The optional own-data boolean `configureCap:false` also preserves every existing
+owner cap when an explicit initial cap is supplied. A new owner still receives
+that initial cap; another connection's stored cap decrease remains authoritative.
+Omission or true retains existing explicit-cap administrative reconfiguration.
+An explicitly undefined/nonboolean value refuses before database open.
 
 The trusted synchronous `readPolicy({namespace,client})` returns
 `{generation,reason}` at registration preparation/commit. Constructor validation
@@ -114,9 +119,85 @@ stores through optional schema 29, including schema28 prerequisites even when
 Card methods remain disabled. Missing/partial claimed layouts refuse and failed
 upgrades roll back. Feature-off current writers validate and preserve29 without
 granting consent or exposing controls/Card/source operations. Internal synthetic
-constructors retain their separately selected24–28 layouts. This adds no actual
+constructors retain their separately selected24–28 layouts. B2b by itself adds no actual
 installer, hook, transport, credential/provider policy, cursor or operational
 migration. Synthetic programmatic installed tests do not complete local V1.
+
+## Local one-shot adapter (B3)
+
+The private archive includes the opt-in POSIX entrypoint
+`adapters/local/cli.mjs --config <absolute-private-file>`. It accepts exactly one
+already selected/redacted strict capture-v2 JSON request on stdin followed by
+EOF (65,536 bytes maximum). It reads no transcript and grants no consent. Both
+`claude-code` and `codex` use the same managed engine; hosted/v1 paths, defaults,
+hooks, setup and producer/cursor persistence are unchanged. Native Windows is
+unavailable for this private-state adapter.
+
+The closed configuration requires all of these fields:
+
+```js
+{
+  version: 'local-capture-config-v1',
+  databasePath: '/absolute/private/existing.sqlite',
+  authority: { /* complete local-capture-authority-v1 snapshot above */ },
+  raw: { mode: 'local-plain-v1', capBytes: 1000000 }, // or mode: 'off'
+  provider: { profile: 'openai-baseline-v1', apiKeyEnv: 'EXPLICIT_KEY_ENV' },
+  usage: { root: '/absolute/private/existing-usage', dailyCap: 20, concurrency: 1 },
+  timeouts: { captureMs: 120000, processMs: 150000 }
+}
+```
+
+Paths must be absolute and normalized; config/store are owner-only regular
+0600 files without symlink leaves, and the existing usage root is 0700. Config
+is bounded to 64 KiB. Caps are positive safe integers, concurrency is 1–32,
+captureMs is 1–120000, processMs is 1–150000, and captureMs cannot exceed
+processMs. No arbitrary endpoint, model/profile, module, command or inline key
+is accepted. The API-key environment variable is looked up only at the first
+actual remote model port, never for planning, replay or continuation. The
+existing OpenAI baseline/token/output bounds are unchanged.
+
+After strict input validation and runtime module loading, a read-only preflight
+checks private file identity across open, Cairn app ID, schema29, exact store ID
+and the bound owner's existing cap. An unrelated owner's cap does not block the
+target. Wrong/old/missing stores refuse without creation or migration. Writable
+capture passes `configureCap:false`, avoiding implicit cap administration even
+if another connection lowers a stored cap after preflight. These checks are
+not a same-user filesystem lock: replacement after validation remains outside
+that guarantee. The adapter never silently refreshes frozen authority.
+
+Plain Raw preserves exact selected/redacted bytes; it is not encryption.
+Notice may skip Raw while independently authorized Memory interpretation
+continues. Each actual remote model-port invocation uses one durable api-key
+runtime permit covering its count and generation HTTP calls. The usage target
+is SHA256 of the JSON tuple `['local-capture-budget-v1', storeId, targetId]`;
+both clients/restarts must use the same private usage root. Counts do not reset
+with a new credential or consent generation. Daily limits count invocations,
+not dollars, and do not protect against the local owner deleting their ledger.
+Corrupt state or uncertain process liveness refuses dispatch; calls are not
+refunded or automatically retried. No network result is awaited under the lock.
+
+Consent/store/target/namespace generation are rechecked at actual dispatch and
+before every HTTP request. The combined core/process AbortSignal does not prove
+termination: the slot remains owned until the underlying invocation actually
+settles, or existing dead-owner recovery confirms the process died. One
+monotonic startup deadline covers configuration, stdin, capture and stdout.
+Deadline exit124 emits only a fixed diagnostic, never completion; catchable
+termination closes owned handles. Kernel/filesystem hangs and the later host's
+independent outer watchdog are not solved by this Node-process boundary.
+
+Stdout is one bounded `{status,body}` JSON line (262,144 bytes maximum, body at
+most 65,536). All 200/202 replies pass the existing strict acknowledgement
+classifier. A 200 means completed durable admission/replay/covered overlap or
+durable continuation, not semantic truth; memoryCount uses committed IDs.
+202/processing never permits cursor advancement. Saved Raw plus incomplete
+interpretation yields non-2xx `interpretation_incomplete`, including on replay;
+resetting a quota does not retry that event. Later optional filing failure does
+not erase already completed admission. Exit0 means a well-formed request was
+handled and can accompany a non-2xx refusal; malformed input/config/internal
+process errors exit1 with a fixed content-free diagnostic. Consumers require
+both a valid reply and normal exit, not partial stdout. This is synthetic
+offline integration, not full conversation coverage, automatic Card creation,
+installed hooks or completed local V1.
 
 ## Internal producer foundation (P4a)
 

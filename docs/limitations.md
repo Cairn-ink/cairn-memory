@@ -1,5 +1,46 @@
 # Known limitations
 
+## Local one-shot adapter (B3)
+
+The [private POSIX one-shot CLI](raw-local-journal.md#local-one-shot-adapter-b3)
+handles an already selected/redacted capture-v2 request for a fixed store,
+namespace/client and frozen authority. Offline fake-HTTP and installed archive
+checks exercise the existing qualified engine, not real model quality, source
+truth, full transcript coverage or completed local V1. No hooks, setup, durable
+cursor, automatic Card promotion, hosted change or production enablement follows.
+Configuration cannot grant itself consent. Plain Raw is not encryption.
+
+Read-only private-file/store/cap preflight follows runtime loading and checks
+file identity across read-open; it is not a lock against same-user filesystem
+replacement after validation. `configureCap:false` prevents capture construction
+from overwriting durable owner caps. The usage root must remain the same across
+clients/restarts for a target. Daily accounting limits model-port invocations,
+not dollars; it has no protection against the local owner deleting the ledger.
+Dispatch consumption is not refunded. Slots remain owned until actual provider
+settlement or confirmed dead-process recovery, not just a core timeout race.
+Process deadline termination emits no successful completion, but is not proof
+of preempting an uninterruptible kernel hang or the future host's outer worker.
+Normal process exit can carry a non-2xx interpretation failure; retained Raw
+alone never establishes complete interpretation or authorizes cursor advancement.
+
+The first Phase-A combined run passed3/16, actual exit1: two cap-preservation
+checks awaited the explicitly deferred journal condition; other failures exposed
+an adapter public-namespace mismatch (internal empty project ID versus public
+null). Correcting only that adapter boundary made its subprocess cases pass.
+The primary's separate Phase-A roster retained16/17, exit1, solely because the
+not-yet-implemented cap condition reset50 to1000. These original reds remain
+evidence, not waived failures or semantic scores.
+
+The first full verification matrix stopped at the existing Codex live-ancestry
+fixture (197/198, actual exit1). A content-free guarded readlink diagnostic on
+both Nodes proved that, after observing its owned fake host, the fixture walked
+into the actual outer agent and correctly tripped `test_observed_real_codex_host`.
+Only that fixture now bounds its injected read/link callbacks to its owned fake
+parent before OS access. It still verifies real `/proc` executable/cmdline/stat
+and actual binary identity; separate synthetic ancestry cases retain outer-exec
+and closest-host coverage. Neither production detection nor the home guard is
+relaxed. The original failed matrix and diagnostic reds remain retained.
+
 ## Durable local authority (B2b)
 
 The trusted programmatic local controls and frozen startup snapshot are bounded

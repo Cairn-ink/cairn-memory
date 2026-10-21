@@ -16,11 +16,11 @@ const freeze = value => {
 };
 
 /** Internal model-free seam. Hosts must not expose this before P2 controls/lineage. */
-export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy, sources = false, localAuthority }) {
+export function createRawJournal({ db, mode = 'off', port, capBytes, configureCap, readPolicy, sources = false, localAuthority }) {
   const rawControls = createRawControlStorage(db);
   const sourceRoots = createRawSourceRoots(db);
   const local = localAuthority ? createLocalAuthorityStorage(db) : null;
-  const configureCap = capBytes !== undefined;
+  const updateCap = capBytes !== undefined && configureCap !== false;
   if (capBytes === undefined) capBytes = 200000000;
   if (!['raw-v1','off'].includes(mode) || !Number.isSafeInteger(capBytes) || capBytes < 1 || typeof readPolicy !== 'function') fail('invalid_input');
   if (port !== undefined && (port?.version !== 'raw-seal-v1' || typeof port.sealRaw !== 'function' || typeof port.openRaw !== 'function')) fail('raw_crypto_unavailable');
@@ -45,7 +45,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy,
   const inTransaction = work => db.isTransaction ? work() : transaction(db,work);
   // The configured cap is durable. A different connection sees a cap decrease
   // without revoking any outstanding reservation.
-  if (configureCap) inTransaction(() => db.prepare('UPDATE raw_owner_usage SET cap_bytes=?,revision=revision+1 WHERE cap_bytes!=?').run(capBytes,capBytes));
+  if (updateCap) inTransaction(() => db.prepare('UPDATE raw_owner_usage SET cap_bytes=?,revision=revision+1 WHERE cap_bytes!=?').run(capBytes,capBytes));
 
   function sessionKey(ns, client, sessionId) {
     return `s1:${digest(['episode-v1', ...rawBoundary(ns), client, sessionId])}`;

@@ -165,3 +165,26 @@ per-client Raw saving switch have independent meanings. Notice/saving changes
 do not cancel eligible admitted interpretation; consent revocation does. No
 serialized capture field, MCP tool, hook, provider or setup path acquires these
 trusted setters. See [the local guide](raw-local-journal.md#durable-local-authority-b2b).
+
+### Opt-in local one-shot adapter
+
+The private artifact also includes `adapters/local/cli.mjs`, an explicit POSIX
+process for one already selected/redacted capture-v2 request. A private fixed
+configuration supplies the existing store and frozen managed authority; stdin
+cannot grant consent or select a different owner, client, scope or provider.
+The adapter invokes the same `captureRaw` source-bound-v2 engine and existing
+OpenAI baseline, not a second interpretation or storage implementation.
+
+The product runtime-usage guard shares durable daily port-invocation counts and
+concurrency across both clients for the same store/target and usage root.
+Local planning/replay/continuation needs no key or permit; actual model ports
+use a lazily selected environment key. Dispatch and every HTTP request recheck
+consent, independently of Raw notice/saving. A slot remains owned until the
+underlying invocation settles or a dead process is recovered. This is a count
+limit, not a dollar budget or cancellation/refund guarantee.
+
+The CLI validates truthful bounded acknowledgements and does not equate retained
+Raw with completed interpretation. It never installs hooks, writes a producer
+cursor, changes controls, enables MCP capture or alters hosted/v1 routes. Setup,
+outer host-worker supervision and complete installed local V1 remain separate.
+See [configuration, replies and limits](raw-local-journal.md#local-one-shot-adapter-b3).

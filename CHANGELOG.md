@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — opt-in local one-shot capture
+
+- Include a private POSIX one-shot CLI accepting one selected/redacted v2 request
+  for a fixed managed local target. It reuses the existing qualified Memory/Raw
+  engine and OpenAI baseline, with lazy explicit environment-key lookup and
+  durable shared per-port count/concurrency accounting.
+- Check consent at dispatch and every HTTP request, await actual provider
+  settlement before releasing a slot, and report saved Raw with incomplete
+  interpretation as non-2xx. Deadline termination never fabricates completion.
+- Add optional trusted `configureCap:false` to preserve existing owner caps
+  during capture construction; omitted/default administrative behavior remains.
+  This is synthetic offline integration, not hooks, setup, cursor recovery,
+  completed local V1, production enablement or a release.
+
 ## Unreleased — durable trusted local capture authority
 
 - Add exact-store/namespace/client local consent controls and an optional frozen
