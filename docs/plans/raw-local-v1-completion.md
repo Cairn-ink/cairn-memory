@@ -1069,3 +1069,39 @@ rerun49/49 pass on both runtimes, actual exits0; both review axes still gate
 the corrected candidate. The detailed P3c plan
 retains the distinction between historical full-matrix and test-only follow-up
 evidence. P4 remains dependent on accepted P3c rather than on a guessed pass.
+
+### P3c delivery and P4a start
+
+[P3c PR #453](https://github.com/Cairn-ink/cairn-memory/pull/453) is ready and
+mergeable, not merged. Final candidate `98ef7916072e63e777c0cec21b4f5a28794c39ee`
+passed both independent non-author GPT 6.1 Sol/high review axes: Standards has
+zero documented breaches and one optional low duplicate-helper observation;
+Spec has zero findings. Final post-commit primary acceptance passes 49/49 on
+each Node 22.16/24.15, actual exits 0, with no owned scratch remaining. All 31
+latest-head remote checks pass, including native Windows. Four workflow-run
+records bind the same reviewed head; the synthetic merge tree equals its tree.
+The product issue receives the reviewed revision and unchanged-pin boundary.
+
+Step 3 now continues through the bounded [P4a producer plan](raw-local-v1-producer.md)
+on `feat/raw-local-v1-producer`, based on that exact P3c commit. One GPT 6.1
+Sol/high implementation worker owns the new internal producer; primary owns
+integration and separate acceptance. Full selected/redacted messages stream
+into contiguous v2 parts without silently clipping long records. The existing
+core remains the only engine and v1 installed clients remain unchanged.
+
+P4a is a foundation inside step 3, not the complete local client. Actual
+versioned cursor integration, one-shot local transport, consent/setup and the
+installed lifecycle remain required. Host-model access, optional episode
+configuration and production encryption/notice gates cannot be inferred from
+synthetic source reconstruction. No paid experiment or new semantic score is
+claimed; no release, deployment, merge or product-pin update was performed.
+
+P4a's frozen source now passes primary62/62 and tracked resource12/12 on each
+Node22.16/24.15, plus the20-command compatibility matrix (all actual exits0).
+The independent native-redactor oracle includes2,078 comparisons. Both actual
+layouts reach real core capture and exact reopened long-text reads; no paid
+model was used. Two inventory routes agree on30 incremental/106 cumulative
+paths, with28 worker paths hash-frozen. The supervised matrix ends with277
+observed owned processes accounted for, none running, and its private tmux
+server/socket/workspace absent. Fixed-candidate dual review and latest-head CI
+remain gates before delivery; this is not yet installed Raw capture.

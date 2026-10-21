@@ -8,6 +8,75 @@ explicit Raw references and authored Cards through the same private engine.
 No public Raw mutation, MCP tool, client hook, hosted encryption or production
 enablement is added. Ordinary public capture keeps its existing wire contract.
 
+## Internal producer foundation (P4a)
+
+`integrations/client/raw/index.mjs` is an uninstalled, synthetic-only producer
+foundation. It prepares an exact authorized JSONL record from an already-open
+positional source handle. It does not enumerate transcripts, acquire permission,
+publish a cursor, install a hook or add an HTTP route. Existing Claude/Codex
+capture remains v1; installed transport and lifecycle work belongs to P4b.
+
+The helper exports are:
+
+- `scanRawRecordRanges({source,start,end}, {limits?,signal?})`: yield complete LF
+  record byte ranges one at a time; an unfinished tail refuses.
+- `prepareRawRecord(input, {identityKey,limits?,signal?})`: stream and validate
+  the complete record, apply the layout's privacy/turn policy, redact the whole
+  joined message, then return an excluded disposition or a private handle.
+- `planRawBatch({message,projectId,position})`: produce one frozen v2 part/body,
+  content-free pending manifest and proposed next position. Only a completed,
+  matching acknowledgement permits the host to adopt that next position.
+- `restoreRawBatch({message,projectId,pending})`: validate closed pending metadata
+  against freshly prepared identities and reconstruct the same canonical body.
+- `validateRawRequest(body)` and `classifyRawAcknowledgement(status,value,body)`:
+  enforce closed transport and exact matching part dispositions. Processing,
+  model quota and HTTP failure do not authorize advancement. A durable Raw skip
+  is distinct from daily model quota. The internal core envelope needs an
+  explicit host adapter and is not itself an acknowledgement.
+
+The private handle exposes frozen bounded metadata, `readPart({start,maxUnits})`
+and asynchronous idempotent `close()`; no path or full-text getter. Close it in
+`finally`. Parts contain at most 4,000 UTF-16 units with code-point-safe bounds.
+Trusted bindings/key material are copied before asynchronous work, and the
+caller retains ownership of its source handle. Schemas describe structural
+limits; code additionally checks Unicode/calendar validity, UTF-16/serialized
+byte budgets, increasing ordinals, canonical parts and frozen identities.
+
+Source buffers default to 16,384 bytes, selectable from 1 through 65,536.
+Scratch I/O uses separate fixed 16,384-byte buffers and decoded chunks of at
+most 8,193 UTF-16 units, including a boundary surrogate pair. There is no
+whole-record AST or selected-text accumulation. Nesting defaults to/maxes at 64,
+retained metadata at 65,536 bytes. Actual simultaneous owned scratch defaults to
+512 MiB, with an explicit maximum 1 GiB. Each preparation, read/plan/restore or
+scanner next-record operation gets an active deadline, default 30 seconds/max 300.
+Nested reads share their outer operation's allowance. Caller idle/ack time does
+not expire a prepared handle; cancellation remains effective. An uncooperative
+filesystem operation cannot be forcibly preempted.
+
+### Internal producer threat model
+
+Before redaction, candidate selected text can exist in transient private
+UTF-16LE scratch while trailing metadata is being validated. This sensitive
+plaintext is separate from retained redacted Raw. Invocation-owned directories/
+files use 0700/0600 permissions and exclusive creation; at most the active input/
+output stage files coexist. All eight legacy redaction patterns run in order;
+unresolved candidates are file offsets. Source/content HMACs detect observed
+changes, not an atomic filesystem snapshot or change-and-restore attacks.
+
+Cleanup verifies path identities before unlinking. One-shot creation, I/O and
+cancellation failures clean their owned resources. If ownership checks fail or
+another inode replaces a path, the helper refuses instead of removing an
+unverified replacement. This can retain scratch requiring operator inspection;
+there is no historical sweep. Logical unlink is not guaranteed physical erasure,
+and SIGKILL/host crashes cannot guarantee cleanup.
+
+Claude machine/skill/control exclusions and qualified Codex layout checks are
+selection boundaries, not authenticated speaker identity or semantic truth.
+The trusted caller supplies loaded-plugin and previously authorized source/format
+context. Transcript text, request booleans, pending HMACs and schemas grant no
+retention, read, Card or publication authority. Notice, hosted encryption and
+production activation gates remain separate.
+
 ## Internal boundary
 
 `openDatabase(path, { rawConversations: true })` atomically upgrades a compatible

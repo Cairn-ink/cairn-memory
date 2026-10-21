@@ -1,5 +1,34 @@
 # Known limitations
 
+## Internal Raw producer foundation (P4a)
+
+The [uninstalled producer](raw-local-journal.md#internal-producer-foundation-p4a)
+prepares synthetic authorized records; it is not installed Claude/Codex Raw
+capture, an HTTP endpoint, a cursor writer or completed local V1. Privacy policy
+and best-effort secret redaction do not prove semantic truth, full transcript
+coverage or permission. Pending identities require the host's original trusted
+key/bindings; legacy Claude pending windows remain v1.
+
+The first bounded test run retained one resource failure: seven-byte buffers
+were applied to every scratch-stage copy, so a long native-redactor case exceeded
+the unchanged 30-second preparation deadline (9/10, actual exit 1). Fixed 16 KiB
+scratch buffers preserve the independent source-read bound; the same ten cases
+then passed, actual exit 0. Early primary checks also exposed caller-idle deadline
+charging, missing ordinal order checks, native errors/empty scratch residue
+before initialization completed, malformed pending fields classified as
+changed source, and binding property order changing replay identities. These
+failures remain in the primary evidence with focused regressions.
+A 20 MiB/32 MiB-heap run was an initial checkpoint, not proof against
+whole-string retention because V8 may store ASCII strings using one byte.
+
+The final resource probe streams a 32 MiB assignment prefix with a bounded
+synthetic secret under a 32 MiB old-space limit, instrumenting actual I/O, live
+scratch bytes/files and cleanup. Its explicit 300-second allowance does not
+establish default 30-second fit. Filesystem calls cannot be forcibly preempted.
+Lost ownership proof or replaced paths retain/refuse rather than delete foreign
+data; logical unlink is not secure erasure. SIGKILL/host crashes cannot guarantee
+scratch cleanup.
+
 The opt-in [integrated local engine preview](private-engine-v1-local.md) owns
 submitted notes, retained Memory receipt excerpts, Memories and private authored
 Cards in one core. It includes exact-namespace common reads, explicitly reviewed

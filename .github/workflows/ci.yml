@@ -84,6 +84,8 @@ jobs:
       - run: npm run test:codex
       # CX-1's shared-client parity and fixture-generator tests.
       - run: npm run test:client
+      # P4a's internal producer is uninstalled; its new tests have an explicit roster.
+      - run: npm run test:raw-producer
 
   core:
     runs-on: ubuntu-latest
