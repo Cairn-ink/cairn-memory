@@ -1,0 +1,37 @@
+// Synthetic HTTP only. No native fetch/network fallback.
+import { setTimeout as delay } from 'node:timers/promises';
+const notify = (kind, details = {}) => process.send?.({ kind, ...details });
+let attempt = 0, firstSignal;
+const memory = { id: '12345678-1234-4234-8234-123456789abc', content: 'Synthetic remembered preference.',
+  kind: 'fact', scope: 'personal', projectId: null, origin: 'explicit', confidence: 1,
+  createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z', receipts: [{ client: 'claude-code',
+    sessionId: 'synthetic-source', eventId: 'synthetic-event', role: 'user', excerpt: 'Synthetic source.',
+    createdAt: '2026-10-01T00:00:00Z' }] };
+globalThis.fetch = async (url, options) => {
+  if (url === 'https://synthetic.invalid/api/memory/recall') {
+    const number = ++attempt;
+    firstSignal ??= options.signal;
+    notify('recall-fetch', { attempt: number, sameSignal: options.signal === firstSignal,
+      hasSession: Object.hasOwn(JSON.parse(options.body), 'session_id') });
+    const mode = process.env.CAIRN_TEST_RECALL_REPLY;
+    const milliseconds = mode === 'old-schema' ? number === 1 ? 1300 : 900 : Number(process.env.CAIRN_TEST_RECALL_DELAY);
+    try { await delay(milliseconds, undefined, { signal: options.signal }); }
+    catch (error) { notify('recall-aborted', { attempt: number }); throw error; }
+    notify('recall-response', { attempt: number });
+    if (mode === 'old-schema' && number === 1 || mode === 'other-400') return Response.json({ error: 'Invalid recall payload.',
+      issues: [{ code: 'unrecognized_keys', keys: [mode === 'old-schema' ? 'session_id' : 'other'], path: [] }] }, { status: 400 });
+    if (mode === 'empty') return Response.json({ memories: [] });
+    if (mode === 'invalid') return Response.json({ memories: [memory], extra: true });
+    if (mode === 'unauthorized') return Response.json({ error: 'Synthetic refusal' }, { status: 401 });
+    if (mode === 'quota') return Response.json({ error: 'quota_reached' }, { status: 429 });
+    return Response.json({ memories: [memory] });
+  }
+  if (url === 'https://synthetic.invalid/api/memory/telemetry') {
+    notify('telemetry-fetch');
+    await delay(5000, undefined, { signal: options.signal });
+    return new Response(null, { status: 204 });
+  }
+  throw new Error('unexpected_synthetic_route');
+};
+notify('preload-ready');
+process.channel?.unref();

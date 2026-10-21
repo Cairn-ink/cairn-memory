@@ -78,13 +78,15 @@ async function gateRead(path) {
   }
   throw new Error("state_changed");
 }
-async function gateWrite(path, state) {
+async function gateWrite(path, state, signal) {
+  signal?.throwIfAborted();
   await checkGatePath(path);
   const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
   const file = await open(temporary, "wx", 0o600);
   try {
     try { await file.writeFile(JSON.stringify(state)); await file.sync(); }
     finally { await file.close(); }
+    signal?.throwIfAborted();
     await rename(temporary, path);
     await notifyWrite(path);
   } finally {
@@ -152,7 +154,8 @@ const gateReply = (gate) => gate.mode === "cooldown" ?
   { status: "unavailable", code: "rate_limited", cooldownUntil: gate.until } :
   { status: "quota_reached", resetAt: gate.resetAt };
 
-async function gateLock(target, work, { repair = false, now = Date.now() } = {}) {
+async function gateLock(target, work, { repair = false, now = Date.now(), signal } = {}) {
+  signal?.throwIfAborted();
   const paths = quotaPaths(target);
   await mkdir(resolve(target.root), { recursive: true, mode: 0o700 });
   const root = await realpath(resolve(target.root));
@@ -166,16 +169,17 @@ async function gateLock(target, work, { repair = false, now = Date.now() } = {})
     catch (error) {
       if (!repair || error.message !== "quota_state_invalid") throw error;
       state = freshState(); repaired = true;
-      await gateWrite(paths.state, state);
+      await gateWrite(paths.state, state, signal);
     }
     const before = JSON.stringify(state);
     recover(state, now);
     // Persist migration and stale recovery once, inside the short state lock.
     const disk = await gateRead(paths.state);
     if (disk !== undefined && (JSON.stringify(state) !== before ||
-        JSON.parse(disk).version === 1)) await gateWrite(paths.state, state);
-    result = await work(state, () => gateWrite(paths.state, state), repaired);
-  }, { timeoutMs: 2_000, pollMs: 10, validatePath: checkGatePath, read: gateRead });
+        JSON.parse(disk).version === 1)) await gateWrite(paths.state, state, signal);
+    signal?.throwIfAborted();
+    result = await work(state, () => gateWrite(paths.state, state, signal), repaired);
+  }, { timeoutMs: 2_000, pollMs: 10, validatePath: checkGatePath, read: gateRead, signal });
   return acquired ? result : { status: "unavailable" };
 }
 
@@ -220,7 +224,7 @@ export async function resumeHostedQuota(target, { now = Date.now() } = {}) {
   }, { repair: true, now });
 }
 
-async function guardedReply(target, operation, timeoutMs, attempt) {
+async function guardedReply(target, operation, timeoutMs, attempt, signal) {
   try {
     const reservation = await gateLock(target, async (state, save) => {
       const gate = state.operations[operation];
@@ -231,10 +235,11 @@ async function guardedReply(target, operation, timeoutMs, attempt) {
       gate.attempt = { pid: process.pid, token, deadline: Date.now() + timeoutMs + 1000 };
       await save();
       return { token };
-    });
+    }, { signal });
     if (reservation.blocked) return reservation.blocked;
     if (!Object.hasOwn(reservation, "token")) return reservation;
     // No filesystem gate lock is held across dispatch, body reads or timeout.
+    signal?.throwIfAborted();
     const reply = await attempt();
     if (reservation.token === null && !["quota_reached", "rate_limited"].includes(reply.code ?? reply.status)) {
       return reply;
@@ -255,7 +260,7 @@ async function guardedReply(target, operation, timeoutMs, attempt) {
           acknowledged.has(reply.status) ? freshOperation() : refusal(gate.resetAt);
       }
       await save(); return true;
-    });
+    }, { signal });
     return transition === true ? reply : { status: "unavailable" };
   } catch (error) { return { status: "unavailable", code: error.message }; }
 }
@@ -335,7 +340,7 @@ export function createJsonPoster({ endpoint, token, root, targetId, client = "cl
           { notStarted: true } : {}) };
       }
     };
-    return target && routes.has(path) ? guardedReply(target, path.endsWith("recall") ? "recall" : "capture", timeoutMs, attempt) : attempt();
+    return target && routes.has(path) ? guardedReply(target, path.endsWith("recall") ? "recall" : "capture", timeoutMs, attempt, signal) : attempt();
   }
   const post = async (path, body, timeoutMs, authenticated = true, dispatch, signal) => {
     if (!routes.has(path) && path !== "/api/memory/session-start") {

@@ -32,7 +32,8 @@ import { withFileLock } from "./file-lock.mjs";
 
 import { setPaused, readControlState } from "./control-state.mjs";
 
-async function randomIdFile(dataDir, filename, { create = true, client = "claude", home } = {}) {
+async function randomIdFile(dataDir, filename, { create = true, client = "claude", home, signal } = {}) {
+  signal?.throwIfAborted();
   const path = join(dataDir, filename);
   async function readIdentity() {
     const entry = await probeEntry(path, {
@@ -48,7 +49,8 @@ async function randomIdFile(dataDir, filename, { create = true, client = "claude
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
       throw new Error(`invalid_identity: ${filename}`);
     }
-    if (filename === "project-key") await cleanupKeyPublication(resolve(dataDir));
+    signal?.throwIfAborted();
+    if (filename === "project-key") await cleanupKeyPublication(resolve(dataDir), signal);
     return value;
   }
   try {
@@ -57,7 +59,7 @@ async function randomIdFile(dataDir, filename, { create = true, client = "claude
     if (error.code !== "ENOENT") throw error;
   }
   if (filename === "project-key") {
-    await publishProjectKey(dataDir, { create, strict: false, client, home });
+    await publishProjectKey(dataDir, { create, strict: false, client, home, signal });
     return readIdentity();
   }
   if (!create) throw new Error("standalone_key_missing");
@@ -197,8 +199,10 @@ async function publishProjectKey(
     repairProfileRoot,
     home,
     client = "claude",
+    signal,
   } = {},
 ) {
+  signal?.throwIfAborted();
   // Preserve 0.1.1's empty plugin-data error rather than resolving it to cwd.
   if (dataDir === "" && !strict) await mkdir(dataDir, { recursive: true });
   dataDir = resolve(dataDir);
@@ -238,13 +242,14 @@ async function publishProjectKey(
   if (originalKey !== undefined && !validKey(originalKey))
     throw new Error("invalid_identity: project-key");
   const publish = async () => {
+    signal?.throwIfAborted();
     const keyPath = join(dataDir, "project-key");
     const existing = await probeEntry(keyPath, {
       read: () => readFile(keyPath, "utf8"),
     });
     if (existing.state === "unknown") failUnreadable(existing.code);
     if (existing.state === "present") {
-      await cleanupKeyPublication(dataDir);
+      await cleanupKeyPublication(dataDir, signal);
       return; // EEXIST reads the winner, never rewrites it.
     }
     const pendingPath = join(dataDir, ".project-key.pending");
@@ -272,7 +277,8 @@ async function publishProjectKey(
       client: prior.value?.client ?? client,
       key: originalKey ?? randomUUID(),
     };
-    await writeIdentityFile(pendingPath, JSON.stringify(value), { strict });
+    signal?.throwIfAborted();
+    await writeIdentityFile(pendingPath, JSON.stringify(value), { strict, signal });
     // Creator intent is durable before the key becomes visible. Both are published
     // under the mint lock; only the linked project-key establishes a winner.
     await writeIdentityFile(
@@ -282,12 +288,13 @@ async function publishProjectKey(
         client: value.client,
         fingerprint: identityFingerprint(value.key),
       }),
-      { strict },
+      { strict, signal },
     );
     await writeIdentityFile(keyPath, `${value.key}\n`, {
       strict,
       exclusive: true,
       checkpoint,
+      signal,
     });
     const winner = (await readFile(keyPath, "utf8")).trim();
     if (winner !== value.key) {
@@ -312,6 +319,7 @@ async function publishProjectKey(
     const acquired = await withFileLock(join(dataDir, ".project-key.lock"), publish, {
       timeoutMs: 5000,
       pollMs: 10,
+      signal,
     });
     if (!acquired) {
       const winner = await probeEntry(join(dataDir, "project-key"));
@@ -323,7 +331,8 @@ async function publishProjectKey(
 // A successful key probe may remove interrupted publication artifacts. A live
 // publisher owns its staging file; only an absent or definitively dead lock permits
 // cleanup. No staging value is ever used to restore a deleted project-key.
-async function cleanupKeyPublication(root) {
+async function cleanupKeyPublication(root, signal) {
+  signal?.throwIfAborted();
   const pendingPath = join(root, ".project-key.pending");
   const lockPath = join(root, ".project-key.lock");
   const pending = await probeEntry(pendingPath);
@@ -335,6 +344,7 @@ async function cleanupKeyPublication(root) {
   if (pending.state === "absent" && lock.state === "absent") return;
   const cleanup = async () => {
     if ((await privateRead(pendingPath, { missing: true, portable: true })) !== undefined) {
+      signal?.throwIfAborted();
       await unlink(pendingPath).catch((error) => {
         if (error.code !== "ENOENT") throw error;
       });
@@ -356,11 +366,14 @@ async function cleanupKeyPublication(root) {
   } catch (error) {
     if (error.code !== "ESRCH") return;
   }
-  await withFileLock(lockPath, cleanup, { timeoutMs: 250, pollMs: 10 });
+  await withFileLock(lockPath, cleanup, { timeoutMs: 250, pollMs: 10, signal });
 }
 
-async function writeIdentityFile(path, bytes, { strict, exclusive = false, checkpoint } = {}) {
-  if (strict) return privateWrite(path, bytes, { exclusive, checkpoint });
+async function writeIdentityFile(path, bytes, { strict, exclusive = false, checkpoint, signal } = {}) {
+  signal?.throwIfAborted();
+  if (strict) return privateWrite(path, bytes, { exclusive, checkpoint: signal ? async stage => {
+    signal.throwIfAborted(); await checkpoint?.(stage); signal.throwIfAborted();
+  } : checkpoint });
   await checkedPath(path, { missing: true, portable: true });
   const temporary = `${path}.tmp-${randomUUID()}`;
   const staged = await open(temporary, "wx", 0o600);
@@ -371,6 +384,7 @@ async function writeIdentityFile(path, bytes, { strict, exclusive = false, check
     await staged.close();
   }
   try {
+    signal?.throwIfAborted();
     if (exclusive) {
       try {
         await link(temporary, path);
@@ -478,8 +492,9 @@ function installIdImpl(dataDir) {
  */
 async function projectKeyImpl(
   dataDir,
-  { create = true, checkpoint, originalKey, home, client = "claude" } = {},
+  { create = true, checkpoint, originalKey, home, client = "claude", signal } = {},
 ) {
+  signal?.throwIfAborted();
   if (originalKey !== undefined) fail("invalid_original_key");
   await checkedPath(dataDir, { directory: true, missing: true });
   const path = join(dataDir, "project-key");
@@ -489,14 +504,14 @@ async function projectKeyImpl(
   if (entry.state === "unknown") failUnreadable(entry.code);
   let value = entry.value;
   if (value === undefined) {
-    await publishProjectKey(dataDir, { create, checkpoint, home, client });
+    await publishProjectKey(dataDir, { create, checkpoint, home, client, signal });
     value = await privateRead(path);
   }
   const key = value.trim();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) {
     throw new Error("invalid_identity: project-key");
   }
-  await cleanupKeyPublication(dataDir);
+  await cleanupKeyPublication(dataDir, signal);
   return key;
 }
 
@@ -1363,7 +1378,7 @@ async function probeClaudeFactsImpl(options = {}) {
       facts.bound.key
     ) {
       facts.bound.fingerprint = await probe(
-        async () => identityFingerprint(await projectKey(facts.bound.root, { create: false })),
+        async () => identityFingerprint(await projectKey(facts.bound.root, { create: false, signal: options.signal })),
         undefined,
       );
     }
@@ -1564,7 +1579,9 @@ function resolveClaudeBindingImpl(facts) {
 }
 
 async function resolveClaudeClient(options) {
+  options.signal?.throwIfAborted();
   const facts = await probeClaudeFacts(options);
+  options.signal?.throwIfAborted();
   const binding = resolveClaudeBinding(facts);
   if (binding.enabled) {
     binding.workerEnv = {
@@ -1572,7 +1589,7 @@ async function resolveClaudeClient(options) {
       CAIRN_MEMORY_STATE_DIR: binding.root,
     };
     if (options.initialize)
-      await identityForBinding(binding, "claude", undefined, stateLocations(options).home);
+      await identityForBinding(binding, "claude", undefined, stateLocations(options).home, options.signal);
   }
   return binding;
 }
@@ -1590,9 +1607,10 @@ async function resolveClientImpl(options = {}) {
   return binding;
 }
 
-async function identityForBinding(binding, client, cwd = "initialization", home) {
+async function identityForBinding(binding, client, cwd = "initialization", home, signal) {
+  signal?.throwIfAborted();
   if (binding.expectedFingerprint) {
-    const key = await projectKey(binding.root, { create: false });
+    const key = await projectKey(binding.root, { create: false, signal });
     if (identityFingerprint(key) !== binding.expectedFingerprint) fail("binding_identity_mismatch");
     return createHmac("sha256", key).update(String(cwd)).digest("hex");
   }
@@ -1600,10 +1618,10 @@ async function identityForBinding(binding, client, cwd = "initialization", home)
     binding.root,
     cwd,
     binding.paired || client !== "claude"
-      ? { strict: true, create: !binding.paired, client, home }
+      ? { strict: true, create: !binding.paired, client, home, signal }
       : binding.createKey === false
-        ? { create: false, home }
-        : { home },
+        ? { create: false, home, signal }
+        : { home, signal },
   );
   if (!binding.paired) {
     const creator = await creatorRecord(binding.root);
@@ -1620,10 +1638,13 @@ async function identityForBinding(binding, client, cwd = "initialization", home)
 }
 
 async function clientProjectIdImpl(options, cwd, binding) {
+  options.signal?.throwIfAborted();
   if (!cwd) return undefined;
   binding ??= await resolveClient(options);
   if (!binding.enabled) fail(binding.status);
-  return identityForBinding(binding, options.client ?? "claude", cwd, stateLocations(options).home);
+  const id = await identityForBinding(binding, options.client ?? "claude", cwd, stateLocations(options).home, options.signal);
+  options.signal?.throwIfAborted();
+  return id;
 }
 
 /** CX-7 API: no host execution. Caller obtains consent and stops hosts/workers. */

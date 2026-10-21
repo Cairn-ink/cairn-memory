@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Claude recall hook deadline
+
+- Give recall one 2.5-second cooperative application budget across input, local
+  waits and HTTP, within the unchanged 3-second host timeout. Preserve the
+  narrower HTTP/fallback deadline and pause/identity checks. Omit optional
+  recall-success telemetry so it cannot delay hook exit after valid context.
+  Capture, startup and status behavior and package versions are unchanged.
+
 ## Unreleased — integrated local private engine preview
 
 - Add exact-namespace `selectEvidence`, `fetchEvidence` and `revalidateEvidence`
