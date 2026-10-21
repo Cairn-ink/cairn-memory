@@ -148,3 +148,20 @@ session-start groups/receipts/combined budget and hosted pause state/generation.
 CX-5 owns lifecycle consumption and the resume EOF barrier; H5 owns hosted
 serving. No hosted/service code or client hook enablement is delivered here.
 The local automatic-capture connection remains LAC's separate work.
+
+### Trusted local capture controls
+
+Explicit public Raw construction also selects optional schema 29 and exposes
+trusted local `getLocalCaptureControl`/`setLocalCaptureControl` methods. These
+content-free exact-store/owner/namespace/client controls share the registration
+and publication transaction domain. The optional frozen `localAuthority`
+startup snapshot is validated before host policy/sealing, after sealing and
+at registration; it cannot refresh itself after settings changes. Persisted
+consent bindings fence ordinary/staged admission and the recorded episode
+watermark at attempt start and commit, even through a later unmanaged caller.
+
+Automatic interpretation consent, Raw disclosure acknowledgement and the
+per-client Raw saving switch have independent meanings. Notice/saving changes
+do not cancel eligible admitted interpretation; consent revocation does. No
+serialized capture field, MCP tool, hook, provider or setup path acquires these
+trusted setters. See [the local guide](raw-local-journal.md#durable-local-authority-b2b).

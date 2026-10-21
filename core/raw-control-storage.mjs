@@ -7,7 +7,7 @@ export function createRawControlStorage(db) {
   function closePendingInside({ ownerId, client, namespace, sessionKey, reason }) {
     const ns = namespace === undefined ? null : rawNamespace(namespace);
     identifier(ownerId); if (client !== undefined) rawClient(client);
-    if (!['tool_off','capture_barrier'].includes(reason) || ns && ns.ownerId !== ownerId) fail('invalid_input');
+    if (!['tool_off','capture_barrier','notice_required'].includes(reason) || ns && ns.ownerId !== ownerId) fail('invalid_input');
     // Policy skips already closed saving, but their unreceived transport tail
     // still blocks a later message until an actual capture barrier discards it.
     const selection = reason === 'capture_barrier'

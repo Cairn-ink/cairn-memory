@@ -1,5 +1,30 @@
 # Known limitations
 
+## Durable local authority (B2b)
+
+The trusted programmatic local controls and frozen startup snapshot are bounded
+synthetic-local infrastructure. They do not implement installer/provider policy,
+filesystem/SQL setup coordination, hook transport, durable cursor recovery,
+MCP lifecycle, hosted controls or production enablement. Revocation fences new
+managed publication but does not cancel a dispatched provider cost or erase
+completed evidence. Raw notice acknowledgement and saving switches remain
+separate from automatic interpretation consent. Historical unmanaged Memory
+work keeps its legacy publication behavior; configuring local authority can
+still close existing saving tails in that exact namespace/client target.
+
+The independent20-case controls/episode oracle initially failed0/20 on the
+fixed parent because the APIs were absent (actual exit1). A first authored
+migration/episode run passed23/30 (exit1): seven migration fixtures incorrectly
+called a private-Card capability method that the feature-off facade correctly
+omits. The corrected fixtures assert method absence. These mechanism tests and
+fresh-process private-archive fixtures do not establish semantic model quality
+or compatibility with the separately frozen pre-Raw reader schemas18/20–23.
+
+A focused pre-correction race also failed0/2 (exit1): a trusted policy callback
+revoked consent and the prepared capture still invoked sealing once before
+refusal. Managed policy evaluation now rechecks the full snapshot immediately
+after the callback, preventing either client's first seal after that change.
+
 ## Public Raw constructor (P4b-B1)
 
 Explicit public construction and private-archive programmatic lifecycle do not

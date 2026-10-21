@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { transaction, isStorageBusy } from "./database.mjs";
 import { fail, identifier } from "./validation.mjs";
+import { localAuthorityGuard } from './local-authority-guard.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ? AND client = ? AND event_id = ?";
 const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, input.eventId];
@@ -8,11 +9,16 @@ const key = (ns, input) => [ns.ownerId, ns.scope, ns.projectId, input.client, in
 /** Content-free job state around the shared admission mutation transaction. */
 export function createAdmissionStorage({ db, admitMutation, isSuppressed, activeRow, epoch,
   conflictStorage, stagedEvidence, classificationJournal, episodes, proceduralStorage, assertSources, sourceRoots }) {
-  const hasRawCapture = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'").get());
+  // A current feature-off connection may predate another connection's optional
+  // migration. Cache presence, never absence, so persisted guards still apply.
+  let rawCaptureAvailable = false;
+  const hasRawCapture = () => rawCaptureAvailable ||= Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'").get());
   function rawGuard(ns, input) {
-    if (!hasRawCapture || input.keepActionId) return null;
+    if (input.keepActionId || !hasRawCapture()) return null;
     const captured = db.prepare(`SELECT * FROM raw_capture_events WHERE ${where}`).get(...key(ns, input));
     if (!captured) return null;
+    const localDenied = localAuthorityGuard(db,captured);
+    if (localDenied) return localDenied;
     if (captured.projection_digest !== input.payloadDigest) return 'event_payload_conflict';
     const control = episodes.getControl(ns);
     if (control.paused || !control.enabled || control.generation !== captured.capture_generation) return 'capture_evidence_closed';

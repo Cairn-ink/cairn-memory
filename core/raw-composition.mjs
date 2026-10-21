@@ -11,7 +11,7 @@ const failure = error => {
 const invoke = work => { try { return success(work()); } catch (error) { return failure(error); } };
 
 // Receive the builder to avoid a contract -> composition -> contract cycle.
-export function composeRawCore(buildCore, input, rawOptions, { sources, lineage, deletion }) {
+export function composeRawCore(buildCore, input, rawOptions, { sources, lineage, deletion, localControls = false }) {
   const profile = structuredClone(Object.fromEntries(['captureQualification','captureSourcePolicy',
     'captureEvidence','captureRationale','sessionEpisodes'].filter(key => Object.hasOwn(input, key)).map(key => [key,input[key]])));
   let storage, capture, runtime;
@@ -21,6 +21,7 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
       rawSources: sources,
       rawLineage: lineage === true,
       rawDeletion: deletion,
+      localControls,
       attachRaw: db => (storage = createRawCaptureStorage({ db, profile, ...rawOptions, sources })) })),
     attachCapture: operation => { capture = operation; },
   });
@@ -50,6 +51,10 @@ export function composeRawCore(buildCore, input, rawOptions, { sources, lineage,
     getRawUsage: input => invoke(() => { runtime.ready(); return storage.getRawUsage(input); }),
     getRawCaptureControl: input => invoke(() => { runtime.ready(); return storage.getRawCaptureControl(input); }),
     setRawCaptureControl: input => invoke(() => { runtime.ready(); return storage.setRawCaptureControl(input); }),
+    ...(localControls ? {
+      getLocalCaptureControl: input => invoke(() => { runtime.ready(); return storage.getLocalCaptureControl(input); }),
+      setLocalCaptureControl: input => invoke(() => { runtime.ready(); return storage.setLocalCaptureControl(input); }),
+    } : {}),
     fenceSession: input => invoke(() => { runtime.ready(); return storage.fenceSession(input); }),
     ...(deletion ? {
       previewDeleteConversation: input => invoke(() => runtime.previewDeleteConversation(input)),

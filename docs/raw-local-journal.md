@@ -12,7 +12,7 @@ is added. Ordinary public capture keeps its existing wire contract.
 ## Explicit public constructor (P4b-B1)
 
 `openMemoryCore({path, model?, privateCards?, rawConversations})` accepts the
-closed option `{mode:'raw-v1'|'off', port?, capBytes?, readPolicy}`. Omission
+closed option `{mode:'raw-v1'|'off', port?, capBytes?, readPolicy, localAuthority?}`. Omission
 keeps the ordinary facade. Explicit undefined/null, unknown properties, symbols
 and accessors refuse before opening or migrating SQLite. Enabled mode requires
 an explicit positive safe-integer cap and a `raw-seal-v1` port with both
@@ -35,9 +35,9 @@ an HTTP v2 acknowledgement. Raw saving and Memory interpretation remain
 separate; continuation-only capture invokes no model. Retained reads/deletion
 work in off mode and do not ask capture policy or invoke a model.
 
-Public selection always includes lineage and deletion (existing schema 27),
-and includes Raw source resolution (existing schema 28) only with valid
-`privateCards`. Its existing opaque per-call authority still gates Raw source
+Public selection installs lineage, deletion, source prerequisites and local
+control storage (additive schema 29). It exposes Raw source resolution only with
+valid `privateCards`. Its existing opaque per-call authority still gates Raw source
 reads and explicitly authored Cards; Raw alone adds no Card authority or
 automatic promotion. With no Raw option, existing capabilities remain unchanged.
 The private archive contains this public import closure, but not the internal
@@ -46,6 +46,77 @@ not installed Claude/Codex capture, setup, transport, cursor or MCP acceptance.
 The [bounded skipped-tail correction](limitations.md#public-raw-constructor-p4b-b1)
 covers ordinary pause/resume with known identities; lost-client-state recovery
 and complete installed-hook acceptance remain separate.
+
+## Durable local authority (B2b)
+
+The explicitly Raw-enabled trusted facade adds these synchronous model-free
+operations, with existing success/error envelopes:
+
+```js
+core.getLocalCaptureControl({ namespace, client });
+core.setLocalCaptureControl({ namespace, client, targetId, expectedStoreId,
+  expectedRevision, automaticCaptureEnabled, rawNoticeVersion });
+```
+
+`client` is `claude-code` or `codex`; notice is null or `local-plain-v1`.
+Values are `{storeId,targetId,client,revision,automaticCaptureEnabled,
+consentGeneration,rawNoticeVersion}`. Absent state is disabled, revision zero,
+target null, consent generation `initial` and notice null; reading creates no
+row. Explicit first mutation binds the opaque target ID and generates a real
+consent generation, even for a declined grant. Exact CAS no-ops preserve both
+revision and generation. Real mutations advance revision; consent changes
+rotate generation, notice-only changes do not. Store/revision/target mismatch
+returns `revision_conflict`; target replacement is unsupported in this packet.
+Controls affect only the supplied exact namespace/client, even when another
+boundary uses the same target label. The trusted host authenticates the owner.
+
+Managed workers select this additional constructor option:
+
+```js
+rawConversations: { mode: 'raw-v1', port, capBytes, readPolicy,
+  localAuthority: { version: 'local-capture-authority-v1', targetId, storeId,
+    namespace, client, expectedControlRevision, expectedConsentGeneration,
+    expectedNamespaceGeneration, expectedRawRevision } }
+```
+
+The snapshot and its canonical namespace are copied/frozen before opening the
+database. Explicit undefined/null, unknown fields, symbols, proxies and
+accessors refuse `invalid_input` without invoking getters. Managed capture
+also checks its nested request/context/message/part DTOs as own-data values.
+The snapshot must match current SQL authority before host policy/sealing,
+after asynchronous sealing and in registration's transaction. Missing/disabled
+consent is `capture_disabled`; stale bindings/revisions are `revision_conflict`.
+The worker never adopts a newer snapshot implicitly. Omission preserves trusted
+unmanaged library behavior; an installer must never use omission as fallback.
+
+Managed event identity binds exact target/store/boundary/client and consent
+generation while preserving legacy unmanaged digest bytes. Admission/replay
+and episode attempt start/commit enforce the stored binding; a later unmanaged
+facade cannot drop it. Consent revocation or disable/re-enable ABA fences late
+Memory/episode publication with `capture_evidence_closed`. The episode fence
+uses the attempt's recorded watermark event rather than a newer grant.
+Revocation preserves previously completed evidence and makes no cancellation
+or provider-refund promise.
+
+Raw notice and Raw saving remain independent of interpretation consent.
+Notice revocation closes exact-target pending saving reservations once with
+`notice_required`, retaining saved prefixes and immutable receipts. Received
+suffixes remain gaps after re-acknowledgement and must advance normally before
+a later ordinal; notice is not EOF. Consent revocation closes that namespace/
+client's pending and policy-skipped tails with `capture_barrier`. These saving
+closures include existing unmanaged tails under the same boundary, while only
+managed Memory work acquires a consent publication guard. Raw switch changes
+retain the existing owner/client scope and `tool_off` behavior. Neither notice
+nor Raw-only off cancels independently eligible admitted Memory/episode work.
+
+Explicit public Raw construction transactionally creates/upgrades supported
+stores through optional schema 29, including schema28 prerequisites even when
+Card methods remain disabled. Missing/partial claimed layouts refuse and failed
+upgrades roll back. Feature-off current writers validate and preserve29 without
+granting consent or exposing controls/Card/source operations. Internal synthetic
+constructors retain their separately selected24–28 layouts. This adds no actual
+installer, hook, transport, credential/provider policy, cursor or operational
+migration. Synthetic programmatic installed tests do not complete local V1.
 
 ## Internal producer foundation (P4a)
 

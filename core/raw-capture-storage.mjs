@@ -8,6 +8,9 @@ import { episodeText } from './episode-storage.mjs';
 import { rawSourceMap } from './raw-source-map.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 import { boundedText, fail, identifier, object, revision } from './validation.mjs';
+import { managedRequest } from './local-authority-input.mjs';
+import { createLocalAuthorityStorage } from './local-authority-storage.mjs';
+import { localAuthorityGuard } from './local-authority-guard.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=? AND client=? AND event_id=?';
 const key = input => [...rawBoundary(input.namespace), input.client, input.eventId];
@@ -21,10 +24,16 @@ const hash = value => createHash('sha256').update(JSON.stringify(value)).digest(
 export function createRawCaptureStorage({ db, profile, ...options }) {
   const journal = createRawJournal({ db, ...options });
   const lineage = createRawLineageStorage(db);
+  const authority = db.prepare("SELECT 1 FROM sqlite_master WHERE name='local_capture_controls'").get() ? createLocalAuthorityStorage(db) : null;
   const binding = input => db.prepare(`SELECT * FROM raw_capture_events WHERE ${where}`).get(...key(input));
   const rawEvent = input => db.prepare(`SELECT result FROM raw_events WHERE ${where}`).get(...key(input));
 
   async function prepare(request) {
+    const managed = options.localAuthority;
+    if (managed) {
+      request = managedRequest(request, Boolean(profile.sessionEpisodes));
+      authority.check(managed, request.namespace, request.client);
+    }
     object(request, ['namespace','client','sessionId','eventId','messages',
       ...(profile.sessionEpisodes ? ['episodeContext'] : ['causal'])]);
     const { causal, episodeContext, ...source } = request;
@@ -43,7 +52,9 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     }
     const sessionKey = journal.sessionKey(input.namespace, input.client, input.sessionId);
     const previous = binding(input);
-    const bindingDigest = hash(['raw-capture-v1', profile, context]);
+    if (previous) { const denied = localAuthorityGuard(db,previous); if (denied) fail(denied); }
+    const bindingDigest = managed ? hash(['raw-capture-managed-v1',profile,context,managed.targetId,managed.storeId,
+      rawBoundary(managed.namespace),managed.client,managed.expectedConsentGeneration]) : hash(['raw-capture-v1', profile, context]);
     if (previous && previous.binding_digest !== bindingDigest) fail('event_payload_conflict');
     const row = db.prepare(`SELECT id FROM raw_conversations WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?`)
       .get(...rawBoundary(input.namespace), input.client, sessionKey);
@@ -69,6 +80,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       .get(...rawBoundary(input.namespace))?.generation ?? 'initial';
     if (profile.sessionEpisodes && context.episodeContext.generation !== generation) fail('generation_conflict');
     const token = await journal.prepareRegistration(input);
+    if (managed) authority.check(managed,input.namespace,input.client);
     // A same-event winner may have committed while sealing awaited. Select
     // observation before any model preflight; commit still checks atomically.
     const replay = Boolean(previous || binding(input));
@@ -112,6 +124,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
 
     function commit() {
       if (!db.isTransaction) fail('raw_transaction_required');
+      if (managed) authority.check(managed,input.namespace,input.client);
       const result = journal.commitRegistration(token);
       const existing = binding(input);
       if (existing) {
@@ -122,6 +135,8 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
           session_key,first_message_ids,eligible_message_ids,projection_digest,binding_digest,capture_generation)
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(...key(input), result.conversationId, sessionKey,
           JSON.stringify(firstIds), JSON.stringify(messages.map(message => message.id)), projectionDigest, bindingDigest, generation);
+        if (managed) db.prepare(`UPDATE raw_capture_events SET local_target_id=?,local_store_id=?,local_consent_generation=? WHERE ${where}`)
+          .run(managed.targetId,managed.storeId,managed.expectedConsentGeneration,...key(input));
       }
       return { raw: result, ...(existing && snapshot ? { observation: replayInside(existing) } : {}) };
     }
@@ -130,6 +145,7 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
     // Called only under the same transaction that revalidates/commits Raw.
     // It observes shared admission state without acquiring interpretation work.
     function replayInside(recorded) {
+      const denied = localAuthorityGuard(db,recorded); if (denied) fail(denied);
       const currentGeneration = db.prepare('SELECT generation FROM episode_controls WHERE owner_id=? AND scope=? AND project_id=?')
         .get(...rawBoundary(input.namespace))?.generation ?? 'initial';
       if (recorded.capture_generation !== currentGeneration) fail('capture_evidence_closed');
@@ -194,5 +210,6 @@ export function createRawCaptureStorage({ db, profile, ...options }) {
       return journal.closePending({ ownerId: namespace.ownerId, namespace, client, sessionKey: session, reason: 'capture_barrier' });
     });
   }
-  return Object.freeze({ ...journal, prepare, fenceSession });
+  return Object.freeze({ ...journal, prepare, fenceSession,
+    ...(authority ? { getLocalCaptureControl: authority.get, setLocalCaptureControl: authority.set } : {}) });
 }

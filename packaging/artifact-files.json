@@ -1,5 +1,9 @@
 [
   "core/admission-storage.mjs",
+  "core/local-authority-input.mjs",
+  "core/local-authority-schema.mjs",
+  "core/local-authority-storage.mjs",
+  "core/local-authority-guard.mjs",
   "core/confirmation-schema.mjs",
   "core/confirmation-storage.mjs",
   "core/relation-limits.mjs",

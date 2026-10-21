@@ -6,6 +6,7 @@ import { createRawReads } from './raw-reads.mjs';
 import { createRawControlStorage } from './raw-control-storage.mjs';
 import { createRawSourceRoots } from './raw-source-roots.mjs';
 import { createRawSourceReader } from './raw-source-reader.mjs';
+import { createLocalAuthorityStorage } from './local-authority-storage.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const clock = () => new Date().toISOString();
@@ -15,9 +16,10 @@ const freeze = value => {
 };
 
 /** Internal model-free seam. Hosts must not expose this before P2 controls/lineage. */
-export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy, sources = false }) {
+export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy, sources = false, localAuthority }) {
   const rawControls = createRawControlStorage(db);
   const sourceRoots = createRawSourceRoots(db);
+  const local = localAuthority ? createLocalAuthorityStorage(db) : null;
   const configureCap = capBytes !== undefined;
   if (capBytes === undefined) capBytes = 200000000;
   if (!['raw-v1','off'].includes(mode) || !Number.isSafeInteger(capBytes) || capBytes < 1 || typeof readPolicy !== 'function') fail('invalid_input');
@@ -65,9 +67,14 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy,
     return { epoch: epoch(ns), capture: control ? { ...control } : null, raw: getRawCaptureControl({ ownerId: ns.ownerId,client }) };
   }
   function policy(input) {
+    const current = local?.check(localAuthority,input.namespace,input.client);
     // This callback is host-owned, synchronous, model-free authority; wire data
     // has no policy fields. The same authority is checked at preparation/commit.
-    return rawPolicy(readPolicy(freeze({ namespace: { ...input.namespace, projectId: input.namespace.projectId || null }, client: input.client })));
+    const result = rawPolicy(readPolicy(freeze({ namespace: { ...input.namespace, projectId: input.namespace.projectId || null }, client: input.client })));
+    // The trusted synchronous policy can still change durable settings. A
+    // revoked snapshot must not reach even the first sealing callback.
+    local?.check(localAuthority,input.namespace,input.client);
+    return current && current.rawNoticeVersion === null ? { ...result,reason:'notice_required' } : result;
   }
   function disposition(input, authority, fence) {
     return mode === 'off' ? 'raw_disabled' : !fence.raw.enabled ? 'tool_off' : authority.reason;

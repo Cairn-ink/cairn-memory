@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { installRawDeletion, RAW_DELETION_SCHEMA_VERSION } from './raw-deletion-schema.mjs';
 import { installRawSources, RAW_SOURCE_SCHEMA_VERSION } from './raw-source-schema.mjs';
+import { assertNoLocalAuthority, installLocalAuthority, validateLocalAuthority, validateRawSourcePrerequisites, LOCAL_AUTHORITY_SCHEMA_VERSION } from './local-authority-schema.mjs';
 import { closeSync, lstatSync, mkdirSync, openSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -269,9 +270,9 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false } = {}) {
-  if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources].some(value => typeof value !== 'boolean')) fail('invalid_input');
-  rawDeletion ||= rawSources;
+export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false } = {}) {
+  if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
+  rawDeletion ||= rawSources || localControls;
   rawLineage ||= rawDeletion;
   rawCapture ||= rawLineage;
   rawConversations ||= rawCapture;
@@ -295,7 +296,8 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
     transaction(db, () => {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
-      if (appId === APPLICATION_ID && [RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION, RAW_LINEAGE_SCHEMA_VERSION, RAW_DELETION_SCHEMA_VERSION, RAW_SOURCE_SCHEMA_VERSION].includes(version)) {
+      if (appId === APPLICATION_ID && [RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION, RAW_LINEAGE_SCHEMA_VERSION, RAW_DELETION_SCHEMA_VERSION, RAW_SOURCE_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION].includes(version)) {
+        if (version < LOCAL_AUTHORITY_SCHEMA_VERSION) assertNoLocalAuthority(db);
         for (const name of ['raw_conversations','raw_messages','raw_parts','raw_events','raw_owner_usage','raw_capture_controls',
           'private_cards','card_notes','card_applicability_reviews','evidence_mappings']) {
           if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
@@ -324,11 +326,16 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
           installRawDeletion(db);
           db.exec(`PRAGMA user_version = ${RAW_DELETION_SCHEMA_VERSION};`);
         }
-        if (version === RAW_SOURCE_SCHEMA_VERSION) {
-          if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='card_raw_bindings'").get()) fail('unsupported_database');
-        } else if (rawSources) {
+        if (version >= RAW_SOURCE_SCHEMA_VERSION) {
+          validateRawSourcePrerequisites(db);
+        } else if (rawSources || localControls) {
           installRawSources(db);
           db.exec(`PRAGMA user_version = ${RAW_SOURCE_SCHEMA_VERSION};`);
+        }
+        if (version === LOCAL_AUTHORITY_SCHEMA_VERSION) validateLocalAuthority(db);
+        else if (localControls) {
+          installLocalAuthority(db);
+          db.exec(`PRAGMA user_version = ${LOCAL_AUTHORITY_SCHEMA_VERSION};`);
         }
         return;
       }
@@ -532,9 +539,13 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
             if (rawDeletion) {
               installRawDeletion(db);
               db.exec(`PRAGMA user_version = ${RAW_DELETION_SCHEMA_VERSION};`);
-              if (rawSources) {
+              if (rawSources || localControls) {
                 installRawSources(db);
                 db.exec(`PRAGMA user_version = ${RAW_SOURCE_SCHEMA_VERSION};`);
+                if (localControls) {
+                  installLocalAuthority(db);
+                  db.exec(`PRAGMA user_version = ${LOCAL_AUTHORITY_SCHEMA_VERSION};`);
+                }
               }
             }
           }

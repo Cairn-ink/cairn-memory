@@ -4,6 +4,7 @@ import { ADMISSION_LEASE_MS, HEX_DIGEST } from './episode-schema.mjs';
 import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
 import { sourceDigest, sourceSpan } from './procedural-storage.mjs';
 import { createRawControlStorage } from './raw-control-storage.mjs';
+import { localAuthorityGuard } from './local-authority-guard.mjs';
 
 const GAP_CODES = new Set(['forgotten', 'discarded', 'expired', 'capacity', 'omitted',
   'episode_failed', 'episode_timeout', 'invalid_model_output', 'context_budget_exceeded',
@@ -60,7 +61,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   // Cleanup-only callers need only exec; defer the optional schema probe until
   // a real episode publication attempt, preserving that legacy failure seam.
   let rawCaptureAvailable;
-  const hasRawCapture = () => rawCaptureAvailable ??= Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'").get());
+  const hasRawCapture = () => rawCaptureAvailable ||= Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'").get());
   const read = (ns, id) => db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND id=?`)
     .get(...boundary(ns), id);
   const event = (ns, input) => input.keepActionId ? null : db.prepare(`SELECT * FROM episode_events WHERE ${eventWhere}`)
@@ -474,9 +475,12 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     if (!claim || claim.finished || claim.expires_at <= Date.now() || claim.revision !== row.revision || claim.source_fence !== row.source_fence) fail('stale_episode');
     // A pre-pause attempt can finish; project stop increments its source fence.
     if (control(ns)?.enabled === 0) fail('capture_disabled');
-    if (hasRawCapture() && db.prepare(`SELECT 1 FROM episode_events e JOIN raw_capture_events r
+    const rawWatermark = hasRawCapture() && db.prepare(`SELECT r.* FROM episode_events e JOIN raw_capture_events r
       USING(owner_id,scope,project_id,client,event_id) WHERE e.episode_id=? AND e.position=?`)
-      .get(row.id, claim.watermark)) {
+      .get(row.id, claim.watermark);
+    if (rawWatermark) {
+      const localDenied = localAuthorityGuard(db,rawWatermark);
+      if (localDenied) fail(localDenied);
       const current = getControl(ns);
       if (current.paused || current.generation !== claim.generation) fail('capture_disabled');
       if (db.prepare(`SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)

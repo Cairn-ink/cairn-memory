@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — durable trusted local capture authority
+
+- Add exact-store/namespace/client local consent controls and an optional frozen
+  startup authority snapshot to explicit public Raw construction. CAS revisions
+  and consent generations fence registration, replay, Memory admission and
+  episode publication across revocation and disable/re-enable races.
+- Keep automatic interpretation consent, Raw notice acknowledgement and the
+  Raw saving switch separate. Notice revocation closes pending reservations
+  without discarding transport suffixes or cancelling admitted interpretation.
+- Explicit public Raw construction selects additive schema 29; ordinary
+  constructors preserve existing layouts and gain no controls or Card authority.
+  This is synthetic local programmatic infrastructure, not installed capture
+  setup, hooks, transport, production enablement or a release.
+
 ## Unreleased — local Raw skipped-tail capture barrier
 
 - Let namespace pause/project stop close incomplete Raw tails previously skipped
