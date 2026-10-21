@@ -1,5 +1,57 @@
 # Known limitations
 
+## Local process transport (B4a)
+
+The opt-in [local transport](raw-local-journal.md#local-process-transport-b4a)
+connects a trusted host to one fixed one-shot entrypoint. It is not wired into
+automatic host capture, setup, hooks or a durable cursor, and does not complete
+local V1. Synthetic subprocess/fake-HTTP archive checks establish mechanisms,
+not real model quality or user transcript coverage. Full integration is tested
+only on Node22.16/24.15; the separate Node20 CI smoke tests pure import without
+SQLite, not Node20 capture. Exact stable runtimes >=22.16 are accepted without
+download or fallback; this is not a claim that every future runtime was tested.
+
+Configuration binding hashes the UTF-8 text returned by the existing bounded
+private reader, not arbitrary file bytes. It does not defend against a hostile
+same-user executable or filesystem replacement. HOME must be an explicit existing
+owned directory; ordinary0755 HOME is accepted without changing permissions or
+reading its contents. Config/store/usage retain their separate private checks.
+Only the configured own-data credential is read, once after the config identifies
+its name; no constructor-time snapshot of the whole environment is claimed.
+
+The one outer deadline reserves teardown time and awaits actual child close;
+Node timers cannot promise termination of an uninterruptible kernel hang. A
+capture PID makes failures conservatively uncertain, even if source was already
+saved. No-PID spawn failure is known not-started. Neither uncertainty nor a
+normal process exit alone permits cursor advancement. There is no retry policy
+or cursor persistence in this packet.
+
+The retained two-case actual-process red (exit1) exposed an overly strict HOME
+mode check and uncertainty set before a failed capture spawn. Corrections accept
+owned0755 directories and use actual launch evidence. A later27/29 focused red
+(exit1) was a fixture expectation error: a whitespace-only first part has no
+eligible interpretation projection, so its replay is not an admitted duplicate.
+The corrected fixture preserves exact Raw receipts, two exact Unicode parts and
+zero model usage; a separate admitted-duplicate case retains duplicate coverage.
+An earlier26/29 red used a non-normalized fixture runtime path. These retained
+reds did not require changing core replay, provider or admission semantics.
+
+A pre-matrix cleanup regression failed0/1 on both runtimes, actual exit1: a
+forged AbortSignal prototype passed `instanceof`, then listener registration
+threw after allocating the operation timer. Isolated `async_hooks` diagnostics
+on both runtimes identified one live timer originating in the process scope
+and zero other timers, excluding a test-owned timeout explanation. Native
+signal-brand validation now precedes timer allocation; native listener/getter
+methods avoid caller-owned overrides during checks and cleanup. Proxies/forged
+brands refuse without spawning or leaving an operation timer. The original
+source freeze and both red logs remain retained rather than overwritten.
+An additional public-boundary regression failed0/1 on both runtimes, actual
+exit1: the caller's earlier `instanceof` invoked a Proxy `getPrototypeOf` trap
+before the native helper refused it. The public boundary now rejects proxies
+before that reflection. This narrow caller correction and its tracked test
+follow the retained28-gate historical freeze; affected transport/import/archive
+checks are rerun on the corrected snapshot, not claimed from the older bytes.
+
 ## Local one-shot adapter (B3)
 
 The [private POSIX one-shot CLI](raw-local-journal.md#local-one-shot-adapter-b3)

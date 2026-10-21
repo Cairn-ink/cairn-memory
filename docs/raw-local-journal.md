@@ -123,6 +123,47 @@ constructors retain their separately selected24–28 layouts. B2b by itself adds
 installer, hook, transport, credential/provider policy, cursor or operational
 migration. Synthetic programmatic installed tests do not complete local V1.
 
+## Local process transport (B4a)
+
+Trusted hosts may explicitly import `createLocalCaptureTransport` from
+`integrations/client/raw/local-transport.mjs`; no automatic entrypoint imports it.
+Its closed options select normalized absolute `nodeExecutable`, `runtimeRoot`,
+`configPath`, `home`, a complete `expectedAuthority`, and optional `env` and
+`deadlineMs` (3000–155000, default155000). `capture(request, {signal})` detaches
+strict capture-v2 input before asynchronous work and returns only `{status,body}`.
+Both clients and personal/project scopes use the same authority checks.
+
+The transport snapshots private configuration, compares full canonical authority,
+then runs only the selected executable's `--version` and fixed
+`<runtimeRoot>/adapters/local/cli.mjs --config <path> --config-digest <sha256>`.
+The child compares the digest before parsing or writable-store/key access.
+The existing standalone `--config <path>` form remains valid. This commitment
+hashes the private reader's UTF-8 text; it is not arbitrary raw-byte equivalence
+or protection against same-user executable replacement. Pure transport/config
+import does not load SQLite. Capture still needs an explicit stable supported
+Node >=22.16, with no PATH fallback, runtime download or install-time search.
+
+Each child gets only explicit existing owned HOME (0755 is allowed), fixed
+PATH=/usr/bin:/bin, LANG=C.UTF-8, and, for capture only, the selected own-data
+OPENAI_API_KEY or CAIRN_[A-Z0-9_]{1,96}_API_KEY value. The value is snapshotted
+once after configuration selects its name, not at construction. Unrelated
+environment properties are neither read nor forwarded. Missing keys permit
+the existing keyless replay/continuation paths; unsafe names/accessors refuse.
+HOME permissions are not modified; private config/usage validation is unchanged.
+
+One monotonic deadline includes preparation and the <=2000ms version probe,
+reserving2000ms for SIGTERM, escalation after1000ms and observed actual close.
+Stdin is one bounded frozen JSON record plus EOF; stdout is strict UTF-8 and
+exactly one JSON line (262144-byte limit). Stderr is drained without retaining
+prose (65536-byte limit). Success requires stdin completion and actual exit0
+before the work deadline. Valid bytes followed by a hang/nonzero exit refuse.
+200/202/429 and incomplete Raw receipts use the existing strict acknowledgement
+classifier. Only completed acknowledgements may support a future cursor advance;
+processing, quota, incomplete interpretation and fixed-code transport errors
+cannot. Errors expose only `local_capture_transport_failed` and `uncertain`:
+false before capture launches, true once a capture PID may have performed work.
+No cursor, retries, usage writes, alternate provider or host enablement is added.
+
 ## Local one-shot adapter (B3)
 
 The private archive includes the opt-in POSIX entrypoint

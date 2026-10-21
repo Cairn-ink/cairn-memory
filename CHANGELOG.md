@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — supervised opt-in local process transport
+
+- Add an explicit host API for fixed-runtime, authority-bound capture-v2
+  subprocesses, with a shared configuration-text digest and closed child
+  environment. The standalone two-argument one-shot CLI remains compatible.
+- Supervise probe, stdin, bounded output, cancellation and actual child close
+  under one deadline. Processing, quota, incomplete interpretation and uncertain
+  delivery never become completed admission. No automatic entrypoint, cursor,
+  hook, setup, hosted/v1 change or production enablement is included.
+
 ## Unreleased — opt-in local one-shot capture
 
 - Include a private POSIX one-shot CLI accepting one selected/redacted v2 request

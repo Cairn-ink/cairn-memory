@@ -1,5 +1,5 @@
 import { isAbsolute, resolve } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 import { privateRead, checkedPath } from '../../integrations/client/private-state.mjs';
 import { localAuthorityInput, ownData } from '../../core/local-authority-input.mjs';
 import { validateRawRequest } from '../../integrations/client/raw/protocol.mjs';
@@ -38,11 +38,21 @@ export function configuration(value) {
   } catch { invalid(); }
 }
 
-export async function readConfiguration(args) {
+export async function readConfigurationSnapshot(path, expectedDigest) {
   if (process.platform === 'win32') throw new LocalCaptureError('local_capture_platform_unavailable');
-  if (args.length !== 2 || args[0] !== '--config' || !normalizedPath(args[1])) invalid();
-  try { return configuration(JSON.parse(await privateRead(args[1]))); }
+  if (!normalizedPath(path) || expectedDigest !== undefined && (typeof expectedDigest !== 'string' || !/^[a-f0-9]{64}$/.test(expectedDigest))) invalid();
+  try {
+    const text = await privateRead(path), digest = createHash('sha256').update(text, 'utf8').digest('hex');
+    if (expectedDigest !== undefined && expectedDigest !== digest) invalid();
+    return Object.freeze({ config: configuration(JSON.parse(text)), digest });
+  }
   catch { invalid(); }
+}
+
+export async function readConfiguration(args) {
+  if (!Array.isArray(args) || ![2, 4].includes(args.length) || args[0] !== '--config' ||
+      args.length === 4 && (args[2] !== '--config-digest' || typeof args[3] !== 'string' || !/^[a-f0-9]{64}$/.test(args[3]))) invalid();
+  return (await readConfigurationSnapshot(args[1], args[3])).config;
 }
 
 export function requestForTarget(value, config) {
@@ -57,6 +67,7 @@ export function requestForTarget(value, config) {
 export async function preflight(config) {
   let db;
   try {
+    const { DatabaseSync } = await import('node:sqlite');
     await checkedPath(config.usage.root, { directory: true });
     const before = await checkedPath(config.databasePath);
     db = new DatabaseSync(config.databasePath, { readOnly: true });
