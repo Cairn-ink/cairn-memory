@@ -25,6 +25,15 @@ revoked consent and the prepared capture still invoked sealing once before
 refusal. Managed policy evaluation now rechecks the full snapshot immediately
 after the callback, preventing either client's first seal after that change.
 
+Independent Spec review found another dispatch gap in the first candidate:
+consent revoked during the first seal still allowed a second seal in the batch,
+although final registration refused and no Raw/admission/model writes occurred.
+Both clients with revoke and disable/re-enable failed the independent and
+author regressions before correction (0/8, actual exit1). Each sealing dispatch
+now checks the same frozen authority outside the crypto-error handler, retaining
+`capture_disabled`/`revision_conflict` and stopping after the already-started
+first seal. This does not cancel work already dispatched or refresh authority.
+
 ## Public Raw constructor (P4b-B1)
 
 Explicit public construction and private-archive programmatic lifecycle do not

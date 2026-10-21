@@ -90,3 +90,26 @@ for(const client of ['claude-code','codex']) test('B2b-03 '+client+' consent rev
   assert.equal(f.seals,0);assert.equal(f.calls,0);
   for(const table of ['raw_events','raw_capture_events','admission_claims'])assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table}`).get().n,0);
 });
+
+for(const client of ['claude-code','codex']) for(const mutation of ['revoke','aba'])
+test(`B2b-03 ${client} ${mutation} during first seal prevents the next seal dispatch`,async t=>{
+  const f=fixture(t,{client}),grant=f.grant(),trace=[];let dispatched=0,worker;
+  worker=f.worker({duringSeal:async()=>{
+    dispatched++;trace.push('seal-'+dispatched);
+    if(dispatched===1) {
+      ok(f.set({automaticCaptureEnabled:false}));
+      if(mutation==='aba')ok(f.set({automaticCaptureEnabled:true}));
+      const observed=ok(worker.getLocalCaptureControl({namespace:ns,client}));
+      assert.equal(observed.automaticCaptureEnabled,mutation==='aba');
+      assert.notEqual(observed.consentGeneration,grant.consentGeneration);
+      trace.push('revocation-visible');await Promise.resolve();trace.push('first-finished');
+    }
+  }});
+  const req=f.request(),first=req.messages[0];
+  req.messages.push({...first,id:'second-source',messageOrdinal:2,part:{...first.part}});
+  denied(await worker.captureRaw(req),mutation==='aba'?'revision_conflict':'capture_disabled');
+  assert.equal(f.calls,0);
+  for(const table of ['raw_conversations','raw_events','raw_capture_events','raw_parts','admission_claims'])
+    assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table}`).get().n,0);
+  assert.deepEqual(trace,['seal-1','revocation-visible','first-finished']);assert.equal(f.seals,1);
+});

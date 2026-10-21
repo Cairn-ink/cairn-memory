@@ -159,6 +159,8 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy,
     // ledger/usage writes occur until commit revalidates the real SQL sequence.
     for (const { message,context } of sealMessages) {
       if (db.isTransaction) fail('raw_transaction_active');
+      // An earlier asynchronous seal can change authority before this dispatch.
+      local?.check(localAuthority,input.namespace,input.client);
       try {
         const result = rawSealed(await seal({ ownerId: ns.ownerId,context,text: message.content }));
         if (result.format === 'local-plain-v1' && !result.sealed.equals(Buffer.from(message.content))) fail('raw_crypto_unavailable');

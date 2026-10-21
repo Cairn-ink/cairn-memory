@@ -483,3 +483,65 @@ check did not include the then-untracked plan. Primary removes that whitespace
 and checks the staged/full candidate diff; all 27 author files remain frozen.
 Committed primary tests and both review axes must identify the corrected HEAD,
 not silently reuse the first candidate's identity.
+
+## Independent review correction: between-part consent fence
+
+On candidate `a4553873c9ff31453e7f8ac83e1d8d10abb0e008`, Standards reports
+zero findings, while Spec identifies a real managed-authority gap. A two-part
+batch invokes a second source-sealing callback after the first callback commits
+consent revocation. The final registration fence still refuses, with no Raw,
+admission or model writes, but dispatching additional source work is outside the
+contract. The non-cancellation caveat covers already-started work, not later
+callbacks. Primary accepts the finding rather than redefining the boundary.
+
+Primary reproduces the reviewer oracle (actual exit 1) and adds four independent
+public-API cases, both clients with revoke and disable/re-enable. They fail 0/4,
+actual exit 1. Through the worker's own database connection, the new disabled
+state or generation is already visible. The exact trace is first-start,
+revocation-visible, first-finish, second-start: this excludes stale SQLite reads
+and prequeued parallel callbacks. The remaining cause is the batch-wide check
+around, rather than between, asynchronous sealing calls.
+
+Correction is bounded to checking the same frozen managed authority at each
+sealing dispatch boundary, retaining the registration check and unchanged
+unmanaged behavior. New regression cases must go red before the change, then
+pass with one seal only, no source/admission/model writes, and existing fixed
+error vocabulary. No snapshot refresh, grant, cancellation/refund claim or
+weakened old assertion is permitted. Affected core/MCP/archive and current
+contributor gates, committed primary checks and both review axes repeat on the
+corrected candidate before any push. The original green matrix remains evidence
+for its old hash, not evidence that the newly found scenario passed.
+
+Independent oracle SHA256:
+`3a84054d54a13b2ac39030b9e9f054612f684a00b48481d18e1a074916e34eee`.
+Retained logs: `primary-sealing-red22.log` and
+`primary-four-seals-contract-red22.log`. An initial extension of the primary
+oracle incorrectly called an absent listConversations API; that fixture failure
+is separately retained in `primary-four-seals-red22.log`. Correcting inspection
+to read the actual SQLite tables exposes the four genuine boundary failures;
+it did not change product code or weaken the expected one-seal outcome.
+
+The correction freezes 27 author paths at manifest SHA256
+`27fdc2dc837807c330b98b5571beb4f3a3d205bfc04d20d705ebcea3e19a20c4`.
+The author and primary independently exercise the four revoke/ABA scenarios
+for both clients: their eight checks first fail (actual exit 1), then pass after
+the two-line per-dispatch fence. These are four scenarios checked twice, not
+eight distinct use cases. Focused author checks pass 86/86 on each Node; primary
+checks pass 35/35 on each Node, actual exits 0 with owned cleanup confirmed.
+
+The corrected frozen full matrix runs from 12:39 to 13:05 UTC on 2026-10-21.
+All 42 scheduled commands finish with actual exit 0 and null signals, and the
+outer runner is reaped with exit 0. Each Node passes core 1728/1728, MCP
+134/134, generic 635/635 and workspace lifecycle 25/25. Artifact checks pass
+100 with the same one native-Windows-only skip. Both runtimes also pass both
+validators, twelve demos and bundle/setup parity. The 130-file installed archive
+retains the independently matching 112-file source/installed runtime closure.
+No retry or source edit occurs during this matrix.
+
+Primary separately audits all 42 command results, exact suite totals, all 27
+frozen author hashes and absence of both owned workspace levels, actual exit 0
+(`primary-correction-matrix-audit.json`). Command/PID/timing records and logs
+are retained as `correction-worker-matrix-results.json` and
+`correction-matrix-*.log` in the existing evidence directory. This evidence is
+for the corrected source snapshot; committed-primary reruns and both independent
+review axes must still pass on its exact candidate before delivery.

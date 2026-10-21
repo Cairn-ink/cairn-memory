@@ -6,6 +6,8 @@
   startup authority snapshot to explicit public Raw construction. CAS revisions
   and consent generations fence registration, replay, Memory admission and
   episode publication across revocation and disable/re-enable races.
+- Recheck the same frozen managed authority before every source-sealing
+  callback, so revocation during one part prevents later parts from dispatching.
 - Keep automatic interpretation consent, Raw notice acknowledgement and the
   Raw saving switch separate. Notice revocation closes pending reservations
   without discarding transport suffixes or cancelling admitted interpretation.
