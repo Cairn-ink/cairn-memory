@@ -1,5 +1,11 @@
 # Local memory store — developer preview (2A)
 
+For asynchronous owner-bound Memory MOC metadata, use the separate
+[`openMemoryReader` port](topic-overview.md). It opens only existing supported
+stores read-only, returns exact counts after bounded aggregation, and keeps
+native SQLite work off the host main loop. It does not change this write
+opener, model-facing `map`, or product flags.
+
 The additive [S2a model-free core contract](storage-contract.md) provides explicit
 admission and bounded metadata/source inspection over this same store. Existing
 methods and result shapes below are retained; their mutations also invalidate

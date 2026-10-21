@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — bounded asynchronous Memory topic metadata
+
+- Add owner-bound `openMemoryReader().readTopicOverview()` over the same local
+  store: exact deduplicated Memory MOC counts, guarded titles, bounded optional
+  member refs and opaque continuation through a fixed read-only Worker.
+- Bound physical work, response bytes and ephemeral state; report incomplete
+  counts explicitly and reject stale snapshots. Existing supported files open
+  without migration or reserving a writer. Model-facing `map` remains unchanged.
+- Expose the unavailable placement-added timestamp explicitly rather than
+  inferring it from edits. Product integration, member-list/location extensions
+  and episode headers remain separate. See the [reader guide](docs/topic-overview.md).
+
 ## Unreleased — integrated local private engine preview
 
 - Add exact-namespace `selectEvidence`, `fetchEvidence` and `revalidateEvidence`

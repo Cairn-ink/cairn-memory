@@ -59,6 +59,12 @@ bounded maps and an injected classification port over that same runtime. No mode
 provider or MCP adapter is bundled. No private source, prompt or fixture contents
 are copied into these slices.
 
+The [asynchronous topic reader](topic-overview.md) supplies owner-bound Memory
+MOC metadata through a fixed read-only Worker over the same store and index
+authority. It uses bounded physical traversal and short deferred snapshots;
+it has no model/counter, second index or admission gate. Its ephemeral cursor
+state does not change model-facing `map` or authorize product enablement.
+
 [S2c](fetch-recall.md) adds bounded fetch/recall to that same runtime. Recall
 uses injected selection/ranking adapters and an authoritative final read;
 no model provider or network host is bundled. The released plugin is unchanged.

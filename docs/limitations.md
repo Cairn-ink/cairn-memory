@@ -1,5 +1,23 @@
 # Known limitations
 
+The [asynchronous Memory topic reader](topic-overview.md) supplies bounded
+owner/namespace metadata over the same SQLite engine without model calls. It
+reports unknown counts until aggregation completes and refuses unavailable
+generations. Preliminary synthetic Node22 measurements at1,112 Memories/four
+namespaces/71 MOCs and a larger3,336-Memory/multifiling case show responsive
+main-loop behavior; the final combined candidate still requires both supported
+runtimes, installed bytes, concurrency gates, independent review and latest-head
+CI. This is metadata mechanics, not semantic recall accuracy or the product
+team's exact old-map33second reproduction. Legacy `map` is unchanged; product
+integration and feature re-enablement remain separate.
+
+The store has no placement-added timestamps: `lastMemberAddedAt` is explicitly
+null with `addedAtCoverage:'not_recorded'`. `latestMemberCreatedAt` describes
+current members' creation times, not filing recency. Opt-in member refs are a
+first-K sample, not a complete member-page/location API; Card MOCs and episode
+headers are outside this port. Continuations are ephemeral, with finite work,
+state, byte and time caps; a changed snapshot requires restarting the read.
+
 The opt-in [integrated local engine preview](private-engine-v1-local.md) owns
 submitted notes, retained Memory receipt excerpts, Memories and private authored
 Cards in one core. It includes exact-namespace common reads, explicitly reviewed
