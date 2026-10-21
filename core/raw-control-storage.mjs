@@ -8,8 +8,13 @@ export function createRawControlStorage(db) {
     const ns = namespace === undefined ? null : rawNamespace(namespace);
     identifier(ownerId); if (client !== undefined) rawClient(client);
     if (!['tool_off','capture_barrier'].includes(reason) || ns && ns.ownerId !== ownerId) fail('invalid_input');
+    // Policy skips already closed saving, but their unreceived transport tail
+    // still blocks a later message until an actual capture barrier discards it.
+    const selection = reason === 'capture_barrier'
+      ? "(m.assembly_state='pending' OR (m.assembly_state='closed' AND m.next_start<m.total_units AND m.reason IN ('quota_reached','notice_required','raw_disabled')))"
+      : "m.assembly_state='pending'";
     const rows = db.prepare(`SELECT m.*,c.owner_id,c.scope,c.project_id FROM raw_messages m JOIN raw_conversations c ON c.id=m.conversation_id
-      WHERE c.owner_id=? AND m.assembly_state='pending'${client === undefined ? '' : ' AND c.client=?'}${ns ? ' AND c.scope=? AND c.project_id=?' : ''}${sessionKey === undefined ? '' : ' AND c.session_key=?'}`)
+      WHERE c.owner_id=? AND ${selection}${client === undefined ? '' : ' AND c.client=?'}${ns ? ' AND c.scope=? AND c.project_id=?' : ''}${sessionKey === undefined ? '' : ' AND c.session_key=?'}`)
       .all(ownerId, ...(client === undefined ? [] : [client]), ...(ns ? [ns.scope,ns.projectId] : []), ...(sessionKey === undefined ? [] : [sessionKey]));
     const touched = new Map(); let released = 0;
     for (const row of rows) {

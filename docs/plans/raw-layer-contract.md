@@ -275,7 +275,7 @@ its saved bytes and reservations once, in the delete transaction.
 | `quota_reached` | Entire new message could not be reserved under the owner cap. |
 | `raw_disabled` | Core raw option was off for this new submission. |
 | `before_launch` | Legacy evidence predates raw support; no reconstruction/backfill. |
-| `capture_barrier` | An already pending assembly was closed by pause/project stop; rejected paused batches themselves are not registered. |
+| `capture_barrier` | A pending assembly or an incomplete quota/notice/Raw-disabled tail was closed by pause/project stop; original part/event dispositions stay unchanged and rejected paused batches themselves are not registered. |
 
 Conversation `rawState` is `saved` (all submitted messages complete and saved),
 `partial` (some saved parts plus gaps/pending messages), or `not_saved` (no saved
@@ -387,7 +387,11 @@ change client allowlists, transmission or memory-model quotas.
 The committed off setter closes pending raw assemblies for that owner/client
 and releases their unused reservations while preserving accepted parts. Existing
 core pause/project-stop setters likewise close affected pending raw assemblies
-in their control transaction, using `capture_barrier`; they do not rely on a
+and incomplete `quota_reached`/`notice_required`/`raw_disabled` tails in their
+control transaction, using `capture_barrier`. Completed messages and already
+tool-off/capture-barrier tails stay unchanged; historical part/event receipts
+keep their original dispositions. Raw-only off/on does not establish this
+barrier for policy-skipped tails. These setters do not rely on a
 later rejected batch to release capacity. In-flight registration rechecks these
 fences. Resuming/enabling cannot reopen a closed assembly; new messages in the
 same surviving conversation can still be saved.

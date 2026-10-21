@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — local Raw skipped-tail capture barrier
+
+- Let namespace pause/project stop close incomplete Raw tails previously skipped
+  for quota, notice or Raw-off, so a fresh higher ordinal can proceed after
+  resume. Historical part/event receipts stay unchanged; late suffixes remain
+  gaps and old-generation replay still refuses. Raw-only off/on adds no barrier.
+
 ## Unreleased — explicit local Raw constructor
 
 - Add default-off `openMemoryCore({rawConversations})` using the existing shared
@@ -9,7 +16,7 @@
 - Include the public composition's real closure in the private archive and
   verify synthetic fresh-process multipart replay/read/authored-Card/deletion.
   This is not installed Claude/Codex hook capture, MCP exposure, hosted Raw or
-  completed local V1. The known skipped-tail resume gap remains a later fix.
+  completed local V1. Lost-client-state recovery remains separate.
 
 ## Unreleased — internal local Raw journal foundation
 

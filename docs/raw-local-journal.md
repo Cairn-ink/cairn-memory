@@ -43,8 +43,9 @@ automatic promotion. With no Raw option, existing capabilities remain unchanged.
 The private archive contains this public import closure, but not the internal
 compatibility wrapper. Installed programmatic synthetic lifecycle tests are
 not installed Claude/Codex capture, setup, transport, cursor or MCP acceptance.
-The [skipped-tail barrier limitation](limitations.md#public-raw-constructor-p4b-b1)
-still blocks complete installed-hook recovery acceptance.
+The [bounded skipped-tail correction](limitations.md#public-raw-constructor-p4b-b1)
+covers ordinary pause/resume with known identities; lost-client-state recovery
+and complete installed-hook acceptance remain separate.
 
 ## Internal producer foundation (P4a)
 
@@ -233,13 +234,16 @@ refuses capacity. This internal split is **not the future public v2 wire
 acknowledgement**. An interpretation error/incomplete/processing result is not
 permission for a future client to advance its capture cursor as completed.
 
-Through this internal factory, namespace pause/project-stop setters close affected pending Raw
-assemblies in their control transaction, including when episodes are off. The
+Through this internal factory, namespace pause/project-stop setters close affected
+pending Raw assemblies and incomplete quota/notice/Raw-disabled tails in their
+control transaction, including through a feature-off writer. Completed messages
+and already tool-off/capture-barrier tails stay unchanged. The
 owner/client Raw-off setter closes only that owner/client's pending assemblies.
 Saved pending attempts preserve accepted parts and release unused reservations
 once. Resume/on permits fresh messages after those closures but never backfills
-a closed suffix; policy-skipped incomplete tails retain the
-[known ordering gap](limitations.md#public-raw-constructor-p4b-b1). Sealing rechecks
+a closed suffix. Historical part/event receipts retain their original reasons;
+later unreceived parts remain capture-barrier gaps. Raw-only off/on does not
+establish a namespace/project barrier for policy-skipped tails. Sealing rechecks
 these controls and session fences before commit. Namespace generation and
 session deletion are checked again inside admission publication, including
 unstaged and ordered capture. Raw-off after registration permits Memory work to
@@ -382,9 +386,11 @@ or publication authority, even when that payload has expired. Repair is required
 no text matching, guessed session or broad deletion is attempted. Terminal,
 payload-free unbound jobs do not block. Pause/project-stop and client-off share
 DB-only reservation closure; accepted parts remain and late suffixes never
-backfill. A fresh higher-ordinal message may save after closing a saved pending
-assembly; policy-skipped incomplete tails retain the
-[known resume ordering gap](limitations.md#public-raw-constructor-p4b-b1).
+backfill. Namespace pause/project stop also closes incomplete quota/notice/Raw-off
+tails, permitting a fresh higher ordinal after resume while preserving original
+receipts. Raw-only off/on does not establish that barrier for policy-skipped
+tails. Lost-client-state recovery remains a
+[separate limit](limitations.md#public-raw-constructor-p4b-b1).
 
 Historically P3b exposed only internal synthetic D5/D6 mechanics; P3c added
 resolution and bare Raw-to-Card support below. B1 now promotes their shared
