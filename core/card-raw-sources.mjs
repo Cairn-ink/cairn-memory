@@ -23,24 +23,31 @@ export function createRawCardInvalidation(db) {
         ${value.messageId ? 'AND b.message_id=? AND b.start<? AND b.end>?' : ''} ORDER BY c.id LIMIT 129`)
         .all(...boundary(ns),value.conversationId,...(value.messageId ? [value.messageId,value.end,value.start] : []));
       if (rows.length > 128) fail('dependency_limit_reached');
-      for (const row of rows) if (!context.cards.has(row.id)) context.cards.set(row.id,row.revision);
+      const queue = db.prepare('INSERT OR IGNORE INTO card_raw_pending_invalidations(card_id,revision) VALUES(?,?)');
+      for (const row of rows) queue.run(row.id,row.revision);
+      if (db.prepare('SELECT card_id FROM card_raw_pending_invalidations LIMIT 129').all().length > 128) fail('dependency_limit_reached');
     }
   }
   function mutate(ns, actionId, work) {
     if (!enabled()) return work();
     if (!db.isTransaction) fail('raw_transaction_required');
     const owner = !mutations.has(db);
-    if (owner) mutations.set(db,{ namespace: boundary(ns),actionId,cards: new Map() });
+    if (owner) {
+      db.prepare('INSERT INTO card_raw_mutation_context VALUES(1,?,?,?,?)').run(...boundary(ns),actionId);
+      mutations.set(db,{ namespace: boundary(ns),actionId });
+    }
     const context = mutations.get(db);
     try {
       if (JSON.stringify(context.namespace) !== JSON.stringify(boundary(ns))) fail('raw_transaction_required');
       const result = work();
       if (owner) {
         let changed = false;
-        for (const [id,revision] of context.cards) {
+        const pending = db.prepare('SELECT card_id,revision FROM card_raw_pending_invalidations ORDER BY card_id LIMIT 129').all();
+        if (pending.length > 128) fail('dependency_limit_reached');
+        for (const { card_id: id,revision } of pending) {
           const row = db.prepare('SELECT state,revision FROM private_cards WHERE id=?').get(id);
-          // Existing receipt revision triggers may already have invalidated a
-          // mixed-support Card in this same callback-free source transaction.
+          // Receipt triggers defer these Cards into the same SQL queue, so
+          // every original revision produces at most one effect and update.
           if (!row || !['draft','confirmed'].includes(row.state) || row.revision !== revision) continue;
           const timestamp = new Date().toISOString();
           db.prepare(`UPDATE private_cards SET revision=revision+1,updated_at=?,
@@ -55,7 +62,17 @@ export function createRawCardInvalidation(db) {
           DO UPDATE SET generation=generation+1`).run(...boundary(ns));
       }
       return result;
-    } finally { if (owner) mutations.delete(db); }
+    } finally {
+      if (owner) {
+        mutations.delete(db);
+        // Cleanup is part of the caller's write transaction too. A cleanup
+        // failure must abort it rather than leave a committed suppression fence.
+        if (db.isTransaction) {
+          db.prepare('DELETE FROM card_raw_pending_invalidations').run();
+          db.prepare('DELETE FROM card_raw_mutation_context').run();
+        }
+      }
+    }
   }
   return { collect,mutate };
 }

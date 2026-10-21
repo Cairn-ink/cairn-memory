@@ -1830,6 +1830,21 @@ actual exit 1; the shared indexed collector now seeks only uncovered intervals,
 including left/right extension and gaps between cached islands. Full bounds
 coverage then passed 15/15 on Node 22.16, actual exit 0, without raising limits.
 
+Independent P3c review exposed duplicate invalidation of a confirmed Card with
+overlapping Raw spans and receipts from two Memories of the same conversation:
+one deletion advanced its revision and effects twice (both clients, actual exit
+1). Schema 28 now queues affected Raw-bound Cards for one outer-transaction
+invalidation, including receipt loss when its Raw spans are disjoint. Its two
+content-free coordination tables remain empty outside the mutation; queue,
+source work, effects, indices and cleanup roll back together. Ordinary receipt-only
+Cards retain their prior per-Memory revision behavior. The union is capped at
+128 unique live Raw-bound Cards per outer source mutation, across direct Raw and
+receipt dependencies; a 129th fails `dependency_limit_reached` atomically even
+when each individual Memory/conversation fanout fits. This is a separate bounded
+mutation limit, not a promise to erase arbitrarily large dependency graphs in
+one call. Schema 28 is unpublished; no compatibility with earlier synthetic
+schema-28 candidates or operational-store migration is claimed.
+
 A real pre-P3a keep also exposed a D6 hole: its receipt contained consumer B's
 identity while exact keep metadata proved original already-saved Raw A. After
 upgrade, option-off forget succeeded but left zero A exclusions and an eligible

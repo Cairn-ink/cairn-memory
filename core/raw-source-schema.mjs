@@ -1,3 +1,5 @@
+import { installCardMemoryInvalidation } from './private-card-schema.mjs';
+
 export const RAW_SOURCE_SCHEMA_VERSION = 28;
 
 export function installRawSources(db) {
@@ -12,9 +14,18 @@ export function installRawSources(db) {
       PRIMARY KEY(card_id,binding_id)
     ) STRICT;
     CREATE INDEX card_raw_dependents ON card_raw_bindings(conversation_id,card_id,message_id,start,end);
+    CREATE TABLE card_raw_mutation_context (
+      singleton INTEGER PRIMARY KEY CHECK(singleton=1), owner_id TEXT NOT NULL,
+      scope TEXT NOT NULL, project_id TEXT NOT NULL, action_id TEXT NOT NULL
+    ) STRICT;
+    CREATE TABLE card_raw_pending_invalidations (
+      card_id TEXT PRIMARY KEY REFERENCES private_cards(id), revision INTEGER NOT NULL CHECK(revision>0)
+    ) STRICT;
     CREATE TRIGGER card_raw_purge AFTER UPDATE OF state ON private_cards
       WHEN NEW.state IN ('cancelled','deleted') BEGIN
       DELETE FROM card_raw_bindings WHERE card_id=NEW.id;
     END;
   `);
+  db.exec('DROP TRIGGER card_memory_revision_invalidation');
+  installCardMemoryInvalidation(db,true);
 }

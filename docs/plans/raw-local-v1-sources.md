@@ -1,6 +1,8 @@
 # P3c — retained Raw support in the existing private Card engine
 
-Status: frozen-source offline verification complete; fixed-candidate review and CI pending.
+Status: the independent review's mixed-support invalidation correction is
+implemented and frozen; final-source verification is in progress. The original
+finding remains below. Not delivered; renewed dual review and CI are pending.
 This is an internal packet, not a shipped Raw capability or complete local V1.
 Fixed base: `50230c0390a0e035b8d15f0cdeb9c335f97e3ffb` (reviewed P3b;
 PR #452 has 31/31 latest-head CI checks successful, ready and unmerged).
@@ -192,6 +194,18 @@ overlapping spans of the same Card, and include all resulting revision/effect/
 index updates in the source transaction. Use the current ordinary writer's
 schema-presence guards, including already-open-before-upgrade handles; external
 host cleanup and a best-effort later scan are not enforcement.
+
+The mixed Raw/receipt correction also bounds the union of affected live
+Raw-bound Cards to128unique Cards per outer logical source mutation. This is
+an aggregate work limit, not a fresh allowance for each Memory, overlapping
+span or nested cascade. The129th candidate refuses with
+`dependency_limit_reached` and rolls back the entire mutation; receipt-only
+legacy behavior is unchanged. Both Raw collection and receipt-trigger queueing
+enforce the same limit, and the final flush checks it defensively. Locate
+receipt-dependent candidates through the indexed Memory binding, not a new
+namespace-wide Card scan. This explicit internal bound is necessary because
+the per-conversation fanout limit alone cannot bound Cards with separate Raw
+support and a shared changed Memory receipt.
 
 Keep the existing note-only usage projection byte-compatible; its Raw projection
 is not implemented there. The opted-in caller uses the already separate
@@ -450,3 +464,129 @@ The primary now commits only the scoped30-path packet, then dispatches separate
 non-author GPT6.1Sol/high Standards and Spec reviews against the fixed P3b base.
 Post-commit acceptance, exact SHA, review findings and latest-head CI belong in
 the delivery PR. No merge, release, deployment, user data or product-pin change.
+
+### First fixed-candidate independent review: correction required
+
+Candidate `64df768bf870c492c2e2057775437e5196584074` contains one P3c commit
+against the recorded P3b base. Primary post-commit acceptance passed44/44 on
+both22.16/24.15, actual exit0, with empty owned parents subsequently removed.
+That does not substitute for independent review.
+
+Standards — independent non-author GPT6.1Sol/high:0 documented violations and
+one optional low-severity possible duplicated part-key helper. All30 paths and
+26non-document paths were independently reconciled with tree blobs; the frozen
+v27 opener matched22,229bytes. All five focused suites passed60/60, actual exit0.
+
+Spec — separate independent non-author GPT6.1Sol/high:one medium finding,
+changes requested. A confirmed Card with two overlapping Raw bindings plus
+receipt bindings from two Memories supported by the same conversation receives
+two revision increments and two invalidation effects from one conversation
+deletion. The Raw coordinator merely skips a Card after receipt triggers change
+it; that does not deduplicate the receipt triggers themselves. This violates
+P3c's single-source-mutation requirement, even though the focused60 cases and
+four independent final-authority race probes passed, actual exit0.
+
+Primary reran the retained independent reproduction with the owned runner:
+`node tools/testing/run.mjs --script
+/tmp/cairn-p3c-spec.qlFgBh/mixed-invalidation.mjs`. Both clients showed
+revisionDelta2/effectDelta2 instead of1/1, actual exit1; synthetic stores were
+cleaned. The log is `review-mixed-invalidation-primary-red22.log` under the
+existing primary evidence directory. No PR or CI run was started for this
+candidate, and P4 implementation does not proceed from it as accepted.
+
+A bounded correction worker, `/root/raw_p3c_dedup61`, actual GPT6.1Sol/high,
+owns only the affected invalidation/schema seam and regression tests. Primary
+owns the design checkpoint and acceptance. No reverse revision adjustment or
+post-hoc effect deletion may simulate deduplication. Existing receipt-only and
+no-Raw behavior, callback-free atomicity, frozen prior-version compatibility,
+already-open ordinary writers and failure cleanup remain required. A new final
+candidate must pass affected gates and both review axes again; no first-round
+green evidence is inherited blindly.
+
+Primary approved a bounded SQL-visible coordinator for the unpublished v28
+schema. A singleton transaction context carries namespace/action, and a pending
+set carries only Card IDs/original revisions. Both are empty outside the outer
+source mutation. This lets the existing Memory-revision trigger queue touched
+Raw-bound Cards instead of independently invalidating them per Memory; the
+outer coordinator flushes once. Receipt-only Cards keep their existing trigger
+behavior. Reuse a canonical trigger installer in `private-card-schema.mjs`;
+install its Raw-aware variant only with v28. Older schema/default trigger and
+the frozen actual v27 opener are unchanged. Do not install SQL callbacks or
+drop/recreate triggers around runtime mutations.
+
+The queue must be reached through exact scope/dependency indices and existing
+fanout limits, not a new unbounded namespace-wide Card scan. It includes a
+Raw-bound Card whose Raw span is disjoint but whose required receipt support
+is invalidated by the same operation. Nested source work shares the outer
+context; rollback and all cleanup paths must leave no queued authority capable
+of suppressing the next independent mutation. Queue/flush failures roll back
+source, Memory, Card, effect and index changes together. Test ordinary handles
+opened before upgrade, separate connections, receipt-only/disjoint controls and
+a successful independent mutation after forced rollback.
+
+This is refinement of an unshipped schema on fresh synthetic stores, not an
+operational migration or a compatibility promise for discarded first-candidate
+v28 fixtures. There is no real-user store in this workstream.
+
+### Corrected-source checkpoint
+
+The correction worker's final Node22 affected six Raw source suites plus
+Memory/Card suites pass122/122, actual exit0. Node24's source/migration and
+invalidation cases pass36/36, with the two subsequently added aggregate-limit
+cases passing2/2, actual exits0. The unchanged independent mixed-support
+reproduction now reports revision/effect deltas1/1 for both clients, exit0.
+This is mechanical correctness evidence, not a semantic-memory score.
+
+Primary independently checks the canonical older Card schema against actual
+fixed-base module execution:17 SQLite schema objects, including two triggers,
+remain identical after whitespace normalization. Four additional primary cases
+force failure while clearing either transaction-local queue/context, for both
+clients; the full stored state rolls back and the next operation succeeds once.
+The combined49-case primary suite and six-suite87-case packet pass on Node22,
+actual exits0. The complete two-runtime matrix remains in progress.
+
+The corrected freeze covers32 paths/28 non-document paths, independently
+cross-checked through Git diff plus untracked paths and base-tree/filesystem
+blob-and-mode comparison. Runtime and tests are not edited during these gates.
+The complete core roster is retained; only local file scheduling is bounded to
+four workers. Current installed-hook repair verification runs separately and
+does not change this branch or its source freeze.
+
+The corrected full105-file core roster now passes1,641/1,641 on both runtimes,
+actual exits0 (Node22:485.358s; Node24:527.878s), with no skips/cancellations.
+Primary49/49 and the six focused source suites87/87 also pass on both runtimes,
+actual exits0. Both twelve-demo lanes pass all commands, actual exits0. Owned
+core/demo parents are empty and removed. Remaining interface/generic lanes are
+still in progress; this checkpoint is not the completed44-command matrix.
+
+### Corrected final offline matrix
+
+The `dedup-final` matrix is now complete:44/44 commands have actual exit0,
+signal null and no unexpected owned scratch. The primary independently
+reconciled every lane record with its retained log. Both Node22.16.0/24.15.0
+ran the same frozen28 non-document paths and the full105-file core roster.
+
+| Gate, per runtime | Node22.16.0 | Node24.15.0 |
+| --- | --- | --- |
+| Independent primary acceptance | 49/49, exit0 | 49/49, exit0 |
+| Six source suites | 87/87, exit0 | 87/87, exit0 |
+| Full105-file core, local concurrency4 | 1,641/1,641, exit0 | 1,641/1,641, exit0 |
+| Generic npm test | 635/635, exit0 | 635/635, exit0 |
+| MCP actual stdio | 125/125, exit0 | 125/125, exit0 |
+| Installed artifact | 94pass,1native-Windows skip, exit0 | 94pass,1native-Windows skip, exit0 |
+| Installed synthetic rationale | 4/4, exit0 | 4/4, exit0 |
+| Workspace lifecycle | 25/25, exit0 | 25/25, exit0 |
+| JSON and pinned native plugin validation | both exit0 | both exit0 |
+| Twelve required synthetic demos | all exit0 | all exit0 |
+
+All eight owned lane parents are empty and removed. The32-path incremental
+inventory and79-path cumulative inventory against `cd6d1ad` each agree through
+Git diff plus untracked files and independent base-tree/filesystem blob/mode
+comparison. The actual frozen v27 opener still matches exactly. Safe fetch
+confirms main remains `cd6d1ad`; no product or predecessor branch was altered.
+
+The correction is ready for a new local candidate and both non-author review
+axes against the original P3b base. Prior review findings and timing failures
+remain in this record. Post-commit primary acceptance, final review findings
+and latest-head CI must be recorded in delivery; this matrix alone does not
+authorize publication, merging, installed Raw capability or a semantic score.

@@ -1034,3 +1034,28 @@ precede delivery. This completes neither installed Raw capture nor the whole
 local V1. P4 next connects bounded complete-record preparation, whole-message
 redaction and exact retry parts to the same core, then the actual installed
 client/local-transport lifecycle. Existing product pin remains `cd6d1ad`.
+
+### P3c corrected offline checkpoint
+
+The first P3c candidate failed independent Spec review: mixed Raw/receipt
+support could invalidate one Card twice in one source deletion. The retained
+actual-API reproduction failed for both clients. The correction uses one
+transaction-local content-free queue for affected Raw-bound Cards, with a
+128-Card aggregate bound and atomic rollback of source, Card, effects, indices
+and cleanup. Receipt-only behavior and actual prior-schema definitions remain
+unchanged. The reproduction now yields one revision/effect per operation.
+
+The new frozen-source matrix passes44/44 commands on Node22.16/24.15, all actual
+exit0: independent primary49/49, source suites87/87, full core1,641/1,641,
+generic635/635, MCP125/125, installed synthetic rationale4/4 and workspace25/25
+per runtime. Artifacts pass94 each with one native-Windows-only skip; all
+validation commands and twelve demos also exit0. Every owned lane parent is
+empty and removed. Independent inventories agree on32 incremental/79 cumulative
+paths; all28 non-document paths match the pre-gate freeze.
+
+The [detailed packet record](raw-local-v1-sources.md#corrected-final-offline-matrix)
+retains first-candidate failures and correction evidence. A new fixed candidate,
+both independent review axes and latest-head CI are still required. P4's bounded
+producer preflight may proceed read-only; dependent implementation waits for
+accepted P3c. The separate installed Recall deadline repair does not change this
+branch, the Raw capability boundary, or the product pin.

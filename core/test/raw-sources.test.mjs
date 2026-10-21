@@ -24,6 +24,45 @@ test('P3c-01 schema28 stays additive and migration failure atomically preserves 
   assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name IN ('card_raw_bindings','raw_source_part_start')").get().n,0);
 });
 
+test('P3c-01 migration rollback after trigger replacement preserves the actual v27 writer and receipt invalidation', t => {
+  const f = sourceFixture(t), path = f.workspace.path+'/after-trigger-v27.sqlite';
+  const initial = openDatabase(path,{ rawDeletion: true });
+  const oldTrigger = initial.prepare("SELECT sql FROM sqlite_master WHERE name='card_memory_revision_invalidation'").get().sql;
+  initial.close();
+  const old = openMemoryCore({ path,privateCards:f.host.options });
+  const memory = ok(old.admit({ namespace:ns,memory:{ content:'Synthetic ordinary support.',kind:'fact' },
+    receipts:[{ client:'synthetic',sessionId:'ordinary',eventId:'ordinary',role:'user',excerpt:'Synthetic ordinary support.' }] })).memory;
+  const card = ok(f.host.call(old,'createCardDraft',{ namespace:ns,actionId:'draft',drafting:'authored',input:{
+    sourcePolicy:'retained-receipts-v1',memoryRefs:[{ type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision }],
+    title:'Synthetic title',body:'Synthetic authored body.',
+  } }));
+  const confirmed = ok(f.host.call(old,'confirmCardDraft',{ namespace:ns,cardId:card.id,expectedRevision:card.revision,
+    actionId:'confirm',applicability:'current' }));
+  old.close();
+  const exec = DatabaseSync.prototype.exec; let replaced = false;
+  DatabaseSync.prototype.exec = function(sql) {
+    const result = exec.call(this,sql);
+    if (sql.includes('CREATE TRIGGER card_memory_revision_invalidation') && sql.includes('card_raw_pending_invalidations')) {
+      assert.equal(this.prepare("SELECT count(*) n FROM sqlite_master WHERE name IN ('card_raw_mutation_context','card_raw_pending_invalidations')").get().n,2);
+      assert.match(this.prepare("SELECT sql FROM sqlite_master WHERE name='card_memory_revision_invalidation'").get().sql,/card_raw_pending_invalidations/);
+      replaced = true;
+      throw Error('Synthetic abort after schema28 trigger replacement');
+    }
+    return result;
+  };
+  try { assert.throws(() => openDatabase(path,{ rawSources:true }),/Synthetic abort after schema28 trigger replacement/); }
+  finally { DatabaseSync.prototype.exec = exec; }
+  assert.equal(replaced,true);
+  const frozen = openV27(path); f.workspace.defer(() => frozen.close());
+  assert.equal(frozen.prepare('PRAGMA user_version').get().user_version,27);
+  assert.equal(frozen.prepare("SELECT count(*) n FROM sqlite_master WHERE name IN ('card_raw_bindings','raw_source_part_start','card_raw_mutation_context','card_raw_pending_invalidations')").get().n,0);
+  assert.equal(frozen.prepare("SELECT sql FROM sqlite_master WHERE name='card_memory_revision_invalidation'").get().sql,oldTrigger);
+  const writer = openMemoryCore({ path }); f.workspace.defer(() => writer.close());
+  ok(writer.forget({ namespace:ns,memoryId:memory.id,expectedRevision:memory.revision }));
+  assert.equal(frozen.prepare('SELECT revision FROM private_cards WHERE id=?').get(card.id).revision,confirmed.revision+1);
+  assert.equal(frozen.prepare('SELECT count(*) n FROM card_effects WHERE entity_id=?').get(card.id).n,1);
+});
+
 for (const client of ['claude-code','codex']) {
   test(`P3c-02/06/07 ${client}: bare Raw source creates the existing authored Card without Memory or note`, async t => {
     const f = sourceFixture(t), source = await savedSource(f,'  A😀B source.  ',{ client });
