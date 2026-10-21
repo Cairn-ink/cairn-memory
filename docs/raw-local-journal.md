@@ -1,12 +1,50 @@
-# Internal local Raw journal, capture, lineage, deletion and sources (P1/P2/P3a/P3b/P3c)
+# Local Raw journal, capture, lineage, deletion and sources
 
-These are the internal local mechanisms in
-[the V1 plan](plans/raw-local-v1-completion.md), not completed installed/hosted
+These are the local mechanisms in
+[the V1 plan](plans/raw-local-v1-completion.md), not completed installed-client/hosted
 Raw V1. They are default-off and authorized only for pure-local synthetic
 development and tests. P2 joins the existing bounded capture engine; P3c adds
 explicit Raw references and authored Cards through the same private engine.
-No public Raw mutation, MCP tool, client hook, hosted encryption or production
-enablement is added. Ordinary public capture keeps its existing wire contract.
+The explicit public constructor and private artifact now compose those same
+mechanisms. No MCP tool, client hook, hosted encryption or production enablement
+is added. Ordinary public capture keeps its existing wire contract.
+
+## Explicit public constructor (P4b-B1)
+
+`openMemoryCore({path, model?, privateCards?, rawConversations})` accepts the
+closed option `{mode:'raw-v1'|'off', port?, capBytes?, readPolicy}`. Omission
+keeps the ordinary facade. Explicit undefined/null, unknown properties, symbols
+and accessors refuse before opening or migrating SQLite. Enabled mode requires
+an explicit positive safe-integer cap and a `raw-seal-v1` port with both
+`sealRaw` and `openRaw`. Off mode may omit cap/port; an explicitly undefined
+cap/port is invalid. Omitting the cap when reopening preserves durable usage/cap.
+
+The trusted synchronous `readPolicy({namespace,client})` returns
+`{generation,reason}` at registration preparation/commit. Constructor validation
+establishes callability, not callback purity; invalid/Promise results refuse at
+the existing registration boundary. Class port methods retain their original
+receiver and opaque host state; validated method references/configuration are
+snapshotted without invoking accessors or copying key material. Both capture
+and retained reads sanitize port failures; no decoder is guessed when absent.
+
+The selected facade adds `captureRaw`, `getConversation`, `getRawUsage`,
+`getRawCaptureControl`, `setRawCaptureControl`, `fenceSession`,
+`previewDeleteConversation`, `deleteConversation` and `listRawEffects`, using
+the camel-case core DTOs below and the existing result envelopes. This is not
+an HTTP v2 acknowledgement. Raw saving and Memory interpretation remain
+separate; continuation-only capture invokes no model. Retained reads/deletion
+work in off mode and do not ask capture policy or invoke a model.
+
+Public selection always includes lineage and deletion (existing schema 27),
+and includes Raw source resolution (existing schema 28) only with valid
+`privateCards`. Its existing opaque per-call authority still gates Raw source
+reads and explicitly authored Cards; Raw alone adds no Card authority or
+automatic promotion. With no Raw option, existing capabilities remain unchanged.
+The private archive contains this public import closure, but not the internal
+compatibility wrapper. Installed programmatic synthetic lifecycle tests are
+not installed Claude/Codex capture, setup, transport, cursor or MCP acceptance.
+The [skipped-tail barrier limitation](limitations.md#public-raw-constructor-p4b-b1)
+still blocks complete installed-hook recovery acceptance.
 
 ## Internal producer foundation (P4a)
 
@@ -87,11 +125,9 @@ Current option-off openers preserve a genuine schema 24 store. Pre-Raw openers
 reject it; stop old writers before any future migration. This packet migrates
 only owned synthetic fixtures, never an operational database.
 
-`createRawJournal({ db, mode, port, capBytes, readPolicy })` is an internal source
-module and is not part of the installed runtime manifest. Canonical DB-only
-schema/input/authority dependencies are packaged for ordinary selected-store
-enforcement; the journal, async reader and usable factory stay uninstalled.
-No installed Raw capability is advertised. The internal journal provides:
+`createRawJournal({ db, mode, port, capBytes, readPolicy })` is a private module
+packaged as a dependency of the explicit public composition. It is not a public
+core export or a second capture engine. The underlying journal provides:
 
 - `prepareRegistration(input)`: validate exact namespace and camel-case message
   parts, snapshot host policy/control/namespace/conversation state, then seal
@@ -102,7 +138,8 @@ No installed Raw capability is advertised. The internal journal provides:
   eventual rollback also removes all journal, ledger and usage effects.
 - `register(input)`: prepare, then run that commit in its own transaction.
 - `getConversation`, `getRawUsage`, internal CAS raw controls and pending-attempt
-  closure. These are not attached to `openMemoryCore` or `openMemoryStore`.
+  closure. Public opt-in delegates to these through the shared capture pipeline;
+  ordinary `openMemoryCore`/`openMemoryStore` gain no implicit Raw methods.
 
 The trusted `readPolicy` callback is synchronous and receives exact namespace and
 client, returning `{generation,reason}`. A null reason permits prospective saving;
@@ -117,9 +154,10 @@ not make an ordinary public opener perform this integration automatically.
 `openRawCaptureCore(coreOptions, rawOptions)` in `core/raw-capture.mjs` is an
 internal, synthetic-only construction seam. `coreOptions` uses unchanged strict
 `openMemoryCore` options. `rawOptions` supplies the journal's explicit mode, port,
-cap and trusted synchronous `readPolicy`. Public `openMemoryCore` does not accept
-these fields or forward construction extensions. The usable factory and its
-capture-storage module remain absent from the installed artifact manifest.
+cap and trusted synchronous `readPolicy`. Public `openMemoryCore` accepts only
+the closed option above, not these internal flags or construction extensions.
+Both factories use `raw-composition.mjs`; the compatibility wrapper alone
+remains absent from the installed artifact manifest.
 No capabilities, MCP tools, client producers or HTTP wire versions are added.
 
 Without the separate lineage selection below, this construction opts into schema **25**. Genuine P1
@@ -198,15 +236,17 @@ permission for a future client to advance its capture cursor as completed.
 Through this internal factory, namespace pause/project-stop setters close affected pending Raw
 assemblies in their control transaction, including when episodes are off. The
 owner/client Raw-off setter closes only that owner/client's pending assemblies.
-All preserve accepted parts and release unused reservations once. Resume/on
-permits fresh messages but never backfills a closed suffix. Sealing rechecks
+Saved pending attempts preserve accepted parts and release unused reservations
+once. Resume/on permits fresh messages after those closures but never backfills
+a closed suffix; policy-skipped incomplete tails retain the
+[known ordering gap](limitations.md#public-raw-constructor-p4b-b1). Sealing rechecks
 these controls and session fences before commit. Namespace generation and
 session deletion are checked again inside admission publication, including
 unstaged and ordered capture. Raw-off after registration permits Memory work to
 finish. Episode prose publication is also fenced for the new path.
 
-`fenceSession({namespace,client,sessionId})` is a narrow internal tombstone seam
-for episode-off race/restart fixtures. Existing episode deletion tombstones also
+`fenceSession({namespace,client,sessionId})` is a trusted tombstone seam, shared
+by the internal factory and explicit public selection. Existing episode deletion tombstones also
 fence registration and publication. This is not `deleteConversation`: full D5
 source cascades and host withdrawal effects remain P3b; P3a's separately selected
 D6 mechanics are described below. The factory must remain unavailable to real capture clients until those
@@ -220,8 +260,8 @@ option-off control or source mutations as complete.
 
 The same uninstalled factory accepts the separate own boolean option
 `rawOptions.lineage:true`, transactionally selecting additive schema **26**.
-Omission/false does not upgrade P2's schema 25. Public constructor fields remain
-unchanged. Current option-off writers preserve an existing 26 store and enforce
+Omission/false does not upgrade the internal P2 selection's schema 25. Public
+selection always enables lineage/deletion. Current option-off writers preserve an existing 26 store and enforce
 its exclusions, including a connection opened before another current connection
 selects lineage. The frozen P2 opener refuses 26; this is not mixed-version writer
 support or authorization to migrate user data.
@@ -272,7 +312,7 @@ later explicit re-extraction workflow.
 
 The uninstalled `openRawCaptureCore(coreOptions, { ...rawOptions, deletion: true })`
 selects additive schema 27 and implies lineage. Only an own boolean option is
-accepted; public constructor fields are unchanged. New ordinary stores remain
+accepted by the internal wrapper; the public selector always includes deletion. New ordinary stores remain
 schema 18. Omission/false preserves earlier Raw selection behavior. A current
 option-off connection, including one opened before this migration, honors the
 persisted deletion rules once 27 is selected. This is not permission for old
@@ -341,20 +381,23 @@ blocks deletion only in the exact target namespace/client when it retains payloa
 or publication authority, even when that payload has expired. Repair is required;
 no text matching, guessed session or broad deletion is attempted. Terminal,
 payload-free unbound jobs do not block. Pause/project-stop and client-off share
-DB-only reservation closure; accepted parts remain, late suffixes never backfill,
-and a fresh higher-ordinal message may save after resume/on.
+DB-only reservation closure; accepted parts remain and late suffixes never
+backfill. A fresh higher-ordinal message may save after closing a saved pending
+assembly; policy-skipped incomplete tails retain the
+[known resume ordering gap](limitations.md#public-raw-constructor-p4b-b1).
 
-This P3b slice implements only internal synthetic D5/D6 mechanics. Raw resolution
-and bare Raw-to-Card are the separate internal P3c slice below; installed/client
-Raw lifecycle and host effect consumption
-remain P4. The factory must not be exposed before those packets and acceptance.
+Historically P3b exposed only internal synthetic D5/D6 mechanics; P3c added
+resolution and bare Raw-to-Card support below. B1 now promotes their shared
+composition through the explicit pure-local programmatic facade/private archive,
+not the internal compatibility wrapper. Installed client hooks/MCP/terminal
+lifecycle, host effect consumption and production gates remain separate.
 
 ## Internal P3c source references and authored Cards
 
-Only the uninstalled factory's own boolean `sources:true` selects schema 28,
+The internal factory's own boolean `sources:true` selects schema 28,
 implying deletion and lineage, with the existing trusted private-Card authority.
-Public constructor fields, ordinary capabilities and synchronous note/receipt
-methods remain unchanged. The actual frozen v27 opener refuses 28. Migration
+Public Raw plus privateCards selects the same protection. Ordinary capabilities
+and synchronous note/receipt methods remain unchanged. The actual frozen v27 opener refuses 28. Migration
 adds metadata bindings and an indexed Raw part start lookup, not source backfill.
 `core/testing/raw-v27-database.mjs` freezes the actual opener from
 `50230c0390a0e035b8d15f0cdeb9c335f97e3ffb`: 22,229 bytes after removing its
@@ -425,8 +468,8 @@ An ordinary private-Card facade encountering required Raw bindings fails
 `source_unavailable` for get/list/evidence/organization/source-consuming writes,
 rather than returning an unsupported DTO or silently claiming complete results.
 Cancellation, deletion and content-free action inspection remain available by ID.
-This mixed-store browsing limitation is deliberate; no installed Raw reader is
-advertised. Capture pause/raw-off do not revoke separately authorized retained
+This mixed-store browsing limitation is deliberate; only explicit public Raw
+selection supplies the installed programmatic reader. Capture pause/raw-off do not revoke separately authorized retained
 source reads, and missing read crypto never enables capture or a decoder fallback.
 
 ## Storage and reads
@@ -504,7 +547,9 @@ processes, asynchronous reads, CAS and bounded effects. The actual v26 opener in
 `99b09855358176786d86765d009faba4777867f6` (21,414 bytes after removing its header
 and undoing only relative-import relocation).
 
-These establish internal P1/P2/P3a/P3b/P3c mechanics. Installed Raw
-lifecycle, production controls/encryption and semantic
-quality remain later packets and acceptance gates in the plan. Existing
-installed/public compatibility tests do not establish installed Raw capability.
+These establish P1/P2/P3a/P3b/P3c mechanics. `raw-public.test.mjs` and the installed
+`packaging/test/raw-conversations.test.mjs` add explicit public construction and
+fresh-process programmatic Raw/Card/deletion checks. Their independently derived
+import/asset closure matches actual installed module resolution/reads. Installed
+client/MCP lifecycle, production controls/encryption and semantic quality remain
+later acceptance gates; programmatic tests do not complete those gates.

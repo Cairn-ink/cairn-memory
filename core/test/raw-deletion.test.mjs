@@ -61,7 +61,8 @@ test('P3b-01 internal selection stays strict/default-off; artifact gains only op
   for (const file of ['raw-deletion-schema','raw-deletion-storage','raw-source-roots','raw-control-storage','raw-input']) {
     assert.ok(files.includes(`core/${file}.mjs`));
   }
-  for (const file of ['raw-capture','raw-capture-storage','raw-journal','raw-reads']) assert.equal(files.includes(`core/${file}.mjs`), false);
+  assert.equal(files.includes('core/raw-capture.mjs'), false);
+  for (const file of ['raw-capture-storage','raw-journal','raw-reads']) assert.equal(files.includes(`core/${file}.mjs`), true);
 });
 
 for (const client of ['claude-code', 'codex']) {

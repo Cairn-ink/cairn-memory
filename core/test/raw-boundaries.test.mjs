@@ -201,8 +201,8 @@ test('P1-04 real child processes race one owner cap and leave persisted reservat
 test('P1-10 schema module is in artifact manifest; source public import advertises no raw capability', async t => {
   const manifest = JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url)));
   assert.ok(manifest.includes('core/raw-schema.mjs'));
-  // The journal is intentionally internal/not advertised or in the artifact.
-  assert.equal(manifest.includes('core/raw-journal.mjs'),false);
+  // Installed public opt-in needs the journal; omission still adds no facade.
+  assert.equal(manifest.includes('core/raw-journal.mjs'),true);
   const { openMemoryCore } = await import(pathToFileURL(join(process.cwd(),'core/contract.mjs')));
   const workspace = createTestWorkspace(t), core = openMemoryCore({ path: join(workspace.path,'plain.sqlite') });
   assert.equal(core.getConversation,undefined); core.close();

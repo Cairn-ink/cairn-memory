@@ -28,9 +28,8 @@ test('installed private Cards preserve note and receipt-backed lifecycles across
     command('npm', ['install', '--prefix', root, '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
       artifact.artifactPath], root, artifact.userconfig);
     const installed = join(root, 'node_modules', packageName);
-    for (const name of ['raw-source-reader','raw-capture','raw-journal']) {
-      assert.equal(existsSync(join(installed,`core/${name}.mjs`)),false);
-    }
+    assert.equal(existsSync(join(installed,'core/raw-capture.mjs')),false);
+    for (const name of ['raw-source-reader','raw-journal']) assert.equal(existsSync(join(installed,`core/${name}.mjs`)),true);
     for (const file of modules) {
       assert.ok(artifact.files.includes(file), `${file} must be in the inspected archive`);
       const bytes = readFileSync(join(installed, file));

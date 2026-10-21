@@ -1,4 +1,6 @@
 import { decisionReviewOption } from './confirmation-storage.mjs';
+import { rawOptions } from './raw-options.mjs';
+import { composeRawCore } from './raw-composition.mjs';
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardFacade } from './private-card-facade.mjs';
 import { contextInput, assembleSessionContext } from './session-context.mjs';
@@ -152,7 +154,19 @@ function failure(error) {
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
-  return createMemoryCore(input);
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return createMemoryCore(input);
+  let descriptor;
+  try { descriptor = Object.getOwnPropertyDescriptor(input, 'rawConversations'); }
+  catch { throw new MemoryStoreError('invalid_input'); }
+  if (!descriptor) return createMemoryCore(input);
+  if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
+  const options = rawOptions(descriptor.value);
+  const fields = Object.getOwnPropertyDescriptors(input);
+  delete fields.rawConversations;
+  const coreOptions = Object.create(Object.getPrototypeOf(input), fields);
+  return composeRawCore(createMemoryCore, coreOptions, options, {
+    sources: Boolean(coreOptions.privateCards), lineage: true, deletion: true,
+  });
 }
 
 /** Internal construction seam. Public openMemoryCore never forwards extensions. */

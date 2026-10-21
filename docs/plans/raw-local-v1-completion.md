@@ -1116,3 +1116,56 @@ Node22.16/24.15, including38/38 new-producer tests and both independent byte
 oracles. Every command and the outer runner exit0; owned temporary residue is
 empty. It awaits the corrected fixed-candidate reviews and remote CI, not a
 new user decision or broader permission.
+
+### P4a delivered and P4b public-constructor packet started
+
+[P4a PR #455](https://github.com/Cairn-ink/cairn-memory/pull/455) is ready,
+mergeable and unmerged at3941e97409cebf5e1e1ab3f882e939e15a7488d5. Both
+non-author GPT6.1Sol/high reviews accept that candidate: Spec0 findings,
+Standards0 documented violations/1 optional repeated-client-policy suggestion.
+Primary post-commit integrated acceptance passes32/32 on each Node22.16/24.15,
+actual exits0; all31 latest-head remote checks succeed. Four workflow-run records
+bind the same SHA and the merge tree matches the candidate. The original ACK
+boundary failure and historical versus corrected gate distinctions remain in
+the packet plan/PR; no model score, deployment or installed Raw claim follows.
+
+Continue step3 on `feat/raw-local-v1-public`, isolated worktree
+`raw-local-v1-public`, fixed at that accepted P4a commit. The
+[P4b-B1 contract](raw-local-v1-public.md) promotes existing Raw composition
+through public openMemoryCore and the actual private archive, preserving
+default-off and existing Card authority. This remains the same engine.
+Its installed programmatic lifecycle is a bounded part of step4, not completed
+Claude/Codex setup/transport/cursor or MCP/terminal acceptance. Product pin stays
+cd6d1ad; later client/control and installed lifecycle packets remain required.
+
+### Newly reported product read bottleneck
+
+Product issue453 comment6313060464 reports a synchronous map read of roughly
+33seconds on a synthetic1,112Memory/four-namespace/71-MOC world, and says the
+production world flag is off. These are product-team measurements pending
+independent reproduction, not new Raw failures. Primary acknowledges the report
+in comment6313275124 and starts isolated diagnosis from maincd6d1ad on
+feat/topic-overview-read; its contract is docs/plans/topic-overview-read.md on
+that independent branch. No product code, production flag or pin is changed.
+
+B1's already frozen verification/review continues. If the E-1 bottleneck is
+confirmed, its bounded model-free metadata read takes priority over further
+Raw setup/transport work. The separately reproduced skipped-tail barrier fix
+remains required before full Raw acceptance; it is not silently dropped or
+folded into the performance change. Full-scale timing is serialized after the
+current matrix, with synthetic-only evidence and separate non-author review.
+
+B1's frozen matrix now passes26/26 commands on both supported runtimes, with
+all actual exits0 and owned scratch removed. Primary independent public/
+installed acceptance passes7/7 per runtime. The candidate still requires
+commit-bound reruns, independent review and latest-head CI; it remains only
+the installed programmatic constructor, not the complete hook transport.
+
+E-1 now has an independently reproduced synthetic responsiveness failure:
+75 Memories in one namespace/two MOCs produce two uninterrupted traversals
+of247/237ms and maximum individual map calls168/161ms on Node22.16, actual
+exit1 against the100ms oracle. A worker's50-Memory negative control passes.
+The controlled public-API fixture uses a real native tokenizer, no generation
+or real data. Exact cause/full-scale profile are still under investigation;
+the report is no longer solely a product-team assertion. E-1 is the next
+implementation priority after finishing this frozen B1 delivery gate.

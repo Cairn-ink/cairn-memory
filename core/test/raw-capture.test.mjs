@@ -136,5 +136,5 @@ test('P2-08 public constructors and capture stay strict and Raw factory is not i
   assert.equal((await f.core.capture(request(splitRaw('Synthetic public bound')[0]))).ok, false);
   const files = JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json', import.meta.url), 'utf8'));
   assert.equal(files.includes('core/raw-capture.mjs'), false);
-  assert.equal(files.includes('core/raw-capture-storage.mjs'), false);
+  assert.equal(files.includes('core/raw-capture-storage.mjs'), true);
 });

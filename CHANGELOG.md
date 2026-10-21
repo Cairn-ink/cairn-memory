@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — explicit local Raw constructor
+
+- Add default-off `openMemoryCore({rawConversations})` using the existing shared
+  Raw/Memory/Card engine, with strict pre-open configuration, retained-read off
+  mode, lineage and revision-bound deletion. Raw source/Card operations still
+  require existing private-Card authority; no automatic Card creation.
+- Include the public composition's real closure in the private archive and
+  verify synthetic fresh-process multipart replay/read/authored-Card/deletion.
+  This is not installed Claude/Codex hook capture, MCP exposure, hosted Raw or
+  completed local V1. The known skipped-tail resume gap remains a later fix.
+
 ## Unreleased — internal local Raw journal foundation
 
 - Add a default-off, model-free internal Raw journal in the existing SQLite

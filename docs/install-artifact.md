@@ -43,6 +43,24 @@ same-schema upgrade, uninstall and troubleshooting. Initialize a dedicated local
 installation project first and use `--prefix .`, so npm cannot walk up to an
 unrelated ancestor project. Keep the memory database outside node_modules.
 
+## Explicit programmatic Raw opt-in
+
+The private archive includes the public `openMemoryCore({rawConversations})`
+composition and its actual import/asset closure. The internal `raw-capture.mjs`
+compatibility factory stays uninstalled. See the [constructor contract and
+threat boundary](raw-local-journal.md#explicit-public-constructor-p4b-b1).
+Omission preserves the existing ordinary facade; existing MCP startup, CLI
+configuration and installed hooks do not enable Raw automatically.
+
+Synthetic installed tests run both client identities through fresh-process
+first-part replay, exact multipart reads, a bare Raw-backed explicitly authored
+Card, revision-bound deletion and cold invalidation/action replay. They import
+only installed engine bytes and verify those bytes against the archive/source
+hashes, with an independent source graph and actual Node import/asset trace.
+This is programmatic lifecycle evidence, not completed installed-client/MCP
+capture or semantic-quality evidence. The [skipped-tail barrier recovery gap](limitations.md#public-raw-constructor-p4b-b1)
+remains a later correction before full installed-hook acceptance.
+
 ## Verification and compatibility
 
 Populate dependency caches once, then run offline artifact tests:

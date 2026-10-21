@@ -22,7 +22,8 @@ test('P3c-01 selector remains internal, own boolean and default facade byte-comp
   assert.equal(capability.methods.includes('resolveSourceReferences'),false);
   const files = JSON.parse(readFileSync(new URL('../../packaging/artifact-files.json',import.meta.url)));
   for (const file of ['raw-source-schema','raw-source-input','card-raw-sources']) assert.ok(files.includes('core/'+file+'.mjs'));
-  for (const file of ['raw-source-reader','raw-capture','raw-journal']) assert.equal(files.includes('core/'+file+'.mjs'),false);
+  assert.equal(files.includes('core/raw-capture.mjs'),false);
+  for (const file of ['raw-source-reader','raw-journal']) assert.equal(files.includes('core/'+file+'.mjs'),true);
 });
 
 for (const client of ['claude-code','codex']) {

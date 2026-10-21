@@ -1,5 +1,22 @@
 # Known limitations
 
+## Public Raw constructor (P4b-B1)
+
+Explicit public construction and private-archive programmatic lifecycle do not
+complete installed Claude/Codex hooks, transport, controls, cursor recovery or
+MCP/terminal acceptance. A primary probe found a pre-existing skipped-tail
+barrier gap in both public construction and the unchanged internal factory:
+an incomplete first part skipped for quota, notice or Raw-off can survive
+pause/resume as an ordering barrier, rejecting the next ordinal with
+`raw_part_out_of_order`. Both six-case probes exited 1. This packet preserves
+existing fences but does not repair or claim universal barrier recovery; a
+subsequent bounded correction is required before full installed-hook acceptance.
+
+The first new combined public/installed run passed 17/18 (exit 1): its forget
+fixture expected `source_unavailable`, while existing exclusion enforcement
+correctly returned `source_excluded`. Only that expected code was corrected;
+both installed cases already passed. The original failure remains retained.
+
 ## Internal Raw producer foundation (P4a)
 
 The [uninstalled producer](raw-local-journal.md#internal-producer-foundation-p4a)
