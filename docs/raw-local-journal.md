@@ -231,10 +231,24 @@ an explicit alias nor a keep action manufactures independent support. Unknown
 legacy surviving receipt provenance refuses `raw_lineage_unavailable` before
 mutation. Unlinked provenance is not assumed independent.
 
+Pre-P3a keep receipts can contain the consumer's client/session, not the source's.
+For these receipts the shared authority resolver follows the actual receipt ID,
+episode Memory link and scoped keep action's recorded source IDs to the original
+source episode before considering a consumer tuple. It never matches prose or
+substitutes current passages for missing IDs. Missing or ambiguous keep proof
+that cannot exclude the target refuses `raw_lineage_unavailable` across the exact
+namespace, including other clients; known unrelated roots do not block. Such
+legacy state needs repair, not inferred independence or Raw backfill.
+
 Receipt/provenance changes advance only source roots reached from the affected
 Memory. One DB-only before/after authority guard covers Raw registration,
 episode reservation and trusted job binding that resolves an old duplicate
 receipt, including registration whose extractor produces no new Memory.
+Episode source additions, replacements and invalidation also advance reached
+origin conversation/episode revisions, including zero-Memory consumers. The same
+transaction preserves before/after authority for exact keep-linked receipts:
+losing a keep proof invalidates other actual support roots on that Memory even
+without receipt SQL changes. Unrelated conversation revisions are untouched.
 This invalidates stale deletion CAS even without a Raw append. The immutable
 `captureRaw` receipt retains its registration-time revision; refresh
 `getConversation` before obtaining the preview/delete revision.

@@ -969,11 +969,22 @@ and mergeable, not merged; no release, deployment or product-pin change occurred
 
 The next dependent packet is [P3b's concrete contract](raw-local-v1-delete.md):
 shared source deletion, multi-source preservation, control closure, durable
-publication fences and a bounded content-free withdrawal outbox. Its final
-offline matrix now passes: 39 independent primary cases, 51 packet cases and
-1,529 full-core cases on each runtime, plus generic/MCP/artifact/installed
-synthetic rationale/cleanup/demos; all actual exit 0, with the existing native
-Windows artifact skip explicitly retained. Fixed-commit independent review and
-latest-head CI are still required before delivery. Primary owns that plan and independent verification;
+publication fences and a bounded content-free withdrawal outbox. Its
+first-candidate offline matrix passed, but independent Spec review rejected
+`6596b2e` for legacy keep-origin resolution and zero-Memory source-graph CAS
+defects. Those failures and the related co-support/context-recovery corrections
+are retained in the packet plan, not overwritten by green reruns. On the newly
+frozen corrected bytes, 47 independent primary cases and 76 packet cases pass
+on each runtime, actual exit 0. The corrected complete 44-command two-runtime
+matrix also passes: full core 1,554/1,554 each, generic 635/635 each, MCP 125/125
+each, installed synthetic rationale 4/4 each, workspace 25/25 each, validation
+and all twelve demos each exit 0. Artifacts pass 94 cases per runtime with one
+explicit native-Windows skip on WSL. All eight owned lane parents are empty
+and removed; the 24 non-document paths match the pre-gate source snapshot.
+The implementation worker's nine affected Node 22 suites pass 289/289 and its
+25 new review cases pass on Node 24, both actual exit 0. The full Node 24 core
+gate supplies the broader integration verification without repeating another
+identical long nine-suite run. Fixed-commit dual review and latest-head CI remain
+required before delivery. Primary owns that plan and independent verification;
 the implementation worker owns runtime/storage/tests and minimal reference
 docs. P3c source resolution and P4 installed/client integration remain separate.

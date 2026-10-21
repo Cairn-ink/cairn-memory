@@ -9,6 +9,7 @@ const receiptValue = row => ({ client: row.client, sessionId: row.session_id,
 /** Source-session authority shared by deletion, admission and option-off writers. */
 export function createRawSourceRoots(db) {
   let available;
+  let episodeMutation;
   const enabled = () => available === true || (available = Boolean(db.prepare(
     "SELECT 1 FROM sqlite_master WHERE name='raw_deletion_actions'").get()));
   const hashSession = (ns, client, value) => 's1:' + createHmac('sha256', Buffer.from(
@@ -51,6 +52,10 @@ export function createRawSourceRoots(db) {
     const stored = db.prepare(`SELECT DISTINCT c.id AS conversationId,c.client,c.session_key AS sessionKey
       FROM raw_receipt_lineage l JOIN raw_conversations c ON c.id=l.conversation_id
       WHERE l.receipt_id=? AND c.owner_id=? AND c.scope=? AND c.project_id=?`).all(row.id, ...boundary(ns));
+    if (!stored.length) {
+      const kept = keepReceipt(ns, row);
+      if (kept) return kept;
+    }
     const values = stored.length ? stored : resolve(ns, receiptValue(row));
     // Existing real receipt IDs can prove older batch-based episode receipts.
     if (!values.length) {
@@ -66,6 +71,34 @@ export function createRawSourceRoots(db) {
       .get(row.id)?.kind === 'independent';
     return { roots: values, independent, unknown: !values.length && !independent };
   }
+  function keepReceipt(ns, row) {
+    const actions = db.prepare(`SELECT DISTINCT a.keep_source_ids FROM episode_memory_links l
+      JOIN json_each(l.receipt_ids) r JOIN episode_keep_actions a ON a.episode_id=l.episode_id AND a.event_id=l.event_id
+      JOIN session_episodes e ON e.id=l.episode_id WHERE r.value=? AND l.memory_id=?
+      AND e.owner_id=? AND e.scope=? AND e.project_id=? AND a.owner_id=? AND a.scope=? AND a.project_id=?`)
+      .all(row.id, row.memory_id, ...boundary(ns), ...boundary(ns));
+    if (!actions.length) return null;
+    const found = new Map(); let missing = false;
+    for (const action of actions) {
+      let ids;
+      try { ids = JSON.parse(action.keep_source_ids); } catch { missing = true; continue; }
+      if (!Array.isArray(ids) || !ids.length || ids.length > 16 || new Set(ids).size !== ids.length ||
+          ids.some(id => typeof id !== 'string')) { missing = true; continue; }
+      const sources = db.prepare(`SELECT s.message_id,s.role,e.id AS episodeId,e.client,e.session_key AS sessionKey
+        FROM json_each(?) j JOIN episode_sources s ON s.id=j.value JOIN session_episodes e ON e.id=s.origin_episode_id
+        WHERE e.owner_id=? AND e.scope=? AND e.project_id=?`).all(action.keep_source_ids, ...boundary(ns));
+      if (sources.length !== ids.length) missing = true;
+      const selected = sources.filter(source => source.message_id === row.event_id && source.role === row.role);
+      if (!selected.length) missing = true;
+      for (const { message_id, role, ...root } of selected) found.set(root.client + ':' + root.sessionKey, root);
+    }
+    // P2 stamped the consumer identity, but kept exact source IDs. These IDs
+    // prove only a unique original root; never infer it from excerpt text or
+    // substitute a later passage after the recorded IDs have disappeared.
+    const values = [...found.values()], proven = !missing && values.length === 1;
+    return { roots: proven ? values : [], independent: false, unknown: !proven,
+      legacyKeep: true, possibleRoots: missing ? null : values };
+  }
   function memoryRoots(ns, id) {
     const roots = new Map();
     for (const row of db.prepare('SELECT * FROM receipts WHERE memory_id=?').all(id)) {
@@ -77,11 +110,16 @@ export function createRawSourceRoots(db) {
     if (!enabled()) return;
     const roots = memoryRoots(ns, id);
     if (incoming) roots.push(...resolve(ns, incoming));
+    touchRoots(ns, roots);
+  }
+  function touchRoots(ns, roots, changedEpisodes = new Set()) {
     for (const root of new Map(roots.map(root => [root.client + ':' + root.sessionKey, root])).values()) {
       db.prepare(`UPDATE raw_conversations SET revision=revision+1 WHERE ${where} AND client=? AND session_key=?`)
         .run(...boundary(ns), root.client, root.sessionKey);
-      db.prepare(`UPDATE session_episodes SET revision=revision+1 WHERE ${where} AND client=? AND session_key=? AND deleted=0`)
-        .run(...boundary(ns), root.client, root.sessionKey);
+      for (const row of db.prepare(`SELECT id FROM session_episodes WHERE ${where} AND client=? AND session_key=? AND deleted=0`)
+        .all(...boundary(ns), root.client, root.sessionKey)) if (!changedEpisodes.has(row.id)) {
+        db.prepare('UPDATE session_episodes SET revision=revision+1 WHERE id=?').run(row.id);
+      }
     }
   }
   function mutateSources(ns, sources, work) {
@@ -118,6 +156,60 @@ export function createRawSourceRoots(db) {
       }
     });
   }
+  function mutateEpisodeSources(ns, episodeId, work) {
+    if (!enabled()) return work();
+    if (!db.isTransaction) fail('raw_transaction_required');
+    const owner = !episodeMutation;
+    if (owner) episodeMutation = { namespace: JSON.stringify(boundary(ns)), before: new Map(), receipts: new Map() };
+    const context = episodeMutation;
+    try {
+      if (context.namespace !== JSON.stringify(boundary(ns))) fail('raw_transaction_required');
+      const read = id => db.prepare(`SELECT id,origin_episode_id,event_id,message_id,digest,role,truncated,ordinal
+        FROM episode_sources WHERE episode_id=? ORDER BY id`).all(id);
+      if (episodeId && !context.before.has(episodeId)) {
+        context.before.set(episodeId, read(episodeId));
+        // Retain authority before exact keep source IDs disappear. Losing that
+        // proof can change deletion support for another root on the same Memory,
+        // even though no receipt was inserted or removed in this transaction.
+        const receipts = db.prepare(`SELECT DISTINCT r.* FROM episode_keep_actions a JOIN json_each(a.keep_source_ids) j
+          JOIN episode_sources s ON j.value=s.id JOIN episode_memory_links l ON l.episode_id=a.episode_id AND l.event_id=a.event_id
+          JOIN json_each(l.receipt_ids) ids JOIN receipts r ON r.id=ids.value AND r.memory_id=l.memory_id
+          JOIN memories m ON m.id=r.memory_id WHERE s.episode_id=? AND m.owner_id=? AND m.scope=? AND m.project_id=? AND m.deleted=0`)
+          .all(episodeId, ...boundary(ns));
+        for (const row of receipts) if (!context.receipts.has(row.id)) context.receipts.set(row.id,
+          { row, before: JSON.stringify(receipt(ns, row)), roots: memoryRoots(ns, row.memory_id) });
+      }
+      const result = work();
+      if (owner) {
+        const changed = new Set(), origins = new Set();
+        for (const [id, before] of context.before) {
+          const after = read(id);
+          if (JSON.stringify(before) === JSON.stringify(after)) continue;
+          changed.add(id);
+          for (const source of [...before, ...after]) origins.add(source.origin_episode_id);
+        }
+        // Defer origin CAS touches until the enclosing source mutation finishes.
+        // In particular, invalidating a draft's consumers must not self-trigger
+        // its genuine pre-publication stale_episode guard.
+        const reached = [];
+        for (const id of origins) {
+          const row = db.prepare(`SELECT client,session_key FROM session_episodes WHERE ${where} AND id=?`).get(...boundary(ns), id);
+          if (!row) fail('raw_lineage_unavailable');
+          reached.push({ client: row.client, sessionKey: row.session_key });
+        }
+        for (const { row, before, roots } of context.receipts.values()) {
+          const current = db.prepare('SELECT * FROM receipts WHERE id=?').get(row.id);
+          if (before !== JSON.stringify(current ? receipt(ns, current) : null)) {
+            reached.push(...roots, ...memoryRoots(ns, row.memory_id));
+          }
+        }
+        // Changed consumers already receive their ordinary save/invalidate
+        // revision. Preserve the caller's one-step episode revision result.
+        touchRoots(ns, reached, changed);
+      }
+      return result;
+    } finally { if (owner) episodeMutation = undefined; }
+  }
   function jobGuard(ns, input) {
     if (!enabled()) return null;
     if (db.prepare(`SELECT 1 FROM raw_closed_jobs WHERE ${where} AND client=? AND event_id=?`)
@@ -130,5 +222,6 @@ export function createRawSourceRoots(db) {
     }
     return null;
   }
-  return { enabled, hashSession, keys, resolve, receipt, memoryRoots, touchMemory, mutateSources, bindJob, jobGuard, assertSession };
+  return { enabled, hashSession, keys, resolve, receipt, memoryRoots, touchMemory, mutateSources,
+    mutateEpisodeSources, bindJob, jobGuard, assertSession };
 }

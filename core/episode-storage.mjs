@@ -146,7 +146,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const previous = JSON.parse(row.record);
       for (const key of ['eventStart', 'eventEnd', 'eventTimeCoverage']) record[key] = previous[key];
     }
-    db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(id);
+    mutateSources(ns, id, () => db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(id));
     db.prepare('UPDATE session_episodes SET source_fence=source_fence+1,writer_token=NULL,writer_expires_at=NULL WHERE id=?').run(id);
     save(ns, row, record);
   }
@@ -155,6 +155,12 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     for (const { episode_id: id } of roots) invalidateSources(ns, id, preserveInterval);
   }
   function invalidateSources(ns, id, preserveInterval = false) {
+    return mutateSources(ns, null, () => invalidateSourceConsumers(ns, id, preserveInterval));
+  }
+  function mutateSources(ns, id, work) {
+    return sourceRoots?.mutateEpisodeSources ? sourceRoots.mutateEpisodeSources(ns, id, work) : work();
+  }
+  function invalidateSourceConsumers(ns, id, preserveInterval = false) {
     // Capture consumers before deleting passages, including zero-memory episodes.
     const pending = [id], seen = new Set();
     while (pending.length) {
@@ -529,7 +535,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     } finally { db.exec(`PRAGMA busy_timeout=${timeout}`); }
   }
   function commitDraft(ns, input) {
-    return transaction(db, () => {
+    return transaction(db, () => mutateSources(ns, null, () => {
       stagedEvidence.touch(ns);
       const { row, claim } = attempt(ns, input), old = JSON.parse(row.record);
       object(input.result, ['type','language','gist','outcome','nextStep','disposition']);
@@ -681,9 +687,11 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const consumers = db.prepare('SELECT DISTINCT episode_id FROM episode_sources WHERE origin_episode_id=? AND episode_id!=?').all(row.id,row.id);
       for (const consumer of consumers) invalidateSources(ns,consumer.episode_id);
       if (read(ns,row.id).revision !== row.revision) fail('stale_episode');
-      db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(row.id);
-      const insert = db.prepare('INSERT INTO episode_sources VALUES(?,?,?,?,?,?,?,?,?,?)');
-      for (const source of sources) insert.run(source.id,row.id,source.origin_episode_id,source.event_id,source.message_id,source.digest,source.role,source.text,source.truncated,source.ordinal);
+      mutateSources(ns, row.id, () => {
+        db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(row.id);
+        const insert = db.prepare('INSERT INTO episode_sources VALUES(?,?,?,?,?,?,?,?,?,?)');
+        for (const source of sources) insert.run(source.id,row.id,source.origin_episode_id,source.event_id,source.message_id,source.digest,source.role,source.text,source.truncated,source.ordinal);
+      });
       for (const item of disposed) {
         if (item.omitted) {
           mergeGap(ns, { client: row.client, eventId: item.eventId }, 'omitted');
@@ -714,7 +722,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
             input.classificationEventId, Date.now());
       }
       return { revision: row.revision+1 };
-    });
+    }));
   }
   function draftReceipt(ns, source) {
     const origin = live(ns, source.origin_episode_id);

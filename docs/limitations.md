@@ -1756,3 +1756,48 @@ source pruning and callback binding. Worker logs, including these failures, are
 retained under `/tmp/cairn-raw-p3-evidence.67nhhd/worker-delete-*.log`; primary
 independent logs use `/tmp/cairn-raw-p3b-evidence.xOAiQk/` instead. Neither earlier
 green runs nor a setup failure substitute for final frozen-source verification.
+
+The first independent P3b Spec review found two further defects on candidate
+`6596b2e`: actual P2 keep receipts stamped with a cross-client consumer could be
+missed/misclassified during origin deletion, and zero-Memory episode-source
+changes did not stale origin deletion CAS. Four checked-in regressions failed
+on that candidate (0/4, actual exit 1). The correction shares exact retained
+receipt/link/keep-action/source-ID resolution between planning and cascade,
+and transactionally invalidates reached source-graph roots without a schema
+change or namespace-wide revision bump. Missing/ambiguous legacy keep proof
+requires repair and refuses before mutation; it is not independent support.
+
+An additional support-authority transition was reproduced (0/2, actual exit 1):
+removing recorded keep IDs changed a receipt from known A to unknown while the
+same Memory also had actual Raw C support. Receipt rows were unchanged, but C's
+old CAS was not invalidated. The episode-source mutation guard now retains exact
+keep-linked receipt authority and Memory roots before source IDs disappear and
+compares them after SQL, covering replacement and invalidation. The expanded
+23-case review suite then passed on Node 22.16 (actual exit 0); final frozen-source
+gates remain separately recorded in the plan/PR, not inherited from earlier runs.
+
+A narrow helper lifecycle regression also failed for both clients (0/2, actual
+exit 1): a failed preparation query before the mutation context's cleanup guard
+could preserve that context across rollback and suppress a later CAS flush.
+The direct DB-only helper test uses real source rows and a single injected read
+failure. Its existing cleanup guard now covers preparation too. Current episode
+callers normally establish an outer guarded context first; this test does not
+claim that the public facade reproduced that injected read failure. The selected
+regressions then passed (2/2, actual exit 0). The preceding six-suite 162/162 pass
+was before this last lifecycle correction, not final-source verification.
+
+The legacy fixture copies the actual `keepEpisodeCapture` function from P2
+`9a7bbe59` (1,930 function bytes after trailing-whitespace removal, SHA-256
+`b41fb629088170813a99b6232e3a80646da5f09bdd7cf974c585c034880ad926`), relocates
+imports, and uses the real shared engine with its old snapshot fallback. It is
+not a frozen copy of the entire P2 engine. Fixtures assert schema 25 and absence
+of lineage/origin/job tables before upgrade; the primary also independently
+exercises the actual old runtime. All fixture data is synthetic.
+
+Correction fixture errors are retained separately: the first two C-support runs
+stopped on qualification conflict and invalid profile setup before the real
+authority-loss red; a later expanded run passed 15/17 because history setup used
+ordinary supersede on a qualified Memory. History now uses real qualified
+binding/transition, preserving the existing refusal. Correction logs, including
+all reds and setup failures, are under
+`/tmp/cairn-raw-p3b-evidence.xOAiQk/review-correction-*.log`.

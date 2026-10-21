@@ -59,14 +59,13 @@ export function createRawDeletionStorage({ db, roots, episodes, forgetMutation, 
       const values = byMemory.get(row.memory_id) ?? []; values.push(row); byMemory.set(row.memory_id, values);
     }
     for (const [id, receipts] of byMemory) {
-      const possible = receipts.filter(receipt => receipt.client === root.client &&
-        roots.keys(ns, receipt.client, receipt.session_id).includes(root.sessionKey) || db.prepare(`SELECT 1 FROM raw_receipt_lineage l
-          JOIN raw_conversations c ON c.id=l.conversation_id WHERE l.receipt_id=? AND c.owner_id=? AND c.scope=? AND c.project_id=?
-          AND c.client=? AND c.session_key=?`).get(receipt.id, ...rawBoundary(ns), root.client, root.sessionKey));
-      const removed = possible.filter(receipt => roots.receipt(ns, receipt).roots.some(value => same(value, root)));
+      const evidence = new Map(receipts.map(receipt => [receipt.id, roots.receipt(ns, receipt)]));
+      for (const value of evidence.values()) if (value.legacyKeep && value.unknown &&
+          (value.possibleRoots === null || value.possibleRoots.some(candidate => same(candidate, root)))) fail('raw_lineage_unavailable');
+      const removed = receipts.filter(receipt => evidence.get(receipt.id).roots.some(value => same(value, root)));
       if (!removed.length) continue;
       const remaining = receipts.filter(receipt => !removed.some(item => item.id === receipt.id));
-      if (remaining.some(receipt => roots.receipt(ns, receipt).unknown)) fail('raw_lineage_unavailable');
+      if (remaining.some(receipt => evidence.get(receipt.id).unknown)) fail('raw_lineage_unavailable');
       memories.push({ id, receiptIds: removed.map(receipt => receipt.id), forget: !remaining.length });
     }
     const episodeIds = new Set(db.prepare(`SELECT id FROM session_episodes WHERE ${where} AND client=? AND session_key=? AND deleted=0`)

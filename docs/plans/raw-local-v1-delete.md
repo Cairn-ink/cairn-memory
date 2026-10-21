@@ -1,8 +1,10 @@
 # P3b — shared conversation deletion, not a second engine
 
-Status: final frozen-source offline matrix passed 2026-10-21; candidate commit,
-independent fixed-point reviews and latest-head CI are still delivery gates.
-Earlier failures remain retained, not overwritten by the final passes.
+Status: corrected frozen-source offline matrix passed 2026-10-21. The first
+candidate `6596b2e4e466996049783502b12d735213e62179` was rejected by independent
+Spec review for two confirmed provenance/CAS defects; its failures are retained
+below. Corrections and related authority/context regressions now pass. A new
+fixed-commit dual review and latest-head CI are still required; no push/PR yet.
 Fixed base: `99b09855358176786d86765d009faba4777867f6` (P3a, PR #451).
 Worktree: `/home/chichieh/Github/cairn-memory-worktrees/raw-local-v1-delete`.
 Branch: `feat/raw-local-v1-delete`. P3a passed independent Standards and Spec;
@@ -30,7 +32,7 @@ or stale-episode behavior remains explicit. No production store is upgraded.
 | --- | --- |
 | P3b-01 | Additive opt-in migration is atomic, has no fabricated Raw or source text, strict options reject wire/public injection, current option-off opens and pre-upgrade connections honor it, frozen v26 refuses. Default behavior stays unchanged. |
 | P3b-02 | Preview and delete call the same live-source planning function on one consistent transactional snapshot. Candidate Memories come only from actual retained receipt provenance, including historical rows; stale episode links or unrelated zero-receipt rows are not deletion authority. Every surviving receipt must be provably independent explicit input or another actual source conversation/session. Unknown legacy support fails `raw_lineage_unavailable`, with no mutation and no fabricated independence. |
-| P3b-03 | A changed support graph invalidates deletion CAS even without Raw append. Receipt addition/removal, correction/forget, dedup provenance attachment and source-root changes advance the affected conversation revision before old evidence disappears. Touch only roots reached from the affected Memory/receipt, not every namespace conversation. A genuinely unrelated conversation remains unchanged. Preview itself is write-free. |
+| P3b-03 | A changed support graph invalidates deletion CAS even without Raw append. Receipt addition/removal, correction/forget, dedup provenance attachment, source-root changes and episode-source consumer addition/removal/replacement (including zero-Memory episodes) advance the affected conversation revision before old evidence disappears. Touch only roots reached from the affected Memory/receipt/episode-source graph, not every namespace conversation. A genuinely unrelated conversation remains unchanged. Preview itself is write-free. |
 | P3b-04 | Forget source-only current and historical Memory using ordinary suppression. For multi-source Memory, remove only target receipts/lineage; preserve content, remaining receipts and current/historical state, advance revision, and invoke existing dependent-evidence/index/episode/Card invalidation. New explicit aliases or keep event IDs cannot count as independent support. |
 | P3b-05 | In one transaction: enforce CAS/action identity, tombstone source session, close related pending work, invalidate source consumers, mutate Memory, release saved/reserved bytes exactly once, purge Raw records/obsolete maps/exclusions/bindings, persist content-free replay and finite host effects. Failure injected after receipt or usage mutation rolls everything back, including Card/effects state. Successful reads expose no deleted source text. |
 | P3b-06 | Same action+arguments replays original counts after restart without additional deletion, usage decrement or effects. Same action with changed arguments fails `event_payload_conflict`; unknown/foreign target is `conversation_not_found`. Same-action/different-action competing processes serialize. No partial state, double decrement or duplicated withdrawal. |
@@ -271,3 +273,149 @@ The dependent base remains P3a `99b09855358176786d86765d009faba4777867f6`,
 not a claim of merging the stack. The subsequent PR records the exact candidate,
 two separate reviews and latest-head CI. No merge/release/deployment or product
 pin change is authorized by these offline results.
+
+## Independent review correction, 2026-10-21
+
+Candidate `6596b2e4e466996049783502b12d735213e62179`, fixed base unchanged:
+
+- Standards (`/root/raw_p2_standards61`, GPT 6.1 Sol/high): zero documented
+  violations; one optional low possible-Duplicated-Code note for the session
+  HMAC helper. Independent 51-case focused run exited 0 and two inventory
+  routes agreed on 25 paths. This does not override the Spec gate.
+- Spec (`/root/raw_p2_spec61`, GPT 6.1 Sol/high): two high findings. Actual
+  frozen P2 keep receipts can carry a consumer's identity for a different
+  episode's original passage. Deleting the original source leaves that Memory
+  and receipt readable. Separately, committing a new zero-Memory episode
+  consumer changes deletion effects without invalidating the old source CAS.
+  The same 51 tests passed; these missing scenarios were independently exposed.
+
+Reviewer retained standalone probes under `/tmp/cairn-p3b-spec.D78L0x/`:
+`legacy-keep-origin-probe.mjs` and `consumer-cas-probe.mjs`, with their logs.
+Each exits 0 **asserting the defective outcome**, not product correctness.
+Primary ran both and independently constructed four expected-correctness cases
+in `/tmp/cairn-raw-p3b-evidence.xOAiQk/primary-review-regressions.test.mjs`:
+both same/cross-client old-P2 keep origins, and both clients' zero-Memory
+consumer CAS with an unrelated-source control. All four failed with actual
+exit 1 on `6596b2e`; this is retained red evidence, not a transient retry.
+
+The bounded original implementation worker owns correction round 1. Primary
+owns independent acceptance and review coordination. Ranked, falsifiable
+diagnostic hypotheses are: removing the stamped-client candidate shortcut
+should make A-derived B receipts reach planning; resolving exact keep-action
+source IDs before consumer inference should identify A instead of B; updating
+CAS around actual episode-source graph mutations should reject the old preview
+even when no Memory or receipt changes. Test each at its actual seam and audit
+removal/invalidation paths as well as insertion.
+
+Legacy keep provenance uses only recorded receipt IDs, the exact scoped keep
+action and recorded source IDs/origin episode identity. No excerpt similarity,
+invented multi-source support, or Raw backfill is permitted. If retained keep
+metadata is missing/ambiguous so that the target cannot be excluded, fail
+`raw_lineage_unavailable` before mutation within the exact namespace, including
+cross-client origins. Proven unrelated roots do not block; this is a legacy
+repair prerequisite, not a new repair endpoint. Default public capability and
+product pin remain unchanged. The original offline passes are still evidence
+for their exact bytes, not approval of a later correction.
+
+Primary retained the four-case red invocation as
+`review-red-review4-22.16.0.log` plus `review-red-review-22.16.0-results.json`;
+the child exited 1, its owned parent had zero residue and was removed. At that
+point only this plan differed from the frozen runtime. The worker independently
+retained four checked-in red cases (`review-correction-worker-red22.log`, exit
+1) and verified the actual frozen P2 keep function after fixture import/header
+relocation: 1,930 bytes, SHA-256
+`b41fb629088170813a99b6232e3a80646da5f09bdd7cf974c585c034880ad926`.
+
+After the first narrow three-runtime-file correction, the worker's original
+four cases passed 4/4, exit 0. Primary's unchanged original four plus two
+independent add/remove source-consumer replacement cases passed 6/6, exit 0
+(`review-first-green-review6-22.16.0.log`). The latter verify both removed and
+added source roots stale, with a third unrelated root unchanged. All owned
+scratch was removed; these are in-progress results, not the final source freeze.
+The expanded primary acceptance suite is now 45 cases. A further authority-
+transition audit is checking whether disappearance of a legacy keep source ID
+also stales the *other* sources of its deduplicated Memory, not only that
+episode's immediate origin. Final full gates and both reviews still remain.
+
+That audit confirmed an additional affected-root omission. An actual legacy
+keep from A and actual Raw capture from C deduplicate to one Memory; forgetting
+the consumer removes the recorded keep source IDs without changing its retained
+receipts. The old C preview then returned `raw_lineage_unavailable` instead of
+first rejecting stale CAS. Two red cases are retained in
+`review-correction-proof-loss-red22c.log` (0/2, actual exit 1). Earlier `red22`
+and `red22b` runs failed during fixture setup and are not counted as runtime
+correction failures. The shared episode-source mutation context now snapshots
+the exact keep-linked receipt authority and all affected Memory roots before
+those IDs disappear, then touches the before/after reached-root union.
+
+The expanded checked-in review suite passed 23/23 on Node 22.16, actual exit 0
+(`review-correction-coverage-second22.log`). This covers both clients, same-
+and cross-client legacy keep, historical/cold reads, genuine independent dedup
+support, naturally missing source IDs, ambiguous colliding message IDs, foreign
+and proven-unrelated controls, source add/remove/replacement/invalidation, and
+transaction rollback. Its earlier 15/17 result (exit 1) used a forbidden
+unqualified supersession operation on a qualified fixture; setup was corrected
+to the real qualified binding/transition APIs, without weakening runtime rules.
+These remain working-tree results. Broader two-runtime gates, a new exact
+candidate and independent dual review are still required.
+
+Primary added two actual-old-runtime acceptance cases for the co-support
+authority transition, separately from the worker's copied keep fixture. The
+eight-case review packet passed 8/8, exit 0
+(`review-proof-check2-review8-22.16.0.log`), with zero residue. The preceding
+run was 6/8, exit 1: its two new fixtures selected an episode-enabled core but
+submitted ordinary input lacking episode context, so strict validation refused
+before the target path. Correcting the fixture construction required no runtime
+change. The total primary acceptance packet is now 47 cases.
+
+Primary direct inspection also identified cleanup outside a helper's preparation
+reads. The worker reproduced it using real source rows and a single injected
+DB read failure: a context survived rollback and suppressed the next helper
+mutation's CAS flush (0/2, actual exit 1,
+`review-correction-context-red22.log`). Extending the existing try/finally around
+preparation resolved both cases (2/2, exit 0,
+`review-correction-context-green22.log`). Current public callers normally open
+an outer guarded context first; this is internal-helper failure recovery, not a
+claim of a reproduced public exploit. The checked-in review packet now has 25
+cases. No schema, permission or dependency-policy change was needed.
+
+Corrected source freeze: Git diff plus untracked paths and independent base-tree
+blob/mode versus filesystem comparison agree on 28 paths, including 24
+non-document paths (`review-fixed-frozen-inventory.json`). Primary's final
+47-case acceptance passes on Node 22.16 and 24.15, actual exit 0 each. Both
+runtime demo lanes also completed all twelve demos, exit 0 each. The remaining
+full, interface and generic gates are still in progress. Every lane checks its
+owned parent for zero unexpected residue; all completed commands have none.
+
+## Corrected final-source verification
+
+All 44 primary gate commands completed with actual exit **0** against the
+unchanged 24-path non-document freeze, on Node **22.16.0** and **24.15.0**:
+
+| Gate | Result on each runtime |
+| --- | --- |
+| Four independently constructed primary acceptance files, owned runner | 47/47, zero skips |
+| `node tools/testing/run.mjs core/test/raw-deletion*.test.mjs` | 76/76, zero skips |
+| `npm run test:core` | 1,554/1,554, zero skips; 438.948 / 438.952 seconds |
+| `npm test` | 635/635, zero skips |
+| `npm run validate`; `npm run validate --prefix tools/plugin-validation` | Each exit 0 |
+| `npm run test:mcp` | 125/125, zero skips |
+| `npm run test:artifact` | 94 passed, zero failed, one native-Windows-only skip on WSL |
+| `CAIRN_RATIONALE_INSTALLED_OFFLINE=1 node tools/testing/run.mjs evaluation/live/test/rationale-pilot.test.mjs` | 4/4, zero skips; synthetic HTTP only |
+| `NODE_DISABLE_COMPILE_CACHE=1 npm run test:workspace-lifecycle` | 25/25, zero skips |
+| Twelve existing demos via the owned runner, as listed above | All 24 invocations exit 0 |
+
+All eight owned lane parents were checked empty and removed. Original failures
+and older logs remain; this round uses `review-fixed-final-*.log` and eight
+`review-fixed-final-<lane>-<runtime>-results.json` files under the same evidence
+directory. `review-gate-report.mjs --complete` checks 44 actual exits, no signals,
+no unexpected residues and no incomplete lanes; actual exit 0. The implementation
+worker separately completed nine affected suites on Node 22 (289/289, exit 0)
+and the new 25-case review suite on Node 24 (25/25, exit 0); its processes ended.
+
+Primary repeated the independent Git/base-tree-filesystem inventory check after
+the matrix: 28 scoped paths agree, and every non-document byte matches the
+pre-gate snapshot. There was no new model call, test timeout relaxation, failure
+reclassification, schema expansion, product edit or production action. A final
+local candidate commit, both independent review axes and latest-head CI remain
+separate gates; their exact SHA/results will be recorded in the PR.
