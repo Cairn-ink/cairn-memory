@@ -877,9 +877,9 @@ export function createMemoryCore(input, internal) {
         deadline, input: { ...input, namespace },
         operations: { filterCaptureSources: sources => runtime.filterCaptureSources(ns, sources),
           assertCaptureSources: sources => runtime.assertCaptureSources(ns, sources),
-          claimAdmission: value => invoke(() => runtime.claimCapturedAdmission(ns, {
+          claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
-        }, deadline, rawRegistration)),
+        }, deadline, rawRegistration, sources)),
           finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline),
           abandonAdmission: (value, retryable) => sessionEpisodes && retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
@@ -888,9 +888,9 @@ export function createMemoryCore(input, internal) {
           beginInitialClassification: value => beginInitialClassification(captureKey(value), deadline),
           failInitialClassification: value => failInitialClassification(captureKey(value)),
           applyInitialPlacement: value => applyInitialPlacement(captureKey(value), deadline),
-          claimCaptureEvidence: value => invoke(() => runtime.claimCaptureEvidence(ns, {
+          claimCaptureEvidence: (value, sources) => invoke(() => runtime.claimCaptureEvidence(ns, {
             ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS, view: value.view,
-          }, deadline, rawRegistration)),
+          }, deadline, rawRegistration, sources)),
           assertCaptureEvidence: value => invoke(() => runtime.assertCaptureEvidence(ns, {
             ...admissionKey(captureKey(value)), token: contractId(value.token),
           })),
@@ -908,7 +908,7 @@ export function createMemoryCore(input, internal) {
           }),
           classifyPlacement: value => classifyPlacementValidated(value, deadline), applyPlacement,
           ordered: {
-            claim: snapshot => invoke(() => runtime.claimOrdered(ns, snapshot, deadline, rawRegistration)),
+            claim: (snapshot, sources) => invoke(() => runtime.claimOrdered(ns, snapshot, deadline, rawRegistration, sources)),
             prepare(snapshot, order, extracted) {
               return invoke(() => {
                 const items = admissionItems(extracted.map(({ sourceIndices, ...item }) => item));

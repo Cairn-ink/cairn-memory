@@ -20,6 +20,8 @@ import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
+import { createRawSourceRoots } from './raw-source-roots.mjs';
+import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
 import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
@@ -31,8 +33,11 @@ export function createMemoryRuntime(input, internal) {
   const privateCards = privateCardOptions(input.privateCards);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
-  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), rawCapture: Boolean(internal?.rawCapture), rawLineage: Boolean(internal?.rawLineage) });
+  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), rawCapture: Boolean(internal?.rawCapture),
+    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion) });
   const rawLineage = createRawLineageStorage(db);
+  const sourceRoots = createRawSourceRoots(db);
+  let deletion;
   let identity;
   try {
     identity = db.prepare(`SELECT store_id AS storeId, cursor_secret AS cursorSecret
@@ -102,11 +107,16 @@ export function createMemoryRuntime(input, internal) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(receiptId, id, key, receipt.client,
       receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt, now).changes;
     if (changes) inserted.push(receiptId);
+    let provenanceChanged = false;
     if (rawLineage.enabled()) {
       const memory = db.prepare('SELECT owner_id,scope,project_id FROM memories WHERE id=?').get(id);
       const actual = changes ? receiptId : db.prepare('SELECT id FROM receipts WHERE memory_id=? AND receipt_key=?').get(id, key).id;
-      rawLineage.attach({ ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id }, actual, receipt,
+      provenanceChanged = rawLineage.attach({ ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id }, actual, receipt,
         changes ? origin : 'unknown');
+    }
+    if (changes || provenanceChanged) {
+      const memory = db.prepare('SELECT owner_id,scope,project_id FROM memories WHERE id=?').get(id);
+      sourceRoots.touchMemory({ ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id }, id, receipt);
     }
     return changes;
   }
@@ -237,6 +247,7 @@ export function createMemoryRuntime(input, internal) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
+      sourceRoots.touchMemory(ns, id);
       rawLineage.excludeMemory(ns, id);
       stagedEvidence.purgeNamespace(ns);
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
@@ -263,6 +274,7 @@ export function createMemoryRuntime(input, internal) {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
+      sourceRoots.touchMemory(ns, id);
       suppress(ns, current.fingerprint);
       rawLineage.excludeMemory(ns, id);
       stagedEvidence.purgeNamespace(ns);
@@ -282,6 +294,18 @@ export function createMemoryRuntime(input, internal) {
   function forget(ns, id, expectedRevision) {
     ready();
     return transaction(db, () => forgetMutation(ns, id, expectedRevision));
+  }
+  function removeReceipts(ns, id, receiptIds) {
+    const current = activeRow(ns, id); if (!current) fail('memory_not_found');
+    sourceRoots.touchMemory(ns, id);
+    const now = new Date().toISOString();
+    conflictStorage.invalidateMemory(id);
+    mocStorage.invalidateMemory(ns, id, now);
+    qualificationStorage.clear(id); proceduralStorage.clear(id);
+    episodes.invalidateMemory(ns, id, current.review_state === 'awaiting');
+    db.prepare('UPDATE memories SET revision=revision+1,updated_at=? WHERE id=?').run(now, id);
+    for (const receiptId of receiptIds) db.prepare('DELETE FROM receipts WHERE memory_id=? AND id=?').run(id, receiptId);
+    advanceEpoch(ns);
   }
 
   function supersede(ns, id, value, expectedRevision) {
@@ -559,12 +583,14 @@ export function createMemoryRuntime(input, internal) {
   const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview });
   let episodes;
   try { episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch,
-    forgetMutation, rawCapture, sourceAuthority: rawLineage }); }
+    forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots,
+    deleteEpisode: (ns, input) => sourceRoots.enabled() ? deletion.forgetEpisode(ns, input) : undefined }); }
   catch (error) { db.close(); throw error; }
   stagedEvidence.setEpisodes(episodes);
+  deletion = createRawDeletionStorage({ db, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
-    classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts,
+    classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
@@ -633,6 +659,9 @@ export function createMemoryRuntime(input, internal) {
     sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     privateCards: cardStorage,
+    previewDeleteConversation(input) { ready(); return deletion.preview(input); },
+    deleteConversation(input) { ready(); return deletion.remove(input); },
+    listRawEffects(input) { ready(); return deletion.list(input); },
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recentReceipts, recallSnapshot, sourceSnapshot,
@@ -641,7 +670,7 @@ export function createMemoryRuntime(input, internal) {
       ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals, deadline);
     },
     getRationale(ns, ref, view) { ready(); return rationaleStorage.inspect(ns, ref, view); },
-    claimOrdered(ns, snapshot, deadline, registration) { ready(); return orderedStorage.claim(ns, snapshot, deadline, registration); },
+    claimOrdered(ns, snapshot, deadline, registration, sources) { ready(); return orderedStorage.claim(ns, snapshot, deadline, registration, sources); },
     discoverOrdered(ns, snapshot, order, items) {
       ready(); return orderedStorage.discover(ns, snapshot, order, items);
     },
@@ -654,13 +683,13 @@ export function createMemoryRuntime(input, internal) {
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
     filterCaptureSources(ns, sources) { ready(); return rawLineage.filter(ns, sources); },
     assertCaptureSources(ns, sources) { ready(); rawLineage.assertReceipts(ns, sources); },
-    claimCapturedAdmission(ns, input, deadline, registration) {
-      ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline, registration);
+    claimCapturedAdmission(ns, input, deadline, registration, sources) {
+      ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline, registration, sources);
     },
-    claimCaptureEvidence(ns, input, deadline, registration) {
+    claimCaptureEvidence(ns, input, deadline, registration, sources) {
       ready();
       if (input.view === undefined) fail('invalid_input');
-      return admissionStorage.claimAdmission(ns, input, undefined, input.view, deadline, registration);
+      return admissionStorage.claimAdmission(ns, input, undefined, input.view, deadline, registration, sources);
     },
     inspectCaptureEvidence(ns, input) { ready(); return stagedEvidence.inspect(ns, input); },
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },

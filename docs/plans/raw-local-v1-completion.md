@@ -949,3 +949,31 @@ the exercised mechanical contracts, not semantic quality or installed Raw
 availability. Fixed-commit Standards/Spec review and latest-head CI are still
 required and will be recorded in the PR; no merge, release, deployment or
 product-pin change is part of this packet.
+
+### P3a review handoff and dependent P3b start
+
+P3a is frozen at `99b09855358176786d86765d009faba4777867f6`, PR #451.
+Both independent non-author GPT 6.1 Sol/high reviewers checked the complete
+fixed-base diff. Standards found zero documented violations and one optional
+low-severity duplicated assignment; Spec passed with zero findings. Standards
+independently reran 38 episode cases, Spec reran 88 packet cases plus eight
+independent actual-API cases, all actual exit 0. Primary's post-commit 44-case
+suite passed on both runtimes, actual exit 0 each. Latest-head CI subsequently
+passed 31/31 checks, `gh pr checks 451` actual exit 0. CI run `39539546858`
+tests the reviewed head; merge tree `ba1a95200ac9b72832b277e10929f16098df4630`
+and the candidate have the identical tree hash. CI core is 1,478/1,478 on
+Node 22.16.0/24.21.0, native Windows 5/5 each, MCP 125/125 each and installed
+rationale 4/4 each. Existing Node20 version and Linux artifact platform skips
+are reported separately in the PR. No CI rerun was needed. PR #451 is ready
+and mergeable, not merged; no release, deployment or product-pin change occurred.
+
+The next dependent packet is [P3b's concrete contract](raw-local-v1-delete.md):
+shared source deletion, multi-source preservation, control closure, durable
+publication fences and a bounded content-free withdrawal outbox. Its final
+offline matrix now passes: 39 independent primary cases, 51 packet cases and
+1,529 full-core cases on each runtime, plus generic/MCP/artifact/installed
+synthetic rationale/cleanup/demos; all actual exit 0, with the existing native
+Windows artifact skip explicitly retained. Fixed-commit independent review and
+latest-head CI are still required before delivery. Primary owns that plan and independent verification;
+the implementation worker owns runtime/storage/tests and minimal reference
+docs. P3c source resolution and P4 installed/client integration remain separate.

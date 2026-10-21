@@ -3,6 +3,8 @@ import { transaction } from './database.mjs';
 import { fail, identifier, object } from './validation.mjs';
 import { rawBoundary, rawClient, rawContext, rawNamespace, rawPolicy, rawRegistration, rawSealed, RAW_CLIENTS } from './raw-input.mjs';
 import { createRawReads } from './raw-reads.mjs';
+import { createRawControlStorage } from './raw-control-storage.mjs';
+import { createRawSourceRoots } from './raw-source-roots.mjs';
 
 const where = 'owner_id=? AND scope=? AND project_id=?';
 const clock = () => new Date().toISOString();
@@ -13,6 +15,8 @@ const freeze = value => {
 
 /** Internal model-free seam. Hosts must not expose this before P2 controls/lineage. */
 export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy }) {
+  const rawControls = createRawControlStorage(db);
+  const sourceRoots = createRawSourceRoots(db);
   const configureCap = capBytes !== undefined;
   if (capBytes === undefined) capBytes = 200000000;
   if (!['raw-v1','off'].includes(mode) || !Number.isSafeInteger(capBytes) || capBytes < 1 || typeof readPolicy !== 'function') fail('invalid_input');
@@ -222,7 +226,12 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy 
     if (!value) fail('invalid_input');
     const name = `raw_registration_${++savepoint}`;
     db.exec(`SAVEPOINT ${name}`);
-    try { const result = commitInside(value); db.exec(`RELEASE ${name}`); return result; }
+    try {
+      const { input } = value;
+      const result = sourceRoots.mutateSources(input.namespace, input.messages.map(message => ({
+        client: input.client, sessionId: value.session, eventId: message.id })), () => commitInside(value));
+      db.exec(`RELEASE ${name}`); return result;
+    }
     catch (error) { db.exec(`ROLLBACK TO ${name}; RELEASE ${name}`); throw error; }
   }
   async function register(input) {
@@ -231,25 +240,7 @@ export function createRawJournal({ db, mode = 'off', port, capBytes, readPolicy 
   }
 
   function closePendingInside({ ownerId,client,namespace,sessionKey: session,reason }) {
-    const ns = namespace === undefined ? null : rawNamespace(namespace);
-    identifier(ownerId); if (client !== undefined) rawClient(client);
-    if (!['tool_off','capture_barrier'].includes(reason) || (ns && ns.ownerId !== ownerId)) fail('invalid_input');
-    const rows = db.prepare(`SELECT m.*,c.owner_id,c.scope,c.project_id FROM raw_messages m JOIN raw_conversations c ON c.id=m.conversation_id
-      WHERE c.owner_id=? AND m.assembly_state='pending'${client === undefined ? '' : ' AND c.client=?'}${ns ? ' AND c.scope=? AND c.project_id=?' : ''}${session === undefined ? '' : ' AND c.session_key=?'}`)
-      .all(ownerId,...(client === undefined ? [] : [client]),...(ns ? [ns.scope,ns.projectId] : []),...(session === undefined ? [] : [session]));
-    const touched = new Map(); let released = 0;
-    for (const row of rows) {
-      released += row.reserved_bytes;
-      db.prepare("UPDATE raw_messages SET assembly_state='closed',reason=?,reserved_bytes=0 WHERE conversation_id=? AND message_id=?")
-        .run(reason,row.conversation_id,row.message_id);
-      touched.set(row.conversation_id,{ ownerId,scope: row.scope,projectId: row.project_id });
-    }
-    if (released) db.prepare('UPDATE raw_owner_usage SET reserved_bytes=reserved_bytes-?,revision=revision+1 WHERE owner_id=?').run(released,ownerId);
-    for (const [id,boundary] of touched) {
-      db.prepare('UPDATE raw_conversations SET revision=revision+1,last_received_at=? WHERE id=?').run(clock(),id);
-      advanceEpoch(boundary);
-    }
-    return { closedMessages: rows.length,releasedBytes: released };
+    return rawControls.closePendingInside({ ownerId, client, namespace, sessionKey: session, reason });
   }
   function closePending(input) { return inTransaction(() => closePendingInside(input)); }
   function setRawCaptureControl(input) {

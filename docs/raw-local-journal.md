@@ -1,4 +1,4 @@
-# Internal local Raw journal, capture and lineage (P1/P2/P3a)
+# Internal local Raw journal, capture, lineage and deletion (P1/P2/P3a/P3b)
 
 This is the storage/read foundation in
 [the local V1 plan](plans/raw-local-v1-completion.md), not completed Raw capture
@@ -190,12 +190,78 @@ ID or paraphrased assertion. Disjoint windows and genuinely unrelated explicit
 receipts remain eligible; ordinary fingerprint suppression still applies.
 Exact replay continues to observe its recorded outcome without model work.
 
-This is **not completed P3 or Raw V1**. P3b still must replace legacy
-`forgetEpisode` over-deletion with D5's live-source cascade, conversation deletion,
+P3a alone is **not completed P3 or Raw V1**. The separately selected P3b
+packet below adds D5's live-source cascade, conversation deletion,
 reservation/control closure and withdrawal effects. P3c still must implement
 asynchronous Raw resolution and bare Raw-to-Card support. No public Raw anchors,
 installed Raw capability or re-extraction job is introduced here; RL-9 owns the
 later explicit re-extraction workflow.
+
+## Internal P3b source deletion
+
+The uninstalled `openRawCaptureCore(coreOptions, { ...rawOptions, deletion: true })`
+selects additive schema 27 and implies lineage. Only an own boolean option is
+accepted; public constructor fields are unchanged. New ordinary stores remain
+schema 18. Omission/false preserves earlier Raw selection behavior. A current
+option-off connection, including one opened before this migration, honors the
+persisted deletion rules once 27 is selected. This is not permission for old
+binary writers: the frozen actual v26 opener refuses 27. No text or synthetic
+receipt provenance is backfilled during migration.
+
+The internal model-free methods use existing success/error envelopes:
+
+- `previewDeleteConversation({ namespace, conversationId, expectedRevision })`
+  returns `{ conversationId, revision, forgottenMemories, retainedMemories,
+  removedReceipts, invalidatedEpisodes }` without writing.
+- `deleteConversation({ namespace, conversationId, expectedRevision, actionId })`
+  returns the same counts plus `{ actionId, effectCount }`. Its revision is the
+  committed tombstone revision. Exact action replay returns the original result
+  after restart, without new effects or usage changes; changed arguments refuse.
+- `listRawEffects({ namespace, limit?, cursor? })` returns finite content-free
+  `withdraw_pending` effects, coverage and a continuation cursor. Default limit
+  is 20, maximum 50, with a 65,536-byte whole-envelope ceiling and a signed,
+  scoped immutable high-watermark. It does not deliver or acknowledge effects.
+
+Preview and delete share one transactional live-receipt plan. Current and
+historical source-only Memory is forgotten through ordinary suppression. A
+Memory with actual independent explicit or other-conversation support retains
+its interpretation and currentness; only the deleted source's receipts are
+removed, with normal revision/evidence/index/episode/Card invalidation. Neither
+an explicit alias nor a keep action manufactures independent support. Unknown
+legacy surviving receipt provenance refuses `raw_lineage_unavailable` before
+mutation. Unlinked provenance is not assumed independent.
+
+Receipt/provenance changes advance only source roots reached from the affected
+Memory. One DB-only before/after authority guard covers Raw registration,
+episode reservation and trusted job binding that resolves an old duplicate
+receipt, including registration whose extractor produces no new Memory.
+This invalidates stale deletion CAS even without a Raw append. The immutable
+`captureRaw` receipt retains its registration-time revision; refresh
+`getConversation` before obtaining the preview/delete revision.
+
+One transaction fences the source session, closes known pending consumers
+(including cross-client keep origins), purges retained staging and obsolete job
+bindings, mutates Memory, invalidates dependent episode prose, releases saved
+and reserved bytes once, purges Raw rows/maps/exclusions, and records replay and
+withdrawal metadata. Existing `forgetEpisode` delegates to this same cascade on
+27, even for actual pre-Raw/empty episodes and option-off writers. It retains its
+old DTO and compares the episode revision, not the conversation revision.
+Confirmed authored Card bodies/host records remain retained while their current
+receipt-backed evidence becomes unavailable and bound drafts are cancelled.
+
+Real ordinary/staged/ordered/episode/keep transactions persist core-owned source
+session bindings before provider dispatch. Tombstones refuse late legacy and Raw
+interpretation/publication. Old pending work without provable source metadata
+blocks deletion only in the exact target namespace/client when it retains payload
+or publication authority, even when that payload has expired. Repair is required;
+no text matching, guessed session or broad deletion is attempted. Terminal,
+payload-free unbound jobs do not block. Pause/project-stop and client-off share
+DB-only reservation closure; accepted parts remain, late suffixes never backfill,
+and a fresh higher-ordinal message may save after resume/on.
+
+This implements only internal synthetic D5/D6 mechanics. Raw resolution and bare
+Raw-to-Card remain P3c; installed/client Raw lifecycle and host effect consumption
+remain P4. The factory must not be exposed before those packets and acceptance.
 
 ## Storage and reads
 
@@ -264,7 +330,15 @@ state, zero-Memory passages, inherited origins, concurrency and rollback.
 `9a7bbe59c9c0ec72227310cece43fce7ac589c6e`, with only an explanatory header and
 relative import relocation.
 
-These establish internal P1/P2/P3a mechanics. Precise source deletion,
-Raw → Card, installed Raw lifecycle, production controls/encryption and semantic
+The three `core/test/raw-deletion*.test.mjs` suites additionally cover the P3b
+shared cascade, legacy and cross-client episode/keep consumers, durable job and
+control fences, migration rollback, usage, actual receipt-backed Cards, competing
+processes, asynchronous reads, CAS and bounded effects. The actual v26 opener in
+`core/testing/raw-v26-database.mjs` is frozen from
+`99b09855358176786d86765d009faba4777867f6` (21,414 bytes after removing its header
+and undoing only relative-import relocation).
+
+These establish internal P1/P2/P3a/P3b mechanics. Raw → Card, installed Raw
+lifecycle, production controls/encryption and semantic
 quality remain later packets and acceptance gates in the plan. Existing
 installed/public compatibility tests do not establish installed Raw capability.

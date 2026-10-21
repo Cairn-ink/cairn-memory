@@ -13,15 +13,19 @@ const invoke = work => { try { return success(work()); } catch (error) { return 
 
 /** Synthetic/internal construction only; intentionally absent from installed files. */
 export function openRawCaptureCore(input, rawOptions) {
+  const deletionDescriptor = Object.getOwnPropertyDescriptor(rawOptions, 'deletion');
+  if (deletionDescriptor && (!Object.hasOwn(deletionDescriptor, 'value') || typeof deletionDescriptor.value !== 'boolean')) fail('invalid_input');
+  const deletion = deletionDescriptor?.value === true;
   const descriptor = Object.getOwnPropertyDescriptor(rawOptions, 'lineage');
   if (descriptor && (!Object.hasOwn(descriptor, 'value') || typeof descriptor.value !== 'boolean')) fail('invalid_input');
-  const lineage = descriptor?.value === true;
+  const lineage = deletion || descriptor?.value === true;
   const profile = structuredClone(Object.fromEntries(['captureQualification','captureSourcePolicy',
     'captureEvidence','captureRationale','sessionEpisodes'].filter(key => Object.hasOwn(input, key)).map(key => [key,input[key]])));
   let storage, capture, runtime;
   const core = createMemoryCore(input, {
     createRuntime: config => (runtime = createMemoryRuntime(config, { rawCapture: true,
       rawLineage: lineage === true,
+      rawDeletion: deletion,
       attachRaw: db => (storage = createRawCaptureStorage({ db, profile, ...rawOptions })) })),
     attachCapture: operation => { capture = operation; },
   });
@@ -52,5 +56,10 @@ export function openRawCaptureCore(input, rawOptions) {
     getRawCaptureControl: input => invoke(() => { runtime.ready(); return storage.getRawCaptureControl(input); }),
     setRawCaptureControl: input => invoke(() => { runtime.ready(); return storage.setRawCaptureControl(input); }),
     fenceSession: input => invoke(() => { runtime.ready(); return storage.fenceSession(input); }),
+    ...(deletion ? {
+      previewDeleteConversation: input => invoke(() => runtime.previewDeleteConversation(input)),
+      deleteConversation: input => invoke(() => runtime.deleteConversation(input)),
+      listRawEffects: input => invoke(() => runtime.listRawEffects(input)),
+    } : {}),
   });
 }

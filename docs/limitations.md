@@ -1687,3 +1687,72 @@ and a 36/38 run incorrectly expected an open-job error on closed replay. Each
 command exited 1 and its evidence remains retained. These are distinct from the
 specific provider-leak red and do not justify weakening source guards or legacy
 validation. Final-source verification is recorded separately in the plan/PR.
+
+## Internal Raw deletion P3b: local cascade, not host delivery or Raw Cards
+
+The [bounded deletion plan](plans/raw-local-v1-delete.md) selects schema 27 only
+through the uninstalled internal factory. It shares preview/delete planning and
+legacy `forgetEpisode` mutation over actual retained receipt/source provenance,
+including historical Memory and source-only episode consumers. Unknown legacy
+support or unresolvable active/retained staged provenance fails closed and needs
+repair; no backfill, independence inference or broad cleanup is offered. New
+ordinary stores are not silently upgraded. The actual frozen v26 opener refuses
+27; current option-off writers honor selected rules, including late migration.
+
+Existing receipt-backed Card drafts/current evidence invalidate, but confirmed
+authored bodies and host records remain. The finite content-free Raw outbox is
+not evidence that a host withdrew an ask/preview, consumed an effect or received
+an acknowledgement. RawSourceRef resolution/bare Raw-to-Card remain P3c;
+installed Raw/client lifecycle and consumption remain P4. No paid-model,
+semantic-quality, production encryption or operational-data claim is made.
+
+Compatibility import closure adds exactly `core/raw-deletion-schema.mjs`,
+`core/raw-deletion-storage.mjs`, `core/raw-source-roots.mjs`,
+`core/raw-control-storage.mjs` and the already-existing `core/raw-input.mjs` to
+the artifact manifest. These DB-only dependencies let installed ordinary
+openers enforce selected-store rules. The usable Raw factory, journal/read
+engine, resolver and new public constructor/tool fields remain uninstalled.
+
+Two runtime failures are retained. The first integrated 17-case worker run
+passed 13 and failed four; the primary's independent original 35 passed 31 and
+failed the same pending-job deletion races, both commands exit 1. A minimal
+public-created pending-claim probe reproduced SQLite CHECK failure (errcode 275):
+clearing its token while keeping pending state was invalid. Deletion now expires
+the valid pending lease while a separate durable closed-job fence prevents retry
+and publication. The original four worker cases then passed on both runtimes
+(actual exit 0), and the original primary 35 passed unchanged (actual exit 0).
+The probe's first missing-lease setup error is retained separately.
+
+The later 17-case jobs run passed 16, actual exit 1, reproducing a support-only
+CAS gap: a trusted job could resolve an existing unknown duplicate receipt
+without a Raw append or receipt insertion. The correction compares only exact
+source receipts before/after binding and invalidates the reached Memory roots;
+it does not update every namespace conversation. The combined 34 cases then
+passed, actual exit 0. Final-source gates/reviews are recorded in the plan/PR.
+
+The same support-proof transition was then tested through episode reservation
+and Raw registration with zero extracted items and unchanged receipt rows.
+Both exposed why observing job insertion alone is insufficient: message ledgers
+can resolve a receipt earlier. Retained focused commands exited 1 (ordinary
+control green, episode red; then ordinary/episode green, Raw red). The shared
+DB-only authority-mutation guard now covers all three entrypoints. Its first
+Raw integration still failed because journal preparation intentionally removes
+the original session ID; using the journal's canonical session in the comparison
+resolved that integration error without retaining raw IDs or creating a guessed
+job binding. The three-entrypoint regression passed, actual exit 0. An initial
+episode fixture qualification conflict is retained separately from its CAS red.
+
+Fixture-development failures are not additional runtime hypotheses: the first
+jobs run passed 4/17 because async conversation reads were not awaited; the
+second passed 15/17 because registration legitimately purged staging that the
+fixture had already expired. Four two-case cross-client setup runs used, in
+turn, missing ledger timestamps, an extra view field, a public-shaped namespace
+at an internal seam, and an incorrect count of pruned uncited sources. The host
+suite first passed 6/10 because it assumed a suppressed assertion was admitted
+again and replaced a crypto callback after construction had bound it. A later
+47/49 run expected public Memory state `current` instead of `active`. All those
+commands exited 1; fixture corrections preserve strict validation, suppression,
+source pruning and callback binding. Worker logs, including these failures, are
+retained under `/tmp/cairn-raw-p3-evidence.67nhhd/worker-delete-*.log`; primary
+independent logs use `/tmp/cairn-raw-p3b-evidence.xOAiQk/` instead. Neither earlier
+green runs nor a setup failure substitute for final frozen-source verification.

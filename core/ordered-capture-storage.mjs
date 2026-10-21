@@ -30,7 +30,7 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
     }
     if (epoch(ns) !== order.indexRevision) fail('index_revision_conflict');
   }
-  function claim(ns, s, deadline, registration) {
+  function claim(ns, s, deadline, registration, sources) {
     return admissionStorage.claimAdmission(ns, { ...s, leaseMs: 125000 }, {
       replay() {
         const row = bound(ns, s);
@@ -57,7 +57,7 @@ export function createOrderedCaptureStorage({ db, admissionStorage, epoch, activ
           ON CONFLICT DO NOTHING`).run(...streamKey(ns, s));
         return { order: { highWater: water, indexRevision: epoch(ns) } };
       },
-    }, undefined, deadline, registration);
+    }, undefined, deadline, registration, sources);
   }
   function receipts(id) {
     return db.prepare(`SELECT r.id, r.role, r.excerpt, c.owner_id, c.scope, c.project_id,

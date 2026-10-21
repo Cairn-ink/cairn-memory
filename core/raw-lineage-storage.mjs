@@ -1,9 +1,11 @@
 import { createHmac } from 'node:crypto';
 import { fail } from './validation.mjs';
+import { createRawSourceRoots } from './raw-source-roots.mjs';
 
 const boundary = ns => [ns.ownerId, ns.scope, ns.projectId || ''];
 /** Schema-presence driven: current option-off writers enforce retained fences. */
 export function createRawLineageStorage(db) {
+  const roots = createRawSourceRoots(db);
   let available;
   const enabled = () => available === true || (available = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_source_maps'").get()));
   const digest = value => createHmac('sha256', Buffer.from(db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get().secret, 'hex'))
@@ -43,19 +45,25 @@ export function createRawLineageStorage(db) {
   }
   function assertReceipts(ns, receipts) {
     if (!enabled()) return;
-    for (const receipt of receipts) assertAnchors(anchors(ns, receipt));
+    for (const receipt of receipts) {
+      roots.assertSession(ns, receipt.client, receipt.sessionId);
+      assertAnchors(anchors(ns, receipt));
+    }
   }
   function attach(ns, receiptId, receipt, origin) {
     if (!enabled()) return;
     const values = anchors(ns, receipt);
     assertAnchors(values);
     const insert = db.prepare('INSERT OR IGNORE INTO raw_receipt_lineage VALUES(?,?,?,?,?,?)');
-    for (const anchor of values) insert.run(receiptId, anchor.conversationId, anchor.messageId,
-      anchor.start, anchor.end, anchor.precision);
+    let changed = 0;
+    for (const anchor of values) changed += insert.run(receiptId, anchor.conversationId, anchor.messageId,
+      anchor.start, anchor.end, anchor.precision).changes;
     const kind = values.length ? 'derived' : origin === 'independent' ? 'independent' : 'unknown';
+    const previous = db.prepare('SELECT kind FROM raw_receipt_origins WHERE receipt_id=?').get(receiptId)?.kind;
     db.prepare(`INSERT INTO raw_receipt_origins VALUES(?,?) ON CONFLICT(receipt_id) DO UPDATE SET
       kind=CASE WHEN excluded.kind='derived' OR raw_receipt_origins.kind='derived' THEN 'derived'
         ELSE raw_receipt_origins.kind END`).run(receiptId, kind);
+    return changed > 0 || previous === undefined || previous !== kind && kind === 'derived';
   }
   function excludeMemory(ns, memoryId) {
     if (!enabled()) return;

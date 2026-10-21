@@ -17,7 +17,7 @@ export const request = (part, patch = {}, kind = 'ordinary') => rawRequest(part,
   ...(kind === 'episode' ? { episodeContext: { clientLabel: 'Synthetic client', generation: 'initial', origin: 'ordinary' } } : {}), ...patch,
 });
 export function fixture(t, { kind = 'ordinary', model: overrides = {}, port = localPlainPort(), capBytes,
-  policy = { generation: 'notice-1', reason: null }, coreOptions = {}, lineage = false } = {}) {
+  policy = { generation: 'notice-1', reason: null }, coreOptions = {}, lineage = false, deletion = false } = {}) {
   const workspace = createTestWorkspace(t, { prefix: 'raw-capture-' }), path = join(workspace.path, 'store.sqlite');
   const calls = [];
   const base = { ...rationaleModel(), interpretEpisode: interpretation, ...overrides };
@@ -32,7 +32,8 @@ export function fixture(t, { kind = 'ordinary', model: overrides = {}, port = lo
   const reopen = () => {
     core?.close();
     core = openRawCaptureCore({ path, model, ...config(kind), ...coreOptions }, {
-      mode: 'raw-v1', port, readPolicy: () => ({ ...policy }), ...(lineage ? { lineage: true } : {}), ...(capBytes === undefined ? {} : { capBytes }),
+      mode: 'raw-v1', port, readPolicy: () => ({ ...policy }), ...(lineage ? { lineage: true } : {}),
+      ...(deletion ? { deletion: true } : {}), ...(capBytes === undefined ? {} : { capBytes }),
     });
     return core;
   };

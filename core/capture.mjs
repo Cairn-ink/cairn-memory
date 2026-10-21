@@ -134,9 +134,14 @@ export async function captureMessages({ model, input, operations, captureQualifi
     ...(captureSourcePolicy === 'indexed-evidence-v1' ? { qualificationStatus: 'not-requested' } : {}) };
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
-  const claim = episodeRun ? episodeRun.claim : snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
-    : captureEvidence ? unwrap(operations.claimCaptureEvidence({ ...key, view: retained }))
-      : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
+  const identities = sourceMessages.map((message, index) => ({
+    client: snapshot.sourceReceipts?.[index]?.client ?? snapshot.client,
+    sessionId: snapshot.sourceReceipts?.[index]?.sessionId ?? snapshot.sessionId,
+    eventId: message.id, role: message.role, excerpt: message.content,
+  }));
+  const claim = episodeRun ? episodeRun.claim : snapshot.causal ? unwrap(operations.ordered.claim(snapshot, identities))
+    : captureEvidence ? unwrap(operations.claimCaptureEvidence({ ...key, view: retained }, identities))
+      : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }, identities));
   if (claim.rawReplay) return claim.rawReplay;
   if (claim.processing || claim.duplicate) return { ...claim, ...coverage,
     ...(captureRationale ? { rationale: { status: 'not-run', reason: claim.processing ? 'processing' : 'duplicate',
@@ -145,11 +150,6 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const qualificationReport = {};
   let finished;
   try {
-    const identities = sourceMessages.map((message, index) => ({
-      client: snapshot.sourceReceipts?.[index]?.client ?? snapshot.client,
-      sessionId: snapshot.sourceReceipts?.[index]?.sessionId ?? snapshot.sessionId,
-      eventId: message.id, role: message.role, excerpt: message.content,
-    }));
     const allowed = operations.filterCaptureSources?.(identities) ?? identities.map((_, index) => index);
     if (!allowed.length && !episodeRun?.skip) fail('source_excluded');
     const selected = allowed.map(index => identities[index]);
