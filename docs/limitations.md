@@ -1,5 +1,49 @@
 # Known limitations
 
+## Optional matching qualified duplicate evidence
+
+The explicit `captureQualifiedDuplicates:'append-matching-evidence-v1'` policy
+is a mechanical ordinary-capture exception, requiring source-bound-v2, exact
+canonical content, the same seven labels and valid incoming/intact original
+source bindings. It appends eligible receipts while preserving the original
+qualification and anchors. It is not semantic deduplication, truth, reaffirmation,
+new confidence/currentness promotion, automatic Cards or a benchmark improvement.
+The default remains strict, as do manual/explicit/ordered/episode paths; episode
+configuration cannot select this policy. Unknown/unqualified/corrupted originals
+cannot be silently repaired or replaced. See [the contract](capture.md#optional-matching-qualified-evidence).
+
+Existing suppression, correction/forgetting, source exclusions/session fences and
+deletion guards remain in force. Deleting a source can clear the surviving
+Memory's qualification; later duplicates can refuse instead of requalifying.
+Changing policy does not reopen old Raw events or implicitly rearm an established
+host. Updating both config and profile digest still refuses the old preparation.
+Installed checks use synthetic ancestry, sources and fake HTTP only, not an
+actual native host, provider, semantic score, activation or completed Raw V1.
+
+Retained author fixture reds used an invalid-shaped corrupted digest, counted
+Raw registration's independently committed epoch as admission mutation, confused
+covered completed-message overlap with incomplete interpretation, counted skipped
+part metadata as saved bytes, and used an empty legacy keep-source array forbidden
+by schema. Assertions/fixtures were corrected, not runtime boundaries. The first
+affected runs hit the author's insufficient 180-second outer cap (actual 143,
+ETIMEDOUT, owned cleanup verified); the identical 29 suites passed with a 600-second
+cap in about 392 seconds on each Node, consistent with prior full-core runs around
+425 seconds. A separate primary launch-order ENOENT preceded tests and was resolved
+by awaiting its freeze. The initial installed Codex fixture omitted required
+`history_mode:'paginated'`; the existing parser correctly refused it. Its synthetic
+header was corrected without changing qualification or host runtime.
+
+Both initial local affected runs passed 35/36 with actual exit 1: the existing
+deadline fixture expected process exit 124 but observed 0 without retaining its
+provider trace. A controlled synthetic planning delay reproduced exit 0 with
+503 `interpretation_incomplete`, planning only and a released slot without refund
+on both parent and candidate, on both Nodes. This proves the old assertion lacked
+a provider-entry precondition, not the exact cause of those two untraced reds.
+The corrected tests separately handshake actual pending provider work before
+asserting hard termination/no refund/dead-owner recovery, and planning-only work
+before asserting cooperative timeout. Only test windows and fake HTTP changed;
+production deadlines, guards and configuration remain unchanged.
+
 ## Retained Raw MCP and authored Cards
 
 The [retained-profile path](private-card-terminal-review.md#retained-raw-profile)
@@ -72,8 +116,8 @@ acknowledgement progress) are retained as fixture failures. Installed evidence
 uses fake HTTP injected by a test-only exact-child spawn wrapper; production
 profiles cannot choose executables, runtime roots, environment or test seams.
 No real model calls, user sources, automatic Cards, source-to-Card lifecycle or
-completed V1 claim is made. The existing identical-content/new-receipt
-qualification conflict remains a separate capture-usability limitation.
+completed V1 claim is made. Without the separate explicit policy above,
+identical-content/new-receipt qualification conflicts remain unchanged.
 
 ## Durable local worker (B4b)
 
@@ -99,9 +143,9 @@ event registration/admission in the existing core: registered events cannot
 reacquire interpretation; never-registered events may acquire their first work.
 No wake-up polling or automatic retry exists inside a run. Confirmed incomplete,
 quota/authority/deletion refusals and exhausted recovery require later operator
-or host recovery, not a changed credential/config filename. Existing qualified
-dedup can refuse identical extracted content with different evidence bindings
-as qualification_conflict/incomplete; this worker does not change that rule.
+or host recovery, not a changed credential/config filename. Default qualified
+dedup still refuses different evidence bindings as qualification_conflict/incomplete;
+the separately selected matching-evidence policy is not automatic retry or rearm.
 Raw notice/saving and Memory consent remain separate. Plain Raw is not encryption,
 and deleting all owner state is not prevented. SIGKILL/kernel hangs cannot promise
 scratch/orphan cleanup; tests explicitly reap only their owned descendants.
@@ -875,10 +919,10 @@ or whether a source claim is true.
 The private observation retains at most 64 primitive-only rows per case, counts
 overflow and marks malformed response projections unavailable. It retains no
 source text or identifiers and does not enter ordinary comparison output,
-scoring, aggregates or the redacted report. Qualified deduplication attaches to
-an existing memory only for identical resolved source anchors. A changed source
-identity intentionally fails with `qualification_conflict`; the observer does
-not turn that immutable provenance boundary into a successful attach. No source
+scoring, aggregates or the redacted report. Default qualified deduplication attaches
+only for identical resolved source anchors; changed source identity still fails
+with `qualification_conflict`. The separate matching-evidence policy above is
+not enabled by this observer and does not rescore historical results. No source
 archive, staging default, retry or source-bound-v2 benchmark switch is added.
 
 ## Historical extraction rejection remains unattributed

@@ -52,6 +52,51 @@ export function createRawLineageStorage(db) {
       assertAnchors(anchors(ns, receipt));
     }
   }
+  // Only qualified automatic dedup calls this with inspected original anchor rows.
+  // The admission transaction owns all reads; no Raw body is opened or rewritten.
+  function assertStoredReceipts(ns, receipts) {
+    if (!db.isTransaction) fail('raw_transaction_required');
+    const required = ['raw_conversations','raw_messages','raw_source_maps','raw_receipt_lineage',
+      'raw_receipt_origins','raw_source_exclusions','raw_deletion_actions','raw_session_fences',
+      'raw_job_sources','episode_identity','session_episodes','episode_messages','episode_sources',
+      'episode_memory_links','episode_keep_actions'];
+    const tables = new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type='table'
+      AND name IN (${required.map(() => '?').join(',')})`).all(...required).map(row => row.name));
+    if (!['raw_conversations','raw_source_maps','raw_receipt_lineage','raw_deletion_actions'].some(name => tables.has(name))) return;
+    if (required.some(name => !tables.has(name))) fail('raw_lineage_unavailable');
+    for (const receipt of receipts) {
+      const stored = db.prepare(`SELECT l.conversation_id AS conversationId,l.message_id AS messageId,l.start,l.end,l.precision,
+        c.owner_id,c.scope,c.project_id,c.client,c.session_key,m.role,m.total_units
+        FROM raw_receipt_lineage l LEFT JOIN raw_conversations c ON c.id=l.conversation_id
+        LEFT JOIN raw_messages m ON m.conversation_id=l.conversation_id AND m.message_id=l.message_id
+        WHERE l.receipt_id=?`).all(receipt.id);
+      for (const anchor of stored) {
+        if (anchor.owner_id !== ns.ownerId || anchor.scope !== ns.scope || anchor.project_id !== (ns.projectId || '') ||
+            anchor.role !== receipt.role || anchor.messageId !== receipt.event_id ||
+            !Number.isSafeInteger(anchor.total_units) || !Number.isSafeInteger(anchor.start) ||
+            !Number.isSafeInteger(anchor.end) || anchor.start < 0 || anchor.end <= anchor.start || anchor.end > anchor.total_units ||
+            !['exact','whole-message'].includes(anchor.precision) ||
+            anchor.precision === 'whole-message' && (anchor.start !== 0 || anchor.end !== anchor.total_units)) fail('raw_lineage_unavailable');
+        roots.assertSession(ns, anchor.client, anchor.session_key);
+      }
+      assertAnchors(stored);
+      const authority = roots.receipt(ns, receipt);
+      if (authority.unknown || authority.legacyKeep && authority.roots.length !== 1) fail('raw_lineage_unavailable');
+      if (authority.independent) roots.assertSession(ns, receipt.client, receipt.session_id);
+      for (const root of authority.roots) {
+        roots.assertSession(ns, root.client, root.sessionKey);
+        const episodeId = root.episodeId ?? root.episode_id;
+        if (episodeId) {
+          const episode = db.prepare(`SELECT deleted FROM session_episodes WHERE owner_id=? AND scope=? AND project_id=?
+            AND id=? AND client=? AND session_key=?`).get(...boundary(ns), episodeId, root.client, root.sessionKey);
+          if (!episode) fail('raw_lineage_unavailable');
+          if (episode.deleted) fail('conversation_deleted');
+        }
+        if (!stored.length) assertAnchors(anchors(ns, { client: root.client, sessionId: root.sessionKey,
+          eventId: receipt.event_id, role: receipt.role, excerpt: receipt.excerpt }));
+      }
+    }
+  }
   function attach(ns, receiptId, receipt, origin) {
     if (!enabled()) return;
     const values = anchors(ns, receipt);
@@ -108,5 +153,5 @@ export function createRawLineageStorage(db) {
       catch (error) { if (error.code === 'source_excluded') return []; throw error; }
     });
   }
-  return { register, attach, assertReceipts, excludeMemory, filter, enabled };
+  return { register, attach, assertReceipts, assertStoredReceipts, excludeMemory, filter, enabled };
 }

@@ -36,6 +36,7 @@ export async function captureLocal(config, request, { signal, env, fetchImpl, ca
   const guarded = guardedModel(config, { core: () => core, signal, env, fetchImpl });
   try {
     core = openMemoryCore({ path: config.databasePath, model: guarded.model, captureQualification: 'source-bound-v2', captureDeadlineMs: captureMs,
+      ...(Object.hasOwn(config, 'captureQualifiedDuplicates') ? { captureQualifiedDuplicates: config.captureQualifiedDuplicates } : {}),
       rawConversations: { mode: config.raw.mode === 'local-plain-v1' ? 'raw-v1' : 'off', capBytes: config.raw.capBytes, configureCap: false,
         port, readPolicy: () => ({ generation: 'local-capture-v1', reason: null }), localAuthority: config.authority } });
     onClose(() => core.close());

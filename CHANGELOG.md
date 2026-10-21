@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — optional matching qualified evidence
+
+- Add the trusted `append-matching-evidence-v1` capture policy for exact canonical
+  content, seven matching labels and eligible original/incoming sources. Append
+  receipts without replacing the original qualification; default/manual/ordered/
+  episode behavior remains strict.
+- Allow the same optional top-level B3 configuration field through the existing
+  local host. Preserve source/deletion/suppression/replay fences and exact
+  configuration/preparation bindings; no implicit requalification or rearm.
+- Add offline synthetic source and installed checks. No truth/reaffirmation,
+  semantic-score, real-client activation, full V1 or release claim is made.
+
 ## Unreleased — retained Raw inspection and authored Cards
 
 - Add an exclusive keyless retained-profile MCP path for an existing private

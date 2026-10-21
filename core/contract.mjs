@@ -155,12 +155,26 @@ function failure(error) {
   return { ok: false, error: { code, retryable: code === "storage_busy" } };
 }
 
+// Validate the trusted opt-in before composition can snapshot any constructor fields.
+function qualifiedDuplicatesOption(input) {
+  if (input && typeof input === 'object' && types.isProxy(input)) throw new MemoryStoreError('invalid_input');
+  if (!input || typeof input !== 'object' || !('captureQualifiedDuplicates' in input)) return undefined;
+  const clean = ownData(input, ['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
+    'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
+    'decisionReview','privateCards','rawConversations','existingStore']);
+  if (!Object.hasOwn(clean, 'captureQualifiedDuplicates') ||
+      clean.captureQualifiedDuplicates !== 'append-matching-evidence-v1' || clean.captureQualification !== 'source-bound-v2' ||
+      Object.hasOwn(clean, 'sessionEpisodes')) throw new MemoryStoreError('invalid_input');
+  return clean.captureQualifiedDuplicates;
+}
+
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
   if (input && typeof input === 'object' && types.isProxy(input)) throw new MemoryStoreError('invalid_input');
+  qualifiedDuplicatesOption(input);
   if (!input || typeof input !== 'object' || Array.isArray(input)) return createMemoryCore(input);
   if ('existingStore' in input) {
-    input = ownData(input, ['path','model','captureQualification','captureSourcePolicy','captureRationale','captureEvidence',
+    input = ownData(input, ['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy','captureRationale','captureEvidence',
       'captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes','decisionReview','privateCards','rawConversations','existingStore']);
     input.existingStore = existingStoreOption(input.existingStore);
   }
@@ -169,7 +183,7 @@ export function openMemoryCore(input) {
   catch { throw new MemoryStoreError('invalid_input'); }
   if (!descriptor) return createMemoryCore(input);
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
-  ownData(input, ['path','model','captureQualification','captureSourcePolicy','captureRationale','captureEvidence',
+  ownData(input, ['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy','captureRationale','captureEvidence',
     'captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes','decisionReview','privateCards','rawConversations','existingStore']);
   const options = rawOptions(descriptor.value);
   const fields = Object.getOwnPropertyDescriptors(input);
@@ -182,7 +196,8 @@ export function openMemoryCore(input) {
 
 /** Internal construction seam. Public openMemoryCore never forwards extensions. */
 export function createMemoryCore(input, internal) {
-  object(input, ['path', 'model', 'captureQualification', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
+  const captureQualifiedDuplicates = qualifiedDuplicatesOption(input);
+  object(input, ['path', 'model', 'captureQualification', 'captureQualifiedDuplicates', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
     'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview', 'privateCards', 'existingStore']);
   const privateCards = privateCardOptions(input.privateCards);
   const decisionReview = decisionReviewOption(input);
@@ -533,7 +548,7 @@ export function createMemoryCore(input, internal) {
     });
   }
 
-  function finishAdmissionValidated(input, captureInitial, deadline) {
+  function finishAdmissionValidated(input, captureInitial, deadline, qualifiedDuplicates) {
     return invoke(() => {
       runtime.ready();
       object(input, ['namespace', 'client', 'eventId', 'payloadDigest', 'token', 'items']);
@@ -541,7 +556,7 @@ export function createMemoryCore(input, internal) {
       const key = admissionKey(input);
       const token = contractId(input.token);
       const items = admissionItems(input.items, captureInitial && Boolean(sessionEpisodes));
-      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline) :
+      return captureInitial ? runtime.finishCapturedAdmission(ns, { ...key, token, items }, deadline, qualifiedDuplicates) :
         runtime.finishAdmission(ns, { ...key, token, items });
     });
   }
@@ -908,7 +923,8 @@ export function createMemoryCore(input, internal) {
           claimAdmission: (value, sources) => invoke(() => runtime.claimCapturedAdmission(ns, {
           ...admissionKey(value), leaseMs: ADMISSION_LEASE_MS,
         }, deadline, rawRegistration, sources)),
-          finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline),
+          finishAdmission: value => finishAdmissionValidated(captureKey(value), true, deadline,
+            keepInput || sessionEpisodes ? undefined : captureQualifiedDuplicates),
           abandonAdmission: (value, retryable) => sessionEpisodes && retryable
             ? invoke(() => runtime.abandonAdmission(ns, { ...admissionKey(captureKey(value)),
               token: contractId(value.token), retryable: true }))

@@ -366,6 +366,29 @@ The closed configuration requires all of these fields:
 }
 ```
 
+The only additional optional top-level policy is
+`captureQualifiedDuplicates:'append-matching-evidence-v1'`. Omission preserves
+the existing configuration shape and strict qualified-source conflict behavior.
+Explicit undefined/null, inherited/accessor options and other values refuse;
+all seven fields above remain required. The adapter forwards only this validated
+trusted value to the same v2 core, without changing producer wire, replies,
+provider/model, usage caps or transport retry policy.
+
+The [matching qualified evidence policy](capture.md#optional-matching-qualified-evidence)
+allows ordinary automatic capture to append a new receipt only for exact
+canonical content, matching seven labels and intact eligible original/incoming
+sources. It keeps the original qualification and anchors, not a re-inference or
+truth/reaffirmation judgment. Explicit/manual/ordered/episode writes remain
+strict. Suppression, correction/forgetting and source deletion retain their
+existing behavior; deletion can clear qualification so a later duplicate refuses
+without implicit requalification. Already registered Raw events are not reopened.
+
+Select the policy before preparing a fresh owned synthetic host. Adding/removing
+it changes the exact configuration digest: an old profile refuses that config,
+and refreshing its digest still cannot adopt the old preparation marker. No
+rearm, historical backfill or state-reset permission is implied. This optional
+policy is unrelated to the retained-read MCP profile, which enables no capture.
+
 Paths must be absolute and normalized; config/store are owner-only regular
 0600 files without symlink leaves, and the existing usage root is 0700. Config
 is bounded to 64 KiB. Caps are positive safe integers, concurrency is 1–32,

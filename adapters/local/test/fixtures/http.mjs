@@ -18,6 +18,10 @@ globalThis.fetch = async (url, options) => {
   if (mode === 'provider-error' || mode === 'qualification-error' && method === 'cairn_qualifyCandidates' ||
       mode === 'filing-error' && method === 'cairn_classify') throw Error('synthetic_source_secret synthetic_key_secret');
   if (url.endsWith('/input_tokens')) {
+    if (mode === 'planning-delay') {
+      writeFileSync(process.env.SYNTHETIC_READY, 'ready', { flag: 'wx', mode: 0o600 });
+      await delay(2500);
+    }
     if (['revoke', 'notice', 'raw-off'].includes(mode)) {
       const config = JSON.parse(readFileSync(process.env.SYNTHETIC_CONFIG, 'utf8'));
       const { openMemoryCore } = await import(pathToFileURL(process.env.SYNTHETIC_CORE));

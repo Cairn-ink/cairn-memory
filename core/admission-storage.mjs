@@ -151,7 +151,8 @@ export function createAdmissionStorage({ db, admitMutation, isSuppressed, active
         activeItems.push(item);
       }
       const entries = activeItems.map((item) => {
-        const result = admitMutation(ns, item, { automatic: true });
+        const result = admitMutation(ns, item, { automatic: true,
+          ...(hooks?.captureQualifiedDuplicates ? { captureQualifiedDuplicates: hooks.captureQualifiedDuplicates } : {}) });
         const memoryId = result.memory.id;
         if (item.procedural !== undefined) proceduralStorage.write(result.memory, item.procedural, 'model', item.receipts);
         ids.add(memoryId);

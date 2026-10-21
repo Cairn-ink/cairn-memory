@@ -16,8 +16,20 @@ client setup/activation. The [retained Raw MCP/terminal bridge](raw-retained-mcp
 has accepted existing-store/indexed-discovery mechanics, the bounded adapter
 and independent installed Raw-to-authored-Card lifecycle cases on both supported
 Node versions. Its48 combined gates passed on both runtimes, actual exits0,
-including owned scratch cleanup. Final committed focused acceptance, dual review
-and PR delivery remain pending; this subset is not acceptance of all of Step4.
+including owned scratch cleanup. Its final committed candidate bf49518 also
+passed primary core11/MCP8/installed3 acceptance on both runtimes, independent
+Standards/Spec review and all31 latest-head checks. It is ready/unmerged as#464;
+this subset is not acceptance of all of Step4. The next dependent
+[qualified duplicate-evidence policy](raw-qualified-duplicates.md) has passed
+its core and opt-in local adapter milestones: primary's independent13 core and5
+installed cases pass on both runtimes. After strengthening an existing deadline
+test's provider-entry premise, all37 affected local cases pass on both runtimes;
+the retained reds and diagnosis remain explicit. Its48 combined commands now
+pass on both runtimes, actual exits0/null, with source/dependency hashes and
+owned cleanup independently verified. The only post-gate changes update these
+two planning records; a separate delivery freeze must confirm that boundary.
+This packet still needs exact-commit acceptance, committed independent reviews
+and latest-head CI delivery.
 Step4's combined installed lifecycle and T01–T18/RL acceptance map are not complete.
 Separate source/schema compatibility must be resolved or explicitly unavailable;
 retained-receipt excerpts do not substitute for full Raw. Product pins/flags and

@@ -78,13 +78,36 @@ test('B3 malformed routing, bytes, CLI and unsafe config refuse without capture 
 });
 
 test('B3 process deadline kills unconfirmed provider work without refund, then dead-owner recovery frees its slot', async t => {
-  const f = fixture(t); f.config.timeouts = { captureMs: 300, processMs: 1200 }; f.save();
-  const result = await f.run(f.request(), { mode: 'hang' });
+  const f = fixture(t), ready = join(f.workspace.path, 'ready'), release = join(f.workspace.path, 'release');
+  f.config.timeouts = { captureMs: 5000, processMs: 7000 }; f.save();
+  const pending = f.launch(f.request(), { mode: 'hold', environment: { SYNTHETIC_READY: ready, SYNTHETIC_RELEASE: release } });
+  const end = Date.now() + 4000;
+  while (!existsSync(ready) && pending.child.exitCode === null && pending.child.signalCode === null && Date.now() < end) await delay(10);
+  assert.equal(existsSync(ready), true, 'provider dispatch must precede the process-deadline assertion');
+  assert.equal(pending.child.exitCode, null); assert.equal(pending.child.signalCode, null);
+  assert.deepEqual(f.calls(), [{ method: 'cairn_extract', count: true }, { method: 'cairn_extract', count: false }]);
+  assert.equal(f.ledger().used, 1); assert.equal(f.ledger().reservations.length, 1);
+  const result = await pending.done;
+  assert.equal(result.timedOut, false);
   assert.equal(result.code, 124); assert.equal(result.signal, null); assert.equal(result.stdout, '');
+  assert.equal(existsSync(release), false);
   assert.equal(f.ledger().used, 1); assert.equal(f.ledger().reservations.length, 1);
   f.config.timeouts = { captureMs: 5000, processMs: 9000 }; f.save();
   const next = f.reply(await f.run(f.request('fresh', 'fresh', 2))); assert.equal(next.status, 200);
   assert.equal(f.ledger().used, 2); assert.deepEqual(f.ledger().reservations, []);
+});
+
+test('B3 pre-dispatch capture timeout completes cooperatively without refund and releases its slot', async t => {
+  const f = fixture(t), ready = join(f.workspace.path, 'planning-ready');
+  f.config.timeouts = { captureMs: 2000, processMs: 7000 }; f.save();
+  const pending = f.launch(f.request(), { mode: 'planning-delay', environment: { SYNTHETIC_READY: ready } });
+  const end = Date.now() + 4000;
+  while (!existsSync(ready) && pending.child.exitCode === null && pending.child.signalCode === null && Date.now() < end) await delay(10);
+  assert.equal(existsSync(ready), true, 'planning must precede the cooperative-timeout assertion');
+  const result = await pending.done, response = f.reply(result);
+  assert.equal(response.status, 503); assert.equal(response.body.error, 'interpretation_incomplete');
+  assert.deepEqual(f.calls(), [{ method: 'cairn_extract', count: true }]);
+  assert.equal(f.ledger().used, 1); assert.deepEqual(f.ledger().reservations, []);
 });
 
 test('B3 two actual processes share a target concurrency cap and release only after provider settlement', async t => {

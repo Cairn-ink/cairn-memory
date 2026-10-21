@@ -193,7 +193,8 @@ export function createMemoryRuntime(input, internal) {
       if (value.qualification !== undefined && value.content !== existing.content) fail('qualification_conflict');
       let changed = false;
       for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now, insertedReceiptIds, receiptOrigin)) || changed;
-      qualificationStorage.bind(existing, value.qualification, value.receipts, true, value.content);
+      qualificationStorage.bind(existing, value.qualification, value.receipts, true, value.content,
+        projection.captureQualifiedDuplicates);
       const explicit = value.origin === "explicit";
       const reviewState = explicit && existing.review_state === 'awaiting' ? 'none' : existing.review_state;
       const kind = explicit ? value.kind : existing.kind;
@@ -563,7 +564,8 @@ export function createMemoryRuntime(input, internal) {
   const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
     dropHeldWork: (id, reason) => dropHeldWork(db, id, reason) });
   const rationaleStorage = createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch });
-  const qualificationStorage = createQualificationStorage({ db, receiptKey });
+  const qualificationStorage = createQualificationStorage({ db, receiptKey,
+    assertStoredReceipts: rawLineage.assertStoredReceipts });
   const qualifiedTransitionStorage = createQualifiedTransitionStorage({ db, qualificationStorage, advanceEpoch, epoch });
   const indexStorage = createIndexStorage({ db, epoch, advanceEpoch });
   const classificationJournal = createClassificationJournalStorage({ db });
@@ -695,8 +697,9 @@ export function createMemoryRuntime(input, internal) {
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },
     assertCaptureEvidence(ns, input) { ready(); return admissionStorage.assertCaptureEvidence(ns, input); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
-    finishCapturedAdmission(ns, input, deadline) {
-      ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true }, deadline);
+    finishCapturedAdmission(ns, input, deadline, captureQualifiedDuplicates) {
+      ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true,
+        ...(captureQualifiedDuplicates ? { captureQualifiedDuplicates } : {}) }, deadline);
     },
     beginInitialClassification(ns, input, admitted, selected, deadline) {
       ready(); return classificationJournal.begin(ns, input, admitted, selected, deadline);

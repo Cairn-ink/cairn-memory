@@ -13,7 +13,7 @@ const invoke = work => { try { return success(work()); } catch (error) { return 
 // Receive the builder to avoid a contract -> composition -> contract cycle.
 export function composeRawCore(buildCore, input, rawOptions, { sources, lineage, deletion, localControls = false }) {
   const profile = structuredClone(Object.fromEntries(['captureQualification','captureSourcePolicy',
-    'captureEvidence','captureRationale','sessionEpisodes'].filter(key => Object.hasOwn(input, key)).map(key => [key,input[key]])));
+    'captureEvidence','captureRationale','sessionEpisodes','captureQualifiedDuplicates'].filter(key => Object.hasOwn(input, key)).map(key => [key,input[key]])));
   let storage, capture, runtime;
   const core = buildCore(input, {
     rawSources: sources,

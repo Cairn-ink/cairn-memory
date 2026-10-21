@@ -7,8 +7,8 @@ const source = row => ({ client: row.client, sessionId: row.session_id,
   eventId: row.event_id, role: row.role, excerpt: row.excerpt });
 
 // All callers hold the shared runtime transaction. No model or external I/O.
-export function createQualificationStorage({ db, receiptKey }) {
-  function inspect(memory) {
+export function createQualificationStorage({ db, receiptKey, assertStoredReceipts }) {
+  function inspectStored(memory) {
     const row = db.prepare('SELECT * FROM memory_qualifications WHERE memory_id = ?').get(memory.id);
     if (!row) return null;
     try {
@@ -34,14 +34,18 @@ export function createQualificationStorage({ db, receiptKey }) {
         anchors: stored.map((anchor, index) => ({ receiptIndex: index, start: anchor.start, end: anchor.end,
           text: receipts[index].excerpt.slice(anchor.start, anchor.end), fields: JSON.parse(anchor.fields) })),
       }, receipts.map(source));
-      return { ...clean, boundRevision: row.bound_revision, contentDigest: row.content_digest,
+      return { receipts, qualification: { ...clean, boundRevision: row.bound_revision, contentDigest: row.content_digest,
         anchors: clean.anchors.map(({ receiptIndex, ...anchor }) => ({
           receiptId: stored[receiptIndex].receipt_id, receiptDigest: stored[receiptIndex].receipt_digest, ...anchor,
-        })) };
+        })) } };
     } catch { fail('storage_error'); }
   }
 
-  function bind(memory, input, receipts, deduplicated, content) {
+  function inspect(memory) { return inspectStored(memory)?.qualification ?? null; }
+
+  function bind(memory, input, receipts, deduplicated, content, qualifiedDuplicates) {
+    const matching = deduplicated && qualifiedDuplicates === 'append-matching-evidence-v1';
+    if (matching && input === undefined) fail('qualification_conflict');
     if (input === undefined) return;
     qualificationSources(content, receipts);
     if (memory.content !== content) fail('storage_error');
@@ -65,6 +69,16 @@ export function createQualificationStorage({ db, receiptKey }) {
     const contentDigest = digest(memory.content);
     const value = { ...clean, boundRevision: memory.revision, contentDigest, anchors: anchored };
     if (deduplicated) {
+      if (matching) {
+        const original = inspectStored(memory), existing = original?.qualification;
+        if (!existing || JSON.stringify(existing.slot) !== JSON.stringify(clean.slot) ||
+            existing.value !== clean.value || existing.attribution !== clean.attribution ||
+            existing.commitment !== clean.commitment) fail('qualification_conflict');
+        // Source refusals retain their own meaning, outside integrity inspection's catch.
+        assertStoredReceipts({ ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id },
+          [...new Map(original.receipts.map(receipt => [receipt.id, receipt])).values()]);
+        return;
+      }
       const existing = inspect(memory);
       // The original revision is retained even after filing/receipt additions.
       if (!existing || JSON.stringify({ ...value, boundRevision: existing.boundRevision }) !== JSON.stringify(existing)) {

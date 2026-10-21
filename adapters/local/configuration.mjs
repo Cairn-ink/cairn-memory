@@ -18,7 +18,11 @@ export const normalizedPath = value => typeof value === 'string' && !value.inclu
 
 export function configuration(value) {
   try {
-    const input = exact(value, ['version', 'databasePath', 'authority', 'raw', 'provider', 'usage', 'timeouts']);
+    const required = ['version', 'databasePath', 'authority', 'raw', 'provider', 'usage', 'timeouts'];
+    const input = ownData(value, [...required, 'captureQualifiedDuplicates']);
+    if (required.some(field => !Object.hasOwn(input, field)) ||
+        'captureQualifiedDuplicates' in value && (!Object.hasOwn(input, 'captureQualifiedDuplicates') ||
+          input.captureQualifiedDuplicates !== 'append-matching-evidence-v1')) invalid();
     if (input.version !== 'local-capture-config-v1' || !normalizedPath(input.databasePath)) invalid();
     const validated = localAuthorityInput(input.authority);
     // The trusted authority validator uses storage's empty personal project ID;

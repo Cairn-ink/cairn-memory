@@ -125,6 +125,48 @@ tokenizer. No automatic host integration or semantic-quality claim is bundled.
 Scripted tests prove boundary/lifecycle behavior only. Storage and
 receipt retention follow [the local store limits](local-store.md).
 
+## Optional matching qualified evidence
+
+Trusted hosts may explicitly select:
+
+```js
+openMemoryCore({ path, model,
+  captureQualification: 'source-bound-v2',
+  captureQualifiedDuplicates: 'append-matching-evidence-v1' });
+```
+
+Omission retains strict qualified deduplication: a different receipt/anchor
+identity can still return `qualification_conflict`. The optional exact literal
+is constructor policy, not model output or a capture/MCP/HTTP request field.
+Undefined, null, inherited/accessor properties and unsupported values refuse
+before storage/model work; v2 qualification is mandatory and `sessionEpisodes`
+cannot be combined with this policy.
+
+Only ordinary automatic capture, including eligible non-episode staged capture,
+can append a new source to an existing qualified Memory under this exception.
+It requires exact canonical content, exactly matching subject/property/scope/
+applies/value/attribution/commitment (including null/unknown), valid incoming
+anchors and intact, eligible original anchored sources. It retains the original
+qualification row, bound revision and anchors rather than replacing provenance.
+Receipt attachment remains transactional with admission; suppression and the
+existing kind/confidence/state/revision, classification and invalidation rules
+are unchanged. A case-folded fingerprint alone is insufficient.
+
+This is mechanical evidence matching, not semantic deduplication, truth,
+reaffirmation, stronger confidence or automatic Card creation. Unknown source
+provenance, an unqualified target, missing incoming qualification or corrupt
+original qualification cannot use the exception. Manual finish, explicit writes,
+ordered/causal capture and episode keep remain strict. Original session fences,
+source exclusions, correction, forgetting and deletion still apply.
+
+Deleting support can clear the surviving Memory's qualification under existing
+semantics. A later duplicate may then refuse; there is no automatic requalification
+or provenance substitution. Raw events bind the selected policy: changing it
+does not reopen a completed/incomplete old event or let a new event retry already
+registered message parts. Ordinary capture snapshot hashing is unchanged.
+See the [local host configuration](raw-local-journal.md#local-one-shot-adapter-b3)
+for the separate trusted opt-in and preparation/rearm boundary.
+
 ## Opt-in automatic source qualification
 
 Construct `openMemoryCore({ path, model, captureQualification: 'source-bound-v1' })`
