@@ -1,10 +1,11 @@
 # Unified memory integration V1: P0 contract and first packet (method packages)
 
-Status: **v0.2 DRAFT, revised after a non-author design audit. Nothing is
-implemented.**
+Status: **v0.3, revised after a non-author design audit and re-check. Nothing
+is implemented.**
 - v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
   read-only), which found seven P0, four P1 and one P2 issue.
-- v0.2 adopts them. Implementation starts only after the auditor confirms v0.2.
+- v0.2 (`91a7825`) adopted them.
+- v0.3 applies the re-check's three P0 and three P1 replacements.
 
 Branch `integration/unified-memory-v1`, based on PR #469 head
 `b8fa224d5ba6fe8007e6d80fe64fae74d89aa78b` (the tip of the unmerged Raw/local
@@ -16,7 +17,7 @@ This is the public-engine part of a private integration draft (v0.2).
 
 | Packet | Content | Waits for |
 | --- | --- | --- |
-| **U2 (§§2–9)** | M4 method packages in core, **text-only subset**: immutable versions, adoption bindings, change records, history, pins and deletion fences. Includes the schema-only prerequisite migrator and opener updates for v30 | Auditor confirmation of this v0.2 |
+| **U2 (§§2–9)** | M4 method packages in core, **text-only subset**: immutable versions, adoption bindings, change records, history, pins and deletion fences. Includes the schema-only prerequisite migrator and opener updates for v30. Delivered as U2a (schema, migrator, import, reads, compare, deletion) then U2b (bindings, resolution, pins, binding events) | Audited contract (v0.3) |
 | U3 | M4 host side: safe local directory importer (real symlink/path-swap confinement, strict UTF-8), explicit-user approval through the existing local authority path, read-only MCP tools, installed tests | U2 accepted |
 | U4 | M5 assets and derivatives: binary storage port, immutable asset versions, derivative provenance, binary method attachments | U2's typed-ref/schema rules |
 | U5 | M6/M7/M8: `context-read-v1` common read; candidate channels; budgeted assembly; role profiles; current-dependent Card/cache/MOC invalidation driven by U2 binding generations | HR-1/HR-2 evidence for defaults; interfaces and degraded modes may be specified earlier |
@@ -50,6 +51,9 @@ The [three-layer contract](three-layer-engine-contract.md) boundaries carry over
   - Today, feature-off flags skip installers (`core/database.mjs:33`). The
     migrator must call the schema installers deliberately, without enabling
     their features.
+- **Only the writable ordinary opener performs prerequisite migration.**
+  Read-only and managed-existing openers validate and reopen an
+  already-upgraded v30 store without creating or migrating it.
 - **Openers.** Update the ordinary, read-only and managed openers, plus local
   setup and preflight, so that v30 is recognized:
   - `core/database.mjs:361`
@@ -88,6 +92,17 @@ are no public content digests.
     (`adapters/mcp/private-card-access.mjs:19`), and they must add method names
     explicitly;
   - capture consent never authorizes method operations.
+- **Namespaces and read sets**:
+  - A `readSet` contains one exact namespace, or personal plus one project of
+    the same owner.
+  - The import namespace must equal `package.namespace` and
+    `basedOn.namespace`.
+  - The only cross-namespace binding target allowed is a project binding to the
+    same owner's personal package.
+  - Import `reasonRefs` use the import namespace; adoption and disable
+    `reasonRefs` use `bindingNamespace`.
+  - Each reason namespace is authorized before canonical validation or
+    delivery. Package access alone never authorizes adoption reasons.
 - **Action classes**:
   - import, adoption, disable and delete are `explicit-user`;
   - reads need read authority for **every namespace consulted**;
@@ -196,21 +211,35 @@ are no public content digests.
 - **Listing**: `resolveMethodsForRole({readSet, roleId, limit, cursor})` applies
   the same rules to every package with a binding in the read set. Default and
   maximum page size is 20.
-- **Snapshots** are opaque. They bind the role, the read set, the consulted
-  binding revisions and the **absence** of higher-level bindings, the version
-  refs and access generations. Any binding change stales current snapshots;
-  historical pins are never retargeted.
+- **Snapshots** are opaque. They bind:
+  - the role, the read set and the consulted binding revisions;
+  - the **absence** of higher-level bindings;
+  - the version refs;
+  - the package and version **lifecycle revisions**;
+  - access generations.
+
+  Any binding change stales current snapshots; historical pins are never
+  retargeted.
+- **Deletion and invalidation**: deletion advances the package lifecycle
+  generation and emits a package/version effect, with no per-binding fanout.
+  Every delivery checks the target's lifecycle directly, whether or not effects
+  were consumed.
 
 ## 5. Reads, pins, change records and history (U2)
 
 - **Version and file reads**:
-  - `getMethodVersion` and `readMethodFile` both accept `intent`
-    (`current`|`history`), a role/read-set `context`, and an optional
+  - `getMethodVersion`, `listMethodManifest` and `readMethodFile` accept
+    `intent` (`current`|`history`), a role/read-set `context`, and an optional
     authenticated pin `snapshot`.
-  - A **current** read revalidates the binding before delivery.
-  - A **history** read preserves the exact pinned version.
-  - A read without context returns `adoptionStatus: 'unassessed'` (history
-    semantics).
+  - **`intent:'current'` requires context**; otherwise `invalid_input`. Content
+    is delivered only when the requested version equals the **available winning
+    target**; otherwise `method_version_unavailable`. A stale current snapshot
+    returns `cursor_stale`.
+  - Only available winners establish `current` or `newer-version-available`.
+  - **Context-free reads require `intent:'history'`** and report
+    `adoptionStatus: 'unassessed'`.
+  - Historical snapshots preserve identity but still require fresh access
+    authorization.
 - **`adoptionStatus` precedence** within the given context:
   1. the winning binding targets this version → `current`;
   2. it was never adopted in this context → `never-adopted`;
@@ -238,12 +267,16 @@ are no public content digests.
     by content identity);
   - recorded items and reasons are attributed **only to their stored edge**.
     Other edges, or a missing record, give `reason: 'not-recorded'`;
-  - recorded reasons that later become unavailable report `recorded-unavailable`;
+  - a matching change record with **zero** `reasonRefs` returns
+    `reason: 'not-recorded'` and keeps its change items;
+  - `recorded-unavailable` requires recorded refs that are **all** currently
+    unavailable. Availability is also returned separately for each ref;
   - core never generates or infers reasons.
 - **Reason refs**:
-  - At most 16 **exact-binding-namespace** refs (MemoryRef, CardRef,
-    NoteSourceRef, RawSourceRef, ReceiptSourceRef), authorized and canonically
-    validated within the import or adoption transaction.
+  - At most 16 refs (MemoryRef, CardRef, NoteSourceRef, RawSourceRef,
+    ReceiptSourceRef), all in the import namespace or the binding namespace
+    (§2.3), authorized and then canonically validated within the import or
+    adoption transaction.
   - Delivery rechecks exact revisions, eligibility and Raw exclusions, and
     exposes only `available` or `unavailable`. Forgotten, missing, foreign and
     denied sources all collapse to `unavailable`.
@@ -312,8 +345,8 @@ All take `(input, authority)` and return existing envelopes. `A` = actionId.
 | Method | Input | Success value |
 | --- | --- | --- |
 | `importMethodVersion` | `namespace, A, package?: MethodPackageRef, expectedPackageRevision?, basedOn?: MethodVersionRef, title, submittedBy?, files:[{path,text,mediaType}], change?: {items, reasonRefs}` (first import omits `package`) | import receipt |
-| `getMethodVersion` | `version, intent, context?: {readSet, roleId}, snapshot?` | `{version}` metadata, first manifest page, `adoptionStatus`; or `{version:null}` |
-| `listMethodManifest` | `version, intent, context?, snapshot?, cursor?` | manifest page |
+| `getMethodVersion` | `version, intent, context?: {readSet, roleId}, snapshot?` | `{version}` metadata only, with `adoptionStatus`; or `{version:null}` |
+| `listMethodManifest` | `version, intent, context?, snapshot?, cursor?` | manifest page; owns the complete manifest pagination stream |
 | `readMethodFile` | `version, path, intent, context?, snapshot?, cursor?` | `{parts, coverage, nextCursor, adoptionStatus}` |
 | `listMethodPackages` | `namespace, limit?, cursor?` | metadata pages |
 | `listMethodVersions` | `package, context?, limit?, cursor?` | metadata pages |
@@ -325,13 +358,13 @@ All take `(input, authority)` and return existing envelopes. `A` = actionId.
 | `listMethodBindingEvents` | `bindingNamespace, package?, limit?, cursor?` | content-free event pages |
 | `deleteMethodVersion` / `deleteMethodPackage` | `A, ref, expectedRevision` | delete receipt |
 | `listMethodEffects` | `namespace, limit?, cursor?` | effect pages |
-| `getMethodPackageUsage` | none | usage projection |
+| `getMethodPackageUsage` | `namespace` | usage projection; owner-wide cross-namespace totals only if authority explicitly permits the aggregate |
 
 ## 9. U2 acceptance (synthetic stores; Node 22.16 and 24.15)
 
 | ID | Observable |
 | --- | --- |
-| M01 | Default construction is unchanged, and old DTOs and tools are unchanged. v30 opt-in works from fresh and from every supported **populated** layout (v18, v20–v29), through every opener (ordinary, read-only, managed, local setup/preflight). Rollback on injected failure. The **actual** old binary refuses v30. v19 is refused |
+| M01 | Default construction is unchanged, and old DTOs and tools are unchanged. v30 opt-in migrates through the **writable ordinary opener** from fresh and from every supported **populated** layout (v18, v20–v29). Every applicable opener (read-only, managed-existing, local setup/preflight) then accesses the upgraded store without migrating. Rollback on injected failure. The **actual** old binary refuses v30. v19 is refused |
 | M02 | Import stores exact redacted text, paths and identities, with aggregate limits and the maximum manifest. Refusals are atomic for invalid or colliding paths, prefixes and segments, unsupported media, oversize, invalid Unicode or NUL. Redaction identities are post-redaction. A second import with `basedOn` gives ordinal 2 with v1 bytes and identity unchanged; existing-package CAS is enforced |
 | M03 | Reads deliver only from the requested immutable version. Identity mismatch, cursor substitution across versions and paths, and bounded parts, pages and envelopes are all exercised |
 | M04 | In **separate processes**: adopt/adopt races (exactly one winner), import/delete, adopt/delete, and owner-quota races. Replay returns original receipts, including after deletion; changed payload fails `action_conflict` |
@@ -340,7 +373,7 @@ All take `(input, authority)` and return existing envelopes. `A` = actionId.
 | M07 | Comparison of adjacent and **non-adjacent** versions. Recorded reasons sit on their edge only; `not-recorded` elsewhere; `recorded-unavailable` after forgetting a Memory or deleting a note; foreign or denied reason refs refused at import |
 | M08 | In **fresh processes**: deletion purges text, paths, titles, labels and change prose; tombstones are content-free; deleted objects return `unavailable`; bindings act as barriers; effects are durable exactly once; no resurrection after restart or replay; usage decrements |
 | M09 | Authority: missing, forged, wrong-scope, stale-generation, revoked and capture-consent-only grants refuse with no leak. Model or tool flags never authorize |
-| M10 | Exact bounds and numeric limits, atomic refusals, exact error codes, and no network, model, filesystem or execution calls from core |
+| M10 | Exact bounds and numeric limits, atomic refusals, exact error codes, and no network or model calls, package-filesystem access or execution from core. SQLite persistence and database opening are excluded from that last check |
 
 ## 10. Resolved design questions
 
