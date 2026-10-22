@@ -128,6 +128,27 @@ Both nominated systems miss **q-058** (a very indirect C3 description) and
 4. **Isolation variant.** The flag was added after the first test run so that
    protocol §6 could be verified; it changes no default behaviour.
    Isolation was verified for every arm.
+5. **Protocol §9.7 after the first test run.** No fixture, label, tokenizer,
+   menu or selection changed after the first test-split run (`1a200af`).
+   Fixture hashes are identical, and `selection.json` was frozen earlier. Only
+   two harness defects were fixed (items 3 and 4); no fixture defect was found,
+   so no new fixture version is warranted.
+   - The first run's rankings were never scored or inspected before the fix;
+     only `status:"unavailable"` was observed.
+   - They are retained unchanged, as `initial-run-1a200af.tar.xz`.
+   - The confirmatory comparisons use non-A0 arms only. Their rankings and
+     channel scores are identical between the two runs, so the confirmatory
+     outcome equals the first run's. The `4fcec31` non-A0 runs are verification
+     duplicates.
+   - A0 is a baseline outside every confirmatory decision. Its numbers come
+     only from the corrected harness.
+
+   An independent reviewer argued that §9.7 calls for a new fixture version here.
+   The primary's reasoning is recorded so readers can judge it.
+6. **A0 capacity precondition.** The corrected A0 seeding requires historical
+   ≤ current memories per projection: this fixture has 20 historical and at
+   least 280 current. The validator's public-API preflight is being extended to
+   refuse fixtures that break this precondition.
 
 ## 6. Limits of this evidence
 
