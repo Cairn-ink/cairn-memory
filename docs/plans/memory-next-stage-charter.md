@@ -97,7 +97,7 @@
 
 ## 7. 工程軌（草案 M1–M8）
 
-**進度（2026-10-23）**：P0 契約經兩輪非作者審查後為 v0.3（整合分支 `docs/plans/unified-memory-v1-contract.md`，`2b2e3cf`）。U2 拆成 U2a 與 U2b：U2a 已派 Codex 實作，U2b（綁定、解析、pin）在 U2a 驗收後由同一位 worker 接續。分包順序：U2 方法包 core → U3 方法包 host（匯入器、TTY 核准、MCP 唯讀工具）→ U4 素材 → U5 共同讀取與檢索（等 HR-1／HR-2）。
+**進度（2026-10-23）**：P0 契約經兩輪非作者審查後為 v0.3（整合分支 `docs/plans/unified-memory-v1-contract.md`，`2b2e3cf`）。U2 拆成 U2a 與 U2b：**U2a 已完成**（`d8eaba8`，雙審查都判 Yes）；U2b（綁定、解析、pin）已派同一位 worker 實作。分包順序：U2 方法包 core → U3 方法包 host（匯入器、TTY 核准、MCP 唯讀工具）→ U4 素材 → U5 共同讀取與檢索（等 HR-1／HR-2）。
 
 P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 `.research-private/dispatch/p0_inventory/last.md`，因引用私有產品檔案而不進 git）。
@@ -171,6 +171,10 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `hr1_arms`（修正 2） | 產生「拿掉外部 namespace」的配對排名參數 | gpt-6.1-sol/xhigh | workspace-write | `1a200af` | 21:2x– | 執行中 |
 | 主控（U2a 驗收） | 沙箱外的完整測試矩陣 | — | — | `b9eb2a6` | 21:3x–22:00 | Node 22.16 全部 exit 0（core 1,904／1,904、整體 635／635）；Node 24.15 全部 exit 0，打包測試是第 3 次才 exit 0（前兩次的失敗證實是負載：R29 單獨跑時與 b8fa224 一樣 6.9 秒）→ commit `b9eb2a6` |
 | `u2a_review_spec`／`u2a_review_standards` | U2a 的非作者雙審查 | gpt-6.1-sol/xhigh → 同 | read-only | `b9eb2a6` | 22:0x–22:1x | 兩邊都判 No：淺層 CI 拿不到歷史 commit（P1）；schema 驗證只看觸發器名稱（P2）；缺少真正同時搶寫的程序測試（P2）→ U2a 修正 2 執行中 |
+| `umv1_u2_impl`（U2a 修正 2） | 淺層 CI、schema 驗證、多程序搶寫測試 | gpt-6.1-sol/xhigh → 同 | workspace-write | `b9eb2a6` | 22:1x–22:34 | exit 0；13 個檔案 |
+| 主控（U2a 修正驗收） | 機器空閒時重跑完整矩陣 | — | — | `d8eaba8` | 22:3x–23:0x | 兩個 Node 版本每一項都 exit 0：core 1,934／1,934、整體 635／635、打包 153 通過 1 略過、local、mcp、示範程式、驗證、歷史資料檔驗證 |
+| `u2a_review_spec`／`u2a_review_standards`（複查） | U2a 修正 | gpt-6.1-sol/xhigh → 同 | read-only | `d8eaba8` | 23:0x | **兩邊都判 Yes**，沒有新問題 → **U2a 完成** |
+| `umv1_u2_impl`（U2b） | 綁定、解析、pin、綁定事件 | gpt-6.1-sol/xhigh | workspace-write | `d8eaba8` | 23:0x– | 執行中 |
 | `hr1_arms`（修正 2／3）＋`hr1_tooling`（修正 3） | 隔離參數；A0 建資料的 bug；A0 容量預檢 | gpt-6.1-sol/xhigh → 同 | workspace-write | `1a200af` | 21:2x–21:39 | 主控驗收：兩個 Node 版本各 136 項、135 通過、0 失敗、1 略過 → commit `4fcec31`；Spec 判定：隔離參數符合，另提 A0 容量前提應加入預檢（P1）→ W4a 修正 3 |
 | 主控（HR-1 最終執行） | 從固定在 `4fcec31` 的 worktree 跑測試集兩種版本（有／沒有外部 namespace）、延遲與計分 | — | — | `4fcec31` | 22:0x–22:2x | 16 個批次全部 exit 0；66 個非 A0 排名檔和 `1a200af` 逐筆相同；**兩個情境都判「繼續」**；A5 未達門檻；API 累計 US$0.0050 → commit `34f6ea9` |
 | `hr1_review_spec`（最終） | 確認 `51dbdf6` 與程序揭露 | gpt-6.1-sol/xhigh → 同 | read-only | `51dbdf6` | 22:2x | 框架判 **Yes**；接受證據保留的推理，但不接受「程序完全合規」的說法 → 結果報告已加註爭議與限縮的說法（`9ce7328`） |
