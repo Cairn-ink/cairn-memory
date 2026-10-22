@@ -97,7 +97,7 @@
 
 ## 7. 工程軌（草案 M1–M8）
 
-**進度（2026-10-23）**：P0 契約與第一包方法包（U2）的草稿已寫好，放在整合分支的 `docs/plans/unified-memory-v1-contract.md`（`81e0f21`），目前由 Codex 做非作者設計審查。分包順序：U2 方法包 core → U3 方法包 host（匯入器、TTY 核准、MCP 唯讀工具）→ U4 素材 → U5 共同讀取與檢索（等 HR-1／HR-2）。
+**進度（2026-10-23）**：P0 契約經兩輪非作者審查後為 v0.3（整合分支 `docs/plans/unified-memory-v1-contract.md`，`2b2e3cf`）。U2 拆成 U2a 與 U2b：U2a 已派 Codex 實作，U2b（綁定、解析、pin）在 U2a 驗收後由同一位 worker 接續。分包順序：U2 方法包 core → U3 方法包 host（匯入器、TTY 核准、MCP 唯讀工具）→ U4 素材 → U5 共同讀取與檢索（等 HR-1／HR-2）。
 
 P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 `.research-private/dispatch/p0_inventory/last.md`，因引用私有產品檔案而不進 git）。
@@ -157,4 +157,7 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `hr1_world_author`（W1） | 寫語料：家族、事實、記憶、原文片段 | gpt-6.1-sol/xhigh | workspace-write，無網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
 | `hr1_tooling`（W4a） | 語料工具、指標、統計、報告 | gpt-6.1-sol/xhigh | workspace-write，無網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
 | `hr1_arms`（W4b） | 各組檢索方法、embedding、融合、計時 | gpt-6.1-sol/xhigh | workspace-write，只開放安裝套件與下載模型的網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
-| `umv1_contract_audit` | 工程軌 P0 契約（方法包）的非作者設計審查 | gpt-6.1-sol/xhigh | read-only | 整合分支 `81e0f21` | 2026-10-22T19:51– | 執行中 |
+| `umv1_contract_audit` | 工程軌 P0 契約的非作者設計審查 | gpt-6.1-sol/xhigh → 同 | read-only | 整合分支 `81e0f21` | 19:51–19:58 | exit 0；7 項 P0 → v0.2（`91a7825`） |
+| `umv1_contract_audit`（複查） | 檢查 v0.2 | gpt-6.1-sol/xhigh | read-only | `91a7825` | 19:59–20:02 | exit 0；3 項 P0 → v0.3（`2b2e3cf`） |
+| `umv1_contract_audit`（確認） | 確認 v0.3 | gpt-6.1-sol/xhigh | read-only | `2b2e3cf` | 20:03– | 執行中 |
+| `umv1_u2_impl`（U2a） | 方法包 core：schema v30 與升級程式、匯入、讀取、比較、刪除 | gpt-6.1-sol/xhigh | workspace-write，無網路 | 整合分支 `2b2e3cf` | 20:03– | 執行中 |
