@@ -10,8 +10,9 @@ Current checkpoint (2026-10-22): storage/capture/source/invalidation and local
 controls/one-shot/transport packets are delivered as reviewed, unmerged PRs.
 The [durable worker](raw-local-worker.md) is ready/unmerged as#462, and the
 [explicit foreground host](raw-local-host.md) as#463; both have committed dual
-review, primary acceptance and31 successful latest-head checks. Step3 still needs
-control rearm and actual automatic client setup/activation. The
+review, primary acceptance and31 successful latest-head checks. Explicit control
+rearm is now delivered as#466 below; actual automatic client setup/activation
+remains separate. The
 [retained Raw MCP/terminal bridge](raw-retained-mcp.md)
 has accepted existing-store/indexed-discovery mechanics, the bounded adapter
 and independent installed Raw-to-authored-Card lifecycle cases on both supported
@@ -43,10 +44,22 @@ passes author source52/installed6 and independent source13/recovery2/installed5/
 deletion4 on each runtime, with actual exits0/null and verified cleanup.
 All22 affected correction commands also pass; primary independently checked
 their logs,1852 source/18 dependency hashes and scratch removal, verifier exit0.
-Exact new-commit acceptance, renewed double review and latest-head CI are still
-pending, so this is not yet a ready delivery. Pending deleted actions refuse;
+Exact new-commit acceptance and renewed double review passed at9623cea, with
+zero actionable findings on both axes. All31 checks and4 workflow runs passed;
+the merge preview matched the reviewed tree. It is ready/unmerged as#466,
+2 incremental commits/18 paths, independently enumerated; no merge occurred.
+Pending deleted actions refuse;
 there is no automatic cancel/rollback/repair. Metadata status is not permission.
-Step4's combined installed lifecycle and T01–T18/RL acceptance map are not complete.
+Step4's [combined installed lifecycle](raw-installed-lifecycle.md) now has a
+frozen six-scenario implementation contract and explicit T01–T18/RL coverage map.
+Primary's independently written installed five-case baseline passed both Node
+versions, actual exit0 and cleanup, after a diagnosed primary fixture import-order
+failure; the original red is retained. The bounded GPT-6.1 Sol/high worker's six
+scenarios now pass both runtimes, actual exits0 and cleanup; runtime/dependencies
+are unchanged. All10 primary combined commands and independent installed5
+cases pass both runtimes, actual exits0, frozen hashes and cleanup independently
+verified. Exact-commit acceptance, double review and latest-head CI remain
+pending; full V1 and final delivery are not declared complete by these local gates.
 Separate source/schema compatibility must be resolved or explicitly unavailable;
 retained-receipt excerpts do not substitute for full Raw. Product pins/flags and
 semantic scores are unchanged.

@@ -1,5 +1,42 @@
 # Known limitations
 
+## Installed Raw / Memory / Card lifecycle evidence
+
+The six installed lifecycle cases select three independent synthetic scenarios
+for each supported client format. Foreground capture, not SQL seeding or
+remember_memory, creates the tested Memory/receipt/Raw lineage. Explicit resolved
+Raw references support authored drafts, generic MCP approval still refuses, and
+a synthetic controlling TTY supplies the exact confirmation phrase. Cold stdio
+reads, precise original-anchor exclusions, surviving independent-source support,
+private authored-body retention and pause/rearm replay are mechanical evidence.
+The matching-evidence policy is explicitly enabled only for the two-conversation
+scenario; duplicate receipts alone do not establish independent corroboration.
+
+Scenario B corrects a captured Memory and then forgets that corrected revision.
+It proves the original exclusions persist, not an independent standalone-forget
+case. Disjoint and future Raw controls use scripted empty extraction; there is
+no claim that model outputs are semantically accurate or that suppression bans
+newly entered text in a genuinely new session. Fresh coarse conversation revisions
+are inspected before testing original anchors. Re-extraction jobs are unavailable
+and are not simulated as a shipped API. Deletion uses the installed trusted core,
+not a nonexistent MCP deletion tool. These short fixtures do not replace the
+specialized long/multipart, quota, crypto, race, isolation or deletion-table suites.
+
+The first author run failed 0/6, actual exit 1, before capture: its new static
+closure looked for the archive's bin/cairn-memory.mjs target as a root source file.
+The build maps it from packaging/bin; archive/installed launcher bytes are now
+checked separately. A second 0/6 run and a minimized 0/1 run exited 1 at MCP
+startup because the new fixture's nested import-loader string expanded a newline
+inside quoted JavaScript. A direct syntax probe distinguished outer success from
+nested failure; only the test guard's trace-newline construction changed. Runtime
+files and dependency versions were untouched, and the red receipts remain retained.
+
+This installed subset does not complete all T01–T18 or RL-1–RL-3 rows. Semantic
+decision/rationale accuracy, generated summaries, automatic consolidation, vector
+retrieval, actual native-client setup/activation, product joint acceptance and
+production G1/G2/H6 remain separate. No real transcript, operational store/key,
+paid request, activation, release, deployment or new competitive score is claimed.
+
 ## Explicit authority-only local rearm
 
 The [explicit rearm path](raw-local-journal.md#explicit-authority-only-rearm)
