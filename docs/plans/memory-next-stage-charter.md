@@ -163,6 +163,7 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | 主控（標註） | 分組、標註、驗證器 | — | — | `f029055` | 20:5x | 分組符合配額與家族下限（開發集 32.1%）。驗證器：15 個缺席事實被誤判 → W4a 修正 2；C6 有 9 題問的是沒改過的決策 → 協議 v2.2 澄清，交 W2 修正 1 |
 | `hr1_tooling`（W4a 修正 1）／`hr1_arms`（W4b 修正 1） | 雙審查的修正 | gpt-6.1-sol/xhigh → 同 | workspace-write | `a424c23` | 20:24–20:48 | exit 0；主控在沙箱外驗收：兩個 Node 版本各 124 項、123 通過、0 失敗、1 略過；commit `f029055`；兩位審查者複查中 |
 | `umv1_u2_impl`（U2a） | 結果 | gpt-6.1-sol/xhigh → 同 | workspace-write | `2b2e3cf` | 20:03–20:50 | exit 0；30 個檔案；新寫的 46 項測試全過；完整測試在沙箱內因子程序管線被擋而失敗。另需補 v0.3.1 的完整 v30 schema → 修正 1 執行中 |
+| 主控（U2a 的比較基準） | 在未修改的 b8fa224 上跑 `npm run test:core` | — | 沙箱外 | `b8fa224` | 20:5x–21:0x | Node 22.16：1,848 項全過，exit 0。Node 24.15：exit 1，失敗 1、取消 1，都是 `E4/E5 lock beyond budget` 時序測試，當時機器同時跑 bge-m3 暖機和多個 Codex。負載低時單獨重跑 9 項全過，exit 0 → **負載造成的偶發失敗，原本的程式就會發生** |
 | `hr1_tooling`（W4a） | 語料工具、指標、統計、報告 | gpt-6.1-sol/xhigh → 同 | workspace-write，無網路 | `e1aa7da` | 19:47–20:14 | exit 0；16 個檔案 |
 | `hr1_arms`（W4b） | 各組檢索方法、embedding、融合、計時 | gpt-6.1-sol/xhigh → 同 | workspace-write，只開放安裝套件與下載模型的網路 | `e1aa7da` | 19:47–20:12 | exit 0；21 個檔案；transformers.js 3.7.6；e5-small `761b726`、bge-m3 `4de1325`（fp32） |
 | 主控驗收 | W4a＋W4b 的測試框架 | — | — | `a424c23` | 20:15 | 兩種方式核對檔案清單，都是 37 個；Node 22.16／24.15 各 84 項測試、83 通過、0 失敗、1 項需手動開啟的測試略過，exit 皆 0；真實模型冒煙測試 exit 0 |
