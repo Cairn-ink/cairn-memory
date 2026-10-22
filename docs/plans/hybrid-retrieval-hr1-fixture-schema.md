@@ -81,6 +81,7 @@ natural language: Traditional Chinese as used in Taiwan, English, or mixed.
       "supersedes": null,
       "eventTime": "2026-08-14T09:00:00Z",
       "domain": "engineering",
+      "authoring": "hand",
       "content": "assistant-style extracted note (memory body)",
       "spans": [
         { "id": "m-0001#s1", "role": "user", "eventTime": "2026-08-14T09:00:00Z", "text": "verbatim chat message excerpt" }
@@ -101,6 +102,7 @@ natural language: Traditional Chinese as used in Taiwan, English, or mixed.
     `decision`, `instruction`, `context`.
   - `state` ∈ `current`, `historical`. `supersedes` links memories.
   - Each memory has 1–3 spans. Span IDs are `<memoryId>#s<n>`.
+  - `authoring` ∈ `hand`, `template` (lets tools check the at-most-half-template rule for S1000 extras).
 - **`expresses`** lists every fact the memory conveys.
   - `where: "body"` means the body states the fact.
   - `where: "span"` means only the named span states it.
