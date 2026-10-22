@@ -12,6 +12,17 @@ const matches = (result, selected) => selected && result.run.arm === selected.ar
 const healthy = result => result.ok && result.summary?.macroRecall12 != null && result.summary.complete;
 const scoredRows = result => result.queries.filter(query => CATEGORIES.includes(query.category));
 const scoreDifference = (a, b) => Math.abs(a - b) < 1e-12 ? 0 : a - b;
+const explicitFailure = result => ['failed', 'unavailable'].includes(result.run.status);
+const bodyModelRun = result => result.run.arm === 'A2' || MENU.includes(configName(result)) && !/^A5/.test(result.run.arm);
+function modelEvidence(runs, model) {
+  const attempted = runs.filter(result => result.run.model === model && bodyModelRun(result));
+  const failures = attempted.filter(explicitFailure).map(result => ({ ...identity(result), split: result.run.split, status: result.run.status }));
+  const success = attempted.some(result => result.ok && !explicitFailure(result));
+  return { status: success ? 'available' : failures.length ? 'failed' : attempted.length ? 'unresolved' : 'missing', failureEvidence: failures };
+}
+function rejectDiagnosticLabels(scores) {
+  if (scores.labelProvenance?.mode === 'diagnostic' || scores.runs.some(result => result.labelProvenance?.mode === 'diagnostic')) throw new Error('diagnostic_labels_not_confirmatory');
+}
 
 function onlyOne(runs, predicate, name) {
   const found = runs.filter(predicate);
@@ -21,6 +32,7 @@ function onlyOne(runs, predicate, name) {
 
 export function createSelection(scores) {
   if (scores.format !== 'hr1-scores-v1') throw new Error('scores_format');
+  rejectDiagnosticLabels(scores);
   // Fail closed on test input: a selection cannot be reconstructed after seeing
   // test quality, even if the caller also supplied dev runs.
   if (scores.runs.some(result => result.run.split !== 'dev')) throw new Error('selection_requires_dev_only');
@@ -37,7 +49,7 @@ export function createSelection(scores) {
     available.sort((a, b) => scoreDifference(b.summary.macroRecall12, a.summary.macroRecall12) || MENU.indexOf(configName(a)) - MENU.indexOf(configName(b)));
     const menuComplete = choices.every(result => result && healthy(result));
     configurations[model] = menuComplete ? { ...identity(available[0]), menu: configName(available[0]), devMacroRecall12: available[0].summary.macroRecall12, menuComplete } : null;
-    modelAvailability[model] = { available: menuComplete, reason: menuComplete ? null : available.length ? 'incomplete_confirmatory_menu' : 'no_successful_confirmatory_menu' };
+    modelAvailability[model] = { ...modelEvidence(dev, model), available: menuComplete, reason: menuComplete ? null : available.length ? 'incomplete_confirmatory_menu' : 'no_successful_confirmatory_menu' };
   }
   const nominated = Object.fromEntries(Object.entries(CONTEXTS).map(([context, models]) => {
     const choices = models.map(model => configurations[model]).filter(Boolean);
@@ -119,6 +131,7 @@ function latencyFor(latencies, nomination, queries, hashes) {
 
 export function buildReport(scores, selection, { latencies = [], seed = 'hr1-bootstrap-v2', resamples = 10000, environment } = {}) {
   if (scores.format !== 'hr1-scores-v1' || selection?.format !== 'hr1-selection-v1') throw new Error('report_formats');
+  rejectDiagnosticLabels(scores);
   if (selection.sourceSplit !== 'dev' || selection.scale !== 'S1000' || !['A1', 'A1+'].includes(selection.comparator?.arm) || selection.lexical !== selection.comparator.arm) throw new Error('selection_contract_mismatch');
   for (const [context, nominated] of Object.entries(selection.nominated)) if (nominated &&
     (!CONTEXTS[context]?.includes(nominated.model) || selection.contexts[context]?.model !== nominated.model || selection.contexts[context]?.fusion !== nominated.menu ||
@@ -130,11 +143,18 @@ export function buildReport(scores, selection, { latencies = [], seed = 'hr1-boo
   for (const context of Object.keys(CONTEXTS)) {
     const nomination = selection.nominated[context];
     const candidate = onlyOne(test, result => matches(result, nomination), `${context}_nomination`);
-    if (!nomination) { contexts[context] = { outcome: 'unavailable', reason: 'both_context_models_unavailable_on_dev' }; continue; }
     if (selection.status !== 'ready' || selection.easeCheck.saturated) { contexts[context] = { outcome: 'inconclusive', reason: selection.reason ?? 'selection_not_ready' }; continue; }
+    const evidence = Object.fromEntries(CONTEXTS[context].map(model => {
+      const tested = modelEvidence(test, model), dev = selection.modelAvailability?.[model];
+      const fromDev = tested.status === 'missing' && dev?.status === 'failed' && dev.failureEvidence?.some(failure => failure.model === model && ['failed', 'unavailable'].includes(failure.status));
+      return [model, fromDev ? { status: 'failed', failureEvidence: dev.failureEvidence } : tested];
+    }));
+    if (Object.values(evidence).every(model => model.status === 'failed')) {
+      contexts[context] = { outcome: 'unavailable', reason: 'both_context_models_explicitly_failed', modelEvidence: evidence }; continue;
+    }
+    if (!nomination) { contexts[context] = { outcome: 'inconclusive', reason: 'unresolved_nomination', modelEvidence: evidence }; continue; }
     if (!baseline || !healthy(baseline) || !candidate || !healthy(candidate)) {
-      const available = test.some(result => CONTEXTS[context].includes(result.run.model) && healthy(result) && !/^A5/.test(result.run.arm));
-      contexts[context] = { outcome: available ? 'inconclusive' : 'unavailable', reason: !baseline || !healthy(baseline) ? 'missing_or_failed_comparator' : 'missing_or_failed_nomination' };
+      contexts[context] = { outcome: 'inconclusive', reason: !baseline || !healthy(baseline) ? 'missing_or_failed_comparator' : 'missing_or_failed_nomination', modelEvidence: evidence };
       continue;
     }
     const comparison = compareRuns(baseline, candidate, { seed, resamples });
@@ -142,7 +162,7 @@ export function buildReport(scores, selection, { latencies = [], seed = 'hr1-boo
     const enoughDevFamilies = Object.values(selection.devFamilyCounts).every(count => count >= 4);
     const isolationVerified = baseline.isolation?.ok === true && candidate.isolation?.ok === true;
     const frozenLexical = candidate.run.lexical == null || candidate.run.lexical === selection.comparator.arm;
-    contexts[context] = { ...comparison, latency, isolationVerified,
+    contexts[context] = { ...comparison, latency, isolationVerified, modelEvidence: evidence,
       outcome: decision({ deltaMacro: comparison.deltaMacro, deltaC3: comparison.deltaC3, ciLower: comparison.bootstrap.ci?.[0],
         regressions: comparison.regressionGuard.count, p95: latency.p95, context, enoughFamilies: enoughDevFamilies && comparison.bootstrap.status === 'ok', valid: baseline.ok && candidate.ok && isolationVerified && frozenLexical }),
       ...(comparison.bootstrap.status !== 'ok' ? { reason: comparison.bootstrap.reason } : !isolationVerified ? { reason: 'foreign_isolation_not_verified' } : !frozenLexical ? { reason: 'frozen_lexical_comparator_mismatch' } : {}) };
@@ -176,7 +196,7 @@ export function buildReport(scores, selection, { latencies = [], seed = 'hr1-boo
     runs: scores.runs.map(result => ({ run: result.run, ok: result.ok, isolation: result.isolation, summary: result.summary, queries: result.queries, strata: result.strata, diagnostics: result.diagnostics, costs: result.costs })),
     conventions: { unit: 'percentage-points', macro: 'equal-category-C1-C7', bootstrap: 'whole-test-families-with-category-redraw',
       percentile: 'linear-interpolation-(n-1)p', spanCount: 'groups-with-any-member-of-count; whole-group-reachability',
-      diagnosticScores: 'unavailable unless rankings provide channelScores or scores' } };
+      diagnosticScores: 'required channelScores maps; no legacy score fallback' } };
 }
 
 export async function reportEnvironment() {

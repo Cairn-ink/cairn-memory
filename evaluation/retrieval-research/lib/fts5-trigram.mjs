@@ -21,7 +21,7 @@ export function createTrigram(documents) {
       const expression = trigramExpression(text);
       if (!expression) return [];
       return collapseMemories(search.all(expression).map(row => ({
-        memoryId: documents[row.rowid - 1].memoryId, score: -row.score,
+        memoryId: documents[row.rowid - 1].memoryId, docId: documents[row.rowid - 1].docId, score: -row.score,
       })), depth);
     }, close() { db.close(); } };
   } catch (error) { db.close(); throw error; }

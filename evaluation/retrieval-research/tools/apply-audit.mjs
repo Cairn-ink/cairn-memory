@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { VERSION, compareIds, eligibleMemory, loadFixture, writeJson, cliMain, requiredOption } from '../lib/fixture.mjs';
 import { makeMember, refreshLabel, loadTokenizers, hardNegativesFor } from './labels.mjs';
 
-// Detail shapes: {fact,memory,where,span?} for members; {category} for
+// Detail shapes: {fact,memory,where,spans?} for members; {category} for
 // recategorize; {memory} for hard negatives; {} for drop-query. Originals and
 // ordered reasons remain embedded so the audit does not destroy its input.
 export function applyAudit(fixture, audit, tokenizers) {
@@ -25,9 +25,11 @@ export function applyAudit(fixture, audit, tokenizers) {
       if (!group || !memory) throw new Error(`audit_unknown_member_or_group:${id}`);
       const exists = group.members.some(member => member.memory === detail.memory);
       if (action === 'add-member') {
+        const spans = detail.spans ?? [...new Set(memory.expresses.filter(expression => expression.fact === detail.fact).map(expression => expression.span))];
         if (exists || !eligibleMemory(memory, query.intent) || !['body', 'span'].includes(detail.where) ||
-          (detail.where === 'span' && !memory.spans.some(span => span.id === detail.span))) throw new Error(`audit_invalid_add_member:${id}`);
-        group.members.push(makeMember(memory, detail));
+          !Array.isArray(spans) || new Set(spans).size !== spans.length || spans.some(id => !memory.spans.some(span => span.id === id)) ||
+          (detail.where === 'span' && !spans.length)) throw new Error(`audit_invalid_add_member:${id}`);
+        group.members.push(makeMember(memory, { where: detail.where, spans }));
         group.members.sort((a, b) => compareIds(a.memory, b.memory));
         label.hardNegatives = label.hardNegatives.filter(member => member !== memory.id);
       } else {

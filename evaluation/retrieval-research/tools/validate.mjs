@@ -1,5 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { openMemoryCore } from '../../../core/contract.mjs';
 import { VERSION, CATEGORIES, unique, eligibleMemory, loadFixture, readJson, cliMain, requiredOption } from '../lib/fixture.mjs';
 import { factsView } from './facts-view.mjs';
 import { buildLabels, loadTokenizers } from './labels.mjs';
@@ -17,6 +19,31 @@ const LANGS = ['zh', 'en', 'mixed'];
 const STATES = ['current', 'historical', 'rejected', 'proposed'];
 const mean = values => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 const distribution = (items, value, keys) => Object.fromEntries(keys.map(key => [key, items.length ? items.filter(item => value(item) === key).length / items.length : null]));
+
+// Exercise the same public admission used by A0, in an ephemeral in-memory
+// store. This also catches NFKC/whitespace/case/redaction deduplication without
+// duplicating private normalization rules. Never persist corpus text in errors.
+export function publicApiPreflight(memories) {
+  const core = openMemoryCore({ path: ':memory:' }), seen = new Map(), incompatibilities = [];
+  try {
+    for (const memory of memories) {
+      const result = core.admit({ namespace: { ownerId: `hr1-preflight-${memory.namespace}`, scope: 'personal', projectId: null },
+        memory: { kind: 'context', content: memory.content }, receipts: memory.spans.map(span => ({ client: 'hr1-preflight', sessionId: 'synthetic',
+          eventId: createHash('sha256').update(span.id).digest('hex'), role: 'user', excerpt: span.text })) });
+      if (!result.ok) { incompatibilities.push({ code: 'public_admission_rejected', namespace: memory.namespace, memory: memory.id, reason: result.error.code }); continue; }
+      const admittedId = result.value.memory.id;
+      if (seen.has(admittedId)) incompatibilities.push({ code: 'duplicate_body', namespace: memory.namespace, memories: [seen.get(admittedId), memory.id] });
+      else seen.set(admittedId, memory.id);
+    }
+  } finally { core.close(); }
+  for (const namespace of ['target', 'foreign']) for (const scale of ['S300', 'S1000']) {
+    const projected = memories.filter(memory => memory.namespace === namespace && (namespace === 'foreign' || memory.scale === 'S300' || scale === 'S1000'));
+    if (projected.some(memory => !eligibleMemory(memory, 'current')) && !projected.some(memory => eligibleMemory(memory, 'current'))) {
+      incompatibilities.push({ code: 'no_current_replacement_for_history', namespace, scale });
+    }
+  }
+  return { ok: !incompatibilities.length, checkedMemories: memories.length, incompatibilities };
+}
 
 export function validateFixture(fixture, tokenizers, options) {
   try { return validate(fixture, tokenizers, options); }
@@ -122,6 +149,10 @@ function validate(fixture, tokenizers, { policy = DISTRIBUTION_POLICY, view } = 
       check(supports.some(memory => previous.some(old => old.id === memory.supersedes)), 'fact:missing_memory_supersession_link', fact.id);
     }
   }
+  if (!errors.length) {
+    statistics.publicApi = publicApiPreflight(memories);
+    for (const detail of statistics.publicApi.incompatibilities) check(false, `fixture_incompatibility:${detail.code}`, detail);
+  }
   for (const query of queries) {
     const family = familyMap.get(query.family);
     check(Boolean(family) && family.role === (query.category === 'FOREIGN' ? 'foreign' : 'target'), 'query:family', query.id);
@@ -149,7 +180,12 @@ function validate(fixture, tokenizers, { policy = DISTRIBUTION_POLICY, view } = 
   for (const label of active) {
     check(label.checks?.[label.category]?.pass === true, 'category:check_failed', { query: label.id, category: label.category });
     if (label.category !== 'C8') check(label.groups?.length > 0 && label.groups.every(group => group.members.some(member => member.scale === 'S300' || label.category === 'FOREIGN')), 'group:no_S300_support', label.id);
-    for (const group of label.groups ?? []) for (const member of group.members ?? []) check(eligibleMemory(memoryMap.get(member.memory) ?? { deleted: true }, label.intent), 'group:ineligible_member', label.id);
+    for (const group of label.groups ?? []) for (const member of group.members ?? []) {
+      const memory = memoryMap.get(member.memory);
+      check(eligibleMemory(memory ?? { deleted: true }, label.intent), 'group:ineligible_member', label.id);
+      check(!Object.hasOwn(member, 'span') && Array.isArray(member.spans) && unique(member.spans).length === member.spans.length &&
+        member.spans.every(id => memory?.spans.some(span => span.id === id)) && (member.where === 'body' || member.spans.length > 0), 'group:supporting_spans', label.id);
+    }
   }
   const activeQueries = active.map(label => ({ ...queryMap.get(label.id), category: label.category }));
   statistics.split = splitSummary(activeQueries, fixture.split ?? {});

@@ -1,13 +1,17 @@
 import { join } from 'node:path';
 import { VERSION, compareIds, unique, eligibleMemory, loadFixture, writeJson, cliMain, requiredOption } from '../lib/fixture.mjs';
 
-export function memberText(memory, member) {
-  return member.where === 'body' ? memory.content : memory.spans.find(span => span.id === member.span)?.text ?? '';
+export function memberTexts(memory, member) {
+  return [...(member.where === 'body' ? [{ where: 'body', text: memory.content }] : []),
+    ...member.spans.map(id => ({ where: 'span', span: id, text: memory.spans.find(span => span.id === id)?.text ?? '' }))];
 }
+export function memberText(memory, member) { return memberTexts(memory, member).map(source => source.text).join('\n'); }
 export function groupFidelity(members) { return members.some(member => member.where === 'body') ? 'body-covered' : 'span-only'; }
-export function makeMember(memory, expression) {
-  return { memory: memory.id, where: expression.where, scale: memory.scale, namespace: memory.namespace,
-    ...(expression.where === 'span' ? { span: expression.span } : {}), lang: memory.lang, spanCount: memory.spans.length };
+export function makeMember(memory, expressions) {
+  const sources = Array.isArray(expressions) ? expressions : [expressions];
+  return { memory: memory.id, where: sources.some(source => source.where === 'body') ? 'body' : 'span',
+    spans: unique(sources.flatMap(source => source.spans ?? (source.span ? [source.span] : []))),
+    scale: memory.scale, namespace: memory.namespace, lang: memory.lang, spanCount: memory.spans.length };
 }
 
 function tokenOverlap(text, query, tokenize) {
@@ -38,10 +42,11 @@ export function categoryChecks(fixture, query, label) {
   const term = query.keyTerm;
   const witnesses = (embedded = false) => groups.map(group => ({ fact: group.fact, members: group.members.flatMap(member => {
     const memory = memories.get(member.memory);
-    if (!memory || (group.fidelity === 'body-covered' && member.where !== 'body')) return [];
-    const text = memberText(memory, member);
-    const found = embedded ? [...text.matchAll(/\p{Script=Han}+/gu)].some(([run]) => run.includes(term) && [...run].length > [...term].length) : text.includes(term);
-    return found ? [{ memory: member.memory, where: member.where, ...(member.span ? { span: member.span } : {}) }] : [];
+    if (!memory) return [];
+    return memberTexts(memory, member).flatMap(({ text, where, span }) => {
+      const found = embedded ? [...text.matchAll(/\p{Script=Han}+/gu)].some(([run]) => run.includes(term) && [...run].length > [...term].length) : text.includes(term);
+      return found ? [{ memory: member.memory, where, ...(span ? { span } : {}) }] : [];
+    });
   }) }));
   const exact = typeof term === 'string' && term.length > 0 && query.text.includes(term) ? witnesses() : [];
   const han = typeof term === 'string' && /^\p{Script=Han}{2,4}$/u.test(term) && query.text.includes(term) ? witnesses(true) : [];
@@ -93,8 +98,7 @@ export function buildLabels(fixture, tokenizers) {
       const members = [...fixture.corpus.memories].sort((a, b) => compareIds(a.id, b.id)).flatMap(memory => {
         if (!eligibleMemory(memory, query.intent)) return [];
         const expressions = memory.expresses.filter(expression => expression.fact === fact);
-        const expression = expressions.find(item => item.where === 'body') ?? expressions[0];
-        return expression ? [makeMember(memory, expression)] : [];
+        return expressions.length ? [makeMember(memory, expressions)] : [];
       });
       return { fact, members, fidelity: groupFidelity(members) };
     });

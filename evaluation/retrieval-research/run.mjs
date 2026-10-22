@@ -7,7 +7,7 @@ import { performance } from 'node:perf_hooks';
 import { CONFIRMATORY } from './lib/fusion.mjs';
 import { createArm, isFused, needsModel, includeForArm, FUSION_CONFIGS } from './lib/arms.mjs';
 import { createLocalEmbedder, LOCAL_MODELS, MODEL_CACHE } from './lib/embed-local.mjs';
-import { createOpenAIEmbedder, OPENAI_MODELS } from './lib/embed-openai.mjs';
+import { createOpenAIEmbedder, OPENAI_MODELS, publicErrorCode } from './lib/embed-openai.mjs';
 import { createApiLedger } from './lib/api-ledger.mjs';
 import { frozenA0Stores } from './lib/a0-core.mjs';
 
@@ -39,11 +39,13 @@ export function parseCLI(args = process.argv.slice(2)) {
 // Consume W4a's frozen hr1-selection-v1 directly. No query labels enter arms.
 export async function loadSelection(options) {
   const frozen = options.selectionPath ? JSON.parse(await readFile(options.selectionPath, 'utf8')) : null;
-  if ((options.split === 'test' && options.arms.some(isFused) || options.arms.some(arm => arm.startsWith('A5-'))) && !frozen)
+  if (options.split === 'test' && !frozen)
     throw new Error('frozen_selection_required');
-  if (frozen && (frozen.format !== 'hr1-selection-v1' || frozen.sourceSplit !== 'dev' || frozen.scale !== 'S1000'))
+  if (frozen && (frozen.format !== 'hr1-selection-v1' || frozen.sourceSplit !== 'dev' || frozen.scale !== 'S1000' ||
+      !['A1', 'A1+'].includes(frozen.comparator?.arm) || !frozen.fixtureHashes ||
+      typeof frozen.fixtureHashes !== 'object' || Array.isArray(frozen.fixtureHashes)))
     throw new Error('invalid_frozen_selection');
-  if (frozen && options.split === 'test' && (frozen.status !== 'ready' || frozen.easeCheck?.saturated))
+  if (frozen && options.split === 'test' && (frozen.status !== 'ready' || frozen.easeCheck?.saturated !== false))
     throw new Error('selection_not_ready_for_test');
   const lexical = frozen?.comparator?.arm ?? options.lexical ?? 'A1';
   if (!['A1', 'A1+'].includes(lexical)) throw new Error('invalid_lexical_selection');
@@ -134,7 +136,7 @@ export async function runRankings(options, { fixtureAPI, embedderFactory = defau
       } catch (error) {
         outputs.push({ format: 'hr1-rankings-v1', run: { arm: config.arm, config: config.fusion ?? config.arm,
           model: config.model, scale: options.scale, split: options.split, fixtureHashes: fixture.hashes, env: environment(),
-          startedAt, finishedAt: new Date().toISOString(), store: null, status: 'unavailable', error: error.message },
+          startedAt, finishedAt: new Date().toISOString(), store: null, status: 'unavailable', error: publicErrorCode(error) },
           queries: {}, costs: ledger ? { ...ledger.summary() } : {} });
       }
     }
@@ -153,6 +155,6 @@ export async function runRankings(options, { fixtureAPI, embedderFactory = defau
   }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  runRankings(parseCLI()).then(({ files, outputs }) => { for (const file of files) console.log(file);
-    if (outputs.some(output => output.run.status === 'unavailable' || Object.values(output.queries).some(query => query.errors?.length))) process.exitCode = 1; }).catch(error => { console.error(error.message); process.exitCode = 1; });
+  Promise.resolve().then(() => runRankings(parseCLI())).then(({ files, outputs }) => { for (const file of files) console.log(file);
+    if (outputs.some(output => output.run.status === 'unavailable' || Object.values(output.queries).some(query => query.errors?.length))) process.exitCode = 1; }).catch(error => { console.error(publicErrorCode(error)); process.exitCode = 1; });
 }

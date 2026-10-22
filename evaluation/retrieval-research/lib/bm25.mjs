@@ -3,13 +3,29 @@ export const compareIds = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 export const rankScores = rows => rows.sort((a, b) => b.score - a.score || compareIds(a.memoryId, b.memoryId));
 
 // Collapse before top-k: A5's channel-level memory score is max(document score).
+// Equal document scores choose the smallest document ID, independently of input
+// order. Keep that identity so evaluation can distinguish a body from a span.
 export function collapseMemories(rows, depth = 24) {
-  const scores = new Map();
-  for (const { memoryId, score } of rows) {
+  const winners = new Map();
+  for (const { memoryId, docId, score } of rows) {
     if (!Number.isFinite(score)) throw new Error('nonfinite_score');
-    scores.set(memoryId, Math.max(scores.get(memoryId) ?? -Infinity, score));
+    if (typeof docId !== 'string' || !docId) throw new Error('document_id_required');
+    const previous = winners.get(memoryId);
+    if (!previous || score > previous.score || score === previous.score && compareIds(docId, previous.docId) < 0)
+      winners.set(memoryId, { memoryId, docId, score });
   }
-  return rankScores([...scores].map(([memoryId, score]) => ({ memoryId, score }))).slice(0, depth);
+  return rankScores([...winners.values()]).slice(0, depth);
+}
+
+// Raw retained-channel diagnostics, shared by standalone and fused arms. Pure
+// fusion-math callers may omit docId; all document indexes above require it.
+export function channelPayload(channels) {
+  return {
+    channelScores: Object.fromEntries(Object.entries(channels).map(([name, rows]) =>
+      [name, Object.fromEntries(rows.map(row => [row.memoryId, row.score]))])),
+    winningDocs: Object.fromEntries(Object.entries(channels).map(([name, rows]) =>
+      [name, Object.fromEntries(rows.filter(row => row.docId !== undefined).map(row => [row.memoryId, row.docId]))])),
+  };
 }
 
 // Construct one index per namespace/scale/intent projection; no global statistics.
@@ -34,7 +50,7 @@ export function createBM25(documents, { tokenize = tokenizeT1, k1 = 1.2, b = 0.7
         const idf = Math.log(1 + (N - df.get(term) + 0.5) / (df.get(term) + 0.5));
         score += idf * f * (k1 + 1) / (f + k1 * (1 - b + b * doc.length / avgLength));
       }
-      if (matched) rows.push({ memoryId: doc.memoryId, score });
+      if (matched) rows.push({ memoryId: doc.memoryId, docId: doc.docId, score });
     }
     return collapseMemories(rows, depth);
   } };

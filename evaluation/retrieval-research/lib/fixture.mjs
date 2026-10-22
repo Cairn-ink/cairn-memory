@@ -85,6 +85,7 @@ export function cliArgs(argv = process.argv.slice(2)) {
     const arg = argv[i];
     if (!arg.startsWith('--')) { options._.push(arg); continue; }
     const key = arg.slice(2);
+    if (key === 'diagnostic-labels') { options[key] = true; continue; }
     if (!key || argv[i + 1] == null || argv[i + 1].startsWith('--')) throw new Error(`missing_option_value:${arg}`);
     options[key] = argv[++i];
   }

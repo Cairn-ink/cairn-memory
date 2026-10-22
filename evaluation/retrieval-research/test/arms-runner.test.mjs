@@ -67,7 +67,7 @@ test('model failure retains unavailable artifact and continues other models',asy
   const result=await runRankings(options(workspace,{arms:['A2'],models:['e5-small','bge-m3']}),{
     fixtureAPI:apiFor(toyFixture()),embedderFactory(model){if(model==='e5-small')throw new Error('synthetic unavailable');return fakeEmbedder();},
   });
-  assert.equal(result.outputs[0].run.status,'unavailable'); assert.match(result.outputs[0].run.error,/synthetic/);
+  assert.equal(result.outputs[0].run.status,'unavailable'); assert.equal(result.outputs[0].run.error,'hr1_operation_failed');
   assert.equal(result.outputs[1].run.status,'complete'); assert.equal(result.files.length,2);
 });
 test('CLI strict arguments and dev-only grid',()=>{

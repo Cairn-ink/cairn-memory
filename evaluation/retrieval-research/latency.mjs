@@ -4,7 +4,7 @@ import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCLI, environment, loadSelection, configurations, defaultEmbedder, configurationName, checkSelectionHashes } from './run.mjs';
 import { createArm, includeForArm } from './lib/arms.mjs';
-import { OPENAI_MODELS } from './lib/embed-openai.mjs';
+import { OPENAI_MODELS, publicErrorCode } from './lib/embed-openai.mjs';
 import { createApiLedger } from './lib/api-ledger.mjs';
 import { frozenA0Stores } from './lib/a0-core.mjs';
 
@@ -30,7 +30,7 @@ export async function measureLatency({ queries, search, passes = 5, seed = 0x485
     try {
       await search(query, { bypassCache: true });
       samples.push({ queryId: query.queryId, pass, ms: performance.now() - started });
-    } catch (error) { samples.push({ queryId: query.queryId, pass, ms: null, elapsedMs: performance.now() - started, error: error.message }); }
+    } catch (error) { samples.push({ queryId: query.queryId, pass, ms: null, elapsedMs: performance.now() - started, error: publicErrorCode(error) }); }
   }
   const successful = samples.filter(sample => !sample.error).map(sample => sample.ms);
   return { samples, p50: percentile(successful, 0.5), p95: percentile(successful, 0.95),
@@ -87,7 +87,7 @@ export async function runLatency(options, { fixtureAPI, embedderFactory = defaul
       } catch (error) { runs.push({ format: 'hr1-latency-v1', run: { arm: config.arm, config: configurationName(config),
         model: config.model, scale: options.scale, split: options.split, store: null, status: 'unavailable',
         fixtureHashes: fixture.hashes, env: environment(), startedAt, finishedAt: new Date().toISOString() },
-        ...config, samples: [], error: error.message, gatePassed: false, costs: ledger?.summary() ?? null }); }
+        ...config, samples: [], error: publicErrorCode(error), gatePassed: false, costs: ledger?.summary() ?? null }); }
       finally { for (const index of indexes.values()) index.close(); }
     }
     const output = { format: 'hr1-latency-v1', env: environment(), fixtureHashes: fixture.hashes, scale: options.scale,
@@ -106,7 +106,7 @@ export async function runLatency(options, { fixtureAPI, embedderFactory = defaul
   }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  runLatency(parseCLI()).then(result => { console.log(`latency runs: ${result.runs.length}`);
+  Promise.resolve().then(() => runLatency(parseCLI())).then(result => { console.log(`latency runs: ${result.runs.length}`);
     if (result.runs.some(run => run.error || run.failures)) process.exitCode = 1;
-  }).catch(error => { console.error(error.message); process.exitCode = 1; });
+  }).catch(error => { console.error(publicErrorCode(error)); process.exitCode = 1; });
 }

@@ -22,7 +22,7 @@ export function toyFixture() {
   }
   function memory(fact, { scale = 'S300', namespace = 'target', lang = 'zh', spanOnly = false, state = 'current', supersedes = null, spanCount = 1, authoring = 'hand', extraText = '' } = {}) {
     const id = `opaque-${String(++serial).padStart(4, '0')}`;
-    const content = `${spanOnly ? 'A retained note without its concrete details.' : 'KEY_shared 啟用觀測系統 note with concrete details.'}${extraText}`;
+    const content = `${spanOnly ? 'A retained note without its concrete details.' : 'KEY_shared 啟用觀測系統 note with concrete details.'} Note ${String(serial).padStart(4, '0')}.${extraText}`;
     const spans = Array.from({ length: spanCount }, (_, i) => ({ id: `${id}#s${i + 1}`, role: 'user', eventTime: timestamp, text: `KEY_shared 啟用觀測系統 ${'quoted evidence '.repeat(4)}` }));
     const item = { id, namespace, scale, lang, kind: fact.kind === 'reason' ? 'context' : fact.kind, state, supersedes,
       eventTime: timestamp, domain: 'engineering', authoring, content, spans,
@@ -87,6 +87,13 @@ export function toyFixture() {
 export function rankingsFor(fixture, { arm = 'A1', config = 'BM25-T1', model = null, split = 'test', scale = 'S1000', store = null,
   ranking = label => label.groups.flatMap(group => group.members.filter(member => member.namespace === 'target').map(member => member.memory)) } = {}) {
   return { format: 'hr1-rankings-v1', run: { arm, config, model, split, scale, store, fixtureHashes: fixture.hashes, env: {} },
-    queries: Object.fromEntries(fixture.labels.queries.filter(label => label.split === split && !label.dropped).map(label => [label.id, { ranked: [...new Set(ranking(label))].slice(0, 24),
-      ...(arm.startsWith('A0-') ? { pages: 1, scannedRows: 128, coverage: 1, errors: [] } : {}) }])), costs: { indexBuildMs: 1 } };
+    queries: Object.fromEntries(fixture.labels.queries.filter(label => label.split === split && !label.dropped).map(label => {
+      const ranked = [...new Set(ranking(label))].slice(0, 24);
+      const fused = ['A3', 'F-RRF60', 'F-RRF10', 'F-MM', 'A5-spans', 'A5-both'].includes(arm);
+      const channelScores = { lex: Object.fromEntries(ranked.map((id, i) => [id, 1 / (i + 1)])), ...(fused ? { sem: {} } : {}) };
+      const winners = Object.fromEntries(ranked.map(id => [id, fixture.corpus.memories.find(memory => memory.id === id)?.spans[0].id]));
+      return [label.id, { ranked, channelScores, ...(fused ? { channels: { lex: ranked, sem: [] }, unionSize: ranked.length } : {}),
+        ...(arm.startsWith('A5-') ? { winningDocs: { lex: winners, sem: {} } } : {}),
+        ...(arm.startsWith('A0-') ? { pages: 1, scannedRows: 128, coverage: 1, errors: [] } : {}) }];
+    })), costs: { indexBuildMs: 1 } };
 }

@@ -48,57 +48,67 @@ async function directoryBytes(path) {
   return bytes;
 }
 export async function createLocalEmbedder({ model: name, cacheDir = MODEL_CACHE, threads = 4,
-  allowDownload = false, progress = undefined } = {}) {
+  allowDownload = false, progress = undefined } = {}, {
+  loadTransformers = () => import('@huggingface/transformers'), measureDirectoryBytes = directoryBytes, makeDirectory = mkdir,
+} = {}) {
   const spec = LOCAL_MODELS[name];
   if (!Object.hasOwn(LOCAL_MODELS, name) || !Number.isSafeInteger(threads) || threads < 1) throw new Error('invalid_local_model_configuration');
   const started = performance.now();
-  const { AutoTokenizer, AutoModel } = await import('@huggingface/transformers');
+  const { AutoTokenizer, AutoModel } = await loadTransformers();
   const options = { revision: spec.revision, cache_dir: cacheDir, local_files_only: !allowDownload,
     ...(progress ? { progress_callback: progress } : {}) };
   const tokenizer = await AutoTokenizer.from_pretrained(spec.repository, options);
   const model = await AutoModel.from_pretrained(spec.repository, { ...options, dtype: 'fp32', device: 'cpu',
     use_external_data_format: spec.externalData ?? false,
     session_options: { intraOpNumThreads: threads, interOpNumThreads: 1, executionMode: 'sequential' } });
-  const metadata = { name, ...spec, dtype: 'fp32', device: 'cpu', threads, interOpThreads: 1,
-    coldLoadMs: performance.now() - started, modelBytes: await directoryBytes(join(cacheDir, spec.repository, spec.revision)),
-    truncation: { maxLength: spec.maxLength, events: [] } };
-  const documentCache = join(cacheDir, 'hr1-document-embeddings');
-  await mkdir(documentCache, { recursive: true });
-  const queries = new Map();
-  return { metadata, async embed(texts, { kind = 'query', bypassCache = false } = {}) {
-    const vectors = [];
-    for (const text of texts) {
-      const prefixed = (kind === 'document' ? spec.passagePrefix : spec.queryPrefix) + text;
-      const key = sha(`${spec.repository}\0${spec.revision}\0fp32\0${sha(prefixed)}`);
-      const path = join(documentCache, key + '.json');
-      if (kind === 'query' && !bypassCache && queries.has(key)) { vectors.push(queries.get(key)); continue; }
-      if (kind === 'document' && !bypassCache) {
-        try {
-          const saved = JSON.parse(await readFile(path, 'utf8'));
-          if (saved.key !== key || saved.vector?.length !== spec.dimensions) throw new Error('invalid_document_cache');
-          if (saved.truncation) metadata.truncation.events.push(saved.truncation);
-          if (!saved.vector.every(Number.isFinite) || Math.abs(saved.vector.reduce((n, v) => n + v * v, 0) - 1) > 1e-5) throw new Error('invalid_document_cache');
-          vectors.push(Float32Array.from(saved.vector)); continue;
-        } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  // Once loading succeeds, this function owns the native session until it
+  // returns an embedder. Every subsequent initialization failure must dispose it.
+  try {
+    const metadata = { name, ...spec, dtype: 'fp32', device: 'cpu', threads, interOpThreads: 1,
+      coldLoadMs: performance.now() - started, modelBytes: await measureDirectoryBytes(join(cacheDir, spec.repository, spec.revision)),
+      truncation: { maxLength: spec.maxLength, events: [] } };
+    const documentCache = join(cacheDir, 'hr1-document-embeddings');
+    await makeDirectory(documentCache, { recursive: true });
+    const queries = new Map();
+    return { metadata, async embed(texts, { kind = 'query', bypassCache = false } = {}) {
+      const vectors = [];
+      for (const text of texts) {
+        const prefixed = (kind === 'document' ? spec.passagePrefix : spec.queryPrefix) + text;
+        const key = sha(`${spec.repository}\0${spec.revision}\0fp32\0${sha(prefixed)}`);
+        const path = join(documentCache, key + '.json');
+        if (kind === 'query' && !bypassCache && queries.has(key)) { vectors.push(queries.get(key)); continue; }
+        if (kind === 'document' && !bypassCache) {
+          try {
+            const saved = JSON.parse(await readFile(path, 'utf8'));
+            if (saved.key !== key || saved.vector?.length !== spec.dimensions) throw new Error('invalid_document_cache');
+            if (saved.truncation) metadata.truncation.events.push(saved.truncation);
+            if (!saved.vector.every(Number.isFinite) || Math.abs(saved.vector.reduce((n, v) => n + v * v, 0) - 1) > 1e-5) throw new Error('invalid_document_cache');
+            vectors.push(Float32Array.from(saved.vector)); continue;
+          } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        }
+        const full = await tokenizer(prefixed, { truncation: false, padding: false });
+        const originalTokens = full.input_ids.dims.at(-1);
+        const inputs = originalTokens > spec.maxLength ?
+          await tokenizer(prefixed, { truncation: true, max_length: spec.maxLength, padding: false }) : full;
+        const truncation = originalTokens > spec.maxLength ? { textHash: sha(prefixed), kind, originalTokens, retainedTokens: spec.maxLength } : null;
+        if (truncation) metadata.truncation.events.push(truncation);
+        const output = await model(inputs);
+        const vector = poolHidden(output.last_hidden_state, inputs.attention_mask.data, spec.pooling);
+        if (vector.length !== spec.dimensions) throw new Error('unexpected_model_dimensions');
+        if (kind === 'document' && !bypassCache) {
+          const temp = `${path}.${randomUUID()}.tmp`;
+          await writeFile(temp, JSON.stringify({ key, vector: [...vector], truncation }), { mode: 0o600 });
+          await rename(temp, path);
+        } else if (!bypassCache) queries.set(key, vector);
+        vectors.push(vector);
       }
-      const full = await tokenizer(prefixed, { truncation: false, padding: false });
-      const originalTokens = full.input_ids.dims.at(-1);
-      const inputs = originalTokens > spec.maxLength ?
-        await tokenizer(prefixed, { truncation: true, max_length: spec.maxLength, padding: false }) : full;
-      const truncation = originalTokens > spec.maxLength ? { textHash: sha(prefixed), kind, originalTokens, retainedTokens: spec.maxLength } : null;
-      if (truncation) metadata.truncation.events.push(truncation);
-      const output = await model(inputs);
-      const vector = poolHidden(output.last_hidden_state, inputs.attention_mask.data, spec.pooling);
-      if (vector.length !== spec.dimensions) throw new Error('unexpected_model_dimensions');
-      if (kind === 'document' && !bypassCache) {
-        const temp = `${path}.${randomUUID()}.tmp`;
-        await writeFile(temp, JSON.stringify({ key, vector: [...vector], truncation }), { mode: 0o600 });
-        await rename(temp, path);
-      } else if (!bypassCache) queries.set(key, vector);
-      vectors.push(vector);
-    }
-    return vectors;
-  }, async close() { await model.dispose(); } };
+      return vectors;
+    }, async close() { await model.dispose(); } };
+  } catch (error) {
+    try { await model.dispose(); }
+    catch (disposeError) { throw new AggregateError([error, disposeError], 'local_model_initialization_cleanup_failed'); }
+    throw error;
+  }
 }
 export async function createDenseIndex(documents, embedder) {
   const started = performance.now();
@@ -107,6 +117,6 @@ export async function createDenseIndex(documents, embedder) {
   return { buildMs, embedDocs: documents.length, embedMsPerDoc: buildMs / Math.max(1, documents.length),
     async search(text, depth = 24, { bypassCache = false } = {}) {
       const [query] = await embedder.embed([text], { kind: 'query', bypassCache });
-      return collapseMemories(documents.map((doc, i) => ({ memoryId: doc.memoryId, score: cosine(query, vectors[i]) })), depth);
+      return collapseMemories(documents.map((doc, i) => ({ memoryId: doc.memoryId, docId: doc.docId, score: cosine(query, vectors[i]) })), depth);
     } };
 }

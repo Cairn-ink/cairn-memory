@@ -70,10 +70,22 @@ for(const status of [400,401,422,429,500]) test(`HTTP ${status} failure retains 
   const expected=status===429||status>=500?2:1;
   assert.equal(calls.length,expected); assert.equal(ledger.summary().outstandingReservations,expected);
 });
-test('timeout aborts, retains unknown reservation, and retries once',async t=>{
-  const {client,calls,ledger}=await setup(t,{maxRetries:1,timeoutMs:30,handler(){}});
-  await assert.rejects(client.embed(['timeout synthetic']));
-  assert.equal(calls.length,2); assert.equal(ledger.summary().outstandingReservations,2);
+test('timeout aborts a registered fake attempt, retains its reservation, and retries once',async t=>{
+  const workspace=createTestWorkspace(t,{prefix:'hr1-timeout-'}),attempts=[];
+  const ledger=createApiLedger(join(workspace.path,'ledger.jsonl'));
+  const client=createOpenAIEmbedder({model:'openai-3-small',apiKey:'synthetic',ledger,
+    cacheDir:join(workspace.path,'cache'),timeoutMs:1,maxRetries:1,retryDelayMs:0,
+    fetchImpl(_url,{signal}){
+      attempts.push(signal);
+      return new Promise((_resolve,reject)=>{
+        const abort=()=>reject(new Error('synthetic transport aborted'));
+        if(signal.aborted)abort();else signal.addEventListener('abort',abort,{once:true});
+      });
+    },
+  });
+  await assert.rejects(client.embed(['timeout synthetic']),/^Error: embedding_timeout$/);
+  assert.equal(attempts.length,2); assert.ok(attempts.every(signal=>signal.aborted));
+  assert.equal(ledger.summary().outstandingReservations,2);
 });
 test('hard cap refuses before any dispatch, including after a retry reservation',async t=>{
   const {client,calls,ledger}=await setup(t,{capUsd:0.0000001});

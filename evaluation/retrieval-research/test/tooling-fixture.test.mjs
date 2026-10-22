@@ -8,7 +8,7 @@ import { factsView } from '../tools/facts-view.mjs';
 import { assignSplit, splitSummary, splitViolations } from '../tools/split.mjs';
 import { buildLabels, categoryChecks, refreshLabel } from '../tools/labels.mjs';
 import { applyAudit } from '../tools/apply-audit.mjs';
-import { validateFixture } from '../tools/validate.mjs';
+import { validateFixture, publicApiPreflight } from '../tools/validate.mjs';
 import { toyFixture, tokenizers } from './fixtures-tooling/toy.mjs';
 import { runCli } from './fixtures-tooling/cli.mjs';
 
@@ -107,15 +107,54 @@ test('join produces one eligible group per fact, group fidelity, per-member over
   assert.equal(fixture.labels.queries.find(label => label.id === 'q-C2-00').checks.C2.witnesses[0].members[0].where, 'body');
 });
 
-test('C1/C2 use the body for body-covered groups; C2 requires a longer contiguous Han run', () => {
+test('C1/C2 search authorized supporting text; C2 requires a longer contiguous Han run', () => {
   const fixture = toyFixture(), query = fixture.queries.queries.find(query => query.id === 'q-C2-00');
   const label = fixture.labels.queries.find(label => label.id === query.id), memory = fixture.corpus.memories.find(memory => memory.id === label.groups[0].members[0].memory);
+  memory.spans[0].text = 'other supporting wording';
   memory.content = '觀測';
   assert.equal(categoryChecks(fixture, query, label).C2.pass, false);
   memory.content = 'different body';
   assert.equal(categoryChecks(fixture, query, label).C1.pass, false);
   memory.content = '新的觀測方案';
   assert.equal(categoryChecks(fixture, query, label).C2.pass, true);
+});
+
+test('C1/C2 accept a span-only alternative in a body-covered group and retain every supporting span', () => {
+  const fixture = toyFixture(), query = fixture.queries.queries.find(query => query.id === 'q-C2-00');
+  const body = fixture.corpus.memories.find(memory => memory.expresses.some(expression => expression.fact === 'new-0'));
+  body.content = 'A paraphrased decision'; body.spans[0].text = 'A paraphrased source';
+  const alternative = fixture.corpus.memories.find(memory => memory.expresses.some(expression => expression.fact === 'near-0'));
+  alternative.content = 'A separate paraphrased note'; alternative.spans[0].text = 'first support without the distinctive wording';
+  alternative.spans.push({ ...alternative.spans[0], id: `${alternative.id}#s2`, text: 'KEY_shared 新的觀測方案' });
+  alternative.expresses.push(...alternative.spans.map(span => ({ fact: 'new-0', where: 'span', span: span.id })));
+  const labels = buildLabels(fixture, tokenizers);
+  for (const id of ['q-C1-00', query.id]) {
+    const label = labels.queries.find(label => label.id === id), member = label.groups[0].members.find(member => member.memory === alternative.id);
+    assert.equal(label.groups[0].fidelity, 'body-covered'); assert.equal(label.checks[label.category].pass, true);
+    assert.deepEqual(member.spans, alternative.spans.map(span => span.id)); assert.equal(Object.hasOwn(member, 'span'), false);
+    assert.equal(label.checks[label.category].witnesses[0].members.some(witness => witness.memory === alternative.id && witness.span === alternative.spans[1].id), true);
+  }
+  const before = labels.queries.find(label => label.id === query.id);
+  const audited = applyAudit({ ...fixture, labels }, { overrides: [
+    { query: query.id, action: 'remove-member', detail: { fact: 'new-0', memory: alternative.id }, reason: 'Recheck the alternative.' },
+    { query: query.id, action: 'add-member', detail: { fact: 'new-0', memory: alternative.id, where: 'span', spans: alternative.spans.map(span => span.id) }, reason: 'Both spans independently support the fact.' },
+  ] }, tokenizers).queries.find(label => label.id === query.id);
+  assert.deepEqual(audited.groups, before.groups); assert.equal(audited.checks.C2.pass, true);
+});
+
+test('public API preflight rejects duplicate bodies within a namespace as fixture incompatibilities', () => {
+  const fixture = toyFixture(), [first, second] = fixture.corpus.memories;
+  second.content = first.content;
+  const result = validateFixture(fixture, tokenizers);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.some(error => error.code === 'fixture_incompatibility:duplicate_body'), true);
+  assert.equal(result.statistics.publicApi.incompatibilities.some(item => item.memories?.includes(first.id) && item.memories.includes(second.id)), true);
+  const foreign = structuredClone(second); foreign.id = 'foreign-copy'; foreign.namespace = 'foreign'; foreign.scale = 'foreign'; foreign.state = 'current';
+  foreign.spans = foreign.spans.map((span, i) => ({ ...span, id: `${foreign.id}#s${i + 1}` }));
+  assert.equal(publicApiPreflight([{ ...first, state: 'current' }, foreign]).ok, true);
+  second.content = `  ${first.content.toUpperCase()}  `;
+  assert.equal(publicApiPreflight([first, second]).incompatibilities[0].code, 'duplicate_body');
+  assert.equal(publicApiPreflight([{ ...first, content: '\u0000' }]).incompatibilities[0].code, 'public_admission_rejected');
 });
 
 test('category checks reject invalid C3–C8 and FOREIGN structures', () => {

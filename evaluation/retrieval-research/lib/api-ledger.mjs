@@ -1,23 +1,48 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, openSync, writeSync, fsyncSync, closeSync, rmdirSync } from 'node:fs';
+import * as filesystem from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 // Integer nano-USD avoids fractional-dollar cap comparisons. Every dispatch,
 // including retries, reserves separately. A crashed/unknown attempt stays held.
 export const PRICES = Object.freeze({ 'text-embedding-3-small': 20, 'text-embedding-3-large': 130 });
-export function createApiLedger(path, { capUsd = 1 } = {}) {
+export function createApiLedger(path, { capUsd = 1, fs = filesystem } = {}) {
   if (!path || !Number.isFinite(capUsd) || capUsd <= 0 || capUsd > 1) throw new Error('invalid_hr1_ledger');
+  const io = { ...filesystem, ...fs };
   path = resolve(path);
-  mkdirSync(dirname(path), { recursive: true });
+  const parent = dirname(path);
+  function syncDirectory(directory) {
+    const fd = io.openSync(directory, 'r');
+    try { io.fsyncSync(fd); } finally { io.closeSync(fd); }
+  }
+  function ensureDirectory(directory) {
+    const ancestor = dirname(directory);
+    try { io.mkdirSync(directory); }
+    catch (error) {
+      if (error.code === 'ENOENT' && ancestor !== directory) {
+        ensureDirectory(ancestor);
+        io.mkdirSync(directory);
+      } else if (error.code !== 'EEXIST' || !io.statSync(directory).isDirectory()) throw error;
+    }
+    // Persist each new directory and its entry in its parent before creating
+    // descendants. Re-sync existing directories too: a prior failed attempt
+    // may have created one without completing its durability fence.
+    syncDirectory(directory);
+    if (ancestor !== directory) syncDirectory(ancestor);
+  }
+  ensureDirectory(parent);
   const cap = Math.floor(capUsd * 1e9);
   const locked = work => {
     // Fail closed on contention or a crash-left lock. Never steal a live lock.
-    mkdirSync(`${path}.lock`);
-    try { return work(); } finally { rmdirSync(`${path}.lock`); }
+    io.mkdirSync(`${path}.lock`);
+    try {
+      syncDirectory(`${path}.lock`);
+      syncDirectory(parent);
+      return work();
+    } finally { io.rmdirSync(`${path}.lock`); syncDirectory(parent); }
   };
   function read() {
     let text;
-    try { text = readFileSync(path, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+    try { text = io.readFileSync(path, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
     if (text && !text.endsWith('\n')) throw new Error('incomplete_hr1_ledger');
     return text.split('\n').filter(Boolean).map(line => JSON.parse(line));
   }
@@ -36,9 +61,20 @@ export function createApiLedger(path, { capUsd = 1 } = {}) {
     return { held, tokens, spend, committed: [...held.values()].reduce((sum, row) => sum + row.nanoUsd, 0) };
   }
   function append(row) {
-    const fd = openSync(path, 'a', 0o600);
-    try { writeSync(fd, JSON.stringify({ format: 'hr1-api-ledger-v1', ...row, at: new Date().toISOString() }) + '\n'); fsyncSync(fd); }
-    finally { closeSync(fd); }
+    const fd = io.openSync(path, 'a', 0o600);
+    try {
+      const bytes = Buffer.from(JSON.stringify({ format: 'hr1-api-ledger-v1', ...row, at: new Date().toISOString() }) + '\n');
+      let offset = 0;
+      while (offset < bytes.length) {
+        const written = io.writeSync(fd, bytes, offset, bytes.length - offset);
+        if (written <= 0) throw new Error('hr1_ledger_write_failed');
+        offset += written;
+      }
+      io.fsyncSync(fd);
+    } finally { io.closeSync(fd); }
+    // File fsync alone does not persist a newly created ledger's name. No
+    // reservation may return (and hence dispatch) until this entry is durable.
+    syncDirectory(parent);
   }
   return {
     reserve(model, texts) {

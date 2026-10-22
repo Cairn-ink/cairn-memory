@@ -5,7 +5,7 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { isDeepStrictEqual } from 'node:util';
-import { collapseMemories, compareIds } from './bm25.mjs';
+import { collapseMemories, compareIds, channelPayload } from './bm25.mjs';
 
 export const A0_NAMESPACE = Object.freeze({ ownerId: 'hr1-synthetic', scope: 'personal', projectId: null });
 const unwrap = result => { if (!result.ok) throw new Error(`a0_core_${result.error.code}`); return result.value; };
@@ -67,15 +67,16 @@ export function createA0Store({ history, current, spans = [], path = ':memory:' 
         replacement: { content: replacement.text, kind: 'context' }, receipts: receipts(replacement) }));
       if (updated.memory.id !== mapping[replacement.memoryId]) throw new Error('a0_supersession_projection_changed');
     }
-    return wrap(core, host, mapping);
+    return wrap(core, host, mapping, bodies);
   } catch (error) { core.close(); throw error; }
 }
-function wrap(core, host, mapping) {
+function wrap(core, host, mapping, bodies) {
   const reverse = new Map(Object.entries(mapping).map(([id, uuid]) => [uuid, id]));
+  const bodyIds = new Map(bodies.map(doc => [doc.memoryId, doc.docId]));
   return { mapping, capabilities: unwrap(core.getPrivateCardCapabilities()), close() { core.close(); },
     search(query, { paged = false } = {}) {
       const base = { namespace: A0_NAMESPACE, query: query.text, intent: query.intent, types: ['memory'], ...(paged ? { limit: 24 } : {}) };
-      const ids = [], coverage = [], errors = [], cursors = new Set();
+      const rows = [], coverage = [], errors = [], cursors = new Set();
       let cursor, scannedRows = 0, pages = 0;
       do {
         const input = { ...base, ...(cursor ? { cursor } : {}) };
@@ -85,13 +86,15 @@ function wrap(core, host, mapping) {
         for (const item of value.items) {
           const id = reverse.get(item.ref.memoryId);
           if (!id) throw new Error('a0_unmapped_uuid');
-          ids.push(id);
+          rows.push({ memoryId: id, docId: bodyIds.get(id), score: item.score });
         }
         cursor = value.nextCursor;
         if (cursor && cursors.has(cursor)) { errors.push({ code: 'repeated_cursor' }); break; }
         cursors.add(cursor);
       } while (paged && cursor); // follow to completion even after collecting 24
-      return { ranked: [...new Set(ids)].slice(0, paged ? 24 : 12), pages, scannedRows, coverage, errors,
+      const seen = new Set();
+      const retained = rows.filter(row => !seen.has(row.memoryId) && seen.add(row.memoryId)).slice(0, paged ? 24 : 12);
+      return { ranked: retained.map(row => row.memoryId), ...channelPayload({ lex: retained }), pages, scannedRows, coverage, errors,
         recall24Available: paged };
     } };
 }
@@ -113,12 +116,12 @@ export function frozenA0Stores({ directory, scale, history, current, spans }) {
       const frozen = JSON.parse(readFileSync(manifest, 'utf8'));
       if (frozen.fingerprint !== fingerprint || frozen.index !== index || frozen.sha256 !== hash(readFileSync(path))) throw new Error('a0_snapshot_mismatch');
       const { core, host } = open(path);
-      stores.push({ ...wrap(core, host, frozen.mapping), snapshot: { path, manifest, sha256: frozen.sha256, mapping: frozen.mapping, seedBuildMs: frozen.seedBuildMs } });
+      stores.push({ ...wrap(core, host, frozen.mapping, history), snapshot: { path, manifest, sha256: frozen.sha256, mapping: frozen.mapping, seedBuildMs: frozen.seedBuildMs } });
     }
     return stores;
   } catch (error) { for (const store of stores) store.close(); throw error; }
 }
 export function a0b(documents, text) {
   const score = createQueryScore(text);
-  return collapseMemories(documents.map(doc => ({ memoryId: doc.memoryId, score: score(doc.text) })), 24);
+  return collapseMemories(documents.map(doc => ({ memoryId: doc.memoryId, docId: doc.docId, score: score(doc.text) })), 24);
 }

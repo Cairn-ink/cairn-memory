@@ -102,11 +102,44 @@ test('reports compare only frozen nominated pairs; model failure is isolated by 
   assert.match(reportMarkdown(report), /97.5% CI/); assert.match(reportMarkdown(report), /McNemar/);
   scores.runs[2].ok = false;
   const failed = buildReport(scores, selection, { resamples: 20, latencies: [latency(selection.nominated.local, scores)] });
-  assert.equal(failed.contexts.local.outcome, 'continue'); assert.equal(failed.contexts.hosted.outcome, 'unavailable');
+  assert.equal(failed.contexts.local.outcome, 'continue'); assert.equal(failed.contexts.hosted.outcome, 'inconclusive');
   const saturated = structuredClone(selection); saturated.easeCheck.saturated = true; saturated.status = 'inconclusive'; saturated.reason = 'suite_too_easy_revise_fixture_before_test';
   assert.equal(buildReport(scores, saturated, { resamples: 20 }).contexts.local.outcome, 'inconclusive');
   const changedHash = structuredClone(selection); changedHash.fixtureHashes = { changed: 'hash' };
   assert.throws(() => buildReport(scores, changedHash), /hash_mismatch/);
+});
+
+test('review reproduction: a failed nominated model plus a missing alternative is inconclusive, not unavailable', () => {
+  const fixture = toyFixture(), selection = createSelection(devScores(fixture)), scores = testScores(fixture, selection);
+  scores.runs[1].ok = false; scores.runs[1].run.status = 'unavailable'; scores.runs[1].run.error = 'synthetic_model_failure';
+  const report = buildReport(scores, selection, { resamples: 20 });
+  assert.equal(report.contexts.local.outcome, 'inconclusive');
+  assert.equal(report.contexts.local.modelEvidence['e5-small'].status, 'failed');
+  assert.equal(report.contexts.local.modelEvidence['bge-m3'].status, 'missing');
+  const alternate = scoreRuns(fixture, [rankingsFor(fixture, { arm: 'A3', config: 'A3', model: 'bge-m3' })]).runs[0];
+  alternate.ok = false; alternate.run.status = 'failed'; alternate.run.error = 'synthetic_model_failure';
+  scores.runs.push(alternate);
+  const both = buildReport(scores, selection, { resamples: 20 });
+  assert.equal(both.contexts.local.outcome, 'unavailable');
+  assert.equal(both.contexts.local.reason, 'both_context_models_explicitly_failed');
+  assert.equal(Object.values(both.contexts.local.modelEvidence).every(model => model.failureEvidence.length > 0), true);
+  alternate.run.status = 'complete';
+  assert.equal(buildReport(scores, selection, { resamples: 20 }).contexts.local.outcome, 'inconclusive', 'validation failure does not establish model failure');
+});
+
+test('a missing dev nomination is inconclusive unless both models explicitly failed', () => {
+  const fixture = toyFixture(), complete = devScores(fixture);
+  const missing = { ...complete, runs: complete.runs.filter(result => !['e5-small', 'bge-m3'].includes(result.run.model)) };
+  const selection = createSelection(missing);
+  assert.equal(selection.nominated.local, null);
+  assert.equal(buildReport(testScores(fixture, selection), selection, { resamples: 20 }).contexts.local.outcome, 'inconclusive');
+  for (const result of complete.runs.filter(result => ['e5-small', 'bge-m3'].includes(result.run.model))) {
+    result.ok = false; result.run.status = 'unavailable'; result.run.error = 'synthetic_model_initialization_failure';
+  }
+  const failed = createSelection(complete);
+  assert.equal(failed.modelAvailability['e5-small'].status, 'failed');
+  assert.equal(failed.modelAvailability['bge-m3'].status, 'failed');
+  assert.equal(buildReport(testScores(fixture, failed), failed, { resamples: 20 }).contexts.local.outcome, 'unavailable');
 });
 
 test('too few test families yields inconclusive and reports category counts', () => {

@@ -67,10 +67,12 @@ test('foreign leakage, including diagnostic queries and internal channels, is a 
   const fixture = toyFixture(), ranking = rankingsFor(fixture), foreign = fixture.corpus.memories.find(memory => memory.namespace === 'foreign').id;
   const control = fixture.labels.queries.find(label => label.category === 'FOREIGN' && label.split === 'test');
   ranking.queries[control.id].ranked = [foreign];
+  ranking.queries[control.id].channelScores = { lex: { [foreign]: 1 } };
   const scores = scoreRuns(fixture, [ranking]);
   assert.equal(scores.ok, false); assert.equal(scores.runs[0].failures.some(failure => failure.code === 'foreign_leakage'), true);
   ranking.queries[control.id].ranked = [];
   ranking.queries[control.id].channels = { lex: [], sem: [foreign] }; ranking.queries[control.id].unionSize = 1;
+  ranking.queries[control.id].channelScores = { lex: {}, sem: { [foreign]: 1 } };
   assert.equal(scoreRankings(fixture, ranking).ok, false);
   const clean = rankingsFor(fixture);
   assert.equal(checkIsolation(clean, structuredClone(clean)).ok, true);
@@ -132,6 +134,7 @@ test('score CLI writes versioned scores and exits nonzero for foreign leakage', 
   assert.equal(command.code, 0, command.stderr);
   assert.equal(JSON.parse(command.stdout).ok, true); assert.equal((await readJson(output)).format, 'hr1-scores-v1');
   rankings.queries[Object.keys(rankings.queries)[0]].ranked = [loaded.corpus.memories.find(memory => memory.namespace === 'foreign').id];
+  rankings.queries[Object.keys(rankings.queries)[0]].channelScores = { lex: { [rankings.queries[Object.keys(rankings.queries)[0]].ranked[0]]: 1 } };
   await writeJson(input, rankings);
   const failed = await runCli(workspace, args);
   assert.equal(failed.code, 1, failed.stderr); assert.equal(JSON.parse(failed.stdout).ok, false);

@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import { createBM25 } from './bm25.mjs';
+import { createBM25, channelPayload } from './bm25.mjs';
 import { createTrigram } from './fts5-trigram.mjs';
 import { tokenizeT1, tokenizeT1Plus } from './tokenize.mjs';
 import { createDenseIndex } from './embed-local.mjs';
@@ -34,19 +34,19 @@ export async function createArm({ arm, documents, embedder, lexical = 'A1', fusi
     embedMsPerDoc: dense?.embedMsPerDoc ?? 0, apiTokens: 0, apiSpendUsd: 0 },
     async search(query, { bypassCache = false } = {}) {
       if (arm === 'A0b') {
-        const rows = a0b(documents, query.text); return { ranked: rows.map(row => row.memoryId), scores: rows };
+        const rows = a0b(documents, query.text); return { ranked: rows.map(row => row.memoryId), ...channelPayload({ lex: rows }) };
       }
       if (!needsModel(arm)) {
-        const rows = index.search(query.text, 24); return { ranked: rows.map(row => row.memoryId), scores: rows };
+        const rows = index.search(query.text, 24); return { ranked: rows.map(row => row.memoryId), ...channelPayload({ lex: rows }) };
       }
       if (arm === 'A2') {
-        const rows = await dense.search(query.text, 24, { bypassCache }); return { ranked: rows.map(row => row.memoryId), scores: rows };
+        const rows = await dense.search(query.text, 24, { bypassCache }); return { ranked: rows.map(row => row.memoryId), ...channelPayload({ sem: rows }) };
       }
       // Tokenization happens inside this request, including when timing.
       const lex = index.search(query.text, config.depth);
       const sem = await dense.search(query.text, config.depth, { bypassCache });
       const fused = fuse(lex, sem, config, { text: query.text, documents, tokenize });
       return { ranked: fused.rows.map(row => row.memoryId), channels: fused.channels, unionSize: fused.unionSize,
-        scores: { lex, sem, fused: fused.rows } };
+        channelScores: fused.channelScores, winningDocs: fused.winningDocs };
     }, close() { index?.close?.(); } };
 }

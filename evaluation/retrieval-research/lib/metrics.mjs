@@ -32,6 +32,18 @@ export function scoreGroups(groups, ranked, available24 = true) {
     allRequired24: recall24 == null ? null : recall24 === 1, bestRanks };
 }
 
+export function scoreRequiredSpans(groups, ranked, winningDocs, available24 = true) {
+  const supported = groups.map(group => ({ ...group, members: group.members.filter(member =>
+    Object.values(winningDocs).some(channel => member.spans.includes(channel[member.memory]))) }));
+  return scoreGroups(supported, ranked, available24);
+}
+
+const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+function scoringRun(fixture, run) {
+  return { ...structuredClone(run), ...(fixture.labelProvenance?.mode === 'diagnostic' ? {
+    rankingFixtureHashes: structuredClone(run.fixtureHashes), fixtureHashes: structuredClone(fixture.hashes) } : {}) };
+}
+
 function memberAtScale(member, scale) { return member.namespace === 'target' && (member.scale === 'S300' || scale === 'S1000' && member.scale === 'S1000-extra'); }
 function filteredGroups(label, scale) {
   return label.groups.map(group => {
@@ -47,7 +59,7 @@ export function scoreRankings(fixture, rankings) {
   if (!run || !['dev', 'test'].includes(run.split) || !['S300', 'S1000'].includes(run.scale) || !run.arm || !rankings.queries || Array.isArray(rankings.queries)) throw new Error('rankings_run_schema');
   const a0 = /^A0-(default|paged)$/.test(run.arm);
   if (run.status === 'unavailable' || run.status === 'failed') {
-    return { run: structuredClone(run), ok: false, failures: [{ code: 'run_unavailable', error: run.error ?? null }], queries: [],
+    return { run: scoringRun(fixture, run), ...(fixture.labelProvenance ? { labelProvenance: structuredClone(fixture.labelProvenance) } : {}), ok: false, failures: [{ code: 'run_unavailable', error: run.error ?? null }], queries: [],
       summary: summarizeQueries([], { requireAllCategories: true }), strata: {}, diagnostics: [], costs: rankings.costs ?? {} };
   }
   if (a0 && (!Number.isInteger(run.store) || run.store < 0 || run.store > 4)) throw new Error('a0_store_required_0_to_4');
@@ -58,7 +70,8 @@ export function scoreRankings(fixture, rankings) {
   if (JSON.stringify(Object.keys(rankings.queries).sort(compareIds)) !== JSON.stringify(expectedIds)) throw new Error('rankings_query_set_mismatch');
   const failures = [];
   for (const filename of new Set([...Object.keys(run.fixtureHashes ?? {}), ...Object.keys(fixture.hashes ?? {})])) {
-    if (fixture.hashes?.[filename] !== run.fixtureHashes?.[filename]) failures.push({ code: 'fixture_hash_mismatch', filename });
+    const diagnosticOriginal = filename === 'hr1-labels.json' && fixture.labelProvenance?.mode === 'diagnostic' && run.fixtureHashes?.[filename] === fixture.labelProvenance.frozenHash;
+    if (fixture.hashes?.[filename] !== run.fixtureHashes?.[filename] && !diagnosticOriginal) failures.push({ code: 'fixture_hash_mismatch', filename });
   }
   const memoryMap = new Map(fixture.corpus.memories.map(memory => [memory.id, memory]));
   const inspectRanking = (ranked, label, channel = 'final', max = 24) => {
@@ -78,6 +91,12 @@ export function scoreRankings(fixture, rankings) {
   const queries = [...labels].sort((a, b) => compareIds(a.id, b.id)).map(label => {
     const result = rankings.queries[label.id];
     inspectRanking(result.ranked, label);
+    if (!record(result.channelScores) || !Object.keys(result.channelScores).length) throw new Error(`channel_scores_required:${label.id}`);
+    for (const [channel, scores] of Object.entries(result.channelScores)) {
+      if (!record(scores) || Object.values(scores).some(score => typeof score !== 'number' || !Number.isFinite(score))) throw new Error(`invalid_channel_scores:${label.id}:${channel}`);
+      inspectRanking(Object.keys(scores), label, `scores:${channel}`, 50);
+    }
+    for (const id of result.ranked) if (!Object.values(result.channelScores).some(scores => Object.hasOwn(scores, id))) throw new Error(`missing_channel_score:${label.id}:${id}`);
     if (a0 && (!Array.isArray(result.errors) || result.errors.length)) failures.push({ code: 'a0_query_error', query: label.id, errors: result.errors ?? null });
     if (run.arm === 'A0-default' && result.ranked.length > 12) throw new Error(`a0_default_limit:${label.id}`);
     const diagnostic = !CATEGORIES.includes(label.category);
@@ -90,6 +109,7 @@ export function scoreRankings(fixture, rankings) {
     const channels = {};
     for (const [name, ranked] of Object.entries(result.channels ?? {})) {
       inspectRanking(ranked, label, name, 50);
+      if (!record(result.channelScores[name]) || ranked.some(id => !Object.hasOwn(result.channelScores[name], id)) || Object.keys(result.channelScores[name]).some(id => !ranked.includes(id))) throw new Error(`channel_score_candidates_mismatch:${label.id}:${name}`);
       channels[name] = diagnostic ? { recall12: null, recall24: null, allRequired12: null, allRequired24: null, bestRanks: [], requiredGroupCoverage: null }
         : { ...scoreGroups(groups, ranked), requiredGroupCoverage: scoreGroups(groups, ranked).bestRanks.filter(group => group.rank != null).length };
     }
@@ -100,10 +120,28 @@ export function scoreRankings(fixture, rankings) {
       union = { size: ids.length, requiredGroups: diagnostic ? null : groups.filter(group => group.members.some(member => ids.includes(member.memory))).length, groupCount: diagnostic ? null : groups.length };
     }
     const scores = diagnostic ? { recall12: null, recall24: null, allRequired12: null, allRequired24: null, bestRanks: [] } : scoreGroups(groups, result.ranked, available24);
+    const a5 = /^A5-(spans|both)$/.test(run.arm);
+    const winningDocs = result.winningDocs;
+    if (a5) {
+      if (!record(winningDocs) || !result.channels || Object.keys(winningDocs).length !== Object.keys(result.channels).length) throw new Error(`winning_docs_required:${label.id}`);
+      for (const [channel, ranked] of Object.entries(result.channels)) {
+        const winners = winningDocs[channel];
+        if (!record(winners) || Object.keys(winners).length !== ranked.length || ranked.some(id => !Object.hasOwn(winners, id))) throw new Error(`winning_docs_candidates_mismatch:${label.id}:${channel}`);
+        for (const [id, docId] of Object.entries(winners)) {
+          const memory = memoryMap.get(id);
+          if (!memory || !(memory.spans.some(span => span.id === docId) || run.arm === 'A5-both' && docId === `${id}#body`)) throw new Error(`invalid_winning_document:${label.id}:${channel}:${id}`);
+        }
+      }
+    }
+    // Every required group stays in the denominator; missing supporting spans
+    // mean zero span coverage rather than exclusion.
+    const spanGroups = a5 ? groups : [];
+    const requiredSpanCoverage = a5 && !diagnostic ? scoreRequiredSpans(spanGroups, result.ranked, winningDocs, available24) : null;
     const row = { id: label.id, family: label.family, category: label.category, lang: label.lang, intent: label.intent, diagnostic,
       ...scores, counts12: counts(12), counts24: available24 ? counts(24) : null, hardNegative12: counts(12).hardNegatives,
       ranked: result.ranked, channels, union,
-      rawChannelScores: result.channelScores ?? result.scores ?? null,
+      rawChannelScores: structuredClone(result.channelScores),
+      ...(a5 ? { winningDocs: structuredClone(winningDocs), requiredSpanCoverage } : {}),
       ...(a0 ? { pages: result.pages, scannedRows: result.scannedRows, coverage: result.coverage, errors: result.errors } : {}) };
     if (!diagnostic) {
       stratum(`language:${label.lang}`, label, groups, result.ranked);
@@ -116,13 +154,13 @@ export function scoreRankings(fixture, rankings) {
       // each applicable count stratum. The reached group retains all supports.
       for (const count of [1, 2, 3]) stratum(`span-count:${count}`, label, groups.filter(group => group.members.some(member => (member.spanCount ?? memoryMap.get(member.memory)?.spans.length) === count)), result.ranked);
       stratum(`scale:${run.scale}`, label, groups, result.ranked);
-      stratum('required-span', label, groups.filter(group => group.members.some(member => member.where === 'span')), result.ranked);
+      if (requiredSpanCoverage && spanGroups.length) (strataRows['required-span'] ??= []).push({ id: label.id, category: label.category, ...requiredSpanCoverage });
     }
     return row;
   });
-  for (const key of ['fidelity:body-covered', 'fidelity:span-only', 'C3:zero-overlap', ...[1, 2, 3].map(count => `span-count:${count}`)]) strataRows[key] ??= [];
+  for (const key of ['fidelity:body-covered', 'fidelity:span-only', 'C3:zero-overlap', 'required-span', ...[1, 2, 3].map(count => `span-count:${count}`)]) strataRows[key] ??= [];
   const strata = Object.fromEntries(Object.entries(strataRows).map(([key, rows]) => [key, { ...summarizeQueries(rows), queries: rows }]));
-  return { run: structuredClone(run), ok: failures.length === 0, failures, queries, summary: summarizeQueries(queries, { requireAllCategories: true }),
+  return { run: scoringRun(fixture, run), ...(fixture.labelProvenance ? { labelProvenance: structuredClone(fixture.labelProvenance) } : {}), ok: failures.length === 0, failures, queries, summary: summarizeQueries(queries, { requireAllCategories: true }),
     strata, diagnostics: queries.filter(query => query.diagnostic), costs: rankings.costs ?? {} };
 }
 
@@ -155,7 +193,7 @@ export function scoreRuns(fixture, rankings, { withoutForeign } = {}) {
     if (result.isolation.ok === false) { result.ok = false; result.failures.push({ code: 'foreign_isolation_mismatch', queries: result.isolation.mismatches }); }
     return result;
   }), a0 = summarizeA0(runs);
-  return { format: 'hr1-scores-v1', fixtureHashes: fixture.hashes ?? {}, ok: runs.every(run => run.ok) && a0.every(group => group.ok), runs, a0 };
+  return { format: 'hr1-scores-v1', fixtureHashes: fixture.hashes ?? {}, ...(fixture.labelProvenance ? { labelProvenance: structuredClone(fixture.labelProvenance) } : {}), ok: runs.every(run => run.ok) && a0.every(group => group.ok), runs, a0 };
 }
 
 export function checkIsolation(withForeign, withoutForeign) {

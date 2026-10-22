@@ -1,4 +1,4 @@
-import { rankScores } from './bm25.mjs';
+import { rankScores, channelPayload } from './bm25.mjs';
 import { tokenizeT1 } from './tokenize.mjs';
 
 export const CONFIRMATORY = Object.freeze({
@@ -42,5 +42,5 @@ export function fuse(lexical, semantic, config, { text = '', documents = [], tok
     });
   }
   return { rows: rankScores([...scores].map(([memoryId, score]) => ({ memoryId, score }))).slice(0, 24),
-    channels, unionSize: new Set([...channels.lex, ...channels.sem]).size };
+    channels, ...channelPayload({ lex, sem }), unionSize: new Set([...channels.lex, ...channels.sem]).size };
 }
