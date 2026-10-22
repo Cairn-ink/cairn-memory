@@ -56,6 +56,7 @@
 | --- | --- |
 | 研究基準 | PR #468 head `3f6590584e746cc596c7859c9b0a00ae808941b6`（未合併）。檢索與排序邏輯和 main `cd6d1ad` 相同 |
 | 研究分支 | `experiment/hybrid-retrieval-hr1`，worktree `/home/chichieh/cairn-memory-hr1`（本機，未推送） |
+| 工程整合分支 | `integration/unified-memory-v1`，worktree `/home/chichieh/cairn-memory-umv1`，基準 #469 `b8fa224`（本機，未推送） |
 | 上游參考 | MemPalace `f41e8e75ddaadf5588d5127715fa531d79eadb45`；OpenViking `824e9c7ff5e7cebbc36f55257c39f8bbe75d5a24` |
 | 參考機器 | AMD Ryzen 9 9950X（32 執行緒）、47 GB RAM、WSL2、Node 22.16.0 |
 
@@ -80,6 +81,9 @@
 | 2026-10-23 | Codex 一律用 `codex exec -m gpt-6.1-sol -c model_reasoning_effort="xhigh" --ignore-user-config --disable hooks`。已實測：實際模型 gpt-6.1-sol／xhigh，沒有觸發 Cairn 擷取 hook，也沒載入 cairn.ink MCP |
 | 2026-10-23 | 同時執行的 Codex 數量不設上限（與另一個 session 共用帳號額度） |
 | 2026-10-23 | 產品 embedding API 選定 OpenAI，模型由主控決定。HR-1 的 API 組：`text-embedding-3-large`（主要候選，3072 維，另在本機截成 1024 維並重新正規化，看儲存成本取捨）與 `text-embedding-3-small`（成本對照）。理由：官方公布的多語檢索 MIRACL 平均 54.9 vs 44.0，英文為主的 MTEB 64.6 vs 62.3；每百萬 token 約 US$0.13 vs US$0.02 |
+| 2026-10-23 | **分支策略**（使用者授權主控以 DRI 身分決定；另一個 session 目前已停下）：研究與工程分成兩條分支。研究留在 `experiment/hybrid-retrieval-hr1`（只動 `evaluation/` 和文件，結論用來回填，本身不併入產品）。改 `core/` 的工程放在新的 `integration/unified-memory-v1`（worktree `/home/chichieh/cairn-memory-umv1`），基準是那串未合併 PR 的最新一個，#469 `b8fa224d5ba6fe8007e6d80fe64fae74d89aa78b` |
+| 2026-10-23 | **整合 owner**：另一個 session 停下期間，由本研究的主控擔任新方向 `core/` 變更的唯一整合者，並保留 schema **v30** 給第一批新資料表。那串 PR 合併或被修改時，本分支 rebase 到它上面。另一個 session 若恢復，先協調再動共用檔案（`database.mjs`、`runtime.mjs`、`contract.mjs`）。對外的 issue 或 PR 留言要先問使用者 |
+| 2026-10-23 | **工程順序**：先做不必等 HR-1 的部分。P0 契約凍結（typed refs、`context-read-v1` 的邊界、採用語義、v30 配置）→ M4 方法包（不可覆寫版本、採用綁定、變更原因）→ M5 素材。M6／M7 的預設值等 HR-1／HR-2，但它們的接口與降級契約可以先做。每一包照派工規則：Codex 實作、兩位非作者審查、主控驗收。推上遠端或開 PR 前先問使用者 |
 | 2026-10-23 | HR-1 的 API 呼叫上限 **US$1**，自己記帳，不用 repo 共用帳本，也不用另一個 session 的額度（估計實際花費不到 US$0.10）。金鑰放在使用者提供的 `~/.config/cairn-hr1/openai.env`（權限 600）。Codex worker 只用假的 HTTP 實作和測試 API 組，**不給金鑰**；付費執行由主控做 |
 
 ## 6. 研究問題與順序
