@@ -213,6 +213,22 @@ test('full validator passes a complete toy fixture and independently detects sta
   assert.equal(validateFixture(fixture, tokenizers).errors.some(error => error.code === 'labels:join_or_audit_mismatch'), true);
 });
 
+test('absent target facts require null coverage; rendered target facts still require body or span-only', () => {
+  const fixture = toyFixture(), absent = fixture.facts.facts.find(fact => fact.id === 'absent-0');
+  assert.equal(absent.rendered, false); assert.equal(absent.coverage, null);
+  const valid = validateFixture(fixture, tokenizers);
+  assert.equal(valid.ok, true, JSON.stringify(valid.errors));
+  assert.equal(fixture.labels.queries.find(label => label.id === 'q-C8-00').checks.C8.pass, true);
+  for (const coverage of ['body', 'span-only', undefined]) {
+    absent.coverage = coverage;
+    assert.equal(validateFixture(fixture, tokenizers).errors.some(error => error.code === 'fact:coverage' && error.detail === absent.id), true);
+  }
+  absent.coverage = null;
+  const rendered = fixture.facts.facts.find(fact => fact.id === 'new-0');
+  rendered.coverage = null;
+  assert.equal(validateFixture(fixture, tokenizers).errors.some(error => error.code === 'fact:coverage' && error.detail === rendered.id), true);
+});
+
 test('validator enforces schema/references, quotas, languages, fidelity, spans, extras and foreign duplicates', () => {
   const cases = [
     ['memory:content', fixture => { fixture.corpus.memories[0].content = 'x'.repeat(4001); }],

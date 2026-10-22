@@ -47,7 +47,7 @@ export function toyFixture() {
     const cross = fact(`cross-${i}`, `fam-${i}`, { coverage });
     memory(cross, { lang: i % 2 ? 'zh' : 'en', spanOnly });
     const near = fact(`near-${i}`, `fam-${i}`); memory(near, { lang: langAt(i) });
-    const absent = fact(`absent-${i}`, `fam-${i}`, { rendered: false });
+    const absent = fact(`absent-${i}`, `fam-${i}`, { rendered: false, coverage: null });
     query(i, 'C1', [current.id]);
     query(i, 'C2', [current.id], { lang: 'zh', keyTerm: '觀測' });
     query(i, 'C3', [current.id], { text: 'unrelatedword' });

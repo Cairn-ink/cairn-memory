@@ -88,7 +88,7 @@ function validate(fixture, tokenizers, { policy = DISTRIBUTION_POLICY, view } = 
     check(KINDS.includes(fact.kind) && STATES.includes(fact.state) && LANGS.includes(fact.statementLang), 'fact:enums', fact.id);
     check(nonempty(fact.statement) && time(fact.eventTime) && typeof fact.rendered === 'boolean', 'fact:metadata', fact.id);
     check(Array.isArray(fact.entities) && fact.entities.every(nonempty) && unique(fact.entities).length === fact.entities.length, 'fact:entities', fact.id);
-    check(family?.role !== 'target' || ['body', 'span-only'].includes(fact.coverage), 'fact:coverage', fact.id);
+    check(family?.role !== 'target' || (fact.rendered === false ? fact.coverage === null : ['body', 'span-only'].includes(fact.coverage)), 'fact:coverage', fact.id);
     for (const field of ['supersedes', 'reasonFor', 'nearDuplicateOf']) {
       check(fact[field] === null || factMap.has(fact[field]), `fact:${field}:reference`, fact.id);
       check(fact[field] !== fact.id, `fact:${field}:self`, fact.id);
