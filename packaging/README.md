@@ -98,10 +98,21 @@ The private archive also contains an explicit Linux local capture host. Its
 owner-operated profile, status/prepare/initialize/run grammar and refusal codes
 are documented in [the local Raw guide](../docs/raw-local-journal.md#explicit-local-host-b4c).
 This entry requires an existing schema29 store and separately recorded current
-capture consent. It does not install automatic Claude/Codex hooks, create a
+capture consent. That host entry itself does not install Claude/Codex hooks, create a
 database, grant consent or configure an MCP Raw/Card review interface. The
 bounded evidence uses synthetic sources and fake HTTP; no real-client activation
 or semantic-quality claim follows from the archive checks.
+
+The separate explicit `cairn-memory local` preview can initialize a brand-new
+schema 29 store, prepare consent-bound installation state and activate foreground
+native JSON hooks only after distinct consents and finite limits. Defaults stay
+off; ordinary MCP/host startup does none of that. Inside an installed package,
+read `docs/raw-local-journal.md` relative to that package's root; the guide is
+included in the archive and `cairn-memory local --help` identifies the same path.
+The [repository operator-guide link](../docs/raw-local-journal.md#explicit-standalone-foreground-setup-preview)
+is for source-checkout readers. The guide covers the closed request, qualified
+Codex prerequisite, 160-second foreground
+latency, shared usage root, SQL-first disable and explicit rearm limitations.
 
 Use Node >=22.16 and npm, with the downloaded local archive's SHA-256 verified
 against its accompanying build report. Create a local installation directory,
@@ -222,7 +233,9 @@ decision; uninstall is not a secure-data-erasure operation.
 - No terminal output: normal for a stdio server waiting for a client request.
 
 Incoming messages are capped at 64 KiB; tool output at 256 KiB. The host has no
-HTTP listener, telemetry, authentication service, automatic hooks, or hosted UI.
+HTTP listener, telemetry, authentication service, default-on automatic hooks, or
+hosted UI. Native foreground hooks require the separate explicit `local setup`
+and `local activate` consent flow; ordinary MCP startup does not install them.
 Local process/database access is trusted; owner labels are not OS access control.
 General semantic quality and actual named-client compatibility remain separate
 gates. See THIRD_PARTY_NOTICES.md and npm-shrinkwrap.json for dependency provenance.

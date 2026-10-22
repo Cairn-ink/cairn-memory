@@ -5,6 +5,17 @@ host. It does not publish to npm, deploy a service or create a second engine.
 The preview name/version is `cairn-memory-local-preview@0.0.0-preview.1`;
 a future registry release needs a separate naming/version/release decision.
 
+For explicit default-off Claude Code/Codex foreground capture, the installed
+binary has a separate `local --help` path. See the [closed request and operator
+sequence](raw-local-journal.md#explicit-standalone-foreground-setup-preview):
+new-store-only `local init`, existing-store-only `local setup`, read-only status,
+explicit activation and SQL-first disable. This does not change MCP startup or
+the released hosted setup helper. The foreground 160-second hook timeout,
+separate consents, explicit private HOME/source root and shared usage/target
+binding must be chosen before activation. No provider key is required for these
+setup actions, and no credential is copied to their files. Native-client and
+semantic/provider acceptance remain distinct from the offline synthetic chain.
+
 The archive includes the [asynchronous topic reader](topic-overview.md) and its
 fixed Worker closure. The installed regression independently walks imports and
 the Worker URL, compares the five reader modules with the archive allowlist and

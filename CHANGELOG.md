@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — explicit local foreground setup preview
+
+- Add default-off `local init/setup/status/activate/disable` and bounded quiet
+  native hook routing over the existing host/worker/core, not another engine.
+- Bind separate consents, exact existing store/client/namespace, approved sources,
+  private runtime HOME and shared cross-client target/usage limits. Init is
+  brand-new-only; setup never migrates existing files. Daily limits count model
+  port calls, not USD; owner Raw cap becomes durable on first real capture.
+- Publish foreground 160-second hooks last and revoke SQL first on disable;
+  preserve identity and require existing explicit rearm after re-enabling.
+  Hosted defaults, trust, credentials and provider algorithms remain unchanged.
+- Separate exact generated-command keyless checks from installed synthetic
+  provider/ancestry instrumentation; native, semantic and product gates remain.
+
 ## Unreleased — bounded asynchronous Memory topic metadata
 
 - Add owner-bound `openMemoryReader().readTopicOverview()` over the same local

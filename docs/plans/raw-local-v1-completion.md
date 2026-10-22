@@ -77,11 +77,22 @@ skips across both runtimes. Frozen hashes and owned cleanup were independently
 verified. The interrupted first matrix is retained: its outer core timeout was
 incorrectly shorter than the suite's established duration, not a reader failure.
 Only that outer supervisor window changed; no product deadline was relaxed.
-Exact-commit acceptance, independent dual review and latest-head CI remain
-delivery gates; it is not yet delivered.
+Exact-commit acceptance and independent dual review passed at `3f659058`;
+all31 latest-head checks succeeded. It is ready/unmerged as#468. Primary
+reconfirmed that SHA, ready state and31 successful checks on2026-10-22.
 This is Memory-only MOC metadata, not a new Card MOC view or retrieval algorithm.
-Actual automatic client setup/activation, product joint acceptance and G1/G2/H6
-remain separate. Retained-receipt excerpts do not substitute for full Raw;
+The next [standalone closeout packet](local-v1-closeout.md) supplies explicit
+default-off local initialization/setup/activation. Its dual-runtime source and
+installed checks and primary independent installed/native-config probes pass.
+Its26-command affected regression matrix now passes on both runtimes, actual
+outer0/children0,2444 passing cases and2 explicit native-Windows skips; source,
+dependency and cleanup evidence were independently verified. Exact-commit
+independent review and CI remain pending. Genuine isolated Codex TUI dispatch
+and EOF initialization also passed primary reproduction without provider calls;
+Claude init-only dispatch is observed but has no transcript at that point.
+Accepted-prompt retention/native Stop capture, full semantic acceptance,
+product joint acceptance and G1/G2/H6 remain separate. Retained-receipt excerpts
+do not substitute for full Raw;
 product pins/flags and semantic scores are unchanged.
 
 ## What "V1 done" means

@@ -11,6 +11,139 @@ inspection and authored Raw-backed Cards, as described below; the constructor
 alone adds no MCP tool, client hook, hosted encryption or production enablement.
 Ordinary public capture keeps its existing wire contract.
 
+## Explicit standalone foreground setup preview
+
+The private archive has a separate default-off `cairn-memory local` operator
+path for Claude Code or qualified Codex, initially Linux/WSL + Node >=22.16.
+It leaves released hosted hooks and `packages/setup` defaults unchanged.
+SessionStart initializes verified EOF; Stop/PreCompact may hold the foreground
+hook for up to 160 seconds (existing host 155 seconds plus teardown). Codex also
+gets an idempotent UserPromptSubmit first-observation fallback: it does not reset
+existing cursors on every prompt. No long SessionEnd hook, detached worker,
+daemon or retry queue is installed. Hook stdout is empty even on refusal;
+internal status objects are never model context.
+
+```sh
+cairn-memory local init --database /absolute/private/new-memory.sqlite
+cairn-memory local setup --request /absolute/private/setup-request.json
+cairn-memory local status --installation /absolute/private/claude-installation
+cairn-memory local activate --installation /absolute/private/claude-installation
+cairn-memory local disable --installation /absolute/private/claude-installation
+```
+
+These are explicit operator actions. `init` exclusively creates a new 0600 file
+under an existing private 0700 parent and opens the public Raw-off core to create
+schema 29. Every existing file, empty file or symlink refuses unchanged; it never
+migrates an old database. A failed init can leave its owned incomplete new file,
+not permission to overwrite/retry. Init creates no owner usage row, capture grant,
+conversation or synthetic event. The selected owner's cap persists on its first
+real capture. Setup itself remains existing-schema-29-only.
+
+The 0600 request is bounded UTF-8 JSON (64 KiB) with exactly these fields:
+
+```json
+{
+  "version": "local-raw-setup-request-v1",
+  "installationDirectory": "/absolute/private/claude-installation",
+  "databasePath": "/absolute/private/new-memory.sqlite",
+  "namespace": {"ownerId":"chosen-owner","scope":"personal","projectId":null},
+  "client": "claude-code",
+  "sourceRoot": "/absolute/approved-transcript-root",
+  "clientConfigPath": "/absolute/private-native-settings/settings.json",
+  "usageRoot": "/absolute/private-shared-usage",
+  "installation": {"pluginRoot":"/absolute/selected-claude-plugin-root"},
+  "rawMode": "local-plain-v1",
+  "rawCapBytes": 1000000,
+  "dailyCap": 20,
+  "providerApiKeyEnv": "OPENAI_API_KEY",
+  "interpretationConsent": true,
+  "plaintextRawConsent": true,
+  "foregroundConsent": true
+}
+```
+
+For Codex select `client:"codex"`, its explicit native `hooks.json`, a different
+installation directory, and `installation:{"qualificationConfigPath":
+"/absolute/private-codex/installation.json"}` instead of pluginRoot. Select an
+already-qualified private profile/cache. Setup does not launch or auto-qualify
+a native binary. The existing installed operator API is explicit:
+
+```js
+// Use the selected supported Node. First create the chosen private parent and
+// 0600 installation.json separately; do not borrow the active user's HOME.
+const q = await import('/absolute/offline/node_modules/cairn-memory-local-preview/integrations/codex/qualification.mjs');
+const configPath = '/absolute/private-codex/installation.json';
+const binaryPath = '/absolute/chosen/bin/codex';
+const host = { binaryPath, identity:await q.binaryIdentity(binaryPath), kind:'cli' };
+const verdict = await q.qualifyBinary(configPath, host);
+console.log(verdict.status); // Proceed only with an actually qualified verdict.
+```
+
+That probes schema/format, not a capture turn or provider request. Actual hooks
+still bind the running ancestor binary, cached identity, interactive source
+header/session and qualified creator; exec sessions refuse. Missing evidence
+reports `qualification_required`, not fabricated support.
+
+Paths must be explicit normalized absolute selections. Source root, native
+settings parent, database parent and shared usage directory must already exist;
+private parents are 0700. Sources cannot overlap database, installation, native
+configuration, qualification/plugin metadata or usage state. Symlink/foreign
+paths and forged events refuse. Activation and fresh SQL permission precede
+source contents. Native turn/agent/task/cron metadata is inert, not execution
+or consent authority. Only the selected session/source fields reach the host.
+
+Interpretation/provider-processing consent, plaintext Raw consent and foreground
+latency consent are separate. For explicitly consented interpretation without
+plaintext retention choose `rawMode:"off"`, `plaintextRawConsent:false`.
+Declining required consent creates no installation or grant. Only an environment
+slot name (`OPENAI_API_KEY` or `CAIRN_*_API_KEY`) is stored, never a credential.
+Setup/status/disable and acknowledged replay need no key. Real new interpretation
+reads that slot in the native process. Child HOME is the installation-owned
+`installationDirectory/home`, never inferred from active HOME or hook payload.
+
+Both clients for the same store/namespace must share one existing private
+`usageRoot`, daily cap and Raw cap. Its `local-setup-budget.json` binds the actual
+store/namespace, one target and both limits; cooperative DB-adjacent/shared-root
+locks serialize installers. Foreign sibling targets, changed caps or a new
+usage root for already-bound controls refuse rather than fork a quota. Daily cap
+counts model-port invocations, not USD. Counters, thresholds and uncertain-call
+no-refund behavior are unchanged.
+
+Setup journals intent, grants through actual public SQL controls, prepares the
+existing host identity and remains inactive. Activation preserves unrelated
+native JSON values/handlers, refuses hosted Cairn conflicts/concurrent edits,
+then publishes active last. It changes no trust, managed policy, global switch,
+credential or shell startup file. Ambiguous partial state reports
+`recovery_required`, never silent identity regeneration. Status is read-only;
+it does not take a setup lock or repair state. Disable revokes SQL first, then
+removes only exact owned registrations; cleanup failure cannot authorize stale
+hooks. Data, keys and cursors remain.
+
+Activating after disable may grant fresh SQL consent but stays
+`rearm_required`, not active capture. Use the existing explicit host rearm for
+each admissible selected session, then activate again:
+
+```sh
+node /absolute/offline/node_modules/cairn-memory-local-preview/integrations/client/raw/local-host-cli.mjs --profile /absolute/private/claude-installation/host-profile.json rearm-status
+node /absolute/offline/node_modules/cairn-memory-local-preview/integrations/client/raw/local-host-cli.mjs --profile /absolute/private/claude-installation/host-profile.json rearm --expected-revision 0 --action-id aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa --session CHOSEN_SESSION --source /absolute/approved-transcript-root/selected.jsonl
+```
+
+For Codex, the actual `rearm` command must run beneath a currently running,
+qualified, non-exec native Codex CLI/app-server process. A normal terminal plus
+a cached qualification does not supply that ancestry and refuses; the shell
+examples above do not bypass it. `rearm-status` only observes action metadata and
+does not require native ancestry. If native-owned command execution is unavailable,
+leave rearm refused rather than disguising the host or replacing identity.
+
+Rearm preserves key/session/ordinal, skips its frozen complete paused EOF and
+refuses deleted/incomplete/unknown boundaries. Zero-history recovery may remain
+unsupported; do not delete/recreate identity to bypass it. Existing bounded
+predecessor/exact-action replay limits remain. Synthetic installed evidence
+separates exact quiet/keyless generated-command execution from provider capture
+through trusted test-only HTTP/ancestry instrumentation. Neither claims real
+native provider-backed hook execution or semantic quality; native, paid/model
+and product gates remain separate.
+
 ## Explicit public constructor (P4b-B1)
 
 `openMemoryCore({path, model?, privateCards?, rawConversations})` accepts the
@@ -233,6 +366,12 @@ caller may invoke `rearmStatus({signal?})` and
 above are fixed and ordered; revision is a canonical nonnegative safe integer,
 and action ID is a canonical lowercase UUIDv4. These operations never set controls,
 look up a provider key, grant retained-read authority or enable automatic hooks.
+
+Codex actual rearm (including replay/recovery) rechecks its real native process
+ancestry, identity-bound qualification and interactive source header. It cannot
+be authorized from an unrelated ordinary shell merely by selecting the profile;
+metadata-only `rearmStatus` remains usable without that host. No host substitution
+or automatic qualification is implied by the CLI grammar.
 
 Both new result DTOs have exactly `{version,status,reason,revision,pending}`.
 Versions are `local-raw-rearm-status-v1` and `local-raw-rearm-result-v1`;

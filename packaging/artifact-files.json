@@ -151,6 +151,12 @@
   "integrations/client/raw/local-worker-source.mjs",
   "integrations/client/raw/local-worker-state.mjs",
   "integrations/client/raw/local-host.mjs",
+  "integrations/client/raw/local-setup-input.mjs",
+  "integrations/client/raw/local-setup-files.mjs",
+  "integrations/client/raw/local-setup.mjs",
+  "integrations/client/raw/local-setup-cli.mjs",
+  "integrations/client/raw/local-setup-init.mjs",
+  "integrations/client/raw/local-hook.mjs",
   "integrations/client/raw/local-host-profile.mjs",
   "integrations/client/raw/local-host-permission.mjs",
   "integrations/client/raw/local-host-preparation.mjs",
@@ -176,5 +182,6 @@
   "plugins/cairn-memory/lib/transcript.mjs",
   "integrations/client/runtime-usage.mjs",
   "integrations/client/state-lock.mjs",
+  "docs/raw-local-journal.md",
   "LICENSE"
 ]

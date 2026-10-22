@@ -1,5 +1,43 @@
 # Known limitations
 
+## Explicit local foreground setup preview
+
+The [operator path](raw-local-journal.md#explicit-standalone-foreground-setup-preview)
+is default-off Linux/WSL + Node >=22.16, not native macOS/Windows verification or
+complete semantic/product V1. Hooks run foreground for up to 160 seconds; there
+is no daemon, detached retry or long SessionEnd capture. Exact generated commands
+exercise quiet/keyless installed routing; provider-backed installed capture uses
+trusted test-only HTTP interception and synthetic Codex ancestry. A Codex command
+outside a qualified actual host is expected to refuse. Qualification proves
+schema/format evidence, not native hook execution or model meaning.
+
+Setup requires an existing private schema 29 store. Separate new-store-only init
+refuses every existing path; failure can leave its owned incomplete new file.
+Init does not persist an owner cap or fake event: first actual capture persists
+the setup-selected cap. Both clients must share the private usage descriptor,
+target and limits. Daily usage counts model-port invocations, not money. These
+cooperative locks do not attest against malicious same-user filesystem/SQL edits.
+The selected native settings parent must be private, and JSON conflicts refuse
+rather than erase unknown Cairn commands. Trust/global policy is never changed.
+
+Disable preserves data/identity and revokes SQL before config cleanup. Re-enable
+stays `rearm_required` until existing explicit admissible rearm; missing identity,
+zero-history or other unsupported recovery refuses rather than resetting it.
+Status is an observation, not repair. Activation/SQL/source checks are repeated,
+but there is no cross-filesystem/SQLite transaction against hostile same-owner
+races. No plaintext encryption or account-wide financial cap is implied.
+
+Retained author failures: the first decoder rejected real Codex required
+`turn_id`/optional agent metadata, and then official Claude session-title/task/
+cron fields; full native-shape red tests now constrain those inert fields.
+Installed fixture reds used a non-UUID rearm action and wrongly expected a killed
+provider's reservation to disappear immediately or through guard status. Existing
+guard recovery is reserve/resume-driven; uncertain usage is not refunded and a
+started dead-owner reservation is durable state, not a live child or unexpected
+scratch. Separate source-status and SIGHUP reds exposed transient status locking
+and a missing signal handler. Logs/actual exits remain recorded; no source or
+authority boundary, provider behavior or timeout budget was weakened for them.
+
 ## Asynchronous Memory topic metadata
 
 The [asynchronous Memory topic reader](topic-overview.md) supplies bounded
