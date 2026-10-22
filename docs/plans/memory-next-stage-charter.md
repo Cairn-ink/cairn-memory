@@ -155,8 +155,10 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `hr1_protocol_audit`（複查） | 檢查 v2 | gpt-6.1-sol/xhigh → 同 | read-only | `ed7c763` | 19:39–19:44 | exit 0；新增 2 項 P0 → v2.1（`994d912`） |
 | `hr1_protocol_audit`（確認） | 確認 v2.1 | gpt-6.1-sol/xhigh → 同 | read-only | `e1aa7da` | 2026-10-22T19:47–19:49 | exit 0；v2.1 可以進行；3 項配套文件 P1 已修（`5c1c90f`） |
 | `hr1_world_author`（W1） | 寫語料：家族、事實、記憶、原文片段 | gpt-6.1-sol/xhigh | workspace-write，無網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
-| `hr1_tooling`（W4a） | 語料工具、指標、統計、報告 | gpt-6.1-sol/xhigh | workspace-write，無網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
-| `hr1_arms`（W4b） | 各組檢索方法、embedding、融合、計時 | gpt-6.1-sol/xhigh | workspace-write，只開放安裝套件與下載模型的網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
+| `hr1_tooling`（W4a） | 語料工具、指標、統計、報告 | gpt-6.1-sol/xhigh → 同 | workspace-write，無網路 | `e1aa7da` | 19:47–20:14 | exit 0；16 個檔案 |
+| `hr1_arms`（W4b） | 各組檢索方法、embedding、融合、計時 | gpt-6.1-sol/xhigh → 同 | workspace-write，只開放安裝套件與下載模型的網路 | `e1aa7da` | 19:47–20:12 | exit 0；21 個檔案；transformers.js 3.7.6；e5-small `761b726`、bge-m3 `4de1325`（fp32） |
+| 主控驗收 | W4a＋W4b 的測試框架 | — | — | `a424c23` | 20:15 | 兩種方式核對檔案清單，都是 37 個；Node 22.16／24.15 各 84 項測試、83 通過、0 失敗、1 項需手動開啟的測試略過，exit 皆 0；真實模型冒煙測試 exit 0 |
+| `hr1_review_spec`／`hr1_review_standards` | 測試框架的非作者雙審查 | gpt-6.1-sol/xhigh | read-only | `a424c23` | 20:15– | 執行中 |
 | `umv1_contract_audit` | 工程軌 P0 契約的非作者設計審查 | gpt-6.1-sol/xhigh → 同 | read-only | 整合分支 `81e0f21` | 19:51–19:58 | exit 0；7 項 P0 → v0.2（`91a7825`） |
 | `umv1_contract_audit`（複查） | 檢查 v0.2 | gpt-6.1-sol/xhigh | read-only | `91a7825` | 19:59–20:02 | exit 0；3 項 P0 → v0.3（`2b2e3cf`） |
 | `umv1_contract_audit`（確認） | 確認 v0.3 | gpt-6.1-sol/xhigh | read-only | `2b2e3cf` | 20:03– | 執行中 |
