@@ -1,5 +1,24 @@
 # Known limitations
 
+## Text-only local method packages (U2a)
+
+[Method packages](method-packages-local.md) are default-off engine mechanics,
+not installed method adoption or execution. U2a supports only independently
+submitted text and context-free history: context, snapshot and current-intent
+arguments return `invalid_input` until U2b. The complete v30 schema already
+includes empty binding, generation and event tables; U2b adds behaviour without
+a layout change. Deletion changes lifecycle revisions and its deletion effect
+only; binding generations advance only on binding transitions. U3 owns safe filesystem importing
+and installed host authority; U4 owns binary assets; U5 owns dependency fences
+for source-derived copies and generated summaries. Hosts must not import fenced
+or forgotten source output. Best-effort redaction is not a secret-removal
+guarantee; logical purge is not secure physical erasure. The provisional limits
+need U3 size measurement. Namespace usage excludes metadata, ledgers, effects,
+SQLite overhead, WAL and backups; owner-wide totals are not exposed by U2a.
+Schema v30 upgrade is explicit and writable-ordinary-only; stop mixed-version
+writers first. Synthetic SQLite tests do not establish hosted safety, semantic
+quality, filesystem confinement or product readiness.
+
 ## Explicit local foreground setup preview
 
 The [operator path](raw-local-journal.md#explicit-standalone-foreground-setup-preview)
@@ -11,7 +30,7 @@ trusted test-only HTTP interception and synthetic Codex ancestry. A Codex comman
 outside a qualified actual host is expected to refuse. Qualification proves
 schema/format evidence, not native hook execution or model meaning.
 
-Setup requires an existing private schema 29 store. Separate new-store-only init
+Setup requires an existing private schema 29 or upgraded schema 30 store. Separate new-store-only init
 refuses every existing path; failure can leave its owned incomplete new file.
 Init does not persist an owner cap or fake event: first actual capture persists
 the setup-selected cap. Both clients must share the private usage descriptor,

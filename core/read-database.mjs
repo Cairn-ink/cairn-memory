@@ -1,3 +1,4 @@
+import { validateExistingStore } from './existing-store.mjs';
 import { lstatSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { APPLICATION_ID, READ_SCHEMA_VERSIONS } from './database.mjs';
@@ -23,6 +24,8 @@ export function openReadDatabase(path) {
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
     if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
         !READ_SCHEMA_VERSIONS.includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
+    if (db.prepare('PRAGMA user_version').get().user_version === 30) validateExistingStore(db, {
+      storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id });
     // Validate every physical seek, including automatically named primary keys.
     // A matching name alone does not establish column order/collation/coverage.
     const list = db.prepare('SELECT name,origin,partial FROM pragma_index_list(?)');

@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — opt-in local method packages (U2a)
+
+- Add text-only immutable method imports, context-free history, exact-edge
+  comparison, atomic owner quota, purging deletion and content-free durable replay
+  and effects in the existing SQLite core.
+- Allocate the complete schema v30, including initially empty binding, binding-
+  generation and content-free binding-event storage, through a transactional
+  schema-only prerequisite migrator; unselected construction stays unchanged. Existing upgraded stores reopen through
+  ordinary, read-only, managed and local setup/preflight paths.
+- Require method-specific host authority. Bindings, contexts, snapshots, current
+  intent and installed directory importing remain deferred. U2b uses the frozen
+  v30 layout; deletion advances lifecycle revisions and emits only its deletion
+  effect, without enumerating bindings or advancing binding generations. See
+  [the local guide](docs/method-packages-local.md).
+
 ## Unreleased — explicit local foreground setup preview
 
 - Add default-off `local init/setup/status/activate/disable` and bounded quiet

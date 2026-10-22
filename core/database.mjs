@@ -1,3 +1,4 @@
+import { migrateMethodPrerequisites } from './method-package-migration.mjs';
 import { randomBytes, randomUUID } from "node:crypto";
 import { installRawDeletion, RAW_DELETION_SCHEMA_VERSION } from './raw-deletion-schema.mjs';
 import { installRawSources, RAW_SOURCE_SCHEMA_VERSION } from './raw-source-schema.mjs';
@@ -31,7 +32,7 @@ export const APPLICATION_ID = 0x43414952;
 const VERSION = CONFIRMATION_SCHEMA_VERSION;
 // Existing layouts accepted without an upgrade by the ordinary opener.
 export const READ_SCHEMA_VERSIONS = Object.freeze([VERSION, 20, PRIVATE_CARD_SCHEMA_VERSION,
-  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION]);
+  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30]);
 
 function createVersion3(db) {
   db.exec(`
@@ -274,7 +275,7 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, existingStore } = {}) {
+export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, existingStore } = {}) {
   if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
   rawDeletion ||= rawSources || localControls;
   rawLineage ||= rawDeletion;
@@ -287,6 +288,7 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
       location.check();
       db.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
       validateExistingStore(db, option);
+      if (methodPackages && db.prepare('PRAGMA user_version').get().user_version !== 30) fail('unsupported_database');
       location.check();
       return db;
     } catch (error) {
@@ -312,8 +314,15 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
   try {
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
     transaction(db, () => {
+      function initialize() {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
+      if (methodPackages && !(appId === 0 && version === 0 && db.prepare('SELECT count(*) AS n FROM sqlite_master').get().n === 0) &&
+          !(appId === APPLICATION_ID && [18,20,21,22,23,24,25,26,27,28,29,30].includes(version))) fail('unsupported_database');
+      if (appId === APPLICATION_ID && version === 30) {
+        validateExistingStore(db, { storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id });
+        return;
+      }
       if (appId === APPLICATION_ID && [RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION, RAW_LINEAGE_SCHEMA_VERSION, RAW_DELETION_SCHEMA_VERSION, RAW_SOURCE_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION].includes(version)) {
         if (version < LOCAL_AUTHORITY_SCHEMA_VERSION) assertNoLocalAuthority(db);
         for (const name of ['raw_conversations','raw_messages','raw_parts','raw_events','raw_owner_usage','raw_capture_controls',
@@ -569,6 +578,9 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
           }
         }
       }
+      }
+      initialize();
+      if (methodPackages) migrateMethodPrerequisites(db);
     });
     return db;
   } catch (error) {

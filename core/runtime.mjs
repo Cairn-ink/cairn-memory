@@ -1,3 +1,5 @@
+import { methodPackageOptions } from './method-package-input.mjs';
+import { createMethodPackageStorage } from './method-package-storage.mjs';
 import { decisionReviewOption, createConfirmationStorage, createHeldReviewResolver, dropHeldWork, recordHeldRetirement } from './confirmation-storage.mjs';
 import { createSessionContextStorage } from './session-context.mjs';
 import { createEpisodeReads } from './episode-reads.mjs';
@@ -30,11 +32,12 @@ const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
-  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "existingStore"]);
+  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "existingStore"]);
   const privateCards = privateCardOptions(input.privateCards);
+  const methodPackages = methodPackageOptions(input.methodPackages);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
-  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), rawCapture: Boolean(internal?.rawCapture),
+  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), methodPackages: Boolean(methodPackages), rawCapture: Boolean(internal?.rawCapture),
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore });
   try {
   const rawLineage = createRawLineageStorage(db);
@@ -52,6 +55,9 @@ export function createMemoryRuntime(input, internal) {
   const cardStorage = privateCards ? createPrivateCardStorage({ db, identity, ready, rawSources: Boolean(internal?.rawSources),
     memoryMapInside: (ns, request) => mocStorage.mapRowsInside(internalNamespace(ns), request),
     memoryTopicInside: (ns, ref) => mocStorage.topicInside(internalNamespace(ns), ref) }) : undefined;
+
+  const methodStorage = methodPackages ? createMethodPackageStorage({ db, identity, ready,
+    cardDetailInside: createPrivateCardStorage({ db,identity,ready,rawSources: true }).cardDetailInside }) : undefined;
 
   function activeRow(ns, id) {
     return db.prepare(`SELECT * FROM memories WHERE ${where} AND id = ? AND deleted = 0`)
@@ -659,7 +665,8 @@ export function createMemoryRuntime(input, internal) {
     closeEpisodeNextStep(ns, input) { ready(); return episodes.closeNextStep(ns, input); },
     sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
-    privateCards: cardStorage,
+    privateCards: privateCards ? cardStorage : undefined,
+    methodPackages: methodStorage,
     rawSourceReader: internal?.rawSources ? rawCapture?.sourceReader : undefined,
     previewDeleteConversation(input) { ready(); return deletion.preview(input); },
     deleteConversation(input) { ready(); return deletion.remove(input); },

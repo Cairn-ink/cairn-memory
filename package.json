@@ -27,6 +27,7 @@
     "test:mixed-native-local": "node tools/testing/run.mjs evaluation/longmemeval/testing/mixed-native.test.mjs",
     "test:core": "node tools/testing/run.mjs core/test/*.test.mjs",
     "demo:session-context": "node examples/session-context.mjs",
+    "demo:method-packages": "node examples/method-packages.mjs",
     "demo:private-cards": "node examples/private-cards.mjs",
     "demo:episodes": "node examples/session-episodes.mjs",
     "demo:store": "node examples/local-store.mjs",

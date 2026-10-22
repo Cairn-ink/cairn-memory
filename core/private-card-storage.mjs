@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createOperationLedger, createPrivateEffectWriter, createPrivateCursor } from './private-operation-helpers.mjs';
 import { transaction } from './database.mjs';
 import { fail } from './validation.mjs';
 import { EVIDENCE_METHODS } from './private-evidence-input.mjs';
@@ -136,11 +137,8 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     if (row.state !== state) fail('card_state_conflict');
     return row;
   }
-  function effect(ns, kind, type, id, revision, actionId) {
-    const ordinal = db.prepare('SELECT coalesce(max(ordinal),0)+1 AS n FROM card_effects').get().n;
-    db.prepare('INSERT INTO card_effects VALUES(?,?,?,?,?,?,?,?,?,?)')
-      .run(randomUUID(), ...boundary(ns), kind, type, id, revision, actionId, ordinal);
-  }
+  const effect = createPrivateEffectWriter(db, 'card_effects');
+  const ledger = createOperationLedger(db, 'card_operations');
   const receipt = (row, effectCount = 0) => ({ id: row.id, revision: row.revision,
     state: row.state, bodyRevision: row.body_revision ?? null, effectCount });
   function purgeCard(ns, row, state, actionId) {
@@ -213,21 +211,7 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
     effect(ns, 'evidence_invalidated', 'card', row.id, row.revision + 1, input.actionId);
     return receipt(card(ns, row.id), 1);
   }
-  function cursorEncode(value) {
-    const body = Buffer.from(JSON.stringify(value)).toString('base64url');
-    return `${body}.${binding('card-cursor-v1', body)}`;
-  }
-  function cursorDecode(cursor, expected, ns) {
-    if (cursor === undefined) return null;
-    const [body, signature, extra] = cursor.split('.');
-    if (extra !== undefined || !body || signature !== binding('card-cursor-v1', body)) fail('invalid_cursor');
-    let value;
-    try { value = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch { fail('invalid_cursor'); }
-    if (JSON.stringify(value.binding) !== JSON.stringify(expected)) fail('invalid_cursor');
-    if (value.epoch !== epoch(ns)) fail('cursor_stale');
-    if (!(typeof value.after === 'string' || Number.isSafeInteger(value.after))) fail('invalid_cursor');
-    return value;
-  }
+  const { encode: cursorEncode, decode: cursorDecode } = createPrivateCursor({ binding, purpose: 'card-cursor-v1', epoch });
   function read(method, ns, input) {
     if (method === 'getCard') {
       const result = { card: detail(ns, card(ns, input.cardId)) };
@@ -309,16 +293,12 @@ export function createPrivateCardStorage({ db, identity, ready, memoryMapInside,
         if (EVIDENCE_METHODS.includes(method)) return evidence.call(method, ns, input, context.accessGeneration);
         if (ORGANIZATION_READS.includes(method)) return organization.call(method, ns, input, context.accessGeneration);
         if (isRead) return read(method, ns, input);
-        const old = db.prepare(`SELECT * FROM card_operations WHERE ${where} AND action_id=?`).get(...boundary(ns), input.actionId);
-        if (old) {
-          if (old.payload_binding !== payloadBinding || old.method !== method) fail('action_conflict');
-          return JSON.parse(old.result);
-        }
+        const replay = ledger.replay(ns, input.actionId, method, payloadBinding);
+        if (replay !== undefined) return replay;
         const result = ORGANIZATION_METHODS.includes(method) ? organization.call(method, ns, input, context.accessGeneration) : mutate(method, ns, input);
         if (size(result) > 65536) fail('context_item_too_large');
         const target = result.source?.sourceId ?? result.id;
-        db.prepare('INSERT INTO card_operations VALUES(?,?,?,?,?,?,?,?,?)')
-          .run(...boundary(ns), input.actionId, method, payloadBinding, target, JSON.stringify(result), now());
+        ledger.record(ns, input.actionId, method, payloadBinding, target, result, now());
         advance(ns);
         return result;
       });

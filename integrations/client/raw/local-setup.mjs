@@ -1,3 +1,4 @@
+import { validateExistingStore } from '../../../core/existing-store.mjs';
 import { mkdir, lstat, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -57,8 +58,9 @@ async function store(request,expectedStoreId) {
     const { DatabaseSync } = await import('node:sqlite'); db = new DatabaseSync(request.databasePath,{ readOnly:true });
     const after = await checkedPath(request.databasePath);
     if (before.dev !== after.dev || before.ino !== after.ino || db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
-        db.prepare('PRAGMA user_version').get().user_version !== 29) fail('store_invalid');
+        ![29,30].includes(db.prepare('PRAGMA user_version').get().user_version)) fail('store_invalid');
     const storeId = db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id;
+    if (db.prepare('PRAGMA user_version').get().user_version === 30) validateExistingStore(db, { storeId });
     if (typeof storeId !== 'string' || expectedStoreId !== undefined && expectedStoreId !== storeId ||
         db.prepare('SELECT 1 FROM raw_owner_usage WHERE owner_id=? AND cap_bytes!=?').get(request.namespace.ownerId,request.rawCapBytes)) fail('store_invalid');
     return storeId;

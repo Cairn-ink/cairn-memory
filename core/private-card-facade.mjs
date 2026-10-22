@@ -5,7 +5,7 @@ import { APPLICABILITY, EVIDENCE_DEFAULTS } from './private-evidence-input.mjs';
 import { ORGANIZATION_METHODS, ORGANIZATION_WRITES } from './private-organization-input.mjs';
 
 const fields = ['method', 'namespace', 'actionClass', 'actionId', 'targetId', 'expectedRevision', 'payloadBinding'];
-function verified(value, request) {
+export function verifyPrivateGrant(value, request) {
   if (!value || typeof value !== 'object') fail('authority_required');
   const data = snapshot(value);
   if (Object.keys(data).sort().join() !== [...fields, 'accessGeneration'].sort().join() ||
@@ -13,7 +13,7 @@ function verified(value, request) {
       fields.some(field => JSON.stringify(data[field]) !== JSON.stringify(snapshot(request[field])))) fail('authority_required');
   return data.accessGeneration;
 }
-function failure(error) {
+export function privateFailure(error) {
   let code = error instanceof MemoryStoreError ? error.code : 'storage_error';
   if (isStorageBusy(error)) code = 'storage_busy';
   if (['invalid_identifier', 'invalid_revision', 'invalid_text'].includes(code)) code = 'invalid_input';
@@ -43,28 +43,28 @@ export function createPrivateCardFacade(storage, options, ready, rawReader) {
         // model or await occurs between the final fence and canonical read/commit.
         const grant = options.authority.authorize(request, authority);
         if (!grant || typeof grant !== 'object' || typeof grant.then === 'function') fail('authority_required');
-        const generation = verified(options.authority.isCurrent(grant, request), request);
+        const generation = verifyPrivateGrant(options.authority.isCurrent(grant, request), request);
         if (rawReader && (method === 'resolveSourceReferences' || method === 'getSource' && payload.source.type === 'raw')) {
           return (async () => {
             try {
               const prepared = await rawReader.prepare(method, ns, payload, generation);
               let current;
-              try { current = verified(options.authority.isCurrent(grant, request), request); }
+              try { current = verifyPrivateGrant(options.authority.isCurrent(grant, request), request); }
               catch { fail('scope_changed'); }
               if (current !== generation) fail('scope_changed');
               const value = prepared.finish();
               return { ok: true, value };
-            } catch (error) { return failure(error); }
+            } catch (error) { return privateFailure(error); }
           })();
         }
         let finalGeneration;
-        try { finalGeneration = verified(options.authority.isCurrent(grant, request), request); }
+        try { finalGeneration = verifyPrivateGrant(options.authority.isCurrent(grant, request), request); }
         catch { fail('scope_changed'); }
         if (generation !== finalGeneration) fail('scope_changed');
         const value = storage.call(method, ns, payload, request.payloadBinding, read, { accessGeneration: finalGeneration });
         if (Buffer.byteLength(JSON.stringify({ ok: true, value }), 'utf8') > 65536) fail('context_item_too_large');
         return { ok: true, value };
-      } catch (error) { return failure(error); }
+      } catch (error) { return privateFailure(error); }
     };
   }
   result.getPrivateCardCapabilities = () => ({ ok: true, value: {
