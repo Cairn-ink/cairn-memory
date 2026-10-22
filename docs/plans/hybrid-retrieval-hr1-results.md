@@ -282,5 +282,7 @@ node evaluation/retrieval-research/report.mjs --scores scores.json --selection $
 
 Embeddings are cached on disk (local models under `~/.cache/cairn-hr1-models`;
 OpenAI responses keyed by model and text hash), so a rerun costs no API spend
-unless the caches are cleared. Expected outputs are in `results/test-final/`;
-compare against `SHA256SUMS.uncompressed` after decompressing.
+unless the caches are cleared. `SHA256SUMS.uncompressed` verifies the archived
+files in `results/test-final/` after decompression. A rerun differs in
+timestamps and environment fields, so compare reruns by their per-query
+`ranked` lists and `channelScores`, not by file bytes.
