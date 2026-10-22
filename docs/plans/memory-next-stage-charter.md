@@ -79,6 +79,8 @@
 | 2026-10-23 | 派工結構：Claude 主控、寫派工紀錄、做驗收；每個任務一位 Codex worker；每個固定 commit 由兩位非作者 Codex 審查（Standards、Spec） |
 | 2026-10-23 | Codex 一律用 `codex exec -m gpt-6.1-sol -c model_reasoning_effort="xhigh" --ignore-user-config --disable hooks`。已實測：實際模型 gpt-6.1-sol／xhigh，沒有觸發 Cairn 擷取 hook，也沒載入 cairn.ink MCP |
 | 2026-10-23 | 同時執行的 Codex 數量不設上限（與另一個 session 共用帳號額度） |
+| 2026-10-23 | 產品 embedding API 選定 OpenAI，模型由主控決定。HR-1 的 API 組：`text-embedding-3-large`（主要候選，3072 維，另在本機截成 1024 維並重新正規化，看儲存成本取捨）與 `text-embedding-3-small`（成本對照）。理由：官方公布的多語檢索 MIRACL 平均 54.9 vs 44.0，英文為主的 MTEB 64.6 vs 62.3；每百萬 token 約 US$0.13 vs US$0.02 |
+| 2026-10-23 | HR-1 的 API 呼叫上限 **US$1**，自己記帳，不用 repo 共用帳本，也不用另一個 session 的額度（估計實際花費不到 US$0.10）。金鑰放在使用者提供的 `~/.config/cairn-hr1/openai.env`（權限 600）。Codex worker 只用假的 HTTP 實作和測試 API 組，**不給金鑰**；付費執行由主控做 |
 
 ## 6. 研究問題與順序
 
@@ -106,4 +108,4 @@
   2. 平行派語料作者和測試框架兩位互相獨立的 worker。
   3. 標註稽核後凍結語料，接著執行、驗收、報告。
   4. 平行派工程軌 P0 盤點。
-- **待使用者確認**：產品 embedding API 的供應商、模型、額度與金鑰提供方式。
+- **待使用者處理**：把 OpenAI 金鑰放進 `~/.config/cairn-hr1/openai.env`（建議用額度上限很低的專用 project key）。
