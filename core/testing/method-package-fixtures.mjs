@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { spawnSync, execFileSync } from 'node:child_process';
-import { mkdirSync, openSync, closeSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { openSync, closeSync, readFileSync } from 'node:fs';
 import { after } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
@@ -87,14 +88,6 @@ export function child(code,args = [],options = {}) {
   return output;
 }
 export const moduleURL = name => pathToFileURL(join(repo,name)).href;
-export function materialize(root,revision) {
-  const target = join(root,'code-'+revision); mkdirSync(target,{ mode:0o700 });
-  const archive = join(root,'code-'+revision+'.tar'), out = openSync(archive,'wx',0o600);
-  try { execFileSync('git',['archive',revision,'core','plugins/cairn-memory/lib/redact.mjs'],{ cwd:repo,stdio:['ignore',out,'inherit'] }); }
-  finally { closeSync(out); }
-  execFileSync('tar',['-xf',archive,'-C',target],{ stdio:['ignore','ignore','inherit'] });
-  return target;
-}
 export const childHost = `
 const token={}, grants=new WeakMap();
 const authority={authorize(request,supplied){if(supplied!==token)return null;const grant={}, {input,...binding}=request;grants.set(grant,binding);return grant;},
@@ -103,3 +96,35 @@ const methods={version:'method-packages-local-v1',storage:'local-plain-v1',autho
 const cards={version:'private-cards-local-v1',source:'submitted-note-v1',storage:'local-plain-v1',disclosure:'explicit-submitted-note-v1',authority};
 const ok=r=>{if(!r.ok)throw Error(JSON.stringify(r));return r.value;};
 `;
+
+// Immutable synthetic stores produced by actual historical public opt-ins.
+// Git is used only by the opt-in regeneration script, never by unit suites.
+export const historicalFixtures=JSON.parse(readFileSync(new URL('./method-package-history.json',import.meta.url),'utf8'));
+export function restoreHistoricalStore(path,version) {
+  assert.equal(historicalFixtures.format,'method-package-history-v1');
+  const saved=version==='compatibility'?historicalFixtures.compatibility:historicalFixtures.layouts.find(layout=>layout.version===version);
+  assert.ok(saved,'missing historical fixture '+version);
+  const definitions=saved.objects.map(id=>{
+    const object=historicalFixtures.objects[id];
+    assert.equal(createHash('sha256').update(JSON.stringify(object)).digest('hex'),id,'historical object integrity');
+    return object;
+  });
+  closeSync(openSync(path,'wx',0o600));
+  const db=new DatabaseSync(path);
+  try {
+    db.exec('PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE');
+    for(const object of definitions.filter(object=>object.type==='table' && !object.name.startsWith('sqlite_')))db.exec(object.sql);
+    for(const [table,rows] of Object.entries(saved.tables)) {
+      if(table==='sqlite_sequence')db.exec('DELETE FROM sqlite_sequence');
+      for(const row of rows) {
+      const columns=Object.keys(row),values=Object.values(row).map(value=>value && typeof value==='object' && 'blob' in value?Buffer.from(value.blob,'base64'):value);
+      db.prepare('INSERT INTO "'+table+'"('+columns.map(column=>'"'+column+'"').join(',')+') VALUES('+columns.map(()=>'?').join(',')+')').run(...values);
+      }
+    }
+    for(const object of definitions.filter(object=>object.type!=='table'))db.exec(object.sql);
+    db.exec('PRAGMA application_id='+saved.applicationId+'; PRAGMA user_version='+saved.version+'; COMMIT; PRAGMA foreign_keys=ON');
+    assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
+    assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
+  } finally {db.close();}
+  return saved;
+}

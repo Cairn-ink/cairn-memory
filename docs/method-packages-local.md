@@ -200,10 +200,57 @@ or package/version mutation trigger changes binding storage. Reason refs remain
 reference metadata; U2b must authorize and canonically validate them in its
 transition transaction, without copying source text.
 
-Tests materialize actual historical core trees with `git archive` and exercise
-populated synthetic layouts through those versions' APIs/opt-ins. v24 predates
-the capture facade and uses its original journal opt-in. Actual pre-v30 refusal
-uses the unchanged `b8fa224` core in a separate process. Rollback, replay and
-purge checks also use separate processes. These tests establish local mechanics,
-not semantic quality, safe code execution, host filesystem confinement, hosted
-encryption or product readiness.
+## Synthetic verification and historical fixtures
+
+Ordinary unit suites use committed immutable fixtures and need neither Git nor
+historical objects. `core/testing/method-package-history.json` contains populated
+synthetic v18 and v20–v29 stores plus the actual pre-v30 default API/DTO baseline.
+It deduplicates shared schema definitions and records full source revisions and
+binary values. Restore checks schema-object hashes, SQLite integrity and foreign
+keys before migration. Every old row is compared after migration. These fixtures
+were produced through each historical version's public opt-ins; v24 predates the
+capture facade and uses its original journal opt-in.
+
+`core/testing/method-package-v29-database.mjs` freezes the actual `b8fa224`
+ordinary database opener, with only a provenance header and relative import
+relocation. A separate process first proves it opens a populated v29 fixture,
+then proves it refuses a genuine v30 store without changing the file. The default
+API/DTO comparison uses frozen output from the full historical implementation,
+not output produced by the new implementation.
+
+Maintainers with full history can regenerate or independently verify these two
+artifacts on Node 22.16 or 24.15:
+
+```sh
+npm run fixtures:method-packages -- --verify
+npm run fixtures:method-packages -- --write
+```
+
+The opt-in recipe archives the pinned historical sources, creates fresh stores
+through their original APIs, captures populated layouts and compatibility output,
+and extracts the old opener. Only the synthetic clock and entropy inputs are
+fixed, so `--verify` compares regenerated artifacts byte for byte on either Node.
+It fails if required history is unavailable. Neither command is part of ordinary
+unit execution or CI; shallow CI requires no checkout-depth change.
+
+Existing-store validation compares every required method table, index and trigger
+SQL definition against SQLite's rendering of the canonical installer, as well as
+checking column, primary-key, index and foreign-key metadata. This includes CHECK
+constraints, implicit uniqueness and complete namespace-guard trigger bodies.
+Same-named weakened definitions are refused across ordinary, read-only,
+managed-existing and local preflight openers without repair. The frozen v30 layout
+is unchanged by this validation hardening.
+
+`method-packages-races.test.mjs` starts independent concurrent SQLite writers.
+File-based ready/start barriers synchronize calls; a third connection holds the
+write lock until both children pass their final authority fence and attempt their
+transactions. The tests race owner quota across namespaces, import against package
+and version deletion, and two imports under the same package CAS. The quota
+baseline contains real retained bytes created through public imports. Assertions
+cover committed usage against file sums, CAS outcomes, ordinal allocation,
+partial-row absence, effects and fresh-process replay. No stdio pipe or sequential
+`spawnSync` call is used to create competing writers.
+
+Rollback, replay and purge checks also use separate processes. These tests
+establish local mechanics, not semantic quality, safe code execution, host
+filesystem confinement, hosted encryption or product readiness.

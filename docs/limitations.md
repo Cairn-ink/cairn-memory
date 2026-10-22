@@ -15,6 +15,10 @@ or forgotten source output. Best-effort redaction is not a secret-removal
 guarantee; logical purge is not secure physical erasure. The provisional limits
 need U3 size measurement. Namespace usage excludes metadata, ledgers, effects,
 SQLite overhead, WAL and backups; owner-wide totals are not exposed by U2a.
+Synthetic migration tests consume frozen historical fixtures in shallow CI;
+maintainers verify their provenance through the opt-in full-history recipe in the
+[guide](method-packages-local.md#synthetic-verification-and-historical-fixtures).
+Process-race tests establish local SQLite serialization, not cross-host coordination.
 Schema v30 upgrade is explicit and writable-ordinary-only; stop mixed-version
 writers first. Synthetic SQLite tests do not establish hosted safety, semantic
 quality, filesystem confinement or product readiness.

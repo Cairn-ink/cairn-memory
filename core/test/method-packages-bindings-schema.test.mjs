@@ -164,3 +164,51 @@ test('M01/M03 U2a capabilities and context-free history stay bounded even with c
     }
   }
 });
+
+// Same names and columns are insufficient: keep the rest of the canonical
+// allocation and weaken exactly one definition per case.
+const weakenedDefinitions=[
+  ['generation CHECK','method_binding_generations',sql=>sql.replace('CHECK(generation>0)','CHECK(generation>=0)')],
+  ['package revision CHECK','method_packages',sql=>sql.replace('CHECK(revision>0)','CHECK(revision>=0)')],
+  ['version purge CHECK','method_versions',sql=>sql.replace('byte_count=0','byte_count>=0')],
+  ['file byte CHECK','method_files',sql=>sql.replace('CHECK(byte_count>=0)','CHECK(1)')],
+  ['binding role CHECK','method_bindings',sql=>sql.replace("role_key NOT GLOB '*[^A-Za-z0-9._-]*'",'1')],
+  ['binding state CHECK','method_bindings',sql=>sql.replace("state IN ('active','disabled')","state IN ('active','disabled','unknown')")],
+  ['binding target CHECK','method_bindings',sql=>sql.replace('manifest_identity IS NOT NULL','1')],
+  ['event reason CHECK','method_binding_events',sql=>sql.replace('json_array_length(reason_refs)<=16','json_array_length(reason_refs)<=32')],
+  ['binding primary key','method_bindings',sql=>sql.replace('PRIMARY KEY(owner_id,scope,project_id,package_id,role_key)','PRIMARY KEY(owner_id,scope,project_id,package_id,role_key,revision)')],
+  ['ledger primary key','method_operations',sql=>sql.replace('PRIMARY KEY(owner_id,scope,project_id,action_id)','PRIMARY KEY(owner_id,scope,project_id,action_id,method)')],
+  ['version ordinal uniqueness','method_versions',sql=>sql.replace('UNIQUE(package_id,ordinal)','UNIQUE(package_id,ordinal,id)')],
+  ['file path uniqueness','method_files',sql=>sql.replace('UNIQUE(version_id,path)','UNIQUE(version_id,path,position)')],
+  ['effect ordinal uniqueness','method_effects',sql=>sql.replace('ordinal INTEGER NOT NULL UNIQUE','ordinal INTEGER NOT NULL')],
+  ['package foreign key','method_binding_generations',sql=>sql.replace(' REFERENCES method_packages(id)','')],
+  ['file foreign key','method_files',sql=>sql.replace(' REFERENCES method_versions(id)','')],
+  ['binding foreign key action','method_bindings',sql=>sql.replace('REFERENCES method_versions(package_id,id,manifest_identity)','REFERENCES method_versions(package_id,id,manifest_identity) ON DELETE CASCADE')],
+  ['event foreign key action','method_binding_events',sql=>sql.replace('REFERENCES method_bindings(owner_id,scope,project_id,package_id,role_key)','REFERENCES method_bindings(owner_id,scope,project_id,package_id,role_key) ON UPDATE CASCADE')],
+  ...frozen.objects.filter(object=>object.type==='index').map(object=>[
+    object.name+' definition',object.name,sql=>sql.includes('CREATE UNIQUE INDEX')?sql.replace('CREATE UNIQUE INDEX','CREATE INDEX'):sql.replace(/\)$/,') WHERE ordinal>0').replace('WHERE ordinal>0','WHERE 1')]),
+  ...['insert','update'].map(operation=>['namespace '+operation+' guard','method_binding_namespace_'+operation,
+    ()=>`CREATE TRIGGER method_binding_namespace_${operation} BEFORE ${operation.toUpperCase()} ON method_binding_generations BEGIN SELECT 1; END`]),
+];
+for(const [label,name,weaken] of weakenedDefinitions)test(`M01 same-named weakened v30 ${label} is refused by every opener`,async t=>{
+  const f=localFixture(t),trusted=host();
+  const core=openMemoryCore({path:f.databasePath,methodPackages:trusted.options});core.close();
+  const db=new DatabaseSync(f.databasePath);
+  try{
+    db.exec('PRAGMA foreign_keys=OFF');
+    for(const object of frozen.objects.filter(object=>object.type==='table'))db.exec('DROP TABLE '+object.name);
+    for(const type of ['table','index','trigger'])for(const object of frozen.objects.filter(object=>object.type===type)){
+      const sql=object.name===name?weaken(object.sql):object.sql;
+      if(object.name===name)assert.notEqual(sql,object.sql,'mutation must alter canonical definition');
+      db.exec(sql);
+    }
+  }finally{db.close();}
+  const before=readFileSync(f.databasePath);
+  assert.throws(()=>openMemoryCore({path:f.databasePath}),{code:'unsupported_database'});
+  assert.throws(()=>openMemoryCore({path:f.databasePath,methodPackages:trusted.options}),{code:'unsupported_database'});
+  for(const version of ['schema29-existing-v1','schema30-existing-v1'])assert.throws(()=>openMemoryCore({path:f.databasePath,
+    existingStore:{version,storeId:f.config.authority.storeId}}),{code:'unsupported_database'});
+  assert.throws(()=>openReadDatabase(f.databasePath),{code:'unsupported_database'});
+  await assert.rejects(preflight(f.config),{code:'invalid_local_capture_configuration'});
+  assert.deepEqual(readFileSync(f.databasePath),before,'refusal must not repair or write');
+});

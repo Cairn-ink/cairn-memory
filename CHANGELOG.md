@@ -2,6 +2,11 @@
 
 ## Unreleased — opt-in local method packages (U2a)
 
+- Keep historical migration and compatibility tests shallow-safe with immutable
+  synthetic fixtures and an opt-in full-history regeneration/verification target.
+- Refuse same-named weakened v30 schema definitions, including CHECK constraints
+  and namespace trigger bodies; cover competing-process quota and lifecycle races.
+
 - Add text-only immutable method imports, context-free history, exact-edge
   comparison, atomic owner quota, purging deletion and content-free durable replay
   and effects in the existing SQLite core.

@@ -1,8 +1,8 @@
+import { DatabaseSync } from 'node:sqlite';
 import { fail } from './validation.mjs';
 
 export const METHOD_PACKAGE_SCHEMA_VERSION = 30;
-export function installMethodPackages(db) {
-  db.exec(`
+const canonicalSQL = `
     CREATE TABLE method_packages (
       id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, scope TEXT NOT NULL, project_id TEXT NOT NULL,
       state TEXT NOT NULL CHECK(state IN ('available','deleted')),
@@ -109,7 +109,27 @@ export function installMethodPackages(db) {
       WHEN NOT EXISTS(SELECT 1 FROM method_packages p WHERE p.id=NEW.package_id AND p.owner_id=NEW.owner_id AND
         ((p.scope=NEW.scope AND p.project_id=NEW.project_id) OR (NEW.scope='project' AND p.scope='personal' AND p.project_id='')))
       BEGIN SELECT RAISE(ABORT,'invalid_method_binding_namespace'); END;
-  `);
+  `;
+export function installMethodPackages(db) { db.exec(canonicalSQL); }
+
+let canonicalDefinitions;
+function validateDefinitions(db) {
+  // Use SQLite's own persisted rendering of the installer, including every
+  // CHECK, implicit UNIQUE/PRIMARY KEY, foreign key, index and trigger body.
+  // Never normalize SQL by deleting whitespace inside string literals.
+  if (!canonicalDefinitions) {
+    const reference = new DatabaseSync(':memory:');
+    try {
+      installMethodPackages(reference);
+      canonicalDefinitions = reference.prepare("SELECT name,type,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name").all();
+    } finally { reference.close(); }
+  }
+  const lookup = db.prepare('SELECT type,tbl_name,sql FROM sqlite_master WHERE name=?');
+  for (const expected of canonicalDefinitions) {
+    const actual = lookup.get(expected.name);
+    if (!actual || actual.type !== expected.type || actual.tbl_name !== expected.tbl_name ||
+        actual.sql !== expected.sql) fail('unsupported_database');
+  }
 }
 const layouts = {
   method_packages: 'id owner_id scope project_id state revision next_ordinal created_at updated_at',
@@ -159,6 +179,7 @@ export function validateMethodPrerequisites(db) {
   }
 }
 export function validateMethodPackages(db) {
+  validateDefinitions(db);
   validateMethodPrerequisites(db);
   for (const [table, columns] of Object.entries(layouts)) {
     const rows = db.prepare('SELECT * FROM pragma_table_info(?) ORDER BY cid').all(table);
