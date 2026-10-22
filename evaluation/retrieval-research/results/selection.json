@@ -1,0 +1,166 @@
+{
+  "format": "hr1-selection-v1",
+  "fixtureHashes": {
+    "hr1-facts.json": "339fbdb91158a7593265c129c31bc205f4efe6a552301bcab1e063e12f8e5087",
+    "hr1-corpus.json": "1ce357439f1ed28cfd2e2c8bf31e0bde1581e1110c40577f06d0a915d8db0bf5",
+    "hr1-queries.json": "91648404a6ea32866081a7e308e20235fd0209835ff2cfee09b7abe074bae9ea",
+    "hr1-split.json": "00e96f9e764da780d7024eac62bc15442dde3e02166c4057bbf49d82ae8c1ebb",
+    "hr1-labels.json": "7e9b8054cf7e5bec7b71789319696ee871a4d5c627c877cba0952f6c74211622",
+    "hr1-label-audit.json": "5e1e585fc5d85ccb92965fd0f15d70dea8f727dc7622990174ece03e21a01d0d",
+    "hr1-facts-view.json": "65fc2e46c474f8d3f532bae7ea9a95441a17a67c4350fe01a091022b10e18971"
+  },
+  "scale": "S1000",
+  "sourceSplit": "dev",
+  "lexical": "A1",
+  "models": {
+    "e5-small": {
+      "fusion": "A3"
+    },
+    "bge-m3": {
+      "fusion": "A3"
+    },
+    "openai-3-small": {
+      "fusion": "F-RRF10"
+    },
+    "openai-3-large": {
+      "fusion": "A3"
+    }
+  },
+  "contexts": {
+    "local": {
+      "model": "bge-m3",
+      "fusion": "A3"
+    },
+    "hosted": {
+      "model": "openai-3-small",
+      "fusion": "F-RRF10"
+    }
+  },
+  "comparator": {
+    "arm": "A1",
+    "config": "BM25-T1",
+    "model": null,
+    "devMacroRecall12": 0.8446428571428571
+  },
+  "configurations": {
+    "e5-small": {
+      "arm": "A3",
+      "config": "A3",
+      "model": "e5-small",
+      "menu": "A3",
+      "devMacroRecall12": 0.8910714285714285,
+      "menuComplete": true
+    },
+    "bge-m3": {
+      "arm": "A3",
+      "config": "A3",
+      "model": "bge-m3",
+      "menu": "A3",
+      "devMacroRecall12": 0.9535714285714285,
+      "menuComplete": true
+    },
+    "openai-3-small": {
+      "arm": "F-RRF10",
+      "config": "F-RRF10",
+      "model": "openai-3-small",
+      "menu": "F-RRF10",
+      "devMacroRecall12": 0.9732142857142857,
+      "menuComplete": true
+    },
+    "openai-3-large": {
+      "arm": "A3",
+      "config": "A3",
+      "model": "openai-3-large",
+      "menu": "A3",
+      "devMacroRecall12": 0.9714285714285714,
+      "menuComplete": true
+    }
+  },
+  "modelAvailability": {
+    "e5-small": {
+      "status": "available",
+      "failureEvidence": [],
+      "available": true,
+      "reason": null
+    },
+    "bge-m3": {
+      "status": "available",
+      "failureEvidence": [],
+      "available": true,
+      "reason": null
+    },
+    "openai-3-small": {
+      "status": "available",
+      "failureEvidence": [],
+      "available": true,
+      "reason": null
+    },
+    "openai-3-large": {
+      "status": "available",
+      "failureEvidence": [],
+      "available": true,
+      "reason": null
+    }
+  },
+  "nominated": {
+    "local": {
+      "arm": "A3",
+      "config": "A3",
+      "model": "bge-m3",
+      "menu": "A3",
+      "devMacroRecall12": 0.9535714285714285,
+      "menuComplete": true
+    },
+    "hosted": {
+      "arm": "F-RRF10",
+      "config": "F-RRF10",
+      "model": "openai-3-small",
+      "menu": "F-RRF10",
+      "devMacroRecall12": 0.9732142857142857,
+      "menuComplete": true
+    }
+  },
+  "easeCheck": {
+    "saturated": false,
+    "categories": {
+      "C1": 0.75,
+      "C2": 1,
+      "C3": 0.6,
+      "C4": 0.875,
+      "C5": 0.8125,
+      "C6": 1,
+      "C7": 0.875
+    }
+  },
+  "devFamilyCounts": {
+    "C1": 8,
+    "C2": 4,
+    "C3": 5,
+    "C4": 8,
+    "C5": 8,
+    "C6": 5,
+    "C7": 8
+  },
+  "status": "ready",
+  "reason": null,
+  "tieOrders": {
+    "lexical": [
+      "A1",
+      "A1+"
+    ],
+    "configuration": [
+      "A3",
+      "F-RRF60",
+      "F-RRF10",
+      "F-MM"
+    ],
+    "local": [
+      "e5-small",
+      "bge-m3"
+    ],
+    "hosted": [
+      "openai-3-small",
+      "openai-3-large"
+    ]
+  }
+}
