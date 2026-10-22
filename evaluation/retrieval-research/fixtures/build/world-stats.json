@@ -1,0 +1,383 @@
+{
+  "families": {
+    "total": 90,
+    "byRole": {
+      "target": 40,
+      "distractor": 40,
+      "foreign": 10
+    },
+    "byRoleAndDomain": {
+      "target/engineering": 10,
+      "target/work-preferences": 7,
+      "target/operations": 7,
+      "target/finance": 8,
+      "target/product": 6,
+      "target/everyday": 2,
+      "distractor/engineering": 10,
+      "distractor/work-preferences": 7,
+      "distractor/operations": 7,
+      "distractor/finance": 8,
+      "distractor/product": 6,
+      "distractor/everyday": 2,
+      "foreign/engineering": 2,
+      "foreign/work-preferences": 2,
+      "foreign/operations": 2,
+      "foreign/finance": 2,
+      "foreign/product": 1,
+      "foreign/everyday": 1
+    }
+  },
+  "facts": {
+    "total": 1095,
+    "byKind": {
+      "decision": 140,
+      "reason": 40,
+      "context": 3,
+      "fact": 816,
+      "instruction": 30,
+      "event": 4,
+      "preference": 62
+    },
+    "byState": {
+      "historical": 20,
+      "current": 1015,
+      "rejected": 36,
+      "proposed": 24
+    },
+    "byCoverage": {
+      "body": 168,
+      "span-only": 112,
+      "null": 815
+    },
+    "target": {
+      "total": 295,
+      "rendered": 280,
+      "absent": 15,
+      "byKind": {
+        "decision": 120,
+        "reason": 40,
+        "context": 3,
+        "fact": 91,
+        "instruction": 30,
+        "event": 4,
+        "preference": 7
+      },
+      "byState": {
+        "historical": 20,
+        "current": 215,
+        "rejected": 36,
+        "proposed": 24
+      },
+      "byCoverage": {
+        "body": 168,
+        "span-only": 112,
+        "null": 15
+      },
+      "spanOnlyFraction": 0.4
+    }
+  },
+  "memories": {
+    "S300": {
+      "count": 300,
+      "namespace": {
+        "target": 300
+      },
+      "language": {
+        "mixed": 45,
+        "en": 90,
+        "zh": 165
+      },
+      "domain": {
+        "engineering": 75,
+        "work-preferences": 53,
+        "operations": 52,
+        "finance": 60,
+        "product": 45,
+        "everyday": 15
+      },
+      "authoring": {
+        "hand": 300
+      },
+      "state": {
+        "historical": 20,
+        "current": 280
+      },
+      "spanCount": {
+        "1": 180,
+        "2": 90,
+        "3": 30
+      },
+      "lengthUTF16": {
+        "mean": 81.007,
+        "p10": 37,
+        "median": 54,
+        "p90": 170
+      },
+      "bodyUTF16": {
+        "mean": 31.343,
+        "p10": 15,
+        "median": 21,
+        "p90": 60
+      },
+      "spanTextUTF16": {
+        "mean": 49.663,
+        "p10": 20,
+        "median": 32,
+        "p90": 111
+      },
+      "lengthByLanguage": {
+        "zh": {
+          "mean": 45.261,
+          "p10": 36,
+          "median": 44,
+          "p90": 58
+        },
+        "en": {
+          "mean": 156.244,
+          "p10": 125,
+          "median": 149,
+          "p90": 193
+        },
+        "mixed": {
+          "mean": 61.6,
+          "p10": 46,
+          "median": 61,
+          "p90": 80
+        }
+      }
+    },
+    "S1000-extra": {
+      "count": 700,
+      "namespace": {
+        "target": 700
+      },
+      "language": {
+        "mixed": 105,
+        "en": 210,
+        "zh": 385
+      },
+      "domain": {
+        "engineering": 175,
+        "work-preferences": 123,
+        "operations": 122,
+        "finance": 140,
+        "product": 105,
+        "everyday": 35
+      },
+      "authoring": {
+        "hand": 360,
+        "template": 340
+      },
+      "state": {
+        "current": 700
+      },
+      "spanCount": {
+        "1": 420,
+        "2": 210,
+        "3": 70
+      },
+      "lengthUTF16": {
+        "mean": 81.837,
+        "p10": 39,
+        "median": 55,
+        "p90": 163
+      },
+      "bodyUTF16": {
+        "mean": 30.089,
+        "p10": 15,
+        "median": 20,
+        "p90": 58
+      },
+      "spanTextUTF16": {
+        "mean": 51.749,
+        "p10": 22,
+        "median": 35,
+        "p90": 110
+      },
+      "lengthByLanguage": {
+        "zh": {
+          "mean": 46.164,
+          "p10": 37,
+          "median": 44,
+          "p90": 58
+        },
+        "en": {
+          "mean": 153.676,
+          "p10": 117,
+          "median": 151,
+          "p90": 199
+        },
+        "mixed": {
+          "mean": 68.962,
+          "p10": 49,
+          "median": 68,
+          "p90": 90
+        }
+      }
+    },
+    "S1000": {
+      "count": 1000,
+      "namespace": {
+        "target": 1000
+      },
+      "language": {
+        "mixed": 150,
+        "en": 300,
+        "zh": 550
+      },
+      "domain": {
+        "engineering": 250,
+        "work-preferences": 176,
+        "operations": 174,
+        "finance": 200,
+        "product": 150,
+        "everyday": 50
+      },
+      "authoring": {
+        "hand": 660,
+        "template": 340
+      },
+      "state": {
+        "historical": 20,
+        "current": 980
+      },
+      "spanCount": {
+        "1": 600,
+        "2": 300,
+        "3": 100
+      },
+      "lengthUTF16": {
+        "mean": 81.588,
+        "p10": 38,
+        "median": 55,
+        "p90": 165
+      },
+      "bodyUTF16": {
+        "mean": 30.465,
+        "p10": 15,
+        "median": 20,
+        "p90": 59
+      },
+      "spanTextUTF16": {
+        "mean": 51.123,
+        "p10": 22,
+        "median": 34,
+        "p90": 110
+      },
+      "lengthByLanguage": {
+        "zh": {
+          "mean": 45.893,
+          "p10": 37,
+          "median": 44,
+          "p90": 58
+        },
+        "en": {
+          "mean": 154.447,
+          "p10": 121,
+          "median": 150,
+          "p90": 195
+        },
+        "mixed": {
+          "mean": 66.753,
+          "p10": 48,
+          "median": 65,
+          "p90": 85
+        }
+      }
+    },
+    "foreign": {
+      "count": 100,
+      "namespace": {
+        "foreign": 100
+      },
+      "language": {
+        "mixed": 15,
+        "zh": 55,
+        "en": 30
+      },
+      "domain": {
+        "engineering": 20,
+        "work-preferences": 20,
+        "operations": 20,
+        "finance": 20,
+        "product": 10,
+        "everyday": 10
+      },
+      "authoring": {
+        "hand": 30,
+        "template": 70
+      },
+      "state": {
+        "current": 100
+      },
+      "spanCount": {
+        "1": 60,
+        "2": 30,
+        "3": 10
+      },
+      "lengthUTF16": {
+        "mean": 87.65,
+        "p10": 44,
+        "median": 65,
+        "p90": 165
+      },
+      "bodyUTF16": {
+        "mean": 31.88,
+        "p10": 17,
+        "median": 26,
+        "p90": 57
+      },
+      "spanTextUTF16": {
+        "mean": 55.77,
+        "p10": 23,
+        "median": 40,
+        "p90": 110
+      },
+      "lengthByLanguage": {
+        "zh": {
+          "mean": 52.964,
+          "p10": 38,
+          "median": 48,
+          "p90": 71
+        },
+        "en": {
+          "mean": 158.5,
+          "p10": 139,
+          "median": 155,
+          "p90": 199
+        },
+        "mixed": {
+          "mean": 73.133,
+          "p10": 50,
+          "median": 76,
+          "p90": 89
+        }
+      }
+    }
+  },
+  "changes": 20,
+  "absentFamilies": 15,
+  "foreignNearDuplicates": 20,
+  "foreignAnchorFamilies": 10,
+  "embeddedChineseFamilies": 28,
+  "crossLanguageDirections": {
+    "zh->mixed": 31,
+    "en->zh": 10,
+    "zh->en": 10
+  },
+  "extraToTargetMeanLengthRatio": 1.01025,
+  "annotationsCrossChecked": 1100,
+  "bodyUniqueness": {
+    "target": {
+      "memories": 1000,
+      "trimmed": 1000,
+      "normalized": 1000
+    },
+    "foreign": {
+      "memories": 100,
+      "trimmed": 100,
+      "normalized": 100
+    }
+  },
+  "checksPassed": true
+}
