@@ -1,7 +1,8 @@
 # HR-1 results: hybrid candidate retrieval (synthetic, offline)
 
-Status: **completed once under protocol v2.2. Direction only; not a product
-reliability claim.**
+Status: **completed under protocol v2.2, with post-test harness corrections
+under a disputed interpretation of §9.7 (see §5). Direction only; not a
+product reliability claim.**
 
 Provenance:
 - Fixture `hr1-fixture-v2`: frozen at `46b9691`; hashes in
@@ -137,9 +138,11 @@ Both nominated systems miss **q-058** (a very indirect C3 description) and
      only `status:"unavailable"` was observed.
    - They are retained unchanged, as `initial-run-1a200af.tar.xz`.
    - The confirmatory comparisons use non-A0 arms only. Their rankings and
-     channel scores are identical between the two runs, so the confirmatory
-     outcome equals the first run's. The `4fcec31` non-A0 runs are verification
-     duplicates.
+     channel scores are identical between the two runs, so the **quality
+     inputs and the resulting quality statistics** equal the first run's. The
+     `4fcec31` non-A0 runs are verification duplicates.
+   - The **latency and isolation gates** were measured only with the corrected
+     harness (`4fcec31`); the first run measured neither.
    - A0 is a baseline outside every confirmatory decision. Its numbers come
      only from the corrected harness.
 
@@ -147,8 +150,13 @@ Both nominated systems miss **q-058** (a very indirect C3 description) and
    The primary's reasoning is recorded so readers can judge it.
 6. **A0 capacity precondition.** The corrected A0 seeding requires historical
    ≤ current memories per projection: this fixture has 20 historical and at
-   least 280 current. The validator's public-API preflight is being extended to
-   refuse fixtures that break this precondition.
+   least 280 current. The validator's public-API preflight now refuses fixtures
+   that break it (`51dbdf6`); the frozen fixture still validates.
+7. **Review outcome.** The final non-author Spec review accepts the harness at
+   `51dbdf6` (yes) and accepts the evidence-preservation reasoning. It does not
+   accept an unqualified claim of procedural compliance, because §9.7 has no
+   explicit harness-only exception and that reading was adopted after test
+   execution. This disagreement is recorded rather than resolved.
 
 ## 6. Limits of this evidence
 
