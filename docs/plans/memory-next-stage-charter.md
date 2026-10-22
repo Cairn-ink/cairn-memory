@@ -154,7 +154,11 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `hr1_protocol_audit` | HR-1 協議的非作者設計審查 | gpt-6.1-sol/xhigh → 同 | read-only | `645b100` | 19:24–19:35 | exit 0；6 項 P0 → v2（`ed7c763`） |
 | `hr1_protocol_audit`（複查） | 檢查 v2 | gpt-6.1-sol/xhigh → 同 | read-only | `ed7c763` | 19:39–19:44 | exit 0；新增 2 項 P0 → v2.1（`994d912`） |
 | `hr1_protocol_audit`（確認） | 確認 v2.1 | gpt-6.1-sol/xhigh → 同 | read-only | `e1aa7da` | 2026-10-22T19:47–19:49 | exit 0；v2.1 可以進行；3 項配套文件 P1 已修（`5c1c90f`） |
-| `hr1_world_author`（W1） | 寫語料：家族、事實、記憶、原文片段 | gpt-6.1-sol/xhigh | workspace-write，無網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
+| `hr1_world_author`（W1） | 寫語料：家族、事實、記憶、原文片段 | gpt-6.1-sol/xhigh → 同 | workspace-write，無網路 | `e1aa7da` | 19:47–20:30 | exit 0；40 個目標家族、1,095 個事實；S300＝300、額外 700、外部 100；40% 只寫在原文片段 |
+| 主控抽查 W1 | 洩漏與品質 | — | — | — | 20:3x | 事實陳述與記憶本文：沒有照抄，用詞重疊度中位數 0.36。事實清單：目標 namespace 零洩漏；80 段外部範本與陳述相同（只影響不計分的 FOREIGN 控制）。**S300 有 20 組本文完全相同 → A0 無法建資料**，交回 W1 修正 |
+| `hr1_world_author`（修正 1） | 讓重複本文措辭自然不同 | gpt-6.1-sol/xhigh | workspace-write | — | 20:3x– | 執行中 |
+| `hr1_query_author`（W2） | 只看事實清單寫查詢（隔離在 `/home/chichieh/cairn-hr1-w2`） | gpt-6.1-sol/xhigh | workspace-write，無網路 | 事實清單 | 20:3x– | 執行中 |
+| `hr1_arms`／`hr1_tooling`（修正 1） | 修正雙審查指出的問題 | gpt-6.1-sol/xhigh | workspace-write | `a424c23` | 20:2x– | 執行中 |
 | `hr1_tooling`（W4a） | 語料工具、指標、統計、報告 | gpt-6.1-sol/xhigh → 同 | workspace-write，無網路 | `e1aa7da` | 19:47–20:14 | exit 0；16 個檔案 |
 | `hr1_arms`（W4b） | 各組檢索方法、embedding、融合、計時 | gpt-6.1-sol/xhigh → 同 | workspace-write，只開放安裝套件與下載模型的網路 | `e1aa7da` | 19:47–20:12 | exit 0；21 個檔案；transformers.js 3.7.6；e5-small `761b726`、bge-m3 `4de1325`（fp32） |
 | 主控驗收 | W4a＋W4b 的測試框架 | — | — | `a424c23` | 20:15 | 兩種方式核對檔案清單，都是 37 個；Node 22.16／24.15 各 84 項測試、83 通過、0 失敗、1 項需手動開啟的測試略過，exit 皆 0；真實模型冒煙測試 exit 0 |
