@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { openMemoryCore } from '../../../core/contract.mjs';
-import { VERSION, CATEGORIES, unique, eligibleMemory, loadFixture, readJson, cliMain, requiredOption } from '../lib/fixture.mjs';
+import { VERSION, CATEGORIES, unique, eligibleMemory, armDocuments, loadFixture, readJson, cliMain, requiredOption } from '../lib/fixture.mjs';
 import { factsView } from './facts-view.mjs';
 import { buildLabels, loadTokenizers } from './labels.mjs';
 import { applyAudit } from './apply-audit.mjs';
@@ -36,10 +36,16 @@ export function publicApiPreflight(memories) {
       else seen.set(admittedId, memory.id);
     }
   } finally { core.close(); }
-  for (const namespace of ['target', 'foreign']) for (const scale of ['S300', 'S1000']) {
-    const projected = memories.filter(memory => memory.namespace === namespace && (namespace === 'foreign' || memory.scale === 'S300' || scale === 'S1000'));
-    if (projected.some(memory => !eligibleMemory(memory, 'current')) && !projected.some(memory => eligibleMemory(memory, 'current'))) {
-      incompatibilities.push({ code: 'no_current_replacement_for_history', namespace, scale });
+  // Match run.mjs: A0 seeds target bodies from both intent projections at
+  // each scale. Every history-only body consumes a distinct current body.
+  const fixture = { corpus: { memories } }, namespace = 'target';
+  for (const scale of ['S300', 'S1000']) {
+    const history = armDocuments(fixture, { namespace, scale, intent: 'history', include: 'body' });
+    const current = armDocuments(fixture, { namespace, scale, intent: 'current', include: 'body' });
+    const currentIds = new Set(current.map(document => document.memoryId));
+    const historicalCount = history.filter(document => !currentIds.has(document.memoryId)).length;
+    if (historicalCount > current.length) {
+      incompatibilities.push({ code: 'insufficient_current_replacements', namespace, scale, historicalCount, currentCount: current.length });
     }
   }
   return { ok: !incompatibilities.length, checkedMemories: memories.length, incompatibilities };

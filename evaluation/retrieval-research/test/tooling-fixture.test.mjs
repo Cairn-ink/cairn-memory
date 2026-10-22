@@ -157,6 +157,47 @@ test('public API preflight rejects duplicate bodies within a namespace as fixtur
   assert.equal(publicApiPreflight([{ ...first, content: '\u0000' }]).incompatibilities[0].code, 'public_admission_rejected');
 });
 
+test('A0 preflight rejects two historical bodies with only one current replacement at both scales', () => {
+  const fixture = toyFixture();
+  const memories = fixture.corpus.memories.filter(memory => memory.expresses[0].fact.startsWith('padding-')).slice(0, 3);
+  memories[0].state = 'historical'; memories[1].state = 'historical';
+  const expected = ['S300', 'S1000'].map(scale => ({ code: 'insufficient_current_replacements', namespace: 'target', scale, historicalCount: 2, currentCount: 1 }));
+  const preflight = publicApiPreflight(memories);
+  assert.equal(preflight.ok, false); assert.deepEqual(preflight.incompatibilities, expected);
+  fixture.corpus.memories = memories;
+  const facts = new Set(memories.flatMap(memory => memory.expresses.map(expression => expression.fact)));
+  fixture.facts.facts = fixture.facts.facts.filter(fact => facts.has(fact.id));
+  const validated = validateFixture(fixture, tokenizers);
+  assert.equal(validated.ok, false);
+  assert.deepEqual(validated.errors.filter(error => error.code === 'fixture_incompatibility:insufficient_current_replacements').map(error => error.detail), expected);
+});
+
+test('A0 capacity is checked independently for S300 and S1000, with equality allowed', () => {
+  const fixture = toyFixture(), rows = fixture.corpus.memories.filter(memory => memory.expresses[0].fact.startsWith('padding-')).slice(0, 4);
+  rows[0].state = 'historical'; rows[1].state = 'historical';
+  assert.equal(publicApiPreflight(rows).ok, true, 'two historical bodies can use two current replacements');
+  rows[3].scale = 'S1000-extra';
+  assert.deepEqual(publicApiPreflight(rows).incompatibilities, [
+    { code: 'insufficient_current_replacements', namespace: 'target', scale: 'S300', historicalCount: 2, currentCount: 1 },
+  ], 'an extra current body cannot rescue S300');
+  rows[1].state = 'current'; rows[1].scale = 'S1000-extra'; rows[3].state = 'historical';
+  rows[1].deleted = true;
+  assert.deepEqual(publicApiPreflight(rows).incompatibilities, [
+    { code: 'insufficient_current_replacements', namespace: 'target', scale: 'S1000', historicalCount: 2, currentCount: 1 },
+  ], 'extra historical bodies can make only S1000 infeasible; deleted rows cannot be replacements');
+});
+
+test('A0 capacity uses history-minus-current eligibility and excludes the foreign namespace', () => {
+  const fixture = toyFixture(), rows = fixture.corpus.memories.filter(memory => memory.expresses[0].fact.startsWith('padding-')).slice(0, 4);
+  rows[0].state = 'historical'; rows[2].state = 'awaiting-review'; rows[3].deleted = true;
+  assert.equal(armDocuments({ corpus: { memories: rows } }, { namespace: 'target', scale: 'S300', intent: 'history', include: 'body' }).length, 3);
+  assert.deepEqual(publicApiPreflight(rows).incompatibilities.map(({ scale, historicalCount, currentCount }) => ({ scale, historicalCount, currentCount })), [
+    { scale: 'S300', historicalCount: 2, currentCount: 1 }, { scale: 'S1000', historicalCount: 2, currentCount: 1 },
+  ]);
+  rows[2].namespace = 'foreign'; rows[2].scale = 'foreign';
+  assert.equal(publicApiPreflight(rows).ok, true, 'foreign history-only rows do not consume target replacements');
+});
+
 test('category checks reject invalid C3–C8 and FOREIGN structures', () => {
   for (const [category, mutate] of [
     ['C3', (fixture, query) => { query.lang = 'en'; }],
