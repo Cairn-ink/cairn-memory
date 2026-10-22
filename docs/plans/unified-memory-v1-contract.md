@@ -1,11 +1,13 @@
 # Unified memory integration V1: P0 contract and first packet (method packages)
 
-Status: **v0.3, revised after a non-author design audit and re-check. Nothing
-is implemented.**
+Status: **v0.3.1, audited and confirmed for U2a implementation. Nothing is
+implemented yet.**
 - v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
   read-only), which found seven P0, four P1 and one P2 issue.
 - v0.2 (`91a7825`) adopted them.
-- v0.3 applies the re-check's three P0 and three P1 replacements.
+- v0.3 (`2b2e3cf`) applied the re-check's three P0 and three P1 replacements.
+- v0.3.1 adds the auditor's two confirmation clarifications: one invalidation
+  rule, and the U2a/U2b schema boundary.
 
 Branch `integration/unified-memory-v1`, based on PR #469 head
 `b8fa224d5ba6fe8007e6d80fe64fae74d89aa78b` (the tip of the unmerged Raw/local
@@ -21,6 +23,16 @@ This is the public-engine part of a private integration draft (v0.2).
 | U3 | M4 host side: safe local directory importer (real symlink/path-swap confinement, strict UTF-8), explicit-user approval through the existing local authority path, read-only MCP tools, installed tests | U2 accepted |
 | U4 | M5 assets and derivatives: binary storage port, immutable asset versions, derivative provenance, binary method attachments | U2's typed-ref/schema rules |
 | U5 | M6/M7/M8: `context-read-v1` common read; candidate channels; budgeted assembly; role profiles; current-dependent Card/cache/MOC invalidation driven by U2 binding generations | HR-1/HR-2 evidence for defaults; interfaces and degraded modes may be specified earlier |
+
+**U2a/U2b boundary**:
+- U2a installs the **complete v30 canonical schema**, including the initially
+  empty binding and event tables that U2b needs.
+- U2b adds behaviour without silently changing the v30 layout; any later
+  canonical schema change needs a newly allocated version.
+- U2a's capabilities advertise only implemented operations.
+- Under U2a, version, manifest and file reads accept only context-free
+  `intent:'history'`. Current intent, context and pin snapshots are rejected
+  with `invalid_input` until U2b.
 
 U2 and U3 certify only the **text-only M4 subset**. Completing the draft's A10,
 A17, A18 and A19 additionally requires installed cross-agent workflows and U5's
@@ -186,12 +198,18 @@ are no public content digests.
   - `disable()`;
   - re-adopt after disable;
   - importing a version **never** changes a binding.
-- **Effects**: every transition and every package or version deletion atomically
-  advances a canonical **binding generation** for the affected
-  (namespace, package) and emits durable, content-free effects. U2 supplies
-  bounded binding-event reads (`listMethodBindingEvents`) and snapshot
-  revalidation. U5 consumes the generations to invalidate current-dependent
-  Cards, caches and MOC representations.
+- **Effects and generations**:
+  - Binding transitions atomically advance the binding generation for
+    (bindingNamespace, packageRef) and emit `binding_changed`.
+  - Package or version deletion advances the package's lifecycle state and
+    revision and emits the matching deletion effect, without enumerating or
+    updating any binding that references it.
+  - Resolvers derive a binding's unavailability through canonical target
+    checks.
+  - Snapshot revalidation checks both binding and lifecycle revisions.
+  - U2 supplies bounded binding-event reads (`listMethodBindingEvents`); U5
+    consumes the generations to invalidate current-dependent Cards, caches and
+    MOC representations.
 - **Resolution**: `resolveMethod({readSet, package: MethodPackageRef, roleId})`
   uses four-level precedence over the authorized read set:
   1. project + role;
