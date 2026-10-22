@@ -153,8 +153,10 @@ natural language: Traditional Chinese as used in Taiwan, English, or mixed.
   dev 30% ± 3%).
 - **`hr1-labels.json`**: one entry per query, containing:
   - `split`;
-  - `groups`: `[{fact, members:[{memory, where, scale, namespace}]}]`, listing
-    eligible members only under the query's intent;
+  - `groups`: `[{fact, members:[{memory, where, spans, scale, namespace}]}]`,
+    listing eligible members only under the query's intent. `spans` holds the
+    IDs of the member's spans that state the fact. Required-span coverage counts
+    required groups supported by a winning span document of a returned memory;
   - `hardNegatives`;
   - mechanical `checks` per category;
   - `overlap`: T1/T1+ token overlap with each group member.

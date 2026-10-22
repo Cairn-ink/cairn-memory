@@ -27,7 +27,8 @@ a tokenizer function in its tests. The primary wires the final imports.
 ```js
 // lib/tokenize.mjs (W4b)
 export const ENGLISH_STOPWORDS;            // frozen Set<string>, committed before the fixture freeze
-export function tokenizeT1(text);          // → string[] (protocol §5.2 T1, with duplicates; callers dedupe)
+export function tokenizeT1(text);          // → string[] (protocol §5.2 T1). Tokenizers preserve duplicates. BM25 deduplicates
+                                           //   query terms only; document term frequencies and lengths keep duplicates.
 export function tokenizeT1Plus(text);      // → string[] (T1+: Han unigrams + bigrams; Porter-stemmed English)
 export function porterStem(word);          // classic Porter (1980)
 export function wholeRuns(text);           // → string[] lowercased /[\p{L}\p{N}]+/gu runs (core v2 scorer compatible)
@@ -67,6 +68,11 @@ export function armQueries(fixture, { split, categories });
 ```
 
 - `ranked` is at most 24 deduplicated memory IDs.
+- Every applicable arm also emits **raw channel scores** for retained candidates
+  (`channelScores: {lex:{memoryId:score}, sem:{...}}`), including C8/FOREIGN
+  queries.
+- A5 arms additionally emit the **winning document ID** per channel and memory
+  (`winningDocs: {lex:{memoryId:docId}, sem:{...}}`).
 - `channels` and `unionSize` appear only on fused arms.
 - `store` is set only for A0, giving the store index 0–4.
 - A0 runs include `pages`, `scannedRows`, `coverage` and `errors` per query.
@@ -87,7 +93,9 @@ export function armQueries(fixture, { split, categories });
 - Run tests with
   `node tools/testing/run.mjs evaluation/retrieval-research/test/<your files>`.
   Use `createTestWorkspace` for scratch. Report actual exit codes.
-- There is no network at query time.
+- Local query execution is offline. Workers use loopback fake HTTP only.
+  Primary-run hosted requests may use ledger-controlled OpenAI HTTPS, including
+  fresh requests for latency measurement.
 - Only W4b installs dependencies, with an exact version in its isolated
   `package.json`.
 - Determinism: fixed seeds; stable sort with documented ties.
