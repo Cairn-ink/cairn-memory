@@ -182,8 +182,8 @@ this with a new multi-day research plan or silently declare all V1 done.
 | Packet | Owner/model/effort | Fixed base | Evidence/next step |
 | --- | --- | --- | --- |
 | Scope, PR consolidation, integration acceptance | Primary | `3f659058…` | Stack audit, independent installed v3 acceptance on both runtimes, original drift reproduction and actual native lifecycle observations exit0; final matrix/review next. |
-| Activation runtime/CLI, source and installed tests, scoped docs | `retained_raw_bridge_impl61`, actual GPT-6.1 Sol/high | `3f659058…` | Frozen v3:37 source/8 installed cases pass each runtime; retained correction history below. No core/algorithm/schema changes. |
-| Standards / Spec | Separate nonauthor reviewers | Candidate SHA to freeze | Pending; implementation self-review is not either independent gate. |
+| Activation runtime/CLI, source and installed tests, scoped docs | `retained_raw_bridge_impl61`, actual GPT-6.1 Sol/high | `3f659058…` | Frozen v4:47 source/10 installed cases pass each runtime; retained correction history below. No core/algorithm/schema changes. |
+| Standards / Spec | `raw_worker_standards61` / `raw_local_host_spec61`, both actual GPT-6.1 Sol/high, nonauthors | Initial `00107e7…`; correction candidate to freeze | Initial Standards0 / Spec1P2; correction and renewed independent review required, not self-review. |
 
 ### Primary prerequisites completed
 
@@ -368,3 +368,93 @@ The reproducible external script is
 `/tmp/cairn-native-codex-tui-author.qaxuMj/codex-tui.mjs`, SHA-256
 `93bf41d760b83c552af23b35431b4b666dbc381162fa8e40285ffd7e2c2e3bda`.
 Neither isolated native observation uses a paid model request or the user's data.
+
+### First fixed-candidate review and correction
+
+Candidate `00107e7ff1ffaece4526a01623342f521824a28a` contains one incremental
+commit/19 paths. Its189 packaged source hashes match the committed blobs;
+independent complete-tree comparison confirms33 commits/269 paths against
+current main, including the dependent stack rather than33 new work items.
+Primary's six exact-commit source/installed/black-box commands passed on both
+runtimes, actual0/null; all raw-log hashes and owned cleanup were verified.
+
+Independent GPT-6.1 Sol/high nonauthor reviews on that exact diff report:
+
+- Standards (`raw_worker_standards61`): zero actionable documented-rule or
+  significant heuristic findings.
+- Spec (`raw_local_host_spec61`): one P2. Owned registration validation ignores
+  the group's matcher. A `SessionStart` group restricted to `resume` can still
+  report active for new sessions. This violates unconditional initialization
+  and drift reporting, not the SQL authorization boundary.
+
+Primary reproduced actual status, repeated setup and repeated activation for
+both clients: all three incorrectly report active after that matcher change.
+`matcher-drift-red.json` and its supervisor record actual exit1 with settings/
+SQL preserved and owned scratch removed. The reviewer's earlier stdin-harness
+failure occurred before fixture execution and is not the reproduction.
+The candidate was not pushed. The author owns the bounded correction: accept
+only the generated unconditional owned group/foreground hook semantics, reject
+unsupported modifiers without repair, preserve unrelated groups/handlers, and
+add source/installed drift regressions. Affected checks, primary reproduction
+and both independent axes must pass a new fixed candidate before delivery.
+
+The separate genuine Claude2.1.260 interactive probe also completed, but not as
+a native lifecycle pass: isolated keyless startup exits1/null with
+`api.anthropic.com:ETIMEOUT` before any hook or auth UI. No transcript, cursor,
+claim or usage is created. The probe/verification exits0 merely record that
+bounded unavailable result. Five preparation commands passed; all1885 source/
+18 dependency entries were unchanged and owned scratch was removed. Native
+normal-startup transcript timing remains unknown. Primary inspected the entire
+script and evidence at `/tmp/cairn-native-claude-tui-author.o0F9gY`; no auth or
+network workaround, provider server or paid call was attempted.
+
+### Corrected owned-registration semantics, v4
+
+The only v4 runtime change retains the owning group alongside each exact owned
+command and validates the closed generated shape: group has only `hooks`, and
+the owned hook has exactly command/type/160-second timeout. Conditional matchers
+and extra modifiers refuse all three active observations. Unrelated hooks can
+share the same array; unrelated matched groups retain their settings. No repair,
+SQL grant, identity rewrite, host/worker/core/provider or disable change is added.
+
+The worker's source47/installed10 cases pass on each runtime, all four child
+and supervisor exits0/null, no leftover scratch. Pre-fix source39/47 and
+installed8/10 reds are retained with actual exit1. Primary checked all raw log
+hashes and before/after freezes:1885 source entries,18 unchanged dependencies,
+and exactly five changed non-planning paths from v3 (predicate, two tests,
+guide and limitations). See `final-readback-v4.json` in the author evidence.
+
+Primary's unchanged actual matcher reproduction now exits0 for both clients,
+with all status/setup/activate observations refusing and cleanup verified.
+The new independent installed modifier check first failed against the immutable
+v3 archive (`modifier-installed-red-supervisor.json`, actual1), then passed
+against the rebuilt v4 archive on both Node versions. It exercises matcher and
+owned-hook modifier drift through every public CLI action, checks unchanged
+settings/identity/SQL, restores only synthetic fixture settings, and verifies
+the original positive lifecycle. Each inner/supervisor exit0 and owned scratch
+is removed. Results: `installed-setup-v4-*.json` /
+`independent-installed-v4-*.json` in the primary evidence directory.
+
+The final retained preview archive has191 members/189 source hashes,387633bytes,
+SHA-256 `63d99613b1d2aa120b153d13e09fe87462f50c85029536827f039e7f010db772`.
+Its archive and independent installed-filesystem inventories match. It is a
+private build output, not a registry publication.
+
+The supervised v4 affected matrix contains12 commands: full local-host, full
+artifact, workspace lifecycle, validation and both host/transport import gates
+on both Node versions. This targets the changed registration predicate, all
+installed callers/closure and cleanup. The earlier full26-command v3 baseline
+is retained separately; it is not relabelled v4. The broader final-head CI will
+also run before delivery. The original native TUI observation belongs to the
+v3 archive and unchanged hook path; current v4 black-box acceptance independently
+checks native discovery, not a new native accepted-turn/Stop claim.
+
+The v4 affected matrix completed at17:32UTC: all12 child exits0/null and outer0,
+636 passing cases,0 failures/cancellations and2 explicit native-Windows skips.
+Primary's separate audit exited0 after verifying every raw log hash, the12
+absent owned workspace paths and empty scratch inventories, all1885 frozen
+source entries and18 dependencies, both independent installed acceptances and
+the original matcher reproduction. `primary-v4-audit.json` records that audit.
+The final correction candidate is now frozen for exact-commit primary reruns,
+renewed Standards/Spec review and remote CI; their final SHA/results will be
+recorded in the PR. No candidate has been pushed at this checkpoint.

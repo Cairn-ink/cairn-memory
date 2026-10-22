@@ -116,3 +116,29 @@ for(const client of ['claude-code','codex'])test(`A3 installed ${client} repeate
   }
   await f.workspace.cleanup();assert.equal(existsSync(f.workspace.path),false);
 });
+for(const client of ['claude-code','codex'])test(`A2/A3 installed ${client} matcher/modifier drift refuses every active CLI observation`,{timeout:120000},async t=>{
+  const f=await installedSetupFixture(t,client);await f.invoke('cli',['init','--database',f.request.databasePath]);await f.setup();await f.activate();
+  const nativeText=readFileSync(f.clientConfigPath,'utf8'),control=(await f.inspect()).control;
+  const paths=['installation.json','identity.key','capture.json','host-profile.json','host-profile.json.prepared.json'];
+  const hash=path=>createHash('sha256').update(readFileSync(path)).digest('hex');
+  const identity=Object.fromEntries(paths.map(path=>[path,hash(join(f.request.installationDirectory,path))]));
+  for(const change of ['matcher','hook-once']){
+    const native=JSON.parse(nativeText),group=native.hooks.SessionStart[0];
+    if(change==='matcher')group.matcher='resume';else group.hooks[0].once=true;
+    const text=JSON.stringify(native);writeFileSync(f.clientConfigPath,text);
+    for(const args of [['status','--installation',f.request.installationDirectory],['setup','--request',f.requestPath],['activate','--installation',f.request.installationDirectory]]){
+      const outcome=await f.invoke('cli',args,{},1);assert.equal(outcome.status,'blocked');assert.equal(outcome.reason,'configuration_changed');
+      assert.equal(readFileSync(f.clientConfigPath,'utf8'),text);assert.deepEqual((await f.inspect()).control,control);
+      assert.deepEqual(Object.fromEntries(paths.map(path=>[path,hash(join(f.request.installationDirectory,path))])),identity);
+    }
+  }
+  const native=JSON.parse(nativeText);native.hooks.SessionStart[0].hooks.push({type:'command',command:'printf synthetic-unrelated',timeout:1});
+  native.hooks.SessionStart.push({matcher:'resume',hooks:[{type:'command',command:'printf synthetic-other',timeout:1}]});
+  const text=JSON.stringify(native);writeFileSync(f.clientConfigPath,text);
+  for(const args of [['status','--installation',f.request.installationDirectory],['setup','--request',f.requestPath],['activate','--installation',f.request.installationDirectory]])assert.equal((await f.invoke('cli',args)).status,'active');
+  assert.equal(readFileSync(f.clientConfigPath,'utf8'),text);assert.deepEqual((await f.inspect()).control,control);
+  assert.deepEqual(Object.fromEntries(paths.map(path=>[path,hash(join(f.request.installationDirectory,path))])),identity);
+  for(const trace of f.traces)assert.equal(rows(trace).filter(row=>['source','worker','spawn'].includes(row.kind)).length,0);
+  assert.equal(rows(f.scaffold.SYNTHETIC_TRACE).length,0);
+  await f.workspace.cleanup();assert.equal(existsSync(f.workspace.path),false);
+});

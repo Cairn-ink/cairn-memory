@@ -119,6 +119,13 @@ it does not take a setup lock or repair state. Disable revokes SQL first, then
 removes only exact owned registrations; cleanup failure cannot authorize stale
 hooks. Data, keys and cursors remain.
 
+An active observation or unchanged repeat setup/activation requires every owned
+registration to retain its unconditional foreground shape: the owned group has
+only `hooks`, and its owned command hook has exactly `type:"command"`, the fixed
+`command`, and `timeout:160`. A matcher or extra group/hook modifier refuses with
+`configuration_changed`, without repair, a new grant or identity changes.
+Unrelated hooks in that array and unrelated groups keep their own options.
+
 Activating after disable may grant fresh SQL consent but stays
 `rearm_required`, not active capture. Use the existing explicit host rearm for
 each admissible selected session, then activate again:
@@ -143,6 +150,13 @@ separates exact quiet/keyless generated-command execution from provider capture
 through trusted test-only HTTP/ancestry instrumentation. Neither claims real
 native provider-backed hook execution or semantic quality; native, paid/model
 and product gates remain separate.
+
+The isolated pinned Claude Code 2.1.260 `--init-only` probe dispatches the real
+installed SessionStart hook before its transcript exists; quiet exit 0 is not
+EOF initialization proof. A separate normal interactive, keyless/network-isolated
+probe exited 1 at the native Anthropic connectivity preflight, before any hook,
+transcript or cursor. Normal interactive transcript timing therefore remains
+unverified; neither result authorizes an authentication/network workaround.
 
 ## Explicit public constructor (P4b-B1)
 

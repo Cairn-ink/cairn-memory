@@ -180,3 +180,31 @@ test(`A3 repeated ${client} setup refuses ${change} owned hook without repairing
   assert.deepEqual(JSON.parse(readFileSync(f.clientConfigPath)),native);
   assert.deepEqual(native.hooks.Notification,[{matcher:'x',hooks:[{type:'prompt',prompt:'unrelated'}]}]);
 });
+for(const client of ['claude-code','codex'])for(const change of ['matcher','group-once','hook-once','hook-async'])
+test(`A2/A3 ${client} refuses owned ${change} semantics on status/setup/activate without mutation`,async t=>{
+  const f=await setupFixture(t,{client});assert.equal((await f.setup()).status,'prepared');assert.equal((await f.invoke('activate')).status,'active');
+  const control=f.control(),native=JSON.parse(readFileSync(f.clientConfigPath)),group=native.hooks.SessionStart[0];
+  if(change==='matcher')group.matcher='resume';
+  if(change==='group-once')group.once=true;
+  if(change==='hook-once')group.hooks[0].once=true;
+  if(change==='hook-async')group.hooks[0].async=false;
+  writeFileSync(f.clientConfigPath,JSON.stringify(native));const before=f.snapshot(),counts=observe(t);
+  for(const action of ['status','setup','activate']){
+    const outcome=await(action==='setup'?f.setup():f.invoke(action));
+    assert.equal(outcome.status,'blocked',JSON.stringify({action,outcome}));assert.equal(outcome.reason,'configuration_changed');
+    assert.deepEqual(f.control(),control);assert.deepEqual(f.snapshot(),before);privateResult(f,outcome);
+  }
+  assert.deepEqual(counts(),{source:0,worker:0});
+});
+for(const client of ['claude-code','codex'])
+test(`A2/A3 ${client} unchanged owned registration permits unrelated hooks and matcher groups`,async t=>{
+  const f=await setupFixture(t,{client});await f.setup();await f.invoke('activate');
+  const native=JSON.parse(readFileSync(f.clientConfigPath));
+  native.hooks.SessionStart[0].hooks.push({type:'command',command:'printf synthetic-unrelated',timeout:1});
+  native.hooks.SessionStart.push({matcher:'resume',hooks:[{type:'command',command:'printf synthetic-other',timeout:1}]});
+  writeFileSync(f.clientConfigPath,JSON.stringify(native));const control=f.control(),before=f.snapshot();
+  for(const action of ['status','setup','activate']){
+    const outcome=await(action==='setup'?f.setup():f.invoke(action));assert.equal(outcome.status,'active',JSON.stringify({action,outcome}));
+    assert.deepEqual(f.control(),control);assert.deepEqual(f.snapshot(),before);
+  }
+});

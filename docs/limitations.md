@@ -38,6 +38,23 @@ scratch. Separate source-status and SIGHUP reds exposed transient status locking
 and a missing signal handler. Logs/actual exits remain recorded; no source or
 authority boundary, provider behavior or timeout budget was weakened for them.
 
+The v3 repeat-setup regression retained source 33/37 and installed 6/8 reds
+(actual exit 1): missing/changed owned commands now refuse without repair.
+Independent Spec review then found that an owned group matcher or hook modifier
+could still report active. The v4 pre-fix source 39/47 and installed 8/10 reds
+also exited 1 with cleanup verified. Active status, repeat setup and repeat
+activation now require the exact unconditional foreground owned group/hook keys;
+unrelated handlers and matched groups remain preserved. These are configuration
+observation corrections, not changed SQL consent, identity or capture algorithms.
+
+Actual pinned Claude Code 2.1.260 `--init-only` dispatches the unchanged installed
+SessionStart hook, but its transcript is absent and no EOF cursor is created.
+A separate normal interactive probe in a fresh keyless, network-isolated PTY
+exited 1 at `api.anthropic.com: ETIMEOUT`, before hook dispatch or transcript
+creation. Only loopback DNS connect syscalls were observed; no provider server
+or authentication workaround was used. Normal interactive source timing and
+complete native Stop capture remain unverified, not inferred from init-only.
+
 ## Asynchronous Memory topic metadata
 
 The [asynchronous Memory topic reader](topic-overview.md) supplies bounded

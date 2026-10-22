@@ -86,8 +86,13 @@ default-off local initialization/setup/activation. Its dual-runtime source and
 installed checks and primary independent installed/native-config probes pass.
 Its26-command affected regression matrix now passes on both runtimes, actual
 outer0/children0,2444 passing cases and2 explicit native-Windows skips; source,
-dependency and cleanup evidence were independently verified. Exact-commit
-independent review and CI remain pending. Genuine isolated Codex TUI dispatch
+dependency and cleanup evidence were independently verified. Initial fixed
+review reported Standards0 / Spec1P2 for matcher-blind active registration.
+The bounded correction now passes47 source/10 installed cases per runtime,
+primary's unchanged reproduction and both independent installed acceptances;
+its12 affected commands also pass,636 cases and2 explicit Windows skips,
+actual exits0/null with hashes and cleanup independently verified. Renewed
+fixed-commit review and CI remain pending. Genuine isolated Codex TUI dispatch
 and EOF initialization also passed primary reproduction without provider calls;
 Claude init-only dispatch is observed but has no transcript at that point.
 Accepted-prompt retention/native Stop capture, full semantic acceptance,

@@ -112,8 +112,14 @@ function registered(text,request) {
   void value;
   const original = text ? JSON.parse(text):{};
   return events(request.client).every(event => {
-    const found = (original.hooks?.[event] ?? []).flatMap(group => group.hooks).filter(hook => hook.command === hookCommand(request.installationDirectory,event));
-    return found.length === 1 && found[0].type === 'command' && found[0].timeout === 160 && found[0].async !== true;
+    const found = (original.hooks?.[event] ?? []).flatMap(group => group.hooks
+      .filter(hook => hook.command === hookCommand(request.installationDirectory,event)).map(hook => ({ group,hook })));
+    if (found.length !== 1) return false;
+    const { group,hook } = found[0];
+    // An exact command is insufficient if a matcher or modifier changes when
+    // it runs. Only our unconditional foreground shape is owned; unrelated
+    // hooks may share its array and unrelated groups retain their own options.
+    return Object.keys(group).length === 1 && Object.keys(hook).length === 3 && hook.type === 'command' && hook.timeout === 160;
   });
 }
 async function prepare(request,signal) {
