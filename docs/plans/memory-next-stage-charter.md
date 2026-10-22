@@ -97,6 +97,8 @@
 
 ## 7. 工程軌（草案 M1–M8）
 
+**進度（2026-10-23）**：P0 契約與第一包方法包（U2）的草稿已寫好，放在整合分支的 `docs/plans/unified-memory-v1-contract.md`（`81e0f21`），目前由 Codex 做非作者設計審查。分包順序：U2 方法包 core → U3 方法包 host（匯入器、TTY 核准、MCP 唯讀工具）→ U4 素材 → U5 共同讀取與檢索（等 HR-1／HR-2）。
+
 P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 `.research-private/dispatch/p0_inventory/last.md`，因引用私有產品檔案而不進 git）。
 主控抽查了 schema 版本、session context 預算，以及 #469 有沒有改 `core/`，三項都屬實。
@@ -151,7 +153,8 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `p0_inventory` | 工程軌 P0 盤點 | gpt-6.1-sol/xhigh → 同 | read-only | `645b100`（core 等同 #468） | 19:24–19:29 | exit 0；見 §7 |
 | `hr1_protocol_audit` | HR-1 協議的非作者設計審查 | gpt-6.1-sol/xhigh → 同 | read-only | `645b100` | 19:24–19:35 | exit 0；6 項 P0 → v2（`ed7c763`） |
 | `hr1_protocol_audit`（複查） | 檢查 v2 | gpt-6.1-sol/xhigh → 同 | read-only | `ed7c763` | 19:39–19:44 | exit 0；新增 2 項 P0 → v2.1（`994d912`） |
-| `hr1_protocol_audit`（確認） | 確認 v2.1 | gpt-6.1-sol/xhigh | read-only | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
+| `hr1_protocol_audit`（確認） | 確認 v2.1 | gpt-6.1-sol/xhigh → 同 | read-only | `e1aa7da` | 2026-10-22T19:47–19:49 | exit 0；v2.1 可以進行；3 項配套文件 P1 已修（`5c1c90f`） |
 | `hr1_world_author`（W1） | 寫語料：家族、事實、記憶、原文片段 | gpt-6.1-sol/xhigh | workspace-write，無網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
 | `hr1_tooling`（W4a） | 語料工具、指標、統計、報告 | gpt-6.1-sol/xhigh | workspace-write，無網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
 | `hr1_arms`（W4b） | 各組檢索方法、embedding、融合、計時 | gpt-6.1-sol/xhigh | workspace-write，只開放安裝套件與下載模型的網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
+| `umv1_contract_audit` | 工程軌 P0 契約（方法包）的非作者設計審查 | gpt-6.1-sol/xhigh | read-only | 整合分支 `81e0f21` | 2026-10-22T19:51– | 執行中 |
