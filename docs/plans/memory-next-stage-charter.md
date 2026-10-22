@@ -159,6 +159,10 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `hr1_world_author`（修正 1） | 讓重複本文措辭自然不同 | gpt-6.1-sol/xhigh | workspace-write | — | 20:3x– | 執行中 |
 | `hr1_query_author`（W2） | 只看事實清單寫查詢（隔離在 `/home/chichieh/cairn-hr1-w2`） | gpt-6.1-sol/xhigh | workspace-write，無網路 | 事實清單 | 20:3x– | 執行中 |
 | `hr1_arms`／`hr1_tooling`（修正 1） | 修正雙審查指出的問題 | gpt-6.1-sol/xhigh | workspace-write | `a424c23` | 20:2x– | 執行中 |
+| `hr1_query_author`（W2） | 結果 | gpt-6.1-sol/xhigh → 同（cwd＝隔離資料夾） | — | 事實清單 | 20:31–20:42 | exit 0；160 題；每類 20 個家族；只寫在原文片段的證據占 39.8%。主控稽核 38 個指令，沒有碰過資料夾外的任何東西 |
+| 主控（標註） | 分組、標註、驗證器 | — | — | `f029055` | 20:5x | 分組符合配額與家族下限（開發集 32.1%）。驗證器：15 個缺席事實被誤判 → W4a 修正 2；C6 有 9 題問的是沒改過的決策 → 協議 v2.2 澄清，交 W2 修正 1 |
+| `hr1_tooling`（W4a 修正 1）／`hr1_arms`（W4b 修正 1） | 雙審查的修正 | gpt-6.1-sol/xhigh → 同 | workspace-write | `a424c23` | 20:24–20:48 | exit 0；主控在沙箱外驗收：兩個 Node 版本各 124 項、123 通過、0 失敗、1 略過；commit `f029055`；兩位審查者複查中 |
+| `umv1_u2_impl`（U2a） | 結果 | gpt-6.1-sol/xhigh → 同 | workspace-write | `2b2e3cf` | 20:03–20:50 | exit 0；30 個檔案；新寫的 46 項測試全過；完整測試在沙箱內因子程序管線被擋而失敗。另需補 v0.3.1 的完整 v30 schema → 修正 1 執行中 |
 | `hr1_tooling`（W4a） | 語料工具、指標、統計、報告 | gpt-6.1-sol/xhigh → 同 | workspace-write，無網路 | `e1aa7da` | 19:47–20:14 | exit 0；16 個檔案 |
 | `hr1_arms`（W4b） | 各組檢索方法、embedding、融合、計時 | gpt-6.1-sol/xhigh → 同 | workspace-write，只開放安裝套件與下載模型的網路 | `e1aa7da` | 19:47–20:12 | exit 0；21 個檔案；transformers.js 3.7.6；e5-small `761b726`、bge-m3 `4de1325`（fp32） |
 | 主控驗收 | W4a＋W4b 的測試框架 | — | — | `a424c23` | 20:15 | 兩種方式核對檔案清單，都是 37 個；Node 22.16／24.15 各 84 項測試、83 通過、0 失敗、1 項需手動開啟的測試略過，exit 皆 0；真實模型冒煙測試 exit 0 |
