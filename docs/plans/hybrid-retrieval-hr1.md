@@ -1,6 +1,6 @@
-# HR-1: hybrid candidate retrieval, frozen offline protocol (v2.1)
+# HR-1: hybrid candidate retrieval, frozen offline protocol (v2.2)
 
-Status: **v2.1, frozen before any result-producing run.** No fixture, harness or
+Status: **v2.2, frozen before any result-producing run.** No fixture, harness or
 result existed at any of these revisions. Goals and boundaries are in the
 [research charter](memory-next-stage-charter.md).
 
@@ -10,6 +10,9 @@ result existed at any of these revisions. Goals and boundaries are in the
 - **v2** (`ed7c763`) addressed them.
 - **v2.1** applies the same auditor's re-check: two further P0s (family counts
   for the bootstrap; A5 group denominators) and three P1 clarifications.
+- **v2.2** clarifies C6(a) before any result: it requires a superseding
+  decision. Nine authored C6-current queries targeted unchanged decisions; the
+  join's mechanical check rejected them, and the query author replaces them.
 
 Branch `experiment/hybrid-retrieval-hr1`, based on PR #468 head
 `3f6590584e746cc596c7859c9b0a00ae808941b6`. No public core API, schema, default,
@@ -187,7 +190,7 @@ never used.
 | C3 | Paraphrase | Same language, phrased without the fact's distinctive wording. Overlap with group members (T1 tokens) is recorded, not constrained; zero-overlap queries form a reported stress stratum |
 | C4 | Cross-lingual | Query language differs from every group member's language |
 | C5 | Multi-evidence | 2–3 required facts expressed in different memories; no single memory expresses all of them |
-| C6 | Change and history | (a) `current`: the current decision and its reason; (b) `history`: the old decision, the new one and the reason |
+| C6 | Change and history | (a) `current`: a current decision that **superseded an earlier decision**, plus the reason for the change; (b) `history`: the old decision, the new one and the reason. A decision that was never changed, together with its reason, belongs to C5, not C6 |
 | C7 | Near-miss | At least one S300 hard negative shares the entity but answers a different attribute, person or time |
 | C8 | No answer | Required facts are absent facts; excluded from recall denominators |
 
