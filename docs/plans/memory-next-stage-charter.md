@@ -149,4 +149,9 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | --- | --- | --- | --- | --- | --- | --- |
 | `isolation_probe` | 隔離驗證 | gpt-6.1-sol/xhigh → 同 | read-only | `d1a64f5` | 2026-10-22T19:20 | exit 0，沒有觸發 hook |
 | `p0_inventory` | 工程軌 P0 盤點 | gpt-6.1-sol/xhigh → 同 | read-only | `645b100`（core 等同 #468） | 19:24–19:29 | exit 0；見 §7 |
-| `hr1_protocol_audit` | HR-1 協議的非作者設計審查 | gpt-6.1-sol/xhigh | read-only | `645b100` | 19:24– | 執行中 |
+| `hr1_protocol_audit` | HR-1 協議的非作者設計審查 | gpt-6.1-sol/xhigh → 同 | read-only | `645b100` | 19:24–19:35 | exit 0；6 項 P0 → v2（`ed7c763`） |
+| `hr1_protocol_audit`（複查） | 檢查 v2 | gpt-6.1-sol/xhigh → 同 | read-only | `ed7c763` | 19:39–19:44 | exit 0；新增 2 項 P0 → v2.1（`994d912`） |
+| `hr1_protocol_audit`（確認） | 確認 v2.1 | gpt-6.1-sol/xhigh | read-only | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
+| `hr1_world_author`（W1） | 寫語料：家族、事實、記憶、原文片段 | gpt-6.1-sol/xhigh | workspace-write，無網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
+| `hr1_tooling`（W4a） | 語料工具、指標、統計、報告 | gpt-6.1-sol/xhigh | workspace-write，無網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
+| `hr1_arms`（W4b） | 各組檢索方法、embedding、融合、計時 | gpt-6.1-sol/xhigh | workspace-write，只開放安裝套件與下載模型的網路 | `e1aa7da` | 2026-10-22T19:47– | 執行中 |
