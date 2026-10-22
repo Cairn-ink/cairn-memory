@@ -13,6 +13,8 @@ import { withWriteObserver } from '../private-state.mjs';
 import { createLocalRawWorker } from '../raw/local-worker.mjs';
 import { claude } from './fixtures/raw-fixtures.mjs';
 import { stateLock } from '../state-lock.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { FORMAT } from '../../codex/parser.mjs';
 
 const root = resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const ok = result => { assert.equal(result.ok,true,JSON.stringify(result)); return result.value; };
@@ -175,4 +177,99 @@ test('RR06 source-close rejection zeroes the key and exposes only fixed failure 
   const replay = await withWriteObserver(({ path })=>{if(path===paths(f).cursor)writes++;},()=>f.call('rearm',input));
   assert.equal(replay.reason,'replayed'); assert.equal(writes,0); assert.deepEqual(readFileSync(paths(f).cursor),before);
   assert.equal(f.calls().length,0); assert.equal(f.ledger(),null);
+});
+
+async function capturedFixture(t,client) {
+  const f = await hostFixture(t,{ client });
+  assert.equal((await f.call('prepare')).status,'ready');
+  assert.equal((await f.call('initialize',{ ...f.selection,start:'beginning' })).status,'ready');
+  const node = join(f.workspace.path,'synthetic-capture-node.mjs');
+  writeFileSync(node,`#!${process.execPath}
+import{spawn}from'node:child_process';
+if(process.argv[2]==='--version')process.stdout.write(process.version+'\\n');else{
+const child=spawn(${JSON.stringify(process.execPath)},['--import',${JSON.stringify(join(root,'adapters/local/test/fixtures/http.mjs'))},...process.argv.slice(2)],{shell:false,stdio:'inherit',env:{...process.env,SYNTHETIC_MODE:'empty',SYNTHETIC_TRACE:${JSON.stringify(f.trace)},SYNTHETIC_CONFIG:${JSON.stringify(f.configPath)},SYNTHETIC_CORE:${JSON.stringify(join(root,'core/index.mjs'))}}});
+for(const signal of['SIGTERM','SIGINT'])process.on(signal,()=>child.kill(signal));child.once('error',()=>{process.exitCode=1});child.once('close',code=>{process.exitCode=code??1})}
+`,{ mode:0o700 });
+  const worker = createLocalRawWorker({ stateRoot:f.stateRoot,identityKeyPath:f.identityKeyPath,nodeExecutable:node,runtimeRoot:root,
+    configPath:f.configPath,expectedAuthority:f.config.authority,home:f.profile.home,env:{ CAIRN_SYNTHETIC_API_KEY:'synthetic_key_secret' } });
+  const result = await worker.run({ ...f.selection,pluginRoot:client === 'claude-code' ? f.pluginRoot:null,
+    formatAuthority:client === 'codex' ? { format:FORMAT,sessionId:f.selection.sessionId,creatorVersion:'0.162.0',qualifiedCreatorVersion:'0.162.0' }:null });
+  assert.equal(result.completedRecords,client === 'codex' ? 2:1,JSON.stringify(result)); assert.equal(result.completedParts,1);
+  assert.equal(cursor(f).issuedOrdinal,1); assert.equal(cursor(f).pending,null);
+  const db = new DatabaseSync(f.databasePath,{ readOnly:true });
+  try { assert.equal(db.prepare("SELECT count(*) n FROM admission_claims WHERE state='completed'").get().n,1);
+    assert.equal(db.prepare("SELECT count(*) n FROM raw_messages WHERE assembly_state='complete' AND reserved_bytes=0").get().n,1);
+  } finally { db.close(); }
+  rotate(f); return f;
+}
+function deleteCaptured(f) {
+  const conversation = ok(f.core.listRawConversations({ namespace:f.namespace,client:f.client })).conversations[0];
+  assert.ok(conversation);
+  ok(f.core.deleteConversation({ namespace:f.namespace,conversationId:conversation.id,expectedRevision:conversation.revision,actionId:randomUUID() }));
+}
+function publications(f) {
+  return [paths(f).cursor,paths(f).cursor.replace(/\.json$/,'.rearm.json'),f.configPath,f.profilePath,f.profilePath+'.prepared.json',paths(f).global];
+}
+function publicationSnapshot(f) {
+  return publications(f).map(path => fs.existsSync(path) ? readFileSync(path):null);
+}
+async function interruptRearm(f,input,stage) {
+  let fired = false;
+  const result = await withWriteObserver(({ path })=>{ if (!fired && stageFor(f,path) === stage) { fired = true; throw Error('synthetic deletion checkpoint'); } },()=>f.call('rearm',input));
+  assert.equal(fired,true); assert.equal(result.status,'blocked');
+}
+async function assertDeletedRecovery(f,input,{ revision = 0,pending = true } = {}) {
+  const before = publicationSnapshot(f),calls = f.calls().length,ledger = f.ledger(); let writes = 0;
+  const result = await withWriteObserver(({ path })=>{ if (publications(f).includes(path)) writes++; },()=>f.call('rearm',input));
+  assert.equal(result.reason,'rearm_refused',JSON.stringify(result)); assert.equal(result.status,'blocked');
+  assert.equal(writes,0); assert.deepEqual(publicationSnapshot(f),before); assert.equal(f.calls().length,calls); assert.deepEqual(f.ledger(),ledger);
+  const status = await f.host.rearmStatus(); assert.equal(status.revision,revision); assert.equal(status.pending,pending);
+}
+
+for (const client of ['claude-code','codex']) for (const stage of ['global-pending','session-committed']) {
+  test(`RR04/06 ${client}: real captured deletion after ${stage} blocks recovery without publication`,async t => {
+    const f = await capturedFixture(t,client),input = request(f); await interruptRearm(f,input,stage);
+    const before = ok(f.core.getLocalCaptureControl({ namespace:f.namespace,client })); deleteCaptured(f);
+    assert.deepEqual(ok(f.core.getLocalCaptureControl({ namespace:f.namespace,client })),before);
+    await assertDeletedRecovery(f,input);
+  });
+}
+for (const client of ['claude-code','codex']) test(`RR04/06 ${client}: zero-issued session fence blocks pending recovery without a conversation`,async t => {
+  const f = await hostFixture(t,{ client }); await f.call('prepare'); await f.call('initialize'); rotate(f);
+  const input = request(f); await interruptRearm(f,input,'global-pending'); assert.equal(cursor(f).issuedOrdinal,0);
+  assert.equal(ok(f.core.listRawConversations({ namespace:f.namespace,client })).conversations.length,0);
+  ok(f.core.fenceSession({ namespace:f.namespace,client,sessionId:cursor(f).wireSessionId }));
+  await assertDeletedRecovery(f,input);
+});
+
+test('RR04/06 deletion during awaited source proof refuses before the next publication',async t => {
+  const f = await capturedFixture(t,'claude-code'),input = request(f); await interruptRearm(f,input,'global-pending');
+  const source = statSync(f.sourcePath),originalOpen = promises.open; let sourceOpens = 0,deleted = false,writes = 0,result;
+  const before = publicationSnapshot(f),calls = f.calls().length,ledger = f.ledger();
+  try {
+    promises.open = async (...args)=>{
+      const handle = await originalOpen(...args),info = await handle.stat();
+      if (info.isFile() && info.dev === source.dev && info.ino === source.ino && ++sourceOpens === 2) {
+        const close = handle.close.bind(handle);
+        handle.close = async ()=>{ await close(); deleteCaptured(f); deleted = true; };
+      }
+      return handle;
+    };
+    syncBuiltinESMExports();
+    result = await withWriteObserver(({ path })=>{ if (deleted && publications(f).includes(path)) writes++; },()=>f.call('rearm',input));
+  } finally { promises.open = originalOpen; syncBuiltinESMExports(); }
+  assert.equal(deleted,true); assert.equal(result.reason,'rearm_refused',JSON.stringify(result)); assert.equal(writes,0);
+  assert.deepEqual(publicationSnapshot(f),before); assert.equal(f.calls().length,calls); assert.deepEqual(f.ledger(),ledger);
+  assert.equal((await f.host.rearmStatus()).pending,true);
+});
+
+test('RR04/06 unrelated real session fence does not block selected-session recovery',async t => {
+  const f = await fixture(t),input = request(f); await interruptRearm(f,input,'global-pending');
+  ok(f.core.fenceSession({ namespace:f.namespace,client:f.client,sessionId:'synthetic-unrelated-wire-session' }));
+  assert.equal((await f.call('rearm',input)).reason,'replayed'); assert.equal(f.calls().length,0); assert.equal(f.ledger(),null);
+});
+
+test('RR04/08 completed-action replay refuses a now-deleted captured session without rewriting terminal state',async t => {
+  const f = await capturedFixture(t,'claude-code'),input = request(f); assert.equal((await f.call('rearm',input)).reason,'rearmed');
+  deleteCaptured(f); await assertDeletedRecovery(f,input,{ revision:1,pending:false });
 });

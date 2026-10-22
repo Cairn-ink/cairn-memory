@@ -172,3 +172,26 @@ let fired=false;const result=await withWriteObserver(({path})=>{if(path===${JSON
   assert.equal(f.cursor().offset,expectedEOF); assert.equal(f.cursor().issuedOrdinal,0); assert.equal(f.calls(),0);
   const before = f.durable(); assert.equal((await f.invoke(args)).reason,'replayed'); assert.deepEqual(f.durable(),before);
 });
+
+for (const client of ['claude-code','codex']) test(`RR04/06/10 installed ${client}: real conversation deletion blocks cold pending-action recovery`,{ timeout:120000 },async t => {
+  const f = await fixture(t,client); f.append('Synthetic captured source before deletion');
+  await f.invoke(['prepare']); await f.invoke([...f.selected('initialize'),'--start','beginning']);
+  assert.equal((await f.invoke(f.selected('run'),{ key:true })).worker.completedRecords,client === 'codex' ? 2:1);
+  assert.equal(f.cursor().issuedOrdinal,1); assert.equal(f.cursor().pending,null);
+  f.operator('pause'); f.operator('resume'); const args = f.rearmArgs();
+  const interrupt = `const{createLocalRawHost,withLocalHostDependencies}=await import(${JSON.stringify('file:')}+${JSON.stringify(join(f.installed,'integrations/client/raw/local-host.mjs'))});
+const{withWriteObserver}=await import(${JSON.stringify('file:')}+${JSON.stringify(join(f.installed,'integrations/client/private-state.mjs'))});
+const q=await import(${JSON.stringify('file:')}+${JSON.stringify(join(f.installed,'integrations/codex/qualification.mjs'))}),binary=${JSON.stringify(join(f.workspace.path,'codex'))};
+const detectHost=async()=>{const detected=await q.detectRunningHost({pid:42,proc:'/synthetic/proc',link:async()=>binary,identity:()=>q.binaryIdentity(binary),read:async path=>Buffer.from(path.endsWith('cmdline')?'codex\\0':'42 (codex) S 1 0 0')});const{processPath,...host}=detected;return host};
+let fired=false;const result=await withLocalHostDependencies({detectHost},()=>withWriteObserver(({path})=>{if(path===${JSON.stringify(f.profilePath+'.rearm.json')}&&!fired){fired=true;throw Error('synthetic pending interruption')}},()=>createLocalRawHost({profilePath:${JSON.stringify(f.profilePath)}}).rearm(${JSON.stringify({expectedRevision:0,actionId:args[4],sessionId:f.sessionId,sourcePath:f.sourcePath})})));if(!fired||result.status!=='blocked')throw Error('synthetic interruption missing');`;
+  f.direct(['--import',preload,'--input-type=module','-e',interrupt]);
+  const deletion = `const{openMemoryCore}=await import(process.env.SYNTHETIC_CORE);const c=JSON.parse((await import('node:fs')).readFileSync(process.env.SYNTHETIC_CONFIG));
+const core=openMemoryCore({path:process.env.SYNTHETIC_DATABASE,existingStore:{version:'schema29-existing-v1',storeId:c.authority.storeId},rawConversations:{mode:'off',configureCap:false,readPolicy(){throw Error('retained read forbidden')}}});
+try{const ok=r=>{if(!r.ok)throw Error('synthetic delete refused');return r.value};const{namespace,client}=c.authority;const before=ok(core.getLocalCaptureControl({namespace,client}));const conversation=ok(core.listRawConversations({namespace,client})).conversations[0];if(!conversation)throw Error('synthetic capture missing');ok(core.deleteConversation({namespace,conversationId:conversation.id,expectedRevision:conversation.revision,actionId:'synthetic-delete-before-recovery'}));if(JSON.stringify(ok(core.getLocalCaptureControl({namespace,client})))!==JSON.stringify(before))throw Error('synthetic controls changed');}finally{core.close()}`;
+  f.direct(['--import',preload,'--input-type=module','-e',deletion]);
+  const before = f.durable(),calls = f.calls(),ledger = f.ledger();
+  assert.equal((await f.invoke(args,{ expected:2 })).reason,'rearm_refused');
+  assert.deepEqual(f.durable(),before); assert.equal(f.calls(),calls); assert.deepEqual(f.ledger(),ledger);
+  assert.deepEqual(await f.invoke(['rearm-status'],{ expected:3 }),{ version:'local-raw-rearm-status-v1',status:'waiting',reason:'rearm_pending',revision:0,pending:true });
+  assert.equal(f.inspectRaw().conversations.length,0);
+});

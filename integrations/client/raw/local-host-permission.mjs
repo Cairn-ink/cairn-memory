@@ -60,18 +60,25 @@ export async function readRearmAuthority(config) {
     check(storage,localAuthorityInput(authority)); return authority;
   });
 }
+function selectedRearmSession(db,config,identity) {
+  const ns = localAuthorityInput(config.authority).namespace,client = config.authority.client;
+  const boundary = [ns.ownerId,ns.scope,ns.projectId];
+  const secret = db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get()?.secret;
+  if (!/^[a-f0-9]{64}$/.test(secret ?? '')) fail('rearm_refused');
+  const session = 's1:'+createHmac('sha256',Buffer.from(secret,'hex'))
+    .update(JSON.stringify(['episode-v1',...boundary,client,identity.wireSessionId])).digest('hex');
+  if (db.prepare('SELECT 1 FROM raw_session_fences WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?')
+    .get(...boundary,client,session) || db.prepare('SELECT 1 FROM session_episodes WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=? AND deleted=1')
+    .get(...boundary,client,session)) fail('rearm_refused');
+  return { ns,client,boundary,secret,session };
+}
+export async function checkRearmSession(config,identity) {
+  await databaseSnapshot(config,db => { selectedRearmSession(db,config,identity); });
+}
 export async function inspectRearmBoundary(config,identity,cursor,proof,previousReceipt = null) {
   return databaseSnapshot(config,db => {
     const { metadata = null,firstBatch = null,oldAuthority,pendingPart = null } = proof;
-    const ns = localAuthorityInput(config.authority).namespace, client = config.authority.client;
-    const boundary = [ns.ownerId,ns.scope,ns.projectId];
-    const secret = db.prepare('SELECT secret FROM episode_identity WHERE singleton=1').get()?.secret;
-    if (!/^[a-f0-9]{64}$/.test(secret ?? '')) fail('rearm_refused');
-    const session = 's1:'+createHmac('sha256',Buffer.from(secret,'hex'))
-      .update(JSON.stringify(['episode-v1',...boundary,client,identity.wireSessionId])).digest('hex');
-    if (db.prepare('SELECT 1 FROM raw_session_fences WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?')
-      .get(...boundary,client,session) || db.prepare('SELECT 1 FROM session_episodes WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=? AND deleted=1')
-      .get(...boundary,client,session)) fail('rearm_refused');
+    const { ns,client,boundary,secret,session } = selectedRearmSession(db,config,identity);
     const conversation = db.prepare('SELECT id FROM raw_conversations WHERE owner_id=? AND scope=? AND project_id=? AND client=? AND session_key=?')
       .get(...boundary,client,session);
     const last = conversation && db.prepare('SELECT * FROM raw_messages WHERE conversation_id=? ORDER BY ordinal DESC LIMIT 1').get(conversation.id);

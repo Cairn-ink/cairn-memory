@@ -288,6 +288,18 @@ worker subsequently progresses while global recovery is pending. Unknown third
 states refuse; ambiguous writes are inspected, never rolled back blindly.
 Normal runs do not hold the global preparation lock across their execution.
 
+Every actual rearm, recovery and completed-action replay checks the exact selected
+session's SQL deletion fence, independently of capture-control versions. The
+shared publication proof checks it after awaited source verification, including
+terminal-session/global-pending recovery; fresh intent publication also rechecks.
+A deleted/fenced session returns rearm_refused without another cursor or activation
+publication. An interrupted action stays visibly pending: no cancellation, rollback
+or repair is inferred. Metadata-only status may still report that pending action,
+or an earlier completed revision; it does not authorize resuming deleted work.
+Historical admission/high-water checks are not repeated against a legitimately
+progressed terminal cursor. SQL checks and subsequent filesystem writes are still
+separate operations, not an atomic deletion/publication transaction.
+
 Direct workers now refresh configuration and actual SQL permission under their
 session lock before source access. Even a no-work invocation refuses after real
 revocation; eligible legacy cursor encoding remains unchanged. Normal runs do

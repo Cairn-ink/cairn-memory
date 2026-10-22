@@ -4,7 +4,7 @@ import { readConfigurationSnapshot } from '../../../adapters/local/configuration
 import { localAuthorityInput } from '../../../core/local-authority-input.mjs';
 import { readHostProfile, readHostConfiguration, hostSelection, canonicalHostPath, overlaps } from './local-host-profile.mjs';
 import { inspectPreparation } from './local-host-preparation.mjs';
-import { readRearmAuthority, inspectRearmBoundary } from './local-host-permission.mjs';
+import { readRearmAuthority, inspectRearmBoundary, checkRearmSession } from './local-host-permission.mjs';
 import { loadIdentity, bindRoot, readSession, validateCursor, writeCursor } from './local-worker-state.mjs';
 import { sourceBudget, openWorkerSource, qualifySource, verifyCursorSource, sourceSize, completeBoundary, cursorSource,
   producerInput, producerOptions, sourceReason } from './local-worker-source.mjs';
@@ -171,6 +171,7 @@ export async function executeRearm(profilePath,value,operation,deps = {},statusC
           const finalProfile = await readHostProfile(profilePath), finalFiles = await snapshot(finalProfile);
           if (sha(finalFiles.configText) !== sha(files.configText) || sha(finalFiles.profileText) !== sha(files.profileText) ||
             sha(finalFiles.preparationText) !== sha(files.preparationText)) rearmFail('rearm_invalid');
+          await checkRearmSession(config,identity);
           operation.check(); await writeRearmRecord(profile.rearmPath,next); record = next;
         }
         const action = record.action;
@@ -187,6 +188,7 @@ export async function executeRearm(profilePath,value,operation,deps = {},statusC
             await verifyCursorSource(identity,freshSource,action.replacementCursor);
             await verifyCursorSource(identity,freshSource,cursor); }
           finally { await freshSource?.close(); }
+          await checkRearmSession(config,identity); operation.check();
         };
         await prove();
         let receipt = await readSessionRearm(identity);

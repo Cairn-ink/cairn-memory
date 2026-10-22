@@ -6,7 +6,7 @@ Owner approval: 2026-10-21, local synthetic development/tests/PRs may proceed
 before production G1/G2 receipts. Default-off; no real-user data, paid calls,
 publication, deployment or operational database migration.
 
-Current checkpoint (2026-10-21): storage/capture/source/invalidation and local
+Current checkpoint (2026-10-22): storage/capture/source/invalidation and local
 controls/one-shot/transport packets are delivered as reviewed, unmerged PRs.
 The [durable worker](raw-local-worker.md) is ready/unmerged as#462, and the
 [explicit foreground host](raw-local-host.md) as#463; both have committed dual
@@ -34,12 +34,18 @@ Standards/Spec reported zero actionable findings, and all31 checks/4 latest-head
 workflow runs succeeded. Merge-preview tree equality and the20 incremental
 paths were independently verified, actual ready-proof exit0. The next isolated
 packet is [explicit local rearm](raw-local-rearm.md): preserve session identity
-and ordinal while skipping paused content at one frozen EOF. Its implementation
-and primary source13/recovery2/installed5 acceptance pass on each supported Node
-runtime. All28 affected contributor commands passed with actual exits0/null;
-source/dependency hashes,18 incremental paths and owned cleanup were independently
-checked. Final committed-candidate acceptance, independent double review and CI
-are still pending at this checkpoint, so this is not yet a ready delivery.
+and ordinal while skipping paused content at one frozen EOF. The first candidate
+d030c02 passed its28-command matrix and exact-commit source13/recovery2/installed5,
+but independent Spec review found a missing selected-session deletion check during
+recovery (Standards0, Spec1 P2). It was not pushed. Actual deletion and independent
+zero-issued fence reproductions failed as expected; the bounded correction now
+passes author source52/installed6 and independent source13/recovery2/installed5/
+deletion4 on each runtime, with actual exits0/null and verified cleanup.
+All22 affected correction commands also pass; primary independently checked
+their logs,1852 source/18 dependency hashes and scratch removal, verifier exit0.
+Exact new-commit acceptance, renewed double review and latest-head CI are still
+pending, so this is not yet a ready delivery. Pending deleted actions refuse;
+there is no automatic cancel/rollback/repair. Metadata status is not permission.
 Step4's combined installed lifecycle and T01–T18/RL acceptance map are not complete.
 Separate source/schema compatibility must be resolved or explicitly unavailable;
 retained-receipt excerpts do not substitute for full Raw. Product pins/flags and

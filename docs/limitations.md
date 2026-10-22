@@ -21,6 +21,14 @@ sessions older than it cannot be implicitly adopted. Same-action replay retains
 its original EOF and never rewrites a cursor after terminal publication or later
 progress. Missing/contradictory receipt/revision pairs refuse, not repair.
 
+Actual rearm/recovery/replay also rechecks the exact selected session's deletion
+fence after awaited source proof and before subsequent publication. Deletion can
+leave general capture controls unchanged. A deleted session refuses even if its
+action was previously completed; pending recovery remains visibly pending, with
+no automatic cancellation, rollback or repair. Metadata status is not permission
+to resume it. These fresh SQL checks cannot make separate filesystem writes and
+deletion share a transaction or undo already-published state.
+
 Case A checks content-free SQL ownership, event/part/binding and completed
 admission consistency, not historical source-file attestation or semantic truth.
 Case B reconstructs only its already-authorized bounded original record. Existing
@@ -40,6 +48,25 @@ before reaching rearm; only those fixture fields changed. A separate source-clos
 regression failed 0/1, exit 1: actual close rejection skipped key zeroing. Nested
 finally now guarantees zeroing while the outer fixed failure remains visible;
 durable ready state is not rolled back. All original reds remain retained.
+
+Independent review found a missing deletion recheck in the first committed rearm
+candidate despite its passing bounded matrix. A completed real capture followed
+by pending-intent interruption, real conversation deletion and same-action recovery
+incorrectly returned ready/replayed and published the remaining state. The tight
+repro failed 0/1 twice, exit 1. New focused source regressions initially passed 1/9,
+exit 1, and installed regressions 0/2, exit 1; two source cases and one installed
+case first stopped at an incorrect fixture count for Codex's excluded header.
+After correcting only that count, all eight failing source cases reached the
+intended deletion refusal assertion. The installed Codex fixture then stopped
+before interruption because its direct API call lacked the existing synthetic
+host-ancestry binding; the fixture now reuses that binding without changing
+runtime qualification. The first post-fix focused run passed 9/9 source cases
+and 1/2 installed cases (exits 0 and 1 respectively), retaining that fixture red.
+The correction reuses the existing exact-session SQL lookup in
+the shared publication proof without rechecking historical admission against
+terminal-progressed cursors. No deleted-content resurrection or core capture
+fence bypass was demonstrated; the defect was false successful rearm. All red
+receipts and the original candidate/review remain retained.
 
 Focused synthetic checks include actual SIGKILL, rename/fsync ambiguity and cold
 publication recovery. These do not promise cleanup after arbitrary SIGKILL/host

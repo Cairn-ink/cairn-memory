@@ -1,8 +1,9 @@
 # Explicit local Raw rearm — next bounded packet
 
-Status: implementation frozen; independent source/recovery/installed acceptance
-and all28 affected contributor commands passed on Node22.16/24.15. Exact-commit
-acceptance, final-candidate reviews and CI remain pending at this checkpoint.
+Status: independent review's selected-session deletion/recovery defect is fixed;
+corrected source/installed acceptance and all22 affected correction commands pass
+on Node22.16/24.15. Original red evidence remains. New exact-commit acceptance,
+renewed Standards/Spec review and latest-head CI remain pending at this checkpoint.
 Base: 363c1da01296e892fed94a1074edd774ede37733, ready/unmerged parent PR #465.
 Worktree: /home/chichieh/Github/cairn-memory-worktrees/raw-local-rearm.
 Branch: feat/raw-local-rearm. This packet has no PR yet.
@@ -163,6 +164,15 @@ latest global action remains incomplete. Only that exact action can resume.
 Recheck fresh authority and source anchors before publication/recovery. SQL and
 filesystem cannot share a transaction; a changed authority while an intent is
 pending leaves a visible refusal, not automatic adoption of yet another snapshot.
+Recheck the exact selected session's durable deletion fence at those publication
+boundaries as well, including same-action recovery after terminal session receipt
+but before global ready. Deletion need not change the general capture controls.
+Do not repeat historical high-water proof against a legitimately progressed
+terminal cursor. A deleted/fenced session returns rearm_refused without another
+cursor/config/profile/preparation/global-ready publication; a pending intent
+remains visibly pending. No automatic cancellation, rollback or repair is added.
+Status remains metadata-only. A completed action's rearm replay also refuses a
+now-deleted selected session rather than suggesting it is rearmed for future use.
 Normal provider/admission/Raw fences remain active. Raw-only controls do not
 retroactively cancel already-admitted interpretation; already-read bytes and
 dispatched cost cannot be undone. No hostile same-owner tamper defense is claimed.
@@ -257,7 +267,7 @@ roster, API/CLI DTOs and state transitions are frozen here before implementation
 | RR-03 | Actual accepted first part plus authoritative closed continuation: completed interpretation and no-eligible-first-part variants can discard only the closed suffix. Incomplete/unknown/first-part/other-block variants refuse. |
 | RR-04 | SQL high-water, binding, namespace, managed-target, deletion and original source checks reject inconsistent cursors. Ordinary worker policy fixtures keep their intentional SQL-free transport seam. |
 | RR-05 | Same-action replay after append and after successful later capture does no cursor write, no rewind, no new EOF choice, no provider call and no second revision increment. Superseded action and revision reject. |
-| RR-06 | Inject failure/termination around every durable publication, including rename/fsync ambiguity. A new process either resumes the exact pending action or refuses; terminal receipt always prevents cursor rewrite. No normal host/direct-worker bypass of a pending session. |
+| RR-06 | Inject failure/termination around every durable publication, including rename/fsync ambiguity. A new process either resumes the exact pending action or refuses; terminal receipt always prevents cursor rewrite. A genuine deletion/fence after durable intent, including terminal-session/global-pending state, refuses subsequent activation without publication. No normal host/direct-worker bypass of a pending session. |
 | RR-07 | Preserve eligible other-session concurrency; same-session exclusion and lock ordering hold. A second stale session can adopt the one retained predecessor with its own EOF. Older/unknown authority refuses without bulk migration. |
 | RR-08 | Bidirectional receipt/revision validation, missing root/key/claim/receipt, legacy downgrade, corrupt third states, authority changes mid-operation, partial EOF, replacement/truncation and append races fail closed or preserve the frozen successful boundary. |
 | RR-09 | No paid HTTP, provider-key loading, ledger change or Raw/Memory/Card mutation during rearm/status; bounded reads and private metadata, source/key omission in diagnostics, cleanup on success/failure/cancellation. |
@@ -418,3 +428,70 @@ entries stayed unchanged during execution. Only the two main-owned planning
 records are updated after this gate; all16 author paths, including runtime/tests,
 remain at the accepted final author freeze. Exact committed-content proof and
 repeated key source/recovery/installed acceptance precede independent review.
+
+First committed candidate d030c0278aea48393eab092c83d8fb55c95621c3:
+primary source13/recovery2/installed5 passed again on both runtimes, all six
+children and three supervisors exit0; owned cleanup/source1852/dependencies18
+were independently checked (primary-committed-verification.json). Standards
+review found0 actionable issues; Spec found1 P2 correctness issue. Both reviewers
+were separate nonauthor GPT6.1Sol/high agents; this candidate was NOT pushed.
+
+The new reproduction captures a real synthetic source through the source-checkout
+worker/core protocol, interrupts after global intent, then calls actual core
+deleteConversation before exact recovery. Deletion leaves capture control versions
+unchanged; recovery incorrectly returned ready/replayed and published all seven
+remaining stages. Author reproduced twice (~0.95/0.93seconds), each0/1 with child
+and outer exit1 and owned cleanup. Receipt: deleted-session-diagnosis-v1.json in
+the author evidence directory. Primary independently reproduced four zero-issued
+fenced-session cases: both clients at global-intent and terminal-session/global-
+pending boundaries,0/4 on each runtime, child/outer exit1 with owned cleanup.
+Receipt: primary-deletion-red-v1-report.json; frozen independent test SHA256
+75e485b859ff2980ffce0ed84d11ea33ce5004ebdc249ae82e20a9e6dd2c905a.
+Core's capture/deletion fences remain intact; no deleted-content resurrection
+or core capture bypass was demonstrated. This is a false successful rearm.
+
+Ranked diagnosis: (1) only the fresh-action branch calls the SQL session-fence
+check; (2) deletion might instead invalidate general authority, but actual
+controls remained identical; (3) only terminal recovery might treat a receipt as
+new permission, but both pre-session and terminal-stage cases reproduced.
+The shared publication proof must recheck exact session deletion without
+re-running historical admission/high-water checks on a terminal-progressed cursor.
+Correction is confined to the two existing host rearm/permission modules, source
+crash suite, installed rearm suite and their guide/limitations; no worker/core/
+schema/identity/timeout/DTO change or automatic pending-action repair is authorized.
+Original matrix, candidate, reviews and red receipts remain retained.
+
+The correction's affected local roster is frozen before execution: artifact,
+JSON validate, local adapter, local transport, local worker, local host, host
+import, transport import, workspace lifecycle, capture demo and private Card
+demo on each Node22.16/24.15 (eleven per runtime,22 commands). The prior generic,
+Raw-producer and pinned native-validator results remain historical evidence,
+not newly rerun correction gates; their implementations/configuration did not
+change. Final latest-head CI still runs its complete matrix. Independent source13,
+recovery2, installed5 and the unchanged four-case deletion reproduction remain
+separate acceptance; each must pass on both runtimes. All original red fixtures
+and corrected-premise reruns are retained, with setup failures distinguished
+from the deletion defect. A new committed candidate and both independent reviews
+are required before push.
+
+Correction round1 is frozen across six author paths at SHA256
+45ed276351bc258bc768972d6e39a4f530bcefd7a23269ec25ec1c3befb654f4;
+all16 author paths are a4fc5b3d7f0dc4cc9c5a3066e8cd236347c7b15505121fdd45d9d532382c26a8.
+Author source52/52 and installed6/6 pass on each runtime, all four child/outer
+exits0/null. The unchanged original real-capture deletion loop now passes1/1,
+with blocked/rearm_refused, pendingtrue, no publication or provider delta.
+Primary's unchanged deletion4, source13, recovery2 and installed5 also pass on
+both runtimes: eight child commands and four supervisors exit0. The independent
+receipt verifier parsed all eight primary and seven final/focused author logs,
+checked actual scratch absence and current16 author/1852 source/18 dependency
+hashes; exit0. Receipts: correction-final-receipt-v1.json in the author evidence
+directory and primary-correction-pre-acceptance.json in the primary directory.
+The22-command correction matrix completed with all child exits0/null and outer
+exit0. Each runtime passed local37, transport34, worker59, host93 and workspace25;
+artifact127 had126 passes and one declared native-Windows-only skip, no failure.
+JSON validation, both import probes and both demos exited0. Primary independently
+parsed all22 logs against frozen commands, verified1852 source/18 dependency
+hashes and actual owned-scratch removal; verifier exit0. Receipt:
+primary-correction-v1-verification.json. Only the two main-owned planning records
+change after this gate; all16 author paths remain frozen. A second scoped commit
+will retain d030c02 as the historical first candidate rather than rewriting it.
