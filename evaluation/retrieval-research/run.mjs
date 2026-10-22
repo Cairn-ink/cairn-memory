@@ -9,7 +9,7 @@ import { createArm, isFused, needsModel, includeForArm, FUSION_CONFIGS } from '.
 import { createLocalEmbedder, LOCAL_MODELS, MODEL_CACHE } from './lib/embed-local.mjs';
 import { createOpenAIEmbedder, OPENAI_MODELS, publicErrorCode } from './lib/embed-openai.mjs';
 import { createApiLedger } from './lib/api-ledger.mjs';
-import { frozenA0Stores } from './lib/a0-core.mjs';
+import { frozenA0Stores, A0_SEEDING } from './lib/a0-core.mjs';
 
 export function environment() {
   const processors = cpus();
@@ -18,7 +18,7 @@ export function environment() {
 }
 export function parseCLI(args = process.argv.slice(2)) {
   const { values } = parseArgs({ args, options: Object.fromEntries([
-    'fixture-dir', 'split', 'scale', 'arms', 'models', 'out', 'ledger', 'selection', 'lexical', 'threads', 'cache-dir', 'store-dir',
+    'fixture-dir', 'split', 'scale', 'arms', 'models', 'out', 'ledger', 'selection', 'lexical', 'threads', 'cache-dir', 'store-dir', 'isolation-variant',
   ].map(key => [key, { type: 'string' }])) });
   for (const key of ['fixture-dir', 'split', 'scale', 'arms', 'out']) if (!values[key]) throw new Error(`missing_--${key}`);
   if (!['dev', 'test'].includes(values.split) || !['S300', 'S1000'].includes(values.scale)) throw new Error('invalid_split_or_scale');
@@ -30,10 +30,22 @@ export function parseCLI(args = process.argv.slice(2)) {
   for (const model of models) if (!Object.hasOwn(LOCAL_MODELS, model) && !Object.hasOwn(OPENAI_MODELS, model)) throw new Error(`unknown_model:${model}`);
   const threads = Number(values.threads ?? 4);
   if (!Number.isSafeInteger(threads) || threads < 1) throw new Error('invalid_threads');
+  const isolationVariant = values['isolation-variant'] ?? 'with-foreign';
+  if (!['with-foreign', 'without-foreign'].includes(isolationVariant)) throw new Error('invalid_isolation_variant');
   return { fixtureDir: resolve(values['fixture-dir']), split: values.split, scale: values.scale, arms: [...new Set(arms)],
     models: [...new Set(models)], out: resolve(values.out), ledgerPath: values.ledger ? resolve(values.ledger) : undefined,
-    selectionPath: values.selection, lexical: values.lexical, threads,
+    selectionPath: values.selection, lexical: values.lexical, threads, isolationVariant,
     cacheDir: values['cache-dir'] ?? MODEL_CACHE, storeDir: values['store-dir'] ?? join(MODEL_CACHE, 'hr1-a0-stores') };
+}
+
+// The counterfactual changes only the in-memory corpus, before query/document
+// projections, A0 seeding or indexing. Keep the frozen hashes and all source
+// objects intact. Default execution returns the original fixture unchanged.
+export function isolationFixture(fixture, variant = 'with-foreign') {
+  if (variant === 'with-foreign') return fixture;
+  if (variant !== 'without-foreign') throw new Error('invalid_isolation_variant');
+  return { ...fixture, corpus: { ...fixture.corpus,
+    memories: fixture.corpus.memories.filter(memory => memory.namespace !== 'foreign') } };
 }
 
 // Consume W4a's frozen hr1-selection-v1 directly. No query labels enter arms.
@@ -89,7 +101,8 @@ export async function runRankings(options, { fixtureAPI, embedderFactory = defau
   const { selection, lexical } = await loadSelection(options);
   const configs = configurations(options, selection);
   const api = fixtureAPI ?? await import('./lib/fixture.mjs');
-  const fixture = await api.loadFixture(options.fixtureDir);
+  const isolationVariant = options.isolationVariant ?? 'with-foreign';
+  const fixture = isolationFixture(await api.loadFixture(options.fixtureDir), isolationVariant);
   checkSelectionHashes(selection, fixture.hashes);
   const queries = api.armQueries(fixture, { split: options.split });
   if (!queries.length) throw new Error('no_projected_queries');
@@ -128,15 +141,15 @@ export async function runRankings(options, { fixtureAPI, embedderFactory = defau
               config: configurationName(config),
               lexical: isFused(config.arm) ? lexical : null, model: config.model, modelMetadata: embedder?.metadata ?? null,
               scale: options.scale, split: options.split, fixtureHashes: fixture.hashes, env: environment(), startedAt,
-              finishedAt: new Date().toISOString(), store: variant.index, status: 'complete',
-              ...(variant.store ? { snapshot: variant.store.snapshot, seeding: 'hr1-projection-v1' } : {}) }, queries: results, costs };
+              finishedAt: new Date().toISOString(), store: variant.index, isolationVariant, status: 'complete',
+              ...(variant.store ? { snapshot: variant.store.snapshot, seeding: A0_SEEDING } : {}) }, queries: results, costs };
             outputs.push(output);
           } finally { for (const index of indexes.values()) index.close(); }
         }
       } catch (error) {
         outputs.push({ format: 'hr1-rankings-v1', run: { arm: config.arm, config: config.fusion ?? config.arm,
           model: config.model, scale: options.scale, split: options.split, fixtureHashes: fixture.hashes, env: environment(),
-          startedAt, finishedAt: new Date().toISOString(), store: null, status: 'unavailable', error: publicErrorCode(error) },
+          startedAt, finishedAt: new Date().toISOString(), store: null, isolationVariant, status: 'unavailable', error: publicErrorCode(error) },
           queries: {}, costs: ledger ? { ...ledger.summary() } : {} });
       }
     }

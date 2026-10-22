@@ -23,7 +23,7 @@ const PUBLIC_ERROR_CODES = new Set([
   'frozen_selection_required', 'invalid_frozen_selection', 'selection_not_ready_for_test',
   'invalid_lexical_selection', 'selection_lexical_override', 'selection_fixture_hash_mismatch',
   'invalid_context_selection', 'a5_nominated_context_required', 'no_projected_queries',
-  'invalid_split_or_scale', 'exploration_grid_dev_only', 'invalid_threads', 'invalid_lexical_comparator',
+  'invalid_split_or_scale', 'exploration_grid_dev_only', 'invalid_threads', 'invalid_isolation_variant', 'invalid_lexical_comparator',
   'embedding_model_required', 'invalid_fusion_configuration', 'invalid_local_model_configuration',
   'invalid_document_cache', 'unexpected_model_dimensions', 'local_model_initialization_cleanup_failed',
   'batch_one_required', 'empty_attention_mask', 'nonfinite_score', 'document_id_required',

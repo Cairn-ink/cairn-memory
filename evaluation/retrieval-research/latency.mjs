@@ -2,7 +2,7 @@ import { performance } from 'node:perf_hooks';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseCLI, environment, loadSelection, configurations, defaultEmbedder, configurationName, checkSelectionHashes } from './run.mjs';
+import { parseCLI, environment, loadSelection, configurations, defaultEmbedder, configurationName, checkSelectionHashes, isolationFixture } from './run.mjs';
 import { createArm, includeForArm } from './lib/arms.mjs';
 import { OPENAI_MODELS, publicErrorCode } from './lib/embed-openai.mjs';
 import { createApiLedger } from './lib/api-ledger.mjs';
@@ -39,7 +39,8 @@ export async function measureLatency({ queries, search, passes = 5, seed = 0x485
 export async function runLatency(options, { fixtureAPI, embedderFactory = defaultEmbedder } = {}) {
   const { selection, lexical } = await loadSelection(options), configs = configurations(options, selection);
   const api = fixtureAPI ?? await import('./lib/fixture.mjs');
-  const fixture = await api.loadFixture(options.fixtureDir);
+  const isolationVariant = options.isolationVariant ?? 'with-foreign';
+  const fixture = isolationFixture(await api.loadFixture(options.fixtureDir), isolationVariant);
   checkSelectionHashes(selection, fixture.hashes);
   const queries = api.armQueries(fixture, { split: options.split });
   if (!queries.length) throw new Error('no_projected_queries');
@@ -72,7 +73,7 @@ export async function runLatency(options, { fixtureAPI, embedderFactory = defaul
           const timing = await measureLatency({ queries, search });
           const after = ledger?.summary();
           runs.push({ format: 'hr1-latency-v1', run: { arm: config.arm, config: configurationName(config),
-            model: config.model, scale: options.scale, split: options.split, store: variant.index, lexical,
+            model: config.model, scale: options.scale, split: options.split, store: variant.index, isolationVariant, lexical,
             fixtureHashes: fixture.hashes, env: environment(), startedAt, finishedAt: new Date().toISOString() },
             ...config, store: variant.index, lexical, ...timing, queryCacheEnabled: false, indexBuildMs,
             embedDocs: [...indexes.values()].reduce((n, index) => n + index.costs.embedDocs, 0),
@@ -85,7 +86,7 @@ export async function runLatency(options, { fixtureAPI, embedderFactory = defaul
             gatePassed: timing.failures === 0 && timing.p95 !== null && timing.p95 < (OPENAI_MODELS[config.model] ? 1000 : 200) });
         }
       } catch (error) { runs.push({ format: 'hr1-latency-v1', run: { arm: config.arm, config: configurationName(config),
-        model: config.model, scale: options.scale, split: options.split, store: null, status: 'unavailable',
+        model: config.model, scale: options.scale, split: options.split, store: null, isolationVariant, status: 'unavailable',
         fixtureHashes: fixture.hashes, env: environment(), startedAt, finishedAt: new Date().toISOString() },
         ...config, samples: [], error: publicErrorCode(error), gatePassed: false, costs: ledger?.summary() ?? null }); }
       finally { for (const index of indexes.values()) index.close(); }

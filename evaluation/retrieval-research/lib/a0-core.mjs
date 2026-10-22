@@ -8,6 +8,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { collapseMemories, compareIds, channelPayload } from './bm25.mjs';
 
 export const A0_NAMESPACE = Object.freeze({ ownerId: 'hr1-synthetic', scope: 'personal', projectId: null });
+export const A0_SEEDING = 'hr1-projection-v2';
 const unwrap = result => { if (!result.ok) throw new Error(`a0_core_${result.error.code}`); return result.value; };
 const hash = value => createHash('sha256').update(value).digest('hex');
 
@@ -35,6 +36,8 @@ function open(path) {
  * membership is history minus current. Public supersede links each old body to
  * a distinct current body already present; this reconstructs eligibility, not
  * original lineage. selectEvidence does not score kind, lineage or receipts.
+ * Both sides use stable memory-ID order. Each current body is used at most
+ * once, keeping incoming supersessions below the core relation limit.
  * Receipts use projected spans with synthetic user roles, event IDs and times.
  * Five stores use actual random core UUIDs, frozen to disk, never SQL mutation.
  */
@@ -43,6 +46,14 @@ export function createA0Store({ history, current, spans = [], path = ':memory:' 
   try {
     const mapping = {}, seen = new Set(), currentIds = new Set(current.map(doc => doc.memoryId));
     const bodies = history.filter(doc => doc.kind === 'body').sort((a, b) => compareIds(a.memoryId, b.memoryId));
+    const available = bodies.filter(doc => currentIds.has(doc.memoryId));
+    // Plan before admitting any rows. Only the eligible projections determine
+    // these synthetic links; evaluator lifecycle metadata never enters A0.
+    const supersessions = bodies.filter(doc => !currentIds.has(doc.memoryId)).map(doc => {
+      const index = available.findIndex(row => row.text !== doc.text);
+      if (index === -1) throw new Error('a0_current_replacement_required');
+      return [doc, available.splice(index, 1)[0]];
+    });
     const spanById = new Map();
     for (const doc of spans) { if (!spanById.has(doc.memoryId)) spanById.set(doc.memoryId, []); spanById.get(doc.memoryId).push(doc); }
     const receipts = doc => {
@@ -59,9 +70,7 @@ export function createA0Store({ history, current, spans = [], path = ':memory:' 
       if (seen.has(memory.id)) throw new Error('a0_duplicate_body_projection');
       seen.add(memory.id); mapping[doc.memoryId] = memory.id;
     }
-    for (const doc of bodies.filter(doc => !currentIds.has(doc.memoryId))) {
-      const replacement = current.find(row => row.text !== doc.text);
-      if (!replacement) throw new Error('a0_current_replacement_required');
+    for (const [doc, replacement] of supersessions) {
       const old = unwrap(core.get({ namespace: A0_NAMESPACE, memoryId: mapping[doc.memoryId] })).memory;
       const updated = unwrap(core.supersede({ namespace: A0_NAMESPACE, memoryId: old.id, expectedRevision: old.revision,
         replacement: { content: replacement.text, kind: 'context' }, receipts: receipts(replacement) }));
@@ -100,7 +109,7 @@ function wrap(core, host, mapping, bodies) {
 }
 
 export function frozenA0Stores({ directory, scale, history, current, spans }) {
-  const fingerprint = hash(JSON.stringify({ scale, history, current, spans, seeding: 'hr1-projection-v1' }));
+  const fingerprint = hash(JSON.stringify({ scale, history, current, spans, seeding: A0_SEEDING }));
   const root = join(directory, `${scale}-${fingerprint}`); mkdirSync(root, { recursive: true });
   const stores = [];
   try {
