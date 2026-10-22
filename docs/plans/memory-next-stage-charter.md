@@ -93,9 +93,35 @@
 
 ## 7. 工程軌（草案 M1–M8）
 
-- P0 盤點（reuse／extend／new，以及與另一個 session 的衝突）：待派 Codex 唯讀處理。
-- 方法包、素材等新能力，以及介面版本化，排在 P0 之後；和另一個 session 正在改的
-  檔案與 schema 要先釐清再動。
+P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
+`.research-private/dispatch/p0_inventory/last.md`，因引用私有產品檔案而不進 git）。
+主控抽查了 schema 版本、session context 預算，以及 #469 有沒有改 `core/`，三項都屬實。
+
+- **可直接沿用**：M1 擷取與封存、M2 修正／忘記／取代、M3 Card 與 typed organization。
+  - Raw 本機機制已實作，草案寫「RL-0 尚未實作」已過時。
+- **要擴充**：
+  - M6 檢索：現在只有 Memory／Card 的字面選取，而且是先掃到的前幾筆，不是全庫 top-k。
+  - M7 組裝：只有 `model-packing`、`session-context` 這些零件。session context 預設
+    1,500、上限 2,000 tokens，草案的 4,000 是新契約。
+  - M8 交付：需要 `context-read-v1`、跨 namespace 預算與任務快照。
+- **全新**：M4 方法包、M5 素材與衍生文字。下一個可用的 schema 版本是 **v30**，要由單一
+  owner 統一配發。
+- **與另一個 session 的衝突**：
+  - #469 動到本機 hook、安裝流程和 installed 測試；
+  - E1-C 動到 topic reader 的 Worker 與 journal mode；
+  - E1-M 動到 MOC 成員分頁。
+  - 這三處要等它們定案後再擴充；`database.mjs`、`runtime.mjs`、`contract.mjs` 這類
+    共用檔案只能有一個整合 owner。
+- **現在就能開始**：
+  - 凍結 typed refs、採用語義、fixture 判準與預算；
+  - 設計 M4／M5 的契約；
+  - 做 M7 決定性組裝的實驗（即 HR-2）。
+- **要等 HR-1**：M6 的預設 embedder、權重與資源配置。
+- **要等外部關卡**：hosted（加密、容量、G1／G2／H6）。
+- **待定義才能凍結的契約**：MOC 通路的名次、採用綁定的投影、素材儲存 port、跨 namespace
+  預算、表示降階、關聯的端點型別、持久工作的 lease。
+- 動到 `core/` 的工程實作會碰到另一個 session 的共用檔案，開工前先跟使用者確認
+  owner 與順序。
 
 ## 8. 進度與下一步
 
@@ -109,3 +135,14 @@
   3. 標註稽核後凍結語料，接著執行、驗收、報告。
   4. 平行派工程軌 P0 盤點。
 - **待使用者處理**：把 OpenAI 金鑰放進 `~/.config/cairn-hr1/openai.env`（建議用額度上限很低的專用 project key）。
+
+## 9. 派工紀錄
+
+所有 Codex 都用 `codex exec --ignore-user-config --disable hooks`，指示、事件與結果放在
+`.research-private/dispatch/<名稱>/`。
+
+| 名稱 | 任務 | 要求 → 實際 | 沙箱 | 基準 | 期間（UTC） | 結果 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `isolation_probe` | 隔離驗證 | gpt-6.1-sol/xhigh → 同 | read-only | `d1a64f5` | 2026-10-22T19:20 | exit 0，沒有觸發 hook |
+| `p0_inventory` | 工程軌 P0 盤點 | gpt-6.1-sol/xhigh → 同 | read-only | `645b100`（core 等同 #468） | 19:24–19:29 | exit 0；見 §7 |
+| `hr1_protocol_audit` | HR-1 協議的非作者設計審查 | gpt-6.1-sol/xhigh | read-only | `645b100` | 19:24– | 執行中 |
