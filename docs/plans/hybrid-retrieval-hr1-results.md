@@ -194,3 +194,93 @@ Both nominated systems miss **q-058** (a very indirect C3 description) and
    - HR-3: typed update policies with real-model extraction (paid; needs
      approval);
    - a larger, independently authored suite before freezing defaults.
+
+## 8. Reproduce
+
+Run everything from a checkout of this branch at `51dbdf6` or later. The
+harness behaviour is identical to `4fcec31` apart from the validator preflight.
+Use Node 22.16.0.
+
+### Setup
+
+```sh
+npm ci --prefix evaluation/retrieval-research
+F=evaluation/retrieval-research/fixtures
+SEL=evaluation/retrieval-research/results/selection.json
+L=<ledger path>
+```
+
+Hosted runs also need `HR1_OPENAI_API_KEY` set in the environment.
+
+### 0. Validate the frozen fixture
+
+```sh
+node evaluation/retrieval-research/tools/validate.mjs --fixture $F
+```
+
+### 1. Dev selection
+
+These steps already produced the committed `selection.json`.
+
+```sh
+node evaluation/retrieval-research/run.mjs --fixture-dir $F --split dev --scale S1000 \
+  --arms A1,A1+ --out dev/lexical
+node evaluation/retrieval-research/run.mjs --fixture-dir $F --split dev --scale S1000 \
+  --arms A2,A3,F-RRF60,F-RRF10,F-MM --models e5-small,bge-m3 --lexical A1 --out dev/local
+node evaluation/retrieval-research/run.mjs --fixture-dir $F --split dev --scale S1000 \
+  --arms A2,A3,F-RRF60,F-RRF10,F-MM --models openai-3-small,openai-3-large,openai-3-large@1024 \
+  --lexical A1 --ledger $L --out dev/hosted
+node evaluation/retrieval-research/score.mjs --fixture $F --out dev.scores.json dev/*/*.json
+node evaluation/retrieval-research/report.mjs --scores dev.scores.json --create-selection $SEL
+```
+
+### 2. Test rankings
+
+Repeat for `VAR` in `with-foreign` and `without-foreign`, and for `SC` in
+`S1000` and `S300`. Each run uses
+`--split test --scale $SC --selection $SEL --isolation-variant $VAR`:
+
+```sh
+node evaluation/retrieval-research/run.mjs --fixture-dir $F --split test --scale $SC \
+  --selection $SEL --isolation-variant $VAR \
+  --arms A0-default,A0-paged,A0b,A1,A1+,A1t --out out/$VAR/base-$SC
+node evaluation/retrieval-research/run.mjs --fixture-dir $F --split test --scale $SC \
+  --selection $SEL --isolation-variant $VAR \
+  --arms A2,A3,F-RRF60,F-RRF10,F-MM --models e5-small,bge-m3 --out out/$VAR/local-$SC
+node evaluation/retrieval-research/run.mjs --fixture-dir $F --split test --scale $SC \
+  --selection $SEL --isolation-variant $VAR \
+  --arms A2,A3,F-RRF60,F-RRF10,F-MM --models openai-3-small,openai-3-large,openai-3-large@1024 \
+  --ledger $L --out out/$VAR/hosted-$SC
+node evaluation/retrieval-research/run.mjs --fixture-dir $F --split test --scale $SC \
+  --selection $SEL --isolation-variant $VAR \
+  --arms A5-spans,A5-both --models bge-m3,openai-3-small --ledger $L --out out/$VAR/a5-$SC
+```
+
+### 3. Latency (S1000, test)
+
+```sh
+node evaluation/retrieval-research/latency.mjs --fixture-dir $F --split test --scale S1000 \
+  --selection $SEL --arms A1,A3 --models bge-m3 --out latency/local
+node evaluation/retrieval-research/latency.mjs --fixture-dir $F --split test --scale S1000 \
+  --selection $SEL --arms F-RRF10 --models openai-3-small --ledger $L \
+  --out latency/hosted.json
+```
+
+With a single configuration, `--out` names a file, not a directory.
+
+### 4. Score with isolation pairs, then report
+
+`without-manifest.json` lists the without-foreign files in the same order as the
+with-foreign files.
+
+```sh
+node evaluation/retrieval-research/score.mjs --fixture $F \
+  --without-foreign without-manifest.json --out scores.json <with-foreign files...>
+node evaluation/retrieval-research/report.mjs --scores scores.json --selection $SEL \
+  --out report.json --markdown report.md <latency files...>
+```
+
+Embeddings are cached on disk (local models under `~/.cache/cairn-hr1-models`;
+OpenAI responses keyed by model and text hash), so a rerun costs no API spend
+unless the caches are cleared. Expected outputs are in `results/test-final/`;
+compare against `SHA256SUMS.uncompressed` after decompressing.
