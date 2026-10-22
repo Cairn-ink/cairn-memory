@@ -171,8 +171,9 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `hr1_arms`（修正 2） | 產生「拿掉外部 namespace」的配對排名參數 | gpt-6.1-sol/xhigh | workspace-write | `1a200af` | 21:2x– | 執行中 |
 | 主控（U2a 驗收） | 沙箱外的完整測試矩陣 | — | — | `b9eb2a6` | 21:3x–22:00 | Node 22.16 全部 exit 0（core 1,904／1,904、整體 635／635）；Node 24.15 全部 exit 0，打包測試是第 3 次才 exit 0（前兩次的失敗證實是負載：R29 單獨跑時與 b8fa224 一樣 6.9 秒）→ commit `b9eb2a6` |
 | `u2a_review_spec`／`u2a_review_standards` | U2a 的非作者雙審查 | gpt-6.1-sol/xhigh → 同 | read-only | `b9eb2a6` | 22:0x–22:1x | 兩邊都判 No：淺層 CI 拿不到歷史 commit（P1）；schema 驗證只看觸發器名稱（P2）；缺少真正同時搶寫的程序測試（P2）→ U2a 修正 2 執行中 |
-| `hr1_arms`（修正 2／3） | 隔離參數；A0 建資料的 bug | gpt-6.1-sol/xhigh → 同 | workspace-write | `1a200af` | 21:2x–21:39 | 主控驗收：兩個 Node 版本各 136 項、135 通過、0 失敗、1 略過 → commit `4fcec31`；Spec 判定：隔離參數符合，另提 A0 容量前提應加入預檢（P1）→ W4a 修正 3 |
+| `hr1_arms`（修正 2／3）＋`hr1_tooling`（修正 3） | 隔離參數；A0 建資料的 bug；A0 容量預檢 | gpt-6.1-sol/xhigh → 同 | workspace-write | `1a200af` | 21:2x–21:39 | 主控驗收：兩個 Node 版本各 136 項、135 通過、0 失敗、1 略過 → commit `4fcec31`；Spec 判定：隔離參數符合，另提 A0 容量前提應加入預檢（P1）→ W4a 修正 3 |
 | 主控（HR-1 最終執行） | 從固定在 `4fcec31` 的 worktree 跑測試集兩種版本（有／沒有外部 namespace）、延遲與計分 | — | — | `4fcec31` | 22:0x–22:2x | 16 個批次全部 exit 0；66 個非 A0 排名檔和 `1a200af` 逐筆相同；**兩個情境都判「繼續」**；A5 未達門檻；API 累計 US$0.0050 → commit `34f6ea9` |
+| `hr1_review_spec`（最終） | 確認 `51dbdf6` 與程序揭露 | gpt-6.1-sol/xhigh → 同 | read-only | `51dbdf6` | 22:2x | 框架判 **Yes**；接受證據保留的推理，但不接受「程序完全合規」的說法 → 結果報告已加註爭議與限縮的說法（`9ce7328`） |
 | `hr1_tooling`（W4a） | 語料工具、指標、統計、報告 | gpt-6.1-sol/xhigh → 同 | workspace-write，無網路 | `e1aa7da` | 19:47–20:14 | exit 0；16 個檔案 |
 | `hr1_arms`（W4b） | 各組檢索方法、embedding、融合、計時 | gpt-6.1-sol/xhigh → 同 | workspace-write，只開放安裝套件與下載模型的網路 | `e1aa7da` | 19:47–20:12 | exit 0；21 個檔案；transformers.js 3.7.6；e5-small `761b726`、bge-m3 `4de1325`（fp32） |
 | 主控驗收 | W4a＋W4b 的測試框架 | — | — | `a424c23` | 20:15 | 兩種方式核對檔案清單，都是 37 個；Node 22.16／24.15 各 84 項測試、83 通過、0 失敗、1 項需手動開啟的測試略過，exit 皆 0；真實模型冒煙測試 exit 0 |
