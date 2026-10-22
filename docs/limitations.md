@@ -2412,3 +2412,48 @@ fixes did not relax runtime validation. Logs are retained under
 `/tmp/cairn-raw-p3c-evidence.n7PShP/worker-*.log`. Final frozen-source gates and
 independent reviews are recorded separately in the plan/PR; earlier green runs
 are not final-source evidence or measured semantic quality.
+
+## HR-1 hybrid retrieval harness: offline synthetic research, no result yet
+
+The [HR-1 protocol](plans/hybrid-retrieval-hr1.md) (v2.1) compares current
+`selectEvidence`, CJK-capable BM25, local embeddings, the OpenAI embeddings API
+and several fusions on a frozen bilingual synthetic corpus. The harness lives on
+the unmerged research branch `experiment/hybrid-retrieval-hr1`. It changes no
+core, adapter or default behaviour. **No retrieval-quality, latency or cost
+result has been produced yet**; nothing here supports a product claim.
+
+### Known harness limitations
+
+- **A0 projection substitutions.** A0 seeds the real core through public APIs
+  but substitutes a synthetic `context` kind and `user` receipt role, and
+  rebuilds current/historical eligibility with `supersede` rather than original
+  lineage. This preserves the eligibility split the selector uses; it does not
+  establish lineage fidelity.
+- **Duplicate bodies.** Public admission deduplicates identical bodies, so a
+  corpus with two memories sharing one body cannot be seeded for A0. The fixture
+  validator must refuse such a corpus as an incompatibility rather than let A0
+  silently diverge.
+- **OpenAI inputs.** Inputs above a conservative 8,192-byte bound are refused,
+  not truncated. Spend is capped at US$1 through a separate ledger with
+  pessimistic reservations. Failed configurations produce explicit
+  `unavailable` artifacts and a nonzero exit, never silent omission.
+- **Model evidence.** Local models run on CPU in fp32 on one WSL2 machine.
+  Smoke throughput figures come from three toy documents and are not latency
+  results.
+- **Numerical conventions.** Protocol "about" counts allow ±10%; distribution
+  matching allows ±5 percentage points. Bootstrap CIs use linearly
+  interpolated percentiles and latency uses nearest-rank percentiles.
+
+### Dependency advisories
+
+`npm audit` reports 6 advisories (2 high, 4 moderate) for
+`@huggingface/transformers@3.7.6`:
+- the high ones come from `sharp` image decoding (libvips/libheif CVEs);
+- the moderate ones are denial-of-service issues in proxy helpers
+  (`global-agent`, `roarr`, `sprintf-js`).
+
+The only fix is the semver-major `@huggingface/transformers@4.3.1`. The harness
+keeps 3.7.6 for HR-1 so that results stay comparable. It embeds synthetic text
+only, decodes no images and uses no proxy at query time. Any product use of
+local embeddings must move to a patched major and first verify embedding parity
+with the HR-1 versions.
