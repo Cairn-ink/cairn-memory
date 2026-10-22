@@ -1,0 +1,2326 @@
+{
+  "version": "hr1-fixture-v2",
+  "queries": [
+    {
+      "id": "q-001",
+      "family": "fam-001",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "月報庫每個月的託管預算最多可以花多少？",
+      "requiredFacts": [
+        "F-000004"
+      ],
+      "keyTerm": "月報庫",
+      "note": "The hosting cap alone supplies the requested monthly maximum; database choice and migration ownership do not."
+    },
+    {
+      "id": "q-002",
+      "family": "fam-002",
+      "category": "C1",
+      "secondaryTags": [
+        "C7"
+      ],
+      "lang": "en",
+      "intent": "current",
+      "text": "What TTL are we using for RelayCart responses now?",
+      "requiredFacts": [
+        "F-000010"
+      ],
+      "keyTerm": "RelayCart",
+      "note": "The current response-cache decision gives the TTL; the historical setting and image cache are different scopes."
+    },
+    {
+      "id": "q-003",
+      "family": "fam-003",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "霧港的通知服務一個月最多能付多少錢？",
+      "requiredFacts": [
+        "F-000019"
+      ],
+      "keyTerm": "霧港",
+      "note": "Only the notification spending ceiling answers the monthly budget question."
+    },
+    {
+      "id": "q-004",
+      "family": "fam-004",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What went wrong with INC-0621 that made us change the alert channel?",
+      "requiredFacts": [
+        "F-000026"
+      ],
+      "keyTerm": "INC-0621",
+      "note": "The change reason identifies the delayed reading of this incident email; ownership and the new channel alone cannot explain the trigger."
+    },
+    {
+      "id": "q-005",
+      "family": "fam-005",
+      "category": "C1",
+      "secondaryTags": [
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "PR #128 那次回滾演練要找誰負責？",
+      "requiredFacts": [
+        "F-000035"
+      ],
+      "keyTerm": "PR #128",
+      "note": "The rollback-drill owner for this PR is sufficient; the same person has a different task on PR #182."
+    },
+    {
+      "id": "q-006",
+      "family": "fam-006",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "At what job count should we stop accepting work into Q-240?",
+      "requiredFacts": [
+        "F-000042"
+      ],
+      "keyTerm": "Q-240",
+      "note": "The intake-pause threshold for this queue is the only requested attribute."
+    },
+    {
+      "id": "q-007",
+      "family": "fam-007",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "石澗每跑一次備份驗證，暫存資源的錢最多能用多少？",
+      "requiredFacts": [
+        "F-000049"
+      ],
+      "keyTerm": "石澗",
+      "note": "The per-verification temporary-resource cap answers this; the validation cadence does not."
+    },
+    {
+      "id": "q-008",
+      "family": "fam-008",
+      "category": "C1",
+      "secondaryTags": [
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "PR #206 的相依套件稽核是誰在管？",
+      "requiredFacts": [
+        "F-000058"
+      ],
+      "keyTerm": "PR #206",
+      "note": "The owner of this dependency audit answers the question; PR #260 concerns a different item."
+    },
+    {
+      "id": "q-009",
+      "family": "fam-009",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "竹浪的分支關掉以後，測試資料庫還會留多久？",
+      "requiredFacts": [
+        "F-000064"
+      ],
+      "keyTerm": "竹浪",
+      "note": "The post-closure retention fact supplies the duration, without needing production-database cleanup responsibilities."
+    },
+    {
+      "id": "q-010",
+      "family": "fam-010",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "Why did AUD-031 lead us to stop sharing administrator accounts?",
+      "requiredFacts": [
+        "F-000070"
+      ],
+      "keyTerm": "AUD-031",
+      "note": "The attribution failure linked to this audit explains the account decision; the export-location restriction does not."
+    },
+    {
+      "id": "q-011",
+      "family": "fam-011",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "營運週報改成三行摘要後，還要帶上哪一塊內容？",
+      "requiredFacts": [
+        "F-000077"
+      ],
+      "keyTerm": "三行摘要",
+      "note": "The current format specifies the component alongside the summary; the length limit is not needed."
+    },
+    {
+      "id": "q-012",
+      "family": "fam-014",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "決策便條現在放在 PaperNest 的哪個地方？我想打開正確的 page。",
+      "requiredFacts": [
+        "F-000099"
+      ],
+      "keyTerm": "PaperNest",
+      "note": "The current storage decision identifies the destination within PaperNest; export requirements do not locate it."
+    },
+    {
+      "id": "q-013",
+      "family": "fam-018",
+      "category": "C1",
+      "secondaryTags": [
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "青禾印務的九月單，運送費用最多能報多少？",
+      "requiredFacts": [
+        "F-000130"
+      ],
+      "keyTerm": "九月單",
+      "note": "The September order shipping cap answers the amount; arrival day and sample-book dispatch do not."
+    },
+    {
+      "id": "q-014",
+      "family": "fam-019",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "Who is responsible for the H-084 onboarding checklist?",
+      "requiredFacts": [
+        "F-000139"
+      ],
+      "keyTerm": "H-084",
+      "note": "The checklist owner alone answers this identifier-specific ownership question."
+    },
+    {
+      "id": "q-015",
+      "family": "fam-020",
+      "category": "C1",
+      "secondaryTags": [
+        "C7"
+      ],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "海杏客服的 handoff 表現在由誰維護？",
+      "requiredFacts": [
+        "F-000146"
+      ],
+      "keyTerm": "海杏客服",
+      "note": "The handover-table owner supplies the answer; arranging the new-hire classroom is a separate responsibility."
+    },
+    {
+      "id": "q-016",
+      "family": "fam-025",
+      "category": "C1",
+      "secondaryTags": [
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "財務月報裡，陳會計負責的是哪一項檢查？",
+      "requiredFacts": [
+        "F-000182"
+      ],
+      "keyTerm": "陳會計",
+      "note": "The accountant responsibility fact identifies the tax-category check; report deadlines are unrelated attributes."
+    },
+    {
+      "id": "q-017",
+      "family": "fam-026",
+      "category": "C1",
+      "secondaryTags": [
+        "C7"
+      ],
+      "lang": "en",
+      "intent": "current",
+      "text": "What amount is printed on BlueReed invoice INV-260814?",
+      "requiredFacts": [
+        "F-000189"
+      ],
+      "keyTerm": "INV-260814",
+      "note": "The face amount for this exact invoice is sufficient; INV-260841 is a near-miss with a different amount."
+    },
+    {
+      "id": "q-018",
+      "family": "fam-028",
+      "category": "C1",
+      "secondaryTags": [
+        "C7"
+      ],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "雲鷺帳的費用快碰到界線時，誰負責 budget alert？",
+      "requiredFacts": [
+        "F-000204"
+      ],
+      "keyTerm": "雲鷺帳",
+      "note": "The spending-alert owner answers the role question; the monthly budget and one-off allowance do not identify that person."
+    },
+    {
+      "id": "q-019",
+      "family": "fam-034",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "EX-42 那份匯出驗收清單，窗口是誰？",
+      "requiredFacts": [
+        "F-000249"
+      ],
+      "keyTerm": "EX-42",
+      "note": "The export-checklist ownership fact supplies the person for this identifier."
+    },
+    {
+      "id": "q-020",
+      "family": "fam-037",
+      "category": "C1",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "R-180 的草稿功能一定要先登入帳號才能用嗎？",
+      "requiredFacts": [
+        "F-000269"
+      ],
+      "keyTerm": "R-180",
+      "note": "The release-specific anonymous-draft requirement directly answers the account prerequisite."
+    },
+    {
+      "id": "q-021",
+      "family": "fam-003",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "霧港要加簡訊備援這件事，現在已經定案了嗎？",
+      "requiredFacts": [
+        "F-000022"
+      ],
+      "keyTerm": "霧港",
+      "note": "The proposal-state fact is sufficient to distinguish an idea from an approved backup channel."
+    },
+    {
+      "id": "q-022",
+      "family": "fam-005",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "杉橋改文件時，有什麼條件才能少找一個人審？",
+      "requiredFacts": [
+        "F-000034"
+      ],
+      "keyTerm": "杉橋",
+      "note": "The exception fact includes both the reduced-review permission and its configuration-file exclusion."
+    },
+    {
+      "id": "q-023",
+      "family": "fam-007",
+      "category": "C2",
+      "secondaryTags": [
+        "C1",
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "石澗的附件，阿哲是看容量，還是連保存多久都由他決定？",
+      "requiredFacts": [
+        "F-000051"
+      ],
+      "keyTerm": "阿哲",
+      "note": "The single scoped responsibility fact states both what this person checks and what they do not decide."
+    },
+    {
+      "id": "q-024",
+      "family": "fam-009",
+      "category": "C2",
+      "secondaryTags": [
+        "C1",
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "竹浪正式庫的清理也歸小許管嗎？他在正式庫到底負責哪件事？",
+      "requiredFacts": [
+        "F-000066"
+      ],
+      "keyTerm": "小許",
+      "note": "The production-database role fact resolves the reporting-versus-cleanup distinction without importing the test-database role."
+    },
+    {
+      "id": "q-025",
+      "family": "fam-011",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "營運週報最前面的摘要，中文字數要壓在多少以內？",
+      "requiredFacts": [
+        "F-000079"
+      ],
+      "keyTerm": "營運週報",
+      "note": "The summary length cap alone answers the requested limit."
+    },
+    {
+      "id": "q-026",
+      "family": "fam-013",
+      "category": "C2",
+      "secondaryTags": [
+        "C1",
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "週五那版投資人信，小周特別要檢查的是什麼？",
+      "requiredFacts": [
+        "F-000096"
+      ],
+      "keyTerm": "小周",
+      "note": "The Friday-version link-check responsibility answers the version-specific task; first-round proofreading has a different scope."
+    },
+    {
+      "id": "q-027",
+      "family": "fam-015",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "澄清卡碰到哪種付款資訊還沒確定時，一定要先停下來問我？",
+      "requiredFacts": [
+        "F-000109"
+      ],
+      "keyTerm": "澄清卡",
+      "note": "The unresolved-payment-amount exception is sufficient to identify the mandatory stop condition."
+    },
+    {
+      "id": "q-028",
+      "family": "fam-016",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "錯誤小報提到程式跑完的結果時，一定要附上什麼代碼？",
+      "requiredFacts": [
+        "F-000116"
+      ],
+      "keyTerm": "錯誤小報",
+      "note": "The actual exit-code requirement identifies the execution result that must be included; ordering and impact ownership are not requested."
+    },
+    {
+      "id": "q-029",
+      "family": "fam-017",
+      "category": "C2",
+      "secondaryTags": [
+        "C1",
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "月底提醒的測試帳號出了問題，小葉在這個帳號上只負責哪件事？",
+      "requiredFacts": [
+        "F-000125"
+      ],
+      "keyTerm": "小葉",
+      "note": "The test-account responsibility identifies password resets; sending checks are a separate task."
+    },
+    {
+      "id": "q-030",
+      "family": "fam-018",
+      "category": "C2",
+      "secondaryTags": [
+        "C1",
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "青禾印務的樣本冊現在還是星期幾寄？",
+      "requiredFacts": [
+        "F-000132"
+      ],
+      "keyTerm": "青禾印務",
+      "note": "The sample-book dispatch day answers this, rather than the order arrival day."
+    },
+    {
+      "id": "q-031",
+      "family": "fam-021",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "柏舟招募編號七二那場，場地要付多少錢？",
+      "requiredFacts": [
+        "F-000154"
+      ],
+      "keyTerm": "七二",
+      "note": "The numbered recruiting event venue fee is sufficient; interview duration is not a monetary answer."
+    },
+    {
+      "id": "q-032",
+      "family": "fam-023",
+      "category": "C2",
+      "secondaryTags": [
+        "C1",
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "南隅辦公室的文具盤點是陳經理在負責嗎？",
+      "requiredFacts": [
+        "F-000168"
+      ],
+      "keyTerm": "陳經理",
+      "note": "The stationery inventory ownership fact directly resolves the named responsibility."
+    },
+    {
+      "id": "q-033",
+      "family": "fam-024",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "松汀活動的出席答覆，最晚什麼時候要收到？",
+      "requiredFacts": [
+        "F-000174"
+      ],
+      "keyTerm": "松汀活動",
+      "note": "The RSVP cutoff supplies the timing; the affirmative-response rule does not specify the deadline."
+    },
+    {
+      "id": "q-034",
+      "family": "fam-025",
+      "category": "C2",
+      "secondaryTags": [
+        "C1",
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "九月那份財務月報，交件截止到哪一天幾點？",
+      "requiredFacts": [
+        "F-000181"
+      ],
+      "keyTerm": "九月",
+      "note": "The period-specific report deadline supplies both the date and Taipei-time cutoff."
+    },
+    {
+      "id": "q-035",
+      "family": "fam-027",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "映川帳的退款要跟交易配起來，這件事找誰處理？",
+      "requiredFacts": [
+        "F-000197"
+      ],
+      "keyTerm": "映川帳",
+      "note": "The refund-matching owner answers the role question; the fee-classification schedule does not."
+    },
+    {
+      "id": "q-036",
+      "family": "fam-029",
+      "category": "C2",
+      "secondaryTags": [
+        "C1",
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "拾禾發票的陳會計，是負責核對哪個數字？",
+      "requiredFacts": [
+        "F-000212"
+      ],
+      "keyTerm": "陳會計",
+      "note": "The tax-amount checking responsibility is sufficient and distinguishes it from receipt-batch information."
+    },
+    {
+      "id": "q-037",
+      "family": "fam-031",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "北汀報銷一筆超過多少錢，要再讓我簽一次？",
+      "requiredFacts": [
+        "F-000225"
+      ],
+      "keyTerm": "北汀報銷",
+      "note": "The extra-signature threshold answers both the amount and the escalation condition."
+    },
+    {
+      "id": "q-038",
+      "family": "fam-032",
+      "category": "C2",
+      "secondaryTags": [
+        "C1",
+        "C7"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "芒岸預備金每週那份餘額摘要，是小葉在整理嗎？",
+      "requiredFacts": [
+        "F-000234"
+      ],
+      "keyTerm": "小葉",
+      "note": "The weekly balance-summary owner resolves the question; petty-cash holdings do not identify an owner."
+    },
+    {
+      "id": "q-039",
+      "family": "fam-036",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "葦光的免費體驗快到期時，誰要負責提醒？",
+      "requiredFacts": [
+        "F-000263"
+      ],
+      "keyTerm": "葦光",
+      "note": "The trial-expiry reminder ownership fact supplies the person."
+    },
+    {
+      "id": "q-040",
+      "family": "fam-038",
+      "category": "C2",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "禾點的新方案名字，最後由誰看文字有沒有問題？",
+      "requiredFacts": [
+        "F-000278"
+      ],
+      "keyTerm": "禾點",
+      "note": "The plan-name copy-checking responsibility supplies the owner; the internal color swatch is a different item."
+    },
+    {
+      "id": "q-041",
+      "family": "fam-021",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "那個用短案例聊天來篩人的招募流程，題目後續是誰在更新？",
+      "requiredFacts": [
+        "F-000153"
+      ],
+      "note": "The case-question maintenance owner answers the requested role. The remembered interview style identifies the workflow without using its name."
+    },
+    {
+      "id": "q-042",
+      "family": "fam-022",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "For the supplier catch-up we only hold once a month, how far ahead do we need to send the topics?",
+      "requiredFacts": [
+        "F-000160"
+      ],
+      "note": "The advance-agenda requirement supplies the lead time; the meeting cadence is identifying context, not an additional requested answer."
+    },
+    {
+      "id": "q-043",
+      "family": "fam-023",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "那間因為筆囤太多才改成缺什麼買什麼的辦公室，一次下單最多能花多少？",
+      "requiredFacts": [
+        "F-000167"
+      ],
+      "note": "The single stationery purchase cap answers the amount; the remembered stock problem only identifies which office policy is meant."
+    },
+    {
+      "id": "q-044",
+      "family": "fam-024",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "之前幫沒回音的人留位子、結果現場空了一排的那個活動，現在什麼情況才會替人留位？",
+      "requiredFacts": [
+        "F-000172"
+      ],
+      "note": "The current seat-reservation rule supplies the condition. The remembered empty seats identify the event without naming it."
+    },
+    {
+      "id": "q-045",
+      "family": "fam-025",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "要先讓會計檢查稅別的那份月結報告，憑證資料每個月幾號收齊？",
+      "requiredFacts": [
+        "F-000183"
+      ],
+      "note": "The recurring attachment-collection cutoff answers the day; the report-delivery date is a sibling attribute, not the answer."
+    },
+    {
+      "id": "q-046",
+      "family": "fam-026",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "For the bill that got paid a second time after someone approved it out loud, what was the amount on the bill?",
+      "requiredFacts": [
+        "F-000189"
+      ],
+      "note": "The face amount of the duplicated-payment invoice answers the question. The remembered mishap identifies the bill without its ID or vendor name."
+    },
+    {
+      "id": "q-047",
+      "family": "fam-027",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "退款以前拖到隔月還沒配上的那套帳，差多少錢就要讓我知道？",
+      "requiredFacts": [
+        "F-000196"
+      ],
+      "note": "The unmatched-difference notification threshold supplies the amount; the remembered matching problem identifies the ledger."
+    },
+    {
+      "id": "q-048",
+      "family": "fam-028",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "那筆因為晚上多跑兩輪工作而調高的 service budget，最後一季有哪項一次性支出不算在內？",
+      "requiredFacts": [
+        "F-000203"
+      ],
+      "note": "The final-quarter exclusion identifies the one-off expense outside the budget; no numeric budget amount is requested."
+    },
+    {
+      "id": "q-049",
+      "family": "fam-029",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "那個設備分兩趟送到、不能只交付款畫面的案子，要送給人審時應該備齊哪些資料？",
+      "requiredFacts": [
+        "F-000209"
+      ],
+      "note": "The submission-package fact lists both required documents. The remembered delivery pattern identifies the invoice workflow without its name."
+    },
+    {
+      "id": "q-050",
+      "family": "fam-030",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "When we send the books to the outside accountant who cannot tell who made the personal purchases, what should the handoff package contain?",
+      "requiredFacts": [
+        "F-000216"
+      ],
+      "note": "The current handoff decision specifies both package components; the identifying difficulty is context rather than a requested explanation."
+    },
+    {
+      "id": "q-051",
+      "family": "fam-031",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "之前同一張車票被請了兩次錢的那套流程，現在由誰把關有沒有重複請領？",
+      "requiredFacts": [
+        "F-000226"
+      ],
+      "note": "The duplicate-receipt checking owner supplies the person, rather than the approver or applicant."
+    },
+    {
+      "id": "q-052",
+      "family": "fam-032",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "那筆因為客戶晚匯錢而改看銀行現額的備用錢，剩不到多少就得先停買非必需品？",
+      "requiredFacts": [
+        "F-000233"
+      ],
+      "note": "The available-cash intervention threshold answers the amount; the separate petty-cash holding is not responsive."
+    },
+    {
+      "id": "q-053",
+      "family": "fam-033",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "之前剛開始用的人常在設定做到一半就離開的那個產品，現在要先帶他們做什麼？",
+      "requiredFacts": [
+        "F-000238"
+      ],
+      "note": "The current onboarding sequence supplies the first activity; the abandonment problem identifies the product without its name."
+    },
+    {
+      "id": "q-054",
+      "family": "fam-034",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "For the note-taking tool whose files get pasted into text-only review apps, which time information needs to survive a download?",
+      "requiredFacts": [
+        "F-000248"
+      ],
+      "note": "The timestamp-retention requirement supplies the information that must remain; the output format alone cannot answer this attribute."
+    },
+    {
+      "id": "q-055",
+      "family": "fam-035",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "那個會把建議跟已定案內容搞混的搜尋介面，旁邊的小 label 可以露出哪些資訊、哪些得藏起來？",
+      "requiredFacts": [
+        "F-000255"
+      ],
+      "note": "The disclosure-boundary fact specifies the permitted origin category and excluded conversation content; the display-layout decision alone is insufficient."
+    },
+    {
+      "id": "q-056",
+      "family": "fam-036",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "那個讓客戶試到完成一輪結帳的產品，免費體驗一結束，能直接從卡片收錢嗎？",
+      "requiredFacts": [
+        "F-000262"
+      ],
+      "note": "The no-automatic-charge rule answers the post-trial behavior; the trial duration is not requested."
+    },
+    {
+      "id": "q-057",
+      "family": "fam-037",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "For the form tool built for staff working on their feet at a shop counter, who checks that phone users can send a form successfully?",
+      "requiredFacts": [
+        "F-000270"
+      ],
+      "note": "The mobile-submission acceptance owner supplies the person; the remembered usage setting identifies the tool without its product name."
+    },
+    {
+      "id": "q-058",
+      "family": "fam-038",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "那組改用使用對象來取名的訂閱選項，最後是誰看名字的文字有沒有寫錯？",
+      "requiredFacts": [
+        "F-000278"
+      ],
+      "note": "The plan-name copy-checking owner answers the role; the remembered naming approach identifies the product."
+    },
+    {
+      "id": "q-059",
+      "family": "fam-012",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "For the founder catch-up that had to move out of the customer follow-up slot, how long can we keep everyone in the meeting?",
+      "requiredFacts": [
+        "F-000087"
+      ],
+      "note": "The meeting duration cap supplies the limit; the remembered scheduling conflict identifies the founder meeting rather than office hours."
+    },
+    {
+      "id": "q-060",
+      "family": "fam-040",
+      "category": "C3",
+      "secondaryTags": [],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "那個只在特定通勤狀況才跳出來的帶傘 notification，一天最早幾點能出現？",
+      "requiredFacts": [
+        "F-000291"
+      ],
+      "note": "The earliest permitted reminder time supplies the answer; commute conditions only identify the reminder workflow."
+    },
+    {
+      "id": "q-061",
+      "family": "fam-002",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "RelayCart 現在把回應內容暫存幾秒就要更新？",
+      "requiredFacts": [
+        "F-000010"
+      ],
+      "note": "The current response-cache duration supplies the answer. All supporting memories are en, while the query is zh."
+    },
+    {
+      "id": "q-062",
+      "family": "fam-004",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "TracePond 什麼類型的故障才可以把值班工程師叫醒？",
+      "requiredFacts": [
+        "F-000027"
+      ],
+      "note": "The pager wake-up restriction supplies the permitted trigger. All supporting memories are en."
+    },
+    {
+      "id": "q-063",
+      "family": "fam-006",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "ByteOrchard 現在最多讓幾個工作程序同時跑？",
+      "requiredFacts": [
+        "F-000040"
+      ],
+      "note": "The selected worker concurrency supplies the count. All supporting memories are en."
+    },
+    {
+      "id": "q-064",
+      "family": "fam-008",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "HarborLint 現在隔多久看一次相依套件？",
+      "requiredFacts": [
+        "F-000055"
+      ],
+      "note": "The selected review cadence supplies the interval. All supporting memories are en."
+    },
+    {
+      "id": "q-065",
+      "family": "fam-010",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "CedarGate 的稽核匯出檔，允許放到台灣工作區以外嗎？",
+      "requiredFacts": [
+        "F-000071"
+      ],
+      "note": "The workspace-local export restriction answers the location question. All supporting memories are en."
+    },
+    {
+      "id": "q-066",
+      "family": "fam-012",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "OpsSync 的創辦人會議，整場最多可以開幾分鐘？",
+      "requiredFacts": [
+        "F-000087"
+      ],
+      "note": "The founder-meeting duration cap is sufficient. All supporting memories are en."
+    },
+    {
+      "id": "q-067",
+      "family": "fam-019",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "MapleDesk 每一梯新人說明最多能安排幾個人？",
+      "requiredFacts": [
+        "F-000138"
+      ],
+      "note": "The onboarding group-size ceiling supplies the count. All supporting memories are en."
+    },
+    {
+      "id": "q-068",
+      "family": "fam-022",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "DockPetal 現在把供應商例會排在每個月什麼時候？",
+      "requiredFacts": [
+        "F-000158"
+      ],
+      "note": "The selected monthly check-in schedule gives the requested weekday and occurrence. All supporting memories are en."
+    },
+    {
+      "id": "q-069",
+      "family": "fam-026",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "BlueReed 那張 INV-260814，票面金額是多少？",
+      "requiredFacts": [
+        "F-000189"
+      ],
+      "note": "The exact invoice face amount is sufficient; the similar invoice ID is a different item. All supporting memories are en."
+    },
+    {
+      "id": "q-070",
+      "family": "fam-030",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "AmberBooks 的 OCT-07 交接，台北時間幾月幾日幾點截止？",
+      "requiredFacts": [
+        "F-000218"
+      ],
+      "note": "The named handoff deadline supplies the date, time, and timezone. All supporting memories are en."
+    },
+    {
+      "id": "q-071",
+      "family": "fam-003",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What is the monthly spending ceiling for the 霧港 notification service?",
+      "requiredFacts": [
+        "F-000019"
+      ],
+      "note": "The notification budget cap supplies the amount. All supporting memories are zh, while the question is English with a proper name."
+    },
+    {
+      "id": "q-072",
+      "family": "fam-005",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "When can a 杉橋 documentation change skip a second reviewer, and what kind of file makes it ineligible?",
+      "requiredFacts": [
+        "F-000034"
+      ],
+      "note": "The exception fact includes both permission and exclusion. All supporting memories are zh."
+    },
+    {
+      "id": "q-073",
+      "family": "fam-007",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "For 石澗 attachments, what does 阿哲 check, and does that role include choosing how long files are kept?",
+      "requiredFacts": [
+        "F-000051"
+      ],
+      "note": "The scoped attachment responsibility supplies both the task and its boundary. All supporting memories are zh."
+    },
+    {
+      "id": "q-074",
+      "family": "fam-009",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "After a 竹浪 branch closes, how long do we keep its test database?",
+      "requiredFacts": [
+        "F-000064"
+      ],
+      "note": "The post-closure retention duration answers this. All supporting memories are zh."
+    },
+    {
+      "id": "q-075",
+      "family": "fam-011",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "Does 小林 approve payments for 營運週報, or is the role limited to checking the financial figures?",
+      "requiredFacts": [
+        "F-000081"
+      ],
+      "note": "The limited financial-proofreading role resolves this authority question. All supporting memories are zh."
+    },
+    {
+      "id": "q-076",
+      "family": "fam-013",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What is 小周 supposed to check in the Friday edition of 投資人信?",
+      "requiredFacts": [
+        "F-000096"
+      ],
+      "note": "The Friday link-check responsibility supplies the task for that edition. All supporting memories are zh."
+    },
+    {
+      "id": "q-077",
+      "family": "fam-015",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "Under the 澄清卡 policy, what should the assistant do when an assumption is needed but the next work is reversible?",
+      "requiredFacts": [
+        "F-000107"
+      ],
+      "note": "The selected assumption-first working method supplies the action. All supporting memories are zh."
+    },
+    {
+      "id": "q-078",
+      "family": "fam-017",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What is the latest permitted sending time for 月底提醒 in Taipei?",
+      "requiredFacts": [
+        "F-000123"
+      ],
+      "note": "The evening sending cutoff answers the time boundary. All supporting memories are zh."
+    },
+    {
+      "id": "q-079",
+      "family": "fam-029",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "Which delivery batch does 拾禾發票 八一四 belong to?",
+      "requiredFacts": [
+        "F-000213"
+      ],
+      "note": "The invoice-specific acceptance-batch fact gives the batch. All supporting memories are zh."
+    },
+    {
+      "id": "q-080",
+      "family": "fam-036",
+      "category": "C4",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "How often is the data in a 葦光 demo account reset?",
+      "requiredFacts": [
+        "F-000264"
+      ],
+      "note": "The demo-data reset interval is sufficient; the trial period is a separate attribute. All supporting memories are zh."
+    },
+    {
+      "id": "q-081",
+      "family": "fam-001",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "月報庫現在用哪個 database、每月託管最多花多少，schema 搬移又是誰負責？",
+      "requiredFacts": [
+        "F-000002",
+        "F-000004",
+        "F-000005"
+      ],
+      "note": "The decision identifies the database, the constraint supplies the monthly cap, and the ownership fact identifies the migration lead. Each answers a separate requested component."
+    },
+    {
+      "id": "q-082",
+      "family": "fam-002",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What response-cache TTL is RelayCart using, and what monthly spending ceiling do we have for it?",
+      "requiredFacts": [
+        "F-000010",
+        "F-000012"
+      ],
+      "note": "The selected TTL and the caching budget cap answer different requested attributes; neither supplies both."
+    },
+    {
+      "id": "q-083",
+      "family": "fam-003",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "霧港通知現在交給哪家供應商，續約要找誰處理？",
+      "requiredFacts": [
+        "F-000017",
+        "F-000020"
+      ],
+      "note": "The current supplier decision identifies the vendor, while the renewal ownership fact identifies the person."
+    },
+    {
+      "id": "q-084",
+      "family": "fam-005",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "杉橋一般合併要幾個人核可、純文件修改有哪些例外，PR #128 的回滾演練又由誰負責？",
+      "requiredFacts": [
+        "F-000032",
+        "F-000034",
+        "F-000035"
+      ],
+      "note": "The normal approval rule, the documentation exception including its exclusion, and the specific rollback owner each answer one part."
+    },
+    {
+      "id": "q-085",
+      "family": "fam-006",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What worker limit did ByteOrchard choose, and when does queue Q-240 have to stop taking new jobs?",
+      "requiredFacts": [
+        "F-000040",
+        "F-000042"
+      ],
+      "note": "The concurrency decision supplies the worker count; the intake rule supplies the queue-length threshold."
+    },
+    {
+      "id": "q-086",
+      "family": "fam-007",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "石澗現在怎麼驗證備份真的能用，驗證紀錄由誰負責？",
+      "requiredFacts": [
+        "F-000047",
+        "F-000050"
+      ],
+      "note": "The selected restore-validation method gives the procedure and cadence; the record ownership fact gives the person."
+    },
+    {
+      "id": "q-087",
+      "family": "fam-009",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "竹浪的測試資料庫是怎麼按分支分配的，分支關掉以後還留多久？",
+      "requiredFacts": [
+        "F-000062",
+        "F-000064"
+      ],
+      "note": "The isolation decision gives the per-branch arrangement; the retention constraint supplies the post-closure duration."
+    },
+    {
+      "id": "q-088",
+      "family": "fam-010",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What administrator-account setup did CedarGate choose, and where are its audit exports allowed to stay?",
+      "requiredFacts": [
+        "F-000069",
+        "F-000071"
+      ],
+      "note": "The account-and-review decision supplies the setup; the export-location constraint supplies the permitted boundary."
+    },
+    {
+      "id": "q-089",
+      "family": "fam-011",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "營運週報現在要用什麼格式，裡面的待決事項誰來整理？",
+      "requiredFacts": [
+        "F-000077",
+        "F-000080"
+      ],
+      "note": "The format decision gives the content structure; the ownership fact identifies who prepares the pending decisions."
+    },
+    {
+      "id": "q-090",
+      "family": "fam-014",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "決策便條現在存在哪個 tool、一定要能匯出成什麼，平常每週的連結檢查是誰做？",
+      "requiredFacts": [
+        "F-000099",
+        "F-000101",
+        "F-000102"
+      ],
+      "note": "The destination decision, export-format requirement, and weekly link-check owner each supply a distinct requested component."
+    },
+    {
+      "id": "q-091",
+      "family": "fam-015",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "澄清卡平常有疑問時要怎麼繼續做事，碰到哪種付款狀況又一定得停下來問？",
+      "requiredFacts": [
+        "F-000107",
+        "F-000109"
+      ],
+      "note": "The default working method supplies how to proceed; the payment exception supplies the required stopping condition."
+    },
+    {
+      "id": "q-092",
+      "family": "fam-017",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "月底提醒要透過什麼方式送到哪裡，台北時間最晚幾點就不能再寄？",
+      "requiredFacts": [
+        "F-000121",
+        "F-000123"
+      ],
+      "note": "The delivery decision identifies the medium and inbox; the time restriction supplies the sending cutoff."
+    },
+    {
+      "id": "q-093",
+      "family": "fam-018",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "青禾印務目前星期幾到貨、九月那張單的運費最多多少，收貨點交又是誰負責？",
+      "requiredFacts": [
+        "F-000128",
+        "F-000130",
+        "F-000131"
+      ],
+      "note": "The current arrival decision, September shipping cap, and receiving owner answer three separate operational questions."
+    },
+    {
+      "id": "q-094",
+      "family": "fam-020",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "海杏客服現在幾點換班，handoff 要留下哪些資料，交班表又由誰負責？",
+      "requiredFacts": [
+        "F-000143",
+        "F-000145",
+        "F-000146"
+      ],
+      "note": "The current handover time, required handover contents, and table owner are all needed; each supplies a different part."
+    },
+    {
+      "id": "q-095",
+      "family": "fam-021",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "柏舟招募第一關怎麼進行、要花多久，那份案例題又由誰維護？",
+      "requiredFacts": [
+        "F-000150",
+        "F-000153"
+      ],
+      "note": "The interview-format decision includes the duration; the question-maintenance owner supplies the person."
+    },
+    {
+      "id": "q-096",
+      "family": "fam-023",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "南隅辦公室現在怎麼決定該買哪些文具，一筆最多能花多少？",
+      "requiredFacts": [
+        "F-000165",
+        "F-000167"
+      ],
+      "note": "The stocktake-based purchasing decision explains selection; the single-order cap supplies the amount."
+    },
+    {
+      "id": "q-097",
+      "family": "fam-026",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What form of approval does BlueReed now require, and what was the face amount of invoice INV-260814?",
+      "requiredFacts": [
+        "F-000187",
+        "F-000189"
+      ],
+      "note": "The current approval decision supplies the required form; the invoice-specific fact supplies the amount."
+    },
+    {
+      "id": "q-098",
+      "family": "fam-030",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What should be in the AmberBooks accountant handoff, when does OCT-07 close in Taipei time, and who owns the exceptions sheet?",
+      "requiredFacts": [
+        "F-000216",
+        "F-000218",
+        "F-000219"
+      ],
+      "note": "The handoff decision supplies the package components, the deadline fact supplies the timestamp, and the ownership fact supplies the person."
+    },
+    {
+      "id": "q-099",
+      "family": "fam-034",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What is TideNote defaulting to for exports now, and which timestamp information must the files retain?",
+      "requiredFacts": [
+        "F-000246",
+        "F-000248"
+      ],
+      "note": "The export-format decision and source-timestamp requirement answer distinct parts of the file specification."
+    },
+    {
+      "id": "q-100",
+      "family": "fam-039",
+      "category": "C5",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "星期三的午餐現在要送去哪裡，份數最晚幾點前要確認？",
+      "requiredFacts": [
+        "F-000282",
+        "F-000284"
+      ],
+      "note": "The Wednesday destination decision supplies the place; the quantity-confirmation constraint supplies the cutoff."
+    },
+    {
+      "id": "q-101",
+      "family": "fam-001",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "月報庫現在選哪個 database，當初是哪個問題讓我們改選？",
+      "requiredFacts": [
+        "F-000002",
+        "F-000003"
+      ],
+      "note": "The current database decision supplies the selected option; its linked reason explains why it was chosen. The old option is not requested."
+    },
+    {
+      "id": "q-111",
+      "family": "fam-002",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "en",
+      "intent": "history",
+      "text": "Between March and August, how did RelayCart response caching change, and why?",
+      "requiredFacts": [
+        "F-000009",
+        "F-000010",
+        "F-000011"
+      ],
+      "note": "The historical TTL is the starting point, the superseding current TTL is the endpoint, and its linked reason explains the change."
+    },
+    {
+      "id": "q-112",
+      "family": "fam-003",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "history",
+      "text": "霧港通知從三月到八月，供應商是從哪家換到哪家，為什麼換？",
+      "requiredFacts": [
+        "F-000016",
+        "F-000017",
+        "F-000018"
+      ],
+      "note": "The historical vendor, its superseding vendor, and the linked latency reason are needed to reconstruct both endpoints and the cause."
+    },
+    {
+      "id": "q-113",
+      "family": "fam-004",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "en",
+      "intent": "history",
+      "text": "How did TracePond incident escalation change from March to August, and what prompted the switch?",
+      "requiredFacts": [
+        "F-000024",
+        "F-000025",
+        "F-000026"
+      ],
+      "note": "The historical email channel supplies the origin, the superseding pager decision supplies the destination, and its linked incident reason supplies the trigger."
+    },
+    {
+      "id": "q-114",
+      "family": "fam-011",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "history",
+      "text": "營運週報三月跟八月的寫法差在哪裡，當時為什麼改版？",
+      "requiredFacts": [
+        "F-000076",
+        "F-000077",
+        "F-000078"
+      ],
+      "note": "The historical daily-log format, its superseding summary format, and the linked mobile-reading reason supply before, after, and cause."
+    },
+    {
+      "id": "q-115",
+      "family": "fam-012",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "en",
+      "intent": "history",
+      "text": "What was the OpsSync founder meeting slot in March, what replaced it in August, and why was it moved?",
+      "requiredFacts": [
+        "F-000084",
+        "F-000085",
+        "F-000086"
+      ],
+      "note": "The historical slot and its superseding current slot establish the scheduling change; the linked customer-follow-up reason explains it."
+    },
+    {
+      "id": "q-116",
+      "family": "fam-018",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "history",
+      "text": "青禾印務三月原本哪天到貨、八月改成哪天，為什麼要挪？",
+      "requiredFacts": [
+        "F-000127",
+        "F-000128",
+        "F-000129"
+      ],
+      "note": "The historical arrival day, its superseding current arrival day, and the linked assembly-schedule reason answer all three parts."
+    },
+    {
+      "id": "q-117",
+      "family": "fam-019",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "en",
+      "intent": "history",
+      "text": "How often did MapleDesk run onboarding in March, what cadence replaced it in August, and why?",
+      "requiredFacts": [
+        "F-000135",
+        "F-000136",
+        "F-000137"
+      ],
+      "note": "The historical cadence is the starting point, the superseding cadence is the endpoint, and its linked waiting-time reason explains the change."
+    },
+    {
+      "id": "q-118",
+      "family": "fam-025",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "history",
+      "text": "財務月報三月原本幾號交、八月改成幾號交，為什麼要提早？",
+      "requiredFacts": [
+        "F-000178",
+        "F-000179",
+        "F-000180"
+      ],
+      "note": "The historical and superseding delivery-day decisions establish the change; the linked accountant review-time reason explains it."
+    },
+    {
+      "id": "q-119",
+      "family": "fam-028",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "mixed",
+      "intent": "history",
+      "text": "雲鷺帳的 monthly service budget，三月到八月從多少調成多少，增加的原因是什麼？",
+      "requiredFacts": [
+        "F-000200",
+        "F-000201",
+        "F-000202"
+      ],
+      "note": "The historical and superseding monthly caps supply both amounts; the linked extra-batch reason explains the increase."
+    },
+    {
+      "id": "q-120",
+      "family": "fam-035",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "mixed",
+      "intent": "history",
+      "text": "砂岬三月的搜尋結果原本會顯示什麼，八月改成什麼樣子，為什麼要做這個 UI 調整？",
+      "requiredFacts": [
+        "F-000252",
+        "F-000253",
+        "F-000254"
+      ],
+      "note": "The historical title-only layout, its superseding layout, and the linked confusion reason supply before, after, and rationale."
+    },
+    {
+      "id": "q-121",
+      "family": "fam-001",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "小林在月報庫的備份排程上負責到哪裡，實際執行備份也歸他嗎？",
+      "requiredFacts": [
+        "F-000006"
+      ],
+      "note": "The backup-schedule role fact supplies the task boundary. F-000005 shares the person and project but concerns schema migration."
+    },
+    {
+      "id": "q-122",
+      "family": "fam-002",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "en",
+      "intent": "current",
+      "text": "How long does RelayCart keep objects in its image edge cache?",
+      "requiredFacts": [
+        "F-000014"
+      ],
+      "note": "The image-edge retention fact answers this attribute; F-000010 is the response-cache TTL and must not be substituted."
+    },
+    {
+      "id": "q-123",
+      "family": "fam-004",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "en",
+      "intent": "current",
+      "text": "For TracePond dashboards, does Evan own uptime, or what does he actually review?",
+      "requiredFacts": [
+        "F-000029"
+      ],
+      "note": "The dashboard role fact supplies the palette-review boundary. F-000028 shares Evan and TracePond but assigns incident follow-up."
+    },
+    {
+      "id": "q-124",
+      "family": "fam-005",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "小周在杉橋 PR #182 上只負責哪件事？",
+      "requiredFacts": [
+        "F-000036"
+      ],
+      "note": "The PR #182 copy-proofreading role is sufficient; F-000035 assigns the same person a rollback drill on PR #128."
+    },
+    {
+      "id": "q-125",
+      "family": "fam-006",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "en",
+      "intent": "current",
+      "text": "How many workers run in the ByteOrchard preview queue?",
+      "requiredFacts": [
+        "F-000044"
+      ],
+      "note": "The preview worker count answers the named queue scope; F-000040 gives the main selected concurrency limit."
+    },
+    {
+      "id": "q-126",
+      "family": "fam-008",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "HarborLint 的 PR #260 到底是在改哪一類東西？",
+      "requiredFacts": [
+        "F-000059"
+      ],
+      "note": "The license-header scope fact answers this PR; F-000058 is a dependency audit on PR #206."
+    },
+    {
+      "id": "q-127",
+      "family": "fam-010",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "en",
+      "intent": "current",
+      "text": "What is Iris responsible for on the CedarGate public status page?",
+      "requiredFacts": [
+        "F-000073"
+      ],
+      "note": "The public-page proofreading role is sufficient; F-000072 gives the same person a separate access-reminder responsibility."
+    },
+    {
+      "id": "q-128",
+      "family": "fam-011",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "小林在營運週報裡能核准付款嗎？他對財務數字的權限到哪？",
+      "requiredFacts": [
+        "F-000081"
+      ],
+      "note": "The financial-proofreading boundary resolves payment authority. F-000080 shares the person and report but concerns pending-decision preparation."
+    },
+    {
+      "id": "q-129",
+      "family": "fam-012",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "en",
+      "intent": "current",
+      "text": "When are OpsSync engineering office hours, in Taipei time?",
+      "requiredFacts": [
+        "F-000089"
+      ],
+      "note": "The office-hours schedule supplies the slot; F-000085 is the current founder meeting schedule."
+    },
+    {
+      "id": "q-130",
+      "family": "fam-013",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "只看週五那一版投資人信，小周要檢查哪個部分？",
+      "requiredFacts": [
+        "F-000096"
+      ],
+      "note": "The Friday link-check task answers the period-specific scope; F-000095 describes first-round proofreading more generally."
+    },
+    {
+      "id": "q-131",
+      "family": "fam-018",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "青禾印務樣本冊的寄出日，現在排在星期幾？",
+      "requiredFacts": [
+        "F-000132"
+      ],
+      "note": "The sample-book dispatch fact supplies the day; F-000128 gives order arrival on a different weekday."
+    },
+    {
+      "id": "q-132",
+      "family": "fam-019",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "en",
+      "intent": "current",
+      "text": "How often is MapleDesk equipment inventory done?",
+      "requiredFacts": [
+        "F-000140"
+      ],
+      "note": "The equipment inventory cadence answers the item; F-000136 describes onboarding cadence instead."
+    },
+    {
+      "id": "q-133",
+      "family": "fam-020",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "海杏客服的新人班，小葉負責的是哪件事？我是問 training 那邊。",
+      "requiredFacts": [
+        "F-000147"
+      ],
+      "note": "The classroom-confirmation responsibility answers the new-hire-class scope; F-000146 assigns the same person the handover table."
+    },
+    {
+      "id": "q-134",
+      "family": "fam-023",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "南隅辦公室要下單買文具，一筆的預算上限是多少？",
+      "requiredFacts": [
+        "F-000167"
+      ],
+      "note": "The stationery order cap supplies the limit; F-000169 is an actual water-dispenser maintenance fee, even though the amount matches."
+    },
+    {
+      "id": "q-135",
+      "family": "fam-025",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "財務月報只看九月這一期，最晚哪一天、幾點要交？",
+      "requiredFacts": [
+        "F-000181"
+      ],
+      "note": "The September-specific deadline supplies the date and time; F-000183 is the attachment cutoff and F-000179 only gives the recurring delivery day."
+    },
+    {
+      "id": "q-136",
+      "family": "fam-026",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "BlueReed 的 INV-260841，票面是多少錢？",
+      "requiredFacts": [
+        "F-000191"
+      ],
+      "note": "The face amount for INV-260841 is sufficient; F-000189 concerns the similar but distinct INV-260814."
+    },
+    {
+      "id": "q-137",
+      "family": "fam-028",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "雲鷺帳 Q4 的 service budget，有把一次性的資料搬遷費算進去嗎？",
+      "requiredFacts": [
+        "F-000203"
+      ],
+      "note": "The quarter-specific exclusion answers budget coverage; F-000205 concerns a one-off test allowance and F-000201 gives the monthly cap."
+    },
+    {
+      "id": "q-138",
+      "family": "fam-032",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "芒岸預備金要看哪個金額門檻，才得暫停非必要採購？",
+      "requiredFacts": [
+        "F-000233"
+      ],
+      "note": "The intervention threshold is sufficient; F-000235 is the much smaller petty-cash-box holding and answers a different attribute."
+    },
+    {
+      "id": "q-139",
+      "family": "fam-034",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "TideNote 一般匯出時預設用哪種格式？",
+      "requiredFacts": [
+        "F-000246"
+      ],
+      "note": "The current default-export decision supplies the format; F-000250 describes the public preview, which keeps a different format."
+    },
+    {
+      "id": "q-140",
+      "family": "fam-035",
+      "category": "C7",
+      "secondaryTags": [
+        "C1"
+      ],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "砂岬搜尋結果的 source badge 能直接露出對話內容嗎？它允許顯示到哪一層？",
+      "requiredFacts": [
+        "F-000255"
+      ],
+      "note": "The badge disclosure-boundary fact is sufficient; F-000253 says that a badge is displayed, while F-000257 describes the saved-items layout."
+    },
+    {
+      "id": "q-141",
+      "family": "fam-001",
+      "category": "C8",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "月報庫那次正式切換，實際停機總共幾分鐘？",
+      "requiredFacts": [
+        "F-000008"
+      ],
+      "note": "The absent exact-downtime fact is the requested answer; rendered database, cost, and ownership facts give no downtime duration."
+    },
+    {
+      "id": "q-142",
+      "family": "fam-003",
+      "category": "C8",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "霧港跟青禾的通知合約，如果提早解約要付多少？",
+      "requiredFacts": [
+        "F-000023"
+      ],
+      "note": "The absent early-termination fee is needed; rendered notification monthly costs and renewal ownership do not specify it."
+    },
+    {
+      "id": "q-143",
+      "family": "fam-005",
+      "category": "C8",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "杉橋固定的第二位審查者叫什麼名字？",
+      "requiredFacts": [
+        "F-000038"
+      ],
+      "note": "The absent fixed-reviewer identity would answer this; an approval-count rule and a rollback-drill owner do not identify that reviewer."
+    },
+    {
+      "id": "q-144",
+      "family": "fam-007",
+      "category": "C8",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "石澗如果做跨區備份，目的地城市是選哪裡？",
+      "requiredFacts": [
+        "F-000053"
+      ],
+      "note": "The absent destination-city fact is requested; the rendered proposal status neither selects nor names a city."
+    },
+    {
+      "id": "q-145",
+      "family": "fam-010",
+      "category": "C8",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "Which manufacturer did we choose for the CedarGate hardware-key pilot?",
+      "requiredFacts": [
+        "F-000075"
+      ],
+      "note": "The manufacturer choice is absent; the rendered pilot proposal and account rules do not supply a manufacturer."
+    },
+    {
+      "id": "q-146",
+      "family": "fam-014",
+      "category": "C8",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What fixed label color did we choose for the decision-note pages in PaperNest?",
+      "requiredFacts": [
+        "F-000105"
+      ],
+      "note": "The absent label-color fact supplies the requested attribute; the rendered storage destination and export requirements give no color."
+    },
+    {
+      "id": "q-147",
+      "family": "fam-021",
+      "category": "C8",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "柏舟招募的錄取通知，寄件人的全名是什麼？",
+      "requiredFacts": [
+        "F-000156"
+      ],
+      "note": "The absent offer-sender full name is the requested answer; the case-question maintainer is a different responsibility."
+    },
+    {
+      "id": "q-148",
+      "family": "fam-025",
+      "category": "C8",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "九月版財務月報的加密密碼有記下來嗎？是多少？",
+      "requiredFacts": [
+        "F-000185"
+      ],
+      "note": "The absent September report password is needed; rendered deadlines, attachment collection, and tax-review ownership do not specify one."
+    },
+    {
+      "id": "q-149",
+      "family": "fam-037",
+      "category": "C8",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "Where is the launch event for the first PebbleForm release being held?",
+      "requiredFacts": [
+        "F-000273"
+      ],
+      "note": "The absent launch-venue fact answers the location; rendered device support and acceptance ownership do not identify a venue."
+    },
+    {
+      "id": "q-150",
+      "family": "fam-040",
+      "category": "C8",
+      "secondaryTags": [],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "雨具卡有記下 raincoat 要買什麼尺寸嗎？",
+      "requiredFacts": [
+        "F-000295"
+      ],
+      "note": "The absent purchase-size fact would answer this; rejecting automatic purchases and specifying reminder conditions do not determine a size."
+    },
+    {
+      "id": "q-151",
+      "family": "foreign-001",
+      "category": "FOREIGN",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "曜浦組的展示倉庫，要用哪個取件碼？",
+      "requiredFacts": [
+        "F-000998"
+      ],
+      "note": "The foreign-only warehouse pickup code supplies the answer. This fact has no nearDuplicateOf link and no target-family counterpart."
+    },
+    {
+      "id": "q-152",
+      "family": "foreign-002",
+      "category": "FOREIGN",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What identifier does LanternDesk use for its prototype cabinet?",
+      "requiredFacts": [
+        "F-001008"
+      ],
+      "note": "The foreign-only cabinet label supplies the answer; it is not a near-duplicate target decision."
+    },
+    {
+      "id": "q-153",
+      "family": "foreign-003",
+      "category": "FOREIGN",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "雪庭組裝紙本資料的那個箱子，代碼是什麼？",
+      "requiredFacts": [
+        "F-001018"
+      ],
+      "note": "The foreign-only paper-storage-box code supplies the answer; no target family describes this box."
+    },
+    {
+      "id": "q-154",
+      "family": "foreign-004",
+      "category": "FOREIGN",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What is the room code for the QuartzOffice rehearsal space?",
+      "requiredFacts": [
+        "F-001028"
+      ],
+      "note": "The foreign-only rehearsal-room identifier is sufficient and has no target counterpart."
+    },
+    {
+      "id": "q-155",
+      "family": "foreign-005",
+      "category": "FOREIGN",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "榆燈組的寄物櫃，識別碼有記下來嗎？",
+      "requiredFacts": [
+        "F-001038"
+      ],
+      "note": "The foreign-only locker identifier supplies the answer and is not a namespace-confusable target decision."
+    },
+    {
+      "id": "q-156",
+      "family": "foreign-006",
+      "category": "FOREIGN",
+      "secondaryTags": [],
+      "lang": "en",
+      "intent": "current",
+      "text": "What code is marked on the JuniperCrew practice crate?",
+      "requiredFacts": [
+        "F-001048"
+      ],
+      "note": "The foreign-only practice-crate code answers the question; the fact has no near-duplicate target link."
+    },
+    {
+      "id": "q-157",
+      "family": "foreign-007",
+      "category": "FOREIGN",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "汐舟組那本練習帳冊的封套，代碼是多少？",
+      "requiredFacts": [
+        "F-001058"
+      ],
+      "note": "The foreign-only practice-ledger sleeve code supplies the answer; no target family describes that item."
+    },
+    {
+      "id": "q-158",
+      "family": "foreign-008",
+      "category": "FOREIGN",
+      "secondaryTags": [],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "霧島組那個 sample folder 的識別碼是什麼？",
+      "requiredFacts": [
+        "F-001068"
+      ],
+      "note": "The foreign-only sample-folder code supplies the answer; it has no nearDuplicateOf link or target counterpart."
+    },
+    {
+      "id": "q-159",
+      "family": "foreign-009",
+      "category": "FOREIGN",
+      "secondaryTags": [],
+      "lang": "zh",
+      "intent": "current",
+      "text": "鹿砂組放模型的架子，編了什麼代碼？",
+      "requiredFacts": [
+        "F-001078"
+      ],
+      "note": "The foreign-only model-rack code supplies the answer and is unrelated to the foreign near-duplicate search-layout decision."
+    },
+    {
+      "id": "q-160",
+      "family": "foreign-010",
+      "category": "FOREIGN",
+      "secondaryTags": [],
+      "lang": "mixed",
+      "intent": "current",
+      "text": "星榕組的雨具 display box，標的是哪個代碼？",
+      "requiredFacts": [
+        "F-001088"
+      ],
+      "note": "The foreign-only rainwear-display-box code supplies the answer; target rain-reminder facts do not identify this box."
+    },
+    {
+      "id": "q-161",
+      "family": "fam-005",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "杉橋現在要幾位審查者同意才能合併？當初是哪件事讓我們把門檻提高？",
+      "requiredFacts": [
+        "F-000032",
+        "F-000033"
+      ],
+      "note": "The superseding approval decision supplies the current reviewer count; its linked change reason identifies the rollback-path oversight that prompted the increase. The old count is not requested."
+    },
+    {
+      "id": "q-162",
+      "family": "fam-013",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "投資人信現在要用什麼語氣寫，當時為什麼要改口吻？",
+      "requiredFacts": [
+        "F-000092",
+        "F-000093"
+      ],
+      "note": "The superseding tone decision supplies the current writing style; its linked change reason explains the readers misinterpreting polite wording as commitments. Together they answer current style and cause without requiring the historical style."
+    },
+    {
+      "id": "q-163",
+      "family": "fam-014",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "決策便條現在改放在哪裡，為什麼不再用原來的方式存？",
+      "requiredFacts": [
+        "F-000099",
+        "F-000100"
+      ],
+      "note": "The superseding storage decision supplies the current destination; its linked change reason identifies the missing withdrawal-reason capability. These two facts answer destination and motivation; the old storage decision is not requested."
+    },
+    {
+      "id": "q-164",
+      "family": "fam-020",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "海杏客服現在多久交接一次、在什麼時候交接，為什麼改成這個排法？",
+      "requiredFacts": [
+        "F-000143",
+        "F-000144"
+      ],
+      "note": "The superseding roster decision supplies the current handover frequency and time; its linked change reason explains the accumulation of unresolved cases. No other responsibility or historical decision is needed."
+    },
+    {
+      "id": "q-165",
+      "family": "fam-026",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "en",
+      "intent": "current",
+      "text": "What kind of approval does BlueReed require for invoices now, and what happened that made us change the rule?",
+      "requiredFacts": [
+        "F-000187",
+        "F-000188"
+      ],
+      "note": "The superseding invoice-approval decision supplies the current approval form; its linked change reason supplies the duplicate-payment incident. Both are needed for the rule and its cause; the old approval decision is not requested."
+    },
+    {
+      "id": "q-166",
+      "family": "fam-027",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "映川帳現在把對帳排在什麼時候，為什麼要改掉原本的頻率？",
+      "requiredFacts": [
+        "F-000194",
+        "F-000195"
+      ],
+      "note": "The superseding reconciliation decision supplies the current schedule; its linked change reason supplies the cross-month unmatched-refund problem. The earlier cadence is not requested."
+    },
+    {
+      "id": "q-167",
+      "family": "fam-033",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "潮頁的新手流程現在要先做什麼、再做什麼？當時是碰到哪個問題才改的？",
+      "requiredFacts": [
+        "F-000238",
+        "F-000239"
+      ],
+      "note": "The superseding onboarding decision supplies the current sequence; its linked change reason identifies the setup-stage abandonment problem. These facts answer sequence and trigger without needing the historical sequence."
+    },
+    {
+      "id": "q-168",
+      "family": "fam-034",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "en",
+      "intent": "current",
+      "text": "Which format does TideNote use by default for exports now, and why did we switch to it?",
+      "requiredFacts": [
+        "F-000246",
+        "F-000247"
+      ],
+      "note": "The superseding export decision supplies the current default format; its linked change reason supplies the customers plain-text review workflow. The public-preview format and historical export decision are not needed."
+    },
+    {
+      "id": "q-169",
+      "family": "fam-039",
+      "category": "C6",
+      "secondaryTags": [
+        "C5"
+      ],
+      "lang": "zh",
+      "intent": "current",
+      "text": "星期三的午餐現在要送去哪裡，當初為什麼換收件地點？",
+      "requiredFacts": [
+        "F-000282",
+        "F-000283"
+      ],
+      "note": "The superseding Wednesday delivery decision supplies the current destination; its linked change reason explains the meeting-room reuse. Neither the old destination decision nor the Friday delivery fact is requested."
+    }
+  ]
+}
