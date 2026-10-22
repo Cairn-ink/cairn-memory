@@ -1,0 +1,119 @@
+{
+  "format": "hr1-summary-v1",
+  "protocol": "v2.2",
+  "harnessCommit": "4fcec31",
+  "fixture": "hr1-fixture-v2 (46b9691)",
+  "selectionCommit": "1a200af",
+  "reportOk": true,
+  "contexts": {
+    "local": {
+      "baseline": {
+        "arm": "A1",
+        "config": "BM25-T1",
+        "model": null
+      },
+      "candidate": {
+        "arm": "A3",
+        "config": "A3",
+        "model": "bge-m3"
+      },
+      "deltaMacro": 18.92857142857143,
+      "deltaC3": 26.666666666666668,
+      "categoryDeltas": {
+        "C1": 16.666666666666664,
+        "C2": 0,
+        "C3": 26.666666666666668,
+        "C4": 50,
+        "C5": 18.055555555555557,
+        "C6": 21.111111111111114,
+        "C7": 0
+      },
+      "regressionGuard": {
+        "count": 0,
+        "queryIds": []
+      },
+      "latency": {
+        "p50": 30.969084999998813,
+        "p95": 38.50426400000106,
+        "percentileMethod": "nearest-rank",
+        "requests": 545,
+        "passes": 5,
+        "coldLoad": 1376.156467,
+        "threads": 4,
+        "device": "cpu",
+        "peakRss": 2192850944
+      },
+      "isolationVerified": true,
+      "outcome": "continue",
+      "ci975": [
+        11.580808080808081,
+        26.564972445317853
+      ],
+      "bootstrapFamilies": 29,
+      "mcnemar": {
+        "baselineOnly": 0,
+        "candidateOnly": 4,
+        "discordant": 4,
+        "p": 0.125
+      }
+    },
+    "hosted": {
+      "baseline": {
+        "arm": "A1",
+        "config": "BM25-T1",
+        "model": null
+      },
+      "candidate": {
+        "arm": "F-RRF10",
+        "config": "F-RRF10",
+        "model": "openai-3-small"
+      },
+      "deltaMacro": 16.865079365079367,
+      "deltaC3": 20,
+      "categoryDeltas": {
+        "C1": 16.666666666666664,
+        "C2": 0,
+        "C3": 20,
+        "C4": 41.66666666666667,
+        "C5": 20.833333333333336,
+        "C6": 18.888888888888893,
+        "C7": 0
+      },
+      "regressionGuard": {
+        "count": 0,
+        "queryIds": []
+      },
+      "latency": {
+        "p50": 231.45572099999845,
+        "p95": 261.8541499999992,
+        "percentileMethod": "nearest-rank",
+        "requests": 545,
+        "passes": 5,
+        "coldLoad": 0,
+        "threads": 1,
+        "device": "hosted",
+        "peakRss": 188342272
+      },
+      "isolationVerified": true,
+      "outcome": "continue",
+      "ci975": [
+        10.1942305684082,
+        23.53425675825888
+      ],
+      "bootstrapFamilies": 29,
+      "mcnemar": {
+        "baselineOnly": 0,
+        "candidateOnly": 3,
+        "discordant": 3,
+        "p": 0.25000000000000006
+      }
+    }
+  },
+  "a5": {
+    "outcome": "threshold-not-met",
+    "deltaSpanOnly": -2.0408163265306034,
+    "deltaBodyCovered": 2.3809523809523725,
+    "unit": "percentage-points"
+  },
+  "apiSpendUsdTotal": 0.00500833
+}

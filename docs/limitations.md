@@ -2457,3 +2457,30 @@ keeps 3.7.6 for HR-1 so that results stay comparable. It embeds synthetic text
 only, decodes no images and uses no proxy at query time. Any product use of
 local embeddings must move to a patched major and first verify embedding parity
 with the HR-1 versions.
+
+### HR-1 results (synthetic, direction only)
+
+The [HR-1 results](plans/hybrid-retrieval-hr1-results.md) report the frozen
+comparison on test S1000 against BM25-T1 (A1), using the macro group recall@12
+over C1–C7:
+
+| Context | Nominated pair | Δ | 97.5% CI | Exact/Chinese-term losses | Outcome |
+| --- | --- | ---: | --- | ---: | --- |
+| Local | bge-m3 + RRF | +18.9 | [11.6, 26.6] | 0 | continue |
+| Hosted | OpenAI text-embedding-3-small + RRF(k=10) | +16.9 | [10.2, 23.5] | 0 | continue |
+
+Indexing verbatim spans did not meet its threshold.
+
+These results come from one LLM-authored synthetic world with recall-only
+metrics, on one machine. They establish neither answer quality, update
+correctness, precision, real-user benefit nor a competitor ranking.
+
+- **Current `selectEvidence`.** It reached only 0.03 macro recall@12 at S1000,
+  because its first-matches scan and whole-run tokens are not a corpus-wide
+  ranker. Treat it as navigation, not relevance retrieval.
+- **Local embedding cost.** The local bge-m3 path used about 2.2 GB of RSS.
+- **Dev selections that did not hold on test.** Two dev-stage selections (3-small
+  over 3-large, and A1 over A1+) were not the best on test. They are recorded,
+  not rescued.
+- **First test run.** It exposed a harness A0 seeding bug, which was fixed and
+  re-run. All non-A0 rankings were identical across the two harness commits.
