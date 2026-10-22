@@ -1,9 +1,10 @@
+import { installedImportClosure } from './fixtures/installed-import-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync,mkdirSync,readFileSync,writeFileSync } from 'node:fs';
-import { join,dirname,relative,resolve } from 'node:path';
+import { join,dirname,relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact,command,packageName } from '../build.mjs';
@@ -11,21 +12,11 @@ import { buildArtifact,command,packageName } from '../build.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url)),fixture=fileURLToPath(new URL('./fixtures/local-authority.mjs',import.meta.url));
 const sha=value=>createHash('sha256').update(value).digest('hex');
 function sourceClosure() {
-  const seen=new Set(),queue=['core/index.mjs'];
-  while(queue.length) {
-    const path=queue.pop();if(seen.has(path))continue;seen.add(path);if(!path.endsWith('.mjs'))continue;
-    const text=readFileSync(join(root,path),'utf8');
-    const imports=[...text.matchAll(/\b(?:from\s*|import\s*\(?\s*)['"](\.[^'"]+)['"]/g)].map(row=>row[1]);
-    const assets=[...text.matchAll(/new URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)].map(row=>row[1]);
-    for(const target of [...imports,...assets]) {
-      const next=relative(root,resolve(root,dirname(path),target));assert.equal(next.startsWith('..'),false);queue.push(next);
-    }
-  }
-  return [...seen].sort();
+  return installedImportClosure(root, ["core/index.mjs"]);
 }
 for(const client of ['claude-code','codex'])test('B2b-08/09 installed '+client+' authority grant/capture/revoke/reopen and failure cleanup',{timeout:120000},async t=>{
   const workspace=createTestWorkspace(t,{prefix:'installed-local-authority-'}),home=join(workspace.path,'home');mkdirSync(home,{mode:0o700});
-  const artifact=buildArtifact(),closure=sourceClosure();
+  const artifact=buildArtifact(),{ required:closure, eager:eagerClosure } = sourceClosure();
   writeFileSync(join(workspace.path,'package.json'),JSON.stringify({name:'synthetic-installed-local',version:'0.0.0',private:true}),{flag:'wx',mode:0o600});
   command('npm',['install','--prefix',workspace.path,'--offline','--ignore-scripts','--no-audit','--no-fund',artifact.artifactPath],workspace.path,artifact.userconfig);
   const installed=join(workspace.path,'node_modules',packageName),database=join(workspace.path,'store.sqlite'),state=join(workspace.path,'state.json');
@@ -49,7 +40,7 @@ for(const client of ['claude-code','codex'])test('B2b-08/09 installed '+client+'
       const row=JSON.parse(line);if(row.path.startsWith(installed+'/'))observed.add(relative(installed,row.path));
     }
   }
-  assert.equal(pids.size,4);assert.deepEqual([...observed].sort(),closure);
+  assert.equal(pids.size,4);assert.deepEqual([...observed].sort(), eagerClosure);
   t.diagnostic(JSON.stringify({client,sourceClosureFiles:closure.length,observedInstalledClosureFiles:observed.size,archiveFiles:artifact.files.length,successfulProcesses:pids.size,deliberateFailureExit:1}));
   await workspace.cleanup();assert.equal(existsSync(workspace.path),false);
 });

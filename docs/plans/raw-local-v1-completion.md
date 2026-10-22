@@ -58,11 +58,31 @@ failure; the original red is retained. The bounded GPT-6.1 Sol/high worker's six
 scenarios now pass both runtimes, actual exits0 and cleanup; runtime/dependencies
 are unchanged. All10 primary combined commands and independent installed5
 cases pass both runtimes, actual exits0, frozen hashes and cleanup independently
-verified. Exact-commit acceptance, double review and latest-head CI remain
-pending; full V1 and final delivery are not declared complete by these local gates.
-Separate source/schema compatibility must be resolved or explicitly unavailable;
-retained-receipt excerpts do not substitute for full Raw. Product pins/flags and
-semantic scores are unchanged.
+verified. Exact-commit installed5 acceptance and both nonauthor review axes
+passed at f6acccf; all31 latest-head checks/four workflow runs succeeded and
+the merge-preview tree matched. The five-path packet is ready/unmerged as#467.
+Full V1 is not declared complete by these finite installed scenarios.
+
+The next bounded packet is [schema29 topic-overview compatibility](topic-overview-raw29.md).
+The separately reviewed #457 reader still refuses29 by its explicit old contract.
+Primary reproduced that refusal and the installed eager/lazy import-test mismatch
+on both runtimes before correction, retaining the failed test outcomes and
+verified cleanup. A selective port now preserves Raw content; precise29 support,
+capture-derived visibility/source-deletion checks and full archive-versus-eager
+closure verification are implemented. Author focused source52/installed4 and
+primary independent public13/installed1(inner13)/native-WAL checks pass both
+runtimes; serial1112/3336 scale meets the unchanged bounds. All24 affected matrix
+commands now exit0/null, with5,604 passing tests and2 explicitly native-Windows
+skips across both runtimes. Frozen hashes and owned cleanup were independently
+verified. The interrupted first matrix is retained: its outer core timeout was
+incorrectly shorter than the suite's established duration, not a reader failure.
+Only that outer supervisor window changed; no product deadline was relaxed.
+Exact-commit acceptance, independent dual review and latest-head CI remain
+delivery gates; it is not yet delivered.
+This is Memory-only MOC metadata, not a new Card MOC view or retrieval algorithm.
+Actual automatic client setup/activation, product joint acceptance and G1/G2/H6
+remain separate. Retained-receipt excerpts do not substitute for full Raw;
+product pins/flags and semantic scores are unchanged.
 
 ## What "V1 done" means
 

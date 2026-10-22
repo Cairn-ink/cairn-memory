@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — bounded asynchronous Memory topic metadata
+
+- Add owner-bound `openMemoryReader().readTopicOverview()` over the same local
+  store: exact deduplicated Memory MOC counts, guarded titles, bounded optional
+  member refs and opaque continuation through a fixed read-only Worker.
+- Bound physical work, response bytes and ephemeral state; report incomplete
+  counts explicitly and reject stale snapshots. Existing supported files open
+  without migration or reserving a writer. Model-facing `map` remains unchanged.
+- Expose the unavailable placement-added timestamp explicitly rather than
+  inferring it from edits. Product integration, member-list/location extensions
+  and episode headers remain separate. See the [reader guide](docs/topic-overview.md).
+- Integrate that reader with exact schema 29 compatibility while preserving
+  physical legacy 18/20/21/22/23 support and refusing 24–28. Add synthetic
+  capture/receipt/deletion and installed Worker coverage. Read-only WAL readers
+  may maintain SQLite SHM read marks; this is not an engine data write or a
+  semantic, native-client or product-enablement claim.
+
 ## Unreleased — explicit local authority rearm
 
 - Add trusted rearm status/CAS actions for one established session after controls

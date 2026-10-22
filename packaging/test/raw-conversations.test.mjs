@@ -1,9 +1,10 @@
+import { installedImportClosure } from './fixtures/installed-import-closure.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact, command, packageName } from '../build.mjs';
@@ -12,23 +13,12 @@ const root=fileURLToPath(new URL('../../',import.meta.url));
 const fixture=fileURLToPath(new URL('./fixtures/raw-conversations.mjs',import.meta.url));
 const sha=value=>createHash('sha256').update(value).digest('hex');
 function sourceClosure() {
-  const seen=new Set(),queue=['core/index.mjs'];
-  while(queue.length) {
-    const path=queue.pop(); if(seen.has(path))continue; seen.add(path);
-    if(!path.endsWith('.mjs'))continue;
-    const source=readFileSync(join(root,path),'utf8');
-    const imports=[...source.matchAll(/\b(?:from\s*|import\s*\(?\s*)['"](\.[^'"]+)['"]/g)].map(row=>row[1]);
-    const assets=[...source.matchAll(/new URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)].map(row=>row[1]);
-    for(const target of [...imports,...assets]) {
-      const next=relative(root,resolve(root,dirname(path),target)); assert.equal(next.startsWith('..'),false); queue.push(next);
-    }
-  }
-  return [...seen].sort();
+  return installedImportClosure(root, ["core/index.mjs"]);
 }
 
 for(const client of ['claude-code','codex']) test(`B1-04/05/06 installed ${client}: public Raw/Card/delete lifecycle and independently traced closure`,{ timeout:120000 },async t=>{
   const workspace=createTestWorkspace(t,{ prefix:'installed-raw-public-' }), home=join(workspace.path,'home'); mkdirSync(home,{ mode:0o700 });
-  const artifact=buildArtifact(), closure=sourceClosure();
+  const artifact=buildArtifact(), { required:closure, eager:eagerClosure } = sourceClosure();
   assert.equal(closure.includes('core/raw-capture.mjs'),false); assert.equal(artifact.files.includes('core/raw-capture.mjs'),false);
   writeFileSync(join(workspace.path,'package.json'),JSON.stringify({ name:'synthetic-installed-raw',version:'0.0.0',private:true }),{ flag:'wx',mode:0o600 });
   assert.equal(command('npm',['prefix','--prefix',workspace.path],workspace.path,artifact.userconfig).trim(),workspace.path);
@@ -53,7 +43,7 @@ for(const client of ['claude-code','codex']) test(`B1-04/05/06 installed ${clien
     }
   }
   assert.equal(pids.size,4);
-  assert.deepEqual([...observed].sort(),closure,'actual installed Node resolution/asset reads must match the independently derived source closure');
+  assert.deepEqual([...observed].sort(), eagerClosure,'actual installed Node resolution/asset reads must match the independently derived source closure');
   t.diagnostic(JSON.stringify({ client,sourceClosureFiles:closure.length,actualInstalledClosureFiles:observed.size,archiveFiles:artifact.files.length,stages:pids.size }));
   await workspace.cleanup(); assert.equal(existsSync(workspace.path),false);
 });

@@ -1,9 +1,10 @@
+import { installedImportClosure } from './fixtures/installed-import-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact, command, packageName } from '../build.mjs';
@@ -20,24 +21,14 @@ function walk(path, prefix = '') {
     ? walk(join(path, entry.name), prefix + entry.name + '/') : [prefix + entry.name]).sort();
 }
 function sourceClosure() {
-  const queue = ['adapters/local/cli.mjs', 'integrations/client/raw/local-host-cli.mjs'], seen = new Set();
-  while (queue.length) {
-    const path = queue.pop(); if (seen.has(path)) continue; seen.add(path); if (!path.endsWith('.mjs')) continue;
-    const text = readFileSync(join(root, path), 'utf8');
-    for (const match of [...text.matchAll(/\b(?:from\s*|import\s*\(?\s*)['"](\.[^'"]+)['"]/g),
-      ...text.matchAll(/new URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)]) {
-      const next = relative(root, resolve(root, dirname(path), match[1])); assert.equal(next.startsWith('..'), false);
-      if (!lstatSync(join(root, next)).isDirectory()) queue.push(next);
-    }
-  }
-  return [...seen].sort();
+  return installedImportClosure(root, ["adapters/local/cli.mjs","integrations/client/raw/local-host-cli.mjs"]);
 }
 
 async function fixture(t, client, selected) {
   const workspace = createTestWorkspace(t, { prefix: 'installed-qualified-duplicates-' });
   const home = join(workspace.path, 'home'), usage = join(workspace.path, 'usage');
   mkdirSync(home, { mode: 0o700 }); mkdirSync(usage, { mode: 0o700 });
-  const artifact = buildArtifact(), closure = sourceClosure();
+  const artifact = buildArtifact(), { required:closure, eager:eagerClosure } = sourceClosure();
   writeFileSync(join(workspace.path, 'package.json'), JSON.stringify({ name: 'synthetic-qualified-duplicates', version: '0.0.0', private: true }), { mode: 0o600 });
   command('npm', ['install', '--prefix', workspace.path, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', artifact.artifactPath], workspace.path, artifact.userconfig);
   const installed = join(workspace.path, 'node_modules', packageName), configPath = join(workspace.path, 'config.json'), database = join(workspace.path, 'memory.sqlite');
@@ -117,7 +108,7 @@ console.log(JSON.stringify({pid:process.pid,memories,conversations:conversations
     return [...seen].sort();
   }
   return { workspace, artifact, config, configPath, profile, profilePath, stateRoot, identityKeyPath, invoke, inspect,
-    calls: () => rows(scaffold.SYNTHETIC_TRACE).length, processReceipts, closure, observedClosure,
+    calls: () => rows(scaffold.SYNTHETIC_TRACE).length, processReceipts, closure, eagerClosure, observedClosure,
     inventory: { archive: archived.length, installed: manifest.length } };
 }
 
@@ -134,7 +125,7 @@ for (const client of ['claude-code','codex']) for (const selected of [false,true
     assert.equal(current.conversations.length, 2);
     const calls = f.calls(); f.invoke('run', 0, { key: false }); f.invoke('run', 1, { key: false, expected: selected ? 0 : 2 });
     assert.equal(f.calls(), calls); assert.deepEqual(f.inspect().memories, current.memories);
-    const observed = f.observedClosure(); assert.deepEqual(observed, f.closure);
+    const observed = f.observedClosure(); assert.deepEqual(observed, f.eagerClosure);
     t.diagnostic(JSON.stringify({ client, selected, ...f.inventory, closure: f.closure.length, observed: observed.length,
       sourceSessions: 2, originalQualificationPreserved: true, replayProviderCalls: 0, processes: f.processReceipts }));
     await f.workspace.cleanup(); assert.equal(existsSync(f.workspace.path), false);

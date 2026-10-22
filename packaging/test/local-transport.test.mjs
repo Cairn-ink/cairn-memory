@@ -1,9 +1,10 @@
+import { installedImportClosure } from './fixtures/installed-import-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact, command, packageName } from '../build.mjs';
@@ -12,24 +13,13 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const preload = fileURLToPath(new URL('./fixtures/local-oneshot.mjs', import.meta.url));
 const driver = fileURLToPath(new URL('./fixtures/local-transport.mjs', import.meta.url));
 function sourceClosure() {
-  const queue = ['adapters/local/cli.mjs', 'integrations/client/raw/local-transport.mjs'], seen = new Set();
-  while (queue.length) {
-    const path = queue.pop(); if (seen.has(path)) continue; seen.add(path);
-    if (!path.endsWith('.mjs')) continue;
-    const text = readFileSync(join(root, path), 'utf8');
-    const imports = [...text.matchAll(/\b(?:from\s*|import\s*\(?\s*)['"](\.[^'"]+)['"]/g)];
-    const assets = [...text.matchAll(/new URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)];
-    for (const row of [...imports, ...assets]) {
-      const next = relative(root, resolve(root, dirname(path), row[1])); assert.equal(next.startsWith('..'), false); queue.push(next);
-    }
-  }
-  return [...seen].sort();
+  return installedImportClosure(root, ["adapters/local/cli.mjs","integrations/client/raw/local-transport.mjs"]);
 }
 for (const client of ['claude-code', 'codex']) test(`B4a installed ${client}: transport and fresh one-shot children use only archive runtime`, { timeout: 120000 }, async t => {
   const workspace = createTestWorkspace(t, { prefix: 'installed-local-transport-' });
   const home = join(workspace.path, 'home'), usage = join(workspace.path, 'usage');
   mkdirSync(home, { mode: 0o755 }); mkdirSync(usage, { mode: 0o700 });
-  const artifact = buildArtifact(), closure = sourceClosure();
+  const artifact = buildArtifact(), { required:closure, eager:eagerClosure } = sourceClosure();
   writeFileSync(join(workspace.path, 'package.json'), JSON.stringify({ name: 'synthetic-local-transport', version: '0.0.0', private: true }), { flag: 'wx', mode: 0o600 });
   command('npm', ['install', '--prefix', workspace.path, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', artifact.artifactPath], workspace.path, artifact.userconfig);
   const installed = join(workspace.path, 'node_modules', packageName), configPath = join(workspace.path, 'config.json');
@@ -74,7 +64,7 @@ else {
   for (const name of traces) for (const line of readFileSync(join(workspace.path, name), 'utf8').trim().split('\n').filter(Boolean)) {
     const row = JSON.parse(line); if (row.path.startsWith(installed + '/')) observed.add(relative(installed, row.path));
   }
-  assert.deepEqual([...observed].sort(), closure);
+  assert.deepEqual([...observed].sort(), eagerClosure);
   const db = new DatabaseSync(database, { readOnly: true });
   try {
     const parts = db.prepare('SELECT sealed FROM raw_parts WHERE conversation_id=? AND message_id=? ORDER BY part_index').all(response.conversationId, 'message-first');

@@ -1,8 +1,9 @@
+import { installedImportClosure } from './fixtures/installed-import-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync,lstatSync,mkdirSync,readFileSync,readdirSync,writeFileSync } from 'node:fs';
-import { dirname,join,relative,resolve } from 'node:path';
+import { existsSync,mkdirSync,readFileSync,readdirSync,writeFileSync } from 'node:fs';
+import { dirname,join,relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
@@ -13,25 +14,12 @@ const preload = fileURLToPath(new URL('./fixtures/local-oneshot.mjs',import.meta
 const driver = fileURLToPath(new URL('./fixtures/local-worker.mjs',import.meta.url));
 const runner = join(root,'tools/testing/run.mjs');
 function closure() {
-  const queue = ['adapters/local/cli.mjs','integrations/client/raw/local-worker.mjs'], seen = new Set();
-  while (queue.length) {
-    const path = queue.pop(); if (seen.has(path)) continue; seen.add(path); if (!path.endsWith('.mjs')) continue;
-    const text = readFileSync(join(root,path),'utf8');
-    for (const row of [...text.matchAll(/\b(?:from\s*|import\s*\(?\s*)['"](\.[^'"]+)['"]/g),
-      ...text.matchAll(/new URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)]) {
-      const next = relative(root,resolve(root,dirname(path),row[1])); assert.equal(next.startsWith('..'),false);
-      // A default plugin-root URL is an identity, not an asset read. Only real
-      // regular modules/assets form this independently derived file closure.
-      if (lstatSync(join(root,next)).isDirectory()) continue;
-      queue.push(next);
-    }
-  }
-  return [...seen].sort();
+  return installedImportClosure(root, ["adapters/local/cli.mjs","integrations/client/raw/local-worker.mjs"]);
 }
 for (const client of ['claude-code','codex']) test(`B4b installed ${client}: durable worker restarts recover only the same event from archive modules`,{ timeout:120000 },async t => {
   const workspace = createTestWorkspace(t,{ prefix:'installed-local-worker-' }), home = join(workspace.path,'home'), usage = join(workspace.path,'usage');
   mkdirSync(home,{ mode:0o755 }); mkdirSync(usage,{ mode:0o700 });
-  const artifact = buildArtifact(), expectedClosure = closure();
+  const artifact = buildArtifact(), { required:expectedClosure, eager:eagerClosure } = closure();
   writeFileSync(join(workspace.path,'package.json'),JSON.stringify({ name:'synthetic-local-worker',version:'0.0.0',private:true }),{ mode:0o600 });
   command('npm',['install','--prefix',workspace.path,'--offline','--ignore-scripts','--no-audit','--no-fund',artifact.artifactPath],workspace.path,artifact.userconfig);
   const installed = join(workspace.path,'node_modules',packageName), configPath = join(workspace.path,'config.json'), database = join(workspace.path,'memory.sqlite');
@@ -97,7 +85,7 @@ else {
   for (const name of traces) for (const line of readFileSync(join(workspace.path,name),'utf8').trim().split('\n').filter(Boolean)) {
     const row = JSON.parse(line); if (row.path.startsWith(installed+'/')) observed.add(relative(installed,row.path));
   }
-  assert.deepEqual([...observed].sort(),expectedClosure); assert.equal(traces.filter(name => name.startsWith('child-imports-')).length,partCount+1);
+  assert.deepEqual([...observed].sort(), eagerClosure); assert.equal(traces.filter(name => name.startsWith('child-imports-')).length,partCount+1);
   const ledgers = readdirSync(join(usage,'usage')).filter(name => name.endsWith('.json')); assert.equal(ledgers.length,1);
   const ledger = JSON.parse(readFileSync(join(usage,'usage',ledgers[0]),'utf8')); assert.equal(ledger.used,3); assert.deepEqual(ledger.reservations,[]);
   assert.equal(readFileSync(scaffold.SYNTHETIC_TRACE,'utf8').trim().split('\n').length,6);

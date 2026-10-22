@@ -1,9 +1,10 @@
+import { installedImportClosure } from './fixtures/installed-import-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn,spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync,lstatSync,mkdirSync,readFileSync,readdirSync,writeFileSync } from 'node:fs';
-import { dirname,join,relative,resolve } from 'node:path';
+import { existsSync,mkdirSync,readFileSync,readdirSync,writeFileSync } from 'node:fs';
+import { dirname,join,relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -16,23 +17,15 @@ const root=fileURLToPath(new URL('../../',import.meta.url)),preload=fileURLToPat
 const childPreload=fileURLToPath(new URL('./fixtures/local-host-child.mjs',import.meta.url));
 const driver=fileURLToPath(new URL('./fixtures/local-host.mjs',import.meta.url));
 const sha=value=>createHash('sha256').update(value).digest('hex');
-function sourceClosure(){
-  const queue=['adapters/local/cli.mjs','integrations/client/raw/local-host-cli.mjs'],seen=new Set();
-  while(queue.length){const path=queue.pop();if(seen.has(path))continue;seen.add(path);if(!path.endsWith('.mjs'))continue;
-    const text=readFileSync(join(root,path),'utf8');
-    for(const row of [...text.matchAll(/\b(?:from\s*|import\s*\(?\s*)['"](\.[^'"]+)['"]/g),
-      ...text.matchAll(/new URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)]){
-      const next=relative(root,resolve(root,dirname(path),row[1]));assert.equal(next.startsWith('..'),false);
-      if(lstatSync(join(root,next)).isDirectory())continue;queue.push(next);
-    }
-  }return [...seen].sort();
+function sourceClosure() {
+  return installedImportClosure(root, ["adapters/local/cli.mjs","integrations/client/raw/local-host-cli.mjs"]);
 }
 function rows(path){return existsSync(path)?readFileSync(path,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse):[]}
 
 async function installedFixture(t,client){
   const workspace=createTestWorkspace(t,{prefix:'installed-local-host-'}),home=join(workspace.path,'home'),usage=join(workspace.path,'usage');
   mkdirSync(home,{mode:0o700});mkdirSync(usage,{mode:0o700});
-  const artifact=buildArtifact(),closure=sourceClosure();
+  const artifact=buildArtifact(),{ required:closure, eager:eagerClosure } = sourceClosure();
   writeFileSync(join(workspace.path,'package.json'),JSON.stringify({name:'synthetic-local-host',version:'0.0.0',private:true}),{mode:0o600});
   command('npm',['install','--prefix',workspace.path,'--offline','--ignore-scripts','--no-audit','--no-fund',artifact.artifactPath],workspace.path,artifact.userconfig);
   const installed=join(workspace.path,'node_modules',packageName),configPath=join(workspace.path,'config.json'),database=join(workspace.path,'memory.sqlite');
@@ -85,7 +78,7 @@ async function installedFixture(t,client){
     memories:db.prepare('SELECT count(*) n FROM memories WHERE deleted=0').get().n,events:db.prepare('SELECT count(*) n FROM raw_events').get().n}}finally{db.close()}}
   function observedClosure(){const observed=new Set();for(const name of readdirSync(workspace.path).filter(name=>/^(prepare-imports|host-\d+|child-\d+-\d+)\.jsonl$/.test(name)))
     for(const row of rows(join(workspace.path,name)))if(row.path?.startsWith(installed+'/'))observed.add(relative(installed,row.path));return [...observed].sort()}
-  return {workspace,scaffold,installed,config,sourcePath,source,profilePath,stateRoot,identityKeyPath,invoke,launch,cursor,inspect,closure,observedClosure,traces,artifact};
+  return {workspace,scaffold,installed,config,sourcePath,source,profilePath,stateRoot,identityKeyPath,invoke,launch,cursor,inspect,closure,eagerClosure,observedClosure,traces,artifact};
 }
 
 for(const client of ['claude-code','codex'])test(`B4c installed ${client}: actual CLI/worker/core recover lost ACK keylessly and preserve archive closure`,{timeout:120000},async t=>{
@@ -104,7 +97,7 @@ for(const client of ['claude-code','codex'])test(`B4c installed ${client}: actua
   assert.equal(Buffer.concat(stored.parts.map(part=>Buffer.from(part.sealed))).toString(),redactSecrets(text));assert.equal(stored.parts.every(part=>part.saved===1),true);
   const ledger=JSON.parse(readFileSync(join(f.scaffold.SYNTHETIC_USAGE,'usage',readdirSync(join(f.scaffold.SYNTHETIC_USAGE,'usage')).find(name=>name.endsWith('.json')))));
   assert.equal(ledger.used,3);assert.deepEqual(ledger.reservations,[]);assert.equal(calls,6);
-  assert.deepEqual(f.observedClosure(),f.closure);t.diagnostic(JSON.stringify({client,sourceDerivedClosure:f.closure.length,observedArchiveClosure:f.observedClosure().length,archiveFiles:f.artifact.files.length,
+  assert.deepEqual(f.observedClosure(),f.eagerClosure);t.diagnostic(JSON.stringify({client,sourceDerivedClosure:f.closure.length,observedArchiveClosure:f.observedClosure().length,archiveFiles:f.artifact.files.length,
     parts:stored.parts.length,providerPortUsage:ledger.used,hostAncestry:'synthetic',actualInstalledCore:true}));
   await f.workspace.cleanup();assert.equal(existsSync(f.workspace.path),false);
 });

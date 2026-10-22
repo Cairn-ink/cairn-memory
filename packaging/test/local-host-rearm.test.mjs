@@ -1,9 +1,10 @@
+import { installedImportClosure } from './fixtures/installed-import-closure.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { buildArtifact, command, packageName } from '../build.mjs';
@@ -18,22 +19,12 @@ const rows = path => existsSync(path) ? readFileSync(path,'utf8').trim().split('
 const walk = (path,prefix='') => readdirSync(path,{ withFileTypes:true }).flatMap(entry => entry.isDirectory()
   ? walk(join(path,entry.name),prefix+entry.name+'/'):[prefix+entry.name]).sort();
 function sourceClosure() {
-  const queue = ['adapters/local/cli.mjs','integrations/client/raw/local-host-cli.mjs'], seen = new Set();
-  while (queue.length) {
-    const path = queue.pop(); if (seen.has(path)) continue; seen.add(path); if (!path.endsWith('.mjs')) continue;
-    const text = readFileSync(join(root,path),'utf8');
-    for (const match of [...text.matchAll(/\b(?:from\s*|import\s*\(?\s*)['"](\.[^'"]+)['"]/g),
-      ...text.matchAll(/new URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)]) {
-      const next = relative(root,resolve(root,dirname(path),match[1])); assert.equal(next.startsWith('..'),false);
-      if (!lstatSync(join(root,next)).isDirectory()) queue.push(next);
-    }
-  }
-  return [...seen].sort();
+  return installedImportClosure(root, ["adapters/local/cli.mjs","integrations/client/raw/local-host-cli.mjs"]);
 }
 async function fixture(t,client = 'claude-code') {
   const workspace = createTestWorkspace(t,{ prefix:'installed-local-rearm-' }), home = join(workspace.path,'home'), usage = join(workspace.path,'usage');
   mkdirSync(home,{ mode:0o700 }); mkdirSync(usage,{ mode:0o700 });
-  const artifact = buildArtifact(), closure = sourceClosure();
+  const artifact = buildArtifact(), { required:closure, eager:eagerClosure } = sourceClosure();
   writeFileSync(join(workspace.path,'package.json'),JSON.stringify({ name:'synthetic-local-rearm',version:'0.0.0',private:true }),{ mode:0o600 });
   command('npm',['install','--prefix',workspace.path,'--offline','--ignore-scripts','--no-audit','--no-fund',artifact.artifactPath],workspace.path,artifact.userconfig);
   const installed = join(workspace.path,'node_modules',packageName), configPath = join(workspace.path,'config.json'), database = join(workspace.path,'memory.sqlite');
@@ -116,7 +107,7 @@ ${action==='inspect' ? `const list=ok(core.list({namespace}));console.log(JSON.s
     return [...seen].sort();
   }
   return { workspace,installed,configPath,profilePath,stateRoot,identityKeyPath,sourcePath,sessionId,append,invoke,selected,rearmArgs,
-    operator,inspectRaw,cursorPath,cursor,durable,direct,processReceipts,closure,observedClosure,calls:()=>rows(scaffold.SYNTHETIC_TRACE).length,
+    operator,inspectRaw,cursorPath,cursor,durable,direct,processReceipts,closure,eagerClosure,observedClosure,calls:()=>rows(scaffold.SYNTHETIC_TRACE).length,
     ledger:()=>rows(join(usage,'usage',readdirSync(join(usage,'usage')).find(name=>name.endsWith('.json')))),archiveCount:archived.length };
 }
 
@@ -146,7 +137,7 @@ for (const client of ['claude-code','codex']) test(`RR02/05/10 installed ${clien
   assert.equal(memories[0].receipts.length,2);
   const durable = f.durable(), calls = f.calls(), ledger = f.ledger(); f.append('Synthetic append after completed action');
   assert.equal((await f.invoke(args)).reason,'replayed'); assert.deepEqual(f.durable(),durable); assert.equal(f.calls(),calls); assert.deepEqual(f.ledger(),ledger);
-  assert.equal((await f.invoke(['rearm-status'])).revision,1); assert.deepEqual(f.observedClosure(),f.closure);
+  assert.equal((await f.invoke(['rearm-status'])).revision,1); assert.deepEqual(f.observedClosure(),f.eagerClosure);
   t.diagnostic(JSON.stringify({ client,archiveFiles:f.archiveCount,closure:f.closure.length,actualProcesses:f.processReceipts,
     sameConversation:true,ordinals:[1,2],pausedSourceSaved:false,replayPublished:false }));
 });

@@ -1,5 +1,55 @@
 # Known limitations
 
+## Asynchronous Memory topic metadata
+
+The [asynchronous Memory topic reader](topic-overview.md) supplies bounded
+owner/namespace metadata over the same SQLite engine without model calls. It
+reports unknown counts until aggregation completes and refuses unavailable
+generations. Historical E1 synthetic Node 22 measurements at 1,112 Memories/four
+namespaces/71 MOCs and a larger 3,336-Memory/multifiling case showed responsive
+main-loop behavior; those are not schema 29 measurements. The combined candidate
+requires both supported
+runtimes, installed bytes, concurrency gates, independent review and latest-head
+CI. This is metadata mechanics, not semantic recall accuracy or the product
+team's exact old-map 33-second reproduction. Legacy `map` is unchanged; product
+integration and feature re-enablement remain separate.
+
+The store has no placement-added timestamps: `lastMemberAddedAt` is explicitly
+null with `addedAtCoverage:'not_recorded'`. `latestMemberCreatedAt` describes
+current members' creation times, not filing recency. Opt-in member refs are a
+first-K sample, not a complete member-page/location API; Card MOCs and episode
+headers are outside this port. Continuations are ephemeral, with finite work,
+state, byte and time caps; a changed snapshot requires restarting the read.
+
+Schema 29 compatibility preserves the old exact 18/20/21/22/23 layouts, while
+actual 24–28 layouts remain unsupported. New synthetic fixtures use public Raw
+capture and public placement, not SQL-seeded Memory/receipt relationships.
+Correction, forget, real conversation deletion, surviving independent-source
+support and published/staging generations test metadata mechanics, not source
+truth, semantic relevance, product integration or native-client activation.
+Consumed Memory/index access paths are validated; this is not full Raw-table
+integrity or local-authority attestation. Required archive closure remains
+complete; exact eager import traces are separate from actual installed Worker
+execution, rather than hiding lazy files behind broad exceptions.
+
+The port-only baseline retained expected schema 29 refusal and two installed
+one-shot failures per runtime: exactly three present-but-lazy Worker modules
+were absent from the old eager trace. The first new author source run exposed
+two invalid pagination preconditions and an overbroad all-SHM-byte assertion.
+Its binary failure dump exhausted the output buffer (ENOBUFS, runner exit 143,
+supervisor exit 1); scratch was removed. The cursor fixture now creates a real
+L2/L1 hierarchy. Minimized reader and bare native read-only controls both changed
+only SHM byte 104 after a fresh WAL commit, with DB/WAL hashes unchanged; warmed
+whole-file hashes stayed exact. SQLite documents read marks at offsets 100–119.
+The contract and bounded test now distinguish that coordination from data writes;
+reader runtime, journal mode and time/work bounds were not changed.
+
+The first new installed run passed its physical-layout case but failed both
+client lifecycle cases at an explicit correction missing required `kind`.
+Actual exit was 1 with cleanup verified; adding the required fixture field was
+the only correction. Original red logs and native-control diagnostics remain
+retained, rather than being replaced by subsequent passing runs.
+
 ## Installed Raw / Memory / Card lifecycle evidence
 
 The six installed lifecycle cases select three independent synthetic scenarios

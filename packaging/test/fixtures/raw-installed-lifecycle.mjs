@@ -1,3 +1,4 @@
+import { installedImportClosure } from './installed-import-closure.mjs';
 // Synthetic orchestration only. Application imports/SQLite mutations execute
 // in cold processes inside the inspected installation, never in this module.
 import assert from 'node:assert/strict';
@@ -5,7 +6,7 @@ import cp, { spawnSync, spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
@@ -30,17 +31,10 @@ export async function call(client,name,input = {}) {
   const result = JSON.parse(response.content[0].text); assert.equal(Boolean(response.isError),!result.ok); return result;
 }
 function closure() {
-  const queue = ['adapters/local/cli.mjs','integrations/client/raw/local-host-cli.mjs','adapters/mcp/cli.mjs'],seen = new Set(['bin/cairn-memory.mjs']);
-  while (queue.length) {
-    const path = queue.pop(); if (seen.has(path)) continue; seen.add(path); if (!path.endsWith('.mjs')) continue;
-    const text = readFileSync(join(root,path),'utf8');
-    for (const match of [...text.matchAll(/\b(?:from\s*|import\s*\(?\s*)['"](\.[^'"]+)['"]/g),
-      ...text.matchAll(/new URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)]) {
-      const next = relative(root,resolve(root,dirname(path),match[1])); assert.equal(next.startsWith('..'),false);
-      if (!lstatSync(join(root,next)).isDirectory()) queue.push(next);
-    }
-  }
-  return [...seen].sort();
+  const graph = installedImportClosure(root, ["adapters/local/cli.mjs","integrations/client/raw/local-host-cli.mjs","adapters/mcp/cli.mjs"]);
+  // The generated bin wrapper keeps its independently checked archive mapping.
+  return { ...graph, required: ['bin/cairn-memory.mjs', ...graph.required].sort(),
+    eager: ['bin/cairn-memory.mjs', ...graph.eager].sort() };
 }
 function guard(installed,trace) {
   return 'data:text/javascript,'+encodeURIComponent(`
@@ -57,7 +51,7 @@ export async function lifecycleFixture(t,{ client,matching = false }) {
   const workspace = createTestWorkspace(t,{ prefix:'installed-raw-lifecycle-' });
   const home = join(workspace.path,'home'),usage = join(workspace.path,'usage');
   mkdirSync(home,{ mode:0o700 }); mkdirSync(usage,{ mode:0o700 });
-  const artifact = buildArtifact(),required = closure();
+  const artifact = buildArtifact(),{ required, eager:eagerClosure } = closure();
   writeFileSync(join(workspace.path,'package.json'),JSON.stringify({ name:'synthetic-installed-lifecycle',version:'0.0.0',private:true }),{ mode:0o600 });
   command('npm',['install','--prefix',workspace.path,'--offline','--ignore-scripts','--no-audit','--no-fund',artifact.artifactPath],workspace.path,artifact.userconfig);
   const installed = join(workspace.path,'node_modules',packageName),executable = join(workspace.path,'node_modules/.bin/cairn-memory');
@@ -216,7 +210,7 @@ else throw Error('synthetic probe action invalid');console.log(JSON.stringify(re
     for (const name of readdirSync(workspace.path).filter(name=>/^(direct-|host-|child-|mcp-|pty-).*\.jsonl$/.test(name)))
       for (const row of rows(join(workspace.path,name))) if (row.path?.startsWith(installed+'/')) observed.add(relative(installed,row.path));
     for (const path of observed) assert.ok(required.includes(path),'observed module outside static closure: '+path);
-    assert.deepEqual([...observed].sort(),required);
+    assert.deepEqual([...observed].sort(), eagerClosure);
     for (const path of ['core/index.mjs','core/raw-lineage-storage.mjs','adapters/local/cli.mjs','adapters/mcp/cli.mjs','adapters/mcp/review-card.mjs']) assert.ok(observed.has(path),path);
     t.diagnostic(JSON.stringify({ client,matching,archiveFiles:archived.length,staticClosure:required.length,observedClosure:observed.size,
       importsInstalledOnly:true,captures,scriptedHttpCalls:calls(),ledgerUsed:ledger()?.used ?? 0,processes }));
