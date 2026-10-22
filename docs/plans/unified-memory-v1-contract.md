@@ -1,283 +1,354 @@
 # Unified memory integration V1: P0 contract and first packet (method packages)
 
-Status: **DRAFT for non-author design audit; nothing here is implemented.**
+Status: **v0.2 DRAFT, revised after a non-author design audit. Nothing is
+implemented.**
+- v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
+  read-only), which found seven P0, four P1 and one P2 issue.
+- v0.2 adopts them. Implementation starts only after the auditor confirms v0.2.
+
 Branch `integration/unified-memory-v1`, based on PR #469 head
 `b8fa224d5ba6fe8007e6d80fe64fae74d89aa78b` (the tip of the unmerged Raw/local
-stack). The research charter and its decisions live on branch
+stack). The research charter and decisions live on branch
 `experiment/hybrid-retrieval-hr1` (`docs/plans/memory-next-stage-charter.md`).
-This contract is the public-engine part of a private integration draft (v0.2).
-It covers only what the engine must own.
+This is the public-engine part of a private integration draft (v0.2).
 
 ## 1. Scope and sequencing
 
-The integration adds four engine capabilities around the existing Raw / Memory /
-private Card engine. Each ships as its own packet:
-
 | Packet | Content | Waits for |
 | --- | --- | --- |
-| **U2 (this contract, §§3–9)** | M4 method packages in core: immutable versions, adoption bindings, change records, history, deletion fences | Nothing |
-| U3 | M4 host side: safe local directory importer, explicit-user approval through the existing local authority path, read-only MCP tools | U2 accepted |
-| U4 | M5 assets and derivatives: binary storage port, immutable asset versions, derivative provenance | U2's typed-ref and schema rules |
-| U5 | M6/M7/M8: `context-read-v1` common read over Memory, Card, method and derivative refs, plus candidate channels and budgeted assembly | HR-1 (embedding default) and HR-2 (assembly) evidence; interfaces and degraded modes may be specified earlier |
+| **U2 (§§2–9)** | M4 method packages in core, **text-only subset**: immutable versions, adoption bindings, change records, history, pins and deletion fences. Includes the schema-only prerequisite migrator and opener updates for v30 | Auditor confirmation of this v0.2 |
+| U3 | M4 host side: safe local directory importer (real symlink/path-swap confinement, strict UTF-8), explicit-user approval through the existing local authority path, read-only MCP tools, installed tests | U2 accepted |
+| U4 | M5 assets and derivatives: binary storage port, immutable asset versions, derivative provenance, binary method attachments | U2's typed-ref/schema rules |
+| U5 | M6/M7/M8: `context-read-v1` common read; candidate channels; budgeted assembly; role profiles; current-dependent Card/cache/MOC invalidation driven by U2 binding generations | HR-1/HR-2 evidence for defaults; interfaces and degraded modes may be specified earlier |
 
-Engine boundaries carry over unchanged from the
-[three-layer contract](three-layer-engine-contract.md):
-- one SQLite engine, no parallel store;
-- strict envelopes and the authority taken from the host;
-- no model calls inside write locks;
+U2 and U3 certify only the **text-only M4 subset**. Completing the draft's A10,
+A17, A18 and A19 additionally requires installed cross-agent workflows and U5's
+dependency validation.
+
+The [three-layer contract](three-layer-engine-contract.md) boundaries carry over:
+- one SQLite engine;
+- strict envelopes and authority from the host;
+- no model calls in write locks;
 - old DTOs and tools unchanged;
-- new capabilities are explicit opt-in.
+- explicit opt-in.
 
 ## 2. Cross-cutting decisions (P0)
 
-### 2.1 Schema allocation
+### 2.1 Schema allocation and migration
 
 - The current maximum is v29 (`LOCAL_AUTHORITY_SCHEMA_VERSION`). U2 takes
-  **v30**. U4 reserves **v31**. U5 indexes are rebuildable sidecars with their
-  own format version and no canonical schema bump, unless a later contract says
-  otherwise.
-- One integration owner allocates versions; numbers are never reused.
-- v30 assumes the v29 baseline. Opting into method packages on an older store
-  applies the existing additive migrations with their own features **off** (empty
-  tables, no backfill), then v30, in one transaction. Old binaries reject v30.
-  Writers on mixed versions must stop before upgrading, as in existing practice.
+  **v30**; U4 reserves **v31**. U5 indexes are rebuildable sidecars with their own
+  format version. One integration owner allocates versions; numbers are never
+  reused.
+- **Prerequisite migrator.** U2 adds a schema-only prerequisite migrator for
+  fresh stores and supported v18 and v20–v29 layouts. v19 is unsupported.
+  - It installs missing schemas exactly once inside `BEGIN IMMEDIATE`,
+    preserving existing rows, with no capture, grants or backfill.
+  - It validates prerequisites before committing v30.
+  - Method packages remain opt-in: unselected stores never upgrade.
+  - On failure, schema, data and `user_version` roll back.
+  - Today, feature-off flags skip installers (`core/database.mjs:33`). The
+    migrator must call the schema installers deliberately, without enabling
+    their features.
+- **Openers.** Update the ordinary, read-only and managed openers, plus local
+  setup and preflight, so that v30 is recognized:
+  - `core/database.mjs:361`
+  - `core/existing-store.mjs:83`
+  - `adapters/local/configuration.mjs:80`
+
+  Old binaries reject v30. Writers on mixed versions must stop before an upgrade.
 
 ### 2.2 Typed references
 
-New refs follow the existing `MemoryRef` / `CardRef` / source-ref style. They
-use an exact `namespace` and positive revisions. Opaque identities are
-core-keyed HMACs bound to store, scope and purpose; no public content digests.
+Refs follow the existing `MemoryRef` / `CardRef` style: exact namespace, positive
+revisions, and core-keyed HMAC identities bound to store, scope and purpose. There
+are no public content digests.
 
 | Ref | Shape |
 | --- | --- |
-| `MethodPackageRef` | `{type:'method-package', namespace, packageId}` |
-| `MethodVersionRef` | `{type:'method-version', namespace, packageId, versionId, manifestIdentity}`. Versions are immutable: the ref pins content forever, and deletion makes it unavailable, never different |
-| `MethodBindingRef` | `{type:'method-binding', namespace, packageId, roleId, revision}` |
+| `MethodPackageRef` | `{type:'method-package', namespace, packageId}`. This is the **canonical, cross-scope identity** of a method; it is never null in resolution. |
+| `MethodVersionRef` | `{type:'method-version', namespace, packageId, versionId, manifestIdentity}`. Immutable; deletion makes it unavailable, never different. |
+| `MethodBindingRef` | `{type:'method-binding', bindingNamespace, package: MethodPackageRef, roleKey, revision}` |
 
-`roleId` is a host-supplied stable identifier (1–200 units, `[A-Za-z0-9._-]`) or
-`null`, meaning "any role in this scope". Role names grant no access or execution
-authority.
+- `roleKey` is the host-supplied stable role identifier (1–200 units,
+  `[A-Za-z0-9._-]`), or the reserved key `*` meaning any role. Callers pass
+  `roleId: null` for `*`.
+- Role identifiers grant no access and no execution authority. Role profiles are
+  later U5 work, as versioned Memory/Card references.
 
 ### 2.3 Capability and authority
 
-- Opt-in uses
+- **Opt-in**:
   `openMemoryCore({ path, methodPackages: { version: 'method-packages-local-v1', storage: 'local-plain-v1', authority } })`.
-  `authority` has the same `{authorize, isCurrent}` port and semantics as
-  `private-cards-local-v1`, so a host may pass the same object.
-- Default construction exposes none of the new methods. A capability descriptor
-  `getMethodPackageCapabilities()` lists them; it holds no private data and needs
-  no authority.
-- Action classes:
-  - every import, adoption, disable and delete is `explicit-user`, because each
-    retains content or changes what agents treat as current;
-  - reads need exact-scope read authority;
-  - a model, tool argument or file text can never mint authority. A method file
-    saying "adopt this version" is data.
+  Default construction exposes nothing new. `getMethodPackageCapabilities()`
+  lists the methods; it holds no private data and needs no authority.
+- **Authority port.** It reuses the synchronous `{authorize, isCurrent}`
+  semantics of `private-cards-local-v1`, but with **method-specific allowlists**:
+  - existing host authority objects whitelist Card methods
+    (`adapters/mcp/private-card-access.mjs:19`), and they must add method names
+    explicitly;
+  - capture consent never authorizes method operations.
+- **Action classes**:
+  - import, adoption, disable and delete are `explicit-user`;
+  - reads need read authority for **every namespace consulted**;
+  - a cross-scope binding needs read authority on the package's namespace and
+    mutation authority on the binding namespace, with the authorized read set
+    carried in the adoption action;
+  - a model, tool argument or file text never mints authority. A method file
+    saying "adopt this" is data.
+- **Reuse is architectural, not drop-in.**
+  - Extract parameterized ledger, effect and cursor helpers from the private-Card
+    closures, keeping Card behaviour byte-for-byte.
+  - Supply separate import validation, because the Card input limits would
+    reject legal method imports.
+  - The ledger HMAC binds the complete **pre-redaction** input. Content
+    identities and byte counts bind the persisted **post-redaction** bytes.
 
 ## 3. Method package model (U2)
 
-- **Package**: a stable identity created by the first import in a namespace.
-  - `packageId` is core-issued.
-  - Display title, file names and paths are not identity.
-  - The same title in another namespace or owner never merges.
-- **Version**: an immutable snapshot, with:
-  - `versionId` (core-issued) and `ordinal` (1, 2, … per package; only a display
-    label);
-  - `basedOn` (null for the first version, otherwise one earlier available
-    version of the same package);
-  - the manifest, `manifestIdentity`, `title` and `submittedBy` (an untrusted
-    attribution label, ≤200 units);
-  - `importedAt`, plus a lifecycle `state` (`available` | `deleted`) with its own
-    revision.
-  - Content never changes after commit.
+- **Package**:
+  - created by the first import in its namespace, with a core-issued
+    `packageId`, a lifecycle `state` (`available` | `deleted`) and a `revision`;
+  - version imports and deletions increment the package revision;
+  - package deletion is terminal;
+  - titles, file names and paths never identify or join packages.
+- **Version**: immutable content, with:
+  - `versionId` and `ordinal` (a display label 1, 2, …, allocated atomically);
+  - `basedOn`: null for the first version, otherwise one available earlier
+    version of the same package;
+  - the manifest, `manifestIdentity`, `title` (≤200 units) and `submittedBy` (an
+    untrusted label, ≤200 units);
+  - `importedAt`, plus lifecycle `state` and `revision` (1, then 2 on deletion).
+- **Import into an existing package** requires `expectedPackageRevision` (CAS),
+  and cannot commit against a deleted package or a deleted `basedOn`.
 - **Manifest**: 1–64 files `{path, byteCount, contentIdentity, mediaType}`.
-  - `path` is a normalized relative POSIX path: no leading `/`, no `.` or `..`
-    segments, no empty segments, no backslash or NUL, ≤512 units, unique, and
-    unique ignoring case.
-  - `mediaType` is a text type only (`text/markdown`, `text/plain`,
-    `application/json`, `application/yaml`, `text/csv`). Binary attachments are
-    refused with `unsupported_media` until U4's asset port exists.
-  - Each file ≤100,000 UTF-16 units; ≤1,000,000 units per version.
-  - Text is valid Unicode without NUL, redacted with the existing best-effort
-    redactor before persistence, and formatting is preserved.
+  - **Paths** are mechanical relative POSIX paths:
+    - no leading `/`, drive letter or URI scheme prefix;
+    - no empty, `.` or `..` segments;
+    - no backslash or NUL, and never percent-decoded;
+    - ≤512 units;
+    - unique, including under locale-independent Unicode lowercase.
+  - Filesystem confinement and strict UTF-8 decoding are U3's job. Core
+    revalidates Unicode, paths and media.
+  - `mediaType` allowlist: `text/markdown`, `text/plain`, `application/json`,
+    `application/yaml`, `text/csv`. Anything else fails `unsupported_media`
+    until U4.
+  - Files are ≤100,000 UTF-16 units each and ≤1,000,000 per version: valid
+    Unicode, no NUL, redacted with the existing best-effort redactor before
+    persistence, formatting preserved.
   - `manifestIdentity` is an HMAC over the ordered `(path, contentIdentity,
     mediaType)` list.
-- **Core never reads the filesystem.** The host's importer (U3) walks a
-  directory, rejects symlinks and escapes, and passes `{path, text, mediaType}`.
-  Core validates everything again. Nothing in a package is executed.
-- **Owner usage**: method text counts toward a separate `method-package-usage-v1`
-  projection, capped at 50,000,000 UTF-8 bytes per owner across namespaces.
-  Limits are proposed engineering defaults, not measured results.
+- **Core never reads the filesystem or executes package content.**
+- **Published limits** (proposed defaults to measure in U3):
 
-## 4. Adoption bindings (U2)
+  | Limit | Value |
+  | --- | --- |
+  | Packages per namespace | 256 |
+  | Versions per package | 128 |
+  | Bindings per namespace | 1,024 |
+  | `reasonRefs` per action | 16 |
+  | Change items per version | 32, each ≤500 units |
 
-- **Key**: `(namespace, packageId, roleId)`, with at most one binding per key.
-  - States: `active` (with `versionId`) or `disabled`. Absent means unbound.
-  - Every transition increments the binding revision under CAS on
-    `expectedRevision` (null when creating).
+  These are text-only defaults and depart from the draft's 256-file / 64 MiB
+  expectation, which belongs to U4 binary assets.
+- **Usage** (`method-package-usage-v1`):
+  - counts retained redacted UTF-8 bytes of method file text, per version,
+    across all namespaces of an owner, with a 50,000,000-byte cap;
+  - reserves atomically at import and decrements when deletion purges;
+  - excludes metadata, ledger, effects, SQLite overhead, WAL and backups.
+
+## 4. Adoption bindings and resolution (U2)
+
+- **Key**: `(bindingNamespace, packageRef, roleKey)`, with at most one binding per
+  key.
+  - States: `active` (with a full `MethodVersionRef` of that package) or
+    `disabled`.
+  - Every transition increments the binding revision under CAS. `expectedRevision`
+    is null only when creating; `disable` may create a disabled barrier.
+  - A same-owner project binding may target a personal package.
 - **Transitions**:
-  - `adopt(versionId)` requires an available version of that package;
-  - `disable()` is an explicit stop;
-  - re-adopting after `disable` is allowed;
-  - importing a version **never** changes a binding, even when the same action
-    imports.
-- **Adoption events**: each transition appends a content-free event with the
-  binding key, new revision, action ID, transition, version and time, plus
-  optional `reasonRefs`.
-- **Resolution** (`resolveMethod`) takes a trusted read set (one exact namespace,
-  or personal plus one project of the same owner, as today), a `packageId` or
-  `null`, and a `roleId`. It checks bindings in this order:
-  1. project + roleId;
-  2. project + null;
-  3. personal + roleId;
-  4. personal + null.
+  - `adopt(version)` requires an available version and an available package;
+  - `disable()`;
+  - re-adopt after disable;
+  - importing a version **never** changes a binding.
+- **Effects**: every transition and every package or version deletion atomically
+  advances a canonical **binding generation** for the affected
+  (namespace, package) and emits durable, content-free effects. U2 supplies
+  bounded binding-event reads (`listMethodBindingEvents`) and snapshot
+  revalidation. U5 consumes the generations to invalidate current-dependent
+  Cards, caches and MOC representations.
+- **Resolution**: `resolveMethod({readSet, package: MethodPackageRef, roleId})`
+  uses four-level precedence over the authorized read set:
+  1. project + role;
+  2. project + `*`;
+  3. personal + role;
+  4. personal + `*`.
 
-  The first existing binding decides:
-  - `active` with an available version → that version;
-  - `active` with a deleted version → `unavailable`, never a silent fallback;
-  - `disabled` → `disabled`; it **blocks** lower levels, so a default cannot
-    reappear.
+  The **first existing binding decides**, and disabled or unavailable bindings
+  are barriers:
+  - `active` with an available target → `current`;
+  - `active` whose target version or package is deleted, or whose target scope is
+    no longer readable → `unavailable`;
+  - `disabled` → `disabled`.
 
   No binding at any level gives `no-active-version`. Upload time, ordinal,
-  similarity and file text never choose a version.
-- `resolveMethodsForRole({readSet, roleId})` lists every package resolved for a
-  role with the same rules. It is paged (default 20, max 50) and gives each
-  package's status.
-- **Snapshots**: every resolution returns an opaque snapshot binding the binding
-  revisions, version refs and access generation. Hosts keep task pins as version
-  refs plus that snapshot.
-  - Reading a pinned version later returns its content with
-    `adoptionStatus ∈ {current, newer-version-available, withdrawn, never-adopted}`
-    relative to the given role context.
-  - `withdrawn` means the binding is now `disabled`. Such a pin must not be
-    presented as applicable guidance, but it stays readable as qualified history.
-  - Deleted versions and revoked scope read as `unavailable` for pins and for
-    history.
+  similarity and text never choose a version.
+- **Listing**: `resolveMethodsForRole({readSet, roleId, limit, cursor})` applies
+  the same rules to every package with a binding in the read set. Default and
+  maximum page size is 20.
+- **Snapshots** are opaque. They bind the role, the read set, the consulted
+  binding revisions and the **absence** of higher-level bindings, the version
+  refs and access generations. Any binding change stales current snapshots;
+  historical pins are never retargeted.
 
-## 5. Change records and history (U2)
+## 5. Reads, pins, change records and history (U2)
 
-- **At import** a version may carry
-  `change: {items:[{summary, paths:[...]}], reasonRefs:[...]}`.
-  - Items are untrusted text: ≤32 items, each summary ≤500 units, and paths must
-    exist in either version.
-  - `reasonRefs` are 0–16 existing core refs: MemoryRef, CardRef, NoteSourceRef,
-    RawSourceRef or ReceiptSourceRef. They are validated at import, and core
-    stores refs only, no copied text. Reason prose a person writes at import time
-    is first submitted with the existing `submitSourceNote`, then referenced.
-- **`compareMethodVersions(from, to)`** (same package) returns:
-  - a mechanical path-level diff (`added`, `removed`, `changed`, `unchanged`, by
-    content identity);
-  - `to`'s change record;
-  - each reason ref with its **current** availability (`available` /
-    `unavailable` / `forgotten`, through canonical rereads);
-  - `reason: 'not-recorded'` when there is no change record or no reason ref.
+- **Version and file reads**:
+  - `getMethodVersion` and `readMethodFile` both accept `intent`
+    (`current`|`history`), a role/read-set `context`, and an optional
+    authenticated pin `snapshot`.
+  - A **current** read revalidates the binding before delivery.
+  - A **history** read preserves the exact pinned version.
+  - A read without context returns `adoptionStatus: 'unassessed'` (history
+    semantics).
+- **`adoptionStatus` precedence** within the given context:
+  1. the winning binding targets this version → `current`;
+  2. it was never adopted in this context → `never-adopted`;
+  3. it was previously adopted, but the winner is now `disabled` → `withdrawn`;
+  4. a different active winner → `newer-version-available`, regardless of
+     ordinal, so rollback to an older version is legal and shown;
+  5. otherwise → `historical`.
 
-  Core never generates or infers reasons. Line-level diffs are left to clients
-  reading both versions.
-- **History**: `listMethodVersions(packageRef)` returns versions in ordinal order
-  with `basedOn`, state, manifest metadata and current binding status per role
-  context. It is paged and holds no file text.
-- **Reads**: `getMethodVersion(versionRef, context?)` returns metadata, manifest
-  and `adoptionStatus`. `readMethodFile(versionRef, path, cursor?)` returns
-  half-open UTF-16 parts of ≤4,000 units at code-point boundaries.
-  - Every read rechecks `manifestIdentity`, so a file can never come from another
-    version.
-  - Every success envelope is ≤65,536 UTF-8 bytes, and cursors are HMAC-bound
-    and stale on mutation, as in private Cards.
+  A deleted pinned version, or revoked target access, gives `unavailable` for
+  both current and history reads.
+- **File reads** return half-open UTF-16 parts of ≤4,000 units at code-point
+  boundaries. Every read rechecks `manifestIdentity`, so a file can never come
+  from a different version.
+- **Envelopes and paging**: every success envelope is ≤65,536 UTF-8 bytes.
+  Manifests, history and comparison metadata are paginated by serialized
+  envelope bytes, and an indivisible oversized item fails
+  `context_item_too_large`. History pages default to and cap at 20. Cursors are
+  HMAC-bound and stale on mutation.
+- **Change records** are persisted with explicit `from` (= `basedOn`) and `to`
+  refs:
+  - `{from, to, items:[{summary, paths}], reasonRefs}`, with paths existing in
+    either version;
+  - `compareMethodVersions(from, to)` compares any two available versions of one
+    package **mechanically** (path-level `added`/`removed`/`changed`/`unchanged`
+    by content identity);
+  - recorded items and reasons are attributed **only to their stored edge**.
+    Other edges, or a missing record, give `reason: 'not-recorded'`;
+  - recorded reasons that later become unavailable report `recorded-unavailable`;
+  - core never generates or infers reasons.
+- **Reason refs**:
+  - At most 16 **exact-binding-namespace** refs (MemoryRef, CardRef,
+    NoteSourceRef, RawSourceRef, ReceiptSourceRef), authorized and canonically
+    validated within the import or adoption transaction.
+  - Delivery rechecks exact revisions, eligibility and Raw exclusions, and
+    exposes only `available` or `unavailable`. Forgotten, missing, foreign and
+    denied sources all collapse to `unavailable`.
+  - No source text is copied.
+  - Reason prose a person writes at import is first submitted through the
+    existing `submitSourceNote`, then referenced. `MethodVersionRef` reasons are
+    deferred.
+- **Retention boundary**:
+  - Explicitly imported method text is an independent, explicitly submitted
+    artifact with its own retention.
+  - Source-derived copies and generated summaries are **unsupported** until
+    typed dependencies enforce canonical forget/deletion fences (U5).
+  - Hosts must not route fenced or forgotten source output through import.
 
-## 6. Deletion, invalidation and effects (U2)
+## 6. Deletion, tombstones and effects (U2)
 
-- **`deleteMethodVersion(versionRef, expectedRevision)`** (`explicit-user`):
-  - purges every file text of that version and marks the version `deleted`
-    (revision + 1);
-  - keeps content-free metadata: path list, counts, ordinal and identities;
-  - leaves bindings that point to it in place, but they resolve `unavailable`
-    until a person adopts another version or disables them;
-  - lets later versions keep `basedOn` pointing to the deleted predecessor, which
-    is reported `unavailable` in diffs and history;
-  - emits effects `method_version_deleted` and `binding_unavailable`.
-- **`deleteMethodPackage(packageRef, expectedRevision)`** deletes all versions
-  and removes every binding of the package in the namespace, emitting effects.
-- **Deletion scope**: active logical-row purge only, not secure physical erasure,
+- **`deleteMethodVersion(versionRef, expectedRevision)`**:
+  - purges the version's file text, **paths, title, attribution label and change
+    prose**;
+  - CASes the version's lifecycle revision and increments the package revision.
+- **`deleteMethodPackage(packageRef, expectedRevision)`**: terminal; purges the
+  same fields for every version.
+- **Tombstones, receipts and effects** keep only opaque refs and identities,
+  revisions, ordinals, timestamps and numeric counts.
+- **Reads of deleted objects**: manifest, file and diff delivery for deleted
+  objects returns `unavailable`. Change prose depending on a deleted endpoint
+  becomes unavailable. History can never reconstruct purged prose.
+- **Bindings survive deletion as barriers**, resolving `unavailable` until a
+  person adopts another version or disables the binding. Package deletion keeps
+  them as barriers too, so lower-level defaults cannot reappear.
+- **Effects** (`method_version_deleted`, `method_package_deleted`,
+  `binding_changed`, `binding_unavailable`) are durable, content-free and listed
+  by a paged `listMethodEffects`. Consumers revalidate; effects grant nothing.
+- Deletion means active logical-row purge only, not secure physical erasure,
   matching existing private-Card wording.
-- **Effects** are content-free and durable, with a paged `listMethodEffects`
-  like `listCardEffects`. Consumers revalidate; effects grant nothing.
-- **Reason refs need no triggers.** They are rechecked at read time, so
-  forgetting or deleting a reason source turns it `unavailable` immediately
-  without copying text.
 
 ## 7. Operations, replay and errors (U2)
 
-- **Action ledger.** Every mutation needs an `actionId` and every existing-object
-  mutation an `expectedRevision`, using the same namespace ledger semantics as
-  private Cards.
-  - Payload binding is a core HMAC over method, scope, target, revision and the
-    complete input, including file texts.
-  - Exact replay returns the original content-free receipt, even after later
-    deletion and restart.
+- **Mutation discipline**:
+  - Every mutation needs an `actionId`, and every existing-object mutation its
+    expected revision.
+  - After authorization, **exact replay is checked before mutable existence
+    checks**, so a replay after deletion returns the original content-free
+    receipt.
   - A changed payload under the same ID fails `action_conflict`.
-  - Implementations should reuse the private-Card ledger helpers without changing
-    their behaviour.
+  - Each mutation atomically validates its targets, allocates ordinals, checks
+    CAS and quota, writes events and effects, and commits its receipt.
 - **Receipts**:
-  - import → `{packageId, versionId, ordinal, manifestIdentity, revision:1}`;
-  - binding transitions → `{bindingRevision, state, versionId}`;
+  - import → `{package: MethodPackageRef, version: MethodVersionRef, ordinal, packageRevision}`;
+  - binding transitions → `{binding: MethodBindingRef, state, version|null}`;
   - deletes → `{id, revision, state, effectCount}`.
 - **Errors**:
   - existing: `invalid_input`, `authority_required`, `scope_changed`,
     `storage_busy` (the only retryable one), `storage_error`,
     `revision_conflict`, `action_conflict`, `cursor_stale`, `invalid_cursor`,
-    `context_item_too_large`;
+    `context_item_too_large`, `quota_reached`;
   - new: `method_not_found` (foreign and missing look identical),
     `method_version_unavailable`, `invalid_path`, `unsupported_media`,
-    `package_limit_reached`, `quota_reached`.
-- **Exceptions** become a sanitized `storage_error`, never file text.
+    `package_limit_reached`.
+- **Unexpected exceptions** become a sanitized `storage_error`, never file text.
 
 ## 8. Facade methods (U2)
 
-All take `(input, authority)` and return existing envelopes. `N` = namespace and
-`A` = actionId.
+All take `(input, authority)` and return existing envelopes. `A` = actionId.
 
-| Method | Input beyond `namespace` | Success value |
+| Method | Input | Success value |
 | --- | --- | --- |
-| `importMethodVersion` | `A, packageId?\|null, basedOn?: MethodVersionRef\|null, title, submittedBy?, files:[{path,text,mediaType}], change?` | import receipt |
-| `getMethodVersion` | `version: MethodVersionRef, context?: {readSet?, roleId}` | `{version}` or `{version:null}` |
-| `readMethodFile` | `version, path, cursor?` | `{parts, coverage, nextCursor}` |
-| `listMethodPackages` | `limit?, cursor?` | metadata pages |
-| `listMethodVersions` | `package: MethodPackageRef, context?, limit?, cursor?` | metadata pages |
-| `compareMethodVersions` | `from, to` | §5 result |
-| `adoptMethodVersion` | `A, packageId, roleId, version, expectedRevision\|null, reasonRefs?` | binding receipt |
-| `disableMethodBinding` | `A, packageId, roleId, expectedRevision, reasonRefs?` | binding receipt |
-| `resolveMethod` | `readSet, packageId, roleId` | `{status, binding, version, snapshot}` |
+| `importMethodVersion` | `namespace, A, package?: MethodPackageRef, expectedPackageRevision?, basedOn?: MethodVersionRef, title, submittedBy?, files:[{path,text,mediaType}], change?: {items, reasonRefs}` (first import omits `package`) | import receipt |
+| `getMethodVersion` | `version, intent, context?: {readSet, roleId}, snapshot?` | `{version}` metadata, first manifest page, `adoptionStatus`; or `{version:null}` |
+| `listMethodManifest` | `version, intent, context?, snapshot?, cursor?` | manifest page |
+| `readMethodFile` | `version, path, intent, context?, snapshot?, cursor?` | `{parts, coverage, nextCursor, adoptionStatus}` |
+| `listMethodPackages` | `namespace, limit?, cursor?` | metadata pages |
+| `listMethodVersions` | `package, context?, limit?, cursor?` | metadata pages |
+| `compareMethodVersions` | `from, to, cursor?` | §5 result |
+| `adoptMethodVersion` | `bindingNamespace, A, package, roleId, version, expectedRevision\|null, readSet, reasonRefs?` | binding receipt |
+| `disableMethodBinding` | `bindingNamespace, A, package, roleId, expectedRevision\|null, readSet, reasonRefs?` | binding receipt |
+| `resolveMethod` | `readSet, package, roleId` | `{status, binding, version, snapshot}` |
 | `resolveMethodsForRole` | `readSet, roleId, limit?, cursor?` | `{methods, coverage, nextCursor, snapshot}` |
+| `listMethodBindingEvents` | `bindingNamespace, package?, limit?, cursor?` | content-free event pages |
 | `deleteMethodVersion` / `deleteMethodPackage` | `A, ref, expectedRevision` | delete receipt |
-| `listMethodEffects` | `limit?, cursor?` | effect pages |
+| `listMethodEffects` | `namespace, limit?, cursor?` | effect pages |
 | `getMethodPackageUsage` | none | usage projection |
 
-Resolution methods take a read set and are authorized like existing evidence
-reads. Every other method uses one exact namespace.
-
-## 9. U2 acceptance (all mechanical, synthetic stores, Node 22.16 and 24.15)
+## 9. U2 acceptance (synthetic stores; Node 22.16 and 24.15)
 
 | ID | Observable |
 | --- | --- |
-| M01 | Default construction unchanged; capability off → no methods; old DTOs and tools unchanged; v30 opt-in from fresh, v18, v23 and v29 stores; reopen with the feature off keeps data; old opener rejects v30; injected migration failure rolls back |
-| M02 | Import stores exact redacted text and paths; refuses invalid paths, case collisions, symlink-like or escape segments, binary or unknown media, oversize, invalid Unicode or NUL, without partial rows; a second import with `basedOn` gives ordinal 2 and keeps v1 bytes and identity unchanged |
-| M03 | Reads return files only from the requested immutable version; a manifest-identity mismatch refuses; parts and cursors are bounded; the whole-envelope ceiling holds |
-| M04 | Importing v2 does not change resolution (v1 stays current, v2 reads as `never-adopted`); adopt v2 under CAS; a concurrent adopt with the same expected revision has exactly one winner; replay returns the original receipt; a changed payload fails `action_conflict` |
-| M05 | Resolution order: a project role binding beats the personal default; project `disabled` blocks the personal default; no binding → `no-active-version`; a later-imported old version never displaces the adopted one; foreign namespaces are invisible |
-| M06 | Pins: after adopting v2, a v1 pin reads `newer-version-available`; after disable, `withdrawn`; after deleting v1, `unavailable`; snapshots stale on binding change |
-| M07 | Compare: path-level diff, change items, and reason refs with live availability. Forgetting a reason Memory or deleting a reason note flips it to `unavailable`; no change record → `not-recorded` |
-| M08 | Delete version and delete package: texts purged, tombstones content-free, bindings `unavailable` or removed, effects durable once, no resurrection after restart or replay |
-| M09 | Authority: missing, forged, wrong-scope, stale-generation and revoked grants refuse with no leak; model- or tool-supplied flags never authorize |
-| M10 | Bounds, usage cap and atomic refusals; error codes exact; no network or model calls in any method |
+| M01 | Default construction is unchanged, and old DTOs and tools are unchanged. v30 opt-in works from fresh and from every supported **populated** layout (v18, v20–v29), through every opener (ordinary, read-only, managed, local setup/preflight). Rollback on injected failure. The **actual** old binary refuses v30. v19 is refused |
+| M02 | Import stores exact redacted text, paths and identities, with aggregate limits and the maximum manifest. Refusals are atomic for invalid or colliding paths, prefixes and segments, unsupported media, oversize, invalid Unicode or NUL. Redaction identities are post-redaction. A second import with `basedOn` gives ordinal 2 with v1 bytes and identity unchanged; existing-package CAS is enforced |
+| M03 | Reads deliver only from the requested immutable version. Identity mismatch, cursor substitution across versions and paths, and bounded parts, pages and envelopes are all exercised |
+| M04 | In **separate processes**: adopt/adopt races (exactly one winner), import/delete, adopt/delete, and owner-quota races. Replay returns original receipts, including after deletion; changed payload fails `action_conflict` |
+| M05 | Resolution precedence in all four levels: higher-level insertion; a `disabled` barrier created with a null expected revision blocks the default; package-deletion barriers; a cross-scope project binding to a personal package with the correct authority (and refusal without it); foreign namespaces invisible; `no-active-version` |
+| M06 | Pins and statuses: `current`, `never-adopted`, `withdrawn`, `newer-version-available` (including rollback adoption of an older version), `historical`, `unassessed` without context, and `unavailable` after deletion or revoked access. Snapshots stale on binding change while history pins hold |
+| M07 | Comparison of adjacent and **non-adjacent** versions. Recorded reasons sit on their edge only; `not-recorded` elsewhere; `recorded-unavailable` after forgetting a Memory or deleting a note; foreign or denied reason refs refused at import |
+| M08 | In **fresh processes**: deletion purges text, paths, titles, labels and change prose; tombstones are content-free; deleted objects return `unavailable`; bindings act as barriers; effects are durable exactly once; no resurrection after restart or replay; usage decrements |
+| M09 | Authority: missing, forged, wrong-scope, stale-generation, revoked and capture-consent-only grants refuse with no leak. Model or tool flags never authorize |
+| M10 | Exact bounds and numeric limits, atomic refusals, exact error codes, and no network, model, filesystem or execution calls from core |
 
-## 10. Open questions for the design audit
+## 10. Resolved design questions
 
-1. Should roles be a canonical engine record now, or stay host-supplied
-   identifiers until the M8 role-profile work?
-2. Is applying intervening migrations with features off acceptable for stores
-   below v29, or should method opt-in require v29?
-3. Should `reasonRefs` allow `MethodVersionRef` (e.g. a review recorded as an
-   earlier version)?
-4. Are the text-only limits reasonable for real method packages (SKILL.md plus
-   templates)?
+1. **Roles** stay host-supplied identifiers. M8 role profiles are later
+   versioned Memory/Card references (U5).
+2. **Older stores** are supported through the explicit schema-only prerequisite
+   migrator (§2.1).
+3. **`MethodVersionRef` as a reason** is deferred. A later version may allow
+   same-scope, reference-only, non-recursive use.
+4. **Limits** are provisional text-only defaults. U3 measures real SKILL.md and
+   template packages (sizes only) before freezing them.
