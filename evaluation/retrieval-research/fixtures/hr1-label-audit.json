@@ -1,0 +1,122 @@
+{
+  "version": "hr1-fixture-v2",
+  "overrides": [
+    {
+      "query": "q-016",
+      "action": "add-member",
+      "detail": {
+        "fact": "F-000182",
+        "memory": "m-689efa9633b7f2",
+        "where": "span",
+        "spans": ["m-689efa9633b7f2#s1"]
+      },
+      "reason": "The rationale span says 陳會計要三天查稅別: it directly identifies tax-category checking as 陳會計's work on 財務月報, answering the requested responsibility. Its body merely announces a rationale. This valid span support must also cease being a hard negative for q-016."
+    },
+    {
+      "query": "q-053",
+      "action": "add-member",
+      "detail": {
+        "fact": "F-000238",
+        "memory": "m-d4db5db2b05c70",
+        "where": "span",
+        "spans": ["m-d4db5db2b05c70#s1"]
+      },
+      "reason": "The rationale span explicitly says 所以才換成先做範例, which supplies the first onboarding activity that q-053 requests. It is valid support for this question's first-activity facet of F-000238 and must cease being a hard negative. It is not added to q-167, which additionally asks what comes after the example; this span does not state that next step."
+    },
+    {
+      "query": "q-087",
+      "action": "add-member",
+      "detail": {
+        "fact": "F-000062",
+        "memory": "m-9d26774659d942",
+        "where": "span",
+        "spans": ["m-9d26774659d942#s1"]
+      },
+      "reason": "The span explains that two tests deleted each other's data and states 所以才要一個分支一份. In its explicit 竹浪 test-data context this states the adopted separate-database-per-branch arrangement. It does not state the four-hour retention period, so q-087 still requires its second group. The rationale is valid support rather than a hard negative."
+    },
+    {
+      "query": "q-093",
+      "action": "add-member",
+      "detail": {
+        "fact": "F-000128",
+        "memory": "m-db75fb2e70c16a",
+        "where": "span",
+        "spans": ["m-db75fb2e70c16a#s1"]
+      },
+      "reason": "The span explicitly states 青禾印務要週三到 before explaining Thursday packing. It therefore independently answers the current arrival weekday, even though expresses lists only the change reason. It supplies neither the September shipping cap nor the receiving owner. It must cease being a hard negative for q-093."
+    },
+    {
+      "query": "q-116",
+      "action": "add-member",
+      "detail": {
+        "fact": "F-000128",
+        "memory": "m-db75fb2e70c16a",
+        "where": "span",
+        "spans": ["m-db75fb2e70c16a#s1"]
+      },
+      "reason": "The same change-reason span explicitly states the replacement Wednesday arrival, so it supports both the new-decision and reason groups for q-116. Its complaint that Friday would be too late does not independently establish the original March arrangement; the historical-decision group remains necessary."
+    },
+    {
+      "query": "q-120",
+      "action": "remove-member",
+      "detail": {
+        "fact": "F-000253",
+        "memory": "m-f2716903678e64"
+      },
+      "reason": "The body only says a source badge was added to the result list; it does not state that the new display contains the title together with the badge. q-120 asks the old and replacement displays, so the body location overstates the complete new-display evidence. Remove this representation before re-adding the same memory at its explicit supporting span."
+    },
+    {
+      "query": "q-120",
+      "action": "add-member",
+      "detail": {
+        "fact": "F-000253",
+        "memory": "m-f2716903678e64",
+        "where": "span",
+        "spans": ["m-f2716903678e64#s1"]
+      },
+      "reason": "The span explicitly states 八月起標題旁邊放 source badge, identifying both components and their replacement arrangement. Preserve this valid memory as span-only support for q-120's complete new-display group."
+    },
+    {
+      "query": "q-124",
+      "action": "add-member",
+      "detail": {
+        "fact": "F-000036",
+        "memory": "m-70fe786598e74b",
+        "where": "span",
+        "spans": ["m-70fe786598e74b#s1"]
+      },
+      "reason": "This target-namespace S1000 extra says 杉橋 PR #182 測試副本給阿岑建，這不是小周的校文案工作. The possessive 小周的校文案工作 identifies 小周's copyediting work while assigning test-copy creation to 阿岑, so it also answers q-124's requested PR #182 role. The body names only 阿岑 and does not provide that answer. Add this accidental span support at S1000; it does not change the role or conflict with the S300 answer."
+    },
+    {
+      "query": "q-162",
+      "action": "add-member",
+      "detail": {
+        "fact": "F-000092",
+        "memory": "m-4ca014c4b2d76d",
+        "where": "span",
+        "spans": ["m-4ca014c4b2d76d#s1"]
+      },
+      "reason": "The rationale span explicitly states 所以才改成白話講清楚, expressing the adopted direct, conversational tone as well as why it changed. It consequently supports both required groups of q-162. C6 current intent requires the replacement decision and change reason, and does not require them to occur in separate memories."
+    },
+    {
+      "query": "q-167",
+      "action": "remove-member",
+      "detail": {
+        "fact": "F-000238",
+        "memory": "m-bfca8315629654"
+      },
+      "reason": "The body states only that onboarding now starts with an example. q-167 explicitly asks both the first and subsequent activities; the body omits the subsequent configuration step. Remove the body-covered representation before re-adding this memory's complete sequence at its span."
+    },
+    {
+      "query": "q-167",
+      "action": "add-member",
+      "detail": {
+        "fact": "F-000238",
+        "memory": "m-bfca8315629654",
+        "where": "span",
+        "spans": ["m-bfca8315629654#s1"]
+      },
+      "reason": "The span explicitly states 八月開始先做一個範例再設定, supplying the ordered example-then-configuration sequence requested by q-167. Preserve the same memory with span-only support; its incomplete body remains sufficient for the narrower first-activity question q-053."
+    }
+  ]
+}
