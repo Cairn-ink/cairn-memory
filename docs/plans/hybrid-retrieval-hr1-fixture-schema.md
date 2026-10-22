@@ -60,6 +60,10 @@ natural language: Traditional Chinese as used in Taiwan, English, or mixed.
     any memory. It is used for C8.
   - `coverage` (target facts only, intended): `body` means at least one target
     memory body expresses the fact; `span-only` means only spans do.
+- **Minimum family count.** Protocol v2.1 §4.3 requires each category to draw
+  test queries from at least ten families and dev queries from at least four.
+  W1 therefore writes **at least 40 target families**, each able to support
+  queries in several categories.
 
 ## `hr1-corpus.json`
 

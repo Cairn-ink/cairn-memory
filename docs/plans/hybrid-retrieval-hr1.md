@@ -1,10 +1,15 @@
-# HR-1: hybrid candidate retrieval, frozen offline protocol (v2)
+# HR-1: hybrid candidate retrieval, frozen offline protocol (v2.1)
 
-Status: **v2, frozen before any result-producing run.** v1 (`d1a64f5`) was
-revised after an independent, non-author, read-only design audit (Codex
-`hr1_protocol_audit`, gpt-6.1-sol/xhigh) found six P0 and eight P1 issues.
-At that point no fixture, harness or result existed. Goals and boundaries are in
-the [research charter](memory-next-stage-charter.md).
+Status: **v2.1, frozen before any result-producing run.** No fixture, harness or
+result existed at any of these revisions. Goals and boundaries are in the
+[research charter](memory-next-stage-charter.md).
+
+- **v1** (`d1a64f5`) was audited by an independent, non-author, read-only design
+  audit (Codex `hr1_protocol_audit`, gpt-6.1-sol/xhigh), which found six P0 and
+  eight P1 issues.
+- **v2** (`ed7c763`) addressed them.
+- **v2.1** applies the same auditor's re-check: two further P0s (family counts
+  for the bootstrap; A5 group denominators) and three P1 clarifications.
 
 Branch `experiment/hybrid-retrieval-hr1`, based on PR #468 head
 `3f6590584e746cc596c7859c9b0a00ae808941b6`. No public core API, schema, default,
@@ -82,11 +87,14 @@ points are percentage points.
     `encoding_format: "float"` and no `dimensions` parameter.
   - `openai-3-large@1024` is derived locally: the first 1024 dimensions,
     L2-renormalized.
-  - Responses are cached by (model, text SHA-256).
-  - Every HR-1 API call shares a **US$1 cap** under its own ledger: a
-    pre-dispatch reservation from a token estimate, stopping before the cap. It
-    does not use the repo's shared experiment ledger or any other session's
-    budget.
+  - Responses are cached by (model, text SHA-256). **Quality evaluation** uses
+    the frozen cached embeddings. **Hosted timing** bypasses query-response
+    caches and makes a fresh HTTPS request for every timed query.
+  - Every HR-1 API call, including timing calls and retries, shares a **US$1
+    cap** under its own ledger. Each request makes a pre-dispatch reservation of
+    a conservative upper-bound charge; when billing is unknown the reservation is
+    retained; dispatch stops before the cap. It does not use the repo's shared
+    experiment ledger or any other session's budget.
   - The key exists only in the primary's run environment
     (`~/.config/cairn-hr1/openai.env`). Workers test against a fake HTTP server
     only.
@@ -135,9 +143,10 @@ never used.
   - Each memory has 1–3 spans. The span-count distribution is matched between
     S300 targets and distractors.
   - Distinctive terms (names, numbers, IDs, products) are kept verbatim.
-- **Fidelity**: a (required fact, memory) pair is `body` if the memory body
-  expresses the fact, otherwise `span-only`. 35–45% of S300 required pairs are
-  span-only. W2 sees coverage metadata, not text.
+- **Fidelity is defined on evidence groups.** A group is `body-covered` if any
+  eligible member expresses its fact in the body; otherwise it is `span-only`.
+  35–45% of S300 required groups are span-only. W2 sees coverage metadata, not
+  text.
 - **Languages**: about 55% zh-TW, 30% en and 15% mixed.
 - **Scales**:
   - `S300`: about 300 target memories, including all query support and hard
@@ -162,6 +171,10 @@ never used.
   plus 10 C8 queries and the foreign-only controls.
 - The split is by family: about 6 dev and 14 test per category (±2); dev is
   30% ± 3% overall.
+- **Each category draws its test queries from at least ten independent families
+  and its dev queries from at least four.** If the frozen fixture falls short,
+  that category's confirmatory outcome is inconclusive. Families may contribute
+  queries to several categories.
 - Query languages are about 55% zh, 30% en and 15% mixed, except C2 (all zh) and
   C4 (balanced directions).
 - The equal-category macro describes this suite, not a production query
@@ -182,11 +195,20 @@ never used.
 
 ### 5.1 Common rules
 
+- **Evaluator-input barrier**: arms receive only the query text, the intent, the
+  eligible opaque memory IDs, body text, A5-authorized span text and the frozen
+  configuration. Evaluator-only data — never available to arms: fact IDs,
+  `expresses` annotations, families, categories, required groups, fidelity and
+  hard-negative labels.
 - **Eligibility**: `current` excludes deleted, historical and awaiting-review
   rows; `history` excludes deleted rows.
 - **Indexes** are per namespace and scale.
 - **Output**: every arm returns a deduplicated ranking of at most 24 memory IDs.
   Ties break by fixture memory ID ascending, except A0, which uses the core.
+  recall@12 and recall@24 are prefixes of that same ranking.
+- **Channel depth**: standalone A2 returns 24 memories. Internal channel
+  retrieval uses the configuration's requested depth, including 50 for
+  exploration. The final arm output stays capped at 24.
 
 ### 5.2 Baselines and lexical channels
 
@@ -260,16 +282,21 @@ For each arm and query, report:
 - **Ranking**: within each channel, a memory scores the maximum over its
   documents. Results are deduplicated to memories, then ranked and fused with
   L\* and each context's frozen winning configuration.
+- **Denominators are evidence groups** (§4.2). For each query and stratum
+  (`body-covered`, `span-only`), score the fraction of that stratum's groups
+  reached. Omit queries without that stratum. The included categories are C1–C7,
+  frozen before dev.
 - **Report**:
-  - body vs span-only strata;
+  - body-covered vs span-only strata;
   - required-span coverage;
   - span-count strata;
   - index costs.
-- **Secondary decision**: if, for the local context, A5-both improves macro
-  recall@12 on span-only pairs by at least 5 points with at most 2 points of
-  loss on body pairs (test, S1000), indexing retained spans merits a
-  product/privacy review. This does not establish benefits of arbitrary Raw
-  search.
+- **Comparator**: A5-both against the nominated local body-only fusion.
+- **Secondary decision**: on test at S1000, A5-both must raise span-only macro
+  recall@12 by at least 5 points while losing at most 2 points on body-covered
+  macro recall@12. If it does, indexing retained spans merits a product/privacy
+  review. An empty stratum makes A5 inconclusive. This does not establish
+  benefits of arbitrary Raw search.
 
 ## 6. Metrics
 
@@ -288,10 +315,16 @@ For each arm and query, report:
 
 ## 7. Statistics
 
-- **Cluster bootstrap** over test families: 10,000 resamples with a fixed seed;
-  recompute the fixed macro; redraw any resample with an empty category. Use
-  97.5% CIs for the two confirmatory comparisons, and 95% for exploratory ones,
-  labelled as exploratory.
+- **Cluster bootstrap** over test families:
+  - 10,000 resamples with a fixed seed, resampling whole families jointly with
+    all their queries;
+  - recompute the fixed macro each time, and redraw any resample with an empty
+    category;
+  - report family counts per category and how often resamples were rejected.
+- **Confirmatory CIs** (the two comparisons): equal-tailed percentile intervals
+  with endpoints 0.0125 and 0.9875 (97.5%). They require the family minimums in
+  §4.3; otherwise the outcome is inconclusive.
+- **Exploratory CIs**: 95%, labelled as exploratory.
 - **Exact two-sided McNemar** on all-required@12: one preregistered query per
   family (the smallest test query ID), reporting discordant counts.
 - Scales and timing repeats are not additional samples.
