@@ -126,8 +126,12 @@ facade is enabled merely by reopening an upgraded database.
 It asserts the 32-MiB standalone and 64-MiB mixed import transaction and RSS bounds and the independent
 maximum-byte-reader/binding-writer contention bounds, including zero busy,
 at least 100 committed transitions, at least 200 reader pages overlapping actual
-writer-call intervals, and writer p95 ≤250 ms in the labelled paced scenario.
-That writer pauses one tenth of a complete byte-read baseline between transitions
+writer-call intervals, and writer p95 ≤250 ms in each labelled paced scenario.
+Both workloads contend with independent binding writers: the 32-MiB standalone
+reader uses `readAssetBytes`; the maximum mixed reader uses
+`readMethodAttachmentBytes` across both 32-MiB attachments, verifying all 256
+manifest entries on every page. Each also runs an unpaced stress observation.
+Each paced writer pauses one tenth of a complete byte-read baseline between transitions
 until a complete contended read and the active-overlap threshold are reached.
 Writer sleeps and reporting time do not count as active overlap. The labelled
 unpaced scenario is a stress observation: its writer stops at reader completion
