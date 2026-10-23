@@ -17,6 +17,14 @@
   "core/prompts/extract-episode-sources.md",
   "core/prompts/qualify-episode-candidates.md",
   "core/procedural-storage.mjs",
+  "core/asset-facade.mjs",
+  "core/asset-input.mjs",
+  "core/asset-identity.mjs",
+  "core/asset-schema.mjs",
+  "core/asset-storage.mjs",
+  "core/asset-derivative-storage.mjs",
+  "core/method-attachment-input.mjs",
+  "core/method-attachment-storage.mjs",
   "core/method-package-facade.mjs",
   "core/method-binding-storage.mjs",
   "core/method-package-input.mjs",
@@ -214,5 +222,6 @@
   "docs/raw-local-journal.md",
   "LICENSE",
   "docs/context-read-local.md",
-  "docs/method-packages-local.md"
+  "docs/method-packages-local.md",
+  "docs/assets-local.md"
 ]

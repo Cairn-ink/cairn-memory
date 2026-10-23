@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createMethodBindingStorage } from './method-binding-storage.mjs';
+import { createMethodAttachmentStorage } from './method-attachment-storage.mjs';
 import { transaction, readTransaction } from './database.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { keyed } from './private-card-input.mjs';
@@ -38,14 +39,21 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
   const contentIdentity = (ns, text) => binding('method-file-content-v1', [ns, text]);
   const manifestIdentity = files => binding('method-manifest-v1', files.map(file => [file.path,file.contentIdentity,file.mediaType]));
   const manifest = rows => rows.map(row => ({ path: row.path, byteCount: row.byte_count,
-    contentIdentity: row.content_identity, mediaType: row.media_type }));
-  function targetMetadata(ns, inputRef) {
+    contentIdentity: row.content_identity, mediaType: row.media_type,...(row.kind?{kind:row.kind}:{}) }));
+  const attachments=createMethodAttachmentStorage({db,identity,contentIdentity,enabled:db.prepare('PRAGMA user_version').get().user_version>=31});
+  function targetLifecycle(ns,inputRef) {
     const ref = methodVersionRef(inputRef), pkg = packageRow(ns, ref.packageId);
     const row = pkg && versionRow(pkg.id, ref.versionId);
     if (!sameNamespace(ns, ref.namespace) || !row) fail('method_not_found');
     if (row.manifest_identity !== ref.manifestIdentity) fail('method_version_unavailable');
-    if (pkg.state !== 'available' || row.state !== 'available') return { pkg, row, available: false };
+    return {pkg,row,available:pkg.state==='available'&&row.state==='available'};
+  }
+  function targetMetadata(ns, inputRef) {
+    const found=targetLifecycle(ns,inputRef),{pkg,row}=found;
+    if(!found.available)return found;
     const files = fileRows(row.id);
+    if(attachments.mixed(row.id))return {...found,files:attachments.metadata(ns,row,files),mixed:true};
+    const ref=methodVersionRef(inputRef);
     if (manifestIdentity(manifest(files)) !== ref.manifestIdentity) fail('method_version_unavailable');
     return { pkg, row, files, available: true };
   }
@@ -56,8 +64,10 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
   }
   function target(ns, inputRef) {
     const found=targetMetadata(ns,inputRef);
-    if (found.available) found.files=db.prepare('SELECT '+fileColumns+',text FROM method_files WHERE version_id=? ORDER BY position')
-      .all(found.row.id).map(file=>verifyFile(ns,file));
+    if (found.available) {
+      const verified=db.prepare('SELECT '+fileColumns+',text FROM method_files WHERE version_id=? ORDER BY position').all(found.row.id).map(file=>verifyFile(ns,file));
+      if(!found.mixed)found.files=verified;
+    }
     return found;
   }
   function excludedReceipt(id) {
@@ -94,17 +104,21 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     return { ref: versionRef(ns,row), ordinal: row.ordinal,
       basedOn: row.based_on ? JSON.parse(row.based_on) : null, state: row.state, revision: row.revision,
       importedAt: row.imported_at, byteCount: row.byte_count,
+      ...(row.state==='available'&&attachments.mixed(row.id)?{manifestFormat:'mixed-v1'}:{}),
       ...(row.state === 'available' ? { title: row.title, submittedBy: row.submitted_by } : {}),
       adoptionStatus: row.state === 'available' ? 'unassessed' : 'unavailable' };
   }
-  function importVersion(ns, input) {
+  function importVersion(ns, input, mixed) {
     let pkg, base = null;
     if (input.package !== undefined) {
       pkg = packageRow(ns, input.package.packageId);
       if (!pkg) fail('method_not_found');
       if (pkg.revision !== input.expectedPackageRevision) fail('revision_conflict');
       if (pkg.state !== 'available') fail('method_version_unavailable');
-      const previous = target(ns, input.basedOn);
+      // A mixed import consumes only the base's identity/lifecycle and paths;
+      // it never reads or inherits its bytes. New input MACs were prepared
+      // before the lock. Legacy imports retain their existing verification.
+      const previous = mixed?targetLifecycle(ns,input.basedOn):target(ns, input.basedOn);
       if (!previous.available) fail('method_version_unavailable');
       base = methodVersionRef(input.basedOn);
     } else {
@@ -114,25 +128,29 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
       pkg = packageRow(ns,id);
     }
     if (pkg.next_ordinal > METHOD_LIMITS.versions) fail('package_limit_reached');
-    const files = methodFiles(input.files), change = methodChange(input.change, ns);
+    const files = mixed?.entries??methodFiles(input.files), change = methodChange(input.change, ns);
     if (change) {
-      const paths = new Set([...files.map(file => file.path), ...(base ? fileRows(base.versionId).map(file => file.path) : [])]);
+      const basePaths=base?(attachments.mixed(base.versionId)?db.prepare('SELECT path FROM method_mixed_entries WHERE version_id=?').all(base.versionId):fileRows(base.versionId)):[];
+      const paths = new Set([...files.map(file => file.path), ...basePaths.map(file=>file.path)]);
       if (change.items.some(item => item.paths.some(path => !paths.has(path)))) fail('invalid_path');
       if (change.reasonRefs.some(ref => !reasonAvailable(ns, ref))) fail('method_not_found');
     }
-    const prepared = files.map(file => ({ ...file, byteCount: Buffer.byteLength(file.text,'utf8'), contentIdentity: contentIdentity(ns,file.text) }));
-    const bytes = prepared.reduce((sum,file) => sum + file.byteCount, 0);
+    const prepared = mixed?.entries??files.map(file => ({ ...file, byteCount: Buffer.byteLength(file.text,'utf8'), contentIdentity: contentIdentity(ns,file.text) }));
+    const textFiles=prepared.filter(file=>file.kind!=='binary');
+    const bytes = textFiles.reduce((sum,file) => sum + file.byteCount, 0);
     db.prepare('INSERT OR IGNORE INTO method_owner_usage VALUES(?,0)').run(ns.ownerId);
     const reserved = db.prepare('UPDATE method_owner_usage SET byte_count=byte_count+? WHERE owner_id=? AND byte_count+?<=?')
       .run(bytes,ns.ownerId,bytes,METHOD_LIMITS.ownerBytes);
     if (reserved.changes !== 1) fail('quota_reached');
-    const id = randomUUID(), ordinal = pkg.next_ordinal, timestamp = now();
-    const manifestId = manifestIdentity(prepared);
+    if(mixed)attachments.reserve(ns,mixed);
+    const id = mixed?.versionId??randomUUID(), ordinal = pkg.next_ordinal, timestamp = now();
+    const manifestId = mixed?.manifestIdentity??manifestIdentity(prepared);
     db.prepare("INSERT INTO method_versions VALUES(?,?,?,?,?,'available',1,?,?,?,?)")
       .run(id,pkg.id,ordinal,base ? JSON.stringify(base) : null,manifestId,methodLabel(input.title,true),
         input.submittedBy === undefined ? null : methodLabel(input.submittedBy),timestamp,bytes);
     const insert = db.prepare('INSERT INTO method_files VALUES(?,?,?,?,?,?,?)');
-    prepared.forEach((file,index) => insert.run(id,index,file.path,file.text,file.byteCount,file.contentIdentity,file.mediaType));
+    textFiles.forEach((file,index) => insert.run(id,file.position??index,file.path,file.text,file.byteCount,file.contentIdentity,file.mediaType));
+    if(mixed)attachments.insert(ns,mixed);
     const ref = versionRef(ns,versionRow(pkg.id,id));
     if (change) db.prepare('INSERT INTO method_changes VALUES(?,?,?,?,?)').run(id,base ? JSON.stringify(base) : null,
       JSON.stringify(ref),JSON.stringify(change.items),JSON.stringify(change.reasonRefs));
@@ -149,7 +167,9 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
   }
   function remove(method, ns, input) {
     if (method === 'deleteMethodVersion') {
-      const found = target(ns,input.ref), { pkg, row } = found;
+      // Purge requires canonical identity/lifecycle/CAS, never readable text,
+      // manifest rows, binary chunks or an enabled asset capability.
+      const found = targetLifecycle(ns,input.ref), { pkg, row } = found;
       if (row.revision !== input.expectedRevision) fail('revision_conflict');
       if (!found.available) fail('method_version_unavailable');
       purge(ns,row);
@@ -181,12 +201,14 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     }
   }
   const bindings=createMethodBindingStorage({db,binding,packageRow,packageRef,target,targetMetadata,reasonAvailable,effect,page});
-  function read(method, ns, input, accessGeneration,access) {
+  function read(method, ns, input, accessGeneration,access,binaryAccessGeneration) {
     const readSet=input.context!==undefined?methodContext(input.context).readSet:input.readSet;
     const cursorScope=readSet??ns;
     const streamInput=Object.fromEntries(Object.entries(input).filter(([key]) => key !== 'cursor'));
     const expected = { store: identity.storeId, namespace: ns, method, accessGeneration,
-      input: readSet || input.snapshot!==undefined ? binding('method-stream-v1',[streamInput,access]) : streamInput };
+      input: method==='readMethodAttachmentBytes'?attachments.streamBinding(streamInput,access):
+        readSet || input.snapshot!==undefined ? binding('method-stream-v1',[streamInput,access]) : streamInput };
+    if(method==='readMethodAttachmentBytes')return readAttachment(ns,input,access,{...expected,binaryAccessGeneration},cursorScope);
     // Validate cursor before mutable existence/availability checks on every stream.
     if (input.cursor !== undefined) cursors.decode(input.cursor,expected,cursorScope);
     if(method==='checkMethodReasonRefs')return {reasonRefs:methodReasons(input.reasonRefs,ns).map(ref=>({ref,status:reasonAvailable(ns,ref)?'available':'unavailable'}))};
@@ -227,7 +249,8 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
       const left = new Map(manifest(from.files).map(file => [file.path,file])), right = new Map(manifest(to.files).map(file => [file.path,file]));
       const changes = [...new Set([...left.keys(),...right.keys()])].sort().map(path => ({ path,
         status: !left.has(path) ? 'added' : !right.has(path) ? 'removed' :
-          left.get(path).contentIdentity === right.get(path).contentIdentity ? 'unchanged' : 'changed' }));
+          left.get(path).contentIdentity === right.get(path).contentIdentity && (!(from.mixed||to.mixed)||
+            (left.get(path).kind??'text')===(right.get(path).kind??'text')&&left.get(path).mediaType===right.get(path).mediaType) ? 'unchanged' : 'changed' }));
       const record = db.prepare('SELECT * FROM method_changes WHERE to_id=?').get(to.row.id);
       const matching = record?.from_ref === JSON.stringify(methodVersionRef(input.from)) && record?.to_ref === JSON.stringify(methodVersionRef(input.to));
       const items = matching ? JSON.parse(record.items) : [];
@@ -250,6 +273,7 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     if (method === 'listMethodManifest') return page(cursorScope,expected,input,manifest(found.files),files => ({ files, adoptionStatus }));
     const selected = found.files.find(row => row.path === input.path);
     if (!selected) fail('method_not_found');
+    if(selected.kind==='binary')fail('unsupported_media');
     const file=verifyFile(ref.namespace,{...selected,...db.prepare('SELECT text FROM method_files WHERE version_id=? AND path=?').get(found.row.id,input.path)});
     const cursor = cursors.decode(input.cursor,expected,cursorScope), start = cursor?.after ?? 0;
     if (!Number.isSafeInteger(start) || start < 0 || start > file.text.length ||
@@ -261,15 +285,33 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     return { parts, coverage: complete ? completeCoverage(parts.length) : { status: 'budget_exhausted',included: parts.length,omitted: null },
       nextCursor: complete ? null : cursors.encode({ binding: expected,epoch: epoch(cursorScope),after: end }), adoptionStatus };
   }
+  function readAttachment(ns,input,access,expected,cursorScope) {
+    const cursor=attachments.decode(input.cursor,expected),saved=bindings.decode(input.snapshot),ref=methodVersionRef(input.version);
+    bindings.pinVersion(saved,ref);
+    const readSet=input.context===undefined?null:methodContext(input.context).readSet;
+    if(readSet&&!includesNamespace(readSet,ref.namespace))return {status:'unavailable',adoptionStatus:'unavailable'};
+    const found=targetMetadata(ref.namespace,ref);
+    if(!found.available)return {status:'unavailable',adoptionStatus:'unavailable'};
+    if(cursor&&(cursor.packageRevision!==found.pkg.revision||cursor.versionRevision!==found.row.revision||
+      input.intent==='current'&&cursor.epoch!==epoch(cursorScope)))fail('cursor_stale');
+    const adoptionStatus=bindings.adoption(found,input,access,saved),selected=found.files.find(file=>file.path===input.path);
+    if(!selected)fail('method_not_found');
+    if(selected.kind!=='binary')fail('unsupported_media');
+    const page=attachments.chunk(ref.namespace,found,selected,cursor?.after??0);
+    return {version:ref,path:input.path,status:'available',adoptionStatus,...page,nextCursor:page.complete?null:
+      attachments.encode({binding:expected,epoch:input.intent==='current'?epoch(cursorScope):null,after:page.index+1,
+        packageRevision:found.pkg.revision,versionRevision:found.row.revision})};
+  }
   return Object.freeze({
     payloadBinding: value => binding('method-action-v1',value),
-    call(method,ns,input,payloadBinding,isRead,{ accessGeneration,access }) {
+    prepareMixed:(ns,input)=>attachments.prepare(ns,input),
+    call(method,ns,input,payloadBinding,isRead,{ accessGeneration,access,binaryAccessGeneration },prepared) {
       ready();
-      if (isRead) return readTransaction(db, () => read(method,ns,input,accessGeneration,access));
+      if (isRead) return readTransaction(db, () => read(method,ns,input,accessGeneration,access,binaryAccessGeneration));
       return transaction(db, () => {
         const replay = ledger.replay(ns,input.actionId,method,payloadBinding);
         if (replay !== undefined) return replay;
-        const result = method === 'importMethodVersion' ? importVersion(ns,input) : ['adoptMethodVersion','disableMethodBinding'].includes(method) ? bindings.transition(method,ns,input) : remove(method,ns,input);
+        const result = method === 'importMethodVersion' ? importVersion(ns,input,prepared) : ['adoptMethodVersion','disableMethodBinding'].includes(method) ? bindings.transition(method,ns,input) : remove(method,ns,input);
         if (size(result) > 65536) fail('context_item_too_large');
         ledger.record(ns,input.actionId,method,payloadBinding,result.binding?.package.packageId ?? result.version?.versionId ?? result.id,result,now());
         advance(ns);

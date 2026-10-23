@@ -23,6 +23,40 @@
   single-Han miss: `中` does not match `中文`. Measurements use synthetic data and
   are observational, not semantic-quality or production-latency guarantees.
 
+## Unreleased — derivatives and method attachments (U4a-2)
+
+- Add immutable, explicitly supplied asset derivatives with exact source
+  provenance, formatting-preserving redaction, bounded unverified intervals,
+  paged text, replay and trigger-driven purge accounting.
+- Add explicit `mixed-v1` method manifests and exclusively owned binary
+  attachments. Imports and byte delivery require separate method and asset
+  grants; metadata and purge remain available to method-only processes.
+  Current attachment reads respect adoption pins and never switch versions.
+- Preserve text-only action/manifest bindings and the frozen v31 schema.
+  Extend `measure:assets` with asserted 64-MiB mixed-import lock/RSS gates.
+
+## Unreleased — standalone assets (U4a-1)
+
+- Add the opt-in assets-local-v1 embedded facade with immutable binary versions,
+  signature matching, authenticated 32-KiB chunk reads, CAS/replay, namespace
+  usage, content-free effects and trigger-driven purge accounting.
+- Install the complete canonical v31 layout only when assets are selected,
+  including reserved derivative and mixed-manifest tables. Validate it at every
+  opener; retain shallow-safe actual v30 install/store fixtures.
+- Gate 32-MiB import lock duration, preparation-inclusive RSS growth and sustained
+  independent byte-reader/binding-writer contention in `measure:assets`.
+
+## Unreleased — method host review fixes
+
+- Treat line terminators as ordinary path characters in exclusion globs, and
+  preserve explicit bind-mount preflight infrastructure failures as failures.
+- Bound exclusion glob matching with a two-row dynamic program and preserve
+  Unicode, separator, class and directory-pruning semantics.
+- Separate bind-mount prerequisite skips from mandatory importer-child success;
+  strengthen installed terminal-control approval and injection tests.
+- Pace the C04 writer from a reader baseline, require 200 overlapping pages,
+  and report overlap reader latency separately, including commit queueing.
+
 ## Unreleased — method read concurrency (U2c)
 
 - Run method and binding reads in deferred, query-only snapshots; restore the

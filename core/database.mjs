@@ -1,3 +1,4 @@
+import { installAssets, validateAssets, assertNoAssets } from './asset-schema.mjs';
 import { types } from 'node:util';
 import { storeFenceOption,pinStoreFile,assertStoreIdentity,noncreatingStoreURI } from './store-fence.mjs';
 import { migrateMethodPrerequisites } from './method-package-migration.mjs';
@@ -34,7 +35,7 @@ export const APPLICATION_ID = 0x43414952;
 const VERSION = CONFIRMATION_SCHEMA_VERSION;
 // Existing layouts accepted without an upgrade by the ordinary opener.
 export const READ_SCHEMA_VERSIONS = Object.freeze([VERSION, 20, PRIVATE_CARD_SCHEMA_VERSION,
-  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30]);
+  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30, 31]);
 // Context reads also validate existing pre-control Raw stores. The retained
 // topic reader's narrower supported-version list remains unchanged.
 export const CONTEXT_READ_SCHEMA_VERSIONS = Object.freeze([...new Set([...READ_SCHEMA_VERSIONS,
@@ -348,7 +349,7 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, existingStore, storeFence } = {}) {
+export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, assets = false, existingStore, storeFence } = {}) {
   if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
   rawDeletion ||= rawSources || localControls;
   rawLineage ||= rawDeletion;
@@ -363,7 +364,8 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
       location.check();
       db.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
       validateExistingStore(db, option);
-      if (methodPackages && db.prepare('PRAGMA user_version').get().user_version !== 30) fail('unsupported_database');
+      if (assets && db.prepare('PRAGMA user_version').get().user_version !== 31) fail('unsupported_database');
+      if (methodPackages && db.prepare('PRAGMA user_version').get().user_version < 30) fail('unsupported_database');
       location.check();
       return db;
     } catch (error) {
@@ -402,9 +404,10 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
       function initialize() {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
-      if (methodPackages && !(appId === 0 && version === 0 && db.prepare('SELECT count(*) AS n FROM sqlite_master').get().n === 0) &&
-          !(appId === APPLICATION_ID && [18,20,21,22,23,24,25,26,27,28,29,30].includes(version))) fail('unsupported_database');
-      if (appId === APPLICATION_ID && version === 30) {
+      if ((methodPackages || assets) && !(appId === 0 && version === 0 && db.prepare('SELECT count(*) AS n FROM sqlite_master').get().n === 0) &&
+          !(appId === APPLICATION_ID && [18,20,21,22,23,24,25,26,27,28,29,30,31].includes(version))) fail('unsupported_database');
+      if (version < 31) assertNoAssets(db);
+      if (appId === APPLICATION_ID && [30,31].includes(version)) {
         validateExistingStore(db, { storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id });
         return;
       }
@@ -665,7 +668,12 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
       }
       }
       initialize();
-      if (methodPackages) migrateMethodPrerequisites(db);
+      if (methodPackages || assets) migrateMethodPrerequisites(db);
+      if (assets && db.prepare('PRAGMA user_version').get().user_version < 31) {
+        installAssets(db);
+        db.exec('PRAGMA user_version=31');
+        validateAssets(db);
+      }
     });
     return db;
   } catch (error) {

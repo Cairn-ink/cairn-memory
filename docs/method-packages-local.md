@@ -1,6 +1,6 @@
 # Local method packages: core and local host
 
-`method-packages-local-v1` is an explicit text-only engine opt-in in the existing
+`method-packages-local-v1` is an explicit engine opt-in in the existing
 SQLite store. It provides immutable imports, contextual and context-free reads,
 mechanical comparisons, logical deletion, content-free replay and durable effects.
 U2a installed the complete v30 canonical schema; U2b adds adoption bindings,
@@ -554,17 +554,26 @@ before concurrent deletion remains complete; a later continuation is
 
 The opt-in C04 timing command creates a real synthetic SQLite store with 256
 files: ten 400,000-unit three-byte UTF-8 files plus empty files (4,000,000 units /
-12,000,000 bytes total). A dedicated reader process continuously reads complete
-versions in 1,246 context-free history pages per pass. A second process commits
-100 alternating adopt/disable transitions on a small independent project
-package. Ready/start/reader-active files synchronize their overlap; complete
-content hashes, binding revisions and committed events are checked. No model or provider is called.
+12,000,000 bytes total). A dedicated reader process first measures an
+uncontended baseline, then reads continuously in 1,246 context-free history pages per complete pass. A second
+process commits at least 100 alternating adopt/disable transitions on a small
+independent project package. Between transitions, it pauses for the fixed
+baseline duration divided by 100 (at least 1 ms), and continues through the
+reader's first complete contended pass. The reader continues until the writer
+finishes, stopping between pages once a complete pass has been verified.
+Ready/start/reader-active files synchronize the processes; complete content
+hashes, binding revisions and committed events are checked. No model or provider
+is called.
 
 The command asserts both child exit codes, at least one complete maximum-version
-read, at least 100 transitions, no busy outcomes on either side, and writer p95
-of at most 250 ms. Busy outcomes may retry the identical page/cursor or writer
+read, at least 100 transitions, at least 200 pages overlapping writer activity,
+no busy outcomes on either side, and writer p95 of at most 250 ms. Busy outcomes may retry the identical page/cursor or writer
 action for diagnostic completeness, but **any busy outcome fails the gate**.
-It reports reader page p50/p95, writer p50/p95 and total/p50/p95/maximum busy waits
+It reports reader page p50/p95/maximum for the whole run and separately under
+`reader.duringOverlap`, including page calls crossing either writer boundary.
+Rollback-journal readers can queue behind pending commits without returning
+`storage_busy`; overlap reader p95 and maximum have no threshold. The JSON also
+reports writer p50/p95 and total/p50/p95/maximum busy waits
 (`busyWaitMs` measures failed SQLite calls), retry delays and the child exit codes.
 
 The shared overall deadline is 600,000 ms, with at most 32 busy retries per
@@ -574,3 +583,13 @@ busy timeout. Incomplete runs and failed thresholds exit nonzero and clean up
 both children. The 250 ms gate applies on the reference machine; measurements
 elsewhere must identify their environment. This synthetic local gate is not a
 latency, semantic-quality or production-readiness guarantee.
+
+Method-only processes also reopen complete v31 stores upgraded by the separate
+[standalone asset opt-in](assets-local.md). Selecting methods alone still upgrades
+to v30. The embedded core supports explicit `mixed-v1` attachments when both the
+method and asset ports are configured, with separate operation/payload-bound
+grants. See [assets and mixed methods](assets-local.md#mixed-method-attachments)
+for tagged entries, binary limits, byte cursors and current/history fences.
+Method-only processes retain mixed metadata/text/purge; binary delivery requires
+the asset capability. Text-only imports, identities and replay keep their
+existing format. The local CLI and MCP transport remain text-only until U4b.

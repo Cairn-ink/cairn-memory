@@ -1,4 +1,5 @@
 import { types } from 'node:util';
+import { binaryView } from './asset-identity.mjs';
 import { redactSecrets } from '../plugins/cairn-memory/lib/redact.mjs';
 import { cardNamespace, sourceRef } from './private-card-input.mjs';
 import { evidenceRef } from './private-evidence-input.mjs';
@@ -7,7 +8,7 @@ import { denseArray, fail, identifier, object, revision } from './validation.mjs
 export const METHOD_METHODS = Object.freeze(['importMethodVersion','getMethodVersion','listMethodManifest',
   'readMethodFile','listMethodPackages','listMethodVersions','compareMethodVersions',
   'deleteMethodVersion','deleteMethodPackage','listMethodEffects','getMethodPackageUsage',
-  'adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents','checkMethodReasonRefs']);
+  'adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents','checkMethodReasonRefs','readMethodAttachmentBytes']);
 export const METHOD_READS = new Set(METHOD_METHODS.filter(name => !['importMethodVersion','deleteMethodVersion','deleteMethodPackage','adoptMethodVersion','disableMethodBinding'].includes(name)));
 export const METHOD_LIMITS = Object.freeze({ packages: 256, versions: 128, bindings: 1024, files: 256, fileUnits: 400_000,
   versionUnits: 4_000_000, pathUnits: 512, reasonRefs: 16, changeItems: 32, changeUnits: 500,
@@ -34,8 +35,13 @@ export const METHOD_SNAPSHOT_LIMITS = Object.freeze({
     + METHOD_LIMITS.reasonRefs * 32 + 2048,
 });
 // Separate import budget: Card snapshots intentionally retain their original limits.
-export function methodSnapshot(value, depth = 0, budget = { nodes: METHOD_SNAPSHOT_LIMITS.nodes, units: METHOD_SNAPSHOT_LIMITS.units }) {
+export function methodSnapshot(value, depth = 0, budget = { nodes: METHOD_SNAPSHOT_LIMITS.nodes, units: METHOD_SNAPSHOT_LIMITS.units,bytes:67108864 },binary = false,path = []) {
   if (--budget.nodes < 0 || depth > 16) fail('invalid_input');
+  if(binary&&types.isUint8Array(value)) {
+    if(path.length!==3||path[0]!=='files'||!Number.isSafeInteger(path[1])||path[2]!=='bytes')fail('invalid_input');
+    const view=binaryView(value);
+    if(view.byteLength>budget.bytes)fail('invalid_input');budget.bytes-=view.byteLength;return Buffer.from(view);
+  }
   if (value === null || typeof value === 'boolean') return value;
   if (typeof value === 'string') {
     if (value.length > METHOD_SNAPSHOT_LIMITS.stringUnits) fail('invalid_input');
@@ -53,7 +59,7 @@ export function methodSnapshot(value, depth = 0, budget = { nodes: METHOD_SNAPSH
     denseArray(value, 0, METHOD_SNAPSHOT_LIMITS.arrayItems);
     return Array.from({ length: value.length }, (_, i) => {
       if (!Object.hasOwn(descriptors[i], 'value')) fail('invalid_input');
-      return methodSnapshot(descriptors[i].value, depth + 1, budget);
+      return methodSnapshot(descriptors[i].value, depth + 1, budget,binary,[...path,i]);
     });
   }
   const result = {};
@@ -61,7 +67,7 @@ export function methodSnapshot(value, depth = 0, budget = { nodes: METHOD_SNAPSH
     if (key === '__proto__' || !Object.hasOwn(descriptors[key], 'value')) fail('invalid_input');
     budget.units -= key.length;
     if (budget.units < 0) fail('invalid_input');
-    result[key] = methodSnapshot(descriptors[key].value, depth + 1, budget);
+    result[key] = methodSnapshot(descriptors[key].value, depth + 1, budget,binary,[...path,key]);
   }
   return result;
 }
@@ -163,12 +169,13 @@ export function methodPageLimit(value = 20) {
   if (!Number.isSafeInteger(value) || value < 1 || value > 20) fail('invalid_input');
   return value;
 }
-export function validateMethodCall(method, input) {
+export function validateMethodCall(method, input,validateMixed) {
   const fields = {
-    importMethodVersion: ['namespace','actionId','package','expectedPackageRevision','basedOn','title','submittedBy','files','change'],
+    importMethodVersion: ['namespace','actionId','package','expectedPackageRevision','basedOn','title','submittedBy','files','change','manifestFormat'],
     getMethodVersion: ['version','intent','context','snapshot'],
     listMethodManifest: ['version','intent','context','snapshot','cursor'],
     readMethodFile: ['version','path','intent','context','snapshot','cursor'],
+    readMethodAttachmentBytes: ['version','path','intent','context','snapshot','cursor'],
     listMethodPackages: ['namespace','limit','cursor'], listMethodVersions: ['package','context','limit','cursor'],
     compareMethodVersions: ['from','to','cursor'], deleteMethodVersion: ['actionId','ref','expectedRevision'],
     deleteMethodPackage: ['actionId','ref','expectedRevision'], listMethodEffects: ['namespace','limit','cursor'],
@@ -181,7 +188,7 @@ export function validateMethodCall(method, input) {
   object(input, fields[method]);
   if (Object.hasOwn(input,'context')) methodContext(input.context);
   if (Object.hasOwn(input,'snapshot') && (typeof input.snapshot !== 'string' || !input.snapshot || input.snapshot.length>65536)) fail('invalid_input');
-  if (['getMethodVersion','listMethodManifest','readMethodFile'].includes(method)) {
+  if (['getMethodVersion','listMethodManifest','readMethodFile','readMethodAttachmentBytes'].includes(method)) {
     if (!['history','current'].includes(input.intent) || input.intent==='current' && input.context===undefined) fail('invalid_input');
   }
   if (input.cursor !== undefined && (typeof input.cursor !== 'string' || input.cursor.length > 8192)) fail('invalid_cursor');
@@ -224,7 +231,10 @@ export function validateMethodCall(method, input) {
     } else if (Object.hasOwn(input, 'expectedPackageRevision') || input.basedOn !== undefined && input.basedOn !== null) fail('invalid_input');
     text(input.title, 200, true);
     if (input.submittedBy !== undefined) text(input.submittedBy, 200);
-    methodFiles(input.files);
+    if(Object.hasOwn(input,'manifestFormat')) {
+      if(input.manifestFormat!=='mixed-v1')fail('invalid_input');
+      if(!validateMixed)fail('unsupported_media');validateMixed(input.files);
+    } else methodFiles(input.files);
     // Canonical reason validation follows separate read authorization.
     if (input.change !== undefined) {
       object(input.change, ['items','reasonRefs']);
@@ -236,8 +246,8 @@ export function validateMethodCall(method, input) {
     revision(input.expectedRevision);
     return (method === 'deleteMethodVersion' ? methodVersionRef(input.ref) : methodPackageRef(input.ref)).namespace;
   }
-  if (['getMethodVersion','listMethodManifest','readMethodFile'].includes(method)) {
-    if (method === 'readMethodFile') methodPath(input.path);
+  if (['getMethodVersion','listMethodManifest','readMethodFile','readMethodAttachmentBytes'].includes(method)) {
+    if (['readMethodFile','readMethodAttachmentBytes'].includes(method)) methodPath(input.path);
     const ref=methodVersionRef(input.version);
     return input.context===undefined ? ref.namespace : methodContext(input.context).readSet[0];
   }

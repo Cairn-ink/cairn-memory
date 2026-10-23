@@ -153,7 +153,7 @@ test('M01/M03 U2 capabilities and context-free history stay bounded even with ca
   const f=seeded(t);insert(f.db,'method_bindings',binding(ns,f.first.version));
   const capabilities=ok(f.core.getMethodPackageCapabilities());
   assert.deepEqual(capabilities.methods,['importMethodVersion','getMethodVersion','listMethodManifest','readMethodFile',
-    'listMethodPackages','listMethodVersions','compareMethodVersions','deleteMethodVersion','deleteMethodPackage','listMethodEffects','getMethodPackageUsage','adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents','checkMethodReasonRefs']);
+    'listMethodPackages','listMethodVersions','compareMethodVersions','deleteMethodVersion','deleteMethodPackage','listMethodEffects','getMethodPackageUsage','adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents','checkMethodReasonRefs','readMethodAttachmentBytes']);
   assert.deepEqual(capabilities.intents,['history','current']);assert.equal(capabilities.context,true);assert.equal(capabilities.snapshots,true);assert.equal(capabilities.adoptionBindings,true);
   for(const method of ['adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents'])assert.equal(typeof f.core[method],'function');
   for(const method of ['getMethodVersion','listMethodManifest','readMethodFile']){

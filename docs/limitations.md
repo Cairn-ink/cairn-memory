@@ -73,10 +73,16 @@ listing and comparison still verify the whole version. Resolution verifies
 metadata; file content is checked when read. These semantics do not detect
 unread text corruption through resolution alone. SQLite contention can still
 return retryable `storage_busy`; byte ceilings do not guarantee latency.
-The opt-in C04 gate runs a continuous maximum-version reader and 100 independent
-binding transitions in separate processes, with finite deadlines. Any busy
-outcome fails, including retried outcomes; writer p95 must be at most 250 ms on
-the reference machine. It reports reader page p50/p95 and both child exit codes.
+The opt-in C04 gate runs a continuous maximum-version reader and at least 100
+independent binding transitions in separate processes, with finite deadlines.
+The writer uses a fixed pause derived from an uncontended reader baseline and
+continues through the first complete contended read. At least 200 reader pages
+must overlap writer activity. Any busy outcome fails, including retried outcomes;
+writer p95 must be at most 250 ms on the reference machine. Rollback-journal
+readers can queue behind pending commits even when neither side returns busy.
+Reader page p50, p95 and maximum during the overlap are reported separately from
+the whole run; overlap reader p95 and maximum are observations without thresholds.
+Both child exit codes are checked.
 Method command review supports rollback-journal stores only. It refuses WAL
 headers and existing journal/WAL/SHM companions before SQLite inspection, pins
 filesystem and SQLite identities, and uses a noncreating fenced opener after
@@ -2567,3 +2573,31 @@ fixes did not relax runtime validation. Logs are retained under
 `/tmp/cairn-raw-p3c-evidence.n7PShP/worker-*.log`. Final frozen-source gates and
 independent reviews are recorded separately in the plan/PR; earlier green runs
 are not final-source evidence or measured semantic quality.
+
+## Standalone binary asset preview
+
+`assets-local-v1` is an explicit embedded opt-in using v31 SQLite BLOB chunks.
+It matches only the contract's bounded leading signatures and does not parse,
+decode, render, execute, scan for malware or call models. No asset CLI or MCP byte
+delivery is exposed in this packet. Embedded derivative creation accepts only
+explicitly supplied text with `method:{kind:'user-provided'}`; it performs no
+OCR, ASR, captioning or media understanding. Optional ordered audio/video
+intervals are `user-supplied-unverified`, with no text-span alignment claim.
+Derivative history compares the exact source ordinal with the greatest imported
+ordinal; it does not infer a current source or inherit text into later versions.
+Embedded mixed-method import requires both capabilities and separate grants.
+Attachments are exclusive copies, charged independently, with no deduplication.
+Method-only processes can inspect mixed metadata and purge attachments, including
+corrupt bytes, but cannot deliver binary content without asset grants. Current
+attachment cursors stale on adoption transitions; history remains on the exact
+requested version with fresh authorization. No CLI/MCP attachment import or byte
+export is added here. The opt-in K13 measurement asserts both 32-MiB standalone
+and 64-MiB mixed-import transaction/RSS thresholds, including byte preparation.
+Every binary read verifies metadata and only the selected chunk; corruption in
+another chunk is detected when it is selected. Authenticated totals prevent
+truncated completion. Logical purge does not erase freed pages, journals/WAL or
+backups, and the binary quota excludes that physical overhead. Deferred reads
+avoid the previous write-lock contention mechanism, but rollback-journal readers
+can still queue behind commits; overlap reader latency is reported without a
+latency threshold. Selecting assets performs a one-way v31 upgrade; older v30
+binaries refuse the upgraded store.

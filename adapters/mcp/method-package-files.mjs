@@ -70,26 +70,52 @@ const media=new Map([
 export function methodExclude(pattern) {
   if(typeof pattern!=='string'||!pattern||pattern.length>METHOD_IMPORT_LIMITS.excludeUnits||pattern.startsWith('/')||/[\\\0]/u.test(pattern)||
     pattern.split('/').some(part=>part==='.'||part==='..'||!part))fail('invalid_input');
-  let source='';
+  const tokens=[];
   for(let i=0;i<pattern.length;i++){
     const c=pattern[i];
     if(c==='*'){
       if(pattern[i+1]==='*'){
-        if(pattern[i+2]==='/'){source+='(?:.*/)?';i+=2;}
-        else{source+='.*';i++;}
-      }else source+='[^/]*';
-    }else if(c==='?')source+='[^/]';
+        if(pattern[i+2]==='/'){tokens.push({kind:'directories'});i+=2;}
+        else{tokens.push({kind:'many',cross:true});i++;}
+      }else tokens.push({kind:'many',cross:false});
+    }else if(c==='?')tokens.push({kind:'one',matches:character=>character!=='/'});
     else if(c==='['){
       const end=pattern.indexOf(']',i+1);if(end<0)fail('invalid_input');
       let body=pattern.slice(i+1,end);if(!body||body.includes('/')||body.includes('['))fail('invalid_input');
       if(body[0]==='!')body='^'+body.slice(1);
-      source+='(?!/)['+body+']';i=end;
-    }else source+=c.replace(/[.()+^$|{}\]\\]/g,'\\$&');
+      // One character class, tested against one code point: no quantifiers or
+      // ambiguous repetition. Retains Unicode ranges and malformed-class refusal.
+      let expression;try{expression=new RegExp('^(?!/)['+body+']$','u');}catch{fail('invalid_input');}
+      tokens.push({kind:'one',matches:character=>expression.test(character)});i=end;
+    }else{
+      const literal=String.fromCodePoint(pattern.codePointAt(i));i+=literal.length-1;
+      tokens.push({kind:'one',matches:character=>character===literal});
+    }
   }
-  try{
-    const expression=new RegExp('^(?:'+source+(pattern.endsWith('/**')?'|'+source.slice(0,-3).replace(/\/$/,''):'')+')$','u');
-    return path=>expression.test(path);
-  }catch{fail('invalid_input');}
+  // POSIX path characters include line terminators; globstar consumes them too.
+  const trailingDirectory=pattern.endsWith('/**');
+  return path=>{
+    const characters=Array.from(String(path)),length=characters.length;
+    let previous=new Uint8Array(length+1),current=new Uint8Array(length+1),directoryItself=false;previous[0]=1;
+    // Two rows: O(pattern units * path code points) work and O(path) space.
+    for(let index=0;index<tokens.length;index++){
+      if(trailingDirectory&&index===tokens.length-2)directoryItself=Boolean(previous[length]);
+      const token=tokens[index];current.fill(0);
+      if(token.kind==='many'){
+        current[0]=previous[0];
+        for(let j=1;j<=length;j++)current[j]=previous[j]||current[j-1]&&
+          (token.cross||characters[j-1]!=='/');
+      }else if(token.kind==='directories'){
+        current[0]=previous[0];let prefix=false;
+        for(let j=1;j<=length;j++){
+          prefix=prefix||Boolean(previous[j-1]);
+          current[j]=previous[j]||prefix&&characters[j-1]==='/';
+        }
+      }else for(let j=1;j<=length;j++)current[j]=previous[j-1]&&token.matches(characters[j-1]);
+      [previous,current]=[current,previous];
+    }
+    return directoryItself||Boolean(previous[length]);
+  };
 }
 
 /** Owns pinned parent, path and read fds until close, including across review. */

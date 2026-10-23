@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { openMemoryCore } from '../contract.mjs';
+import { STORAGE_BUSY_TIMEOUT_MS } from '../database.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { host,ns } from './method-package-fixtures.mjs';
 export {ns,project,ok,error,input,file,history,child,childHost,moduleURL} from './method-package-fixtures.mjs';
@@ -28,7 +29,7 @@ export function bindingFixture(t) {
   };
   const configuration={path,methodPackages:{...trusted.options,authority},privateCards:{...trusted.cards,authority}};
   let core=openMemoryCore(configuration);workspace.defer(()=>core.close());
-  const db=new DatabaseSync(path);workspace.defer(()=>db.close());
+  const db=new DatabaseSync(path,{timeout:STORAGE_BUSY_TIMEOUT_MS});workspace.defer(()=>db.close());
   return {workspace,path,db,trusted,state,get core(){return core;},
     call(method,input){return trusted.call(core,method,input);},
     reopen(){core.close();core=openMemoryCore(configuration);return core;},
