@@ -220,3 +220,9 @@
   保留與相容性放寬——稽核者確認 U5a 測試沒有鎖定驗證訊息位元、成本式、Card 矩陣）；新 P1：A15 對 snapshot 路徑一律期望
   `snapshot_stale` 太寬，canonical 重取本身失敗時既有 §13.6 錯誤優先（current 下同修訂 Card support 喪失→
   `evidence_unavailable`，history→`snapshot_stale`）。**v0.10.3 提交 `ccc9602a`**（只改 A15 那句與狀態行），派第三次短複查。
+- **v0.10.3 第三次複查：confirmed，無阻斷項**。狀態改為已確認，**契約 commit `f6bc33f6`**（已推送，回報主控備查）。
+  稽核軌跡：v0.10 `fa94af58` → v0.10.1 `165d7f99` → v0.10.2 `22a017f5` → v0.10.3 `ccc9602a` → 狀態 `f6bc33f6`。
+- **派 A 包實作 worker `u5b2_impl`**（gpt-6.1-sol/xhigh，workspace-write，`/home/chichieh/cairn-memory-u5b2` at `f6bc33f6`，
+  離線 `npm ci` adapters/mcp＋adapters/openai 已裝，zod 4.5.4）。派工單：主控預核的共用檔案清單、`cli.mjs`／`server.mjs`／
+  `core/contract.mjs`／`core/database.mjs` 不動、U5a 必不改測試逐一點名、`fences` 向量是 fetch 唯一改動、zod 原分支不變、
+  limitations 記父節點搬移差異、只跑改到的測試檔、TRAPS 11 條。派出時負載 2.8。
