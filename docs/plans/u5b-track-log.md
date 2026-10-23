@@ -234,3 +234,10 @@
   `assets-host` 全過（兩版本）。
 - **契約 v0.10.4 提交 `c646c4cc`**：只改 A13 三個數字為實測值加約 10% 餘裕（48／96／90），理由寫在 A13；無規則變動，
   隨實作一起交雙審查。resume worker 做 fix1：只改 A13 斷言數字並重跑該檔。
+- fix1 第一次 resume 因未先 `cd` 進 worktree（沙箱只允許寫 hr1）沒動任何檔；重跑後 worker 只改 A13 斷言為 48／96／90，
+  該檔兩版本 19／19。協調者重驗同結果、whitespace 0。
+- **A 包實作提交 `47099de0`**（15 檔、+827／−104，含 `overhead-host-v2.json` 與 worker 報告檔，報告檔合併前移除），
+  再以 `c8014883` 把實作 commit 填進 `overhead-host-v2.json`。**候選 commit `c8014883`**，已推送。
+  開審查 worktree `/home/chichieh/cairn-memory-review-u5b2c`（`c8014883`，離線 `npm ci`），派 Spec／Standards 雙審查
+  （gpt-6.1-sol/xhigh，read-only；派工單含 §15.8 v0.10.4 歷程、主控條件、worker 宣告的決定、A13 上限調整是否合理）。
+  完整矩陣以 `cairn-heavy` 排在 `/home/chichieh/cairn-memory-ci-u5b2`（`c8014883`）。派出時負載 0.7。
