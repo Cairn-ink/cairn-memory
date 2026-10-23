@@ -1,4 +1,3 @@
-import { DatabaseSync } from 'node:sqlite';
 import { fail } from './validation.mjs';
 
 export const METHOD_PACKAGE_SCHEMA_VERSION = 30;
@@ -118,7 +117,8 @@ function validateDefinitions(db) {
   // CHECK, implicit UNIQUE/PRIMARY KEY, foreign key, index and trigger body.
   // Never normalize SQL by deleting whitespace inside string literals.
   if (!canonicalDefinitions) {
-    const reference = new DatabaseSync(':memory:');
+    // Reuse the caller's SQLite class so importing schema guards stays portable.
+    const reference = new db.constructor(':memory:');
     try {
       installMethodPackages(reference);
       canonicalDefinitions = reference.prepare("SELECT name,type,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name").all();

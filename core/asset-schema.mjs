@@ -1,5 +1,4 @@
 import { installMethodPackages } from './method-package-schema.mjs';
-import { DatabaseSync } from 'node:sqlite';
 import { fail } from './validation.mjs';
 
 export const ASSET_SCHEMA_VERSION = 31;
@@ -202,7 +201,8 @@ export function assertNoAssets(db) {
 }
 export function validateAssets(db) {
   if (!definitions) {
-    const reference = new DatabaseSync(':memory:');
+    // Reuse the caller's SQLite class so importing schema guards stays portable.
+    const reference = new db.constructor(':memory:');
     try {
       installMethodPackages(reference);
       const previous = new Set(reference.prepare('SELECT name FROM sqlite_master').all().map(row=>row.name));
