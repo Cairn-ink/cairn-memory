@@ -119,3 +119,8 @@
 - **修正輪一提交。** U5b core `9b9e9d4c`（6 檔；協調者沙箱外 85／85 兩版本；協調者自己去掉 vendored 協議 fixture
   的檔尾空行並更新 hash）。HR-2 harness（14 檔；127／127 兩版本；dev 240 格重跑 exit 0；markdown 3.6 MB→254 KB，
   JSON 243 MB 正式跑時要 xz）。兩邊都已 resume 原審查者複查。U5b 第二部分雙審查與完整矩陣仍在跑。
+- **U5b 第二部分審查（`1a589129`）**：Standards **yes**（共用檔案改動區塊化、manifest 215／227 閉包一致、CLI 靜態圖
+  無 SQLite）；Spec **No**，三個 P0：(1) `server.mjs` 靜態引入 counter 模組使 flag-off 啟動載入 tiktoken／WASM，
+  違反 A01 並與 `source-snapshot.test.mjs` 衝突；(2) 組裝工具對 query 做 redaction，排名與 `find_memory_candidates`
+  不一致且會洗掉核心該拒絕的輸入；(3) 組裝錯誤的 `details.candidates` 診斷進了文字塊。派 `u5b_impl2` fix1（resume）。
+  1a589129 的完整矩陣繼續跑作早期訊號，最終 commit 要再跑一次。
