@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — standalone assets (U4a-1)
+
+- Add the opt-in assets-local-v1 embedded facade with immutable binary versions,
+  signature matching, authenticated 32-KiB chunk reads, CAS/replay, namespace
+  usage, content-free effects and trigger-driven purge accounting.
+- Install the complete canonical v31 layout only when assets are selected,
+  including reserved derivative and mixed-manifest tables. Validate it at every
+  opener; retain shallow-safe actual v30 install/store fixtures.
+- Gate 32-MiB import lock duration, preparation-inclusive RSS growth and sustained
+  independent byte-reader/binding-writer contention in `measure:assets`.
+
 ## Unreleased — method host review fixes
 
 - Treat line terminators as ordinary path characters in exclusion globs, and

@@ -583,3 +583,8 @@ busy timeout. Incomplete runs and failed thresholds exit nonzero and clean up
 both children. The 250 ms gate applies on the reference machine; measurements
 elsewhere must identify their environment. This synthetic local gate is not a
 latency, semantic-quality or production-readiness guarantee.
+
+Method-only processes also reopen complete v31 stores upgraded by the separate
+[standalone asset opt-in](assets-local.md). Selecting methods alone still upgrades
+to v30. Binary attachments remain unavailable in this packet; text-only imports,
+identities and replay keep their existing format.

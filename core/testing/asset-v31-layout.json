@@ -1,0 +1,269 @@
+{
+  "format": "assets-v31-canonical-v1",
+  "objects": [
+    {
+      "name": "asset_derivative_immutable",
+      "type": "trigger",
+      "tbl_name": "asset_derivatives",
+      "sql": "CREATE TRIGGER asset_derivative_immutable BEFORE UPDATE ON asset_derivatives WHEN OLD.state='deleted' OR\n  NEW.id!=OLD.id OR NEW.version_id!=OLD.version_id OR NEW.source_identity!=OLD.source_identity OR\n  NEW.content_identity!=OLD.content_identity OR NEW.created_at!=OLD.created_at OR NEW.state!='deleted' OR NEW.revision!=OLD.revision+1\n  BEGIN SELECT RAISE(ABORT,'asset_derivative_immutable'); END"
+    },
+    {
+      "name": "asset_derivative_insert",
+      "type": "trigger",
+      "tbl_name": "asset_derivatives",
+      "sql": "CREATE TRIGGER asset_derivative_insert BEFORE INSERT ON asset_derivatives WHEN NEW.state!='available' OR NEW.revision!=1 OR\n  NOT EXISTS(SELECT 1 FROM asset_versions v JOIN assets a ON a.id=v.asset_id WHERE v.id=NEW.version_id AND\n   v.content_identity=NEW.source_identity AND v.state='available' AND a.state='available') OR\n  (SELECT count(*) FROM asset_derivatives WHERE version_id=NEW.version_id)>=32 OR\n  NOT EXISTS(SELECT 1 FROM asset_versions v JOIN assets a ON a.id=v.asset_id WHERE v.id=NEW.version_id AND\n    json_extract(NEW.provenance,'$.source.assetId') IS a.id AND\n    json_extract(NEW.provenance,'$.source.namespace.ownerId') IS a.owner_id AND\n    json_extract(NEW.provenance,'$.source.namespace.scope') IS a.scope AND\n    (json_type(NEW.provenance,'$.source.namespace.projectId') IS 'null' AND a.project_id='' OR\n     json_extract(NEW.provenance,'$.source.namespace.projectId') IS a.project_id))\n  BEGIN SELECT RAISE(ABORT,'asset_parent_unavailable'); END"
+    },
+    {
+      "name": "asset_derivative_no_delete",
+      "type": "trigger",
+      "tbl_name": "asset_derivatives",
+      "sql": "CREATE TRIGGER asset_derivative_no_delete BEFORE DELETE ON asset_derivatives BEGIN SELECT RAISE(ABORT,'asset_tombstone_required'); END"
+    },
+    {
+      "name": "asset_derivative_release",
+      "type": "trigger",
+      "tbl_name": "asset_derivatives",
+      "sql": "CREATE TRIGGER asset_derivative_release AFTER UPDATE OF state ON asset_derivatives WHEN OLD.state='available' AND NEW.state='deleted' BEGIN\n  UPDATE binary_owner_usage SET byte_count=byte_count-OLD.byte_count WHERE owner_id=(SELECT a.owner_id FROM assets a JOIN asset_versions v ON v.asset_id=a.id WHERE v.id=OLD.version_id);\n  INSERT INTO asset_epochs SELECT a.owner_id,a.scope,a.project_id,2 FROM assets a JOIN asset_versions v ON v.asset_id=a.id WHERE v.id=OLD.version_id\n   ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1;\n END"
+    },
+    {
+      "name": "asset_derivative_source",
+      "type": "index",
+      "tbl_name": "asset_derivatives",
+      "sql": "CREATE INDEX asset_derivative_source ON asset_derivatives(version_id,id)"
+    },
+    {
+      "name": "asset_derivative_timecodes",
+      "type": "trigger",
+      "tbl_name": "asset_derivatives",
+      "sql": "CREATE TRIGGER asset_derivative_timecodes BEFORE INSERT ON asset_derivatives WHEN NEW.timecodes IS NOT NULL AND (\n  NOT EXISTS(SELECT 1 FROM asset_versions WHERE id=NEW.version_id AND (media_type GLOB 'audio/*' OR media_type GLOB 'video/*')) OR\n  EXISTS(SELECT 1 FROM json_each(NEW.timecodes) t WHERE json_type(t.value) IS NOT 'object' OR\n   json_type(t.value,'$.startMs') IS NOT 'integer' OR json_type(t.value,'$.endMs') IS NOT 'integer' OR\n   json_extract(t.value,'$.startMs')<0 OR json_extract(t.value,'$.endMs')<json_extract(t.value,'$.startMs') OR\n   json_extract(t.value,'$.endMs')>9007199254740991 OR\n   (CAST(t.key AS INTEGER)>0 AND json_extract(NEW.timecodes,'$['||(CAST(t.key AS INTEGER)-1)||'].endMs')>json_extract(t.value,'$.startMs'))))\n  BEGIN SELECT RAISE(ABORT,'invalid_asset_timecodes'); END"
+    },
+    {
+      "name": "asset_derivatives",
+      "type": "table",
+      "tbl_name": "asset_derivatives",
+      "sql": "CREATE TABLE asset_derivatives (\n  id TEXT PRIMARY KEY, version_id TEXT NOT NULL, source_identity TEXT NOT NULL,\n  state TEXT NOT NULL CHECK(state IN ('available','deleted')), revision INTEGER NOT NULL CHECK(revision IN (1,2)),\n  kind TEXT CHECK(kind IN ('caption','transcript','description','alt-text')), text TEXT,\n  content_identity TEXT NOT NULL, provenance TEXT, language TEXT, timecodes TEXT,\n  byte_count INTEGER NOT NULL CHECK(byte_count>=0), created_at TEXT NOT NULL,\n  FOREIGN KEY(version_id,source_identity) REFERENCES asset_versions(id,content_identity),\n  CHECK(language IS NULL OR (length(language) BETWEEN 1 AND 35 AND language NOT GLOB '*[^A-Za-z0-9-]*')),\n  CHECK(text IS NULL OR (length(text)<=20000 AND instr(text,char(0))=0 AND byte_count=length(CAST(text AS BLOB)))),\n  CHECK(provenance IS NULL OR (json_valid(provenance) AND json_type(provenance)='object'\n    AND json_type(provenance,'$.source') IS 'object' AND json_extract(provenance,'$.source.type') IS 'asset-version'\n    AND json_extract(provenance,'$.source.versionId') IS version_id\n    AND json_extract(provenance,'$.source.contentIdentity') IS source_identity\n    AND json_type(provenance,'$.method') IS 'object' AND json_extract(provenance,'$.method.kind') IS 'user-provided')),\n  CHECK(timecodes IS NULL OR (json_valid(timecodes) AND json_type(timecodes)='array' AND json_array_length(timecodes)<=256)),\n  CHECK((state='available' AND revision=1 AND kind IS NOT NULL AND text IS NOT NULL AND provenance IS NOT NULL) OR\n   (state='deleted' AND revision=2 AND kind IS NULL AND text IS NULL AND provenance IS NULL AND language IS NULL AND timecodes IS NULL AND byte_count=0))\n ) STRICT"
+    },
+    {
+      "name": "asset_effect_scope",
+      "type": "index",
+      "tbl_name": "asset_effects",
+      "sql": "CREATE INDEX asset_effect_scope ON asset_effects(owner_id,scope,project_id,ordinal)"
+    },
+    {
+      "name": "asset_effects",
+      "type": "table",
+      "tbl_name": "asset_effects",
+      "sql": "CREATE TABLE asset_effects (\n  effect_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('personal','project')), project_id TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN\n   ('asset_version_imported','asset_derivative_created','asset_deleted','asset_version_deleted','asset_derivative_deleted')),\n  entity_type TEXT NOT NULL CHECK(entity_type IN ('asset','asset-version','asset-derivative')), entity_id TEXT NOT NULL,\n  revision INTEGER NOT NULL CHECK(revision>0), action_id TEXT NOT NULL, ordinal INTEGER NOT NULL UNIQUE CHECK(ordinal>0), CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0))\n ) STRICT"
+    },
+    {
+      "name": "asset_epochs",
+      "type": "table",
+      "tbl_name": "asset_epochs",
+      "sql": "CREATE TABLE asset_epochs (owner_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('personal','project')), project_id TEXT NOT NULL, generation INTEGER NOT NULL CHECK(generation>0),\n  PRIMARY KEY(owner_id,scope,project_id), CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0))) STRICT"
+    },
+    {
+      "name": "asset_identity_immutable",
+      "type": "trigger",
+      "tbl_name": "assets",
+      "sql": "CREATE TRIGGER asset_identity_immutable BEFORE UPDATE ON assets WHEN\n  NEW.id!=OLD.id OR NEW.owner_id!=OLD.owner_id OR NEW.scope!=OLD.scope OR NEW.project_id!=OLD.project_id OR NEW.created_at!=OLD.created_at\n  BEGIN SELECT RAISE(ABORT,'asset_immutable'); END"
+    },
+    {
+      "name": "asset_lifecycle_epoch",
+      "type": "trigger",
+      "tbl_name": "assets",
+      "sql": "CREATE TRIGGER asset_lifecycle_epoch AFTER UPDATE OF state ON assets BEGIN\n  INSERT INTO asset_epochs VALUES(NEW.owner_id,NEW.scope,NEW.project_id,2)\n ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1;\n END"
+    },
+    {
+      "name": "asset_no_delete",
+      "type": "trigger",
+      "tbl_name": "assets",
+      "sql": "CREATE TRIGGER asset_no_delete BEFORE DELETE ON assets BEGIN SELECT RAISE(ABORT,'asset_tombstone_required'); END"
+    },
+    {
+      "name": "asset_operations",
+      "type": "table",
+      "tbl_name": "asset_operations",
+      "sql": "CREATE TABLE asset_operations (\n  owner_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('personal','project')), project_id TEXT NOT NULL, action_id TEXT NOT NULL, method TEXT NOT NULL, payload_binding TEXT NOT NULL,\n  target_id TEXT NOT NULL, result TEXT NOT NULL CHECK(json_valid(result) AND json_type(result)='object'), created_at TEXT NOT NULL,\n  PRIMARY KEY(owner_id,scope,project_id,action_id), CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0))\n ) STRICT"
+    },
+    {
+      "name": "asset_purge",
+      "type": "trigger",
+      "tbl_name": "assets",
+      "sql": "CREATE TRIGGER asset_purge AFTER UPDATE OF state ON assets WHEN OLD.state='available' AND NEW.state='deleted' BEGIN\n  UPDATE asset_versions SET state='deleted',revision=2,title=NULL,filename=NULL,media_type=NULL,byte_count=0,object_id=NULL WHERE asset_id=NEW.id AND state='available';\n END"
+    },
+    {
+      "name": "asset_scope",
+      "type": "index",
+      "tbl_name": "assets",
+      "sql": "CREATE INDEX asset_scope ON assets(owner_id,scope,project_id,id)"
+    },
+    {
+      "name": "asset_terminal",
+      "type": "trigger",
+      "tbl_name": "assets",
+      "sql": "CREATE TRIGGER asset_terminal BEFORE UPDATE ON assets WHEN OLD.state='deleted'\n  BEGIN SELECT RAISE(ABORT,'asset_terminal'); END"
+    },
+    {
+      "name": "asset_version_epoch",
+      "type": "trigger",
+      "tbl_name": "asset_versions",
+      "sql": "CREATE TRIGGER asset_version_epoch AFTER INSERT ON asset_versions BEGIN\n  INSERT INTO asset_epochs SELECT owner_id,scope,project_id,2 FROM assets WHERE id=NEW.asset_id\n   ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1;\n END"
+    },
+    {
+      "name": "asset_version_immutable",
+      "type": "trigger",
+      "tbl_name": "asset_versions",
+      "sql": "CREATE TRIGGER asset_version_immutable BEFORE UPDATE ON asset_versions WHEN OLD.state='deleted' OR\n  NEW.id!=OLD.id OR NEW.asset_id!=OLD.asset_id OR NEW.ordinal!=OLD.ordinal OR NEW.content_identity!=OLD.content_identity OR\n  NEW.imported_at!=OLD.imported_at OR NEW.state!='deleted' OR NEW.revision!=OLD.revision+1\n  BEGIN SELECT RAISE(ABORT,'asset_version_immutable'); END"
+    },
+    {
+      "name": "asset_version_insert",
+      "type": "trigger",
+      "tbl_name": "asset_versions",
+      "sql": "CREATE TRIGGER asset_version_insert BEFORE INSERT ON asset_versions WHEN NEW.state!='available' OR NEW.revision!=1 OR\n  NOT EXISTS(SELECT 1 FROM assets WHERE id=NEW.asset_id AND state='available') OR\n  EXISTS(SELECT 1 FROM binary_objects WHERE id=NEW.object_id) OR\n  (SELECT count(*) FROM asset_versions WHERE asset_id=NEW.asset_id)>=64\n  BEGIN SELECT RAISE(ABORT,'asset_parent_unavailable'); END"
+    },
+    {
+      "name": "asset_version_no_delete",
+      "type": "trigger",
+      "tbl_name": "asset_versions",
+      "sql": "CREATE TRIGGER asset_version_no_delete BEFORE DELETE ON asset_versions BEGIN SELECT RAISE(ABORT,'asset_tombstone_required'); END"
+    },
+    {
+      "name": "asset_version_parent",
+      "type": "index",
+      "tbl_name": "asset_versions",
+      "sql": "CREATE INDEX asset_version_parent ON asset_versions(asset_id,ordinal)"
+    },
+    {
+      "name": "asset_version_purge",
+      "type": "trigger",
+      "tbl_name": "asset_versions",
+      "sql": "CREATE TRIGGER asset_version_purge AFTER UPDATE OF state ON asset_versions WHEN OLD.state='available' AND NEW.state='deleted' BEGIN\n  DELETE FROM binary_objects WHERE asset_version_id=NEW.id;\n  UPDATE asset_derivatives SET state='deleted',revision=2,kind=NULL,text=NULL,provenance=NULL,language=NULL,timecodes=NULL,byte_count=0\n   WHERE version_id=NEW.id AND state='available';\n END"
+    },
+    {
+      "name": "asset_versions",
+      "type": "table",
+      "tbl_name": "asset_versions",
+      "sql": "CREATE TABLE asset_versions (\n  id TEXT PRIMARY KEY, asset_id TEXT NOT NULL REFERENCES assets(id), ordinal INTEGER NOT NULL CHECK(ordinal>0),\n  content_identity TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('available','deleted')),\n  revision INTEGER NOT NULL CHECK(revision IN (1,2)), title TEXT, filename TEXT, media_type TEXT,\n  byte_count INTEGER NOT NULL CHECK(byte_count BETWEEN 0 AND 33554432), object_id TEXT UNIQUE,\n  imported_at TEXT NOT NULL, UNIQUE(asset_id,ordinal), UNIQUE(id,content_identity),\n  FOREIGN KEY(object_id) REFERENCES binary_objects(id) DEFERRABLE INITIALLY DEFERRED,\n  CHECK((state='available' AND revision=1 AND title IS NOT NULL AND filename IS NOT NULL AND media_type IS NOT NULL\n    AND byte_count>0 AND object_id IS NOT NULL) OR\n   (state='deleted' AND revision=2 AND title IS NULL AND filename IS NULL AND media_type IS NULL AND byte_count=0 AND object_id IS NULL))\n ) STRICT"
+    },
+    {
+      "name": "assets",
+      "type": "table",
+      "tbl_name": "assets",
+      "sql": "CREATE TABLE assets (\n  id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('personal','project')), project_id TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('available','deleted')),\n  revision INTEGER NOT NULL CHECK(revision>0), next_ordinal INTEGER NOT NULL CHECK(next_ordinal>0),\n  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0))\n ) STRICT"
+    },
+    {
+      "name": "binary_chunk_immutable",
+      "type": "trigger",
+      "tbl_name": "binary_chunks",
+      "sql": "CREATE TRIGGER binary_chunk_immutable BEFORE UPDATE ON binary_chunks BEGIN SELECT RAISE(ABORT,'binary_chunk_immutable'); END"
+    },
+    {
+      "name": "binary_chunk_shape",
+      "type": "trigger",
+      "tbl_name": "binary_chunks",
+      "sql": "CREATE TRIGGER binary_chunk_shape BEFORE INSERT ON binary_chunks WHEN NOT EXISTS(SELECT 1 FROM binary_objects o\n  WHERE o.id=NEW.object_id AND NEW.chunk_index*32768<o.byte_count AND\n   length(NEW.bytes)=min(32768,o.byte_count-NEW.chunk_index*32768))\n  BEGIN SELECT RAISE(ABORT,'invalid_binary_chunk'); END"
+    },
+    {
+      "name": "binary_chunks",
+      "type": "table",
+      "tbl_name": "binary_chunks",
+      "sql": "CREATE TABLE binary_chunks (\n  object_id TEXT NOT NULL REFERENCES binary_objects(id) ON DELETE CASCADE,\n  chunk_index INTEGER NOT NULL CHECK(chunk_index>=0), chunk_mac TEXT NOT NULL,\n  bytes BLOB NOT NULL CHECK(length(bytes) BETWEEN 1 AND 32768), PRIMARY KEY(object_id,chunk_index)\n ) STRICT"
+    },
+    {
+      "name": "binary_object_immutable",
+      "type": "trigger",
+      "tbl_name": "binary_objects",
+      "sql": "CREATE TRIGGER binary_object_immutable BEFORE UPDATE ON binary_objects BEGIN SELECT RAISE(ABORT,'binary_object_immutable'); END"
+    },
+    {
+      "name": "binary_object_method",
+      "type": "index",
+      "tbl_name": "binary_objects",
+      "sql": "CREATE INDEX binary_object_method ON binary_objects(method_version_id,position)"
+    },
+    {
+      "name": "binary_object_owner",
+      "type": "trigger",
+      "tbl_name": "binary_objects",
+      "sql": "CREATE TRIGGER binary_object_owner BEFORE INSERT ON binary_objects WHEN\n  (NEW.asset_version_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM asset_versions v JOIN assets a ON a.id=v.asset_id\n   WHERE v.id=NEW.asset_version_id AND v.object_id=NEW.id AND a.state='available' AND v.state='available' AND\n    a.owner_id=NEW.owner_id AND a.scope=NEW.scope AND a.project_id=NEW.project_id AND\n    v.content_identity=NEW.content_identity AND v.media_type=NEW.media_type AND v.byte_count=NEW.byte_count)) OR\n  (NEW.method_version_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id\n   JOIN method_mixed_entries e ON e.version_id=v.id AND e.position=NEW.position WHERE v.id=NEW.method_version_id AND\n    v.state='available' AND p.state='available' AND p.owner_id=NEW.owner_id AND p.scope=NEW.scope AND p.project_id=NEW.project_id AND\n    e.kind='binary' AND e.binary_object_id=NEW.id AND e.content_identity=NEW.content_identity AND e.media_type=NEW.media_type AND e.byte_count=NEW.byte_count))\n  BEGIN SELECT RAISE(ABORT,'invalid_binary_owner'); END"
+    },
+    {
+      "name": "binary_object_release",
+      "type": "trigger",
+      "tbl_name": "binary_objects",
+      "sql": "CREATE TRIGGER binary_object_release AFTER DELETE ON binary_objects BEGIN\n  UPDATE binary_owner_usage SET byte_count=byte_count-OLD.byte_count WHERE owner_id=OLD.owner_id;\n  INSERT INTO asset_epochs VALUES(OLD.owner_id,OLD.scope,OLD.project_id,2)\n ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1;\n END"
+    },
+    {
+      "name": "binary_object_scope",
+      "type": "index",
+      "tbl_name": "binary_objects",
+      "sql": "CREATE INDEX binary_object_scope ON binary_objects(owner_id,scope,project_id,id)"
+    },
+    {
+      "name": "binary_objects",
+      "type": "table",
+      "tbl_name": "binary_objects",
+      "sql": "CREATE TABLE binary_objects (\n  id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('personal','project')), project_id TEXT NOT NULL, media_type TEXT NOT NULL, content_identity TEXT NOT NULL,\n  byte_count INTEGER NOT NULL CHECK(byte_count BETWEEN 1 AND 33554432), asset_version_id TEXT UNIQUE,\n  method_version_id TEXT, position INTEGER CHECK(position>=0), CHECK((scope='personal' AND project_id='') OR (scope='project' AND length(project_id)>0)),\n  UNIQUE(method_version_id,position),\n  FOREIGN KEY(asset_version_id) REFERENCES asset_versions(id) DEFERRABLE INITIALLY DEFERRED,\n  FOREIGN KEY(method_version_id,position) REFERENCES method_mixed_entries(version_id,position) DEFERRABLE INITIALLY DEFERRED,\n  CHECK((asset_version_id IS NOT NULL AND method_version_id IS NULL AND position IS NULL) OR\n    (asset_version_id IS NULL AND method_version_id IS NOT NULL AND position IS NOT NULL))\n ) STRICT"
+    },
+    {
+      "name": "binary_owner_usage",
+      "type": "table",
+      "tbl_name": "binary_owner_usage",
+      "sql": "CREATE TABLE binary_owner_usage (owner_id TEXT PRIMARY KEY, byte_count INTEGER NOT NULL CHECK(byte_count BETWEEN 0 AND 200000000)) STRICT"
+    },
+    {
+      "name": "method_binary_package_purge",
+      "type": "trigger",
+      "tbl_name": "method_packages",
+      "sql": "CREATE TRIGGER method_binary_package_purge AFTER UPDATE OF state ON method_packages WHEN OLD.state='available' AND NEW.state='deleted' BEGIN\n  DELETE FROM binary_objects WHERE method_version_id IN (SELECT id FROM method_versions WHERE package_id=NEW.id);\n  DELETE FROM method_mixed_entries WHERE version_id IN (SELECT id FROM method_versions WHERE package_id=NEW.id);\n END"
+    },
+    {
+      "name": "method_binary_purge",
+      "type": "trigger",
+      "tbl_name": "method_versions",
+      "sql": "CREATE TRIGGER method_binary_purge AFTER UPDATE OF state ON method_versions WHEN OLD.state='available' AND NEW.state='deleted' BEGIN\n  DELETE FROM binary_objects WHERE method_version_id=NEW.id;\n  DELETE FROM method_mixed_entries WHERE version_id=NEW.id;\n END"
+    },
+    {
+      "name": "method_format_immutable",
+      "type": "trigger",
+      "tbl_name": "method_manifest_formats",
+      "sql": "CREATE TRIGGER method_format_immutable BEFORE UPDATE ON method_manifest_formats BEGIN SELECT RAISE(ABORT,'method_format_immutable'); END"
+    },
+    {
+      "name": "method_format_parent",
+      "type": "trigger",
+      "tbl_name": "method_manifest_formats",
+      "sql": "CREATE TRIGGER method_format_parent BEFORE INSERT ON method_manifest_formats WHEN NOT EXISTS(\n  SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id WHERE v.id=NEW.version_id AND v.state='available' AND p.state='available')\n  BEGIN SELECT RAISE(ABORT,'method_parent_unavailable'); END"
+    },
+    {
+      "name": "method_manifest_formats",
+      "type": "table",
+      "tbl_name": "method_manifest_formats",
+      "sql": "CREATE TABLE method_manifest_formats (\n  version_id TEXT PRIMARY KEY REFERENCES method_versions(id), format TEXT NOT NULL CHECK(format='mixed-v1')\n ) STRICT"
+    },
+    {
+      "name": "method_mixed_binary",
+      "type": "index",
+      "tbl_name": "method_mixed_entries",
+      "sql": "CREATE INDEX method_mixed_binary ON method_mixed_entries(binary_object_id)"
+    },
+    {
+      "name": "method_mixed_entries",
+      "type": "table",
+      "tbl_name": "method_mixed_entries",
+      "sql": "CREATE TABLE method_mixed_entries (\n  version_id TEXT NOT NULL REFERENCES method_manifest_formats(version_id), position INTEGER NOT NULL CHECK(position>=0 AND position<256),\n  kind TEXT NOT NULL CHECK(kind IN ('text','binary')), path TEXT NOT NULL, folded_path TEXT NOT NULL,\n  media_type TEXT NOT NULL, content_identity TEXT NOT NULL, byte_count INTEGER NOT NULL CHECK(byte_count>=0),\n  binary_object_id TEXT UNIQUE REFERENCES binary_objects(id) DEFERRABLE INITIALLY DEFERRED,\n  PRIMARY KEY(version_id,position), UNIQUE(version_id,folded_path),\n  CHECK((kind='text' AND binary_object_id IS NULL) OR (kind='binary' AND binary_object_id IS NOT NULL AND byte_count BETWEEN 1 AND 33554432))\n ) STRICT"
+    },
+    {
+      "name": "method_mixed_immutable",
+      "type": "trigger",
+      "tbl_name": "method_mixed_entries",
+      "sql": "CREATE TRIGGER method_mixed_immutable BEFORE UPDATE ON method_mixed_entries BEGIN SELECT RAISE(ABORT,'method_entry_immutable'); END"
+    },
+    {
+      "name": "method_mixed_parent",
+      "type": "trigger",
+      "tbl_name": "method_mixed_entries",
+      "sql": "CREATE TRIGGER method_mixed_parent BEFORE INSERT ON method_mixed_entries WHEN NOT EXISTS(\n  SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id WHERE v.id=NEW.version_id AND v.state='available' AND p.state='available') OR\n  (NEW.kind='binary' AND EXISTS(SELECT 1 FROM binary_objects WHERE id=NEW.binary_object_id)) OR\n  (NEW.kind='text' AND NOT EXISTS(SELECT 1 FROM method_files f WHERE f.version_id=NEW.version_id AND f.position=NEW.position AND\n    f.path=NEW.path AND f.media_type=NEW.media_type AND f.content_identity=NEW.content_identity AND f.byte_count=NEW.byte_count))\n  BEGIN SELECT RAISE(ABORT,'invalid_method_entry'); END"
+    }
+  ]
+}

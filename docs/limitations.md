@@ -2527,3 +2527,18 @@ fixes did not relax runtime validation. Logs are retained under
 `/tmp/cairn-raw-p3c-evidence.n7PShP/worker-*.log`. Final frozen-source gates and
 independent reviews are recorded separately in the plan/PR; earlier green runs
 are not final-source evidence or measured semantic quality.
+
+## Standalone binary asset preview
+
+`assets-local-v1` is an explicit embedded opt-in using v31 SQLite BLOB chunks.
+It matches only the contract's bounded leading signatures and does not parse,
+decode, render, execute, scan for malware or call models. No asset CLI, MCP byte
+delivery, derivative creation or mixed-method import is exposed in this packet.
+Every binary read verifies metadata and only the selected chunk; corruption in
+another chunk is detected when it is selected. Authenticated totals prevent
+truncated completion. Logical purge does not erase freed pages, journals/WAL or
+backups, and the binary quota excludes that physical overhead. Deferred reads
+avoid the previous write-lock contention mechanism, but rollback-journal readers
+can still queue behind commits; overlap reader latency is reported without a
+latency threshold. Selecting assets performs a one-way v31 upgrade; older v30
+binaries refuse the upgraded store.

@@ -14,7 +14,7 @@ import { fail } from './validation.mjs';
 // capture, authority grants or backfill. A failure rolls back the whole opener.
 export function migrateMethodPrerequisites(db) {
   const version = db.prepare('PRAGMA user_version').get().user_version;
-  if (version === 30) return;
+  if (version >= 30) return;
   if (![18,20,21,22,23,24,25,26,27,28,29].includes(version)) fail('unsupported_database');
   for (const [threshold, install] of [
     [20,installPrivateCards], [21,installCardMemorySources], [22,installPrivateEvidence],
