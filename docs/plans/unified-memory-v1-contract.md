@@ -1414,7 +1414,7 @@ window degradation; Card source units; role profiles, relations and MOC (U5c);
 long-item validity of the default (HR-2 §3); total model-request spend; any
 budget number as a recommendation.
 
-### 15.8 Amendment v0.10.1: `representation-v2`, host-only snapshot, first-source policy (U5b-2)
+### 15.8 Amendment v0.10.2: `representation-v2`, host-only snapshot, first-source policy (U5b-2)
 
 Authored by the U5b coordinator on 2026-10-24 after the primary's installed
 smoke test of `0a38a991` (charter §5, `ec806085`) and the primary's decision
@@ -1423,7 +1423,13 @@ smoke test of `0a38a991` (charter §5, `ec806085`) and the primary's decision
 (`u5b2_contract_audit`, gpt-6.1-sol/xhigh): three P0, five P1, one P2. v0.10.1
 applies all of them; the consistency finding (P0) is resolved by the
 primary's decision of 2026-10-24: a per-item fence prefix in the compact ref
-(§15.8.3). Status: **v0.10.1, awaiting re-check.** Where this subsection contradicts §§15.1–15.7, including their
+(§15.8.3). The re-check of v0.10.1 (`165d7f99`) found three blocking items
+(verification must live in core; the item fence does not cover MOC parent
+moves; the host-v2 cost equation double-counted) and one new P1 (Card
+mutation codes); v0.10.2 applies them with the primary's second decision
+(parent-only moves are a documented path difference; the fence vector on
+core fetch input is approved under three conditions). Status: **v0.10.2,
+awaiting second re-check.** Where this subsection contradicts §§15.1–15.7, including their
 return-value and envelope descriptions, this subsection wins; every other U5b
 rule stays in force. `read_memory_context` ships in `v1-preview.2` as
 **experimental**, outside the versioning promise; experimental labelling and
@@ -1498,11 +1504,17 @@ One delivered item, with **default-valued fields omitted**:
   the Card body revision (mandatory for Cards, forbidden for Memories).
   `type` moves from the item into the ref. `f` is the **item fence prefix**:
   the first 8 base64url characters (48 bits) of the existing per-item HMAC
-  `bind('snapshot-item', item)` computed over the prepared canonical item
-  (`core/context-read-facade.mjs:108`), with no new key material. It is a
-  detection token only, never an authority: it proves nothing to the host
-  about who holds it, and leaking it to the model leaks nothing, because the
-  HMAC key is store-local and the prefix cannot be inverted or extended.
+  `bind('snapshot-item', item)` (`core/context-read-facade.mjs:108`),
+  computed over the **untouched canonical evidence DTO** exactly as the
+  snapshot path hashes it, never over the sorted wire projection, with no
+  new key material. It is a detection token only, never an authority: it
+  proves nothing to the host about who holds it. What it reveals: a stable
+  keyed fingerprint of the item and therefore equality/change information
+  across calls, not plaintext and not key material (the HMAC key is
+  store-local and the prefix cannot be inverted or extended). Assuming
+  pseudorandom HMAC output, a changed item escapes detection with
+  probability 2⁻⁴⁸ per comparison, union bound `M/2⁴⁸` over `M` comparisons:
+  bounded accidental-change detection, not adversarial integrity.
   Full refs with namespace objects stay available in diagnostics (§15.8.4)
   and are what `fetchCandidateEvidence` returns; the host never rewrites
   identities.
@@ -1609,11 +1621,20 @@ estimates; A13 measures and publishes the actual constants.
   compact forms `{ns, type:'memory', id, rev, f}` and
   `{ns, type:'card', id, rev, bodyRev, f}` exactly as delivered in the metered
   text. `f` is mandatory: a compact ref without `f` is `invalid_input`, so
-  the fence-less path is never reachable by omission. Validation happens on
-  the raw objects, before any Zod copy: own-data descriptors only, no
+  the fence-less path is never reachable by omission. Because the SDK
+  validates the registered input schema before the action runs
+  (`adapters/mcp/server.mjs:226`), the registered `refs` element schema
+  becomes a union whose **legacy arm is the original full-ref schema,
+  unchanged**, and whose compact arm is a strict object validated on the raw
+  descriptor before any normalization: own-data descriptors only, no
   prototype keys, no hybrid objects mixing compact and full keys; `ns` a safe
   non-negative integer, `rev`/`bodyRev` safe positive integers, `f` exactly
   8 base64url characters. Mixed arrays of compact and full refs are allowed.
+  Valid existing inputs produce byte-identical outputs; invalid existing
+  inputs keep the same refusal class (SDK parameter refusal versus tool
+  error) and the same `invalid_input` code, and the worker reports any
+  change in validation message text together with the assertion, if any,
+  that depends on it (no other owner's test is edited).
   The MCP tool layer (`adapters/mcp/context-read-tools.mjs`, U5b-owned)
   expands each compact ref purely against the host's **immutable startup
   read-set mapping** (`adapters/mcp/context-read-access.mjs:8`, never
@@ -1642,21 +1663,41 @@ estimates; A13 measures and publishes the actual constants.
   there is no item-level failure, the whole call refuses). Two mutations do
   not bump a revision and are invisible to full refs: same-revision receipt
   deletion, and moving an already-filed Memory between MOC parents
-  (`core/moc-storage.mjs:200,292`). The item fence covers both. Therefore,
-  after expansion and authorization, the tool layer **verifies `f`**: for
-  each expanded item it recomputes `bind('snapshot-item', item)` over the
-  canonically refetched item inside the same read transaction the fetch
-  uses and refuses the whole call `snapshot_stale` (`retryable:false`, the
-  snapshot path's code and retryability) when the first 8 characters differ.
-  There is no partial result and no fence-less fallback. Collision
-  probability is 2⁻⁴⁸ per stale item: detection, not security.
+  (`core/moc-storage.mjs:200,292`). The item fence covers the first: the
+  canonical evidence DTO includes the receipt references. It does **not**
+  cover the second: the DTO carries `filing.status` only, never MOC
+  memberships, and a filed→filed parent move advances only the namespace
+  epoch. By the primary's decision of 2026-10-24 this is a **documented
+  difference between the two paths**: a parent-only move leaves the
+  compact-ref fetch succeeding with byte-identical evidence (nothing the
+  model was shown changed, nothing newer or lesser is served), while the
+  snapshot fetch refuses `snapshot_stale` through its generation fence.
+  `docs/limitations.md` records it.
+  **Verification of `f`** lives in core, because `bind`, `read` and the
+  fetch transaction are private facade closures: `fetchCandidateEvidence`
+  input gains an optional `fences` array, aligned index by index with
+  `refs`, each entry an 8-character base64url prefix or `null`. The facade
+  compares every non-null prefix against the full fence it computes over
+  the canonically refetched item, inside **both** `fetchInside` executions
+  (the prepared read and the authoritative final read), after the existing
+  eligibility and revision validation, and refuses the whole call
+  `snapshot_stale` (`retryable:false`, the snapshot path's code and
+  retryability) on any mismatch. There is no partial result and no
+  fence-less fallback. `fences` is part of the authorized input (the
+  authority token binds it like every other field). Calls without `fences`
+  are byte-identical to today. Through MCP, `fences` is reachable **only**
+  by compact-ref expansion: the tool layer fills it from each compact ref's
+  `f` and `null` for full refs; a caller that supplies `fences` itself, or
+  any raw prefix vector beside full refs or a `snapshot`, is refused
+  `invalid_input` before any core call.
   - **Snapshot fetch** (host-side, from `_meta`) guarantees canonical
     generations, access generations and full fences over the exact delivered
     set, in delivered order.
   - **Compact-ref fetch** (the model's path) guarantees exact revision, intent
     eligibility and the item fence for each ref, plus re-authorization of
     `ns` against the immutable startup mapping; it does not check store
-    generations. A full ref without `f` keeps today's semantics.
+    generations, so namespace-only changes such as a parent move pass. A
+    full ref without `f` keeps today's semantics.
 - **Core hosts** (`contextRead()` callers without MCP) receive the full
   `snapshot` string in the success value and may pass it to
   `fetchCandidateEvidence` as before.
@@ -1715,8 +1756,10 @@ default change (§15.4).
   `sourcesComplete:true`). The description is bounded and contains no secrets
   or store identifiers.
 - `docs/context-read-local.md`, `CHANGELOG.md` and `docs/limitations.md`
-  record the representation change, the `_meta` snapshot and the experimental
-  status of the preview.2 shape. Shared-file rules of §15.6 apply.
+  record the representation change, the `_meta` snapshot, the experimental
+  status of the preview.2 shape, and the documented path difference of
+  §15.8.3 (parent-only MOC moves pass the compact-ref fetch and fail the
+  snapshot fetch). Shared-file rules of §15.6 apply.
 - Nothing else in §15.6 changes: counter construction, `--check-config`,
   allowlist, packaging and SQLite-free linking stay as specified.
 
@@ -1726,7 +1769,7 @@ default change (§15.4).
 | --- | --- |
 | A13 | **Known-answer serialization and constants.** A fixed fixture item (Memory and Card, with a concrete receipt, a `sameAsBody` receipt and a `sameAs` alias) serializes to a byte-exact expected v2 string constructed in the test without the production serializer. Constants: the test freezes the exact probe bytes (fixed ids, fixed namespace, fixed `f`, fixed 15-token body, one `sameAsBody` receipt per item) and builds three complete independent expected strings for 0, 1 and 2 items; the real `o200k_base` counter gives `T0`, `T1`, `T2`; the published constants are `envelope = T0`, `firstItem = T1 − T0`, `furtherItem = T2 − T1`, plus separately measured `bodyOnlyItem` (no sources), `concreteSource` (one 15-token concrete receipt delta) and `aliasSource` (one `sameAsBody` delta); bounds `T0 ≤ 40`, `T1 − T0 ≤ 90`, `T2 − T1 ≤ 80`; the constants, the probe strings, the counter id and the implementation commit are written to `evaluation/retrieval-research/assembly/overhead-host-v2.json`, labelled an approximate model (UUID and text tokenization vary), never a guarantee. The test skips with a printed reason when the tokenizer package is absent, and the coordinator runs it where it is present |
 | A14 | **Snapshot out of text.** For every assembly response (success and assembly error), no text block contains the snapshot string or any full fence, and the only fence-derived bytes in text are the 8-character `f` values; `_meta['ink.cairn/context-read-snapshot']` carries the snapshot beside the diagnostics key; the §13 tools' responses are unchanged; a host fetch with that snapshot returns exactly the delivered items in order; after a second-process mutation it refuses `snapshot_stale` (A06 unchanged); an empty selection carries `null` with no encoding call; the 16,384 bound is enforced once on the final snapshot and the 65,536 bound on the complete `{metered, snapshot, diagnostics}` envelope; the core success value carries the same snapshot string |
-| A15 | **Compact refs round-trip with fence verification.** Every `ref` in a delivered v2 text, passed verbatim to `fetch_memory_candidate_evidence`, returns the same item at the same revision with full namespace and canonical receipt references, under both intents, in a one- and a two-namespace read set, for Memories and Cards; mixed compact and full refs in one call succeed; U5a's existing fetch inputs produce byte-identical outputs and byte-identical validation errors. **Staleness is visible, never silent**, asserted per mutation kind × intent with the exact codes of §15.8.3: correction and filing-status change → `revision_conflict` (both intents); supersession → `evidence_unavailable` (`current`), `revision_conflict` (`history`); forget and deletion → `evidence_unavailable`; Card support or applicability loss → `evidence_unavailable`; Card edit → `revision_conflict`; same-revision receipt deletion → `snapshot_stale`; MOC parent move of a filed Memory → `snapshot_stale`; in every case the whole call refuses, no text carries post-mutation content, and the host's snapshot fetch for the same state refuses `snapshot_stale` (A06). **`f` is mandatory and verified:** a one-character change in `f` → `snapshot_stale`; a missing, short, long or non-base64url `f` → `invalid_input`; a full ref without `f` keeps today's semantics. **Authorization is re-derived, never trusted from the index:** expansion uses the immutable startup mapping and authorizes through `access.call` before any evidence read; a core caller passing the read set in reversed order gets canonical indices; out-of-range, negative, non-integer or non-own-data `ns`, hybrid compact/full objects, a Card ref without `bodyRev`, a Memory ref with one → `invalid_input` with zero core evidence reads; a host revoked before the call → `authority_required`; revocation during a granted call → `scope_changed`; a foreign fixture at the indexed position in another host's read set is never returned |
+| A15 | **Compact refs round-trip with fence verification.** Every `ref` in a delivered v2 text, passed verbatim to `fetch_memory_candidate_evidence`, returns the same item at the same revision with full namespace and canonical receipt references, under both intents, in a one- and a two-namespace read set, for Memories and Cards; mixed compact and full refs in one call succeed; valid existing U5a fetch inputs produce byte-identical outputs, invalid ones the same refusal class and code (§15.8.3); every existing U5a test passes unmodified. **Staleness is visible, never silent**, asserted per mutation kind × intent with the exact codes of §15.8.3, each case pinning the resulting eligibility and revisions in the test: Memory correction and filing-status change → `revision_conflict` (both intents); supersession → `evidence_unavailable` (`current`), `revision_conflict` (`history`); forget and deletion → `evidence_unavailable` (both); Card support or applicability loss → `evidence_unavailable` (`current`), and under `history` `revision_conflict` if a revision changed, otherwise `snapshot_stale` from the fence if the canonical item changed; Card edit → `revision_conflict` under `history`, and under `current` `revision_conflict` while still eligible, otherwise `evidence_unavailable`; same-revision receipt deletion → `snapshot_stale`; in every case the whole call refuses, no text carries post-mutation content, and the host's snapshot fetch for the same state refuses `snapshot_stale` (A06). **Documented path difference:** a filed→filed MOC parent move of a delivered Memory leaves the compact-ref fetch succeeding with byte-identical evidence while the snapshot fetch refuses `snapshot_stale`; A15 asserts exactly that pair. **`f` is mandatory and verified in core:** a one-character change in `f` → `snapshot_stale`; a missing, short, long or non-base64url `f` → `invalid_input`; a caller-supplied `fences` argument, or a prefix vector beside full refs or a `snapshot` → `invalid_input` with zero core calls; a core call with a `fences` entry whose prefix mismatches → `snapshot_stale` from both the prepared and the final read; a full ref without `f` keeps today's semantics. **Authorization is re-derived, never trusted from the index:** expansion uses the immutable startup mapping and authorizes through `access.call` before any evidence read; a core caller passing the read set in reversed order gets canonical indices; out-of-range, negative, non-integer or non-own-data `ns`, hybrid compact/full objects, a Card ref without `bodyRev`, a Memory ref with one → `invalid_input` with zero core evidence reads; a host revoked before the call → `authority_required`; revocation during a granted call → `scope_changed`; a foreign fixture at the indexed position in another host's read set is never returned |
 | A16 | **`sameAsBody` is legible and lossless.** For a receipt equal to the body, the metered text contains `"sameAsBody":true` with the receipt's `role` and does not contain a second copy of the body; the exposed `read_memory_context` tool description contains the sentence "`sameAsBody` means this receipt's excerpt equals this item's body verbatim" (asserted on the listed tool, not on a constant); `diagnostics.items[i].sources[j]` carries `kind:'sameAsBody'` with its token count and no text; the snapshot fetch and the compact-ref fetch return the item's canonical receipt references including that receipt (§13.6 shape, no excerpt text); a receipt that differs from the body by one byte is delivered concretely; a receipt equal to another item's body but not its own is delivered via `sameAs` or concretely, never `sameAsBody`; a `sameAsBody` unit is never a `sameAs` target; `dedup.body` and `sourcesComplete` are exact |
 | A17 | **Default omission is lossless.** Items with every default value carry no `metadata`, `sourceAccess` or `sourcesComplete` key; each non-default value appears in the text: `historical` Memories under `history`, `awaiting` review under `history` (ineligible under `current`), a confirmed review state, a filed status, a non-fact kind, an agent-inferred origin as the store actually records it, confidence < 1, Cards' always-present `support` and `origin`, `sourceAccess` unsupported or unavailable-for-noncurrent, `sourcesComplete:false`; `diagnostics.items[i].metadata` equals the §13.6 metadata for every item; the announced `assembly.defaults` equal the constant the serializer uses. The U5b-owned synthetic fixture's `reviewState:'not-required'` (`core/testing/context-read-assembly-fixture.mjs:50`) is wrong against the store and is corrected to the canonical value in this packet |
 | A18 | **First-source policy.** Visitation order verified against the pinned HR-2 P-top-s1 schedule on the A02 fixture; an item admits at most its earliest capped receipt, and only when it fits; a rejected first receipt never causes the second to be tried; later receipts are counted omitted; `sourcesComplete:false` whenever more than one capped receipt exists; default policy unchanged |
@@ -1738,12 +1781,22 @@ After A13 publishes the constants, the HR-2 harness gains
 `--overhead-model host-v2`, read from `overhead-host-v2.json` with its
 commit. The existing scalar `O` (`assembly/arms.mjs:23`, one surcharge per
 unit) cannot express it, so the model is a separate cost function with its
-own cell identity (`O=host-v2@<commit>` in file names and provenance):
-`cost(selection) = envelope + Σ_items (firstItem if first else furtherItem)
-+ Σ_concrete_sources concreteSource + Σ_alias_sources aliasSource +
-tokens(body) + Σ_concrete_sources tokens(excerpt)`, where a receipt whose
-excerpt equals its body is charged as an alias and its text is never charged
-twice. The addendum re-runs the exploratory grid of results §2 on the frozen
+own cell identity (`O=host-v2@<commit>` in file names and provenance).
+Constants, all from A13's frozen probe with 15-token bodies: `E` = envelope
+(`T0`); `B_n` = tokens of the `n`-item body-only probe minus `E`;
+`h1 = B_1 − 15` (first-item representation without its body text);
+`hN = B_2 − B_1 − 15` (each further item); `C` = delta of one concrete
+15-token receipt; `A` = delta of one `sameAsBody` receipt. For `n > 0`
+delivered items:
+`cost = E + h1 + (n − 1)·hN + Σ_items tokens(body) + Σ_concrete_sources (C − 15 + tokens(excerpt)) + Σ_body_aliases A`,
+and `cost(empty) = E`; a receipt whose excerpt equals its body is charged as
+an alias and its text is never charged twice; every other receipt is charged
+as concrete in this approximate model. The raw `firstItem`/`furtherItem`
+constants stay published solely for the A13 bounds. The harness validates
+`host-v2` cells explicitly: `score.mjs` (which today accepts only overhead
+0/8 and scalar costs, `assembly/score.mjs:40,67,75`) gains a `host-v2`
+replay that recomputes each cell's cost from the constants and refuses a
+cell that does not match. The addendum re-runs the exploratory grid of results §2 on the frozen
 inputs under protocol v1.1 without any model or spend, and publishes
 `docs/plans/budgeted-assembly-hr2-results.md` v1.1 with the host-overhead
 curves beside the `O = 0` curves, as a separately versioned exploratory
