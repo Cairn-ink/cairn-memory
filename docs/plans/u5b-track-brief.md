@@ -67,6 +67,15 @@ first session, the **primary**. Written 2026-10-23.
 - **Review**: two non-author reviewers (Spec, Standards), each on a
   clean detached worktree of the exact commit. Never let a reviewer read
   a worktree that a worker is editing.
+- **Machine-wide test queue (mandatory):** wrap every heavy run in
+  `~/.local/bin/cairn-heavy <command>`. It takes an exclusive `flock` on
+  `~/.cache/cairn-heavy-tests.lock`, which both sessions share, and waits until
+  the load average is below 12 (`CAIRN_MAX_LOAD`). Heavy runs include full
+  matrices, `test:core`, `test:artifact` and measurements. The shared CI
+  script is `~/.local/bin/cairn-ci-matrix`, so run, for example,
+  `cairn-heavy cairn-ci-matrix <worktree> <outdir>`.
+  Tell Codex workers not to run broad suites in their sandbox: only the
+  test files they touched (item 11 in the TRAPS file).
 - **Acceptance**: run outside the sandbox with
   `/tmp/claude-1000/-home-chichieh-cairn-memory/e7bc6894-2b04-4de0-a5e2-78112847aff1/scratchpad/acceptance/ci-matrix.sh <worktree> <outdir>`.
   Install `adapters/mcp`, `adapters/openai` and `tools/plugin-validation`
