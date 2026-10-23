@@ -77,3 +77,14 @@
 - 分兩部分實作：**第一部分只動 core**（facade 的 `contextRead`、組裝模組、輸入驗證、capabilities、U5b 自有
   fixture 與 oracle 測試），不碰共用檔案；**第二部分 host 接線**等使用者／主控回覆共用檔案與 U5a 兩個斷言
   的處理方式後再派。
+
+## 2026-10-24
+
+- **主控答覆（使用者要求我直接問主控）U5b 第二部分**：(1) 共用檔案（`adapters/mcp/cli.mjs`、`server.mjs`、
+  `packaging/artifact-files.json`、`CHANGELOG.md`、`docs/limitations.md`）由我的 worker 在 U5b 分支做增量修改，
+  主控合併並處理衝突；條件：每處改動獨立成塊、緊鄰既有 context-read 接線、不重排不重排版鄰行（U4b 同時在改
+  同批檔案）；TRAPS 2–3；o200k 計數器只在 `--check-config` 返回後的 context 啟用路徑建構；新模組與文件進
+  manifest 並對靜態 import 圖交叉核對；`core/contract.mjs`、`core/database.mjs` 不動；另一個 session 的測試與
+  fixture 不動。(2) U5a 兩個斷言選 **(b)**：我的 worker 改，但要斷言確切工具名稱清單（啟用時多 `read_memory_context`，
+  flag-off 清單完全不變）。交接：第二部分驗收與審查完成後告知 commit，主控在 U4a-1 與 U4b 落地後合併並跑完整矩陣。
+- 派工：`u5b_impl` 第一部分（core）執行中；第二部分等第一部分提交後再派。`hr2_harness` 執行中。
