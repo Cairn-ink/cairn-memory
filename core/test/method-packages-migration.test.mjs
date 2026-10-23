@@ -27,7 +27,7 @@ test('M01 default stays v18 and selected fresh store is v30 without runtime prer
   let db=new DatabaseSync(path);assert.equal(db.prepare('PRAGMA user_version').get().user_version,18);db.close();
   const trusted=host();core=openMemoryCore({path,methodPackages:trusted.options});
   for(const method of ['captureRaw','submitSourceNote','getLocalCaptureControl'])assert.equal(core[method],undefined);
-  assert.equal(ok(core.getMethodPackageCapabilities()).context,false);core.close();
+  assert.equal(ok(core.getMethodPackageCapabilities()).context,true);core.close();
   db=new DatabaseSync(path);assert.equal(db.prepare('PRAGMA user_version').get().user_version,30);
   for(const name of ['raw_capture_events','local_capture_controls','card_notes',...bindingTables])assert.equal(db.prepare(`SELECT count(*) n FROM ${name}`).get().n,0);
   const before=readFileSync(path);db.close();core=openMemoryCore({path});assert.deepEqual(Object.keys(core),keys);core.close();

@@ -22,16 +22,16 @@ test('M03 immutable requested-version reads, manifest identity mismatch and UTF1
   assert.equal(ok(f.call('getMethodVersion',history(first.version))).version.adoptionStatus,'unassessed');
 });
 
-test('M03 every read verifies persisted manifest/content and context/snapshot/current are deferred',t=>{
+test('M03 every read verifies persisted manifest/content and invalid contexts, pins and current-without-context refuse',t=>{
   const f=fixture(t),first=ok(f.call('importMethodVersion',input()));
   for(const method of ['getMethodVersion','listMethodManifest','readMethodFile']){
     const base={...history(first.version),...(method==='readMethodFile'?{path:'SKILL.md'}:{})};
-    for(const patch of [{intent:'current'},{intent:undefined},{context:{readSet:[ns],roleId:null}},{context:null},{snapshot:'opaque'},{snapshot:null}]){
+    for(const patch of [{intent:'current'},{intent:undefined},{context:null},{snapshot:'opaque'},{snapshot:null}]){
       const candidate={...base,...patch};if(candidate.intent===undefined)delete candidate.intent;
       error(f.call(method,candidate),'invalid_input');
     }
   }
-  error(f.call('listMethodVersions',{package:first.package,context:{readSet:[ns],roleId:'test'}}),'invalid_input');
+  assert.equal(ok(f.call('listMethodVersions',{package:first.package,context:{readSet:[ns],roleId:'test'}})).versions[0].adoptionStatus,'never-adopted');
   f.db.prepare('UPDATE method_files SET text=? WHERE version_id=?').run('Corrupted synthetic content.',first.version.versionId);
   for(const method of ['getMethodVersion','listMethodManifest','readMethodFile'])error(f.call(method,{...history(first.version),...(method==='readMethodFile'?{path:'SKILL.md'}:{})}),'method_version_unavailable');
 });

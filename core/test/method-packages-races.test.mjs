@@ -21,8 +21,11 @@ async function race(f,operations) {
     const paths={ready:stem+'.ready',entered:stem+'.entered',result:stem+'.result'};
     writeFileSync(configuration,JSON.stringify({path:f.path,...operation,...paths,start}),{mode:0o600});
     const stdout=stem+'.stdout',stderr=stem+'.stderr',out=openSync(stdout,'wx',0o600),err=openSync(stderr,'wx',0o600);
+    // These writers are independent processes, not node:test workers. Match
+    // the owned runner's environment fence before their fixture imports node:test.
+    const environment={...globalThis.process.env};delete environment.NODE_TEST_CONTEXT;
     let process;
-    try{process=spawn(globalThis.process.execPath,[fileURLToPath(new URL('../testing/method-package-race-child.mjs',import.meta.url)),configuration],{stdio:['ignore',out,err]});}
+    try{process=spawn(globalThis.process.execPath,[fileURLToPath(new URL('../testing/method-package-race-child.mjs',import.meta.url)),configuration],{env:environment,stdio:['ignore',out,err]});}
     finally{closeSync(out);closeSync(err);}
     const closed=new Promise(resolve=>{
       process.once('error',error=>resolve({error}));

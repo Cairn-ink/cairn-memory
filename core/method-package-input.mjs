@@ -6,9 +6,10 @@ import { denseArray, fail, identifier, object, revision } from './validation.mjs
 
 export const METHOD_METHODS = Object.freeze(['importMethodVersion','getMethodVersion','listMethodManifest',
   'readMethodFile','listMethodPackages','listMethodVersions','compareMethodVersions',
-  'deleteMethodVersion','deleteMethodPackage','listMethodEffects','getMethodPackageUsage']);
-export const METHOD_READS = new Set(METHOD_METHODS.filter(name => !['importMethodVersion','deleteMethodVersion','deleteMethodPackage'].includes(name)));
-export const METHOD_LIMITS = Object.freeze({ packages: 256, versions: 128, files: 64, fileUnits: 100_000,
+  'deleteMethodVersion','deleteMethodPackage','listMethodEffects','getMethodPackageUsage',
+  'adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents']);
+export const METHOD_READS = new Set(METHOD_METHODS.filter(name => !['importMethodVersion','deleteMethodVersion','deleteMethodPackage','adoptMethodVersion','disableMethodBinding'].includes(name)));
+export const METHOD_LIMITS = Object.freeze({ packages: 256, versions: 128, bindings: 1024, files: 64, fileUnits: 100_000,
   versionUnits: 1_000_000, pathUnits: 512, reasonRefs: 16, changeItems: 32, changeUnits: 500,
   ownerBytes: 50_000_000, partUnits: 4000, pageItems: 20, responseBytes: 65536 });
 export const METHOD_MEDIA = Object.freeze(['text/markdown','text/plain','application/json','application/yaml','text/csv']);
@@ -65,6 +66,35 @@ export function methodVersionRef(value) {
   return { type: value.type, namespace: cardNamespace(value.namespace), packageId: identifier(value.packageId),
     versionId: identifier(value.versionId), manifestIdentity: value.manifestIdentity };
 }
+export function methodRole(value) {
+  if (value === null) return '*';
+  if (typeof value !== 'string' || !/^[A-Za-z0-9._-]{1,200}$/.test(value)) fail('invalid_input');
+  return value;
+}
+export function methodReadSet(value) {
+  const namespaces = denseArray(value, 1, 2).map(cardNamespace);
+  if (namespaces.some(ns => ns.ownerId !== namespaces[0].ownerId) ||
+      namespaces.length === 2 && namespaces[0].scope === namespaces[1].scope) fail('invalid_input');
+  return namespaces.sort((a,b) => a.scope === b.scope ? 0 : a.scope === 'personal' ? -1 : 1);
+}
+export function methodContext(value) {
+  object(value, ['readSet','roleId']);
+  methodRole(value.roleId);
+  return { readSet: methodReadSet(value.readSet), roleId: value.roleId };
+}
+export function methodBindingRef(value) {
+  object(value,['type','bindingNamespace','package','roleKey','revision']);
+  if (value.type !== 'method-binding') fail('invalid_input');
+  if (value.roleKey !== '*') methodRole(value.roleKey);
+  revision(value.revision);
+  return { type:value.type, bindingNamespace:cardNamespace(value.bindingNamespace),package:methodPackageRef(value.package),roleKey:value.roleKey,revision:value.revision };
+}
+export function methodReasons(value, ns) {
+  const refs=denseArray(value===undefined?[]:value,0,16).map(ref=>methodReasonRef(ref,ns));
+  if(new Set(refs.map(ref=>JSON.stringify(ref))).size!==refs.length)fail('invalid_input');
+  return refs;
+}
+export const includesNamespace = (readSet, ns) => readSet.some(value=>sameNamespace(value,ns));
 export function methodPath(value) {
   if (typeof value !== 'string' || !value.isWellFormed() || !value || value.length > 512 ||
       /[\\\0]/.test(value) || value.startsWith('/') || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(value) ||
@@ -131,14 +161,43 @@ export function validateMethodCall(method, input) {
     compareMethodVersions: ['from','to','cursor'], deleteMethodVersion: ['actionId','ref','expectedRevision'],
     deleteMethodPackage: ['actionId','ref','expectedRevision'], listMethodEffects: ['namespace','limit','cursor'],
     getMethodPackageUsage: ['namespace'],
+    adoptMethodVersion: ['bindingNamespace','actionId','package','roleId','version','expectedRevision','readSet','reasonRefs'],
+    disableMethodBinding: ['bindingNamespace','actionId','package','roleId','expectedRevision','readSet','reasonRefs'],
+    resolveMethod: ['readSet','package','roleId'], resolveMethodsForRole: ['readSet','roleId','limit','cursor'],
+    listMethodBindingEvents: ['bindingNamespace','package','limit','cursor'],
   };
   object(input, fields[method]);
-  if (Object.hasOwn(input, 'context') || Object.hasOwn(input, 'snapshot') ||
-      Object.hasOwn(input, 'intent') && input.intent !== 'history') fail('invalid_input');
-  if (['getMethodVersion','listMethodManifest','readMethodFile'].includes(method) && input.intent !== 'history') fail('invalid_input');
+  if (Object.hasOwn(input,'context')) methodContext(input.context);
+  if (Object.hasOwn(input,'snapshot') && (typeof input.snapshot !== 'string' || !input.snapshot || input.snapshot.length>65536)) fail('invalid_input');
+  if (['getMethodVersion','listMethodManifest','readMethodFile'].includes(method)) {
+    if (!['history','current'].includes(input.intent) || input.intent==='current' && input.context===undefined) fail('invalid_input');
+  }
   if (input.cursor !== undefined && (typeof input.cursor !== 'string' || input.cursor.length > 8192)) fail('invalid_cursor');
   if (Object.hasOwn(input, 'limit')) methodPageLimit(input.limit);
   if (!METHOD_READS.has(method)) identifier(input.actionId);
+  if (['adoptMethodVersion','disableMethodBinding'].includes(method)) {
+    const ns=cardNamespace(input.bindingNamespace), ref=methodPackageRef(input.package), readSet=methodReadSet(input.readSet);
+    methodRole(input.roleId);
+    if (input.expectedRevision!==null)revision(input.expectedRevision);
+    if (!(sameNamespace(ns,ref.namespace) || ns.ownerId===ref.namespace.ownerId && ns.scope==='project' && ref.namespace.scope==='personal') ||
+        !includesNamespace(readSet,ns) || !includesNamespace(readSet,ref.namespace)) fail('method_not_found');
+    if (method==='adoptMethodVersion') {
+      const version=methodVersionRef(input.version);
+      if (!sameNamespace(version.namespace,ref.namespace) || version.packageId!==ref.packageId)fail('method_not_found');
+    }
+    denseArray(input.reasonRefs===undefined?[]:input.reasonRefs,0,16).forEach(ref=>cardNamespace(ref?.namespace));
+    return ns;
+  }
+  if (['resolveMethod','resolveMethodsForRole'].includes(method)) {
+    const readSet=methodReadSet(input.readSet);methodRole(input.roleId);
+    if(method==='resolveMethod' && methodPackageRef(input.package).namespace.ownerId!==readSet[0].ownerId)fail('method_not_found');
+    return readSet[0];
+  }
+  if (method==='listMethodBindingEvents') {
+    const ns=cardNamespace(input.bindingNamespace);
+    if(input.package!==undefined && methodPackageRef(input.package).namespace.ownerId!==ns.ownerId)fail('method_not_found');
+    return ns;
+  }
   if (method === 'importMethodVersion') {
     const ns = cardNamespace(input.namespace);
     if (input.package !== undefined) {
@@ -162,9 +221,10 @@ export function validateMethodCall(method, input) {
   }
   if (['getMethodVersion','listMethodManifest','readMethodFile'].includes(method)) {
     if (method === 'readMethodFile') methodPath(input.path);
-    return methodVersionRef(input.version).namespace;
+    const ref=methodVersionRef(input.version);
+    return input.context===undefined ? ref.namespace : methodContext(input.context).readSet[0];
   }
-  if (method === 'listMethodVersions') return methodPackageRef(input.package).namespace;
+  if (method === 'listMethodVersions') { const ref=methodPackageRef(input.package);return input.context===undefined?ref.namespace:methodContext(input.context).readSet[0]; }
   if (method === 'compareMethodVersions') {
     const from = methodVersionRef(input.from), to = methodVersionRef(input.to);
     if (!sameNamespace(from.namespace, to.namespace) || from.packageId !== to.packageId) fail('method_not_found');

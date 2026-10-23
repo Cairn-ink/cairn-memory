@@ -18,6 +18,7 @@
   "core/prompts/qualify-episode-candidates.md",
   "core/procedural-storage.mjs",
   "core/method-package-facade.mjs",
+  "core/method-binding-storage.mjs",
   "core/method-package-input.mjs",
   "core/method-package-migration.mjs",
   "core/method-package-schema.mjs",

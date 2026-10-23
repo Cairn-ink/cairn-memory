@@ -19,7 +19,7 @@ function argumentsFor(receipt) {
 test('M09 all U2a methods reject omitted, forged, revoked, wrong-scope and stale-generation authority without leaks',t=>{
   const f=fixture(t),receipt=ok(f.call('importMethodVersion',input())),args=argumentsFor(receipt);
   assert.deepEqual(ok(f.core.getMethodPackageCapabilities()).methods,[...METHOD_METHODS]);
-  for(const method of METHOD_METHODS){
+  for(const method of Object.keys(args)){
     error(f.core[method](args[method]),'authority_required');error(f.core[method](args[method],{}),'authority_required');
     f.trusted.state.enabled=false;error(f.call(method,args[method]),'authority_required');f.trusted.state.enabled=true;
     f.trusted.state.wrongScope=true;error(f.call(method,args[method]),'authority_required');f.trusted.state.wrongScope=false;
@@ -35,7 +35,7 @@ test('M09 all U2a methods reject omitted, forged, revoked, wrong-scope and stale
 test('M09 capture, draft, organization and serialized model flags never mint method authority; read and mutation classes are separate',t=>{
   const f=fixture(t),receipt=ok(f.call('importMethodVersion',input())),args=argumentsFor(receipt);
   for(const permitted of [['capture'],['draft'],['organization']]){
-    f.trusted.state.classes=permitted;for(const method of METHOD_METHODS)error(f.call(method,args[method]),'authority_required');
+    f.trusted.state.classes=permitted;for(const method of Object.keys(args))error(f.call(method,args[method]),'authority_required');
   }
   f.trusted.state.classes=['read'];error(f.call('importMethodVersion',input('read-cannot-import')),'authority_required');
   error(f.call('deleteMethodVersion',args.deleteMethodVersion),'authority_required');

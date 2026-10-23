@@ -149,17 +149,17 @@ test('M08 imports and deletion never enumerate bindings, advance binding generat
     assert.equal(JSON.stringify(actual),JSON.stringify(expected));db.close();`,[f.path,JSON.stringify(before)]);
 });
 
-test('M01/M03 U2a capabilities and context-free history stay bounded even with canonical bindings present',t=>{
+test('M01/M03 U2 capabilities and context-free history stay bounded even with canonical bindings present',t=>{
   const f=seeded(t);insert(f.db,'method_bindings',binding(ns,f.first.version));
   const capabilities=ok(f.core.getMethodPackageCapabilities());
   assert.deepEqual(capabilities.methods,['importMethodVersion','getMethodVersion','listMethodManifest','readMethodFile',
-    'listMethodPackages','listMethodVersions','compareMethodVersions','deleteMethodVersion','deleteMethodPackage','listMethodEffects','getMethodPackageUsage']);
-  assert.deepEqual(capabilities.intents,['history']);assert.equal(capabilities.context,false);assert.equal(capabilities.snapshots,false);assert.equal(capabilities.adoptionBindings,false);
-  for(const method of ['adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents'])assert.equal(f.core[method],undefined);
+    'listMethodPackages','listMethodVersions','compareMethodVersions','deleteMethodVersion','deleteMethodPackage','listMethodEffects','getMethodPackageUsage','adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents']);
+  assert.deepEqual(capabilities.intents,['history','current']);assert.equal(capabilities.context,true);assert.equal(capabilities.snapshots,true);assert.equal(capabilities.adoptionBindings,true);
+  for(const method of ['adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents'])assert.equal(typeof f.core[method],'function');
   for(const method of ['getMethodVersion','listMethodManifest','readMethodFile']){
     const payload={...history(f.first.version),...(method==='readMethodFile'?{path:'SKILL.md'}:{})};
     const result=ok(f.call(method,payload));assert.equal(method==='getMethodVersion'?result.version.adoptionStatus:result.adoptionStatus,'unassessed');
-    for(const patch of [{intent:'current'},{context:{readSet:[ns],roleId:null}},{snapshot:'opaque'},{context:null},{snapshot:null}]){
+    for(const patch of [{intent:'current'},{snapshot:'opaque'},{context:null},{snapshot:null}]){
       error(f.call(method,{...payload,...patch}),'invalid_input');
     }
   }

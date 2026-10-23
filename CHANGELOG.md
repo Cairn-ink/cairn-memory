@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — local method bindings and pins (U2b)
+
+- Add explicit adoption/disable CAS, four-level resolution with disabled and
+  unavailable barriers, authenticated current/history pins and binding-event reads.
+- Reauthorize every read-set namespace, retain exact cross-scope package identity,
+  and advance binding generations only on transitions. The frozen v30 layout is
+  unchanged; deletion uses canonical lifecycle fences without binding fanout.
+- Extend the synthetic method example with adopt → resolve → pin → disable.
+  Installed importing, approval UI and MCP tools remain U3 work.
+
 ## Unreleased — opt-in local method packages (U2a)
 
 - Keep historical migration and compatibility tests shallow-safe with immutable
@@ -14,8 +24,8 @@
   generation and content-free binding-event storage, through a transactional
   schema-only prerequisite migrator; unselected construction stays unchanged. Existing upgraded stores reopen through
   ordinary, read-only, managed and local setup/preflight paths.
-- Require method-specific host authority. Bindings, contexts, snapshots, current
-  intent and installed directory importing remain deferred. U2b uses the frozen
+- Require method-specific host authority. At the U2a checkpoint, bindings, contexts,
+  snapshots and current intent were deferred; U2b adds them on the frozen
   v30 layout; deletion advances lifecycle revisions and emits only its deletion
   effect, without enumerating bindings or advancing binding generations. See
   [the local guide](docs/method-packages-local.md).

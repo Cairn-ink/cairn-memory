@@ -1,20 +1,21 @@
 # Known limitations
 
-## Text-only local method packages (U2a)
+## Text-only local method packages (U2)
 
 [Method packages](method-packages-local.md) are default-off engine mechanics,
-not installed method adoption or execution. U2a supports only independently
-submitted text and context-free history: context, snapshot and current-intent
-arguments return `invalid_input` until U2b. The complete v30 schema already
-includes empty binding, generation and event tables; U2b adds behaviour without
-a layout change. Deletion changes lifecycle revisions and its deletion effect
-only; binding generations advance only on binding transitions. U3 owns safe filesystem importing
+not execution or an installed adoption workflow. U2b adds explicit binding CAS,
+four-level resolution, authenticated pins and content-free events on the same
+frozen v30 layout. Every read set requires fresh host authorization; pins grant
+no access. Disabled/deleted targets remain barriers. Historical pins preserve
+identity and access checks, without asserting current adoption. Deletion changes
+lifecycle revisions and its deletion effect only; binding generations advance
+only on binding transitions. U3 owns safe filesystem importing
 and installed host authority; U4 owns binary assets; U5 owns dependency fences
 for source-derived copies and generated summaries. Hosts must not import fenced
 or forgotten source output. Best-effort redaction is not a secret-removal
 guarantee; logical purge is not secure physical erasure. The provisional limits
 need U3 size measurement. Namespace usage excludes metadata, ledgers, effects,
-SQLite overhead, WAL and backups; owner-wide totals are not exposed by U2a.
+SQLite overhead, WAL and backups; owner-wide totals are not exposed by U2.
 Synthetic migration tests consume frozen historical fixtures in shallow CI;
 maintainers verify their provenance through the opt-in full-history recipe in the
 [guide](method-packages-local.md#synthetic-verification-and-historical-fixtures).

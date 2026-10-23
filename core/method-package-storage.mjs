@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { createMethodBindingStorage } from './method-binding-storage.mjs';
 import { transaction } from './database.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { keyed } from './private-card-input.mjs';
@@ -7,7 +8,7 @@ import { createCardRawSources } from './card-raw-sources.mjs';
 import { createOperationLedger, createPrivateEffectWriter, createPrivateCursor,
   privateBoundary as boundary, privateWhere as where, envelopeBytes as size } from './private-operation-helpers.mjs';
 import { methodPackageRef, methodVersionRef, methodFiles, methodChange, methodLabel, methodPageLimit,
-  METHOD_LIMITS, sameNamespace } from './method-package-input.mjs';
+  METHOD_LIMITS, sameNamespace, methodContext, includesNamespace } from './method-package-input.mjs';
 
 const now = () => new Date().toISOString();
 const completeCoverage = count => ({ status: 'complete', included: count, omitted: 0 });
@@ -17,7 +18,7 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
   const ledger = createOperationLedger(db, 'method_operations');
   const effect = createPrivateEffectWriter(db, 'method_effects');
   const receipts = createCardReceiptSources(db, binding), raw = createCardRawSources(db, identity);
-  const epoch = ns => binding('method-read-generation-v1', [
+  const epoch = ns => Array.isArray(ns) ? binding('method-readset-generation-v1',ns.map(namespace=>epoch(namespace))) : binding('method-read-generation-v1', [
     ...['method_epochs','card_epochs'].map(table => db.prepare(`SELECT generation FROM ${table} WHERE ${where}`).get(...boundary(ns))?.generation ?? 1),
     db.prepare(`SELECT epoch FROM namespace_epochs WHERE ${where}`).get(...boundary(ns))?.epoch ?? 1,
     db.prepare(`SELECT generation FROM raw_exclusion_clocks WHERE ${where}`).get(...boundary(ns))?.generation ?? 1,
@@ -168,11 +169,18 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
       if (--end <= start) fail('context_item_too_large');
     }
   }
-  function read(method, ns, input, accessGeneration) {
+  const bindings=createMethodBindingStorage({db,binding,packageRow,packageRef,target,reasonAvailable,effect,page});
+  function read(method, ns, input, accessGeneration,access) {
+    const readSet=input.context!==undefined?methodContext(input.context).readSet:input.readSet;
+    const cursorScope=readSet??ns;
+    const streamInput=Object.fromEntries(Object.entries(input).filter(([key]) => key !== 'cursor'));
     const expected = { store: identity.storeId, namespace: ns, method, accessGeneration,
-      input: Object.fromEntries(Object.entries(input).filter(([key]) => key !== 'cursor')) };
+      input: readSet || input.snapshot!==undefined ? binding('method-stream-v1',[streamInput,access]) : streamInput };
     // Validate cursor before mutable existence/availability checks on every stream.
-    if (input.cursor !== undefined) cursors.decode(input.cursor,expected,ns);
+    if (input.cursor !== undefined) cursors.decode(input.cursor,expected,cursorScope);
+    if(method==='resolveMethod')return bindings.resolve(input,access);
+    if(method==='resolveMethodsForRole')return bindings.list(input,access,expected);
+    if(method==='listMethodBindingEvents')return bindings.events(ns,input,expected);
     if (method === 'getMethodPackageUsage') return { version: 'method-package-usage-v1', namespace: ns,
       retainedFileBytes: db.prepare(`SELECT coalesce(sum(v.byte_count),0) AS n FROM method_versions v JOIN method_packages p ON p.id=v.package_id
         WHERE p.owner_id=? AND p.scope=? AND p.project_id=?`).get(...boundary(ns)).n,
@@ -190,10 +198,16 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
       return page(ns,expected,input,entries,packages => ({ packages }));
     }
     if (method === 'listMethodVersions') {
-      const ref = methodPackageRef(input.package), pkg = packageRow(ns,ref.packageId);
+      const ref = methodPackageRef(input.package);
+      if(readSet && !includesNamespace(readSet,ref.namespace))return {status:'unavailable',versions:[]};
+      const pkg = packageRow(ref.namespace,ref.packageId);
       if (!pkg) fail('method_not_found');
-      const entries = db.prepare('SELECT * FROM method_versions WHERE package_id=? ORDER BY ordinal').all(pkg.id).map(row => metadata(ns,row));
-      return page(ns,expected,input,entries,versions => ({ versions }));
+      const entries = db.prepare('SELECT * FROM method_versions WHERE package_id=? ORDER BY ordinal').all(pkg.id).map(row => {
+        const value=metadata(ref.namespace,row);
+        if(input.context!==undefined && row.state==='available')value.adoptionStatus=bindings.adoption({row},{...input,version:value.ref,intent:'history'},access,null);
+        return value;
+      });
+      return page(cursorScope,expected,input,entries,versions => ({ versions }));
     }
     if (method === 'compareMethodVersions') {
       const from = target(ns,input.from), to = target(ns,input.to);
@@ -213,14 +227,18 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
         status: 'available', reason, changes: selected.filter(e => e.type === 'diff').map(e => e.value),
         items: selected.filter(e => e.type === 'item').map(e => e.value), reasonRefs: selected.filter(e => e.type === 'reason').map(e => e.value) }));
     }
-    const found = target(ns,input.version);
+    const saved=bindings.decode(input.snapshot),ref=methodVersionRef(input.version);
+    bindings.pinVersion(saved,ref);
+    if(readSet && !includesNamespace(readSet,ref.namespace))return method==='getMethodVersion'?{version:null,status:'unavailable',adoptionStatus:'unavailable'}:{status:'unavailable',adoptionStatus:'unavailable'};
+    const found = target(ref.namespace,input.version);
     if (!found.available) return method === 'getMethodVersion' ? { version: null, status: 'unavailable', adoptionStatus: 'unavailable' } :
       { status: 'unavailable', adoptionStatus: 'unavailable' };
-    if (method === 'getMethodVersion') return { version: metadata(ns,found.row) };
-    if (method === 'listMethodManifest') return page(ns,expected,input,manifest(found.files),files => ({ files, adoptionStatus: 'unassessed' }));
+    const adoptionStatus=bindings.adoption(found,input,access,saved);
+    if (method === 'getMethodVersion') return { version: {...metadata(ref.namespace,found.row),adoptionStatus} };
+    if (method === 'listMethodManifest') return page(cursorScope,expected,input,manifest(found.files),files => ({ files, adoptionStatus }));
     const file = found.files.find(row => row.path === input.path);
     if (!file) fail('method_not_found');
-    const cursor = cursors.decode(input.cursor,expected,ns), start = cursor?.after ?? 0;
+    const cursor = cursors.decode(input.cursor,expected,cursorScope), start = cursor?.after ?? 0;
     if (!Number.isSafeInteger(start) || start < 0 || start > file.text.length ||
         start > 0 && /[\uDC00-\uDFFF]/.test(file.text[start])) fail('invalid_cursor');
     let end = Math.min(start+4000,file.text.length);
@@ -228,19 +246,19 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     const complete = end === file.text.length;
     const parts = end === start ? [] : [{ start,end,text: file.text.slice(start,end) }];
     return { parts, coverage: complete ? completeCoverage(parts.length) : { status: 'budget_exhausted',included: parts.length,omitted: null },
-      nextCursor: complete ? null : cursors.encode({ binding: expected,epoch: epoch(ns),after: end }), adoptionStatus: 'unassessed' };
+      nextCursor: complete ? null : cursors.encode({ binding: expected,epoch: epoch(cursorScope),after: end }), adoptionStatus };
   }
   return Object.freeze({
     payloadBinding: value => binding('method-action-v1',value),
-    call(method,ns,input,payloadBinding,isRead,{ accessGeneration }) {
+    call(method,ns,input,payloadBinding,isRead,{ accessGeneration,access }) {
       ready();
       return transaction(db, () => {
-        if (isRead) return read(method,ns,input,accessGeneration);
+        if (isRead) return read(method,ns,input,accessGeneration,access);
         const replay = ledger.replay(ns,input.actionId,method,payloadBinding);
         if (replay !== undefined) return replay;
-        const result = method === 'importMethodVersion' ? importVersion(ns,input) : remove(method,ns,input);
+        const result = method === 'importMethodVersion' ? importVersion(ns,input) : ['adoptMethodVersion','disableMethodBinding'].includes(method) ? bindings.transition(method,ns,input) : remove(method,ns,input);
         if (size(result) > 65536) fail('context_item_too_large');
-        ledger.record(ns,input.actionId,method,payloadBinding,result.version?.versionId ?? result.id,result,now());
+        ledger.record(ns,input.actionId,method,payloadBinding,result.binding?.package.packageId ?? result.version?.versionId ?? result.id,result,now());
         advance(ns);
         return result;
       });

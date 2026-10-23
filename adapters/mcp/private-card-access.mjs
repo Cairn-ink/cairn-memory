@@ -3,7 +3,8 @@ import { isDeepStrictEqual } from 'node:util';
 const reads = new Set(['getCard', 'listCards', 'getSource', 'inspectCardOperation', 'listCardEffects',
   'selectEvidence', 'fetchEvidence', 'revalidateEvidence', 'mapEvidence', 'listEvidenceMappings']);
 const methodReads = new Set(['getMethodVersion','listMethodManifest','readMethodFile','listMethodPackages',
-  'listMethodVersions','compareMethodVersions','listMethodEffects','getMethodPackageUsage']);
+  'listMethodVersions','compareMethodVersions','listMethodEffects','getMethodPackageUsage',
+  'resolveMethod','resolveMethodsForRole','listMethodBindingEvents']);
 const drafts = new Set(['createCardDraft', 'cancelCardDraft']);
 const organization = new Set(['applyCardPlacement', 'refreshCardTopic', 'proposeEvidenceMapping']);
 
@@ -35,7 +36,8 @@ export function createScopedCardAccess(namespace, { rawSources = false, methodPa
     ...(methodPackages ? { methodPackageConfiguration: { version: 'method-packages-local-v1', storage: 'local-plain-v1', authority } } : {}),
     call(core, method, input) {
       const refScoped = ['getMethodVersion','listMethodManifest','readMethodFile','listMethodVersions','compareMethodVersions',
-        'deleteMethodVersion','deleteMethodPackage'].includes(method);
+        'deleteMethodVersion','deleteMethodPackage','resolveMethod','resolveMethodsForRole','listMethodBindingEvents',
+        'adoptMethodVersion','disableMethodBinding'].includes(method);
       const payload = refScoped ? { ...input } : { ...input, namespace: structuredClone(scope) };
       const token = Object.freeze({});
       tokens.set(token, { method, input: structuredClone(payload) });

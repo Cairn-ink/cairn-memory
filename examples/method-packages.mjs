@@ -14,7 +14,7 @@ const authority = {
     const approved = tokens.get(token);
     if (!approved || approved.method !== request.method || !isDeepStrictEqual(approved.input,request.input) ||
         !isDeepStrictEqual(request.namespace,namespace) ||
-        request.actionClass !== (request.method.startsWith('import') || request.method.startsWith('delete') ? 'explicit-user' : 'read')) return null;
+        !(request.actionClass==='read' || request.actionClass==='explicit-user' && ['importMethodVersion','adoptMethodVersion','disableMethodBinding','deleteMethodVersion','deleteMethodPackage'].includes(request.method))) return null;
     const grant = {}, { input,...binding } = request;
     grants.set(grant,{...binding,accessGeneration:1});return grant;
   },
@@ -39,12 +39,23 @@ try {
   assert.equal(history.parts[0].text,firstInput.files[0].text);assert.equal(history.adoptionStatus,'unassessed');
   const comparison = call('compareMethodVersions',{from:first.version,to:second.version});
   assert.equal(comparison.changes[0].status,'changed');assert.equal(comparison.reason,'not-recorded');
+  const adopted=call('adoptMethodVersion',{bindingNamespace:namespace,actionId:'adopt',package:first.package,
+    version:second.version,roleId:'planner',expectedRevision:null,readSet:[namespace]});
+  const context={readSet:[namespace],roleId:'planner'};
+  const resolved=call('resolveMethod',{...context,package:first.package});
+  assert.equal(resolved.status,'current');assert.deepEqual(resolved.version,second.version);
+  const pinned=call('readMethodFile',{version:second.version,path:'SKILL.md',intent:'current',context,snapshot:resolved.snapshot});
+  assert.equal(pinned.adoptionStatus,'current');
+  call('disableMethodBinding',{bindingNamespace:namespace,actionId:'disable',package:first.package,roleId:'planner',
+    expectedRevision:adopted.binding.revision,readSet:[namespace]});
+  assert.equal(call('resolveMethod',{...context,package:first.package}).status,'disabled');
+  assert.equal(call('readMethodFile',{version:second.version,path:'SKILL.md',intent:'history',snapshot:resolved.snapshot}).parts[0].text,pinned.parts[0].text);
   call('deleteMethodPackage',{actionId:'purge',ref:first.package,expectedRevision:2});
   core.close();core=openMemoryCore(configuration);
   assert.deepEqual(call('importMethodVersion',firstInput),first);
   assert.equal(call('getMethodVersion',{version:first.version,intent:'history'}).status,'unavailable');
   assert.equal(call('getMethodPackageUsage',{namespace}).retainedFileBytes,0);
-  assert.equal(call('listMethodEffects',{namespace}).effects[0].kind,'method_package_deleted');
+  assert.deepEqual(call('listMethodEffects',{namespace}).effects.map(effect=>effect.kind),['binding_changed','binding_changed','method_package_deleted']);
   console.log(JSON.stringify({syntheticDatabase:path,versions:[first.ordinal,second.ordinal],historyStatus:history.adoptionStatus,
-    comparison:comparison.changes[0].status,reason:comparison.reason,replayAfterPurge:true,retainedFileBytes:0},null,2));
+    comparison:comparison.changes[0].status,reason:comparison.reason,adoptResolvePinDisable:true,replayAfterPurge:true,retainedFileBytes:0},null,2));
 } finally {core.close();}

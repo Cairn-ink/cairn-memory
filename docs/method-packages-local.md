@@ -1,12 +1,12 @@
-# Local method packages: U2a
+# Local method packages: U2
 
 `method-packages-local-v1` is an explicit text-only engine opt-in in the existing
-SQLite store. U2a provides immutable imports, context-free history reads,
+SQLite store. It provides immutable imports, contextual and context-free reads,
 mechanical comparisons, logical deletion, content-free replay and durable effects.
-It installs the complete v30 canonical schema, including initially empty binding,
-binding-generation and binding-event tables. It does not adopt, resolve, execute
-or select a current method. Binding behaviour, role contexts, snapshots and
-current-intent delivery are U2b work; U2b will not change the v30 layout. The authoritative
+U2a installed the complete v30 canonical schema; U2b adds adoption bindings,
+resolution, pins and binding events without changing that allocation. Core never
+executes a method or selects one by upload time, ordinal, title or similarity.
+The authoritative
 specification is [contract v0.3.1](plans/unified-memory-v1-contract.md).
 
 Run `npm run demo:method-packages` on Node 22.16 or 24.15. It uses scripted
@@ -40,9 +40,10 @@ The deeply frozen `input` is the full pre-redaction snapshot. `authorize` return
 an opaque grant; `isCurrent` returns exactly the request fields except `input`,
 plus positive `accessGeneration`. Core checks it twice outside the transaction,
 then performs canonical checks without callbacks, awaits or model work under the
-lock. Imports and deletes require `explicit-user`; reads require `read`.
-When an import cites reasons, core separately requests `read` for each exact
-reason namespace using the same method/input/binding and `actionId:null`.
+lock. Imports, adoption, disable and deletes require `explicit-user`; reads require `read`.
+Binding transitions also request `read` for every namespace in the action
+`readSet`, including a separate read grant for the binding namespace. When an
+action cites reasons, core requests `read` for each exact reason namespace using the same method/input/binding and `actionId:null`.
 The host must explicitly authorize that read as well as the mutation. A rejected
 initial grant returns `authority_required`; final revocation or generation change
 returns `scope_changed`. Exceptions are sanitized; input text is never returned
@@ -50,8 +51,9 @@ in an error. Successful replay still needs current authorization.
 
 The optional MCP host authority configuration may explicitly select method
 reads using `createScopedCardAccess(namespace,{methodPackages:true})` and its
-`methodPackageConfiguration`. It grants no method import/deletion authority and
-adds no MCP tools. Directory importing, filesystem confinement, strict byte-to-UTF8
+`methodPackageConfiguration`. It grants no method mutation authority and adds no MCP tools. It supports the
+new resolution/event reads only for its configured exact namespace; a read set
+spanning personal and project needs a host authority that can grant both. Directory importing, filesystem confinement, strict byte-to-UTF8
 decoding and installed method workflows are U3 work.
 
 ## References and API
@@ -66,19 +68,29 @@ Titles and paths never identify or join packages.
 | Method | Input fields | Value |
 | --- | --- | --- |
 | `importMethodVersion` | `namespace,actionId,title,submittedBy?,files,package?,expectedPackageRevision?,basedOn?,change?` | `{package,version,ordinal,packageRevision}` |
-| `getMethodVersion` | `version,intent:'history'` | `{version}` metadata with `adoptionStatus:'unassessed'`; deleted returns `{version:null,status:'unavailable',adoptionStatus:'unavailable'}` |
-| `listMethodManifest` | `version,intent:'history',cursor?` | `{files,adoptionStatus,coverage,nextCursor}` |
-| `readMethodFile` | `version,path,intent:'history',cursor?` | `{parts,adoptionStatus,coverage,nextCursor}` |
+| `getMethodVersion` | `version,intent,context?,snapshot?` | `{version}` metadata with contextual `adoptionStatus`; deleted returns `{version:null,status:'unavailable',adoptionStatus:'unavailable'}` |
+| `listMethodManifest` | `version,intent,context?,snapshot?,cursor?` | `{files,adoptionStatus,coverage,nextCursor}` |
+| `readMethodFile` | `version,path,intent,context?,snapshot?,cursor?` | `{parts,adoptionStatus,coverage,nextCursor}` |
 | `listMethodPackages` | `namespace,limit?,cursor?` | `{packages,coverage,nextCursor}` |
-| `listMethodVersions` | `package,limit?,cursor?` | `{versions,coverage,nextCursor}` |
+| `listMethodVersions` | `package,context?,limit?,cursor?` | `{versions,coverage,nextCursor}` |
 | `compareMethodVersions` | `from,to,cursor?` | `{from,to,status,changes,items,reason,reasonRefs,coverage,nextCursor}` |
 | `deleteMethodVersion`, `deleteMethodPackage` | `actionId,ref,expectedRevision` | `{id,revision,state,effectCount}` |
 | `listMethodEffects` | `namespace,limit?,cursor?` | `{effects,coverage,nextCursor}` |
 | `getMethodPackageUsage` | `namespace` | `method-package-usage-v1`, `retainedFileBytes`, owner `limitBytes` |
 
-Any supplied `context` or `snapshot`, including null, and any current-intent
-read returns `invalid_input` in U2a. Context-free content reads must explicitly
-supply `intent:'history'`. No import establishes currentness or adoption.
+Context-free content reads require explicit `intent:'history'` and report
+`unassessed`. Context is `{readSet,roleId}`: one exact namespace, or personal plus
+one project of the same owner. Every namespace in that read set needs a fresh
+read grant. A role is null (the reserved `*` key) or 1–200 ASCII letters, digits,
+dot, underscore or hyphen; a role grants no access.
+
+`intent:'current'` requires context and delivers only the available winning
+version; another version gives `method_version_unavailable`. Every call resolves
+and checks canonical state inside the same SQLite transaction as delivery.
+Deleted versions and targets outside the authorized read set return
+`unavailable`, including when pinned. Rejected or revoked host grants refuse with
+`authority_required` or `scope_changed`; a snapshot never supplies authority.
+No import establishes currentness or adoption.
 
 The first import omits `package` and has null `basedOn`. Later imports require
 that package, its exact positive `expectedPackageRevision`, and an available
@@ -103,6 +115,67 @@ unavailable yields `recorded-unavailable`. No reason is inferred. Comparison
 pages share one cursor stream: collect `changes`, `items` and `reasonRefs`
 from every page. Deleted endpoints return `{status:'unavailable'}` with no diff
 or change prose. Deleted manifest/file reads likewise report `unavailable`.
+
+## Bindings, resolution and pins
+
+| Method | Input | Value |
+| --- | --- | --- |
+| `adoptMethodVersion` | `bindingNamespace,actionId,package,version,roleId,expectedRevision,readSet,reasonRefs?` | `{binding,state,version}` |
+| `disableMethodBinding` | `bindingNamespace,actionId,package,roleId,expectedRevision,readSet,reasonRefs?` | `{binding,state,version:null}` |
+| `resolveMethod` | `readSet,package,roleId` | `{package,status,binding,version,snapshot}` |
+| `resolveMethodsForRole` | `readSet,roleId,limit?,cursor?` | `{methods,coverage,nextCursor,snapshot}`; each method includes its canonical `package` |
+| `listMethodBindingEvents` | `bindingNamespace,package?,limit?,cursor?` | `{events,coverage,nextCursor}` |
+
+A `MethodBindingRef` is
+`{type:'method-binding',bindingNamespace,package,roleKey,revision}`. The binding key
+is exact namespace, canonical package identity and role key. `expectedRevision`
+is explicitly null for creation, otherwise the current positive revision.
+Disable may create a barrier, and re-adoption after disable increments revision.
+At most 1,024 bindings, including disabled barriers, exist per namespace.
+
+Bindings normally target their exact package namespace. The only cross-scope
+case is a same-owner project binding to a personal package. Both namespaces must
+be in the action's authorized `readSet`; the host grants mutation access in the
+binding namespace and read access across the set. Adoption and disable reasons
+must belong to the binding namespace, even when the package is personal. They
+are separately authorized before canonical validation under the transaction.
+
+Each transition advances its binding revision and the generation for binding
+namespace/package, appends a content-free event, and emits `binding_changed`.
+The effect identifies the affected package; consumers use its namespace and
+canonical generation to revalidate affected roles. Import and deletion do not
+change bindings or binding generations. Event pages include binding/version refs,
+state, generation, ordinal, action ID, timestamp and reason refs rechecked as
+`available`/`unavailable`. They never copy reason text or method prose. Optional package filters match the
+full canonical identity within authorized binding events; missing or mismatched
+filters return an empty page without probing an unrelated package.
+
+Resolution checks project+role, project+`*`, personal+role, then personal+`*`,
+within the authorized read set. The first existing binding decides. Disabled and
+unavailable targets block lower defaults. Missing bindings give
+`no-active-version`. A project-only read can expose its logical binding's opaque
+personal-package reference, but cannot read that target's lifecycle or content;
+an active target outside the read set resolves `unavailable`. Normalized identity
+lookups reconstruct the logical reference without granting target access.
+
+Opaque HMAC snapshots bind the role, canonical read set, access generations,
+consulted revisions, absent higher bindings, version refs, binding generations,
+and package/version lifecycle revisions. They also fence binding transitions
+across the read set. `resolveMethod` returns a single-package pin;
+`resolveMethodsForRole` returns a pin for the methods included on that page.
+Use either token as `snapshot` in content reads for its selected version.
+Current pins stale with `cursor_stale` on binding, access-generation or lifecycle
+changes. Deleted/unreadable targets report `unavailable` before current-pin
+staleness. Historical use authenticates the pinned version identity, accepts
+binding/lifecycle changes, and reauthorizes access; it never retargets a version.
+It can omit context for `unassessed`, or assess status within a freshly authorized
+context. Snapshot substitution or tampering gives `invalid_input`.
+
+Contextual adoption status is, in order: `current`, `never-adopted` in any
+applicable binding history, `withdrawn` when previously adopted and now disabled,
+`newer-version-available` for a different available winner (including rollback to
+an older ordinal), otherwise `historical`. Deleted/unreadable targets report
+`unavailable`. These are mechanical adoption states, not semantic quality claims.
 
 ## Limits, paging and usage
 
@@ -136,7 +209,7 @@ return `invalid_cursor`; stale generations within the stream return
 
 `method-package-usage-v1` counts retained redacted file UTF8 bytes. Imports
 reserve against an atomic 50,000,000-byte owner-wide cap across namespaces;
-purges decrement in the same transaction. U2a exposes only the authorized exact
+purges decrement in the same transaction. U2 exposes only the authorized exact
 namespace's projection, not an owner-wide aggregate. Metadata, ledgers, effects,
 SQLite overhead, WAL, backups and other memory kinds are excluded.
 
@@ -160,9 +233,8 @@ consumers deduplicate by `effectId` and revalidate canonical state. Deletion
 updates only package/version lifecycle state and revisions and emits its matching
 deletion effect. It never enumerates or updates bindings, binding generations or
 binding events, and never fans out `binding_unavailable` effects. Binding
-generations advance only on binding transitions in U2b. Resolvers will derive
-unavailability through canonical target checks, and snapshot revalidation will
-check both binding and lifecycle revisions. The separate `method_epochs` counter
+generations advance only on binding transitions. Resolvers derive
+unavailability through canonical target checks, and snapshot revalidation checks both binding and lifecycle revisions. The separate `method_epochs` counter
 is a namespace pagination fence, not a binding generation. Effects grant no access. Deletion is active logical-row purge, not secure physical erasure from
 free pages, WAL, snapshots or backups.
 
@@ -178,7 +250,7 @@ writers before upgrading; operators own inventory, backups and restore policy.
 
 The complete method allocation is frozen in
 [`method-package-v30-layout.json`](../core/testing/method-package-v30-layout.json).
-U2b must use these existing tables, columns, constraints and indexes; a later
+U2b uses these existing tables, columns, constraints and indexes; a later
 canonical layout change requires a newly allocated schema version. Incomplete
 pre-acceptance v30 layouts are refused by all openers rather than silently repaired.
 
@@ -197,8 +269,8 @@ from the canonical package row. Together these reconstruct the full immutable
 reference their canonical generation key; events reference their binding key.
 Foreign keys retain opaque targets through logical deletion. No deletion cascade
 or package/version mutation trigger changes binding storage. Reason refs remain
-reference metadata; U2b must authorize and canonically validate them in its
-transition transaction, without copying source text.
+reference metadata; transitions authorize and canonically validate them in their
+transaction, without copying source text.
 
 ## Synthetic verification and historical fixtures
 
@@ -249,7 +321,9 @@ and version deletion, and two imports under the same package CAS. The quota
 baseline contains real retained bytes created through public imports. Assertions
 cover committed usage against file sums, CAS outcomes, ordinal allocation,
 partial-row absence, effects and fresh-process replay. No stdio pipe or sequential
-`spawnSync` call is used to create competing writers.
+`spawnSync` call is used to create competing writers. Independent writer launches
+clear the runner-only `NODE_TEST_CONTEXT` marker before importing their fixtures,
+following the owned runner's child-environment convention.
 
 Rollback, replay and purge checks also use separate processes. These tests
 establish local mechanics, not semantic quality, safe code execution, host
