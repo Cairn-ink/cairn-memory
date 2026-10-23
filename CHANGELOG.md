@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — budgeted context assembly (U5b)
+
+- Add opt-in `read_memory_context` with whole canonical evidence units, strict
+  budgets and versioned rank-first/coverage-first policies. Context-enabled
+  startup supplies a keyless local `o200k_base` counter independently of models.
+- Emit the exact core-metered text as the single MCP text block; diagnostics
+  use namespaced `_meta` under an explicit client contract. The guarantee covers
+  that text alone, with separate core/transport byte bounds. See the
+  [context guide](docs/context-read-local.md) and [limitations](docs/limitations.md).
+
 ## Unreleased — context retrieval host (U5a part 3)
 
 - Add explicit context MCP startup options and two read tools, fixed host read

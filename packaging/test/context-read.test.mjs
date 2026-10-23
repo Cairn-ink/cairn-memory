@@ -48,7 +48,9 @@ test('R01/R03/R12/R13 actual artifact: captured sources, fresh lexical MCP, open
     globalThis.fetch=()=>{process.exit(91)};`);
   const plain=await contextHost(workspace,f.path,{entry:f.entry,enabled:false,key:true,preload}),host=await contextHost(workspace,f.path,{entry:f.entry,key:true});
   const baseline=(await plain.client.listTools()).tools,tools=(await host.client.listTools()).tools;
-  assert.equal(baseline.length,5);assert.equal(tools.length,7);assert.deepEqual(tools.filter(tool=>baseline.some(old=>old.name===tool.name)),baseline);
+  assert.deepEqual(baseline.map(tool=>tool.name).sort(),['correct_memory','forget_memory','inspect_memory','recall_memory','remember_memory']);
+  assert.deepEqual(tools.map(tool=>tool.name).sort(),['correct_memory','fetch_memory_candidate_evidence','find_memory_candidates','forget_memory','inspect_memory','read_memory_context','recall_memory','remember_memory']);
+  assert.deepEqual(tools.filter(tool=>baseline.some(old=>old.name===tool.name)),baseline);
   for(const input of [{limit:50},{memoryId:captured.memories[0].id}])assert.deepEqual(
     await host.client.callTool({name:'inspect_memory',arguments:input}),await plain.client.callTool({name:'inspect_memory',arguments:input}));
   const docs=captured.memories.map(memory=>({ref:{type:'memory',namespace:ns,memoryId:memory.id,revision:memory.revision},text:memory.content}));

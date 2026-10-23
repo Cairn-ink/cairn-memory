@@ -1,5 +1,21 @@
 # Known limitations
 
+## Budgeted context assembly (U5b)
+
+The [assembly tool](context-read-local.md#budgeted-context-assembly-u5b) bounds
+its exact single text block in the local `tiktoken-o200k_base` counter, not
+total model-request spend. Diagnostics are namespaced `_meta` and require an
+explicit client contract that excludes them from model input; no invisibility
+is claimed for arbitrary clients. Separate core/transport byte bounds remain.
+Whole units may be omitted; no body or source is silently shortened.
+
+HR-2 has not run. The initial rank-first default is versioned and swappable;
+the research design addresses short, single-fact items with evidence often in
+receipts and provides no external validity for long items. U5b makes no claim
+about answer quality or correctness, generated summaries, prefix/window
+degradation, Card source units, role profiles, relations, MOC (U5c), total
+model-request spend or any budget number being a recommendation.
+
 ## Context retrieval host (U5a part 3)
 
 The [context host](context-read-local.md) adds two explicit MCP read tools and a

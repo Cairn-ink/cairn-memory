@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { cardNamespace } from '../../core/private-card-input.mjs';
 
-export const CONTEXT_TOOL_METHODS = Object.freeze(['findCandidates', 'fetchCandidateEvidence']);
+export const CONTEXT_TOOL_METHODS = Object.freeze(['findCandidates', 'fetchCandidateEvidence', 'contextRead']);
 export function createContextReadAccess(namespace, personal = false, { refresh = false } = {}) {
   const scope = Object.freeze(cardNamespace(namespace));
   if (personal && scope.scope !== 'project') throw Error('invalid_mcp_configuration');
