@@ -1,7 +1,7 @@
 import { validateExistingStore } from './existing-store.mjs';
 import { lstatSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { APPLICATION_ID, READ_SCHEMA_VERSIONS } from './database.mjs';
+import { APPLICATION_ID, READ_SCHEMA_VERSIONS, CONTEXT_READ_SCHEMA_VERSIONS, readTransaction } from './database.mjs';
 import { fail } from './validation.mjs';
 
 function identity(path) {
@@ -15,15 +15,17 @@ function identity(path) {
   }
   return stat;
 }
-export function openReadDatabase(path) {
+export function openReadDatabase(path, { contextRead = false, preflight } = {}) {
   const initial = identity(path);
+  preflight?.();
   const db = new DatabaseSync(path, { readOnly: true });
   try {
-    db.exec('PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=0;');
+    db.exec(`PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=${contextRead ? 5000 : 0};`);
     const current = identity(path);
     if (initial.dev !== current.dev || initial.ino !== current.ino) fail('unsafe_database_file');
+    const validate = () => {
     if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
-        !READ_SCHEMA_VERSIONS.includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
+        !(contextRead ? CONTEXT_READ_SCHEMA_VERSIONS : READ_SCHEMA_VERSIONS).includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
     if (db.prepare('PRAGMA user_version').get().user_version === 30) validateExistingStore(db, {
       storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id });
     // Validate every physical seek, including automatically named primary keys.
@@ -54,6 +56,8 @@ export function openReadDatabase(path) {
     const metadataKey = db.prepare("SELECT name,type,pk FROM pragma_table_info('store_metadata') WHERE pk!=0").all();
     if (metadataKey.length !== 1 || metadataKey[0].name !== 'singleton' ||
         metadataKey[0].type !== 'INTEGER' || metadataKey[0].pk !== 1) fail('unsupported_database');
+    };
+    if (contextRead) readTransaction(db, validate); else validate();
     return { db, assertFile() {
       const stat = identity(path);
       if (stat.dev !== initial.dev || stat.ino !== initial.ino) fail('cursor_stale');

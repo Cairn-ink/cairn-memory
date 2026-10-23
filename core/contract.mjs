@@ -1,5 +1,6 @@
 import { methodPackageOptions } from './method-package-input.mjs';
 import { createMethodPackageFacade } from './method-package-facade.mjs';
+import { openContextCore } from './context-read-facade.mjs';
 import { decisionReviewOption } from './confirmation-storage.mjs';
 import { rawOptions } from './raw-options.mjs';
 import { storeFenceOption } from './store-fence.mjs';
@@ -174,6 +175,13 @@ function qualifiedDuplicatesOption(input) {
 /** Model-free exact-namespace lifecycle and inspection facade. */
 export function openMemoryCore(input) {
   if (input && typeof input === 'object' && types.isProxy(input)) throw new MemoryStoreError('invalid_input');
+  // Strip only this opt-in before applying the retained constructor validation.
+  if (input && typeof input === 'object' && 'contextRead' in input) {
+    const { contextRead, ...base } = ownData(input, ['path','model','captureQualification','captureQualifiedDuplicates',
+      'captureSourcePolicy','captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy',
+      'sessionEpisodes','decisionReview','privateCards','methodPackages','rawConversations','existingStore','storeFence','contextRead']);
+    return openContextCore(base, contextRead, openMemoryCore);
+  }
   qualifiedDuplicatesOption(input);
   if (!input || typeof input !== 'object' || Array.isArray(input)) return createMemoryCore(input);
   if ('existingStore' in input) {
