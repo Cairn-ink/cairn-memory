@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { openSync, closeSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from 'node:fs';
+import { openSync, closeSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { assembleContext, meteredText, ASSEMBLY_FRAMING } from '../context-read-assembly.mjs';
 import { ASSEMBLY_POLICIES, ASSEMBLY_DEFAULTS, contextInput } from '../context-read-input.mjs';
@@ -501,7 +501,7 @@ test('A13/A16 byte-exact Memory/Card serialization, nested canonical keys and so
   const prepared = [
     { ...base, text: body, rank: 2, sources: [
       { index: 0, role: 'user', excerpt: body }, { index: 1, role: 'assistant', excerpt: shared },
-      { index: 2, role: 'assistant', excerpt: shared }, { index: 3, role: 'user', excerpt: body + ' ' }],
+      { index: 2, role: 'assistant', excerpt: shared }, { index: 3, role: 'user', excerpt: 'Own body!' }],
     metadata: { ...base.metadata, filing: { z: { 'é': 1, a: 2 }, status: 'filed' } } },
     { ...base, text: 'Another body.', rank: 7, ref: { ...base.ref, memoryId: 'other' }, sources: [
       { index: 0, role: 'user', excerpt: body }, { index: 1, role: 'assistant', excerpt: shared }] },
@@ -516,7 +516,7 @@ test('A13/A16 byte-exact Memory/Card serialization, nested canonical keys and so
       { ref: { ns: 0, type: 'memory', id: 'u5b-01', rev: 1, f: 'abcdefgh' }, rank: 2, body: 'Own body.',
         metadata: { filing: { status: 'filed', z: { a: 2, 'é': 1 } } }, sources: [
           { index: 0, role: 'user', sameAsBody: true }, { index: 1, role: 'assistant', excerpt: 'Concrete receipt.' },
-          { index: 2, sameAs: { item: 0, source: 1 } }, { index: 3, role: 'user', excerpt: 'Own body. ' }] },
+          { index: 2, sameAs: { item: 0, source: 1 } }, { index: 3, role: 'user', excerpt: 'Own body!' }] },
       { ref: { ns: 0, type: 'memory', id: 'other', rev: 1, f: 'abcdefgh' }, rank: 7, body: 'Another body.', sources: [
         { index: 0, role: 'user', excerpt: 'Own body.' }, { index: 1, sameAs: { item: 0, source: 1 } }] },
       { ref: { ns: 0, type: 'card', id: 'card', rev: 3, bodyRev: 2, f: 'abcdefgh' }, rank: 9, body: 'Title\nBody',
@@ -529,7 +529,7 @@ test('A13/A16 byte-exact Memory/Card serialization, nested canonical keys and so
     { index: 0, kind: 'sameAsBody', tokens: counter.countTokens(body) },
     { index: 1, kind: 'concrete', tokens: counter.countTokens(shared) },
     { index: 2, kind: 'sameAs', item: 0, source: 1 },
-    { index: 3, kind: 'concrete', tokens: counter.countTokens(body + ' ') },
+    { index: 3, kind: 'concrete', tokens: counter.countTokens('Own body!') },
   ]);
   actual.diagnostics.items.forEach((item, i) => {
     assert.deepEqual(item.ref, prepared[i].ref); assert.deepEqual(item.metadata, prepared[i].metadata);
@@ -544,7 +544,31 @@ test('A13/A16 byte-exact Memory/Card serialization, nested canonical keys and so
   assert.deepEqual(precedence.metered.items[1].sources, [{ index: 0, role: 'user', sameAsBody: true }]);
 });
 
-test('A13 frozen independent o200k_base probes publish approximate host overhead', async t => {
+test('Fix 2 A16 canonical preparation preserves a one-byte receipt difference as concrete', async t => {
+  const body = 'Own body.', excerpt = 'Own body!';
+  assert.equal(Buffer.byteLength(body), Buffer.byteLength(excerpt));
+  assert.equal([...Buffer.from(body)].filter((byte, i) => byte !== Buffer.from(excerpt)[i]).length, 1);
+  const f = assemblyFixture(t);
+  const [{ memory }] = f.seed([{ id: 'one-byte', input: body, text: body, receipts: [
+    { client: 'synthetic', sessionId: 'one-byte', eventId: 'body', role: 'user', excerpt: body },
+    { client: 'synthetic', sessionId: 'one-byte', eventId: 'different', role: 'user', excerpt },
+  ] }]);
+  assert.equal(ok(f.core.get({ namespace: ns, memoryId: memory.id })).memory.content, body);
+  const assembled = ok(await f.call('contextRead', assemblyQuery({ query: body, budget: { maxTokens: 4000, maxItems: 24 } })));
+  assert.equal(assembled.metered.items[0].body, body);
+  assert.deepEqual(assembled.metered.items[0].sources, [
+    { index: 0, role: 'user', sameAsBody: true }, { index: 1, role: 'user', excerpt },
+  ]);
+  assert.deepEqual(assembled.diagnostics.items[0].sources, [
+    { index: 0, kind: 'sameAsBody', tokens: counter.countTokens(body) },
+    { index: 1, kind: 'concrete', tokens: counter.countTokens(excerpt) },
+  ]);
+  assert.deepEqual(assembled.diagnostics.dedup, { sources: 0, body: 1 });
+  assert.equal(assembled.metered.items[0].sourcesComplete, undefined);
+  assert.equal(ok(f.call('fetchCandidateEvidence', { readSet: [ns], snapshot: assembled.snapshot })).items[0].provenance.sources.length, 2);
+});
+
+test('A13 frozen independent o200k_base probes verify the committed approximate host overhead', async t => {
   let real;
   try { real = await createContextCounter(); }
   catch (error) {
@@ -568,14 +592,21 @@ test('A13 frozen independent o200k_base probes publish approximate host overhead
   const constants = { T0, T1, T2, envelope: T0, firstItem: T1 - T0, furtherItem: T2 - T1,
     bodyOnlyItem: B1, concreteSource: real.countTokens(probes.concrete) - real.countTokens(probes.bodyOnlyOne),
     aliasSource: T1 - real.countTokens(probes.bodyOnlyOne), B1, B2, h1: B1 - 15, hN: B2 - B1 - 15 };
-  const directory = new URL('../../evaluation/retrieval-research/assembly/', import.meta.url), path = new URL('overhead-host-v2.json', directory);
-  const implementationCommit = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')).implementationCommit : '__COMMIT__';
-  mkdirSync(directory, { recursive: true });
-  writeFileSync(path, JSON.stringify({ label: 'approximate model', note: 'UUID and text tokenization vary; never a guarantee.',
-    counter: real.id, implementationCommit, namespace: ns, bodyTokens: 15, constants, probes }, null, 2) + '\n');
-  t.diagnostic(JSON.stringify({ counter: real.id, ...constants }));
   assert.deepEqual({ envelope: T0 <= 48, firstItem: constants.firstItem <= 96, furtherItem: constants.furtherItem <= 90 },
     { envelope: true, firstItem: true, furtherItem: true }, 'A13 bounds 48/96/90; measured ' + [T0, constants.firstItem, constants.furtherItem].join('/'));
+  const directory = new URL('../../evaluation/retrieval-research/assembly/', import.meta.url), path = new URL('overhead-host-v2.json', directory);
+  const committed = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
+  const measured = { label: 'approximate model', note: 'UUID and text tokenization vary; never a guarantee.',
+    counter: real.id, implementationCommit: committed?.implementationCommit ?? '__COMMIT__', namespace: ns, bodyTokens: 15, constants, probes };
+  if (process.env.CAIRN_PUBLISH_ASSEMBLY_OVERHEAD === '1') {
+    mkdirSync(directory, { recursive: true });
+    const temporary = new URL('overhead-host-v2.' + randomUUID() + '.tmp', directory);
+    try {
+      writeFileSync(temporary, JSON.stringify(measured, null, 2) + '\n', { flag: 'wx' });
+      renameSync(temporary, path);
+    } finally { if (existsSync(temporary)) unlinkSync(temporary); }
+  } else assert.deepEqual(committed, measured, 'A13 committed artifact drift; publish explicitly with CAIRN_PUBLISH_ASSEMBLY_OVERHEAD=1');
+  t.diagnostic(JSON.stringify({ counter: real.id, ...constants }));
 });
 
 test('A14 snapshot encoding happens once after counts, never for empty selections; final bound precedes authoritative read', async t => {

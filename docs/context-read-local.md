@@ -157,7 +157,7 @@ receipt changes; snapshot fetch also checks namespace/access generations. A
 filed-to-filed MOC parent move changes only a namespace generation: compact-ref
 fetch succeeds with byte-identical evidence, while snapshot fetch refuses
 `snapshot_stale`. Other mutation refusals retain eligibility/revision precedence;
-see [contract §15.8](plans/unified-memory-v1-contract.md#158-amendment-v0103-representation-v2-host-only-snapshot-first-source-policy-u5b-2).
+see [contract §15.8](plans/unified-memory-v1-contract.md#158-amendment-v0104-representation-v2-host-only-snapshot-first-source-policy-u5b-2).
 
 The default is versioned and swappable. HR-2 ran on a short, single-fact,
 receipt-oriented synthetic fixture and kept rank-first as the initial default;

@@ -5,7 +5,8 @@ import { spawnSync } from 'node:child_process';
 import { openSync, closeSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/client';
-import { InMemoryTransport } from '@modelcontextprotocol/server';
+import * as z from 'zod/v4';
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server';
 import { createCairnServer, buildCairnServer } from '../server.mjs';
 import { createContextReadAccess, CONTEXT_TOOL_METHODS } from '../context-read-access.mjs';
 import { registerContextReadTools } from '../context-read-tools.mjs';
@@ -394,6 +395,91 @@ test('A15 raw compact descriptors, SDK schema, mixed expansion and caller prefix
   assert.equal(calls.length, 1);
   access.revoke();
   assert.equal((await tool.action(parsed)).error.code, 'authority_required'); assert.equal(calls.length, 1);
+});
+
+test('Fix 2 A15 compact raw descriptors and malformed ids refuse through the SDK without getters or core calls', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'compact-descriptor-sdk-' }), calls = [];
+  const access = createContextReadAccess(ns), server = new McpServer({ name: 'compact-refs', version: '1' });
+  registerContextReadTools((name, description, inputSchema, action) => server.registerTool(name, { description, inputSchema },
+    async input => contextToolResponse(await action(input))),
+  { fetchCandidateEvidence(input) { calls.push(input); return { ok: true, value: null }; } }, access);
+  const client = await connect(workspace, server), ref = { ns: 0, type: 'memory', id: 'memory', rev: 1, f: 'abcdefgh' };
+  let inheritedGetters = 0, ownGetters = 0, typeGetters = 0;
+  const inheritedAccessor = { ...ref };
+  Object.defineProperty(inheritedAccessor, 'ns', { enumerable: true, get() { inheritedGetters++; return 0; } });
+  const ownAccessor = { ...ref };
+  Object.defineProperty(ownAccessor, 'ns', { enumerable: true, get() { ownGetters++; return 0; } });
+  const typeAccessor = { ...ref };
+  Object.defineProperty(typeAccessor, 'type', { enumerable: true, get() { typeGetters++; return 'memory'; } });
+  for (const bad of [Object.create(ref), Object.create(inheritedAccessor), ownAccessor, typeAccessor,
+    ...[' memory', 'mem\0ory', 'mem\ud800ory'].map(id => ({ ...ref, id })), new Proxy(ref, {}),
+    { ...ref, namespace: ns, memoryId: 'memory', revision: 1 }]) {
+    const response = await client.callTool({ name: 'fetch_memory_candidate_evidence', arguments: { refs: [bad], intent: 'current' } });
+    assert.equal(response.isError, true);
+    assert.match(response.content[0].text, /Input validation error.*invalid_input/s);
+    assert.equal(calls.length, 0, 'malformed compact ref never reaches core');
+    assert.equal(inheritedGetters, 0); assert.equal(ownGetters, 0); assert.equal(typeGetters, 0);
+  }
+  const valid = await client.callTool({ name: 'fetch_memory_candidate_evidence', arguments: { refs: [ref], intent: 'current' } });
+  assert.equal(valid.isError, false); assert.equal(calls.length, 1);
+});
+
+test('Fix 2 A15 legacy differential schema and SDK compatibility preserve normalized core bytes', async t => {
+  const f = assemblyFixture(t, { cards: true }), scope = assemblyQuery().readSet[0], access = createContextReadAccess(scope);
+  const core = f.reopen({ ...access.configuration }), calls = [];
+  const wrapped = { fetchCandidateEvidence(input, token) { calls.push(JSON.stringify(input)); return core.fetchCandidateEvidence(input, token); } };
+  const memory = f.admit('assembly legacy compatibility', scope), card = confirmedCard(f, scope, memory);
+  const full = { type: 'memory', namespace: scope, memoryId: memory.id, revision: memory.revision };
+  const fullCard = { type: 'card', namespace: scope, cardId: card.id, revision: card.revision, bodyRevision: card.bodyRevision };
+  // Independently preserve the exact original full-ref and fetch input schemas.
+  const id = z.string().min(1).max(200), revision = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
+  const namespace = z.strictObject({ ownerId: id, scope: z.enum(['personal', 'project']), projectId: id.nullable() });
+  const ref = z.union([z.strictObject({ type: z.literal('memory'), namespace, memoryId: id, revision }),
+    z.strictObject({ type: z.literal('card'), namespace, cardId: id, revision, bodyRevision: revision })]);
+  const legacy = z.strictObject({ refs: z.array(ref).min(1).max(24).optional(), intent: z.enum(['current', 'history']).optional(),
+    snapshot: z.string().min(1).max(16384).optional(), responseByteLimit: z.number().int().min(1).max(65536).optional() })
+    .refine(input => input.snapshot !== undefined ? input.refs === undefined && input.intent === undefined : input.refs !== undefined && input.intent !== undefined);
+  const tools = assemblyTools(wrapped, access), current = tools.get('fetch_memory_candidate_evidence');
+  const server = new McpServer({ name: 'legacy-differential', version: '1' });
+  server.registerTool('fetch_current', { inputSchema: current.schema }, async input => contextToolResponse(await current.action(input)));
+  server.registerTool('fetch_legacy', { inputSchema: legacy }, async input => {
+    if (input.refs?.some(ref => !access.includes(ref.namespace))) return contextToolResponse({ ok: false, error: { code: 'authority_required', retryable: false } });
+    return contextToolResponse(await access.call(wrapped, 'fetchCandidateEvidence', { ...input, readSet: access.readSet }));
+  });
+  const client = await connect(f.workspace, server);
+  const hiddenId = { ...full }; Object.defineProperty(hiddenId, 'memoryId', { value: memory.id, enumerable: false });
+  const hiddenExtra = { ...full }; Object.defineProperty(hiddenExtra, 'ns', { value: 0, enumerable: false });
+  let hiddenGetters = 0;
+  const hiddenAccessor = { ...full }; Object.defineProperty(hiddenAccessor, 'f', { get() { hiddenGetters++; return 'abcdefgh'; } });
+  const inputs = [
+    ...[full, fullCard, new Proxy(full, {}), new Proxy(fullCard, {}), hiddenId, hiddenExtra, hiddenAccessor,
+      Object.create(full), { ...full, memoryId: ' legacy whitespace' }, { ...full, memoryId: 'legacy\0nul' },
+      { ...full, memoryId: 'legacy\ud800surrogate' }, { ...full, namespace: { ...scope, ownerId: 'foreign' } }]
+      .map(ref => ({ refs: [ref], intent: 'current' })),
+    ...[{}, { ...full, extra: true }, { ...full, revision: 0 }, { ...full, revision: 1.5 },
+      { ...full, memoryId: '' }, { ...full, memoryId: 'x'.repeat(201) }, { ...full, bodyRevision: 1 },
+      { ...full, namespace: { ...scope, extra: true } }, { ...fullCard, bodyRevision: undefined },
+      { ...full, ns: 0 }, { ...full, f: 'abcdefgh' }].map(ref => ({ refs: [ref], intent: 'current' })),
+    { refs: [], intent: 'current' }, { refs: [full] }, { refs: [full], intent: 'guess' },
+    { refs: [full], intent: 'current', snapshot: 'opaque' }, { snapshot: 'opaque', intent: 'current' },
+    { refs: [full], intent: 'current', fences: [null] },
+  ];
+  const refusal = response => !response.isError ? 'accepted' : response.content[0].text.includes('Input validation error:') ?
+    'SDK invalid_input' : 'tool ' + JSON.parse(response.content[0].text).error.code;
+  for (const input of inputs) {
+    const oldParsed = legacy.safeParse(input), newParsed = current.schema.safeParse(input);
+    assert.equal(newParsed.success, oldParsed.success);
+    if (oldParsed.success) assert.equal(JSON.stringify(newParsed.data), JSON.stringify(oldParsed.data));
+    calls.length = 0;
+    const previous = await client.callTool({ name: 'fetch_legacy', arguments: input }), oldCalls = [...calls];
+    calls.length = 0;
+    const result = await client.callTool({ name: 'fetch_current', arguments: input });
+    assert.equal(refusal(result), refusal(previous));
+    assert.deepEqual(calls, oldCalls, 'accepted legacy normalization reaches core byte-identically');
+    if (refusal(previous) !== 'SDK invalid_input') assert.deepEqual(result, previous);
+    else assert.equal(calls.length, 0);
+  }
+  assert.equal(hiddenGetters, 0, 'ignored non-enumerable legacy accessors remain unread');
 });
 
 function assemblyTools(core, access) {

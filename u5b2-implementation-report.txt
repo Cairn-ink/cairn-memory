@@ -94,3 +94,20 @@ Direct commands:
 /home/chichieh/.nvm/versions/node/v24.15.0/bin/node core/test/context-read-assembly.test.mjs — actual exit 0; 19 passed, 0 failed, 0 skipped.
 
 Inventory re-derived from git status --porcelain=v1 --untracked-files=all and independently from find -newer /tmp/u5b2-start-marker, filtering candidates by byte comparison against HEAD (to exclude the committed contract amendment): 15/15 files, zero differences. Fix 1 changes exactly two files by before/after hashes: this test and this appended report; the A13 artifact remains byte-identical. No suites or other test files ran; no commit.
+
+Fix 2
+
+C=core/test/context-read-assembly.test.mjs; M=adapters/mcp/test/context-read-assembly.test.mjs; T=adapters/mcp/context-read-tools.mjs.
+1. T:22–38: mandatory compact own-data validation; inherited/own accessor regressions M:400 (zero getters/core calls).
+2. T:32–38: legacy-compatible dispatch; differential proxy/non-enumerable/invalid-input checks M:427 preserve core bytes.
+3. T:15–19: compact-only identifier(); whitespace/NUL/surrogate refusals before core.
+4. C:504,547–568: canonical Own body! difference; concrete preparation verified.
+5. docs/context-read-local.md:160: corrected v0104 fragment.
+6. C:596–608: artifact comparison by default; CAIRN_PUBLISH_ASSEMBLY_OVERHEAD=1 uses exclusive temp+rename. Artifact bytes/mtime unchanged, implementationCommit=47099de0.
+
+Commands: "$N" "$C", "$N" "$M" (paths above), sequential; results=pass/fail/actual-exit:
+N=/home/chichieh/.nvm/versions/node/v22.16.0/bin/node: C=20/0/0; M=43/0/0.
+N=/home/chichieh/.nvm/versions/node/v24.15.0/bin/node: C=20/0/0; M=43/0/0.
+No skips.
+Inventory: git status --porcelain=v1 --untracked-files=all versus find -newer /tmp/u5b2-fix2-start-marker (diffed):5/5,zero differences; C,M,T,docs/context-read-local.md,u5b2-implementation-report.txt.
+Sandbox-only failures:none. No commit.
