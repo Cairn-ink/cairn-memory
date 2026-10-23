@@ -72,3 +72,8 @@
   測試擁有者更新，U5b worker 不碰。複查中。
 - **要問使用者／主控的事**：(1) U5a 那兩個精確工具數斷言由主控更新的流程；(2) 共用檔案
   （`cli.mjs`、`server.mjs`、`artifact-files.json`、`CHANGELOG.md`、`docs/limitations.md`）的最小增量改法與順序。
+- 契約複查一：v0.9 判 No，兩個新 P0（snapshot 要逐次試算推導；`structuredContent` 不能宣稱對模型不可見）
+  加一個 P1（遺漏計數與競態邊界）→ v0.9.1（`0e92245d`）。複查二：**Yes，確認可實作**，無新發現。
+- 分兩部分實作：**第一部分只動 core**（facade 的 `contextRead`、組裝模組、輸入驗證、capabilities、U5b 自有
+  fixture 與 oracle 測試），不碰共用檔案；**第二部分 host 接線**等使用者／主控回覆共用檔案與 U5a 兩個斷言
+  的處理方式後再派。
