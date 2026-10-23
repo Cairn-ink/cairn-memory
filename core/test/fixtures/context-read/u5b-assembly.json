@@ -1,0 +1,1272 @@
+{
+  "version": "u5b-synthetic-v1",
+  "protocol": {
+    "commit": "c863e9d6",
+    "sha256": "d9607305d1ef25f6bf6f0b1ad561e585713f697df3685cd2bc59a6b64c5672ed",
+    "section6Sha256": "477a86dfcb7b2ee6f84078aec19f1aedc1bbe7c9950149f4e89983d62fc725af"
+  },
+  "budgets": [
+    64,
+    256,
+    1500,
+    4000
+  ],
+  "rankings": [
+    [
+      "u5b-00",
+      "u5b-01",
+      "u5b-02",
+      "u5b-03",
+      "u5b-04",
+      "u5b-05",
+      "u5b-06",
+      "u5b-07",
+      "u5b-08",
+      "u5b-09",
+      "u5b-10",
+      "u5b-11",
+      "u5b-12",
+      "u5b-13",
+      "u5b-14",
+      "u5b-15",
+      "u5b-16",
+      "u5b-17"
+    ],
+    [
+      "u5b-17",
+      "u5b-16",
+      "u5b-15",
+      "u5b-14",
+      "u5b-13",
+      "u5b-12",
+      "u5b-11",
+      "u5b-10",
+      "u5b-09",
+      "u5b-08",
+      "u5b-07",
+      "u5b-06",
+      "u5b-05",
+      "u5b-04",
+      "u5b-03",
+      "u5b-02",
+      "u5b-01",
+      "u5b-00"
+    ]
+  ],
+  "items": [
+    {
+      "id": "u5b-00",
+      "rank": 1,
+      "input": "assembly detail",
+      "text": "assembly detail",
+      "receipts": []
+    },
+    {
+      "id": "u5b-01",
+      "rank": 2,
+      "input": "assembly detail detail",
+      "text": "assembly detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "same-event",
+          "role": "user",
+          "excerpt": "Shared canonical source."
+        }
+      ]
+    },
+    {
+      "id": "u5b-02",
+      "rank": 3,
+      "input": "assembly detail detail detail",
+      "text": "assembly detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "same-event",
+          "role": "user",
+          "excerpt": "Synthetic source 02 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-02-01",
+          "role": "user",
+          "excerpt": "Shared canonical source."
+        }
+      ]
+    },
+    {
+      "id": "u5b-03",
+      "rank": 4,
+      "input": "assembly detail detail detail detail  ＡＢＣ\t",
+      "text": "assembly detail detail detail detail ABC",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-03-00",
+          "role": "user",
+          "excerpt": "Synthetic source 03 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-03-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 03 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-03-02",
+          "role": "user",
+          "excerpt": "Synthetic source 03 ordinal 02."
+        }
+      ]
+    },
+    {
+      "id": "u5b-04",
+      "rank": 5,
+      "input": "assembly detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-04-00",
+          "role": "user",
+          "excerpt": "Synthetic source 04 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-04-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 04 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-04-02",
+          "role": "user",
+          "excerpt": "Synthetic source 04 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-04-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 04 ordinal 03."
+        }
+      ]
+    },
+    {
+      "id": "u5b-05",
+      "rank": 6,
+      "input": "assembly detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-05-00",
+          "role": "user",
+          "excerpt": "Synthetic source 05 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-05-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 05 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-05-02",
+          "role": "user",
+          "excerpt": "Synthetic source 05 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-05-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 05 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-05-04",
+          "role": "user",
+          "excerpt": "Synthetic source 05 ordinal 04."
+        }
+      ]
+    },
+    {
+      "id": "u5b-06",
+      "rank": 7,
+      "input": "assembly detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-06-00",
+          "role": "user",
+          "excerpt": "Synthetic source 06 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-06-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 06 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-06-02",
+          "role": "user",
+          "excerpt": "Synthetic source 06 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-06-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 06 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-06-04",
+          "role": "user",
+          "excerpt": "Synthetic source 06 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-06-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 06 ordinal 05."
+        }
+      ]
+    },
+    {
+      "id": "u5b-07",
+      "rank": 8,
+      "input": "assembly detail detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-07-00",
+          "role": "user",
+          "excerpt": "Synthetic source 07 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-07-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 07 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-07-02",
+          "role": "user",
+          "excerpt": "Synthetic source 07 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-07-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 07 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-07-04",
+          "role": "user",
+          "excerpt": "Synthetic source 07 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-07-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 07 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-07-06",
+          "role": "user",
+          "excerpt": "Synthetic source 07 ordinal 06."
+        }
+      ]
+    },
+    {
+      "id": "u5b-08",
+      "rank": 9,
+      "input": "assembly detail detail detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-08-00",
+          "role": "user",
+          "excerpt": "Synthetic source 08 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-08-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 08 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-08-02",
+          "role": "user",
+          "excerpt": "Synthetic source 08 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-08-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 08 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-08-04",
+          "role": "user",
+          "excerpt": "Synthetic source 08 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-08-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 08 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-08-06",
+          "role": "user",
+          "excerpt": "Synthetic source 08 ordinal 06."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-08-07",
+          "role": "assistant",
+          "excerpt": "Synthetic source 08 ordinal 07."
+        }
+      ]
+    },
+    {
+      "id": "u5b-09",
+      "rank": 10,
+      "input": "assembly detail detail detail detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-09-00",
+          "role": "user",
+          "excerpt": "Synthetic source 09 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-09-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 09 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-09-02",
+          "role": "user",
+          "excerpt": "Synthetic source 09 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-09-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 09 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-09-04",
+          "role": "user",
+          "excerpt": "Synthetic source 09 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-09-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 09 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-09-06",
+          "role": "user",
+          "excerpt": "Synthetic source 09 ordinal 06."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-09-07",
+          "role": "assistant",
+          "excerpt": "Synthetic source 09 ordinal 07."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-09-08",
+          "role": "user",
+          "excerpt": "Synthetic source 09 ordinal 08."
+        }
+      ]
+    },
+    {
+      "id": "u5b-10",
+      "rank": 11,
+      "input": "assembly detail detail detail detail detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-10-00",
+          "role": "user",
+          "excerpt": "Synthetic source 10 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-10-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 10 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-10-02",
+          "role": "user",
+          "excerpt": "Synthetic source 10 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-10-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 10 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-10-04",
+          "role": "user",
+          "excerpt": "Synthetic source 10 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-10-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 10 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-10-06",
+          "role": "user",
+          "excerpt": "Synthetic source 10 ordinal 06."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-10-07",
+          "role": "assistant",
+          "excerpt": "Synthetic source 10 ordinal 07."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-10-08",
+          "role": "user",
+          "excerpt": "Synthetic source 10 ordinal 08."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-10-09",
+          "role": "assistant",
+          "excerpt": "Synthetic source 10 ordinal 09."
+        }
+      ]
+    },
+    {
+      "id": "u5b-11",
+      "rank": 12,
+      "input": "assembly detail detail detail detail detail detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-00",
+          "role": "user",
+          "excerpt": "Synthetic source 11 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 11 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-02",
+          "role": "user",
+          "excerpt": "Synthetic source 11 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 11 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-04",
+          "role": "user",
+          "excerpt": "Synthetic source 11 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 11 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-06",
+          "role": "user",
+          "excerpt": "Synthetic source 11 ordinal 06."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-07",
+          "role": "assistant",
+          "excerpt": "Synthetic source 11 ordinal 07."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-08",
+          "role": "user",
+          "excerpt": "Synthetic source 11 ordinal 08."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-09",
+          "role": "assistant",
+          "excerpt": "Synthetic source 11 ordinal 09."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-11-10",
+          "role": "user",
+          "excerpt": "Synthetic source 11 ordinal 10."
+        }
+      ]
+    },
+    {
+      "id": "u5b-12",
+      "rank": 13,
+      "input": "assembly detail detail detail detail detail detail detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-00",
+          "role": "user",
+          "excerpt": "Synthetic source 12 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 12 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-02",
+          "role": "user",
+          "excerpt": "Synthetic source 12 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 12 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-04",
+          "role": "user",
+          "excerpt": "Synthetic source 12 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 12 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-06",
+          "role": "user",
+          "excerpt": "Synthetic source 12 ordinal 06."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-07",
+          "role": "assistant",
+          "excerpt": "Synthetic source 12 ordinal 07."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-08",
+          "role": "user",
+          "excerpt": "Synthetic source 12 ordinal 08."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-09",
+          "role": "assistant",
+          "excerpt": "Synthetic source 12 ordinal 09."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-10",
+          "role": "user",
+          "excerpt": "Synthetic source 12 ordinal 10."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-12-11",
+          "role": "assistant",
+          "excerpt": "Synthetic source 12 ordinal 11."
+        }
+      ]
+    },
+    {
+      "id": "u5b-13",
+      "rank": 14,
+      "input": "assembly detail detail detail detail detail detail detail detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-00",
+          "role": "user",
+          "excerpt": "Synthetic source 13 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 13 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-02",
+          "role": "user",
+          "excerpt": "Synthetic source 13 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 13 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-04",
+          "role": "user",
+          "excerpt": "Synthetic source 13 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 13 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-06",
+          "role": "user",
+          "excerpt": "Synthetic source 13 ordinal 06."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-07",
+          "role": "assistant",
+          "excerpt": "Synthetic source 13 ordinal 07."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-08",
+          "role": "user",
+          "excerpt": "Synthetic source 13 ordinal 08."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-09",
+          "role": "assistant",
+          "excerpt": "Synthetic source 13 ordinal 09."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-10",
+          "role": "user",
+          "excerpt": "Synthetic source 13 ordinal 10."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-11",
+          "role": "assistant",
+          "excerpt": "Synthetic source 13 ordinal 11."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-13-12",
+          "role": "user",
+          "excerpt": "Synthetic source 13 ordinal 12."
+        }
+      ]
+    },
+    {
+      "id": "u5b-14",
+      "rank": 15,
+      "input": "assembly detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-00",
+          "role": "user",
+          "excerpt": "Synthetic source 14 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 14 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-02",
+          "role": "user",
+          "excerpt": "Synthetic source 14 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 14 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-04",
+          "role": "user",
+          "excerpt": "Synthetic source 14 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 14 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-06",
+          "role": "user",
+          "excerpt": "Synthetic source 14 ordinal 06."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-07",
+          "role": "assistant",
+          "excerpt": "Synthetic source 14 ordinal 07."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-08",
+          "role": "user",
+          "excerpt": "Synthetic source 14 ordinal 08."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-09",
+          "role": "assistant",
+          "excerpt": "Synthetic source 14 ordinal 09."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-10",
+          "role": "user",
+          "excerpt": "Synthetic source 14 ordinal 10."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-11",
+          "role": "assistant",
+          "excerpt": "Synthetic source 14 ordinal 11."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-12",
+          "role": "user",
+          "excerpt": "Synthetic source 14 ordinal 12."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-14-13",
+          "role": "assistant",
+          "excerpt": "Synthetic source 14 ordinal 13."
+        }
+      ]
+    },
+    {
+      "id": "u5b-15",
+      "rank": 16,
+      "input": "assembly detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-00",
+          "role": "user",
+          "excerpt": "Synthetic source 15 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 15 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-02",
+          "role": "user",
+          "excerpt": "Synthetic source 15 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 15 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-04",
+          "role": "user",
+          "excerpt": "Synthetic source 15 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 15 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-06",
+          "role": "user",
+          "excerpt": "Synthetic source 15 ordinal 06."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-07",
+          "role": "assistant",
+          "excerpt": "Synthetic source 15 ordinal 07."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-08",
+          "role": "user",
+          "excerpt": "Synthetic source 15 ordinal 08."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-09",
+          "role": "assistant",
+          "excerpt": "Synthetic source 15 ordinal 09."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-10",
+          "role": "user",
+          "excerpt": "Synthetic source 15 ordinal 10."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-11",
+          "role": "assistant",
+          "excerpt": "Synthetic source 15 ordinal 11."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-12",
+          "role": "user",
+          "excerpt": "Synthetic source 15 ordinal 12."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-13",
+          "role": "assistant",
+          "excerpt": "Synthetic source 15 ordinal 13."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-15-14",
+          "role": "user",
+          "excerpt": "Synthetic source 15 ordinal 14."
+        }
+      ]
+    },
+    {
+      "id": "u5b-16",
+      "rank": 17,
+      "input": "assembly detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail",
+      "text": "assembly detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail detail",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-00",
+          "role": "user",
+          "excerpt": "Synthetic source 16 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 16 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-02",
+          "role": "user",
+          "excerpt": "Synthetic source 16 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 16 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-04",
+          "role": "user",
+          "excerpt": "Synthetic source 16 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 16 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-06",
+          "role": "user",
+          "excerpt": "Synthetic source 16 ordinal 06."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-07",
+          "role": "assistant",
+          "excerpt": "Synthetic source 16 ordinal 07."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-08",
+          "role": "user",
+          "excerpt": "Synthetic source 16 ordinal 08."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-09",
+          "role": "assistant",
+          "excerpt": "Synthetic source 16 ordinal 09."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-10",
+          "role": "user",
+          "excerpt": "Synthetic source 16 ordinal 10."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-11",
+          "role": "assistant",
+          "excerpt": "Synthetic source 16 ordinal 11."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-12",
+          "role": "user",
+          "excerpt": "Synthetic source 16 ordinal 12."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-13",
+          "role": "assistant",
+          "excerpt": "Synthetic source 16 ordinal 13."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-14",
+          "role": "user",
+          "excerpt": "Synthetic source 16 ordinal 14."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-16-15",
+          "role": "assistant",
+          "excerpt": "Synthetic source 16 ordinal 15."
+        }
+      ]
+    },
+    {
+      "id": "u5b-17",
+      "rank": 18,
+      "input": "assembly 界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界",
+      "text": "assembly 界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界",
+      "receipts": [
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-00",
+          "role": "user",
+          "excerpt": "Synthetic source 17 ordinal 00."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-01",
+          "role": "assistant",
+          "excerpt": "Synthetic source 17 ordinal 01."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-02",
+          "role": "user",
+          "excerpt": "Synthetic source 17 ordinal 02."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-03",
+          "role": "assistant",
+          "excerpt": "Synthetic source 17 ordinal 03."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-04",
+          "role": "user",
+          "excerpt": "Synthetic source 17 ordinal 04."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-05",
+          "role": "assistant",
+          "excerpt": "Synthetic source 17 ordinal 05."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-06",
+          "role": "user",
+          "excerpt": "Synthetic source 17 ordinal 06."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-07",
+          "role": "assistant",
+          "excerpt": "Synthetic source 17 ordinal 07."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-08",
+          "role": "user",
+          "excerpt": "Synthetic source 17 ordinal 08."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-09",
+          "role": "assistant",
+          "excerpt": "Synthetic source 17 ordinal 09."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-10",
+          "role": "user",
+          "excerpt": "Synthetic source 17 ordinal 10."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-11",
+          "role": "assistant",
+          "excerpt": "Synthetic source 17 ordinal 11."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-12",
+          "role": "user",
+          "excerpt": "Synthetic source 17 ordinal 12."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-13",
+          "role": "assistant",
+          "excerpt": "Synthetic source 17 ordinal 13."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-14",
+          "role": "user",
+          "excerpt": "Synthetic source 17 ordinal 14."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-15",
+          "role": "assistant",
+          "excerpt": "Synthetic source 17 ordinal 15."
+        },
+        {
+          "client": "synthetic-u5b",
+          "sessionId": "fixed",
+          "eventId": "e-17-16",
+          "role": "user",
+          "excerpt": "Synthetic source 17 ordinal 16."
+        }
+      ]
+    }
+  ]
+}
