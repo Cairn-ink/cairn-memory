@@ -13,7 +13,10 @@ const unavailable = fn => assert.throws(fn, { code: 'index_unavailable' });
 
 test('R02/R03/R10 real canonical stores; shared query_only reads; lexical equals clean BM25', t => {
   const f = fixture(t), documents = ['apple apple pear', 'apple', 'pear', 'unfiled 中 資料庫 𠀀𠀁'];
-  const rows = documents.map(text => ({ memoryId: f.admit(text).id, text }));
+  const rows = documents.map(text => {
+    const admitted = f.admit(text), memory = ok(f.core.get({ namespace: ns, memoryId: admitted.id })).memory;
+    return { memoryId: memory.id, text: memory.content };
+  });
   const ddl = f.db.prepare("SELECT name,sql FROM sqlite_master ORDER BY name").all();
   let reads = 0;
   const originalExec = DatabaseSync.prototype.exec;

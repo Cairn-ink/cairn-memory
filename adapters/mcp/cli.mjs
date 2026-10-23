@@ -1,6 +1,10 @@
 import { pathToFileURL } from 'node:url';
 import { methodCommand } from './method-package-command.mjs';
 import { MethodStdioServerTransport } from './method-package-transport.mjs';
+import { contextCommand } from './context-read-command.mjs';
+import { CONTEXT_FLAGS, contextHostConfiguration } from './context-read-configuration.mjs';
+import { createContextEmbedding } from './context-read-provider.mjs';
+import { ContextStdioServerTransport } from './context-read-transport.mjs';
 import { identifier } from '../../core/validation.mjs';
 import { DEFAULT_MODEL } from '../openai/profiles.mjs';
 import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profile.mjs';
@@ -8,6 +12,10 @@ import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profi
 const help = `Cairn Memory — local stdio MCP developer preview
 
 Usage:
+  cairn-memory --db ABS --owner ID [--project ID] --context-read context-read-v1 [--context-read-personal]
+    [--context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X]
+  cairn-memory context refresh --db ABS --owner ID [--project ID] --types memory,card --intent current|history --max-items N --max-ms T
+    --context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X [--check-config]
   cairn-memory methods import|adopt|disable [method command arguments; see docs/method-packages-local.md]
   cairn-memory --db PATH --owner ID [--project ID] --method-packages local-v1 [--method-read-personal]
   cairn-memory --help
@@ -134,16 +142,25 @@ methods command and real controlling-terminal approval. Core results are bounded
 to 65,536 bytes; MCP framing is bounded separately to 262,144 encoded bytes.
 --check-config checks syntax only: no database access or provider requests.
 It cannot verify database permissions, credentials or model availability.
+--context-read context-read-v1 adds find_memory_candidates and
+fetch_memory_candidate_evidence only. Read sets are fixed at startup; personal
+reads require project scope and --context-read-personal. Semantic defaults to false.
+Only explicit context refresh embeds documents. All five provider options are
+required together; a key alone never constructs an embedder. Hosted uses rrf-k10.
+Context --check-config performs no key lookup, database opening or provider creation.
+Sensitive sidecars invalidate logically, without secure physical erasure. Frozen
+T1 intentionally misses an embedded single Han: 中 does not match 中文.
+See docs/context-read-local.md for budgets, degraded states and non-claims.
 `;
 
 export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
-    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages']);
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', ...CONTEXT_FLAGS]);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
-    if(args[i]==='--method-read-personal'){
+    if(args[i]==='--method-read-personal'||args[i]==='--context-read-personal'){
       if(values.has(args[i]))throw Error('invalid_mcp_configuration');
       values.set(args[i],true);i--;continue;
     }
@@ -161,6 +178,7 @@ export function parseConfiguration(args) {
   if (values.has('--project')) identifier(values.get('--project'));
   if (!values.get('--db').trim() || values.get('--db').includes('\0')) throw new Error('invalid_mcp_configuration');
   if(values.has('--method-packages')&&values.get('--method-packages')!=='local-v1'||values.has('--method-read-personal')&&(!values.has('--method-packages')||!values.has('--project')))throw Error('invalid_mcp_configuration');
+  const context = contextHostConfiguration(values);
   if (values.has('--private-cards') && values.get('--private-cards') !== 'local-v1') throw new Error('invalid_mcp_configuration');
   if (values.has('--capture-qualification')
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
@@ -208,6 +226,7 @@ export function parseConfiguration(args) {
   }
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
+    ...context,
     ...(values.has('--method-packages')?{methodPackages:'local-v1'}:{}),
     ...(values.has('--method-read-personal')?{methodReadPersonal:true}:{}),
     ...(values.has('--private-cards') ? { privateCards: 'local-v1' } : {}),
@@ -230,6 +249,8 @@ export function parseConfiguration(args) {
 export async function start(args = process.argv.slice(2), env = process.env) {
   if (args.length === 1 && args[0] === '--help') { console.log(help); return; }
   if(args[0]==='methods')return methodCommand(args.slice(1));
+  if(args[0]==='context')return contextCommand(args.slice(1),env);
+  if(args[0]==='--check-config'&&args[1]==='context')return contextCommand([...args.slice(2),'--check-config'],env);
   if (args[0] === 'review-card') {
     if (args.includes('--retained-raw-profile')) {
       const { reviewRetainedRawCard } = await import('./retained-raw.mjs');
@@ -255,6 +276,13 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     const factory = await prepareRetainedRawServer({ profilePath: config.retainedRawProfile });
     const stdio = await import('@modelcontextprotocol/server/stdio');
     return startStdio(factory, stdio);
+  }
+  if (check && config.contextRead) {
+    console.log(JSON.stringify({ ok: true, mode: 'configuration-check', contextRead: config.contextRead,
+      contextReadPersonal: config.contextReadPersonal ?? false, scope: config.namespace.scope,
+      provider: config.contextProvider ?? null, preset: config.contextProvider ? 'rrf-k10' : 'rrf-k60-d12',
+      modelKeyInspected: false, databaseOpened: false, providerContacted: false, automaticCapture: false }));
+    return;
   }
   const key = env.OPENAI_API_KEY;
   if (key && (typeof key !== 'string' || !key.trim() || /[\r\n]/.test(key))) {
@@ -304,8 +332,11 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     const { countOpenAITokens } = await import('../openai/index.mjs');
     model = { countTokens: countOpenAITokens };
   }
-  const Transport=config.methodPackages?MethodStdioServerTransport:StdioServerTransport;
-  return startStdio(() => createCairnServer({ ...config, model }), { serveStdio, StdioServerTransport:Transport },config.methodPackages?262144:65536);
+  const { contextProvider, ...serverConfiguration } = config;
+  const contextEmbedding = createContextEmbedding(contextProvider,env);
+  const Transport=config.contextRead?ContextStdioServerTransport:config.methodPackages?MethodStdioServerTransport:StdioServerTransport;
+  return startStdio(() => createCairnServer({ ...serverConfiguration, model, ...(contextEmbedding?{contextEmbedding}:{}) }),
+    { serveStdio, StdioServerTransport:Transport },config.methodPackages||config.contextRead?262144:65536);
 }
 
 function startStdio(factory, { serveStdio, StdioServerTransport },maxBufferSize=65536) {

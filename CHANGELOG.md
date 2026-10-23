@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — context retrieval host (U5a part 3)
+
+- Add explicit context MCP startup options and two read tools, fixed host read
+  sets, strict reference-preserving grammars and separate core/transport bounds.
+- Add bounded `context refresh`, syntax-only context configuration checks and
+  the budgeted OpenAI embedding port. Hosted configuration selects frozen
+  `rrf-k10`; default construction and legacy tools remain unchanged.
+- Use fake HTTP and actual installed-process acceptance; paid smoke remains a
+  separate unrun opt-in. Accounting rates are frozen inputs, not live billing
+  attestation. See [the context guide](docs/context-read-local.md).
+
 ## Unreleased — opt-in core candidate retrieval (U5a parts 1–2)
 
 - Add the explicit `contextRead` core opt-in, read-only `openContextReader`,

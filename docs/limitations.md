@@ -1,5 +1,28 @@
 # Known limitations
 
+## Context retrieval host (U5a part 3)
+
+The [context host](context-read-local.md) adds two explicit MCP read tools and a
+separate bounded document-refresh command. Startup fixes provider, preset and
+read set. Tool arguments cannot select authority, configuration or another
+namespace; returned source text remains untrusted data. Semantic query embedding
+is off by default; a key alone does not construct an embedder. Known coverage
+gaps send no query request. Hosted configuration uses frozen `rrf-k10`.
+
+The OpenAI adapter uses reviewed frozen accounting inputs, not live price quotes
+or billing attestation. Reported-token settlement releases unused reservations
+only at actual completion; unknown usage keeps the full conservative charge.
+Caps and concurrency share process totals by embedder identity, including
+configuration changes; they are not durable or account-wide spending limits.
+Inputs/transport bytes and cooperative deadlines are bounded without a latency
+guarantee. No hidden retry occurs. A paid smoke script exists but is unrun by
+default and never executes in offline tests. Actual fake HTTP and installed
+process tests use synthetic sources, not paid calls or native-product evidence.
+Sidecars remain sensitive, invalidation is logical rather than secure physical
+erasure, and the intentional `中` versus `中文` miss is unchanged. Assembly,
+complete semantic recall, answer correctness and 100,000-Memory latency remain
+non-claims. See the separate core limitations below.
+
 ## Opt-in core candidate retrieval (U5a parts 1–2)
 
 Candidate retrieval requires explicit `contextRead` configuration and method-specific

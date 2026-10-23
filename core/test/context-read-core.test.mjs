@@ -64,10 +64,14 @@ test('R03 frozen HR-1 and exact-term/CJK fixtures replay through product BM25 an
   for (const family of ['local', 'hosted']) {
     const fake = spyEmbedder(createFakeEmbedder({ dimensions: 256 })), f = coreFixture(t, { embedder: fake.port, selectedPolicy: policy({ family }) });
     const documents = [...sample.documents.map(row => row.text), '中', '中文資料庫', '𠀀𠀁𠀂', 'ＡＢＣ１２']
-      .map(text => ({ ref: ref(f.admit(text)), text }));
+      .map(text => {
+        const admitted = f.admit(text), memory = ok(f.core.get({ namespace: ns, memoryId: admitted.id })).memory;
+        return { ref: ref(memory), text: memory.content };
+      });
+    assert.equal(documents.at(-1).text, 'ABC12', 'reference rankings use the canonical stored mixed-width content');
     const bm25 = createBM25(documents);
     ok(await f.call('refreshContextIndex', refresh()));
-    for (const text of ['SQLite', '月報庫', '資料庫', 'RelayCart response', 'hosting 預算', '中', '資料', '𠀁𠀂', 'abc12']) {
+    for (const text of ['SQLite', '月報庫', '資料庫', 'RelayCart response', 'hosting 預算', '中', '資料', '𠀁𠀂', 'abc12', 'ABC12', 'ＡＢＣ１２']) {
       const lexical = bm25.search(text), value = ok(await f.call('findCandidates', query({ query: text, limit: 24 })));
       assert.deepEqual(value.items.map(row => ({ ref: row.ref, score: row.channels.lexical.rawScore })), lexical.map(row => ({ ref: row.ref, score: row.score })));
       const hybrid = ok(await f.call('findCandidates', query({ query: text, semantic: true, limit: 24 })));
@@ -79,6 +83,7 @@ test('R03 frozen HR-1 and exact-term/CJK fixtures replay through product BM25 an
       assert.deepEqual(hybrid.items.map(row => row.ref), expected.rows.map(row => row.ref));
       hybrid.items.forEach((row, i) => assert.equal(row.fusionScore, expected.rows[i].fusionScore));
       if (text === '中') assert.deepEqual(value.items.map(row => row.ref), [documents.at(-4).ref], 'documented embedded single-Han miss');
+      if (['abc12', 'ABC12', 'ＡＢＣ１２'].includes(text)) assert.deepEqual(value.items.map(row => row.ref), [documents.at(-1).ref]);
     }
   }
 });
@@ -123,6 +128,10 @@ test('R04/R05 all provider degradation preserves lexical, with complete-only pub
   mode.error = { status: 429, code: 'provider_error' };
   const multiple = ok(await f.call('findCandidates', query({ semantic: true })));
   assert.deepEqual(multiple.channels.semantic, { state: 'rate_limited', causes: ['rate_limited', 'provider_error'] });
+  mode.error = { code: 'context_item_too_large' };
+  const oversized = ok(await f.call('findCandidates', query({ semantic: true })));
+  assert.deepEqual(oversized.channels.semantic, { state: 'provider_error', causes: ['provider_error', 'context_item_too_large'] });
+  assert.equal(oversized.trace.effective, 'lexical');
   mode.error = null;
   const missing = coreFixture(t); missing.admit('apple');
   const absent = await missing.call('findCandidates', query({ semantic: true })); denied(absent, 'invalid_input');

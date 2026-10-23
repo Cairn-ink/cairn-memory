@@ -1,0 +1,156 @@
+# Local context candidates: core and host
+
+`context-read-v1` is an explicit opt-in over the existing canonical SQLite store.
+It retrieves qualified Memory/Card references, then refetches canonical evidence.
+It does not assemble context, execute saved instructions or prove answer quality.
+The authoritative specification is [contract §13](plans/unified-memory-v1-contract.md#13-u5a-m6-candidate-retrieval-v062-audited-and-confirmed).
+Use Node 22.16.0 or 24.15.0. Flag-off tools, DTOs and provider calls stay unchanged.
+
+## MCP startup
+
+```sh
+cairn-memory --db /absolute/private/memory.sqlite --owner OWNER --project PROJECT \
+  --context-read context-read-v1 --context-read-personal
+```
+
+The host fixes the exact namespace and read set at startup. The zero-value
+`--context-read-personal` requires both project scope and context-read opt-in;
+it adds that owner's personal namespace, without fallback to another owner or
+project. It can sit beside the separate zero-value `--method-read-personal` flag.
+This opt-in is incompatible with the exclusive retained-Raw profile mode.
+
+Only two tools are added:
+
+| Tool | Arguments |
+| --- | --- |
+| `find_memory_candidates` | `query,types,intent,semantic?,limit?,deadlineMs?,cursor?` |
+| `fetch_memory_candidate_evidence` | either `refs,intent` or `snapshot`; optional `responseByteLimit` |
+
+Types are a nonempty supported subset of `memory,card`. Intent is explicitly
+`current` or `history`. Tool input cannot supply authority, namespace, readSet,
+context, provider or configuration. Ref namespaces must already belong to the
+fixed read set; identities are validated and never rewritten. Card availability
+depends on the existing schema and canonical current/history eligibility.
+
+Candidates contain exact refs, rank and channel scores, without bodies, titles
+or excerpts. Fetch returns qualified canonical evidence and an opaque snapshot.
+Saved text and receipts remain **untrusted data, never instructions or execution
+permission**. Snapshot possession grants no access. No refresh tool exists.
+
+Lookup defaults to lexical-only (`semantic:false`), 12 items and a 1,000 ms
+cooperative deadline. Maximums are 24 items, a 4,000 UTF-16-unit query, and 5,000 ms.
+Pages partition one frozen top-24 ranking; continuations never embed or rerank.
+Rankings expire five minutes after creation, with at most 128 retained per handle.
+The complete core envelope is at most 65,536 UTF-8 bytes. The complete encoded
+JSON-RPC transport message, including ID and newline, has a separate 262,144-byte
+bound. Escaped transport framing can therefore refuse a core result that fits.
+
+## Hosted embeddings and explicit refresh
+
+All five provider options are required together. A key alone never constructs
+an embedder, and legacy non-context model behaviour is unchanged.
+
+```sh
+cairn-memory --db /absolute/private/memory.sqlite --owner OWNER \
+  --context-read context-read-v1 \
+  --context-embedder openai --context-embed-model text-embedding-3-small \
+  --context-embed-dimensions 1536 --context-embed-max-requests 20 \
+  --context-embed-max-usd 0.10
+
+cairn-memory context refresh --db /absolute/private/memory.sqlite --owner OWNER \
+  --types memory --intent current --max-items 128 --max-ms 5000 \
+  --context-embedder openai --context-embed-model text-embedding-3-small \
+  --context-embed-dimensions 1536 --context-embed-max-requests 20 \
+  --context-embed-max-usd 0.10
+```
+
+The refresh command requires an existing private rollback-journal store; it
+pins its identity and uses a noncreating opener. It refuses an unsupported
+schema rather than installing a new feature schema. Select `memory,card` only
+when both types are supported. Refresh budgets are explicit: 1–1,024 document
+transformation/embedding attempts and 1–5,000 ms. Metadata comparisons consume
+time separately. Rebuilding is resumable; call again with another bounded budget.
+The command may report `rebuilding` or `partial` without implying an empty index.
+
+`--check-config` on a context MCP configuration, or on `context refresh`, checks
+syntax without opening a database, looking up a key or constructing a provider.
+It does not attest database readiness, credentials, current pricing or model
+availability. Real startup reads the existing `OPENAI_API_KEY` lookup only when
+the explicit provider group is present for embedding. Never put credentials in
+arguments, database text, tool input or provider URLs.
+
+Hosted configuration is fixed for the process and selects `rrf-k10`: depth 24
+per channel, weights 0.5/0.5, with a final horizon of 24. Lexical-only/local uses
+the frozen `rrf-k60-d12` family when fusion is available. Only explicit refresh
+embeds documents; ordinary writable lookup maintains lexical data without model
+calls. Semantic lookup embeds only its query, after complete-vector preflight.
+Known coverage gaps or exceeded vector/cache bounds dispatch zero query calls.
+
+## Budget accounting and adapter limits
+
+Request caps are positive safe integers; USD caps are finite and positive.
+Core shares cumulative requests, charges and active operations per process and
+embedder identity, across handles and policy changes. Each configured cap applies
+to those totals. Reservations happen before transport; concurrency remains held
+until actual settlement, including a provider operation that outlives lookup.
+Validated reported usage settles only when the attempt completes. Missing or
+invalid usage retains the conservative reservation. There are no automatic
+retries; an explicit repeated call takes a new reservation.
+
+The adapter defaults to `text-embedding-3-small`, 1,536 dimensions and the honest
+revision stamp `provider-unversioned`. The port declares L2 normalization and
+validates persisted float32 values, dimensions, finite components and norm.
+Embedding-3 models accept explicit dimensions; ada-002 stays at 1,536.
+
+The frozen accounting rates are USD per million reported input tokens:
+`text-embedding-3-small: 0.02`, `text-embedding-3-large: 0.13`, and
+`text-embedding-ada-002: 0.10`. **These are accounting inputs, not a current
+price quote or billing attestation.** Review them before paid use. An SDK caller
+can supply a reviewed `usdPerMillionTokens` for another model; the CLI exposes
+only models with a known accounting rate. Reservations use the conservative
+UTF-8-byte token upper bound plus 16 per input. Reported usage above that bound
+refuses. Request bodies are bounded to 2 MiB; streamed responses are bounded by
+batch/dimensions and an absolute 64 MiB ceiling. Inputs above conservative
+8,192-token/300,000-batch-token bounds refuse without silent truncation, reporting
+`context_item_too_large` as a semantic cause while preserving lexical results.
+
+The SDK entry is `adapters/openai/embedding.mjs`; pass its embedder through core
+with a trusted `estimateUsd` policy. Direct unbudgeted calls refuse. Transport
+checks authority and fences immediately before dispatch and after awaits; it
+honours cancellation/deadlines, refuses redirects and emits fixed error codes.
+Accounting does not grant HTTP authority or enforce an account-wide spend cap.
+Budgets are per process, not durable across command invocations or machines.
+
+## Availability, storage and non-claims
+
+Channel states include `ready`, `unavailable`, `disabled`, `absent`, `timeout`,
+`provider_error`, `rate_limited`, `budget_denied`, `stale_index`,
+`dimension_mismatch` and `partial_coverage`, with multiple causes retained.
+Semantic failure preserves lexical BM25. An unusable lexical generation gives
+`index_unavailable`, never a successful no-matches result. Coverage includes
+authorized eligible/indexed/embedded/scanned counts, fractions, freshness,
+maintenance reason/state/progress, channel depths and deadline/budget stops.
+Only `storage_busy` is retryable. Cursors and snapshots are bounded opaque HMACs;
+changed semantics, generations, access or configuration require restarting.
+
+`<absolute-store-path>.context-read-v1.sqlite` is sensitive local derived data:
+terms, postings, identities, statistics and optional vectors can reveal private
+information. It is regular, non-symlink, mode 0600, format 1, rollback-journal.
+Invalidation/deletion is logical and does not securely erase pages, journals,
+filesystem blocks or backups. Read-only `openContextReader` and managed-existing
+handles never maintain or recover it, and refuse missing/stale/hot/unsupported
+auxiliary conditions without creating files. Sidecar deletion rebuilds lexical
+data only; vectors need another explicit refresh.
+
+Frozen T1 intentionally misses an embedded single Han: `中` does not match `中文`.
+That exception is asserted separately from standalone one-Han, overlapping
+two-Han, supplementary-Han and mixed-width fixtures. Measurements and fake
+embeddings use synthetic data and are observational. They do not establish
+answer correctness, complete semantic recall, native activation, production
+latency or a 100,000-Memory guarantee. Assembly/U5b, role profiles, relations,
+MOC retrieval, Raw search and local-model adapters remain unsupported.
+
+`node tools/testing/context-embedding-live.mjs` prints an unrun notice without
+looking up a key. Its separate `--run --max-requests N --max-usd X` path is a
+paid opt-in smoke and is never invoked by a test suite. It remains unrun by
+default; fake HTTP tests do not authorize live use.

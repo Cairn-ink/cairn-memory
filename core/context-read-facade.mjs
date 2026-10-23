@@ -40,6 +40,7 @@ function degradation(error) {
   if (error?.status === 429 || error?.code === 'rate_limited') causes.push('rate_limited');
   if (states.has(error?.code)) causes.push(error.code);
   if (error?.code === 'index_unavailable') causes.push('stale_index');
+  if (error?.code === 'context_item_too_large') causes.push('provider_error', 'context_item_too_large');
   if (!causes.length) causes.push('provider_error');
   return channel(causes[0], causes);
 }

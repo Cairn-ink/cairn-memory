@@ -135,6 +135,12 @@
   "core/prompts/recall-rank-rationale-evidence.md",
   "core/prompts/recall-select.md",
   "adapters/mcp/cli.mjs",
+  "adapters/mcp/context-read-access.mjs",
+  "adapters/mcp/context-read-command.mjs",
+  "adapters/mcp/context-read-configuration.mjs",
+  "adapters/mcp/context-read-provider.mjs",
+  "adapters/mcp/context-read-tools.mjs",
+  "adapters/mcp/context-read-transport.mjs",
   "adapters/mcp/method-package-command.mjs",
   "adapters/mcp/method-package-files.mjs",
   "adapters/mcp/method-package-tools.mjs",
@@ -150,6 +156,7 @@
   "adapters/local/configuration.mjs",
   "adapters/local/guarded-model.mjs",
   "adapters/openai/classification-wire.mjs",
+  "adapters/openai/embedding.mjs",
   "adapters/openai/index.mjs",
   "adapters/openai/prompts/qualify-candidates-pool.md",
   "adapters/openai/qualification-evidence-pool.mjs",
@@ -206,5 +213,6 @@
   "integrations/client/state-lock.mjs",
   "docs/raw-local-journal.md",
   "LICENSE",
+  "docs/context-read-local.md",
   "docs/method-packages-local.md"
 ]

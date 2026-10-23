@@ -25,19 +25,27 @@ export function contextBudget(options) {
     // Reserve synchronously, immediately before invoking the port. Unknown
     // usage keeps the conservative full charge. Every invocation reserves anew.
     ledger.requests++; ledger.usd += usd; ledger.active++;
-    let operation, invoked = false;
+    let operation, invoked = false, actualUsd;
+    // A trusted adapter may report validated usage. Hold the reservation until
+    // the underlying attempt settles; unknown usage retains its full charge.
+    const settleUsd = value => {
+      if (!Number.isFinite(value) || value < 0 || actualUsd !== undefined) throw refused('provider_error');
+      actualUsd = value;
+    };
     try {
       beforeDispatch();
       // Adapters with internal awaits must call beforeDispatch immediately
       // before HTTP transmission. Core also fences every await/settlement.
       invoked = true;
-      operation = Promise.resolve(port.embed(texts, { signal, beforeDispatch }));
+      operation = Promise.resolve(port.embed(texts, { signal, beforeDispatch, deadlineAt, settleUsd }));
     } catch (error) {
       ledger.active--;
       if (!invoked) { ledger.requests--; ledger.usd -= usd; }
+      else if (actualUsd !== undefined) ledger.usd += actualUsd - usd;
       throw error;
     }
-    operation.then(() => { ledger.active--; }, () => { ledger.active--; });
+    const settled = () => { ledger.active--; if (actualUsd !== undefined) ledger.usd += actualUsd - usd; };
+    operation.then(settled, settled);
     let timer, aborted;
     const timeout = new Promise((resolve, reject) => {
       aborted = () => reject(refused('timeout'));

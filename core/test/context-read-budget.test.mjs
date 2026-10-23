@@ -54,3 +54,18 @@ test('R06 review 5: revocation after reservation holds capacity before transport
   assert.equal(transmissions, 1, 'uninvoked reservation released requests, USD and concurrency');
   await assert.rejects(dispatcher(embedder, { maxConcurrent: 3 })(), { code: 'budget_denied' });
 });
+
+test('R04/R10 hosted usage settles only at actual completion; unknown usage keeps the reservation', async () => {
+  let release, calls = 0;
+  const embedder = port((texts, { settleUsd }) => {
+    calls++; if (calls !== 1) return [[1]];
+    settleUsd(.25); return new Promise(resolve => { release = () => resolve([[1]]); });
+  });
+  const first = dispatcher(embedder)();
+  try {
+    await assert.rejects(dispatcher(embedder, { maxRequests: 9, maxConcurrent: 2 })(), { code: 'budget_denied' });
+  } finally { release(); await first; }
+  await dispatcher(embedder, { maxRequests: 9, maxUsd: 1.25 })();
+  await assert.rejects(dispatcher(embedder, { maxRequests: 9, maxUsd: 1.25, maxConcurrent: 3 })(), { code: 'budget_denied' });
+  assert.equal(calls, 2);
+});
