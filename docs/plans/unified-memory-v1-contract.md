@@ -1087,3 +1087,46 @@ capability change.
   | C03 | Corrupting file A's text refuses reads of A, `getMethodVersion` and manifest listing, while reads of file B succeed. Corrupting a stored `content_identity` or manifest row refuses the reads and resolutions that verify the affected version. Unrelated package lists, usage, effects and reason checks are unaffected |
   | C04 | Gate: a continuous maximum-size `readMethodFile` reader and the existing small independent binding writer run in separate processes, with at least 100 committed transitions and finite deadlines. Any busy outcome fails the gate, even if it was retried. Writer p95 must be ≤250 ms on the reference machine. `npm run measure:method-packages` asserts these thresholds and both processes' exit codes on both runtimes, and reports reader page p50/p95. This is plausibly achievable, not yet established: rollback-mode PENDING locks let short deferred reads coexist with writer progress |
   | C05 | A concurrent deletion permits complete pages linearized before the deletion. A later continuation returns `cursor_stale` under the existing U2 epoch precedence (`core/test/method-packages-deletion.test.mjs:72`), and a fresh read returns `unavailable`. No page mixes snapshots or versions. Existing §5 behaviour and assertions are preserved. U4's separately specified deleted-target precedence does not change U2c |
+
+## 16. Amendment: contention gates under rollback-journal mode (v0.7.2, primary, 2026-10-24)
+
+The U4a-1 review asked for an **unpaced** writer scenario, so that the overlap
+is real and not counted across writer sleeps. The primary measured it outside
+the sandbox on Node 22.16.0 and 24.15.0:
+
+- An unpaced binding writer committed continuously: 6,408 commits, zero busy
+  outcomes, p95 about 21 ms.
+- It **starved concurrent readers**. The asset reader read 157 pages in 94 s
+  before a `storage_busy`. The method reader read 6 pages, with a 2.9 s
+  maximum page.
+- The paced scenarios passed every gate on both runtimes: zero busy on both
+  sides, writer p95 25–40 ms.
+
+This is inherent to SQLite rollback-journal locking. A writer that never
+pauses keeps re-acquiring the lock before readers can.
+
+Therefore, for §14 C04 and §12.7 K13:
+
+- **Gates (unchanged)** apply to the **paced** scenario:
+  - at least 100 commits;
+  - at least 200 actively overlapping pages, counted against actual writer-call
+    intervals;
+  - zero busy outcomes on either side;
+  - writer p95 ≤250 ms;
+  - both process exits checked.
+- The **unpaced** scenario is a labelled **stress observation**, not a gate. It
+  reports:
+  - reader pages;
+  - busy outcomes;
+  - waits;
+  - whether retried reads eventually complete.
+
+  The run fails only on corruption, a wrong byte comparison, a writer error or
+  a deadline breach.
+- **Limitation** (`docs/limitations.md`): a process that writes continuously,
+  without pauses, can starve readers. Readers then receive retryable
+  `storage_busy`. Normal capture and imports are sporadic and meet the paced
+  gates.
+- **WAL mode** is a separate, store-wide follow-up decision. It would remove
+  this starvation, but it touches every V1 opener and the §11.2 store fence,
+  whose review currently requires rollback-journal mode.
