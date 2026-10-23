@@ -109,3 +109,10 @@
   提交、推送；開 `/home/chichieh/cairn-memory-review-u5b2`（審查）與 `/home/chichieh/cairn-memory-ci-u5b`（驗收）。
   給審查者的待評估問題：MCP adapter 靜態引入 plugin 的 `redact.mjs` 並對 query 做 redaction；`server.mjs` 靜態
   引入 counter 模組使 flag-off 啟動也載入 tiktoken。
+- **審查結果（四份，都判 No，無運行期 P0）。** U5b 第一部分 Spec：P1×3（Card store 隔離、17 筆 receipt 順序與
+  完整性、唯讀拒絕矩陣）＋P2；Standards：P0（測試用 `git show c863e9d6:…` 讀另一分支，乾淨 CI 會失敗）、P1（競態
+  測試依賴子程序延遲 < 5 s deadline）、P2。兩位都確認 `:memory:` 回 `index_unavailable`、計數器呼叫 818 = 2+2U、
+  manifest 只缺 `core/context-read-assembly.mjs`（第二部分已加）。HR-2 harness Spec：P0（report 不驗 provenance，
+  壞輸入仍判 confirmatory）＋P2×2；Standards：P1×2（score 不重放排程；實作身分未比對）＋P2×3（含 480→240）。
+- 派修正輪：`u5b_impl` fix1（resume，只動 core 測試與 fixture）、`hr2_harness` fix1（resume）。
+  U5b 第二部分雙審查與完整矩陣仍在跑。
