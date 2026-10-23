@@ -175,7 +175,7 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
   - U2c：`5b1202d`，主控驗收通過，C04 門檻達標
 - **進行中**
   - U5a 第一＋二部分（core）完成：U5a 分支 `54259bf`＋`c798695`，雙審查 Yes。第三部分（host）實作中
-  - U4a 第一部分：v31 schema、遷移、素材的匯入／讀取／刪除、用量與量測門檻
+  - U4a 第一部分已提交（`74956b5`），雙審查中；第二部分（衍生文字與附件）實作中
 - **下一步**
   1. U3 雙審查與修正輪。
   2. U2c 實作：解決讀寫鎖競爭，U4a 和 U5a 的接線都要靠它。
@@ -272,7 +272,10 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `umv1_u2_impl`（U3 修正 4） | 保留狀態碼 78；glob 依 POSIX 把換行當一般字元 | gpt-6.1-sol/xhigh → 同 | workspace-write | `e9d7c58` | 06:53–07:04 | exit 0，5 個檔案。主控驗收兩個 Node 版本全部 exit 0（負載一度到 44）→ 提交為 `e63b24c` |
 | `u3_review_spec`／`u3_review_standards`（最終確認） | `e63b24c` | gpt-6.1-sol/xhigh → 同 | read-only | `e63b24c` | 07:1x–07:20 | **兩邊都判 Yes**，沒有剩下任何問題 → **U3 完成** |
 | `umv1_u2_impl`（U4a 第一部分） | 完整 v31 schema（11 張表與觸發器）、遷移與開啟器、正規編碼與已知答案向量、獨立素材的匯入／讀取／刪除、分塊 MAC、配額、K01–K07、K09、K12、K13 門檻 | gpt-6.1-sol/xhigh → 同 | workspace-write | `e63b24c` | 07:21–09:08 | exit 0，38 個檔案。沙箱內的 K13：匯入 32 MiB 的寫入交易 122–593 ms（門檻 2,000）、RSS 增長約 40 MiB（門檻 128）、寫入者 p95 22–63 ms、零 busy。注意：Node 24 校準時讀取者出現過一次 busy，worker 隨後放慢了寫入節奏 → 主控要在沙箱外確認 |
-| `umv1_u2_impl`（競態測試修正） | 測試連線加上 busy timeout，修掉 U2c 暴露出來的偶發失敗 | gpt-6.1-sol/xhigh → 同 | workspace-write | U4a-1 工作目錄 | 09:1x–09:2x | exit 0；2 個既有測試輔助檔（加上 U4a-1 新增的 asset-fixtures）。競態測試在兩個 Node 版本各連跑 10 次都通過。主控正在沙箱外跑 U4a-1 加這個修正的完整矩陣，之後分成兩次提交 |
+| `umv1_u2_impl`（競態測試修正） | 測試連線加上 busy timeout，修掉 U2c 暴露出來的偶發失敗 | gpt-6.1-sol/xhigh → 同 | workspace-write | U4a-1 工作目錄 | 09:1x–09:2x | exit 0；競態測試在兩個 Node 版本各連跑 10 次都通過 → 提交為 `2d20a52` |
+| 主控（U4a-1 驗收） | 沙箱外的完整矩陣，含 `measure:assets` | — | 沙箱外 | 整合分支工作目錄 | 09:2x–10:0x | 兩個 Node 版本**全部 exit 0**：core 2,080、mcp 187、整體 635、打包 185＋1 略過、workspace-lifecycle 52。沙箱外的 K13：匯入 32 MiB 的寫入交易 51–55 ms（門檻 2,000）、RSS 增長約 40 MiB（門檻 128）、寫入者 p95 16–17 ms、零 busy、重疊讀取超過 10,000 頁 → **提交 U4a-1 為 `74956b5`**（38 個檔案；連同修正共 40 個，兩種方式核對一致） |
+| `u4a_review_spec`／`u4a_review_standards` | U4a-1 的非作者雙審查 | gpt-6.1-sol/xhigh | read-only | `74956b5`，在乾淨的 worktree `/home/chichieh/cairn-memory-review-u4a` | 10:0x– | 執行中 |
+| `umv1_u2_impl`（U4a 第二部分） | 衍生文字、方法包二進位附件（mixed-v1）、K04／K08–K12，以及 64 MiB 混合匯入的 K13 門檻；不改 DDL | gpt-6.1-sol/xhigh | workspace-write | `74956b5` | 10:0x– | 執行中 |
 | `umv1_u5a_impl`（修正 2）＋主控重跑 | 打包清單加入 9 個新的執行期模組 | gpt-6.1-sol/xhigh → 同 | workspace-write | U5a worktree | 08:1x–08:3x | 兩種方式核對：從 import 圖走到的 198 個檔案都在清單內，差異 0。補裝依賴後主控重跑：local、mcp、workspace-lifecycle 在兩個 Node 版本都過；Node 24 的 core 2,076／2,076（競態偶發失敗沒有重現）；打包在 Node 24 是 182＋1 略過；Node 22 有 3 個試點測試在負載 39 時逾時，單獨重跑 14／14 通過 → **在 U5a 分支提交 `54259bf`**（28 個檔案） |
 | `u5a_review_spec`／`u5a_review_standards` | U5a 第一＋二部分（core）的非作者雙審查 | gpt-6.1-sol/xhigh → 同 | read-only | `54259bf`，在乾淨的 worktree `/home/chichieh/cairn-memory-review-u5a` | 08:16–08:27 | **兩邊都判 No**。Spec 有 1 項 P1：預算帳本的鍵包含並行上限，改了上限，累計花費就歸零，審查者實測在 $1 的上限下花掉 $2。另有 4 項 P2：診斷沒有回報重建原因、檔案監看漏掉 `-journal/-wal/-shm`、R10 沒有用獨立程序驗證寫入者、R06 少了索引存取的監看與「預留後撤權」。Standards 有 4 項 P2：建構失敗時沒有關閉連線、檔案系統錯誤會帶出路徑、測試等待沒有上限、缺少 CHANGELOG 與限制說明 → 9 項全部交給修正輪 |
 | `umv1_u5a_impl`（U5a 審查修正） | 上述 9 項，每項都附回歸測試 | gpt-6.1-sol/xhigh → 同 | workspace-write | `54259bf` | 08:27–08:49 | exit 0，12 個檔案。主控在沙箱外驗收，兩個 Node 版本全部 exit 0（core 2,090、mcp 180、整體 635、打包 182＋1 略過）→ **在 U5a 分支提交 `c798695`**；兩位審查者在乾淨的 worktree 複查中 |
