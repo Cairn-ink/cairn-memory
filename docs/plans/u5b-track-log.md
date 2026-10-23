@@ -141,3 +141,9 @@
   惰性計數器（載好前組裝回 `token_count_unavailable`），CLI 照舊先 await。
 - `1a589129` 矩陣（修正前）Node 22：mcp 1 失敗＝已修的 tokenizer 載入測試；artifact 2 失敗（B4c、H5，與 context
   無關，負載 9 時）要在最終 commit 的矩陣確認是否為 flake。Node 24 進行中。
+- **U5b 第二部分 fix2 提交 `a5194967`**（`contextCounter` 改選配、server 惰性注入、`contextCounterReady`），
+  協調者沙箱外 7 個測試檔兩版本 41／41。文件 commit `aeae00e8`：契約 §15 證據狀態、`docs/limitations.md`、
+  `docs/context-read-local.md` 改記 HR-2 已跑、預設維持。**候選最終 commit：`aeae00e8`**（已推送）。
+  派 Spec／Standards 第二次複查；完整矩陣以 `cairn-heavy` 排在 `/home/chichieh/cairn-memory-ci-u5b`（aeae00e8）。
+- `1a589129` 矩陣結果：100 工作 97 通過；3 個失敗＝tokenizer 載入測試（兩版本，已修）＋Node 22 artifact 兩個
+  （`local-host` B4c、`mcp-capture-deadline` H5），單獨重跑 8／8、1／1 通過，判為負載 9 時的 flake。
