@@ -116,3 +116,6 @@
   壞輸入仍判 confirmatory）＋P2×2；Standards：P1×2（score 不重放排程；實作身分未比對）＋P2×3（含 480→240）。
 - 派修正輪：`u5b_impl` fix1（resume，只動 core 測試與 fixture）、`hr2_harness` fix1（resume）。
   U5b 第二部分雙審查與完整矩陣仍在跑。
+- **修正輪一提交。** U5b core `9b9e9d4c`（6 檔；協調者沙箱外 85／85 兩版本；協調者自己去掉 vendored 協議 fixture
+  的檔尾空行並更新 hash）。HR-2 harness（14 檔；127／127 兩版本；dev 240 格重跑 exit 0；markdown 3.6 MB→254 KB，
+  JSON 243 MB 正式跑時要 xz）。兩邊都已 resume 原審查者複查。U5b 第二部分雙審查與完整矩陣仍在跑。
