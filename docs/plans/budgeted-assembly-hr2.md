@@ -1,12 +1,20 @@
-# HR-2: budgeted assembly, offline protocol (v0.2, pre-audit)
+# HR-2: budgeted assembly, offline protocol (v1, frozen)
 
-Status: **v0.2, not yet frozen.** v0.1 was written 2026-10-23 by the U5b
-coordinator after two mechanical findings on the frozen HR-1 fixture (§1). The
-primary (charter owner) approved the six deviations in §2 on 2026-10-23 with
-three conditions, now folded in: the external-validity statement (§3, §10),
-"initial default" wording (§4), and an optional exploratory length-stress arm
-(§6.1). Next: a non-author audit, then a freeze commit (v1) before any
-test-split run.
+Status: **v1, frozen before any HR-2 test-coverage run.** v0.1 was written
+2026-10-23 by the U5b coordinator after two mechanical findings on the frozen
+HR-1 fixture (§1). The primary (charter owner) approved the six deviations in
+§2 on 2026-10-23 with three conditions, folded into v0.2: the
+external-validity statement (§3, §10), "initial default" wording (§4), and an
+optional length-stress arm (§6.1). v0.2 was audited by an independent,
+non-author, read-only Codex (`hr2_protocol_audit`, gpt-6.1-sol/xhigh), which
+found three P0, seven P1 and one P2; v1 applies all of them. The auditor
+reproduced every mechanical claim in §1 and the dev probe output exactly.
+
+**Pre-freeze inspection declaration.** This protocol is dev-informed and
+preregistered before any HR-2 test-coverage scoring. Pre-freeze inspection
+included the published HR-1 results, test candidate token volumes (§1.1) and
+test-label structural and fidelity counts (§1.3, §1.4). Assembly coverage was
+probed only on dev rankings. No HR-2 test coverage was computed.
 
 Branch `experiment/hr2-assembly`, cut from `experiment/hybrid-retrieval-hr1` at
 `43a8347`. No public core API, schema, default, adapter or installed artifact
@@ -32,12 +40,16 @@ raw output: `evaluation/retrieval-research/results/hr2-design-probe/`.
    | bge-m3 + A3 (local nominated; depth 12 fusion returns 14–24 items) | 309 / 412 | 789 / 1,020 |
    | openai-3-small + F-RRF10 (hosted nominated) | 394 / 451 | 997 / 1,112 |
 
-   At 1,500 / 2,000 / 4,000 tokens every arm would emit the same context, so
-   the experiment would be saturated and uninformative.
-2. **Prefix and window arms are degenerate here.** Memory bodies are 20 UTF-16
-   units at the median and 82 at most. `packRank`'s floor is 120 code points
-   (`core/model-packing.mjs:7`), so P-prefix equals P-top, and a query-term
-   window inside an 82-unit body is the body.
+   At 1,500 / 2,000 / 4,000 tokens every full-unit arm saturates (the s1
+   variants still omit later spans even at unlimited budget), so the
+   experiment would be uninformative.
+2. **Prefix and window arms are inert here.** Memory bodies are 20 UTF-16
+   units at the median and 82 at most. `packRank`'s body floor is 120 code
+   points (`core/model-packing.mjs:7`), so P-prefix's body-shortening stage
+   changes nothing; the current `packRank` as a whole (it also caps receipt
+   lists and measures complete requests, `core/model-packing.mjs:114`) is
+   **not** benchmarked. P-window is omitted because a short-body fixture does
+   not meaningfully test the intended window treatment.
 3. **No character-span annotation is needed.** Each of the 1,100 memories
    expresses exactly one fact (`expresses.length === 1` for 1,100 / 1,100), and
    every span-only fact sits in the memory's first span (112 / 112). The
@@ -62,8 +74,11 @@ raw output: `evaluation/retrieval-research/results/hr2-design-probe/`.
    answer. Bodies-first therefore spends budget on text that cannot satisfy
    those groups, while the rankers already put the evidence near the top.
    "Depth then breadth" (whole items in rank order, then bodies of the rest)
-   never beat P-top. Keeping only the first span per item gave at most +1.8
-   points at small budgets.
+   occasionally improved dev coverage (A1 at 256: 0.736 vs 0.718).
+   First-span-only rank-first improved by at most 1.8 points; first-span-only
+   body-first improved body-first by 5.3 points on A1 at 512. The probe was
+   re-run after the audit with the §6 rule that a span is scheduled only after
+   its body was admitted; the table above shows the re-run.
 
 ## 2. Deviations from the charter §6 plan (approved by the primary, 2026-10-23)
 
@@ -72,8 +87,8 @@ raw output: `evaluation/retrieval-research/results/hr2-design-probe/`.
 | D1 | Budgets 1,500 / 2,000 / 4,000 | Confirmatory **256 / 512 / 768**; exploratory sweep 128–1,536 | §1.1: the approved budgets never bind on this fixture. 256 / 512 / 768 are about 25% / 50% / 75% of the full candidate volume. Product defaults (1,500 session context, 4,000 draft) stay as token numbers; HR-2 informs the **strategy**, not the number |
 | D2 | Top 30 candidates | Each ranking's full frozen list (≤ 24) | HR-1 arms are capped at 24 (protocol §5.1); fused A3 returns 14–24 |
 | D3 | Codex annotates character spans, another checks, mechanical substring check | Dropped; required region = whole body or whole named span | §1.3, verified 1,100 / 1,100 |
-| D4 | P-prefix (120-unit prefix then widen) | Dropped, recorded as degenerate | §1.2 |
-| D5 | P-window | Dropped, recorded as degenerate | §1.2 |
+| D4 | P-prefix (120-unit prefix then widen) | Dropped, recorded as inert on this fixture | §1.2 |
+| D5 | P-window | Dropped, recorded as untestable on this fixture | §1.2 |
 | D6 | (none) | Add P-top-s1 and P-cover-s1 (deepen with the earliest span only) and P-top+tail (depth then breadth) | Product-relevant variants that the probe can distinguish; cheap |
 
 The alternative, a new fixture with realistic memory and receipt lengths, was
@@ -89,10 +104,10 @@ packet. It stays the follow-up that §10 asks for.
 > items, coverage-first (every body, then spans), or depth-then-breadth? Does
 > deepening with the earliest span only help?
 
-No model, no API, no money. Short representations are deterministic cuts of
-stored text, so the coverage-first result is a lower bound for layered
-representations that use generated summaries; that bound is what U5b can ship
-without a model.
+No model, no API, no money. This tests bodies-first receipt deepening with
+deterministic whole units on this fixture; it provides **no** performance bound
+for generated summaries. The deterministic policy is what U5b can ship without
+a model.
 
 **External validity, stated before the run.** This fixture is a short-item
 world: bodies of at most 82 units, exactly one fact per memory, and 40% of
@@ -104,36 +119,58 @@ generalize to them.
 ## 4. Decision rule (dev-free; everything below is preregistered)
 
 - **Primary comparison**: P-cover versus P-top on the local nominated ranking
-  (bge-m3 + A3), budget 512, test split, S1000, macro group coverage over
-  C1–C7, family cluster bootstrap 95% CI (one preregistered comparison).
+  (bge-m3 + A3), budget 512, overhead `O = 0`, test split, S1000, macro group
+  coverage over C1–C7, family cluster bootstrap 95% CI (one preregistered
+  comparison). The local ranking is the primary because it is the stronger
+  frozen ranking; the hosted product default is an exploratory replicate (§4
+  secondary). On dev, P-top at 512 already reaches that ranking's ceiling, so
+  the test can only show whether coverage-first loses, ties or gains at the
+  budget where the probe saw the largest difference.
 
 | Outcome | Condition |
 | --- | --- |
 | Coverage-first worth continuing | Δmacro(P-cover − P-top) ≥ +5 points and CI lower bound > 0 |
-| Rank-first whole items become U5b's **initial** default, to be revisited once a long-item fixture exists | Δmacro ≤ 0 and CI upper bound < +5 |
-| Inconclusive | Otherwise |
+| Rank-first whole units stay U5b's **initial** default, to be revisited once a long-item fixture exists | Δmacro ≤ 0 and CI upper bound < +5 |
+| Inconclusive | Otherwise, and whenever the bootstrap reports too few families or invalid inputs |
+
+The +5-point threshold is a practical criterion without a claimed power
+guarantee; 29 families establish neither adequate power nor equivalence. The
+initial-policy outcome means only that no material coverage-first gain was
+established for this ranking and evidence shape. Hosted applicability,
+realistic lengths and production reliability need separate evidence.
 
 - **Secondary, exploratory (95% CIs, labelled)**: the same contrast on A1 and
   on openai-3-small + F-RRF10; budgets 256 and 768; P-top-s1 vs P-top;
   P-top+tail vs P-top; the full sweep.
 - The probe in §1.4 is a dev-split design probe. It chose budgets and arms; it
-  is not evidence for the rule above. No test-split file is read before the
-  freeze commit.
+  is not evidence for the rule above. See the pre-freeze inspection declaration
+  at the top: test rankings were read for token volume and test labels for
+  structural counts, never for coverage.
 
 ## 5. Fixed inputs
 
 - Fixture `hr1-fixture-v2`, hashes in
   `evaluation/retrieval-research/fixtures/FROZEN.md`. Nothing is changed.
 - Rankings: the `with-foreign` test-final files for `A1`, `A3--bge-m3` and
-  `F-RRF10--openai-3-small` at S1000 (HR-1 verified with/without-foreign
-  rankings identical). The harness verifies their `fixtureHashes` field against
-  FROZEN.md and refuses mismatches.
+  `F-RRF10--openai-3-small` at S1000 (the auditor independently verified that
+  all three with/without-foreign pairs have identical ranked lists).
+- **Input authentication.** Before scoring, the harness recomputes all seven
+  fixture hashes against FROZEN.md and requires equality with each ranking's
+  `run.fixtureHashes`. A frozen HR-2 input manifest
+  (`evaluation/retrieval-research/assembly/INPUTS.md`, written by the worker
+  and checked by review) records the SHA-256 of `rankings.tar.xz`, the three
+  exact member paths and their member hashes. The harness validates
+  `run.split === 'test'`, scale S1000, arm/model/configuration, complete status,
+  the expected scored query set, unique candidate IDs, target namespace,
+  eligibility under the query's intent and horizon ≤ 24. Any mismatch exits
+  nonzero.
 - Scored queries: test split, C1–C7 (94 queries, 29 families). C8 and FOREIGN
   are excluded; dev is never scored by the confirmatory report.
-- Token counter: `countOpenAITokens` (`o200k_base`), the same counter the MCP
-  host uses. `tiktoken@1.0.22` is added to
-  `evaluation/retrieval-research/package.json` at the exact version used by
-  `adapters/openai`.
+- Token counter: a research-local counter reproducing
+  `get_encoding('o200k_base').encode(text, [], []).length`, the same encoding
+  the MCP host uses (`adapters/openai/index.mjs:13`). `tiktoken: "1.0.22"` is
+  pinned in both `evaluation/retrieval-research/package.json` and its lockfile;
+  the harness never imports from `adapters/`.
 - Runtime: Node 22.16.0, tests also on 24.15.0. Record CPU, RAM and OS.
 
 ## 6. Items, units and representations
@@ -143,31 +180,52 @@ generalize to them.
   product terms the body is the Memory content and spans are its receipts
   (`fetchCandidateEvidence` returns content plus receipt refs; receipt text is
   read separately, so spans are the natural "deepen" layer).
-- Unit cost is the counter's token count of the unit text plus a fixed
-  **per-unit overhead** `O`. Confirmatory `O = 0`; sensitivity `O = 8`
-  (identity, kind and time line). Both are reported.
-- A unit is either wholly in the context or absent. No partial units.
-- Arms (all deterministic, all consume the ranking in order, all skip a unit
-  that does not fit and continue; the context is the set of admitted units):
+- Unit cost is `tokens(unit text) + O`, charged once per admitted unit, where
+  `O` is an abstract per-unit surcharge, not measured metadata serialization.
+  Primary `O = 0` only; `O = 8` is a sensitivity run.
+- A unit is either wholly in the context or absent. No partial units. Admit
+  exact fits and continue through all scheduled units; never re-sort the
+  frozen ranking.
+- **Admission rule (whole-unit).** An arm visits units in its schedule and
+  admits each unit independently when its cost fits the remaining budget;
+  otherwise it skips that unit and continues. A span unit is scheduled only if
+  its item's body unit was admitted (sources never appear detached from their
+  memory; this is also contract §15's invariant). "First span" means
+  `spans[0]`; a zero-span item contributes only a body. Only P-top+tail tests
+  whole-item bundles atomically.
+- Arms (all deterministic, all consume the ranking in order; the context is the
+  set of admitted units):
 
 | Arm | Pass 1 | Pass 2 |
 | --- | --- | --- |
-| P-top | body + all spans of item 1, then item 2, … | — |
-| P-top-s1 | body + first span of each item in order | — |
+| P-top | for each item in rank order: its body, then its spans in order (rank-first whole-unit) | — |
+| P-top-s1 | the same with only `spans[0]` | — |
 | P-cover | body of every item in order | all spans, item order then span order |
-| P-cover-s1 | body of every item in order | first span of each item in order |
-| P-top+tail | whole items in order until the first item that does not fit wholly | bodies of the remaining items in order |
+| P-cover-s1 | body of every item in order | `spans[0]` of each item in order |
+| P-top+tail | whole-item bundles (body + all spans, atomically) in order until the first bundle that does not fit | body-only tail starting with that failed item, continuing in order |
 
-- A budget run admits units until the budget is exhausted; `used ≤ budget`
-  always holds. Report used tokens per query.
+- A budget run admits units until the schedule is exhausted; `used ≤ budget`
+  always holds. Report per query the admitted unit IDs, their costs and the
+  total.
+- **Grid.** Five arms × three rankings × `O ∈ {0, 8}` × budgets
+  `{128, 192, 256, 384, 512, 768, 1024, 1536}`, test split, S1000. Only the §4
+  primary cell is confirmatory; every other contrast, including P-cover-s1, is
+  exploratory.
 - Not run, recorded as degenerate: **P-prefix** (a 120-unit prefix then
   widening equals P-top because no body exceeds 82 units) and **P-window** (a
   query-term window inside an 82-unit body is the body).
 
-### 6.1 Optional exploratory arm: length stress (non-blocking)
+### 6.1 Optional exploratory arm: length stress (skipped in v1)
 
-Approved by the primary as optional. It is skipped, and recorded as skipped,
-if it would delay the confirmatory run.
+Approved by the primary as optional and non-blocking. **It is skipped in v1**
+because its recipe is not yet deterministic: seed, donor ordering, sentence
+splitting, separators, the "about four times" target and donor exclusions are
+undefined, and the foreign namespace contains near-duplicate facts, so the
+padding's irrelevance is unverified. If it is run later, a separately frozen
+exploratory recipe must specify those choices, create only derived HR-2
+artifacts, preserve original prefixes and labels, and report its changed
+retrieval ceilings. The sketch below is kept for that recipe and is not part
+of the v1 run.
 
 - **Padding.** Every body and span unit of the target namespace is extended by
   appending foreign-namespace text: sentences drawn from foreign memory bodies
@@ -188,21 +246,35 @@ if it would delay the confirmatory run.
 
 - **Group coverage@B**: per query, the fraction of required groups with at
   least one member whose required region (§1.3) is wholly in the context.
-  Macro over C1–C7 equally, as HR-1.
+  Macro over C1–C7 equally, as HR-1. Coverage is evidence-region admission;
+  HR-1's recall is memory-ID reachability. The two names stay distinct.
 - **All-required@B**: whether every required group is covered.
 - **Assembly loss**: ceiling − coverage, where the ceiling is coverage with an
   unlimited budget (equal to the ranking's group recall over its list). This
   separates ranking misses from packing misses.
 - **Token use**: used / budget, p50 and p95 per arm and budget.
-- Strata: fidelity (body-covered vs span-only groups), language, category.
+- **Report** per arm, ranking, `O` and budget: per-query admitted unit IDs,
+  costs, coverage, all-required, the common full-ranking ceiling and assembly
+  loss; category means and deltas; token-use p50/p95.
+- Strata: fidelity (body-covered vs span-only groups: divide by the stratum's
+  groups and omit queries without that stratum, reporting represented
+  categories and query/group counts), query language, category.
 
 ## 8. Statistics
 
-Reuse `evaluation/retrieval-research/lib/stats.mjs`: cluster bootstrap over
-test families, 10,000 resamples, fixed seed `hr2-bootstrap-v1`, whole-family
-resampling with empty-category redraw; 95% equal-tailed percentile CI for the
-primary (one comparison) and exploratory 95% CIs labelled as such. Exact
-McNemar on all-required@B with one query per family, reported as underpowered.
+Reuse `evaluation/retrieval-research/lib/stats.mjs` through an assembly-local
+adapter: it maps coverage@B to the `recall12` field and all-required@B to
+`allRequired12`, and supplies `id`, `family` and `category`
+(`lib/stats.mjs:12`). Call `clusterBootstrap` with P-top as baseline, P-cover
+as candidate, seed `hr2-bootstrap-v1`, 10,000 resamples, categories C1–C7,
+`exploratory: true` and `minimumFamilies: 10`. The existing `exploratory` flag
+selects the 95% endpoints (0.025 / 0.975, interpolated percentiles,
+`lib/stats.mjs:26`); the HR-2 report separately labels the §4 contrast as the
+confirmatory one. Report family counts, accepted and rejected resamples and
+status; invalid or incomplete inputs make the decision inconclusive. Exact
+McNemar on all-required@B selects the smallest scored test-query ID per family
+and reports discordant counts; it is underpowered by design. §8 is frozen with
+§§4–7.
 
 ## 9. Harness and procedure
 
@@ -210,18 +282,26 @@ McNemar on all-required@B with one query per family, reported as underpowered.
    on §2 is recorded before the audit.
 2. Freeze: v1 committed on `experiment/hr2-assembly` before any test run.
 3. One Codex worker builds `evaluation/retrieval-research/assembly/` (run,
-   score, report; tests against a toy fixture under the owned runner
-   `node tools/testing/run.mjs`), on Node 22.16 and 24.15. It reads only
-   `fixtures/`, `results/test-final/rankings.tar.xz` and `lib/`. It never
-   edits fixtures, HR-1 code or results.
+   score, report, `INPUTS.md`; tests against a toy fixture under the owned
+   runner `node tools/testing/run.mjs`, run as explicit touched test files on
+   Node 22.16.0 and 24.15.0 with `createTestWorkspace` for scratch). It may
+   change `assembly/**`, the research package manifest and lockfile, and the
+   designated HR-2 results and docs. It may read existing library modules and
+   their transitive sources (including `tools/split.mjs`). HR-1 source,
+   fixtures, rankings, tokenizer and selection stay unchanged. Assembly
+   functions receive text, IDs, costs, the ranking, `B` and `O`; labels remain
+   scorer-only.
 4. Two non-author reviews (Spec, Standards) on a clean detached worktree of the
-   exact commit; then the coordinator's acceptance outside the sandbox on both
-   Node versions, with actual exit codes.
-5. One confirmatory run on the test split; results committed under
+   exact commit; then the coordinator queues the CI-equivalent acceptance
+   matrix through `cairn-heavy` on both Node versions, records actual exit
+   codes, reports sandbox-only failures separately and retains failures.
+5. One run of the §6 grid on the test split; results committed under
    `evaluation/retrieval-research/results/hr2-final/` with a results document
    `docs/plans/budgeted-assembly-hr2-results.md` and an entry in
-   `docs/limitations.md` on this branch. After the test run nothing in §§4–7
-   changes; a defect produces a new protocol version reported alongside.
+   `docs/limitations.md` on this branch, whatever the outcome. After the test
+   run nothing in §§4–8 changes; a defect produces a new protocol version
+   reported alongside. Research artifacts are not shipped; any later shipped
+   document follows the packaging manifest rule.
 6. Heavy runs (the owned-runner suite on both Node versions, any measurement)
    go through the machine-wide queue `~/.local/bin/cairn-heavy`. The worker
    and reviewers run only the test files they touch, never broad suites, and

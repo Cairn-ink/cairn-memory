@@ -32,6 +32,7 @@ function pack(order, budget, passes) {
   for (const pass of passes) for (const id of order) for (const u of units(byId.get(id))) {
     if (!pass(u)) continue; const key = u.part === 'body' ? id + '#body' : u.spanId;
     if (have.has(key)) continue;
+    if (u.part === 'span' && !have.has(id + '#body')) continue; // sources are scheduled only after their body was admitted
     if (used + u.tokens <= budget) { used += u.tokens; have.add(key); }
   }
   return { have, used };
