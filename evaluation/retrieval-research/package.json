@@ -2,5 +2,8 @@
   "name": "cairn-hr1-retrieval-research",
   "private": true,
   "type": "module",
-  "dependencies": { "@huggingface/transformers": "3.7.6" }
+  "dependencies": {
+    "@huggingface/transformers": "3.7.6",
+    "tiktoken": "1.0.22"
+  }
 }
