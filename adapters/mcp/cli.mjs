@@ -5,6 +5,7 @@ import { contextCommand } from './context-read-command.mjs';
 import { CONTEXT_FLAGS, contextHostConfiguration } from './context-read-configuration.mjs';
 import { createContextEmbedding } from './context-read-provider.mjs';
 import { ContextStdioServerTransport } from './context-read-transport.mjs';
+import { createContextCounter } from '../openai/context-counter.mjs';
 import { identifier } from '../../core/validation.mjs';
 import { DEFAULT_MODEL } from '../openai/profiles.mjs';
 import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profile.mjs';
@@ -322,6 +323,15 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     }, null, 2));
     return;
   }
+  // Context's local tokenizer is independent of the legacy model and check mode.
+  let contextCounter;
+  if (config.contextRead) {
+    try { contextCounter = await createContextCounter(); }
+    catch {
+      console.error('cairn_context_tokenizer_unavailable: check the documented tiktoken runtime dependency');
+      throw Error('context_tokenizer_unavailable');
+    }
+  }
   const { serveStdio, StdioServerTransport } = await import('@modelcontextprotocol/server/stdio');
   const { createCairnServer } = await import('./server.mjs');
   let model;
@@ -335,7 +345,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
   const { contextProvider, ...serverConfiguration } = config;
   const contextEmbedding = createContextEmbedding(contextProvider,env);
   const Transport=config.contextRead?ContextStdioServerTransport:config.methodPackages?MethodStdioServerTransport:StdioServerTransport;
-  return startStdio(() => createCairnServer({ ...serverConfiguration, model, ...(contextEmbedding?{contextEmbedding}:{}) }),
+  return startStdio(() => createCairnServer({ ...serverConfiguration, model, ...(contextCounter ? { contextCounter } : {}), ...(contextEmbedding?{contextEmbedding}:{}) }),
     { serveStdio, StdioServerTransport:Transport },config.methodPackages||config.contextRead?262144:65536);
 }
 

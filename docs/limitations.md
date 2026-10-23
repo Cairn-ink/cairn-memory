@@ -4,9 +4,11 @@
 
 The [assembly tool](context-read-local.md#budgeted-context-assembly-u5b) bounds
 its exact single text block in the local `tiktoken-o200k_base` counter, not
-total model-request spend. Diagnostics are namespaced `_meta` and require an
-explicit client contract that excludes them from model input; no invisibility
-is claimed for arbitrary clients. Separate core/transport byte bounds remain.
+total model-request spend. Both success diagnostics and candidate diagnostics
+on assembly errors are confined to namespaced `_meta`; error text preserves
+its code, retryability and trust framing without candidate telemetry. These
+diagnostics require an explicit client contract that excludes them from model
+input; no invisibility is claimed for arbitrary clients. Separate core/transport byte bounds remain.
 Whole units may be omitted; no body or source is silently shortened.
 
 HR-2 has not run. The initial rank-first default is versioned and swappable;

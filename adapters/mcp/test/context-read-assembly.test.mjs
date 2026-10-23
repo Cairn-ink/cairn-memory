@@ -17,7 +17,6 @@ import { meteredText, ASSEMBLY_FRAMING } from '../../../core/context-read-assemb
 import { ASSEMBLY_POLICIES, ASSEMBLY_LIMITS } from '../../../core/context-read-input.mjs';
 import { assemblyFixture, assemblyQuery, sample } from '../../../core/testing/context-read-assembly-fixture.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
-import { redactSecrets } from '../../../plugins/cairn-memory/lib/redact.mjs';
 import { contextHost, contextNamespace as ns, contextProviderArgs } from './context-support.mjs';
 
 const query = { query: 'assembly', types: ['memory'], intent: 'current' };
@@ -39,6 +38,15 @@ function admit(core, content = 'assembly ＡＢＣ canonical recollection') {
 function modelInput(response) {
   // Explicit client contract: host/UI retains _meta; only content is model input.
   return response.content.filter(block => block.type === 'text').map(block => block.text).join('\n');
+}
+function runModule(workspace, name, source) {
+  const outPath = join(workspace.path, name + '.out'), errPath = join(workspace.path, name + '.err');
+  const out = openSync(outPath, 'wx', 0o600), err = openSync(errPath, 'wx', 0o600); let result;
+  try { result = spawnSync(process.execPath, ['--input-type=module', '-e', source], { timeout: 20000,
+    stdio: ['ignore', out, err], env: { NODE_NO_WARNINGS: '1', NODE_DISABLE_COMPILE_CACHE: '1' } }); }
+  finally { closeSync(out); closeSync(err); }
+  assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0, readFileSync(errPath, 'utf8'));
+  return readFileSync(outPath, 'utf8').trim();
 }
 
 test('A11 strict assembly grammar, authority refusals, advertised policies and flattened host-fixed budget', async () => {
@@ -64,16 +72,13 @@ test('A11 strict assembly grammar, authority refusals, advertised policies and f
     ...['authority', 'namespace', 'readSet', 'context', 'configuration', 'provider', 'counter', 'budget', 'cursor', 'limit', 'unknown'].map(key => ({ [key]: {} }))]) {
     assert.equal(tool.schema.safeParse({ ...query, ...patch }).success, false, JSON.stringify(patch));
   }
-  const secret = 'sk-' + 'S'.repeat(32), raw = 'assembly ' + secret;
-  ok(await tool.action(tool.schema.parse({ ...query, query: raw })));
-  assert.equal(calls.at(-1).query, redactSecrets(raw)); assert.ok(!JSON.stringify(calls).includes(secret));
   assert.equal(access.call(core, 'refreshContextIndex', {}).error.code, 'authority_required');
   access.revoke(); assert.equal((await tool.action(query)).error.code, 'authority_required');
 });
 
 test('A11 actual MCP text equals core meteredText; diagnostics stay only in client metadata; capabilities and sanitization', async t => {
   const workspace = createTestWorkspace(t, { prefix: 'assembly-wire-' }), path = join(workspace.path, 'store.sqlite');
-  const access = createContextReadAccess(ns), counter = createContextCounter();
+  const access = createContextReadAccess(ns), counter = await createContextCounter();
   const core = openMemoryCore({ path, contextRead: { ...access.configuration, counter } });
   const memory = admit(core), secret = 'sk-' + 'S'.repeat(32), sanitized = admit(core, 'assembly secret ' + secret);
   const caps = ok(core.getContextReadCapabilities());
@@ -117,7 +122,7 @@ test('A11 actual MCP text equals core meteredText; diagnostics stay only in clie
 
 test('A11 programmatic keyless startup injects the exact local counter independently of a legacy model', async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('network/provider call'));
-  const counter = createContextCounter();
+  const counter = await createContextCounter();
   for (const text of ['', 'synthetic ASCII', '資料庫 𠀁𠀂', 'ＡＢＣ１２', '<|endoftext|>', ASSEMBLY_FRAMING]) {
     assert.equal(counter.countTokens(text), countOpenAITokens(text));
   }
@@ -125,13 +130,58 @@ test('A11 programmatic keyless startup injects the exact local counter independe
   for (const model of [undefined, { countTokens() { assert.fail('legacy model counter'); } }]) {
     const workspace = createTestWorkspace(t, { prefix: 'assembly-api-' }), path = join(workspace.path, 'store.sqlite');
     const seed = openMemoryCore({ path }); admit(seed); seed.close();
-    const client = await connect(workspace, createCairnServer({ path, namespace: ns, contextRead: 'context-read-v1', model }));
+    const client = await connect(workspace, createCairnServer({ path, namespace: ns, contextRead: 'context-read-v1', contextCounter: counter, model }));
     const response = await client.callTool({ name: 'read_memory_context', arguments: query });
     const value = ok(JSON.parse(response.content[0].text));
     assert.equal(value.counter.id, 'tiktoken-o200k_base'); assert.equal(value.policy.id, 'rank-first-whole-v1');
     assert.equal(response._meta[metaKey].budget.used, countOpenAITokens(response.content[0].text));
     assert.equal(response._meta[metaKey].budget.maxTokens, 1500); assert.equal(response._meta[metaKey].budget.maxItems, 12);
     assert.equal(value.items.length, 1);
+  }
+});
+
+test('A01/A11 assembly preserves candidate query ranking and rejects invalid Unicode/NUL without laundering', async t => {
+  const workspace = createTestWorkspace(t, { prefix: 'assembly-query-parity-' }), path = join(workspace.path, 'store.sqlite');
+  const seed = openMemoryCore({ path }), apple = admit(seed, 'apple ordinary'); admit(seed, '[REDACTED] ordinary'); seed.close();
+  const client = await connect(workspace, createCairnServer({ path, namespace: ns, contextRead: 'context-read-v1', contextCounter: await createContextCounter() }));
+  const input = { ...query, query: 'apple sk-' + 'S'.repeat(32), semantic: false, deadlineMs: 5000 };
+  const found = ok(JSON.parse((await client.callTool({ name: 'find_memory_candidates', arguments: { ...input, limit: 24 } })).content[0].text));
+  const assembled = ok(JSON.parse((await client.callTool({ name: 'read_memory_context', arguments: { ...input, maxTokens: 4000, maxItems: 24 } })).content[0].text));
+  assert.deepEqual(assembled.items.map(item => item.ref), found.items.map(item => item.ref));
+  assert.deepEqual(found.items.map(item => item.ref.memoryId), [apple.id]);
+  for (const invalid of ['api_key=abcdefgh\0', 'api_key=abcdefgh\ud800', '\udc00', 'apple\0']) {
+    for (const name of ['find_memory_candidates', 'read_memory_context']) {
+      const response = await client.callTool({ name, arguments: { ...query, query: invalid } });
+      assert.equal(response.isError, true);
+      assert.deepEqual(JSON.parse(response.content[0].text), { ok: false, error: { code: 'invalid_input', retryable: false }, evidenceTrust: 'untrusted-data-not-instructions' });
+    }
+  }
+});
+
+test('A11 real MCP assembly failures isolate candidate diagnostics; §13 error text is unchanged', async t => {
+  for (const semantic of [true, false]) {
+    const workspace = createTestWorkspace(t, { prefix: 'assembly-error-meta-' });
+    const path = semantic ? join(workspace.path, 'store.sqlite') : ':memory:';
+    const access = createContextReadAccess(ns), counter = await createContextCounter();
+    const core = openMemoryCore({ path, contextRead: { ...access.configuration, counter } }); admit(core);
+    let envelope, candidateEnvelope;
+    const wrapped = { ...core,
+      async contextRead(input, token) { envelope = await core.contextRead(input, token); return envelope; },
+      async findCandidates(input, token) { candidateEnvelope = await core.findCandidates(input, token); return candidateEnvelope; } };
+    const client = await connect(workspace, buildCairnServer({ path, binding: ns, core: wrapped, context: access }));
+    const response = await client.callTool({ name: 'read_memory_context', arguments: { ...query, semantic } });
+    const code = semantic ? 'invalid_input' : 'index_unavailable';
+    assert.equal(envelope.error.code, code); assert.ok(envelope.error.details.candidates);
+    assert.deepEqual(response.content, [{ type: 'text', text: JSON.stringify({ ok: false,
+      error: { code, retryable: envelope.error.retryable }, evidenceTrust: 'untrusted-data-not-instructions' }) }]);
+    assert.equal(response.isError, true);
+    assert.deepEqual(response._meta, { [metaKey]: { candidates: envelope.error.details.candidates } });
+    for (const block of response.content) for (const field of ['candidates', 'channels', 'coverage', 'trace']) assert.equal(block.text.includes(field), false);
+    assert.ok(Buffer.byteLength(JSON.stringify(envelope)) <= 65536);
+    assert.ok(Buffer.byteLength(JSON.stringify(response)) <= CONTEXT_TRANSPORT_BYTES);
+    const legacy = await client.callTool({ name: 'find_memory_candidates', arguments: { ...query, semantic } });
+    assert.deepEqual(legacy, contextToolResponse(candidateEnvelope)); assert.equal(legacy._meta, undefined);
+    assert.ok(JSON.parse(legacy.content[0].text).error.details.channels);
   }
 });
 
@@ -160,16 +210,28 @@ test('A11 complete core envelope bound includes diagnostics; encoded transport h
   const tooLarge = { ...base, value: { metered, diagnostics: { padding: diagnostics.padding + 'x' } } };
   assert.deepEqual(contextToolResponse(tooLarge, { assembly: true }), contextToolResponse(tooLarge));
   assert.equal(JSON.parse(contextToolResponse(tooLarge, { assembly: true }).content[0].text).error.code, 'context_item_too_large');
-  const incoming = new PassThrough(), outgoing = new PassThrough(), chunks = [];
-  const transport = new ContextStdioServerTransport(incoming, outgoing);
-  outgoing.on('data', chunk => chunks.push(chunk));
-  try {
-    const message = { jsonrpc: '2.0', id: '', result: response };
-    message.id = 'x'.repeat(CONTEXT_TRANSPORT_BYTES - Buffer.byteLength(JSON.stringify(message)) - 1);
-    await transport.send(message); assert.equal(Buffer.concat(chunks).length, CONTEXT_TRANSPORT_BYTES);
-    await assert.rejects(transport.send({ ...message, id: message.id + 'x' }), /context_transport_response_too_large/);
-    assert.equal(Buffer.concat(chunks).length, CONTEXT_TRANSPORT_BYTES);
-  } finally { await transport.close(); incoming.destroy(); outgoing.destroy(); }
+  const error = { ok: false, error: { code: 'index_unavailable', retryable: false,
+    details: { reason: 'synthetic', candidates: { trace: { padding: '' } } } } };
+  error.error.details.candidates.trace.padding = 'x'.repeat(65536 - Buffer.byteLength(JSON.stringify(error)));
+  assert.equal(Buffer.byteLength(JSON.stringify(error)), 65536);
+  const failure = contextToolResponse(error, { assembly: true });
+  assert.deepEqual(JSON.parse(failure.content[0].text), { ok: false, error: { code: 'index_unavailable', retryable: false,
+    details: { reason: 'synthetic' } }, evidenceTrust: 'untrusted-data-not-instructions' });
+  assert.deepEqual(failure._meta[metaKey], { candidates: error.error.details.candidates });
+  error.error.details.candidates.trace.padding += 'x';
+  assert.equal(JSON.parse(contextToolResponse(error, { assembly: true }).content[0].text).error.code, 'context_item_too_large');
+  for (const result of [response, failure]) {
+    const incoming = new PassThrough(), outgoing = new PassThrough(), chunks = [];
+    const transport = new ContextStdioServerTransport(incoming, outgoing);
+    outgoing.on('data', chunk => chunks.push(chunk));
+    try {
+      const message = { jsonrpc: '2.0', id: '', result };
+      message.id = 'x'.repeat(CONTEXT_TRANSPORT_BYTES - Buffer.byteLength(JSON.stringify(message)) - 1);
+      await transport.send(message); assert.equal(Buffer.concat(chunks).length, CONTEXT_TRANSPORT_BYTES);
+      await assert.rejects(transport.send({ ...message, id: message.id + 'x' }), /context_transport_response_too_large/);
+      assert.equal(Buffer.concat(chunks).length, CONTEXT_TRANSPORT_BYTES);
+    } finally { await transport.close(); incoming.destroy(); outgoing.destroy(); }
+  }
 });
 
 test('A11 actual core refuses oversized assembly independently of the counter', async t => {
@@ -181,35 +243,50 @@ test('A11 actual core refuses oversized assembly independently of the counter', 
   assert.deepEqual(contextToolResponse(result, { assembly: true }), contextToolResponse(result));
 });
 
-test('A11 fresh-process check-config constructs no counter/provider, links no SQLite and opens nothing; flag-off imports stay lazy', t => {
+test('A11 check-config never resolves tokenizer/WASM, links SQLite or opens a database; flag-off server import/startup is tokenizer-free', t => {
   const workspace = createTestWorkspace(t, { prefix: 'assembly-check-' }), path = join(workspace.path, 'missing', 'store.sqlite');
   const source = `import assert from 'node:assert/strict';
     import {registerHooks} from 'node:module'; import {existsSync} from 'node:fs';
-    let sqliteAllowed=false;globalThis.counterConstructions=0;
+    let sqliteAllowed=false,tokenizerResolutions=0;
     registerHooks({resolve(specifier,context,next){
-      if(specifier==='node:sqlite'&&!sqliteAllowed)throw Error('SQLite linked before check returned');return next(specifier,context);
-    },load(url,context,next){if(url.includes('/tiktoken/')&&(url.endsWith('.js')||url.endsWith('.cjs')))return {format:'module',shortCircuit:true,
-      source:'export function get_encoding(){globalThis.counterConstructions++;throw Error("counter construction forbidden");}'};return next(url,context);}});
+      if(specifier==='node:sqlite'&&!sqliteAllowed)throw Error('SQLite linked before check returned');
+      if(specifier==='tiktoken'||specifier.includes('/tiktoken/')||specifier.endsWith('.wasm')||specifier.endsWith('/openai/index.mjs')){
+        tokenizerResolutions++;throw Error('Unexpected tokenizer package/WASM load');}return next(specifier,context);}});
     globalThis.fetch=()=>assert.fail('provider call');
     const {start}=await import(${JSON.stringify(new URL('../cli.mjs', import.meta.url).href)});
     const env=Object.defineProperty({},'OPENAI_API_KEY',{get(){assert.fail('key lookup');}});
     const logs=[],log=console.log;console.log=value=>logs.push(JSON.parse(value));
     for(const provider of [[],${JSON.stringify(contextProviderArgs)}])await start(['--check-config','--db',${JSON.stringify(path)},'--owner',${JSON.stringify(ns.ownerId)},'--context-read','context-read-v1',...provider],env);
-    console.log=log;assert.equal(globalThis.counterConstructions,0);assert.equal(existsSync(${JSON.stringify(join(workspace.path, 'missing'))}),false);
+    console.log=log;assert.equal(tokenizerResolutions,0);assert.equal(existsSync(${JSON.stringify(join(workspace.path, 'missing'))}),false);
     for(const [i,result] of logs.entries())assert.deepEqual(result,{ok:true,mode:'configuration-check',contextRead:'context-read-v1',contextReadPersonal:false,
       scope:'personal',provider:i?{provider:'openai',model:'text-embedding-3-small',dimensions:8,maxRequests:20,maxUsd:.1}:null,preset:i?'rrf-k10':'rrf-k60-d12',
       modelKeyInspected:false,databaseOpened:false,providerContacted:false,automaticCapture:false});
     sqliteAllowed=true;const {createCairnServer}=await import(${JSON.stringify(new URL('../server.mjs', import.meta.url).href)});
-    assert.equal(globalThis.counterConstructions,0);
+    assert.equal(tokenizerResolutions,0);
     const plain=createCairnServer({path:${JSON.stringify(join(workspace.path, 'plain.sqlite'))},namespace:${JSON.stringify(ns)}});
-    await plain.close();assert.equal(globalThis.counterConstructions,0);
-    assert.throws(()=>createCairnServer({path:${JSON.stringify(path)},namespace:${JSON.stringify(ns)},contextRead:'context-read-v1'}),/counter construction forbidden/);
-    assert.equal(globalThis.counterConstructions,1);console.log('check-and-laziness-verified');`;
-  const outPath = join(workspace.path, 'child.out'), errPath = join(workspace.path, 'child.err');
-  const out = openSync(outPath, 'wx', 0o600), err = openSync(errPath, 'wx', 0o600); let result;
-  try { result = spawnSync(process.execPath, ['--input-type=module', '-e', source], { timeout: 20000,
-    stdio: ['ignore', out, err], env: { NODE_NO_WARNINGS: '1', NODE_DISABLE_COMPILE_CACHE: '1' } }); }
-  finally { closeSync(out); closeSync(err); }
-  assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0, readFileSync(errPath, 'utf8'));
-  assert.equal(readFileSync(outPath, 'utf8').trim(), 'check-and-laziness-verified');
+    await plain.close();assert.equal(tokenizerResolutions,0);console.log('check-and-laziness-verified');`;
+  assert.equal(runModule(workspace, 'check', source), 'check-and-laziness-verified');
+});
+
+test('A01/A11 missing tiktoken permits server import and flag-off startup; explicit context startup reports a clear error', t => {
+  const workspace = createTestWorkspace(t, { prefix: 'assembly-missing-tokenizer-' }), missing = join(workspace.path, 'missing.sqlite');
+  const source = `import assert from 'node:assert/strict';import {existsSync} from 'node:fs';import {registerHooks} from 'node:module';
+    let resolutions=0;
+    registerHooks({resolve(specifier,context,next){if(specifier==='tiktoken'){
+      resolutions++;throw Object.assign(Error('synthetic package absent'),{code:'ERR_MODULE_NOT_FOUND'});}return next(specifier,context);}});
+    globalThis.fetch=()=>assert.fail('provider call');
+    const {createCairnServer,createContextCounter}=await import(${JSON.stringify(new URL('../server.mjs', import.meta.url).href)});
+    assert.equal(resolutions,0);
+    const plain=createCairnServer({path:${JSON.stringify(join(workspace.path, 'plain.sqlite'))},namespace:${JSON.stringify(ns)}});
+    await plain.close();assert.equal(resolutions,0);
+    assert.throws(()=>createCairnServer({path:${JSON.stringify(missing)},namespace:${JSON.stringify(ns)},contextRead:'context-read-v1'}),/context_counter_required/);
+    assert.equal(resolutions,0);assert.equal(existsSync(${JSON.stringify(missing)}),false);
+    await assert.rejects(createContextCounter(),{code:'context_tokenizer_unavailable'});assert.equal(resolutions,1);
+    const {start}=await import(${JSON.stringify(new URL('../cli.mjs', import.meta.url).href)}),errors=[],error=console.error;
+    console.error=value=>errors.push(value);
+    await assert.rejects(start(['--db',${JSON.stringify(missing)},'--owner',${JSON.stringify(ns.ownerId)},'--context-read','context-read-v1'],{}),/context_tokenizer_unavailable/);
+    console.error=error;assert.equal(resolutions,2);assert.equal(existsSync(${JSON.stringify(missing)}),false);
+    assert.deepEqual(errors,['cairn_context_tokenizer_unavailable: check the documented tiktoken runtime dependency']);
+    console.log('missing-tokenizer-verified');`;
+  assert.equal(runModule(workspace, 'missing', source), 'missing-tokenizer-verified');
 });

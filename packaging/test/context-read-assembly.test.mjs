@@ -1,7 +1,8 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { readFileSync, readdirSync, existsSync, openSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
@@ -80,6 +81,10 @@ test('A12 installed keyless and keyed CLI expose assembly, inject the counter, p
       assert.equal(diagnostics.candidates.channels.semantic.state, 'disabled');
       assert.ok(Buffer.byteLength(JSON.stringify(response)) <= 262144);
     }
+    const refused = await client.callTool({ name: tool.name, arguments: { query: 'assembly', types: ['memory'], intent: 'current', semantic: true } });
+    assert.deepEqual(JSON.parse(refused.content[0].text), { ok: false, error: { code: 'invalid_input', retryable: false }, evidenceTrust: 'untrusted-data-not-instructions' });
+    assert.equal(refused._meta[metaKey].candidates.channels.semantic.state, 'absent');
+    for (const block of refused.content) for (const field of ['candidates', 'channels', 'coverage', 'trace']) assert.equal(block.text.includes(field), false);
     await client.close();
     const loaded = new Set(readFileSync(trace, 'utf8').trim().split('\n').map(JSON.parse));
     for (const path of added) assert.ok(loaded.has(new URL(path, 'file://' + installed.root + '/').href), path + ' loaded');
@@ -89,4 +94,23 @@ test('A12 installed keyless and keyed CLI expose assembly, inject the counter, p
     installedClosure: closure.required.length, manifest: JSON.parse(readFileSync(join(root, 'packaging/artifact-files.json'))).length,
     installedFilesystem: walk(installed.root).length, archive: installed.artifact.files.length,
     addedModules: added.length, missing: 0, difference: 0, packExit: 0, installExit: 0, paidCalls: 0 }));
+});
+
+test('A01/A12 installed flag-off startup tolerates missing tokenizer; explicit context startup fails clearly before database creation', async () => {
+  const preload = 'data:text/javascript,' + encodeURIComponent(`import {registerHooks} from 'node:module';
+    registerHooks({resolve(specifier,context,next){if(specifier==='tiktoken')throw Object.assign(Error('synthetic module missing'),{code:'ERR_MODULE_NOT_FOUND'});return next(specifier,context);}});
+    globalThis.fetch=()=>{process.exit(91)};`);
+  const { client } = await contextHost(workspace, installed.path, { entry: installed.entry, enabled: false, preload });
+  assert.equal((await client.listTools()).tools.length, 5); await client.close();
+  const path = join(workspace.path, 'missing-tokenizer.sqlite');
+  const outPath = join(workspace.path, 'missing-tokenizer.out'), errPath = join(workspace.path, 'missing-tokenizer.err');
+  const out = openSync(outPath, 'wx', 0o600), err = openSync(errPath, 'wx', 0o600); let result;
+  try { result = spawnSync(process.execPath, ['--import', preload, installed.entry, '--db', path, '--owner', ns.ownerId,
+    '--context-read', 'context-read-v1'], { timeout: 10000, stdio: ['ignore', out, err],
+    env: { NODE_NO_WARNINGS: '1', NODE_DISABLE_COMPILE_CACHE: '1' } }); }
+  finally { closeSync(out); closeSync(err); }
+  assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 1);
+  assert.match(readFileSync(errPath, 'utf8'), /cairn_context_tokenizer_unavailable/);
+  assert.equal(readFileSync(errPath, 'utf8').includes('synthetic module missing'), false);
+  assert.equal(readFileSync(outPath, 'utf8'), ''); assert.equal(existsSync(path), false);
 });

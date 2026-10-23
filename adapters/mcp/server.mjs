@@ -10,7 +10,7 @@ import { registerMethodTools, METHOD_TOOL_NAMES } from './method-package-tools.m
 import { createContextReadAccess } from './context-read-access.mjs';
 import { registerContextReadTools, CONTEXT_TOOL_NAMES } from './context-read-tools.mjs';
 import { contextToolResponse } from './context-read-transport.mjs';
-import { createContextCounter } from '../openai/context-counter.mjs';
+export { createContextCounter } from '../openai/context-counter.mjs';
 
 const text = z.string().min(1).max(600);
 const id = z.string().min(1).max(200);
@@ -56,13 +56,15 @@ export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
-    'contextRead', 'contextReadPersonal', 'contextEmbedding']);
+    'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter']);
   const { path, namespace, model } = options;
   const contextConfigured = Object.hasOwn(options,'contextRead');
   if (contextConfigured && options.contextRead !== 'context-read-v1' || Object.hasOwn(options,'contextReadPersonal') &&
       (!contextConfigured || options.contextReadPersonal !== true || namespace?.scope !== 'project') ||
       Object.hasOwn(options,'contextEmbedding') && !contextConfigured) throw Error('invalid_mcp_configuration');
   if (options.contextEmbedding) object(options.contextEmbedding,['embedder','policy']);
+  if (Object.hasOwn(options, 'contextCounter') && !contextConfigured) throw Error('invalid_mcp_configuration');
+  if (contextConfigured && !options.contextCounter) throw Error('context_counter_required');
   const methodsConfigured=Object.hasOwn(options,'methodPackages');
   if(methodsConfigured&&options.methodPackages!=='local-v1'||Object.hasOwn(options,'methodReadPersonal')&&(!methodsConfigured||options.methodReadPersonal!==true||namespace?.scope!=='project'))throw Error('invalid_mcp_configuration');
   const cardsConfigured = Object.hasOwn(options, 'privateCards');
@@ -122,7 +124,7 @@ export function createCairnServer(options = {}) {
   const cards = cardsConfigured ? createScopedCardAccess(binding) : null;
   const methods=methodsConfigured?createMethodReadAccess(binding,options.methodReadPersonal===true):null;
   const context=contextConfigured?createContextReadAccess(binding,options.contextReadPersonal===true):null;
-  const contextCounter = context ? createContextCounter() : null;
+  const contextCounter = context ? options.contextCounter : null;
   const core = openMemoryCore({ path, model, ...(context?{contextRead:{...context.configuration,...options.contextEmbedding,counter:contextCounter}}:{}),
     ...(methods?{methodPackages:methods.configuration}:{}), ...(cards ? { privateCards: cards.configuration } : {}),
     ...(configured ? { captureQualification } : {}),

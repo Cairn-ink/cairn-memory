@@ -1,6 +1,5 @@
 import * as z from 'zod/v4';
 import { ASSEMBLY_POLICIES } from '../../core/context-read-input.mjs';
-import { redactSecrets } from '../../plugins/cairn-memory/lib/redact.mjs';
 
 export const CONTEXT_TOOL_NAMES = Object.freeze(['find_memory_candidates', 'fetch_memory_candidate_evidence', 'read_memory_context']);
 export function registerContextReadTools(tool, core, access) {
@@ -29,6 +28,6 @@ export function registerContextReadTools(tool, core, access) {
       intent: z.enum(['current', 'history']), semantic: z.boolean().optional(),
       maxTokens: z.number().int().min(64).max(4000).optional(), maxItems: z.number().int().min(1).max(24).optional(),
       policy: z.strictObject({ id: z.enum(ASSEMBLY_POLICIES) }).optional(), deadlineMs: z.number().int().min(1).max(5000).optional() }),
-    ({ maxTokens, maxItems, ...input }) => access.call(core, 'contextRead', { ...input, query: redactSecrets(input.query),
+    ({ maxTokens, maxItems, ...input }) => access.call(core, 'contextRead', { ...input,
       budget: { ...(maxTokens !== undefined ? { maxTokens } : {}), ...(maxItems !== undefined ? { maxItems } : {}) }, readSet: access.readSet }), true);
 }
