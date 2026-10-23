@@ -2,7 +2,7 @@
 
 The embedded core can retain explicitly submitted opaque binary versions.
 SQLite BLOBs are plaintext at rest, under the existing private-file checks. This
-preview is opt-in and has no asset CLI or MCP tools. It does not decode media,
+preview is opt-in, with separate terminal commands and metadata/derivative MCP reads. It does not decode media,
 run parsers or models, execute content, or read import files itself. The embedded
 API also supports user-provided derivatives and exclusive method attachments,
 using the same frozen v31 layout. `getAssetCapabilities()` advertises implemented methods and
@@ -194,3 +194,109 @@ manifest and comparison reads retain whole-text verification. Purge checks only
 canonical identity, lifecycle and CAS, so corrupted payloads can still be removed
 with assets disabled. There are no asset references or asset effects for method
 attachments; method receipts/effects retain their existing format.
+
+## Local host commands
+
+All paths below are absolute. Reuse the exact `--db`, `--owner` and optional
+`--project` namespace. Commands never create a database.
+
+```sh
+cairn-memory assets import --db /abs/store.sqlite --owner OWNER --file /abs/source.pdf --title 'Supplied document'
+cairn-memory assets import --db /abs/store.sqlite --owner OWNER --file /abs/revised.pdf --title 'Revision' --asset ASSET_ID --expected-asset-revision 1
+cairn-memory assets derive --db /abs/store.sqlite --owner OWNER --version VERSION_REF_JSON --kind caption --text-file /abs/caption.txt --language en
+cairn-memory assets delete --db /abs/store.sqlite --owner OWNER --ref REF_JSON --expected-revision 1
+cairn-memory assets export --db /abs/store.sqlite --owner OWNER --version VERSION_REF_JSON --out /abs/private/export.pdf
+```
+
+Derive accepts `--timecodes /abs/intervals.json` for the bounded JSON array of
+supplied audio/video intervals. It obtains the exact source revision and always
+supplies `method:{kind:'user-provided'}`. Delete accepts asset, version or
+derivative refs. Stale expected revisions refuse without automatic retry.
+
+Mutations require Linux/WSL descriptor semantics, real TTY stdin and stdout,
+and the controlling `/dev/tty`. A bounded escaped review displays the namespace,
+action, revisions and complete metadata, plus derivative text and intervals.
+Binary imports display byte count and the frozen payload commitment. The review
+approves metadata and the frozen bytes, rather than displaying every byte.
+Type the exact displayed action phrase. Wrong phrases, EOF, `--yes`, pipes,
+environment approval and non-TTY operation refuse. Files are never executed.
+
+Every explicit input channel pins its parent, no-follow path descriptor and
+original file identity. Mount ID, regular-file type, single link, bounded size,
+mtime and ctime are checked before and after reads and again after approval.
+Symlinks, hardlinks, devices, FIFOs, sockets, invalid UTF-8 text and changed files
+refuse. Directory capabilities remain on their original inodes after an ancestor
+rename; continuous pathname ancestry and an atomic directory snapshot are not
+promised. The complete payload is private and frozen before review.
+
+Review supports rollback-journal stores only, refusing WAL headers and existing
+journal/WAL/SHM companions before SQLite opens. A read-only transaction freezes
+`dev`, `ino`, application ID, schema version and store ID. An import below v31
+shows `storeUpgrade:{from,to:31}` and migrates only after approval. Derive,
+delete and export refuse below v31 with `asset_not_found`. Post-approval opening
+is noncreating and validates the frozen identities before migration or writes.
+Missing/replaced/mismatched stores refuse without application data or schema
+writes; approved SQLite opening may still perform crash recovery. Supported
+participants must keep rollback-journal mode throughout review. Managed openers
+remain validation-only.
+
+## Create-only export and recovery
+
+Export requires a byte-read grant, supplied solely by the separate local command.
+It needs no mutation approval. The destination parent must belong to the operator
+and have no group/other write permission. The command pins that directory and
+creates a random private 0700 staging directory with an exclusive no-follow 0600
+payload file. That private directory protects the source name from other users.
+The threat boundary trusts processes running as the operator; same-UID processes
+can bypass Unix owner permissions. Parent renames continue on the pinned original.
+
+Export writes authenticated pages, checks the completed file's actual readback
+count and canonical identity using `verifyAssetBytes`, then fsyncs the file.
+Publication links the protected temporary name to the final basename through
+pinned directory prefixes. Existing files, directories and symlinks refuse with
+`EEXIST`. No final path is overwritten or removed, including during error cleanup.
+
+A successful link publishes a complete file. The command reopens the pinned
+parent with `O_RDONLY|O_DIRECTORY`, fsyncs publication, unlinks its owned temporary
+name, fsyncs the staging cleanup, removes its owned empty staging directory, and
+fsyncs the parent cleanup. Failure after publication returns
+`published-but-durability-uncertain` with exit 1. Inspect the complete final before
+retrying; retrying the same output path will refuse. A killed process can leave a
+private partial file, a complete final, both, or neither. Temporary leftovers are
+not resumable. Cleanup checks saved inode identities and never scans or removes
+names merely because they match a prefix. There is no automatic stale-file janitor
+or guarantee of power-loss durability after a failed fsync.
+
+## Method attachment import
+
+Add `--attachments local-v1` to `methods import` to include allowlisted binary
+files as exclusive method-version attachments and permit `.svg` as `text/plain`.
+The review lists every path, kind, media type, byte count and binary exclusivity.
+The asset and method ports grant the same approved payload commitment separately.
+The flag selects v31 and displays any required one-way upgrade. A text-only
+package retains its untagged legacy representation and identities. Without the
+flag, U3 extension, text and binary-refusal rules are unchanged.
+
+## MCP metadata and supplied text
+
+Start with `--assets local-v1`. This one-way v31 opt-in adds exactly `list_assets`,
+`list_asset_versions`, `get_asset_version`, `list_asset_derivatives` and
+`read_asset_derivative`. It grants neither binary delivery nor mutation, model,
+parser, capture or Card authority. The startup namespace is the entire asset
+read scope; a method-personal flag never expands it. Strict tool grammars reject
+scope, context, read-set, configuration and authority fields, unknown fields and
+foreign refs. Identities and cursors are preserved, not rewritten.
+
+Derivative reads retain exact user-provided provenance and historical ordinals.
+`--method-packages local-v1` independently exposes mixed attachment metadata,
+including kind, media, size and identity; `read_method_file` refuses binary entries.
+There is no MCP attachment byte tool. Core envelopes are at most 65,536 bytes;
+the complete encoded stdio JSON-RPC message including framing and newline is
+bounded separately at 262,144 bytes. Flag-off tools, DTOs and defaults are unchanged.
+`--check-config` validates syntax without opening a database or contacting a provider.
+
+Host acceptance lives in `adapters/mcp/test/assets.test.mjs`,
+`asset-export.test.mjs` and `packaging/test/assets-host.test.mjs`. The installed
+suite independently hashes a complete 32-MiB export, reads a maximum derivative,
+measures actual encoded responses, runs syscall failure/termination cases and
+cross-checks archive, installed files, manifest and static closure without history.

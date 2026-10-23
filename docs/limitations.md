@@ -2578,8 +2578,8 @@ are not final-source evidence or measured semantic quality.
 
 `assets-local-v1` is an explicit embedded opt-in using v31 SQLite BLOB chunks.
 It matches only the contract's bounded leading signatures and does not parse,
-decode, render, execute, scan for malware or call models. No asset CLI or MCP byte
-delivery is exposed in this packet. Embedded derivative creation accepts only
+decode, render, execute, scan for malware or call models. Asset mutations use separate real-TTY commands. MCP exposes metadata and supplied
+derivative text only, with no binary delivery or mutations. Embedded derivative creation accepts only
 explicitly supplied text with `method:{kind:'user-provided'}`; it performs no
 OCR, ASR, captioning or media understanding. Optional ordered audio/video
 intervals are `user-supplied-unverified`, with no text-span alignment claim.
@@ -2590,8 +2590,13 @@ Attachments are exclusive copies, charged independently, with no deduplication.
 Method-only processes can inspect mixed metadata and purge attachments, including
 corrupt bytes, but cannot deliver binary content without asset grants. Current
 attachment cursors stale on adoption transitions; history remains on the exact
-requested version with fresh authorization. No CLI/MCP attachment import or byte
-export is added here. The opt-in K13 measurement asserts both 32-MiB standalone
+requested version with fresh authorization. CLI attachment import is explicit via `--attachments local-v1`; there is no MCP
+attachment import or byte export. Local asset export uses a pinned operator-owned
+parent, private source name and create-only link publication. A post-publication
+fsync/cleanup failure reports `published-but-durability-uncertain`; termination can
+leave private partials. Recovery never overwrites/removes the final, and cleanup
+never adopts stale names. Same-UID processes remain inside the Unix owner trust
+boundary. See [the host and recovery guide](assets-local.md#local-host-commands). The opt-in K13 measurement asserts both 32-MiB standalone
 and 64-MiB mixed-import transaction/RSS thresholds, including byte preparation.
 Every binary read verifies metadata and only the selected chunk; corruption in
 another chunk is detected when it is selected. Authenticated totals prevent

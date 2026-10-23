@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — local asset host (U4b)
+
+- Add terminal-approved asset import, supplied derivatives and CAS deletion,
+  using confined descriptors, frozen payloads and the noncreating v31 store fence.
+- Add pure-Node create-only export with protected source names, readback
+  verification, link publication and explicit uncertain-durability receipts.
+- Add `methods import --attachments local-v1`, including exclusive binary
+  attachment review and SVG text, and five opt-in metadata/derivative MCP reads.
+  Default tools remain unchanged; MCP exposes neither bytes nor asset mutations.
+- Ship the complete host closure and real-process, PTY, publication fault and
+  installed-artifact acceptance. See [the asset guide](docs/assets-local.md).
+
 ## Unreleased — context retrieval host (U5a part 3)
 
 - Add explicit context MCP startup options and two read tools, fixed host read
