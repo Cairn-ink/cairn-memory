@@ -4,7 +4,7 @@ Status:
 - U2 (§§2–9, v0.3.1) is implemented and accepted.
 - U3 (§11, v0.4.3) is implemented and in acceptance.
 - U4 (§12) is draft v0.5.1: audit round 1 is applied and the re-check is pending.
-- U5a (§13) is draft v0.6, not yet audited.
+- U5a (§13) is draft v0.6.1: audit round 1 is applied and the re-check is pending.
 - U2c (§14) is draft v0.7, not yet audited; it precedes U4a.
 
 History:
@@ -855,130 +855,152 @@ Record actual exit codes, finite deadlines and independently verified output byt
 | Continuous maximum-size byte reader plus concurrent writer | Zero busy timeouts on either side; writer p95 ≤250 ms |
 | Maximum-import peak RSS growth | ≤134,217,728 bytes |
 
-## 13. U5a: M6 candidate retrieval (draft v0.6, not yet audited)
+## 13. U5a: M6 candidate retrieval (draft v0.6.1, audit round 1 applied; re-check pending)
 
-Drafted by Codex `u5_contract_author` (gpt-6.1-sol/xhigh, read-only) from the
-primary's decisions and the `u5_inventory` report. The primary resolved the
-author's single-Han objection, raised the exact-cosine bound, and added the
-maintenance policy.
+Revised by `u5_contract_author` after the `u5_contract_audit` audit of v0.6 (`2669a3c`). The
+primary resolved the author's covering-index objection (§13.4).
 
-U5a adds a separate, opt-in candidate path. Without opt-in, DTOs, defaults, ordering, prompts, tools, capabilities, errors and provider-call counts remain byte-identical, including `selectEvidence`, recall, session context and MOC reads. `HR-1/` anchors below refer to the research checkout.
+Applies all four P1 and three P2 findings from `u5_contract_audit` and the primary’s incremental-reconciliation, hosted-configuration and read-only decisions. This remains a contract draft.
 
-### 13.1 Facade and authority
+U5a adds a separate opt-in path. Without opt-in, DTOs, defaults, ordering, prompts, tools, capabilities, errors and provider-call counts remain byte-identical, including `selectEvidence`, recall, session context and MOC reads. `HR-1/` denotes the research checkout.
 
-- Construction: `openMemoryCore({path, contextRead:{version:'context-read-v1', authority, embedder?}})`.
-- Authority follows §2.3: synchronous `{authorize,isCurrent}`, separate method allowlists, `actionClass:'read'`, `actionId:null`, exact payload binding and access generations (`core/private-card-facade.mjs:7`; `core/method-package-facade.mjs:20`). Capture consent grants nothing here.
-- Authorize every namespace before index access, statistics, vector loading, scoring, top-k or transmission. A read set is one namespace, or personal plus one project of the same owner. No implicit personal fallback.
-- Recheck all grants after every await and immediately before dispatch/publication/final canonical reads. Revocation discards results and late completions. Host transport guards recheck after asynchronous budget reservation.
+### 13.1 Facade, authority and transactions
 
-All data methods take `(input, token)` and return success/error envelopes; `findCandidates` and refresh are asynchronous. Unknown fields refuse.
+- Writable construction: `openMemoryCore({path,contextRead:{version:'context-read-v1',authority,embedder?,policy?}})`. `policy` is trusted constructor configuration, never method/tool input; supplying an embedder fixes its family/preset before use.
+- Read-only construction: `openContextReader({path,contextRead})`, with the same configuration and read methods. Refresh refuses `invalid_input`. Canonical and sidecar connections are read-only; neither this constructor nor managed-existing context operations invokes ordinary opening, recovery or sidecar maintenance. Existing `openMemoryReader` stays unchanged (`core/topic-overview-input.mjs:17`).
+- Refuse hot rollback journals and unsupported auxiliary-file conditions, including WAL/SHM requiring creation or recovery. Never use an immutable-open shortcut on a live store. Missing/mismatched sidecars and hot/unsupported journal conditions report `index_unavailable`; no repair or transient file creation. Reuse path/schema identity checks (`core/read-database.mjs:18`; `core/existing-store.mjs:82`); canonical path/schema failures retain existing opener codes.
+- All canonical reads and sidecar reads use §14’s shared deferred `BEGIN` helper: `query_only` throughout, restored on every exit, existing busy timeout, no `BEGIN IMMEDIATE`. Sidecar maintenance writes use separate bounded transactions. No host callback or await occurs inside a transaction.
+- Authority follows §2.3: synchronous `{authorize,isCurrent}`, method-specific allowlists, `actionClass:'read'`, `actionId:null`, payload binding and access generations (`core/private-card-facade.mjs:7`; `core/method-package-facade.mjs:20`). Capture consent grants nothing.
+- Authorize every namespace before index access, statistics, vectors, scoring, top-k or transmission. Read sets contain one namespace or personal plus one project of the same owner; no implicit fallback. Recheck grants and canonical/index fences after every await and before dispatch, publication and delivery; discard revoked/stale results and late completions. Transport guards recheck after budget reservation.
+
+Data methods take `(input,token)` and return envelopes; lookup/refresh are asynchronous. Unknown fields refuse.
 
 | Method | Input | Success value |
 | --- | --- | --- |
-| `getContextReadCapabilities()` | None; no authority | Version, implemented methods/types/intents, channel availability, embedder metadata, presets, limits, writable-index status and unsupported features; no private counts |
-| `findCandidates` | `readSet,query,types,intent,policy?,semantic?,limit?,deadlineMs?,cursor?` | `{version,items,channels,coverage,trace,nextCursor}` |
-| `refreshContextIndex` | `readSet,types,intent,budget:{maxItems,maxMs}` | `{status,progress,coverage,channels}`; bounded lexical build and explicit document embedding |
-| `fetchCandidateEvidence` | `readSet`, either `{refs,intent}` or `{snapshot}`, `responseByteLimit?` | `{items,snapshot}`; initial canonical fetch or final canonical refetch |
+| `getContextReadCapabilities()` | None; no authority | Version, methods/types/intents, channel/embedder configuration, preset, limits, maintenance availability and unsupported features; no private counts |
+| `findCandidates` | `readSet,query,types,intent,semantic?,limit?,deadlineMs?,cursor?` | `{version,items,channels,coverage,trace,nextCursor}` |
+| `refreshContextIndex` | `readSet,types,intent,budget:{maxItems,maxMs}` | `{status,progress,coverage,channels}` |
+| `fetchCandidateEvidence` | `readSet`, either `{refs,intent}` or `{snapshot}`, `responseByteLimit?` | `{items,snapshot}`; canonical fetch/refetch |
 
-- `types` is a nonempty Memory/Card subset; `intent` is explicit `current` or `history`. Older supported schemas advertise Card unavailable without installing schemas. Unsupported types refuse `invalid_input`.
-- Capabilities advertise assembly, role profiles, relations and MOC retrieval as unsupported. `contextRead()` is reserved for U5b.
+- `types` is a nonempty Memory/Card subset; intent is explicit `current|history`. Unsupported types refuse `invalid_input`. Memory-only schemas never query absent Card tables, including `card_epochs` (`core/private-evidence-storage.mjs:20`). No implicit schema installation.
+- `semantic` defaults to false. True requires an explicitly configured embedder, fixed preset and request/spend budget; otherwise `invalid_input` with channel diagnostics.
+- Assembly, role profiles, relations and MOC retrieval remain unsupported; `contextRead()` is reserved for U5b.
 
 ### 13.2 Limits and continuation
 
 | Limit | Value |
 | --- | --- |
-| Returned items / final ranked horizon | Default 12; maximum 24 |
+| Items / ranked horizon | Default 12; maximum 24 |
 | Query | Nonblank, valid Unicode, ≤4,000 UTF-16 units; no NUL |
-| Query deadline | Default 1,000 ms; maximum 5,000 ms, including reconciliation and embedding |
-| Complete envelope | ≤65,536 UTF-8 bytes, including trace, snapshot/cursor and framing fields |
-| Cursor / delivery snapshot | ≤8,192 / 16,384 characters |
+| Query deadline | Default 1,000 ms; maximum 5,000 ms, including reconciliation/embedding |
+| Complete envelope | ≤65,536 UTF-8 bytes, including trace, snapshot and cursor |
+| Cursor / snapshot | ≤8,192 / 16,384 characters |
 | Refresh budget | Required; 1–1,024 items, 1–5,000 ms |
-| Synchronous build/scoring batch | ≤128 rows and ≤2,000,000 text units; check remaining deadline between batches |
-| Exact-cosine scan | Maximum 20,000 authorized vectors per query, served from a per-handle float32 cache bounded at 134,217,728 bytes. Beyond either bound, scan the most recently updated canonical items first (ties by canonical tuple) and report partial coverage with the omitted count |
+| Synchronous batch | ≤128 rows and ≤2,000,000 text units; deadline checks between batches |
+| Exact cosine | ≤20,000 authorized vectors/query; per-handle float32 cache ≤134,217,728 bytes |
+| Embedder metadata | ID/revision 1–200 units; dimensions positive integral, ≤32,768, validated before allocation |
 
-- Deadlines are cooperative; they do not promise preemption of blocking host code.
-- Freeze the ranked union on the first page; pagination only partitions its top 24. HMAC cursors bind store identity, query, types/intent, exact read set, access generations, canonical/index generations, policy, ranking identity and position.
-- A per-handle cache retains at most 128 frozen rankings for five minutes. Eviction or restart returns `cursor_stale`. Changed bindings refuse continuation. Byte limits never silently truncate indivisible items.
+- Deadlines are cooperative, without preemption guarantees. Refresh `maxItems` caps document transformation/embedding attempts, including refusals; projection comparisons consume deadline/batch budgets and are counted separately.
+- Freeze the first ranking; pages partition its top 24. HMAC cursors bind store, query, types/intent, read set, access/canonical/index generations, preset, ranking identity, horizon and position. Also bind normalized `semantic`, effective channel mode, embedder ID/revision/dimensions/normalization and representation version.
+- Changed request semantics give `invalid_cursor`; changed effective configuration gives `cursor_stale` and invalidates rankings. Continuation performs no embedding/reranking. Retain ≤128 rankings/handle; five-minute expiry starts at initial creation and paging never renews it. Expiry, eviction or restart gives `cursor_stale`. Indivisible oversized items refuse.
 
-### 13.3 Lexical, semantic and fusion
+### 13.3 Channels and fusion
 
-- Lexical is always enabled under opt-in. Port T1 into product code, without importing evaluation modules: NFKC, lowercase, frozen stopwords and Unicode boundaries. Han runs emit overlapping bigrams; a one-character run emits itself. No stemming (`HR-1/evaluation/retrieval-research/lib/tokenize.mjs:86`).
-- Index Memory `content` and Card `title + '\n' + body` as versioned `candidate-text-v1`; no receipts, Raw, methods, derivatives or MOC text. U4 asset derivatives become a candidate type only in a later U5 packet.
-- **Known miss (primary decision).** T1 stays frozen exactly as HR-1 validated it. A one-Han query term embedded in a longer Han run is therefore not found: `中` does not match `中文`, although the legacy substring search does. R03 asserts this as an explicit known miss, so any change is visible. The limitation is documented. A follow-up research item, HR-1b, measures a Han-unigram fallback for one-character query terms on the frozen HR-1 fixture before any tokenizer change.
-- BM25 uses `k1=1.2`, `b=0.75`, distinct query terms and `idf=ln(1+(N-df+0.5)/(df+0.5))`. Only matching documents enter lexical ranking (`HR-1/evaluation/retrieval-research/lib/bm25.mjs:32`). Compute N, df and average length over exactly the authorized, eligible type/intent projection, combining only explicitly authorized namespaces.
-- Semantic uses exact cosine over validated finite, nonzero vectors. `policy` is required when semantic is requested with a configured embedder. Frozen presets follow HR-1 protocol §5.3 (`HR-1/docs/plans/hybrid-retrieval-hr1.md:255`):
+- Lexical is always on. Port frozen T1 into product code: NFKC, lowercase, fixed stopwords/Unicode boundaries; overlapping Han bigrams, isolated single-Han tokens, no stemming (`HR-1/evaluation/retrieval-research/lib/tokenize.mjs:86`).
+- **Known miss:** `中` misses `中文`; legacy substring search can match it. Assert/document this intentional exception separately. HR-1b measures a one-character Han-unigram fallback on the frozen fixture before any tokenizer change.
+- `candidate-text-v1` indexes Memory content and Card `title + '\n' + body`. No receipts, Raw, methods, derivatives or MOC text; U4 derivatives await another U5 packet.
+- BM25: `k1=1.2`, `b=0.75`, distinct query terms, `idf=ln(1+(N-df+0.5)/(df+0.5))`; matching documents only (`HR-1/evaluation/retrieval-research/lib/bm25.mjs:32`). Statistics cover exactly the authorized eligible type/intent projection.
+- Exact cosine and frozen RRF follow HR-1 protocol §5.3 (`HR-1/docs/plans/hybrid-retrieval-hr1.md:255`):
 
-| Versioned preset | k | Each channel’s depth | Lexical/semantic weights |
+| Preset/family | k | Depth/channel | Lexical/semantic weights |
 | --- | --- | --- | --- |
-| `rrf-k60-d12` | 60 | 12 | 0.45 / 0.45 |
-| `rrf-k10` | 10 | 24 | 0.5 / 0.5 |
+| `rrf-k60-d12`, local | 60 | 12 | 0.45 / 0.45 |
+| `rrf-k10`, hosted | 10 | 24 | 0.5 / 0.5 |
 
-- `score(x)=Σ weight/(k+rank)`, ranks start at 1; missing membership contributes zero. Union maxima are 24/48 respectively; final output stays ≤24. All ties use binary ordering of canonical `(owner,scope,project,type,id)` tuples.
-- The host selects the preset: local family uses `rrf-k60-d12`; hosted family uses `rrf-k10`. No arbitrary weights. With absent, disabled or degraded semantic retrieval, use lexical-only BM25 ordering; do not fuse incomplete semantic coverage.
+- `score=Σ weight/(k+rank)`; ranks start at 1, missing membership contributes zero. Union maxima 24/48; final horizon ≤24. Ties use binary canonical `(owner,scope,project,type,id)` ordering. No arbitrary weights.
+- Disabled/absent/degraded semantic means lexical-only BM25; never fuse incomplete semantic coverage. Determine coverage and scan/cache capacity before paid dispatch, accounting for dimensions and resident capacity. Known gaps or exceeded bounds produce `partial_coverage` and **zero query embedding calls**. Embedded and scanned coverage are distinct. Partial semantic diagnostics would require a separate explicit operation, unsupported here.
 
-### 13.4 Rebuildable sidecar
+### 13.4 Sidecar and maintenance
 
-- File: `<absolute-store-path>.context-read-v1.sqlite`; format version 1, independently versioned. Same protection as the store: regular, non-symlink file, mode 0600 on POSIX; temporary/journal files receive equivalent protection (`core/database.mjs:299`). Memory-only `:memory:` stores report indexing unavailable.
-- Use rollback-journal mode; readers reject hot/incomplete generations without recovery. No canonical schema change, tables, triggers or writer callbacks. Bind generations to store identity, namespace, intent/types, tokenizer/representation versions and canonical Memory/Card epochs.
+- `<absolute-store-path>.context-read-v1.sqlite`, format 1, independently versioned. Regular non-symlink file, same protection as store (POSIX 0600); temporary/journal files equally protected (`core/database.mjs:299`). `:memory:` reports unavailable. Rollback-journal mode; read-only consumers never recover.
+- No canonical DDL, tables, triggers or writer callbacks. Bind generations to store, namespace, intent/types, tokenizer/representation and canonical epochs.
 
 | Table | Invariant |
 | --- | --- |
-| `generations` | Format/store binding, captured canonical fences, progress and incomplete/published state; only completely fenced generations are readable |
-| `documents` | Generation, namespace, typed ID, exact revision, Card bodyRevision, representation and token length; no bodies |
-| `postings` | Generation/document/term frequency; positive frequencies; no cross-generation joins |
-| `statistics` | Projection-local N, total length and per-term df; consistent with published documents/postings |
-| `vectors` | Store/namespace/type/ID/revision/bodyRevision/representation/embedder ID+revision/dimensions/normalization key; exact vector shape |
+| `generations` | Store/format/fences, persisted scan/delta progress, incomplete/published state |
+| `documents` | Typed identity, exact revision/bodyRevision, eligibility, representation, token length |
+| `postings` | Generation/document/term frequencies; positive frequencies, consistent published-generation joins |
+| `statistics` | Complete eligible-projection N, total length and df, consistent with documents/postings |
+| `vectors` | Store/namespace/type/ID/revision/bodyRevision/representation/embedder ID+revision/dimensions/normalization key; validated float32 |
 
-- Every read reconciles canonical epochs before using sidecar data. Reuse epoch sources (`core/private-evidence-storage.mjs:20`), not the existing membership-index implementation (`core/index-storage.mjs:61`).
-- Admission, correction, supersession, forget, Card changes and source/conversation deletion invalidate logically at canonical commit, including feature-off writers and restarts. Recheck canonical/index fences after awaits and before scoring or returning refs; changed fences discard the ranking.
-- Build in bounded batches; publish atomically only against unchanged canonical and access fences. Incomplete, wrong-store, incompatible or corrupt generations are rejected. Late embeddings cannot publish against changed revisions. Purge invalid derivatives during authorized writable reconciliation.
-- Writable ordinary handles create/rebuild missing or corrupt sidecars and report `missing`, `corrupt`, `rebuilding` or `rebuilt`. Until publication, report unavailable. Document vectors require explicit refresh again.
-- **Maintenance policy (primary decision).**
-  - Lexical reconciliation needs no model and no money. On writable handles it runs automatically inside `findCandidates`, in bounded batches within the call's deadline. When it cannot finish, it reports `rebuilding` or partial coverage, never stale items.
-  - Document embedding may cost money, so it runs only through an explicit `refreshContextIndex` call. The host exposes that call as `cairn-memory context refresh --db ABS --owner ID [--project ID] --max-items N --max-ms T`, with the embedder, model and spend budget given explicitly. Neither MCP nor capture ever triggers it.
-- Read-only and managed-existing handles never create, repair or clean sidecars, journals or directories. They consume a matching published generation or report lexical unavailable. Preserve existing opener/schema validation (`core/read-database.mjs:18`; `core/existing-store.mjs:82`).
+- Reconcile epochs on every read (`core/private-evidence-storage.mjs:20`); existing membership rebuilding is not lexical reconciliation (`core/index-storage.mjs:61`). Mutations invalidate logically at canonical commit, including feature-off writers/restarts.
+- On an epoch change, compare canonical `(type,id,revision,bodyRevision,eligibility)` against `documents` through a **metadata projection scan**: indexed lookups of those columns, plus Card support checks where eligibility requires them. Text columns of unchanged rows are never read or tokenized. **Primary decision:** U5a adds no canonical index. Existing indexes do not cover revision or eligibility (`core/index-schema.mjs:15`, `core/private-card-schema.mjs:24`). If the 10⁵ measurements show the scan is too slow, a covering index needs its own schema decision. Detect insertions, removals and eligibility transitions. Retokenize only changed eligible rows, remove invalid postings/vectors and adjust N, lengths and df incrementally; unchanged texts are not read/tokenized.
+- Persist bounded scan/delta progress and resume across calls/restarts while canonical/access fences match. Changed fences reject affected staged work. Publish a new complete generation only after reconciliation and full-projection statistics finish against unchanged fences. An unrelated epoch change with no document delta advances fences without retokenizing.
+- **Incomplete generations are never searchable.** Until publication return `index_unavailable`, `buildState:'rebuilding'`; unverified counts are null. Partial lexical search coverage describes only a matching published generation.
+- Full rebuilds occur only for missing, corrupt, wrong-store or incompatible sidecars. Report reason plus `rebuilding|rebuilt`; late embeddings cannot publish changed revisions. Sidecar deletion never reconstructs vectors implicitly.
+- Writable ordinary `findCandidates` performs automatic bounded lexical maintenance within its deadline, without model/money. Only explicit host refresh produces document vectors; MCP/capture never trigger it. Read-only/managed-existing context refresh refuses `invalid_input`.
+- A dirty 10⁵-Memory projection requires O(Ncanonical+Nsidecar) comparisons: 100,000 canonical tuples plus the corresponding sidecar scan, even after one mutation; Card support checks add cost. This is not O(changes). Measure scan rows, bytes, lookups and time; no 10⁵ latency promise.
 
-### 13.5 Embedder and paid calls
+### 13.5 Embedding and host configuration
 
-- Port: `{id,revision,dimensions,normalization,embed(texts,{signal})}`; returns one vector per input in order. Normalization is `none` or `l2` (norm tolerance 1e-5). Validate counts, dimensions, finite/nonzero values and declared normalization.
-- Model/configuration changes invalidate cached vectors; hosted provider revision may be explicitly `provider-unversioned`.
-- No embedder by default. `semantic:false` disables a configured port. Only host-invoked refresh embeds canonical documents; `findCandidates` embeds only its query. Neither capture nor canonical write locks invoke embedding (`core/database.mjs:261`). Oversized inputs are reported in coverage, never silently truncated.
-- Ship a deterministic fake and a separate OpenAI adapter: default `text-embedding-3-small` (1,536 dimensions), configurable model with declared dimensions, existing host key lookup (`adapters/local/guarded-model.mjs:24`; MCP `OPENAI_API_KEY`, `adapters/mcp/cli.mjs:257`). A key alone enables nothing.
-- Require explicit per-process request/spend budgets. The host reserves before dispatch and releases concurrency only after actual settlement, including caller timeout (`adapters/local/guarded-model.mjs:35`). Preserve conservative accounting for unknown usage; accounting grants no HTTP authority (`evaluation/experiment-budget/index.mjs:1018`). Each retry requires its own reservation. Bound HTTP request/response bytes; honor cancellation and remaining deadlines.
+- Port: `{id,revision,dimensions,normalization,embed(texts,{signal})}`, one ordered vector/input. Normalization `none|l2`, norm tolerance 1e-5. Convert to persisted float32 **before** validating dimensions, finite components, finite positive norm and normalization; repeat validation on load. Invalid vectors never publish/score; preserve lexical with semantic degradation.
+- No embedder by default. Lookup embeds only its query, after preflight; refresh alone embeds canonical documents. Never embed during capture or inside canonical/sidecar transactions. Report oversized inputs without silent truncation.
+- Ship deterministic fake and OpenAI adapter; adapter default `text-embedding-3-small`, 1,536 dimensions; configurable model/dimensions. Configuration changes invalidate vectors and rankings; `provider-unversioned` is an honest hosted revision stamp.
+- Embedding reads existing `OPENAI_API_KEY` only with explicit `--context-embedder openai`; a key alone never constructs an embedder. Existing non-context model behavior remains unchanged.
+- Require explicit per-process request/spend caps. Reserve before dispatch; retain concurrency until actual settlement and conservative charges for unknown usage; each retry reserves separately (`adapters/local/guarded-model.mjs:35`). Accounting is not HTTP authority (`evaluation/experiment-budget/index.mjs:1018`). Bound transport bytes; honor cancellation/deadlines.
 
-### 13.6 Delivery, diagnostics and MCP
+**MCP startup grammar:**
 
-- Candidate items are `{ref,rank,fusionScore,channels:{lexical,semantic}}`; each channel is `{rank,rawScore}` or null. Refs carry exact revision and Card bodyRevision. `fusionScore` is null for lexical-only results. No bodies, titles or excerpts.
-- Reuse current/history eligibility and canonical evidence readers (`core/private-evidence-storage.mjs:54`). Superseded Memories cannot be current evidence; history remains explicitly qualified.
-- Existing `fetchEvidence`/`revalidateEvidence` are exact-namespace, private-Card-gated APIs. The minimal new `fetchCandidateEvidence` wrapper reuses their readers and content fences across the authorized read set in one canonical read transaction.
-- Its HMAC snapshot binds store, read set, refs, intent, access/canonical generations and item fences (`core/private-evidence-storage.mjs:91`). Initial fetch validates exact refs; snapshot mode refetches canonically. No external callback or await follows the final read (`core/recall.mjs:195`). Hosts use this refetch immediately before delivery.
-- `channels` distinguishes `ready`, `unavailable`, `disabled`, `absent`, `timeout`, `provider_error`, `rate_limited`, `budget_denied`, `stale_index`, `dimension_mismatch`, `partial_coverage`; retain multiple causes. Semantic failure preserves lexical results. An unusable lexical generation returns `index_unavailable`.
-- Coverage reports authorized eligible/indexed/embedded/scanned counts by type, active-embedder coverage numerator/denominator, freshness, build state, selected depths, omitted counts or unknown, and deadline/budget stops. Trace records effective/requested policy, tokenizer/representation/embedder versions and channel timings. No text, vectors, credentials, paths or foreign aggregates.
-- Reuse `invalid_input`, `invalid_read_set`, `authority_required`, `scope_changed`, `invalid_cursor`, `cursor_stale`, `revision_conflict`, `evidence_unavailable`, `invalid_snapshot`, `snapshot_stale`, `context_item_too_large`, `index_unavailable`, `storage_busy`, `storage_error`, `store_closed`. Only `storage_busy` is retryable.
-- New facade errors may carry `details:{channels,coverage,trace}`; existing error DTOs stay unchanged. Total failure never becomes complete-empty. Empty results require a fresh, exhausted lexical search.
-- MCP: `--context-read context-read-v1` enables `find_memory_candidates` and `fetch_memory_candidate_evidence`. No refresh tool. Follow §11.4: startup namespace only; project plus personal requires explicit `--context-read-personal`. Reject supplied authority, namespace/readSet/context and unknown fields; validate embedded ref namespaces without rewriting identities. Preserve trust framing; separately test the 262,144-byte transport bound.
+```text
+--context-read context-read-v1 [--context-read-personal]
+  [--context-embedder openai --context-embed-model MODEL
+   --context-embed-dimensions N --context-embed-max-requests N
+   --context-embed-max-usd X]
+```
+
+**Explicit hosted refresh grammar:**
+
+```text
+cairn-memory context refresh --db ABS --owner ID [--project ID]
+  --types memory,card --intent current|history --max-items N --max-ms T
+  --context-embedder openai --context-embed-model MODEL
+  --context-embed-dimensions N --context-embed-max-requests N
+  --context-embed-max-usd X
+```
+
+- Require the entire provider group together; request caps are positive integers, USD cap positive finite, dimensions obey advertised bounds. CLI requires explicit model/dimensions despite adapter defaults. Types select a nonempty supported subset; no inferred intent.
+- MCP fixes provider/configuration/preset at startup; hosted is `rrf-k10`. Tools cannot override them. `--context-read-personal` requires project scope plus context-read opt-in.
+
+### 13.6 Delivery and diagnostics
+
+- Items: `{ref,rank,fusionScore,channels:{lexical,semantic}}`; channel entries `{rank,rawScore}|null`; fusionScore null for lexical-only. Exact revisions/Card bodyRevision; no bodies/titles/excerpts.
+- Reuse canonical current/history eligibility (`core/private-evidence-storage.mjs:54`). `fetchCandidateEvidence` wraps existing exact-namespace/private-Card-gated readers across the authorized read set using §14’s transaction helper. HMAC snapshots bind store/read set, refs, intent, access/canonical generations and item fences (`core/private-evidence-storage.mjs:91`). Refetch canonically immediately before delivery; no external callback/await follows final reading (`core/recall.mjs:195`).
+- Channels distinguish `ready`, `unavailable`, `disabled`, `absent`, `timeout`, `provider_error`, `rate_limited`, `budget_denied`, `stale_index`, `dimension_mismatch`, `partial_coverage`; retain multiple causes. Unusable lexical generation gives `index_unavailable`.
+- Coverage: authorized eligible/indexed/embedded/scanned counts by type, embedded/scanned fractions, freshness, maintenance state/progress, depths, omitted counts/null, deadline/budget stops. Trace: requested/effective modes/preset, tokenizer/representation/embedder metadata and channel timings. No text, vectors, credentials, paths or foreign aggregates.
+- Reuse `invalid_input`, `invalid_read_set`, `authority_required`, `scope_changed`, `invalid_cursor`, `cursor_stale`, `revision_conflict`, `evidence_unavailable`, `invalid_snapshot`, `snapshot_stale`, `context_item_too_large`, `index_unavailable`, `storage_busy`, `storage_error`, `store_closed`, plus existing opener refusals. Only `storage_busy` retryable. New errors may include sanitized `details:{channels,coverage,trace}`. Total failure never means no matches; complete-empty requires fresh exhausted lexical search.
+- MCP exposes `find_memory_candidates` and `fetch_memory_candidate_evidence`, no refresh tool. Follow §11.4 host-fixed namespace/read set; reject supplied authority/namespace/readSet/context/configuration and unknown fields, validate ref namespaces without rewriting identities. Preserve trust framing; test 262,144-byte transport bound separately.
 
 ### 13.7 Acceptance (installed, Node 22.16 and 24.15)
 
 | ID | Observable |
 | --- | --- |
-| R01 | Flag-off core/stdio bytes, schemas, prompts, errors, ordering and provider-call counts unchanged, including every legacy read path |
-| R02 | Unfiled/MOC-omitted Memories and eligible Cards retrieved directly; current/history eligibility preserved |
-| R03 | Copy T1/BM25 goldens from `HR-1/evaluation/retrieval-research/test/arms-lexical.test.mjs:10`; exact-term guard includes standalone one-Han, embedded two-Han, supplementary Han and mixed-width terms. Embedded one-Han is asserted as the documented known miss (§13.3), not as a pass |
-| R04 | Fake embedder/fake HTTP validate paraphrase fixtures, vector keys, both preset depths/weights and deterministic ties; real API smoke separately approved and primary-run, **unrun by default**; no completed A07 live claim |
-| R05 | Every degraded state exercised; lexical survives; total failure cannot claim no matches |
-| R06 | Foreign owner/project insertion changes no visible names, counts, scores or ranks; index-access and transport spies observe no foreign data; revoke during each await |
-| R07 | Second-process correction/supersession/forget/deletion between retrieval, fetch and final refetch blocks stale delivery |
-| R08 | Feature-off capture/Card/source/conversation mutations invalidate across restart; rebuild/replay/late embeddings cannot resurrect forgotten evidence |
-| R09 | Kill during build/publication; reject incomplete, corrupt, wrong-store/version and stale generations; recover safely after sidecar deletion |
-| R10 | Concurrent canonical writer succeeds while embedding is paused; no calls during capture/write locks; budgets and timeout settlement verified |
-| R11 | Tampered, cross-scope, evicted and generation-stale cursors/snapshots refuse; maximum complete envelopes fit |
-| R12 | Ordinary/read-only/managed opener matrix preserves canonical DDL; read-only/managed execution creates no files, including journals |
-| R13 | Installed import closure independently cross-checked against archive/manifest; print file count and differences; report actual build/test exit codes |
+| R01 | Flag-off bytes, DTOs, defaults, schemas, prompts, ordering, errors and call counts unchanged across legacy reads |
+| R02 | Direct retrieval finds unfiled/MOC-omitted Memories and eligible Cards; current/history qualification preserved |
+| R03 | Copy T1/BM25 goldens (`HR-1/evaluation/retrieval-research/test/arms-lexical.test.mjs:10`); replay frozen exact-term/CJK retrieval fixtures through installed lexical scores and both fused rankings: standalone one-Han, embedded two-Han, supplementary Han, mixed width. Record embedded single-Han exception separately |
+| R04 | Fake embedder/HTTP verify paraphrases, presets, float32 overflow/underflow/load validation, cache bounds and zero paid dispatch for predictable partial coverage. Approved primary-run real API smoke **unrun by default** |
+| R05 | All degraded states; semantic false/default makes zero calls; absent/incomplete hosted configuration refuses; lexical survives; total failure never complete-empty |
+| R06 | Foreign fixtures influence no visible names/counts/scores/ranks; index/transport spies see no foreign data; revoke at each await |
+| R07 | Second-process correction/supersession/forget/deletion between retrieval/fetch/refetch blocks stale delivery |
+| R08 | Feature-off capture, Memory confirmation/rejection, Card/source/conversation mutation and Raw source exclusion invalidate through restart/reconciliation; no resurrection |
+| R09 | Real-process kills during incremental/full build/publication; resumable matching progress, rejected stale/incomplete/corrupt/wrong-store/format generations; deletion recovery; detect transient auxiliary files |
+| R10 | Separate canonical writer progresses during embedding and reconciliation; no model calls under locks/capture; paid settlement and §14 query_only restoration verified |
+| R11 | Request-semantic changes invalidate cursors; configuration changes stale rankings; continuation makes zero calls, never renews expiry; tamper/scope/generation/size boundaries |
+| R12 | Ordinary/read-only/managed matrix, Memory-only schemas and hot/auxiliary-journal refusals; real-process monitoring detects any transient file creation on read-only/managed paths; unchanged canonical DDL |
+| R13 | Independently derive/diff installed closure and archive/manifest lists; print counts/differences and actual build/test exit codes |
 
-Measure at 10³, 10⁴ and 10⁵ Memories on both runtimes: full build/rebuild, incremental refresh throughput/time, cold/warm query p50/p95, sidecar plus journal bytes and peak RSS. Record hardware, corpus/Card mix, budgets, coverage and failures. Fake-provider timing is labelled; paid timing remains unrun absent approval. These are observations, not latency guarantees.
+At 10³/10⁴/10⁵ Memories on both runtimes measure full build/rebuild, incremental refresh, projection-scan cost, unchanged reads, **first read after one mutation**, repeated deadline-limited reconciliation and sustained writes. Record cold/warm query p50/p95, event-loop delay, concurrent-writer latency, sidecar/journal bytes, peak RSS, hardware, Card mix, coverage and failures. These are observations. Label fake-provider timing; paid timing remains unrun absent approval. A07 remains partially unmet until approved live embedding and explicit regression disposition are recorded.
 
-**Non-claims:** answer correctness, complete semantic recall, M7 assembly (U5b), role profiles/relations (U5c), MOC channel, local-model adapter, Raw search, secure physical erasure and 10⁵ latency guarantees. HR-1 is synthetic directional evidence, not product acceptance (`HR-1/docs/plans/hybrid-retrieval-hr1-results.md:161`).
+**Non-claims:** answer correctness, complete semantic recall, M7 assembly/U5b, role profiles/relations/U5c, MOC channel, local-model adapter, Raw search, secure physical erasure or 10⁵ latency guarantees. HR-1 remains synthetic directional evidence (`HR-1/docs/plans/hybrid-retrieval-hr1-results.md:161`).
 
 ## 14. U2c: method reads without the write lock (draft v0.7, primary-authored, not yet audited)
 
