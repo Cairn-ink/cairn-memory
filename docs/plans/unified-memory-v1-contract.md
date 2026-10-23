@@ -2,10 +2,10 @@
 
 Status:
 - U2 (§§2–9, v0.3.1) is implemented and accepted.
-- U3 (§11, v0.4.4) is implemented and in acceptance.
-- U4 (§12) is draft v0.5.2: the re-check findings are applied and confirmation is pending.
-- U5a (§13) is draft v0.6.2: the re-check findings are applied and confirmation is pending.
-- U2c (§14) is draft v0.7.1: audit findings are applied and confirmation is pending. It precedes U4a.
+- U3 (§11, v0.4.5) is implemented and in acceptance; fix round 2 implements the store fence.
+- U4 (§12) v0.5.2 is confirmed by the auditor as ready for U4a implementation after U2c.
+- U5a (§13) v0.6.2 is confirmed by the auditor as ready for implementation.
+- U2c (§14) v0.7.1 is confirmed by the auditor as ready for implementation. It precedes U4a and U5a's wiring.
 
 History:
 - v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
@@ -410,7 +410,7 @@ All take `(input, authority)` and return existing envelopes. `A` = actionId.
 4. **Limits** are provisional text-only defaults. U3 measures real SKILL.md and
    template packages (sizes only) before freezing them.
 
-## 11. U3: method packages on the local host (v0.4.4; v0.4.1 audited)
+## 11. U3: method packages on the local host (v0.4.5; v0.4.1 audited)
 
 The draft (`fc5b9ea`) was audited by the same non-author auditor, who found
 four P0, five P1 and one P2 issue. This section incorporates all of them.
@@ -593,12 +593,18 @@ The importer is a separate CLI process. The MCP process never imports.
   - Review supports rollback-journal stores only. Before opening SQLite at all,
     inspect the pinned file header. Refuse WAL-format stores, existing
     rollback-journal files and any other auxiliary or recovery condition.
-    Never use an immutable open on a live store.
+    Never use an immutable open on a live store. Supported participants must
+    keep rollback-journal mode throughout review; changing the journal mode
+    meanwhile is unsupported. This v0.4.4 refusal promise supersedes the older
+    absolute "mutating anything" wording above.
   - Read the SQLite identity tuple in one consistent read transaction.
   - After approval, the ordinary opener's new noncreating mode skips `mkdir`
-    and `open(ax)`. It opens without creation, using SQLite `mode=rw` where the
-    runtime supports it; the worker probes support on both runtimes and reports
-    the residual race if it does not. Inside its transaction, before
+    and `open(ax)`. It opens without creation. **Noncreating behaviour is mandatory on
+    both supported runtimes (v0.4.5).** Probe SQLite `mode=rw` support and
+    verify that a store's disappearance cannot recreate it. If `mode=rw`, or an
+    equally strong noncreating mechanism, is unavailable, the command refuses.
+    Reporting a residual race never authorizes a fallback that can create a
+    file. Inside its transaction, before
     initialization or migration, it checks the expected filesystem and SQLite
     identities.
   - The managed existing-store opener remains validation-only. Neither today's
@@ -694,7 +700,7 @@ tool arguments.
 | H06 | Deleting a version through the core host API makes MCP reads `unavailable` with no stale text, including through pins |
 | H07 | Packaging manifest, closure and installed-import tests pass on the shallow CI layout; no historical git objects are needed. Every new helper is in the installed closure |
 
-## 12. U4: assets, derivatives and binary method attachments (draft v0.5.2, re-check findings applied; confirmation pending)
+## 12. U4: assets, derivatives and binary method attachments (v0.5.2, audited and confirmed)
 
 Revised by `u4_contract_author` after the `umv1_contract_audit` audit of v0.5 (`d148a34`).
 Independently checked by the primary: both known-answer vectors in §12.2 reproduce exactly.
@@ -879,7 +885,7 @@ Record actual exit codes, finite deadlines and independently verified output byt
 | Continuous maximum-size byte reader plus concurrent writer | Zero busy timeouts on either side; writer p95 ≤250 ms |
 | Maximum-import peak RSS growth | ≤134,217,728 bytes |
 
-## 13. U5a: M6 candidate retrieval (draft v0.6.2, re-check findings applied; confirmation pending)
+## 13. U5a: M6 candidate retrieval (v0.6.2, audited and confirmed)
 
 Revised by `u5_contract_author` after the `u5_contract_audit` audit of v0.6 (`2669a3c`). The
 primary resolved the author's covering-index objection (§13.4).
@@ -1026,7 +1032,7 @@ At 10³/10⁴/10⁵ Memories on both runtimes measure full build/rebuild, increm
 
 **Non-claims:** answer correctness, complete semantic recall, M7 assembly/U5b, role profiles/relations/U5c, MOC channel, local-model adapter, Raw search, secure physical erasure or 10⁵ latency guarantees. HR-1 remains synthetic directional evidence (`HR-1/docs/plans/hybrid-retrieval-hr1-results.md:161`).
 
-## 14. U2c: method reads without the write lock (draft v0.7.1, primary-authored, audit findings applied; confirmation pending)
+## 14. U2c: method reads without the write lock (v0.7.1, primary-authored, audited and confirmed)
 
 The primary's U3 acceptance (§11.1 v0.4.2) found the cause of the contention.
 Every method read runs inside `BEGIN IMMEDIATE` (`core/database.mjs:261`,
