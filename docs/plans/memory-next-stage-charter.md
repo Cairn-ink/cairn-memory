@@ -179,6 +179,8 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `umv1_u2_impl`（U2b 修正 1）＋Spec 複查 | 列出所有有綁定的方法包 | gpt-6.1-sol/xhigh → 同 | — | `811b251` | 00:1x–00:4x | 2 個檔案；主控驗收兩個 Node 版本 core 1,961／1,961、示範程式 exit 0 → commit `a8323cb`；Spec 複查判 **Yes** → **U2 方法包 core 完成** |
 | 主控（U3 契約） | 方法包的 host 端：匯入器、TTY 核准、MCP 唯讀工具 | — | — | 整合分支 `fc5b9ea` | 00:5x | 先量測本機 21 個真實 skill 套件（只看大小）：1–122 個檔案、最大 1.85 MB、單檔最大 321 KB、5 個含二進位檔 → 提高文字上限 |
 | `umv1_contract_audit`（U3） | U3 契約的非作者審查 | gpt-6.1-sol/xhigh → 同 | read-only | `fc5b9ea` | 01:0x | 4 項 P0（隔離擋不住上層目錄被換、常數寫死在多處、要用方法包專屬授權、MCP 範圍與參數格式）→ 契約 v0.4（`69e22b3`），用 `/proc/self/fd` 逐層開啟取代 openat2；審查者確認中 |
+| `umv1_contract_audit`（U3 確認） | v0.4 與 /proc 隔離做法 | gpt-6.1-sol/xhigh → 同 | read-only | `69e22b3` | 01:1x | 方向正確，但要補 `O_PATH` 先檢查再讀、明確拒絕 `..`、說明隔離跟的是釘住的 handle → 契約 v0.4.1（`1265b4b`）；審查者表示修完即可實作 |
+| `umv1_u2_impl`（U3） | 方法包 host 端實作 | gpt-6.1-sol/xhigh | workspace-write | `1265b4b` | 01:2x– | 執行中 |
 | `hr1_arms`（修正 2／3）＋`hr1_tooling`（修正 3） | 隔離參數；A0 建資料的 bug；A0 容量預檢 | gpt-6.1-sol/xhigh → 同 | workspace-write | `1a200af` | 21:2x–21:39 | 主控驗收：兩個 Node 版本各 136 項、135 通過、0 失敗、1 略過 → commit `4fcec31`；Spec 判定：隔離參數符合，另提 A0 容量前提應加入預檢（P1）→ W4a 修正 3 |
 | 主控（HR-1 最終執行） | 從固定在 `4fcec31` 的 worktree 跑測試集兩種版本（有／沒有外部 namespace）、延遲與計分 | — | — | `4fcec31` | 22:0x–22:2x | 16 個批次全部 exit 0；66 個非 A0 排名檔和 `1a200af` 逐筆相同；**兩個情境都判「繼續」**；A5 未達門檻；API 累計 US$0.0050 → commit `34f6ea9` |
 | `hr1_review_spec`（最終） | 確認 `51dbdf6` 與程序揭露 | gpt-6.1-sol/xhigh → 同 | read-only | `51dbdf6` | 22:2x | 框架判 **Yes**；接受證據保留的推理，但不接受「程序完全合規」的說法 → 結果報告已加註爭議與限縮的說法（`9ce7328`） |
