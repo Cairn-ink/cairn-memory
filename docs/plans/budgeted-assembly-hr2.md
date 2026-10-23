@@ -1,10 +1,12 @@
-# HR-2: budgeted assembly, offline protocol (v0.1 draft)
+# HR-2: budgeted assembly, offline protocol (v0.2, pre-audit)
 
-Status: **v0.1 draft, not frozen.** Written 2026-10-23 by the U5b coordinator.
-It re-scopes the charter §6 plan after two mechanical findings on the frozen
-HR-1 fixture (§1). The deviations from the approved plan are listed in §2 and
-wait for the user's decision; then a non-author audit; then a freeze commit
-(v1) before any test-split run.
+Status: **v0.2, not yet frozen.** v0.1 was written 2026-10-23 by the U5b
+coordinator after two mechanical findings on the frozen HR-1 fixture (§1). The
+primary (charter owner) approved the six deviations in §2 on 2026-10-23 with
+three conditions, now folded in: the external-validity statement (§3, §10),
+"initial default" wording (§4), and an optional exploratory length-stress arm
+(§6.1). Next: a non-author audit, then a freeze commit (v1) before any
+test-split run.
 
 Branch `experiment/hr2-assembly`, cut from `experiment/hybrid-retrieval-hr1` at
 `43a8347`. No public core API, schema, default, adapter or installed artifact
@@ -63,7 +65,7 @@ raw output: `evaluation/retrieval-research/results/hr2-design-probe/`.
    never beat P-top. Keeping only the first span per item gave at most +1.8
    points at small budgets.
 
-## 2. Deviations from the charter §6 plan (user decision required)
+## 2. Deviations from the charter §6 plan (approved by the primary, 2026-10-23)
 
 | ID | Charter §6 | Proposed | Reason |
 | --- | --- | --- | --- |
@@ -74,10 +76,10 @@ raw output: `evaluation/retrieval-research/results/hr2-design-probe/`.
 | D5 | P-window | Dropped, recorded as degenerate | §1.2 |
 | D6 | (none) | Add P-top-s1 and P-cover-s1 (deepen with the earliest span only) and P-top+tail (depth then breadth) | Product-relevant variants that the probe can distinguish; cheap |
 
-Alternative the user may prefer instead of D1–D5: author a new fixture with
-realistic memory and receipt lengths. That abandons the frozen HR-1 rankings
-(lexical reruns are free; bge-m3 needs 2.2 GB RSS; hosted costs money) and is a
-larger packet. Not recommended for a first answer.
+The alternative, a new fixture with realistic memory and receipt lengths, was
+declined for the first answer: it abandons the frozen HR-1 rankings (lexical
+reruns are free; bge-m3 needs 2.2 GB RSS; hosted costs money) and is a larger
+packet. It stays the follow-up that §10 asks for.
 
 ## 3. Question
 
@@ -92,6 +94,13 @@ stored text, so the coverage-first result is a lower bound for layered
 representations that use generated summaries; that bound is what U5b can ship
 without a model.
 
+**External validity, stated before the run.** This fixture is a short-item
+world: bodies of at most 82 units, exactly one fact per memory, and 40% of
+required groups answerable only from a span. The answer therefore holds for
+short, single-fact items whose evidence often sits in spans. It is not evidence
+about long memories or long receipts, and the results document must not
+generalize to them.
+
 ## 4. Decision rule (dev-free; everything below is preregistered)
 
 - **Primary comparison**: P-cover versus P-top on the local nominated ranking
@@ -101,7 +110,7 @@ without a model.
 | Outcome | Condition |
 | --- | --- |
 | Coverage-first worth continuing | Δmacro(P-cover − P-top) ≥ +5 points and CI lower bound > 0 |
-| Rank-first whole items become the U5b default | Δmacro ≤ 0 and CI upper bound < +5 |
+| Rank-first whole items become U5b's **initial** default, to be revisited once a long-item fixture exists | Δmacro ≤ 0 and CI upper bound < +5 |
 | Inconclusive | Otherwise |
 
 - **Secondary, exploratory (95% CIs, labelled)**: the same contrast on A1 and
@@ -151,6 +160,29 @@ without a model.
 
 - A budget run admits units until the budget is exhausted; `used ≤ budget`
   always holds. Report used tokens per query.
+- Not run, recorded as degenerate: **P-prefix** (a 120-unit prefix then
+  widening equals P-top because no body exceeds 82 units) and **P-window** (a
+  query-term window inside an 82-unit body is the body).
+
+### 6.1 Optional exploratory arm: length stress (non-blocking)
+
+Approved by the primary as optional. It is skipped, and recorded as skipped,
+if it would delay the confirmatory run.
+
+- **Padding.** Every body and span unit of the target namespace is extended by
+  appending foreign-namespace text: sentences drawn from foreign memory bodies
+  and spans by a seeded deterministic choice keyed on the unit id, until the
+  unit reaches about four times its original token count. The original text
+  stays intact as the unit's prefix. Required regions are unchanged in meaning,
+  but a unit is still admitted whole, so required units become about four times
+  as expensive.
+- **Re-ranking.** Lexical only: BM25-T1 (`lib/bm25.mjs`, `lib/tokenize.mjs`)
+  over the padded target corpus at S1000, same eligibility and intent rules as
+  HR-1 A1, horizon 24. No model.
+- **Budgets.** The product numbers 1,500 / 2,000 / 4,000 and the sweep.
+- **Reporting.** Exploratory only, 95% CIs labelled; it never feeds the §4
+  rule. It shows whether the §4 direction survives when items are long, with
+  the caveat that the padding is irrelevant text, which flatters rank-first.
 
 ## 7. Metrics
 
