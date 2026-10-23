@@ -185,3 +185,19 @@
   （僅契約 +233 行與一行狀態），已推送。派非作者稽核 `u5b2_contract_audit`（gpt-6.1-sol/xhigh，read-only，乾淨 detached
   worktree `/home/chichieh/cairn-memory-review-u5b2c`，派工單附 TRAPS 11 條），明列主控條件 (4)：精簡 ref 路徑必須與 snapshot
   路徑同等一致性（追 `fetchCandidateEvidence` 各變更類型的確切錯誤碼）、`ns` 經固定 read set 重新授權。派出時負載 0.4。
+- **§15.8 稽核結果**（`u5b2_contract_audit`，exit 0）：3 P0、5 P1、1 P2。P0-1：精簡 ref 展開成完整 ref 後只有「精確修訂＋意圖
+  資格」語意，同修訂的 receipt 刪除與 MOC 父節點搬移不會升修訂、完整 ref 路徑看不到（snapshot 路徑靠 generations＋fence
+  才看得到）；稽核追出各變更類型的確切錯誤碼（修正／filing 變更→`revision_conflict`、supersession→`evidence_unavailable`
+  （current）／`revision_conflict`（history）、forget／刪除→`evidence_unavailable`、Card 資格先於修訂）。P0-2：A16 要求診斷與
+  fetch 回傳 receipt 全文，但 §13 fetch 只回 receipt 參照。P0-3：序列化缺規範（key 順序、巢狀排序、永遠輸出的欄位）。
+  P1：授權順序與 read-set 映射生命週期、最終驗證接縫（既有程式用 wire ref 比對會變空）、A13 常數定義不足且 `arms.mjs` 的
+  純量 O 無法表達 host-v2、A17–A19 遷移範圍（fixture 的 `reviewState:'not-required'` 錯誤；五個待改檔）、「becomes stable」
+  越權；P2：fence 是 43 字元 base64url。
+- 把 P0-1 兩個方案提給主控（1：精簡 ref 帶 48-bit fence 前綴 `f`，約 7 token／筆；2：接受較弱語意並寫明）。**主控選 1**，
+  條件：mismatch 回既有 `snapshot_stale` 且不得退回無 fence 路徑；A15 加四個測試（同修訂刪 receipt、MOC 搬移、`f` 錯一字、
+  缺 `f`→`invalid_input`）；寫明 `f` 是偵測用截斷 HMAC、48 bit、非授權、外洩無害；generations 留在主機端 snapshot。
+  `v1-preview.2` 已發（`4e53d1dc`，`read_memory_context` 標 experimental）。
+- **§15.8 v0.10.1 提交 `165d7f99`**（+176／−66，全在 §15.8）：套用全部稽核發現＋主控四條件；新增規範序列化、最終驗證接縫、
+  不可變啟動 read-set 映射的授權順序、無 receipt 文字的診斷、A13 以 T0／T1／T2 差分定義常數、A15 逐變更類型×意圖的碼、
+  A16 經工具描述證明可讀、A17–A19 遷移範圍（八個可改檔）、host-v2 獨立成本函數且以身分排除於 O=0 確認性比較。
+  派複查（resume 同一 thread，worktree 移到 `165d7f99`），負載 0.5。已回報主控。
