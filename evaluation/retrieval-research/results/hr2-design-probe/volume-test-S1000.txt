@@ -1,0 +1,12 @@
+per-memory tokens body p50/p90/max 16 19 25  body+spans p50/p90/max 39 51 69
+per-memory chars body p50/p90/max 20 59 82
+A1 top12 n 94 | body tokens p50/p90/max 189 207 220 | body+spans p50/p90/max 491 521 548 | >1500 0 >2000 0 >4000 0
+A1 top24 n 94 | body tokens p50/p90/max 391 425 451 | body+spans p50/p90/max 993 1070 1128 | >1500 0 >2000 0 >4000 0
+  ranked length p10/p50/min 24 24 3
+A3--bge-m3 top12 n 94 | body tokens p50/p90/max 191 208 229 | body+spans p50/p90/max 495 522 541 | >1500 0 >2000 0 >4000 0
+A3--bge-m3 top24 n 94 | body tokens p50/p90/max 309 354 412 | body+spans p50/p90/max 789 909 1020 | >1500 0 >2000 0 >4000 0
+  ranked length p10/p50/min 16 19 14
+F-RRF10--openai-3-small top12 n 94 | body tokens p50/p90/max 193 211 227 | body+spans p50/p90/max 501 532 551 | >1500 0 >2000 0 >4000 0
+F-RRF10--openai-3-small top24 n 94 | body tokens p50/p90/max 394 425 451 | body+spans p50/p90/max 997 1070 1112 | >1500 0 >2000 0 >4000 0
+  ranked length p10/p50/min 24 24 24
+test C1-7 groups body-covered 80 span-only 54
