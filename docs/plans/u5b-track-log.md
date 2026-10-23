@@ -216,3 +216,7 @@
   為「合法輸入位元相同、不合法輸入同拒絕類別與碼、訊息文字差異需回報」、A15 Card 逐意圖的碼、host-v2 成本式改為
   `E + h1 + (n−1)·hN + Σ本文 + Σ具體 receipt (C−15+excerpt) + Σ alias A`、`score.mjs` 加 host-v2 重算驗證。派第二次複查
   （同 thread，worktree `22a017f5`），負載 0.2。
+- **v0.10.2 第二次複查**：阻斷項 1、3、5、7 全部 resolved（core `fences` 機制、父節點搬移差異、`f` 指紋描述、schema 原分支
+  保留與相容性放寬——稽核者確認 U5a 測試沒有鎖定驗證訊息位元、成本式、Card 矩陣）；新 P1：A15 對 snapshot 路徑一律期望
+  `snapshot_stale` 太寬，canonical 重取本身失敗時既有 §13.6 錯誤優先（current 下同修訂 Card support 喪失→
+  `evidence_unavailable`，history→`snapshot_stale`）。**v0.10.3 提交 `ccc9602a`**（只改 A15 那句與狀態行），派第三次短複查。
