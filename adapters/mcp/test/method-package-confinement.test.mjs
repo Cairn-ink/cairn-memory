@@ -5,6 +5,7 @@ import {mkdirSync,writeFileSync,readFileSync,openSync,closeSync,readdirSync} fro
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createTestWorkspace} from '../../../tools/testing/workspace.mjs';
+import {methodMountPreflight,mountedMethodProcess,METHOD_MOUNT_UNAVAILABLE} from '../../../tools/testing/method-bind-mount.mjs';
 import {prepareMethodFiles,METHOD_IMPORT_LIMITS} from '../method-package-files.mjs';
 const fixture=fileURLToPath(new URL('./fixtures/method-files-race.mjs',import.meta.url));
 function setup(t,mode){
@@ -17,12 +18,13 @@ function setup(t,mode){
 }
 function run(workspace,config,namespace=false){
   const path=join(workspace.path,'config.json');writeFileSync(path,JSON.stringify(config));
+  if(namespace){
+    const result=mountedMethodProcess(workspace,config.outside,config.root+'/nested',process.execPath,[fixture,path]);
+    return {result,stderr:result.stderr,outcome:JSON.parse(readFileSync(config.result,'utf8'))};
+  }
   const out=join(workspace.path,'stdout'),err=join(workspace.path,'stderr'),stdout=openSync(out,'wx'),stderr=openSync(err,'wx');let result;
   const env={...process.env};delete env.NODE_TEST_CONTEXT;
-  const args=namespace?['-Urm','--','/bin/sh','-c',
-    'mount --bind "$1" "$2" || exit 77; "$3" "$4" "$5"; result=$?; umount "$2"; exit "$result"',
-    'method-mount-test',config.outside,config.root+'/nested',process.execPath,fixture,path]:[fixture,path];
-  try{result=spawnSync(namespace?'/usr/bin/unshare':process.execPath,args,{env,timeout:15000,stdio:['ignore',stdout,stderr]});}
+  try{result=spawnSync(process.execPath,[fixture,path],{env,timeout:15000,stdio:['ignore',stdout,stderr]});}
   finally{closeSync(stdout);closeSync(stderr);}
   assert.equal(result.error,undefined,String(result.error));assert.equal(result.signal,null,readFileSync(err,'utf8'));
   return {result,stderr:readFileSync(err,'utf8'),outcome:result.status===0?JSON.parse(readFileSync(config.result,'utf8')):null};
@@ -41,8 +43,12 @@ test('H02 real special device never receives a data open',t=>{
 });
 test('H02 same-filesystem bind mount is refused before subtree enumeration (unprivileged user+mount namespace)',t=>{
   const {workspace,config}=setup(t,'mount');mkdirSync(join(config.root,'nested'));
-  const {result,stderr,outcome}=run(workspace,config,true);
-  if(result.status!==0){t.skip('UNVERIFIED bind mount: unshare/mount unavailable: '+stderr.trim());return;}
+  const prerequisite=methodMountPreflight(workspace,config.outside,config.root+'/nested');
+  if(prerequisite.status===METHOD_MOUNT_UNAVAILABLE){t.skip('UNVERIFIED bind mount prerequisite: '+prerequisite.stderr.trim());return;}
+  // A failing mounted child must throw, even when it uses the skip status.
+  assert.throws(()=>mountedMethodProcess(workspace,config.outside,config.root+'/nested',process.execPath,['-e','process.exit(77)'],'mount-failed-child'),
+    {code:'ERR_ASSERTION',actual:77});
+  const {outcome}=run(workspace,config,true);
   assert.equal(outcome.refused,true);assert.equal(outcome.sameDevice,true);assert.ok(outcome.rootMount);assert.ok(outcome.childMount);assert.notEqual(outcome.rootMount,outcome.childMount);assert.ok(!JSON.stringify(outcome).includes('OUTSIDE MUST NEVER BE READ'));
 });
 test('H02 published depth and entry ceilings refuse before unbounded traversal',t=>{

@@ -27,10 +27,16 @@ listing and comparison still verify the whole version. Resolution verifies
 metadata; file content is checked when read. These semantics do not detect
 unread text corruption through resolution alone. SQLite contention can still
 return retryable `storage_busy`; byte ceilings do not guarantee latency.
-The opt-in C04 gate runs a continuous maximum-version reader and 100 independent
-binding transitions in separate processes, with finite deadlines. Any busy
-outcome fails, including retried outcomes; writer p95 must be at most 250 ms on
-the reference machine. It reports reader page p50/p95 and both child exit codes.
+The opt-in C04 gate runs a continuous maximum-version reader and at least 100
+independent binding transitions in separate processes, with finite deadlines.
+The writer uses a fixed pause derived from an uncontended reader baseline and
+continues through the first complete contended read. At least 200 reader pages
+must overlap writer activity. Any busy outcome fails, including retried outcomes;
+writer p95 must be at most 250 ms on the reference machine. Rollback-journal
+readers can queue behind pending commits even when neither side returns busy.
+Reader page p50, p95 and maximum during the overlap are reported separately from
+the whole run; overlap reader p95 and maximum are observations without thresholds.
+Both child exit codes are checked.
 Method command review supports rollback-journal stores only. It refuses WAL
 headers and existing journal/WAL/SHM companions before SQLite inspection, pins
 filesystem and SQLite identities, and uses a noncreating fenced opener after

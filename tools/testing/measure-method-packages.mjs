@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {openSync,closeSync,existsSync,readFileSync,writeFileSync} from 'node:fs';
+import {openSync,closeSync,existsSync,readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -22,7 +22,7 @@ const percentile=(values,fraction)=>[...values].sort((a,b)=>a-b)[Math.min(values
 export const MEASUREMENT_BOUNDS=Object.freeze({overallMs:600_000,maxBusyRetries:32});
 export class MeasurementBound extends Error {constructor(reason){super(reason);this.reason=reason;}}
 function checkDeadline(deadlineAt){if(Date.now()>=deadlineAt)throw new MeasurementBound('run-deadline');}
-async function until(predicate,deadlineAt){const end=Date.now()+30000;while(!predicate()){checkDeadline(deadlineAt);assert.ok(Date.now()<end,'measurement start barrier');await delay(5);}}
+async function until(predicate,deadlineAt,maximumMs=30000){const end=Date.now()+maximumMs;while(!predicate()){checkDeadline(deadlineAt);assert.ok(Date.now()<end,'measurement start barrier');await delay(5);}}
 // The callback owns one frozen operation/page, including its cursor/action ID.
 // Busy outcomes leave that operation unchanged; only a successful result advances.
 export async function retryStorageBusy(call,stats,{deadlineAt=Date.now()+MEASUREMENT_BOUNDS.overallMs,maxBusyRetries=MEASUREMENT_BOUNDS.maxBusyRetries}={}) {
@@ -57,58 +57,88 @@ export function assertMethodGate({reader,writer,exits}) {
   }
   assert.notEqual(reader.pid,writer.pid,'independent processes');
   assert.ok(reader.passes>=1,'complete maximum-version read');
-  assert.ok(reader.pagesDuringWriter>0,'reader and writer overlap');
+  assert.ok(reader.pagesDuringWriter>=200,'at least 200 reader pages overlap writer activity');
   assert.ok(writer.committed>=100,'at least 100 committed binding transitions');
   assert.ok(writer.p95Ms<=250,'writer p95 exceeds 250 ms');
+}
+const absoluteNow=()=>performance.timeOrigin+performance.now();
+const publish=(path,value)=>{writeFileSync(path+'.tmp',JSON.stringify(value));renameSync(path+'.tmp',path);};
+export function methodWriterInterval(baselineMs){
+  assert.ok(Number.isFinite(baselineMs)&&baselineMs>0,'finite positive reader baseline');
+  return Math.max(1,baselineMs/100);
+}
+export function overlapPageReport(pages,{startedAt,finishedAt}){
+  const times=pages.filter(page=>page.startedAt<=finishedAt&&page.finishedAt>=startedAt).map(page=>page.elapsedMs);
+  return {pages:times.length,p50Ms:times.length?percentile(times,.5):0,p95Ms:times.length?percentile(times,.95):0,
+    maxMs:times.reduce((max,time)=>Math.max(max,time),0)};
+}
+async function maximumPass(f,config,stats,observe,stop=()=>false){
+  const started=performance.now(),hash=createHash('sha256');let units=0,bytes=0,pages=0;
+  for(const path of config.files){
+    let cursor;
+    do{
+      if(stop())return {complete:false,pages,elapsedMs:performance.now()-started};
+      const input={version:config.receipt.version,intent:'history',path,...(cursor?{cursor}:{})};
+      const startedAt=absoluteNow(),result=await retryStorageBusy(()=>f.call('readMethodFile',input),stats,config),finishedAt=absoluteNow(),page=ok(result);
+      observe?.({startedAt,finishedAt,elapsedMs:finishedAt-startedAt});
+      assert.ok(Buffer.byteLength(JSON.stringify(result))<=65536);
+      for(const part of page.parts){units+=part.text.length;bytes+=Buffer.byteLength(part.text);hash.update(part.text);}
+      cursor=page.nextCursor;pages++;
+    }while(cursor);
+  }
+  assert.equal(units,METHOD_LIMITS.versionUnits);assert.equal(bytes,config.bytes);assert.equal(hash.digest('hex'),config.sha256);
+  return {complete:true,pages,elapsedMs:performance.now()-started,units,bytes,sha256:config.sha256};
 }
 const main=process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url);
 if(main&&process.argv[2]==='--writer'){
   const config=JSON.parse(readFileSync(process.argv[3],'utf8')),f=host(config.path),stats=contentionStats();
-  let revision=0,status='complete',reason=null;
+  let revision=0,status='complete',reason=null,startedAt;
   try{
     writeFileSync(config.ready,String(process.pid));await until(()=>existsSync(config.start),config.deadlineAt);
     if(config.gate)await until(()=>existsSync(config.readerActive),config.deadlineAt);
-    writeFileSync(config.entered,String(process.pid));
-    while(config.gate?revision<100:!existsSync(config.stop)){
+    startedAt=absoluteNow();publish(config.entered,{pid:process.pid,at:startedAt});
+    while(config.gate?revision<100||config.readerPassDone&&!existsSync(config.readerPassDone):!existsSync(config.stop)){
+      // A fixed pause derived from the reader baseline leaves reads between
+      // commits. Continue through the first complete contended reader pass.
+      if(config.gate&&revision>0){checkDeadline(config.deadlineAt);await delay(config.intervalMs??1);}
       const method=revision%2===0?'adoptMethodVersion':'disableMethodBinding';
       const input={bindingNamespace:project,actionId:'measurement-'+revision,package:config.receipt.package,
         roleId:'measurement',expectedRevision:revision||null,readSet:[project],...(method==='adoptMethodVersion'?{version:config.receipt.version}:{})};
       const result=await retryStorageBusy(()=>f.call(method,input),stats,config);
       revision++;assert.equal(result.value.binding.revision,revision);
-      await delay(1);
+      if(!config.gate)await delay(1);
     }
   }catch(error){
     if(!(error instanceof MeasurementBound))throw error;status='incomplete';reason=error.reason;
   }finally{f.core.close();}
-  writeFileSync(config.result,JSON.stringify({pid:process.pid,status,reason,deadlineAt:config.deadlineAt,maxBusyRetries:config.maxBusyRetries,committed:revision,...contentionReport(stats)}));
-  if(config.gate){writeFileSync(config.writerDone,'done');if(status!=='complete')process.exitCode=1;}
+  const finishedAt=absoluteNow();
+  writeFileSync(config.result,JSON.stringify({pid:process.pid,status,reason,deadlineAt:config.deadlineAt,maxBusyRetries:config.maxBusyRetries,
+    intervalMs:config.intervalMs??null,activeElapsedMs:startedAt===undefined?0:finishedAt-startedAt,committed:revision,...contentionReport(stats)}));
+  if(config.gate){publish(config.writerDone,{pid:process.pid,at:finishedAt});if(status!=='complete')process.exitCode=1;}
 }else if(main&&process.argv[2]==='--reader'){
-  const config=JSON.parse(readFileSync(process.argv[3],'utf8')),f=host(config.path),stats=contentionStats();
-  let status='complete',reason=null,passes=0,pages=0,pagesDuringWriter=0;
-  const started=performance.now();
+  const config=JSON.parse(readFileSync(process.argv[3],'utf8')),f=host(config.path),stats=contentionStats(),pageTimes=[];
+  let status='complete',reason=null,passes=0,pages=0,started;
   try{
-    writeFileSync(config.ready,String(process.pid));await until(()=>existsSync(config.start),config.deadlineAt);
+    if(config.baseline){
+      const baselineStats=contentionStats(),baseline=await maximumPass(f,config,baselineStats);
+      publish(config.baseline,{...baseline,pid:process.pid,...contentionReport(baselineStats)});
+    }
+    writeFileSync(config.ready,String(process.pid));await until(()=>existsSync(config.start),config.deadlineAt);started=performance.now();
     do{
-      const hash=createHash('sha256');let units=0,bytes=0;
-      for(const path of config.files){
-        let cursor;
-        do{
-          const input={version:config.receipt.version,intent:'history',path,...(cursor?{cursor}:{})};
-          const result=await retryStorageBusy(()=>f.call('readMethodFile',input),stats,config),page=ok(result);
-          assert.ok(Buffer.byteLength(JSON.stringify(result))<=65536);
-          for(const part of page.parts){units+=part.text.length;bytes+=Buffer.byteLength(part.text);hash.update(part.text);}
-          cursor=page.nextCursor;pages++;
-          if(existsSync(config.writerEntered)&&!existsSync(config.writerDone))pagesDuringWriter++;
-          if(pages===1)writeFileSync(config.readerActive,String(process.pid));
-          if(pages%100===0)console.error(JSON.stringify({measurement:'reader',passes,pages,elapsedMs:performance.now()-started}));
-        }while(cursor);
-      }
-      assert.equal(units,METHOD_LIMITS.versionUnits);assert.equal(bytes,config.bytes);assert.equal(hash.digest('hex'),config.sha256);passes++;
+      const pass=await maximumPass(f,config,stats,timing=>{
+        pageTimes.push(timing);pages++;
+        if(pages===1)writeFileSync(config.readerActive,String(process.pid));
+        if(pages%100===0)console.error(JSON.stringify({measurement:'reader',passes,pages,elapsedMs:performance.now()-started}));
+      },()=>passes>=1&&existsSync(config.writerDone));
+      if(pass.complete){passes++;if(passes===1&&config.readerPassDone)publish(config.readerPassDone,{at:absoluteNow()});}
     }while(!existsSync(config.writerDone));
   }catch(error){if(!(error instanceof MeasurementBound))throw error;status='incomplete';reason=error.reason;}
   finally{f.core.close();}
-  writeFileSync(config.result,JSON.stringify({pid:process.pid,status,reason,passes,pages,pagesDuringWriter,files:config.files.length,
-    elapsedMs:performance.now()-started,deadlineAt:config.deadlineAt,
+  const entered=config.writerEntered&&existsSync(config.writerEntered)?JSON.parse(readFileSync(config.writerEntered,'utf8')):null;
+  const done=config.writerDone&&existsSync(config.writerDone)?JSON.parse(readFileSync(config.writerDone,'utf8')):null;
+  const duringOverlap=entered?overlapPageReport(pageTimes,{startedAt:entered.at,finishedAt:done?.at??absoluteNow()}):overlapPageReport([],{});
+  writeFileSync(config.result,JSON.stringify({pid:process.pid,status,reason,passes,pages,pagesDuringWriter:duringOverlap.pages,duringOverlap,files:config.files.length,
+    elapsedMs:started===undefined?0:performance.now()-started,deadlineAt:config.deadlineAt,
     ...(passes?{units:METHOD_LIMITS.versionUnits,bytes:config.bytes,sha256:config.sha256}:{}),...contentionReport(stats)}));
   if(status!=='complete')process.exitCode=1;
 }else if(main){
@@ -122,10 +152,9 @@ if(main&&process.argv[2]==='--writer'){
     const hash=createHash('sha256');for(const file of files)hash.update(file.text);
     f.core.close();
     const shared={path,gate:true,deadlineAt:bounds.deadlineAt,maxBusyRetries:bounds.maxBusyRetries,
-      ...Object.fromEntries(['start','readerActive','writerEntered','writerDone'].map(name=>[name,join(workspace.path,name)]))};
-    for(const name of ['reader','writer']){
-      const config={...shared,ready:join(workspace.path,name+'.ready'),result:join(workspace.path,name+'.result'),
-        ...(name==='writer'?{receipt,entered:shared.writerEntered}:{receipt:imported,files:files.map(file=>file.path),bytes:12_000_000,sha256:hash.digest('hex')})};
+      ...Object.fromEntries(['start','readerActive','readerPassDone','writerEntered','writerDone'].map(name=>[name,join(workspace.path,name)]))};
+    function launch(name,options){
+      const config={...shared,ready:join(workspace.path,name+'.ready'),result:join(workspace.path,name+'.result'),...options};
       const configuration=join(workspace.path,name+'.json');writeFileSync(configuration,JSON.stringify(config));
       const stdout=join(workspace.path,name+'.stdout'),stderr=join(workspace.path,name+'.stderr'),out=openSync(stdout,'wx'),err=openSync(stderr,'wx');
       const env={...process.env};delete env.NODE_TEST_CONTEXT;let child;
@@ -134,8 +163,14 @@ if(main&&process.argv[2]==='--writer'){
       const state={child,config,stdout,stderr,exit:null};children[name]=state;
       state.closed=new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>{state.exit={code,signal};resolve(state.exit);});});
       workspace.defer(async()=>{if(!state.exit)child.kill('SIGKILL');await state.closed;});
+      return state;
     }
     const alive=()=>{for(const [name,state] of Object.entries(children))if(state.exit)throw Error(name+' exited before barrier: '+JSON.stringify(state.exit)+' '+readFileSync(state.stderr,'utf8'));};
+    const reader=launch('reader',{receipt:imported,files:files.map(file=>file.path),bytes:12_000_000,sha256:hash.digest('hex'),baseline:join(workspace.path,'baseline.result')});
+    await until(()=>{alive();return existsSync(reader.config.ready);},bounds.deadlineAt,MEASUREMENT_BOUNDS.overallMs);
+    const baseline=observations.baseline=JSON.parse(readFileSync(reader.config.baseline,'utf8'));
+    assert.equal(baseline.complete,true);assert.equal(baseline.storageBusy,0,'reader baseline busy');
+    launch('writer',{receipt,entered:shared.writerEntered,intervalMs:methodWriterInterval(baseline.elapsedMs)});
     await until(()=>{alive();return Object.values(children).every(state=>existsSync(state.config.ready));},bounds.deadlineAt);
     writeFileSync(shared.start,'start');
     const completed=Promise.all(Object.entries(children).map(async([name,state])=>{
@@ -152,7 +187,7 @@ if(main&&process.argv[2]==='--writer'){
       assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
     }finally{db.close();}
     const report={node:process.version,status:'complete',bounds,...observations,exits,
-      methodology:'real SQLite; metadata plus requested-file verification per page; continuous maximum-version reader and 100 independent project binding transitions in separate processes; ready/start/reader-active barrier; identical operations retried on busy but any busy fails; writer p95 <=250 ms; no provider'};
+      methodology:'real SQLite; reader-process baseline then continuous maximum-version reads; independent project writer pauses baseline elapsedMs / 100 between transitions and continues for at least 100 commits through the first complete reader pass; at least 200 overlap pages; overlap includes calls crossing writer start/end; reader overlap p95/max are observations; zero busy; writer p95 <=250 ms; no provider'};
     assertMethodGate(report);console.log(JSON.stringify(report,null,2));
   }catch(error){
     process.exitCode=1;

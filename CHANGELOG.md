@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — method host review fixes
+
+- Bound exclusion glob matching with a two-row dynamic program and preserve
+  Unicode, separator, class and directory-pruning semantics.
+- Separate bind-mount prerequisite skips from mandatory importer-child success;
+  strengthen installed terminal-control approval and injection tests.
+- Pace the C04 writer from a reader baseline, require 200 overlapping pages,
+  and report overlap reader latency separately, including commit queueing.
+
 ## Unreleased — method read concurrency (U2c)
 
 - Run method and binding reads in deferred, query-only snapshots; restore the

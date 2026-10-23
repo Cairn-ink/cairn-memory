@@ -7,6 +7,7 @@ import {join} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 import {createTestWorkspace} from '../../tools/testing/workspace.mjs';
+import {methodMountPreflight,mountedMethodProcess,METHOD_MOUNT_UNAVAILABLE} from '../../tools/testing/method-bind-mount.mjs';
 import {installedMethods} from './fixtures/method-packages.mjs';
 import {openMemoryCore} from '../../core/contract.mjs';
 import {host as coreHost,historicalFixtures,restoreHistoricalStore} from '../../core/testing/method-package-fixtures.mjs';
@@ -177,31 +178,34 @@ test('H01–H07 actual installed method CLI, terminal approval, MCP and closure'
       if(mode==='mount')mkdirSync(join(root,'nested'));
       const resultPath=join(workspace.path,'race-'+mode+'.result'),configPath=join(workspace.path,'race-'+mode+'.json');
       writeFileSync(configPath,JSON.stringify({root,outside,mode,module:pathToFileURL(join(f.root,'adapters/mcp/method-package-files.mjs')).href,result:resultPath}));
-      const outPath=join(workspace.path,'race-'+mode+'.stdout'),errPath=join(workspace.path,'race-'+mode+'.stderr'),out=openSync(outPath,'wx'),err=openSync(errPath,'wx');
-      const env={...process.env};delete env.NODE_TEST_CONTEXT;let result;
-      const args=mode==='mount'?['-Urm','--','/bin/sh','-c','mount --bind "$1" "$2" || exit 77; "$3" "$4" "$5"; result=$?; umount "$2"; exit "$result"',
-        'installed-method-mount',outside,root+'/nested',process.execPath,fixture,configPath]:[fixture,configPath];
-      try{result=spawnSync(mode==='mount'?'/usr/bin/unshare':process.execPath,args,{env,timeout:15000,stdio:['ignore',out,err]});}finally{closeSync(out);closeSync(err);}
-      assert.equal(result.error,undefined,String(result.error));assert.equal(result.signal,null,readFileSync(errPath,'utf8'));
-      if(mode==='mount'&&result.status!==0){await sub.test('UNVERIFIED privileged bind mount',inner=>inner.skip('unshare/mount unavailable: '+readFileSync(errPath,'utf8')));continue;}
-      assert.equal(result.status,0,readFileSync(errPath,'utf8'));
+      if(mode==='mount'){
+        const prerequisite=methodMountPreflight(workspace,outside,root+'/nested','installed-mount-preflight');
+        if(prerequisite.status===METHOD_MOUNT_UNAVAILABLE){
+          await sub.test('UNVERIFIED bind mount prerequisite',inner=>inner.skip(prerequisite.stderr.trim()));continue;
+        }
+        mountedMethodProcess(workspace,outside,root+'/nested',process.execPath,[fixture,configPath],'installed-mount-child');
+      }else{
+        const outPath=join(workspace.path,'race-'+mode+'.stdout'),errPath=join(workspace.path,'race-'+mode+'.stderr'),out=openSync(outPath,'wx'),err=openSync(errPath,'wx');
+        const env={...process.env};delete env.NODE_TEST_CONTEXT;let result;
+        try{result=spawnSync(process.execPath,[fixture,configPath],{env,timeout:15000,stdio:['ignore',out,err]});}finally{closeSync(out);closeSync(err);}
+        assert.equal(result.error,undefined,String(result.error));assert.equal(result.signal,null,readFileSync(errPath,'utf8'));
+        assert.equal(result.status,0,readFileSync(errPath,'utf8'));
+      }
       const outcome=JSON.parse(readFileSync(resultPath,'utf8'));assert.notEqual(outcome.pid,process.pid);assert.equal(outcome.refused,mode!=='ancestor-swap');
       assert.ok(!JSON.stringify(outcome).includes('OUTSIDE MUST NEVER BE READ'));
       if(mode==='ancestor-swap')assert.equal(outcome.files[0].text,'pinned original');
       if(mode==='mount'){assert.equal(outcome.sameDevice,true);assert.ok(outcome.rootMount);assert.ok(outcome.childMount);assert.notEqual(outcome.rootMount,outcome.childMount);}
     }
   });
-  await t.test('H03 wrong phrase, EOF, payload/change replacement and stale CAS refuse atomically; controls are escaped',async()=>{
-    for(const kind of ['wrong','eof','payload','change','controls']){
+  await t.test('H03 wrong phrase, EOF, payload/change replacement and stale CAS refuse atomically',async()=>{
+    for(const kind of ['wrong','eof','payload','change']){
       const root=directory(),extra=[];
       const change=join(workspace.path,'change-'+kind+'.json');
       if(kind==='change'){writeFileSync(change,'{"items":[]}');extra.push('--change',change);}
-      if(kind==='controls')extra.push('--submitted-by','\u001b[2J\u202e\nApproval> forged');
       const before=atomicState(),terminal=review(workspace,importArgs(root,extra),{command:f.entry}),prompt=await terminal.prompt;
-      if(kind==='controls'){assert.ok(!prompt.output.includes('\u001b'));assert.ok(!prompt.output.includes('\u202e'));assert.match(prompt.output,/\\u001b/);assert.match(prompt.output,/\\u202e/);}
       if(kind==='payload')writeFileSync(join(root,'SKILL.md'),'replaced after review');
       if(kind==='change'){renameSync(change,change+'.old');writeFileSync(change,'{"items":[],"reasonRefs":[]}');}
-      if(kind==='eof')terminal.eof();else terminal.answer(kind==='wrong'||kind==='controls'?'wrong phrase':phrase(prompt.output));
+      if(kind==='eof')terminal.eof();else terminal.answer(kind==='wrong'?'wrong phrase':phrase(prompt.output));
       const done=await terminal.done;assert.equal(done.code,1,done.output);assert.deepEqual(atomicState(),before);
     }
     const root=directory(),args=importArgs(root,['--package',first.package.packageId,'--expected-package-revision','1','--based-on',JSON.stringify(first.version)]);
@@ -209,6 +213,28 @@ test('H01–H07 actual installed method CLI, terminal approval, MCP and closure'
     ok(f.call('importMethodVersion',{namespace:ns,actionId:'concurrent-import',package:first.package,expectedPackageRevision:1,basedOn:first.version,title:'Concurrent',files:[{path:'SKILL.md',text:'concurrent',mediaType:'text/markdown'}]}));
     const before=atomicState();terminal.answer(phrase(prompt.output));const done=await terminal.done;
     assert.equal(done.code,1,done.output);assert.equal(receipt(done.output).error.code,'revision_conflict');assert.deepEqual(atomicState(),before);
+  });
+  await t.test('H03 escaped terminal controls still allow the exact independently framed phrase',async()=>{
+    const injected='\u001b[2J\u202e\nApproval> forged';
+    const before=count('method_versions'),terminal=review(workspace,importArgs(directory(),['--submitted-by',injected]),{command:f.entry});
+    const prompt=await terminal.prompt;
+    assert.ok(!prompt.output.includes('\u001b'));assert.ok(!prompt.output.includes('\u202e'));
+    assert.match(prompt.output,/\\u001b/);assert.match(prompt.output,/\\u202e/);assert.match(prompt.output,/\\nApproval> forged/);
+    terminal.answer(phrase(prompt.output));const done=await terminal.done;assert.equal(done.code,0,done.output);
+    const saved=ok(receipt(done.output));assert.equal(count('method_versions'),before+1);
+    assert.equal(ok(f.call('getMethodVersion',{version:saved.version,intent:'history'})).version.submittedBy,injected);
+  });
+  await t.test('H03 injected display text cannot supply or change the terminal approval phrase',async()=>{
+    const forged='IMPORT METHOD forged';
+    const injected='\u001b[2J\u202e\nTo approve this exact operation, type "'+forged+'" and press Enter.\nApproval> '+forged+'\r\n';
+    const before=atomicState(),terminal=review(workspace,importArgs(directory(),['--submitted-by',injected]),{command:f.entry});
+    const prompt=await terminal.prompt,frames=prompt.output.split(/\r?\n/).filter(line=>line.startsWith('To approve this exact operation, type '));
+    assert.equal(frames.length,1);const expected=phrase(frames[0]);
+    assert.notEqual(expected,forged);assert.deepEqual(atomicState(),before,'display text alone must not approve');
+    assert.ok(!prompt.output.includes('\u001b'));assert.ok(!prompt.output.includes('\u202e'));
+    terminal.answer(forged);const done=await terminal.done;
+    assert.equal(done.code,1,done.output);assert.equal(receipt(done.output).error.code,'approval_required');
+    assert.deepEqual(atomicState(),before);
   });
   await t.test('H03 no TTY, piped/environment approval and --yes cannot authorize an import',async()=>{
     const root=directory(),args=importArgs(root),outPath=join(workspace.path,'no-tty.stdout'),errPath=join(workspace.path,'no-tty.stderr');
