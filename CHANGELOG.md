@@ -26,6 +26,7 @@
 
 ## Unreleased — context retrieval host (U5a part 3)
 
+- Renormalize OpenAI provider vectors in the adapter before strict float32 validation.
 - Add explicit context MCP startup options and two read tools, fixed host read
   sets, strict reference-preserving grammars and separate core/transport bounds.
 - Add bounded `context refresh`, syntax-only context configuration checks and
