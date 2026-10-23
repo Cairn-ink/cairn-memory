@@ -2,7 +2,7 @@
   "label": "approximate model",
   "note": "UUID and text tokenization vary; never a guarantee.",
   "counter": "tiktoken-o200k_base",
-  "implementationCommit": "__COMMIT__",
+  "implementationCommit": "47099de0",
   "namespace": {
     "ownerId": "synthetic-u5a",
     "scope": "project",
