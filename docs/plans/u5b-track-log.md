@@ -180,3 +180,8 @@
   dirty=0，記錄的最高負載 6.78），無 flake、無需單獨重跑；plugin-validation N/A 同前。已回報主控。主控的合併解法審查
   （非作者）yes，無發現；主控要求 A15 再加兩案（精簡 ref 指到已變更修訂必須以 §13.6 的碼明顯失敗、`ns` 索引經主機
   read set 重新授權），已補進草稿。等主控 fast-forward 到 `0a38a991`、發 `v1-preview.2`、給基準 commit。
+- 主控已將 `integration/unified-memory-v1` fast-forward 至 `0a38a991`（preview.2 只改 `release/v1-preview` 的指南）。
+  開 `integration/unified-memory-v1-u5b2`（worktree `/home/chichieh/cairn-memory-u5b2`），**§15.8 v0.10 草稿提交 `fa94af58`**
+  （僅契約 +233 行與一行狀態），已推送。派非作者稽核 `u5b2_contract_audit`（gpt-6.1-sol/xhigh，read-only，乾淨 detached
+  worktree `/home/chichieh/cairn-memory-review-u5b2c`，派工單附 TRAPS 11 條），明列主控條件 (4)：精簡 ref 路徑必須與 snapshot
+  路徑同等一致性（追 `fetchCandidateEvidence` 各變更類型的確切錯誤碼）、`ns` 經固定 read set 重新授權。派出時負載 0.4。
