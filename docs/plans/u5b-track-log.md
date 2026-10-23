@@ -88,3 +88,10 @@
   fixture 不動。(2) U5a 兩個斷言選 **(b)**：我的 worker 改，但要斷言確切工具名稱清單（啟用時多 `read_memory_context`，
   flag-off 清單完全不變）。交接：第二部分驗收與審查完成後告知 commit，主控在 U4a-1 與 U4b 落地後合併並跑完整矩陣。
 - 派工：`u5b_impl` 第一部分（core）執行中；第二部分等第一部分提交後再派。`hr2_harness` 執行中。
+- **U5b 第一部分（core）提交 `4bfd576c`**：8 個檔案（facade、input、新 `context-read-assembly.mjs`、兩個測試、
+  U5b 自有 fixture、兩個測試輔助）。worker `u5b_impl` 自報與協調者重跑：兩個 Node 版本 53／53、exit 0，
+  空白檢查 0。未跑完整矩陣：第一部分未把新模組加進 artifact manifest，打包閉包測試必定要等第二部分；
+  完整矩陣在第二部分後以 `cairn-heavy` 跑一次。
+- 派 `u5b_review_spec`／`u5b_review_standards`（read-only，乾淨 detached worktree `/home/chichieh/cairn-memory-review-u5b`
+  在 `4bfd576c`）；同時派 `u5b_impl2`（第二部分 host 接線，workspace-write，含主控的條件與兩個斷言改法）。
+  協調者給審查者的待評估問題：`contextRead` 是否像 `fetchCandidateEvidence` 一樣處理 `:memory:`。
