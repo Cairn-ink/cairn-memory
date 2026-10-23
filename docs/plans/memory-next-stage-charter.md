@@ -19,7 +19,7 @@
 
 - 研究使用者帶來的新方向：《Cairn 統一記憶架構整合 v1 實作規格草案》v0.2，吸收了
   MemPalace 與 OpenViking 的思路。
-  - 原檔：`/mnt/c/Users/User/Downloads/cairn-unified-memory-integration-v1-draft (1).md`
+  - 原檔：使用者提供的本機檔案（私有，未納入 repo）
   - 本機固定副本（不進 git）：`.research-private/unified-memory-integration-v1-draft-v0.2.md`，
     SHA-256 `9e895b33ab5d1224e11bbf93ce763ec5e867e7e6b9786215cb30a81290986c08`
   - 草案建議的正式位置：私有 `cairn-wiki/docs/plans/unified-memory-integration-v1.md`
