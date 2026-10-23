@@ -4,7 +4,6 @@ import { createHash, createHmac } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { openSync, closeSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { assembleContext, meteredText, ASSEMBLY_FRAMING } from '../context-read-assembly.mjs';
 import { ASSEMBLY_POLICIES, contextInput } from '../context-read-input.mjs';
 import { sample, counter, fixedPrepared, assemblyFixture, assemblyQuery, ns, personal, ok } from '../testing/context-read-assembly-fixture.mjs';
@@ -12,6 +11,21 @@ import { denied, foreign, policy, query, refresh } from '../testing/context-read
 import { createFakeEmbedder } from '../context-read-embedder.mjs';
 import { openMemoryCore, openContextReader } from '../index.mjs';
 import { observeDatabaseFiles } from '../testing/context-read-fixture.mjs';
+
+// Written independently of the production serializer, including key order.
+const expectedMeteredText = value => JSON.stringify({ ok: true, value, evidenceTrust: 'untrusted-data-not-instructions' });
+function stableCandidates(value) {
+  const result = structuredClone(value);
+  delete result.trace.timings;
+  delete result.trace.maintenance; // Per-call reconciliation work telemetry.
+  return result;
+}
+function stableResult(value) {
+  const result = structuredClone(value);
+  delete result.diagnostics.trace.timings;
+  result.diagnostics.candidates = stableCandidates(result.diagnostics.candidates);
+  return result;
+}
 
 // Independent oracle: enumerate a schedule, maintain selected unit IDs, and
 // rebuild the delivered arrays from those IDs. No product admission helpers.
@@ -45,18 +59,18 @@ function oracle(prepared, policyId, budget, port, snapshotOf) {
     return { version: 'context-read-v1', policy: { id: policyId }, representation: 'representation-v1',
       counter: { id: port.id }, framing: ASSEMBLY_FRAMING, items, snapshot: items.length ? snapshotOf(included) : null };
   }
-  if (port.countTokens(meteredText(render(selected))) > budget.maxTokens) return null;
+  if (port.countTokens(expectedMeteredText(render(selected))) > budget.maxTokens) return null;
   for (const [i, j] of schedule) {
     if (j >= 0 && !selected.has(id(i, -1))) continue;
     if (j < 0 && prepared.filter((_, k) => selected.has(id(k, -1))).length >= budget.maxItems) { itemStop = true; continue; }
     attempted++;
     costs.set(id(i, j), port.countTokens(j < 0 ? prepared[i].text : prepared[i].sources[j].excerpt));
     const trial = new Set([...selected, id(i, j)]);
-    if (port.countTokens(meteredText(render(trial))) <= budget.maxTokens) selected.add(id(i, j));
+    if (port.countTokens(expectedMeteredText(render(trial))) <= budget.maxTokens) selected.add(id(i, j));
     else {
       rejected++;
       const minimal = new Set([id(i, -1), id(i, j)]);
-      if (port.countTokens(meteredText(render(minimal))) > budget.maxTokens) oversized++;
+      if (port.countTokens(expectedMeteredText(render(minimal))) > budget.maxTokens) oversized++;
     }
   }
   const metered = render(selected), bodies = prepared.length - metered.items.length;
@@ -67,7 +81,7 @@ function oracle(prepared, policyId, budget, port, snapshotOf) {
 }
 const fixedSnapshot = items => 'snapshot:' + items.map(item => item.ref.memoryId).join(',');
 function invariant(result, port, maxTokens) {
-  assert.equal(result.diagnostics.budget.used, port.countTokens(meteredText(result.metered)));
+  assert.equal(result.diagnostics.budget.used, port.countTokens(expectedMeteredText(result.metered)));
   assert.ok(result.diagnostics.budget.used <= maxTokens);
   assert.ok(Buffer.byteLength(JSON.stringify({ ok: true, value: result })) <= 65536);
   assert.ok(Object.isFrozen(result.metered));
@@ -79,18 +93,10 @@ function invariant(result, port, maxTokens) {
   }));
 }
 
-test('A02 pinned HR-2 section 6 hashes, schedules and greedy skip-and-continue match the product', t => {
-  const workspace = createTestWorkspace(t, { prefix: 'u5b-protocol-' });
-  const outPath = join(workspace.path, 'protocol'), errPath = join(workspace.path, 'stderr');
-  const out = openSync(outPath, 'wx', 0o600), err = openSync(errPath, 'wx', 0o600);
-  let result;
-  try { result = spawnSync('git', ['show', 'c863e9d6:docs/plans/budgeted-assembly-hr2.md'], { stdio: ['ignore', out, err], timeout: 10000 }); }
-  finally { closeSync(out); closeSync(err); }
-  assert.equal(result.error, undefined); assert.equal(result.signal, null);
-  assert.equal(result.status, 0, readFileSync(errPath, 'utf8'));
-  const protocol = readFileSync(outPath, 'utf8');
-  const section = protocol.split('## 6. Items, units and representations\n')[1].split('### 6.1')[0];
-  assert.equal(createHash('sha256').update(protocol).digest('hex'), sample.protocol.sha256);
+test('A02 pinned HR-2 section 6 hashes, schedules and greedy skip-and-continue match the product', () => {
+  const section = readFileSync(new URL('./fixtures/context-read/hr2-protocol-section6.md', import.meta.url), 'utf8');
+  assert.equal(sample.protocol.commit, 'c863e9d6');
+  assert.equal(sample.protocol.section6File, 'hr2-protocol-section6.md');
   assert.equal(createHash('sha256').update(section).digest('hex'), sample.protocol.section6Sha256);
   assert.ok(section.includes('| P-top | for each item in rank order: its body, then its spans in order (rank-first whole-unit) |'));
   assert.ok(section.includes('| P-cover | body of every item in order | all spans, item order then span order |'));
@@ -104,6 +110,14 @@ test('A02 pinned HR-2 section 6 hashes, schedules and greedy skip-and-continue m
       [...prepared.map(item => item.text), ...prepared.flatMap(item => item.sources.map(source => source.excerpt))];
     assert.deepEqual(seen, expected);
   }
+});
+
+test('A03/A09 metered serialization matches a literal known answer independently of the oracle', () => {
+  const value = { version: 'context-read-v1', policy: { id: 'rank-first-whole-v1' }, representation: 'representation-v1',
+    counter: { id: 'test' }, framing: 'quoted "line"\n界', items: [], snapshot: null };
+  const known = String.raw`{"ok":true,"value":{"version":"context-read-v1","policy":{"id":"rank-first-whole-v1"},"representation":"representation-v1","counter":{"id":"test"},"framing":"quoted \"line\"\n界","items":[],"snapshot":null},"evidenceTrust":"untrusted-data-not-instructions"}`;
+  assert.equal(expectedMeteredText(value), known);
+  assert.equal(meteredText(value), known);
 });
 
 test('A02–A05 independent oracle compares every represented unit, snapshot, omission and cap across frozen rankings', () => {
@@ -162,6 +176,72 @@ test('A03/A04/A09 nonadditive whole-envelope counting, long whole bodies, capped
   const value = assembleContext({ prepared: prepared.slice(0, 4), policy: { id: 'rank-first-whole-v1' }, budget: { maxTokens: 1500, maxItems: 24 },
     counter: nonadditive, snapshotOf: fixedSnapshot, deadlineAt: Infinity });
   invariant(value, nonadditive, 1500); assert.ok(value.metered.items.length > 0);
+});
+
+test('A09 deadline expiry during trial and minimal envelopes stops admission and retains final metering', () => {
+  for (const policyId of ASSEMBLY_POLICIES) for (const stage of ['trial', 'minimal']) {
+    const prepared = fixedPrepared().slice(0, 2), counted = [];
+    let clock = 0, expiredAt = null;
+    const port = { id: 'envelope-expiry', countTokens(text) {
+      counted.push(text);
+      if (!text.startsWith('{')) return 1;
+      const items = JSON.parse(text).value.items;
+      if (stage === 'trial' && items.length === 1) { clock = 10; expiredAt ??= counted.length; }
+      if (stage === 'minimal') {
+        if (items.length === 2) return 5000; // Reject the second body's trial.
+        if (items.length === 1 && items[0].ref.memoryId === prepared[1].ref.memoryId) {
+          clock = 10; expiredAt = counted.length; return 5000;
+        }
+      }
+      return 1;
+    } };
+    const actual = assembleContext({ prepared, policy: { id: policyId }, budget: { maxTokens: 64, maxItems: 24 },
+      counter: port, snapshotOf: fixedSnapshot, deadlineAt: 10, now: () => clock });
+    assert.equal(actual.diagnostics.stops.deadline, true);
+    assert.equal(counted.length, expiredAt + 1, 'only mandatory final metering follows expiry');
+    assert.equal(counted.at(-1), expectedMeteredText(actual.metered));
+    assert.equal(actual.diagnostics.trace.counterCalls, stage === 'trial' ? 4 : 7);
+    assert.equal(actual.metered.items.length, stage === 'trial' ? 0 : 1);
+    assert.deepEqual(actual.diagnostics.omitted, { items: stage === 'trial' ? 2 : 1, bodies: stage === 'trial' ? 2 : 1,
+      sources: 1, unavailable: 0, oversized: stage === 'trial' ? 0 : 1 });
+    assert.equal(actual.diagnostics.stops.budget, stage === 'minimal');
+    invariant(actual, port, 64);
+  }
+});
+
+test('A04 product receipts use created_at then id, cap the universe at 16 and mark incomplete coverage', async t => {
+  const definition = sample.receiptOrderCase;
+  const order = definition.receiptOrder;
+  assert.deepEqual(order, definition.receiptStorage.map((_, i) => i).sort((a, b) =>
+    definition.receiptStorage[a].createdAt.localeCompare(definition.receiptStorage[b].createdAt) ||
+    definition.receiptStorage[a].id.localeCompare(definition.receiptStorage[b].id)));
+  const idOnly = definition.receiptStorage.map((_, i) => i).sort((a, b) => definition.receiptStorage[a].id.localeCompare(definition.receiptStorage[b].id));
+  assert.notDeepEqual(order, idOnly, 'timestamp order deliberately conflicts with ID order');
+  assert.notDeepEqual(order, definition.receipts.map((_, i) => i), 'timestamp ties require the ID tiebreak');
+  const port = { id: 'synthetic-quarter-bytes', countTokens: text => Math.ceil(Buffer.byteLength(text) / 4) };
+  const f = assemblyFixture(t, { counter: port }), [{ memory }] = f.seed([definition]);
+  const expected = order.slice(0, 16).map((ordinal, index) => ({ index, role: definition.receipts[ordinal].role,
+    excerpt: definition.receipts[ordinal].excerpt, tokens: port.countTokens(definition.receipts[ordinal].excerpt) }));
+  for (const policyId of ASSEMBLY_POLICIES) for (const intent of ['current', 'history']) {
+    const actual = ok(await f.call('contextRead', assemblyQuery({ intent, policy: { id: policyId }, budget: { maxTokens: 4000, maxItems: 24 } })));
+    invariant(actual, port, 4000);
+    assert.equal(actual.metered.items.length, 1); assert.equal(actual.metered.items[0].ref.memoryId, memory.id);
+    assert.equal(actual.metered.items[0].body.text, definition.text);
+    assert.deepEqual(actual.metered.items[0].sources, expected);
+    assert.equal(actual.metered.items[0].sourcesComplete, false);
+    assert.deepEqual(actual.diagnostics.omitted, { items: 0, bodies: 0, sources: 0, unavailable: 0, oversized: 0 });
+    assert.equal(actual.diagnostics.dedup.sources, 0); assert.equal(actual.diagnostics.stops.budget, false);
+    assert.equal(expectedMeteredText(actual.metered).includes(definition.receipts[order[16]].excerpt), false);
+  }
+  const reject = assemblyFixture(t, { counter: { id: 'reject-nonempty', countTokens(text) {
+    return text.startsWith('{') && JSON.parse(text).value.items.length ? 5000 : 1;
+  } } });
+  reject.seed([definition]);
+  for (const policyId of ASSEMBLY_POLICIES) {
+    const actual = ok(await reject.call('contextRead', assemblyQuery({ policy: { id: policyId }, budget: { maxTokens: 64, maxItems: 24 } })));
+    assert.deepEqual(actual.metered.items, []);
+    assert.deepEqual(actual.diagnostics.omitted, { items: 1, bodies: 1, sources: 16, unavailable: 0, oversized: 1 });
+  }
 });
 
 test('A01/A07/A09 capabilities, optional counter, strict input, payload binding and allowlists', async t => {
@@ -263,23 +343,62 @@ test('A02–A05/A08 product search, canonical preparations and per-trial snapsho
 });
 
 test('A05/A07 foreign scope isolation and two-namespace canonical aliases', async t => {
-  const f = assemblyFixture(t);
-  f.seed(sample.items.slice(0, 3), [ns, personal]);
-  const input = assemblyQuery({ readSet: [ns, personal], budget: { maxTokens: 4000, maxItems: 24 } });
-  const before = ok(await f.call('contextRead', input));
-  assert.equal(before.diagnostics.dedup.sources, 1);
-  const aliasItem = before.metered.items.find(item => item.sources.some(source => source.sameAs));
-  const alias = aliasItem.sources.find(source => source.sameAs);
-  assert.notDeepEqual(aliasItem.ref.namespace, before.metered.items[alias.sameAs.item].ref.namespace);
-  f.admit('assembly foreign secret', foreign);
-  f.trusted.state.allowed.push(foreign);
-  ok(await f.call('contextRead', assemblyQuery({ readSet: [foreign] })));
-  const after = ok(await f.call('contextRead', input));
-  assert.deepEqual(after.metered, before.metered);
-  assert.deepEqual(after.diagnostics.budget, before.diagnostics.budget);
-  assert.deepEqual(after.diagnostics.candidates.channels, before.diagnostics.candidates.channels);
-  assert.deepEqual(after.diagnostics.candidates.coverage, before.diagnostics.candidates.coverage);
-  assert.equal(JSON.stringify(after).includes('foreign secret'), false);
+  for (const cards of [false, true]) for (const policyId of ASSEMBLY_POLICIES) {
+    const port = { id: 'synthetic-quarter-bytes', countTokens: text => Math.ceil(Buffer.byteLength(text) / 4) };
+    const f = assemblyFixture(t, { cards, counter: port });
+    f.seed(sample.items.slice(0, 3), [ns, personal]);
+    const addCard = (namespace, label) => {
+      const draft = ok(f.host.call(f.core, 'createCardDraft', { namespace, actionId: 'draft-' + label, drafting: 'authored', input: {
+        title: 'assembly ' + label, body: 'Synthetic Card ' + label, authoredInput: { text: 'Synthetic source ' + label, occurredAt: null } } }));
+      return ok(f.host.call(f.core, 'confirmCardDraft', { namespace, cardId: draft.id, expectedRevision: draft.revision,
+        actionId: 'confirm-' + label, applicability: 'current' }));
+    };
+    if (cards) { addCard(ns, 'target-project'); addCard(personal, 'target-personal'); }
+    const input = assemblyQuery({ types: cards ? ['memory', 'card'] : ['memory'], readSet: [ns, personal],
+      policy: { id: policyId }, budget: { maxTokens: 4000, maxItems: 24 } });
+    const warm = async request => { ok(await f.call('contextRead', request)); return ok(await f.call('contextRead', request)); };
+    const before = await warm(input);
+    invariant(before, port, 4000);
+    assert.equal(before.diagnostics.dedup.sources, 1);
+    assert.equal(before.metered.items.filter(item => item.type === 'card').length, cards ? 2 : 0);
+    const aliasItem = before.metered.items.find(item => item.sources.some(source => source.sameAs));
+    const alias = aliasItem.sources.find(source => source.sameAs);
+    assert.notDeepEqual(aliasItem.ref.namespace, before.metered.items[alias.sameAs.item].ref.namespace);
+    f.admit('assembly FOREIGN_MEMORY_SECRET', foreign);
+    if (cards) addCard(foreign, 'FOREIGN_CARD_SECRET');
+    f.trusted.state.allowed.push(foreign);
+    const populated = await warm({ ...input, readSet: [foreign] });
+    assert.equal(populated.diagnostics.candidates.count, cards ? 2 : 1);
+    const after = await warm(input);
+    assert.equal(expectedMeteredText(after.metered), expectedMeteredText(before.metered), 'metered bytes are scope-isolated');
+    assert.deepEqual(stableResult(after), stableResult(before), 'all fields except timing and reconciliation work stay identical');
+    assert.equal(JSON.stringify(after).includes('FOREIGN_'), false);
+  }
+});
+
+test('A08 provider errors, rate limits and timeout retain lexical assembly and candidate diagnostics', async t => {
+  const base = createFakeEmbedder(); let error, calls = 0;
+  const embedder = { ...base, embed(texts, options) { calls++; if (error) throw error; return base.embed(texts, options); } };
+  const f = assemblyFixture(t, { embedder, selectedPolicy: policy() }); f.admit('assembly lexical survivor');
+  ok(await f.call('refreshContextIndex', refresh()));
+  for (const [cause, state] of [[{ code: 'provider_error', message: 'SECRET_PROVIDER_DETAIL' }, 'provider_error'],
+    [{ status: 429, message: 'SECRET_PROVIDER_DETAIL' }, 'rate_limited'], [{ code: 'timeout', message: 'SECRET_PROVIDER_DETAIL' }, 'timeout']]) {
+    error = cause;
+    const input = assemblyQuery({ semantic: true, budget: { maxTokens: 4000, maxItems: 24 } });
+    const { budget, ...search } = input;
+    const candidates = ok(await f.call('findCandidates', { ...search, limit: 24 }));
+    const before = calls, actual = ok(await f.call('contextRead', input));
+    assert.equal(calls, before + 1); assert.equal(actual.metered.items.length, 1);
+    assert.deepEqual(stableCandidates(actual.diagnostics.candidates), stableCandidates({ count: candidates.items.length,
+      channels: candidates.channels, coverage: candidates.coverage, trace: candidates.trace }));
+    assert.equal(actual.diagnostics.candidates.channels.lexical.state, 'ready');
+    assert.equal(actual.diagnostics.candidates.channels.semantic.state, state);
+    assert.ok(actual.diagnostics.candidates.channels.semantic.causes.includes(state));
+    assert.equal(actual.diagnostics.candidates.trace.effective, 'lexical');
+    assert.equal(actual.diagnostics.candidates.trace.requested, 'hybrid');
+    invariant(actual, counter, 4000);
+    assert.equal(JSON.stringify(actual).includes('SECRET_PROVIDER_DETAIL'), false);
+  }
 });
 
 test('A08 internal search propagates candidate diagnostics and semantic degradation without retaining rankings', async t => {

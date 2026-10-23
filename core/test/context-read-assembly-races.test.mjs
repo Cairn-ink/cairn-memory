@@ -2,11 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
-import { assemblyFixture, assemblyQuery, counter, sample, ns, personal, ok } from '../testing/context-read-assembly-fixture.mjs';
+import { assemblyFixture, assemblyQuery, controlledClock, counter, sample, ns, personal, ok } from '../testing/context-read-assembly-fixture.mjs';
 import { denied, receipt, policy, refresh, mutateProcess, waitForContextEntry } from '../testing/context-read-core-fixture.mjs';
 import { createFakeEmbedder } from '../context-read-embedder.mjs';
 
 test('A06 second-process correction, supersession and forget during counting refuse stale prepared text', async t => {
+  // Child-process startup and storage contention consume wall time, not the
+  // cooperative assembly clock. Deadline expiry has its own tests below.
+  const clock = controlledClock(t);
   for (const method of ['correct', 'supersede', 'forget']) {
     let f, memory, fired = false;
     const port = { id: 'race-' + method, countTokens(text) {
@@ -23,11 +26,13 @@ test('A06 second-process correction, supersession and forget during counting ref
     f = assemblyFixture(t, { counter: port }); memory = f.admit('assembly original');
     const result = await f.call('contextRead', assemblyQuery({ budget: { maxTokens: 4000, maxItems: 24 } }));
     assert.equal(fired, true); denied(result, 'snapshot_stale');
+    assert.equal(clock.now(), 0);
     assert.equal(result.error.retryable, false); assert.equal(JSON.stringify(result).includes('original'), false);
   }
 });
 
 test('A06 second connection deletion, refiling, receipt invalidation and Card changes stale admitted fences', async t => {
+  controlledClock(t);
   for (const change of ['delete', 'refile', 'receipt', 'card-revision', 'card-delete', 'card-source']) {
     let f, memory, card, fired = false;
     const port = { id: 'race-' + change, countTokens(text) {
@@ -144,6 +149,7 @@ test('A06/A07 revocation at search-result await, counter callbacks and final che
 });
 
 test('A07 inner embedding await rechecks outer contextRead authority and search fences; no repeated embedding', async t => {
+  controlledClock(t);
   for (const change of ['revoke', 'mutate']) {
     const base = createFakeEmbedder();
     let pending = false, entered, release, calls = 0;
@@ -159,8 +165,8 @@ test('A07 inner embedding await rechecks outer contextRead authority and search 
     try {
       await waitForContextEntry(gate, operation);
       if (change === 'revoke') f.trusted.state.enabled = false;
-      else await mutateProcess(f, { method: 'correct', input: { namespace: ns, memoryId: memory.id, expectedRevision: memory.revision,
-        content: 'assembly changed at await', kind: 'fact', receipt: receipt('await') } });
+      else mutateProcess(f, { method: 'correct', input: { namespace: ns, memoryId: memory.id, expectedRevision: memory.revision,
+        content: 'assembly changed at await', kind: 'fact', receipt: receipt('await') } }, { sync: true });
       release();
       denied(await operation, change === 'revoke' ? 'scope_changed' : 'index_unavailable');
       assert.equal(calls, before + 1);

@@ -3,7 +3,8 @@
   "protocol": {
     "commit": "c863e9d6",
     "sha256": "d9607305d1ef25f6bf6f0b1ad561e585713f697df3685cd2bc59a6b64c5672ed",
-    "section6Sha256": "477a86dfcb7b2ee6f84078aec19f1aedc1bbe7c9950149f4e89983d62fc725af"
+    "section6Sha256": "e563f24c36df579e89f17f72c7c784d25722051e9bd47db02b86dae87705b5b4",
+    "section6File": "hr2-protocol-section6.md"
   },
   "budgets": [
     64,
@@ -1268,5 +1269,220 @@
         }
       ]
     }
-  ]
+  ],
+  "receiptOrderCase": {
+    "id": "u5b-receipt-order",
+    "input": "assembly short body for canonical receipt ordering.",
+    "text": "assembly short body for canonical receipt ordering.",
+    "receipts": [
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-00",
+        "role": "user",
+        "excerpt": "Synthetic ordering source 00."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-01",
+        "role": "assistant",
+        "excerpt": "Synthetic ordering source 01."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-02",
+        "role": "user",
+        "excerpt": "Synthetic ordering source 02."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-03",
+        "role": "assistant",
+        "excerpt": "Synthetic ordering source 03."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-04",
+        "role": "user",
+        "excerpt": "Synthetic ordering source 04."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-05",
+        "role": "assistant",
+        "excerpt": "Synthetic ordering source 05."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-06",
+        "role": "user",
+        "excerpt": "Synthetic ordering source 06."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-07",
+        "role": "assistant",
+        "excerpt": "Synthetic ordering source 07."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-08",
+        "role": "user",
+        "excerpt": "Synthetic ordering source 08."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-09",
+        "role": "assistant",
+        "excerpt": "Synthetic ordering source 09."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-10",
+        "role": "user",
+        "excerpt": "Synthetic ordering source 10."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-11",
+        "role": "assistant",
+        "excerpt": "Synthetic ordering source 11."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-12",
+        "role": "user",
+        "excerpt": "Synthetic ordering source 12."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-13",
+        "role": "assistant",
+        "excerpt": "Synthetic ordering source 13."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-14",
+        "role": "user",
+        "excerpt": "Synthetic ordering source 14."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-15",
+        "role": "assistant",
+        "excerpt": "Synthetic ordering source 15."
+      },
+      {
+        "client": "synthetic-u5b",
+        "sessionId": "receipt-order",
+        "eventId": "event-16",
+        "role": "user",
+        "excerpt": "Synthetic ordering source 16."
+      }
+    ],
+    "receiptStorage": [
+      {
+        "id": "u5b-order-r-16",
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "u5b-order-r-15",
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "u5b-order-r-14",
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "u5b-order-r-13",
+        "createdAt": "2026-01-01T00:00:01.000Z"
+      },
+      {
+        "id": "u5b-order-r-12",
+        "createdAt": "2026-01-01T00:00:01.000Z"
+      },
+      {
+        "id": "u5b-order-r-11",
+        "createdAt": "2026-01-01T00:00:01.000Z"
+      },
+      {
+        "id": "u5b-order-r-10",
+        "createdAt": "2026-01-01T00:00:02.000Z"
+      },
+      {
+        "id": "u5b-order-r-09",
+        "createdAt": "2026-01-01T00:00:02.000Z"
+      },
+      {
+        "id": "u5b-order-r-08",
+        "createdAt": "2026-01-01T00:00:02.000Z"
+      },
+      {
+        "id": "u5b-order-r-07",
+        "createdAt": "2026-01-01T00:00:03.000Z"
+      },
+      {
+        "id": "u5b-order-r-06",
+        "createdAt": "2026-01-01T00:00:03.000Z"
+      },
+      {
+        "id": "u5b-order-r-05",
+        "createdAt": "2026-01-01T00:00:03.000Z"
+      },
+      {
+        "id": "u5b-order-r-04",
+        "createdAt": "2026-01-01T00:00:04.000Z"
+      },
+      {
+        "id": "u5b-order-r-03",
+        "createdAt": "2026-01-01T00:00:04.000Z"
+      },
+      {
+        "id": "u5b-order-r-02",
+        "createdAt": "2026-01-01T00:00:04.000Z"
+      },
+      {
+        "id": "u5b-order-r-01",
+        "createdAt": "2026-01-01T00:00:05.000Z"
+      },
+      {
+        "id": "u5b-order-r-00",
+        "createdAt": "2026-01-01T00:00:05.000Z"
+      }
+    ],
+    "receiptOrder": [
+      2,
+      1,
+      0,
+      5,
+      4,
+      3,
+      8,
+      7,
+      6,
+      11,
+      10,
+      9,
+      14,
+      13,
+      12,
+      16,
+      15
+    ]
+  }
 }

@@ -1,12 +1,20 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { performance } from 'node:perf_hooks';
 import { coreFixture, ns, personal, ok } from './context-read-core-fixture.mjs';
 import { STORAGE_BUSY_TIMEOUT_MS } from '../database.mjs';
 
 export const sample = JSON.parse(readFileSync(new URL('../test/fixtures/context-read/u5b-assembly.json', import.meta.url)));
 export const counter = { id: 'synthetic-utf8-bytes', countTokens: text => Buffer.byteLength(text) };
 export const assemblyQuery = (patch = {}) => ({ readSet: [ns], types: ['memory'], intent: 'current', query: 'assembly', deadlineMs: 5000, ...patch });
+export function controlledClock(t) {
+  const descriptor = Object.getOwnPropertyDescriptor(performance, 'now');
+  let time = 0;
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => time });
+  t.after(() => { if (descriptor) Object.defineProperty(performance, 'now', descriptor); else delete performance.now; });
+  return { now: () => time, advance(ms) { time += ms; } };
+}
 export function assemblyFixture(t, options = {}) {
   const { counter: port = counter, ...rest } = options, f = coreFixture(t, rest);
   const context = f.reopen({ ...(port === null ? {} : { counter: port }) });
@@ -25,9 +33,9 @@ export function assemblyFixture(t, options = {}) {
         writer.prepare('DELETE FROM receipts WHERE memory_id=?').run(memory.id);
         for (const [index, source] of definition.receipts.entries()) {
           writer.prepare(`INSERT INTO receipts(id,memory_id,receipt_key,client,session_id,event_id,role,excerpt,created_at)
-            VALUES(?,?,?,?,?,?,?,?,?)`).run(definition.id + '-r-' + String(index).padStart(2, '0'), memory.id,
+            VALUES(?,?,?,?,?,?,?,?,?)`).run(definition.receiptStorage?.[index]?.id ?? definition.id + '-r-' + String(index).padStart(2, '0'), memory.id,
             createHash('sha256').update(JSON.stringify(source)).digest('hex'), source.client, source.sessionId,
-            source.eventId, source.role, source.excerpt, '2026-01-01T00:00:00.000Z');
+            source.eventId, source.role, source.excerpt, definition.receiptStorage?.[index]?.createdAt ?? '2026-01-01T00:00:00.000Z');
         }
         return { definition, namespace, memory };
       });
