@@ -404,7 +404,7 @@ All take `(input, authority)` and return existing envelopes. `A` = actionId.
 4. **Limits** are provisional text-only defaults. U3 measures real SKILL.md and
    template packages (sizes only) before freezing them.
 
-## 11. U3: method packages on the local host (v0.4, audited)
+## 11. U3: method packages on the local host (v0.4.1, audited)
 
 The draft (`fc5b9ea`) was audited by the same non-author auditor, who found
 four P0, five P1 and one P2 issue. This section incorporates all of them.
@@ -461,25 +461,40 @@ cairn-memory methods import --db /abs/store.sqlite --owner OWNER [--project PROJ
 
 The importer is a separate CLI process. The MCP process never imports.
 
-- **Confinement** (Linux/WSL only; other platforms refuse):
-  - Pin the selected root directory descriptor.
-  - Resolve every descendant one component at a time relative to its parent
-    directory descriptor, with kernel-enforced no-symlink and no-mount
-    traversal. Node has no `openat2` binding, so use `fs.openSync` on
-    `/proc/self/fd/<dirfd>/<single-name>` with `O_NOFOLLOW` (plus
-    `O_DIRECTORY` for directories). Compare the `mnt_id` from
-    `/proc/self/fdinfo/<fd>` with the root's, so bind mounts on the same
-    device are also refused.
-  - Never use a pathname-only fallback. If `/proc` fd semantics are
-    unavailable, refuse.
-  - Inspect types without blocking (`O_NONBLOCK` on open; FIFOs and devices
-    are refused without reading).
-  - Open data only for regular files with `nlink = 1`.
-  - Before and after each bounded read, check the descriptor's identity, size,
-    link count, mtime and ctime; any change refuses the whole import. Post-read
+- **Confinement** (Linux/WSL only; other platforms refuse). This follows the
+  auditor's descriptor-capability rules in v0.4.1:
+  - Pin the selected root directory descriptor, and keep every referenced fd
+    open throughout its use.
+  - **Names**: reject empty names, `.`, `..`, and names containing `/` or NUL.
+    Never normalize or decode a component into a different name. Do not rely on
+    `readdir` provenance alone.
+  - **Opening a child**: open it relative to its pinned parent through
+    `/proc/self/fd/<dirfd>/<name>` with ABI-correct `O_PATH | O_NOFOLLOW`, adding
+    `O_DIRECTORY` when a directory is expected. Use numeric Linux flags where
+    Node lacks constants. `O_PATH | O_NOFOLLOW` can return a symlink
+    descriptor; reject it explicitly.
+  - **Before any data access or directory enumeration**: validate the type, the
+    mount ID (`mnt_id` from `/proc/self/fdinfo/<fd>`, refusing missing or
+    malformed metadata, and requiring equality with the root's) and, for
+    regular files, `nlink = 1`. Refuse devices, FIFOs and sockets without ever
+    opening them for reading.
+  - **Reading**: reopen an approved regular file through
+    `/proc/self/fd/<filefd>` for reading, following that trusted magic link.
+    Never reopen its directory-entry name. Verify the descriptor identity and
+    mount. Check identity, size, link count, mtime and ctime before and after
+    each bounded read; any change refuses the whole import. Post-read
     `realpath` checks are supplementary only.
-  - Read nothing outside the root through the package-tree channel. Execute
-    nothing.
+  - **Environment**: probe the required flags and `/proc` semantics at start, and
+    refuse unsupported environments. Never use a pathname-only fallback.
+  - **Semantics**: confinement follows pinned directory capabilities. A pinned
+    directory remains usable after being renamed outside the root. H02 permits
+    refusal or safe continuation on the pinned original, never redirection to a
+    replacement. Continuous pathname ancestry and an atomic directory snapshot
+    are not promised. If strict root-relative lookup after ancestor
+    relocation is ever required, use a packaged `openat2` helper instead;
+    pathname rechecks are not equivalent.
+  - Read nothing outside the pinned tree through the package-tree channel.
+    Execute nothing.
 - **Content**:
   - Decode with `TextDecoder('utf-8', {fatal: true, ignoreBOM: true})`, so a
     leading BOM is preserved as content.
