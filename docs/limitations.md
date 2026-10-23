@@ -2484,3 +2484,18 @@ correctness, precision, real-user benefit nor a competitor ranking.
   not rescued.
 - **First test run.** It exposed a harness A0 seeding bug, which was fixed and
   re-run. All non-A0 rankings were identical across the two harness commits.
+
+### HR-2 results (synthetic, direction only)
+
+The [HR-2 results](plans/budgeted-assembly-hr2-results.md) report one frozen
+test-split run of deterministic assembly policies under binding token budgets
+on the HR-1 fixture. The preregistered contrast (coverage-first against
+rank-first whole units, bge-m3 + A3, 512 tokens) came out −2.5 points with a
+95% family-bootstrap CI of [−6.6, +1.5], so rank-first whole units stay U5b's
+initial default. The fixture has short single-fact bodies and 40% span-only
+evidence and is biased against body-first strategies; nothing here applies to
+long memories, long receipts, generated summaries, answer correctness or the
+effect of irrelevant admitted text on a model. Coverage-first stays an
+available policy. A first-receipt-only deepening variant looked slightly
+better at tight budgets and needs its own contract clause before adoption.
+No budget number is a recommendation.
