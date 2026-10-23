@@ -168,16 +168,17 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
   - 基準與上游核對、Codex 隔離驗證
   - HR-1：協議、語料凍結、執行、結果與審查（見 §6）
   - U2 方法包 core（雙審查 Yes）
-  - U3 契約（v0.4.1 審查通過，v0.4.2 由主控補充）與實作
+  - U3 契約（v0.4.1 審查通過，之後補到 v0.4.5）與實作
+  - U4 §12、U5a §13、U2c §14 三份契約都經非作者審查並確認可以實作
 - **進行中**
-  - U3 修正輪 1 → 主控重跑打包、MCP 與量測 → 提交 → 雙審查
-  - U4 契約 §12 的非作者審查
-  - U5a 契約起草
+  - U3 修正輪 2 → 主控重跑完整矩陣 → 提交 → 雙審查
+  - U5a 第一部分：只新增模組，在獨立 worktree 進行
 - **下一步**
   1. U3 雙審查與修正輪。
-  2. U4、U5a 契約定稿。實作順序主控建議 U5a 先：它直接服務「找得回」，HR-1 證據已足夠。
-  3. U2c 讀取效能修正（契約另寫）。
-  4. HR-2 只寫計畫，等使用者對齊後才做原型。
+  2. U2c 實作：解決讀寫鎖競爭，U4a 和 U5a 的接線都要靠它。
+  3. U5a 第二部分：rebase 到 U3＋U2c 之後，接線 facade、MCP、CLI 與 OpenAI adapter，再做已安裝測試。
+  4. U4a、U4b：主控決定排在 U5a 之後，因為檢索直接服務「找得回」。
+  5. HR-2 只寫計畫，等使用者對齊後才做原型。
 - **等使用者決定**
   - 是否推送分支或開 PR（兩條分支都只在本機）。
   - 本機 embedding 預設：bge-m3 約需 2.2 GB RSS，下載 2.3 GB。
@@ -240,7 +241,7 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `umv1_contract_audit`（確認） | 確認 v0.3 | gpt-6.1-sol/xhigh | read-only | `2b2e3cf` | 20:03– | 完成：兩項澄清 → v0.3.1 |
 | `umv1_u2_impl`（U2a） | 方法包 core：schema v30 與升級程式、匯入、讀取、比較、刪除 | gpt-6.1-sol/xhigh | workspace-write，無網路 | 整合分支 `2b2e3cf` | 20:03– | 完成，見上方結果列 |
 | 主控（U3 驗收） | 沙箱外完整矩陣＋真 PTY 手動試用 | — | 沙箱外 | `1265b4b`＋U3 工作目錄 | 02:10–02:40 | 兩個 Node 版本：core 1,964／1,964、local 37、mcp 178（含新的 PTY、競態、bind mount 測試）、整體 635、示範、驗證、歷史資料檔都 exit 0。**打包測試 exit 1**：6 項已安裝生命週期測試失敗，原因是新模組在閉包內卻沒被載入，屬於真回歸。**Node 24 量測 exit 1**：讀取者遇到 `storage_busy`；Node 22 的寫入者 14 次中 10 次逾時。手動試用：打錯口令仍會留下新建的 v30 資料庫 → 契約 v0.4.2（`26ad5ef`） |
-| `umv1_u2_impl`（U3 修正 1） | 打包閉包、核准前不動資料庫、量測把 busy 當資料 | gpt-6.1-sol/xhigh | workspace-write | `26ad5ef` | 02:42– | 執行中 |
+| `umv1_u2_impl`（U3 修正 1） | 打包閉包、核准前不動資料庫、量測把 busy 當資料 | gpt-6.1-sol/xhigh → 同 | workspace-write | `26ad5ef` | 02:42–03:06 | exit 0；8 個檔案（主控用兩種方式核對一致）。主控驗收兩個 Node 版本：打包、整體、local、workspace-lifecycle、示範、驗證、量測都 exit 0；**mcp 177／178**：另一個 session 的測試要求 CLI 在檢查執行環境前不載入 SQLite，靜態 import 違反了這條 → 修正 2 |
 | `u4_inventory` | U4 素材的設計盤點 | gpt-6.1-sol/xhigh → 同 | read-only | `1265b4b`＋U3 工作目錄 | 02:14–02:21 | exit 0：建議 SQLite 分塊 BLOB，列出六項待決設計 |
 | `u5_inventory` | U5a 檢索接口的設計盤點 | gpt-6.1-sol/xhigh → 同 | read-only | 同上 | 02:24–02:37 | exit 0：建議附屬索引檔、BM25-T1、非同步 embedder、授權先於排名 |
 | `u4_contract_author` | 依主控決定起草 §12 | gpt-6.1-sol/xhigh → 同 | read-only | 同上 | 02:25–02:38 | exit 0；主控改 3 處後併入契約（`d148a34`，v0.5 草稿） |
@@ -248,5 +249,10 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `umv1_contract_audit`（U4） | §12 的非作者審查 | gpt-6.1-sol/xhigh → 同 | read-only | `d148a34` | 02:44–02:55 | 第一次因模型滿載失敗，接續原對話重試後 exit 0。**判 No**：7 項 P0、4 項 P1、1 項 P2，主控全部接受。重點有四：<br>• 擁有權與配額釋放要有唯一寫入者；<br>• 讀取不可重蹈整版驗證與寫入鎖 → **U2c 要排在 U4a 之前**；<br>• 核准前的「存在檢查」不足以當圍欄 → U3 契約加上 store 圍欄 v0.4.3（`bf61a02`）；<br>• 匯出時暫存檔的名稱會被調包、發布後的失敗處理。<br>已交原作者修訂 |
 | 主控（U2c 契約） | 方法包讀取不拿寫入鎖 | — | — | `63678be` | 02:5x | 契約 §14 v0.7：讀取改用延遲的只讀交易，以 `query_only` 防寫；`readMethodFile` 只驗清單身分和被讀的檔案，其他讀取保留整版驗證，既有測試不改；量測門檻是寫入者 p95 ≤250 ms、零逾時 |
 | `u5_contract_audit` | §13 的非作者審查（全新審查者） | gpt-6.1-sol/xhigh → 同 | read-only | `2669a3c` | 02:51–03:01 | **判 No**：沒有 P0，4 項 P1、3 項 P2，主控全部接受。內容包括：<br>• 未完成的索引不可搜尋；<br>• 要有真正唯讀的建構器；<br>• 游標要綁定語意設定；<br>• `semantic` 預設關閉、旗標要寫明；<br>• 向量轉成 float32 後再驗；<br>• 覆蓋不足時不付錢嵌入查詢。<br>主控另外決定做增量對齊（比對 id 與 revision）。已交原作者修訂 |
-| `u4_contract_author`（修訂 1） | 依審查意見修訂 §12 | gpt-6.1-sol/xhigh | read-only | `bf61a02` | 02:58– | 執行中 |
-| `u5_contract_author`（修訂 1） | 依審查意見修訂 §13 | gpt-6.1-sol/xhigh | read-only | `63678be` | 03:03– | 執行中 |
+| `u4_contract_author`（修訂 1） | 依審查意見修訂 §12 | gpt-6.1-sol/xhigh → 同 | read-only | `bf61a02` | 02:58–03:08 | exit 0 → §12 v0.5.1（`837c6a6`）；主控獨立重算兩個已知答案向量，結果相符 |
+| `u5_contract_author`（修訂 1） | 依審查意見修訂 §13 | gpt-6.1-sol/xhigh → 同 | read-only | `63678be` | 03:03–03:12 | exit 0 → §13 v0.6.1（`3e73a18`）；主控裁定掃描方式：用索引查中繼資料，不新增正式索引 |
+| `umv1_contract_audit`（U4 複查＋U2c） | §12 v0.5.1、§14、store 圍欄 | gpt-6.1-sol/xhigh → 同 | read-only | `837c6a6` | 03:1x–03:18 | 3 項新 P0：分塊要驗總長度、C05 要保留 U2 的 `cursor_stale`、唯讀 SQLite 仍可能產生 WAL/SHM 檔。主控照替換文字套用 → `23514ec` |
+| `u5_contract_audit`（複查） | §13 v0.6.1 | gpt-6.1-sol/xhigh → 同 | read-only | `3e73a18` | 03:1x–03:2x | 沒有 P0；2 項 P1、3 項 P2（快取隔離、可寫入時的日誌復原、檢查點的原子性等）。主控照替換文字套用 → `3d061b0` |
+| 兩位審查者（確認） | 最終確認 | gpt-6.1-sol/xhigh → 同 | read-only | `3d061b0` | 03:2x | **§12 U4（排在 U2c 之後）、§13 U5a、§14 U2c 都判可以實作**。§11.2 的圍欄再補兩點：「不建立」是強制的、審查期間要維持 rollback 模式 → v0.4.5（`517a71d`） |
+| `umv1_u2_impl`（U3 修正 2） | SQLite 不可在環境檢查前載入（不改對方測試）、store 圍欄 v0.4.5、量測有限期限 | gpt-6.1-sol/xhigh | workspace-write | `517a71d` | 03:2x– | 執行中 |
+| `umv1_u5a_impl`（U5a 第一部分） | 只新增模組：T1 移植、BM25、RRF、embedder 驗證、附屬索引與增量對齊，加上測試與量測 | gpt-6.1-sol/xhigh | workspace-write | 新 worktree `/home/chichieh/cairn-memory-u5a`，分支 `integration/unified-memory-v1-u5a`，基準 `517a71d` | 03:2x– | 執行中；不改既有檔案，接線等 U3、U2c 落地後再做 |
