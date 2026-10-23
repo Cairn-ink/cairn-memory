@@ -124,3 +124,8 @@
   違反 A01 並與 `source-snapshot.test.mjs` 衝突；(2) 組裝工具對 query 做 redaction，排名與 `find_memory_candidates`
   不一致且會洗掉核心該拒絕的輸入；(3) 組裝錯誤的 `details.candidates` 診斷進了文字塊。派 `u5b_impl2` fix1（resume）。
   1a589129 的完整矩陣繼續跑作早期訊號，最終 commit 要再跑一次。
+- **複查結果**：U5b 第一部分 `9b9e9d4c` Spec／Standards 都 **yes**；HR-2 harness `241fad89` Spec／Standards 都 **yes**
+  （harness 通過雙審查，協調者可以跑 test grid）。U5b 第二部分 fix1 協調者沙箱外驗證：7 個測試檔兩版本 40／40
+  （含 `source-snapshot`、`installed-import-closure`、`raw-installed-lifecycle`），提交、推送，派兩位審查者複查。
+- **HR-2 test grid 由協調者執行**（`experiment/hr2-assembly` `241fad89`，乾淨工作樹）：run→score→report 寫到
+  `evaluation/retrieval-research/results/hr2-final/`。
