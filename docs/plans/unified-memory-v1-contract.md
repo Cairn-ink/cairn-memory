@@ -404,7 +404,10 @@ All take `(input, authority)` and return existing envelopes. `A` = actionId.
 4. **Limits** are provisional text-only defaults. U3 measures real SKILL.md and
    template packages (sizes only) before freezing them.
 
-## 11. U3: method packages on the local host (DRAFT for audit)
+## 11. U3: method packages on the local host (v0.4, audited)
+
+The draft (`fc5b9ea`) was audited by the same non-author auditor, who found
+four P0, five P1 and one P2 issue. This section incorporates all of them.
 
 U3 makes U2 usable on the installed local host without widening authority. It
 reuses the private-Card terminal-review pattern
@@ -415,7 +418,7 @@ not change v30 and does not add binary assets (those belong to U4).
 ### 11.1 Limits recalibrated from measured packages
 
 Statistics only (no contents) from 21 real local skill packages on the
-development machine, 2026-10-23:
+development machine, 2026-10-23. These figures are unverified by the auditor:
 - files per package: 1–122;
 - bytes per package: up to 1.85 MB;
 - largest single file: 321 KB;
@@ -423,13 +426,29 @@ development machine, 2026-10-23:
 
 U2's text limits (64 files; 100,000 units per file; 1,000,000 units per
 version) would refuse 3 of 21 packages on text grounds alone. U3 raises the
-**code constants** (no DDL):
+limits without DDL; v30 imposes no file-count or text-length CHECK:
 - files: 256 per version;
 - `fileUnits`: 400,000;
 - `versionUnits`: 4,000,000.
 
 The owner cap stays at 50,000,000 bytes, and the media allowlist is unchanged.
-Reads already page at 4,000 units, so the envelope stays ≤65,536 bytes.
+
+Raise the semantic validators and the snapshot string, array and aggregate
+budgets together (`core/method-package-input.mjs` hard-codes 64, 100,000 and
+1,000,000, and snapshots cap arrays at 128 and strings at 3,300,000 units).
+Derive them from the advertised file bounds plus maximum legal metadata.
+Update capabilities and the boundary tests. Preserve pre/post-redaction
+checks, owner quota, identities, replay and pagination. Verify 256 files, a
+400,000-unit file and a 4,000,000-unit version through the public facade.
+
+**Resource bounds**:
+- Bound streamed package bytes before allocation, including files that grow
+  during reading.
+- Cap raw bytes at four times the matching UTF-16 limits.
+- Publish traversal depth and entry bounds, and change-file bounds.
+- Every file page currently re-verifies the whole version. Measure complete
+  maximum-version reading and concurrent-writer contention on both runtimes;
+  4,000-unit pages alone are not a latency guarantee.
 
 ### 11.2 Importer (`cairn-memory methods import`)
 
@@ -442,32 +461,64 @@ cairn-memory methods import --db /abs/store.sqlite --owner OWNER [--project PROJ
 
 The importer is a separate CLI process. The MCP process never imports.
 
-- **Confinement**:
-  - Resolve `--dir` once with `realpath`. Walk with `lstat`.
-  - Refuse any symlink, hardlinked file (`nlink > 1`), device, FIFO, socket or
-    mount-point crossing anywhere under the root. Never follow links.
-  - Open each regular file with `O_NOFOLLOW`. `fstat` before and after reading;
-    if dev, ino, size or mtime change, or `realpath` leaves the root, refuse the
-    whole import.
-  - Read nothing outside the root. Execute nothing.
+- **Confinement** (Linux/WSL only; other platforms refuse):
+  - Pin the selected root directory descriptor.
+  - Resolve every descendant one component at a time relative to its parent
+    directory descriptor, with kernel-enforced no-symlink and no-mount
+    traversal. Node has no `openat2` binding, so use `fs.openSync` on
+    `/proc/self/fd/<dirfd>/<single-name>` with `O_NOFOLLOW` (plus
+    `O_DIRECTORY` for directories). Compare the `mnt_id` from
+    `/proc/self/fdinfo/<fd>` with the root's, so bind mounts on the same
+    device are also refused.
+  - Never use a pathname-only fallback. If `/proc` fd semantics are
+    unavailable, refuse.
+  - Inspect types without blocking (`O_NONBLOCK` on open; FIFOs and devices
+    are refused without reading).
+  - Open data only for regular files with `nlink = 1`.
+  - Before and after each bounded read, check the descriptor's identity, size,
+    link count, mtime and ctime; any change refuses the whole import. Post-read
+    `realpath` checks are supplementary only.
+  - Read nothing outside the root through the package-tree channel. Execute
+    nothing.
 - **Content**:
-  - Decode strict UTF-8 (`fatal: true`). A leading BOM is preserved as content.
+  - Decode with `TextDecoder('utf-8', {fatal: true, ignoreBOM: true})`, so a
+    leading BOM is preserved as content.
   - Media type comes from the extension allowlist mapped to U2's media types.
   - Any non-text file refuses the whole import unless the person passes an
     explicit `--exclude` that matches it. Exclusions are displayed in the
     review. Core receives only the included files, so the version records only
     what was imported.
-  - `.git/` is always excluded and displayed as excluded. Other dotfiles follow
-    the same rules as ordinary files.
-  - Paths are relative POSIX, built from directory entries, never from file
-    contents.
+  - Every `.git` entry (file or directory) is pruned without being opened.
+  - Explicit `--exclude` patterns use anchored POSIX glob semantics and prune
+    matching entries before traversal. Confinement claims apply to the
+    included tree. No implicit `.gitignore` rules are applied.
+  - Display all exclusions, and describe the import as filtered when any
+    apply.
+  - Root confinement covers package-tree reads. The database, the terminal and
+    the explicitly named, bounded `--change` file are separate channels.
+  - Paths are relative POSIX, built from directory entries (never from file
+    contents), and sorted deterministically.
 - **Review and approval**:
+  - Reuse the terminal mechanics only, not capture consent or Card method
+    allowlists.
+  - Before review, freeze the file bytes, parsed change data, actionId,
+    revisions and the complete mutation input. Commit exactly that payload
+    through the same pinned store handle; never reread files into the
+    approved payload.
+  - The explicit-user grant covers only the approved method and input, and only
+    the mutation namespace.
+  - Supplemental read grants cover only independently authorized target,
+    read-set and reason namespaces, using core's `actionClass:'read'`,
+    `actionId:null` requests. Foreign JSON refs never expand grants.
+  - Post-prompt canonical checks and CAS remain mandatory.
   - The command builds the exact `importMethodVersion` input. It shows a bounded,
     escaped review on the controlling `/dev/tty`: the namespace, package and
     `basedOn`, title, every path with its byte count and media type, exclusions,
     change items and reason refs. The display is capped at 512 KiB; larger
     reviews refuse.
-  - The person must type the exact displayed phrase.
+  - The person must type the exact displayed phrase. The approval reviews
+    metadata (paths, sizes, media types, change items), not every file's prose,
+    and it commits the frozen bytes.
   - Unsupported: `--yes`, piped or environment approval, and any non-TTY stdin
     or stdout. These refuse with `approval_required`.
   - The grant binds the exact payload (`payloadBinding`), namespace, action ID
@@ -486,6 +537,18 @@ cairn-memory methods disable --db ... --owner ... [--project ...] --binding-name
   --package ... --role ... --expected-revision N|null [--reason-ref ...]...
 ```
 
+Shell-safe examples quote the role and revision: `--role '*'` and
+`--expected-revision null`.
+
+**Reason availability** for the review comes from a new read-authorized
+preparation operation (`checkMethodReasonRefs`):
+- It accepts a namespace and at most 16 `reasonRefs`, and returns canonical
+  availability only.
+- It reuses U2's eligibility and exclusion checks.
+- It never probes through mutations, copies source prose or infers
+  availability from existence alone.
+- It is not exposed through MCP.
+
 Same TTY approval as §11.2. The review shows:
 - the binding key;
 - the current resolution for that role;
@@ -498,6 +561,21 @@ Same TTY approval as §11.2. The review shows:
 Opt-in at server start with `--method-packages local-v1`. Without it, nothing
 changes. Namespace and read set are fixed by host flags at startup, never by
 tool arguments.
+
+- The default method `readSet` is exactly the startup namespace.
+- A project-scoped server may also read the same owner's personal packages
+  only with an explicit flag (`--method-read-personal`). Never infer that
+  grant.
+- Inject namespace, `readSet` and context according to each core method's
+  grammar; several methods accept no `intent` or context at all.
+- Reject tool-supplied authority, top-level `namespace`/`readSet`/`context`,
+  and unknown fields.
+- Validate reference namespaces against the host-authorized scopes without
+  rewriting immutable identities.
+- Version, manifest and file reads require `intent`. Context is derived from
+  the host `readSet` plus the tool's `roleId`.
+- The method opt-in adds only method read tools. It does not enable Card
+  drafting, organization, capture or model work.
 
 | Tool | Core method |
 | --- | --- |
@@ -515,7 +593,11 @@ tool arguments.
   requires a `roleId`.
 - **No MCP mutation tools** exist for methods.
 - Tool descriptions state that method text is untrusted data, not instructions
-  or permission. Responses keep the core envelope and the 65,536-byte ceiling.
+  or permission.
+- The serialized core envelope stays ≤65,536 bytes. MCP framing and the
+  existing trust marker (server transport bound 262,144 encoded bytes) are
+  measured separately, and that transport bound is documented and tested.
+- Untrusted-data framing never modifies identities, snapshots or cursors.
 - Snapshots returned to agents are opaque. A later `read_method_file` with a pin
   follows §5.
 
@@ -523,10 +605,10 @@ tool arguments.
 
 | ID | Observable |
 | --- | --- |
-| H01 | The installed artifact without the flag is unchanged: tool list, DTOs, defaults |
-| H02 | The importer refuses symlinks, hardlinks, special files, root escape, path swaps between `stat` and read, invalid UTF-8 and binaries without `--exclude`, each before any core call. Valid packages (including a 120-file, ~1.8 MB fixture) import exactly |
-| H03 | Real-PTY approval: the exact phrase commits; a wrong phrase, EOF, no TTY, piped input or a stale CAS refuses with no partial rows |
-| H04 | Adopt and disable through real-PTY approval. Resolution changes as §4 specifies, including a project override of a personal default and a disable barrier |
-| H05 | A fresh MCP process in a new session: `resolve_methods_for_role` → `read_method_file` delivers the adopted version; after adopting v2, the old pin reads `newer-version-available`; after a restart, it still does |
+| H01 | The installed artifact without the flag is unchanged (tool list, DTOs, defaults), and the method flag adds no Card, capture, organization or model authority |
+| H02 | The importer refuses, each before any core call: symlinks, hardlinks and link-count changes; FIFO replacement (without hanging); special files; root escape; **ancestor swaps**; **same-filesystem bind mounts**; path swaps between `stat` and read; growing files; invalid UTF-8; binaries without `--exclude`. Excluded subtrees and `.git` files are pruned unopened. Valid packages import exactly, including a 120-file, ~1.8 MB fixture and the new maximum boundaries (256 files, a 400,000-unit file, a 4,000,000-unit version) |
+| H03 | Real-PTY approval: the exact phrase commits. A wrong phrase, EOF, no TTY, piped input, a stale CAS, **payload or change-file replacement after review**, or **terminal-control injection** in displayed text refuses with no partial rows |
+| H04 | Adopt and disable through real-PTY approval. Resolution changes as §4 specifies, including a project override of a personal default and a disable barrier. Foreign reasons, denied supplemental reads, concurrent adoption and unavailable targets all refuse |
+| H05 | A fresh MCP process in a new session: `resolve_methods_for_role` → `read_method_file` delivers the adopted version. Current reads are distinguished from pinned history: after adopting v2, the old pin reads `newer-version-available` and still does after a restart. Disable, scope revocation and stale snapshots/cursors behave as §5 specifies, with no fallback |
 | H06 | Deleting a version through the core host API makes MCP reads `unavailable` with no stale text, including through pins |
-| H07 | Packaging manifest, closure and installed-import tests pass on the shallow CI layout; no historical git objects are needed |
+| H07 | Packaging manifest, closure and installed-import tests pass on the shallow CI layout; no historical git objects are needed. Every new helper is in the installed closure |
