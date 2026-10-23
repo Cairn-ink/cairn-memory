@@ -2,7 +2,7 @@
 
 Status:
 - U2 (§§2–9, v0.3.1) is implemented and accepted.
-- U3 (§11, v0.4.2) is implemented and in acceptance.
+- U3 (§11, v0.4.3) is implemented and in acceptance.
 - U4 (§12) is draft v0.5, not yet audited.
 - U5a (§13) is draft v0.6, not yet audited.
 
@@ -409,7 +409,7 @@ All take `(input, authority)` and return existing envelopes. `A` = actionId.
 4. **Limits** are provisional text-only defaults. U3 measures real SKILL.md and
    template packages (sizes only) before freezing them.
 
-## 11. U3: method packages on the local host (v0.4.2; v0.4.1 audited)
+## 11. U3: method packages on the local host (v0.4.3; v0.4.1 audited)
 
 The draft (`fc5b9ea`) was audited by the same non-author auditor, who found
 four P0, five P1 and one P2 issue. This section incorporates all of them.
@@ -570,6 +570,21 @@ The importer is a separate CLI process. The MCP process never imports.
     `method_not_found`, because it cannot hold a package.
   - The MCP server's `--method-packages local-v1` keeps §2.1's opt-in
     migration at startup. The documentation states that it is one-way.
+- **Store fence (v0.4.3, from the U4 audit).** Checking existence is not a
+  fence: the file can be removed or replaced during review, and the ordinary
+  opener would then create or upgrade a different store. The commands therefore
+  work as follows.
+  - **Before review**, they freeze the store's file identity (`dev`, `ino`),
+    `application_id`, `user_version` and `store_metadata.store_id`, through a
+    plain read-only open that creates nothing. A store without these refuses.
+  - **After approval**, they recheck `dev`/`ino`, then open the store through
+    the ordinary writable opener in a new **noncreating** mode that receives
+    the expected identities.
+  - The opener validates those identities inside its own transaction, before
+    any migration. A missing, replaced or mismatched store refuses without
+    creating, migrating or mutating anything.
+  - The opener option is a host seam: default construction is unchanged. U4
+    reuses the same fence.
 - **Output**: the content-free import receipt, plus a JSON line on stdout.
 
 ### 11.3 Adoption commands
