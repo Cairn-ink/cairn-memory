@@ -32,13 +32,13 @@ const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
-  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "existingStore"]);
+  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "existingStore", "storeFence"]);
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
   const db = openDatabase(input.path, { privateCards: Boolean(privateCards), methodPackages: Boolean(methodPackages), rawCapture: Boolean(internal?.rawCapture),
-    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore });
+    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence });
   try {
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);

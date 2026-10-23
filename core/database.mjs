@@ -1,3 +1,4 @@
+import { storeFenceOption,pinStoreFile,assertStoreIdentity,noncreatingStoreURI } from './store-fence.mjs';
 import { migrateMethodPrerequisites } from './method-package-migration.mjs';
 import { randomBytes, randomUUID } from "node:crypto";
 import { installRawDeletion, RAW_DELETION_SCHEMA_VERSION } from './raw-deletion-schema.mjs';
@@ -275,12 +276,14 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, existingStore } = {}) {
+export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, methodPackages = false, existingStore, storeFence } = {}) {
   if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
   rawDeletion ||= rawSources || localControls;
   rawLineage ||= rawDeletion;
   rawCapture ||= rawLineage;
   rawConversations ||= rawCapture;
+  if (storeFence !== undefined && existingStore !== undefined) fail('invalid_input');
+  const fence = storeFence === undefined ? undefined : storeFenceOption(storeFence);
   if (existingStore !== undefined) {
     const option = existingStoreOption(existingStore), location = existingStorePath(path);
     const db = new DatabaseSync(location.uri, { timeout: STORAGE_BUSY_TIMEOUT_MS });
@@ -297,7 +300,10 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
     }
   }
   if (typeof path !== "string" || !path.trim() || path.includes("\0")) fail("invalid_path");
-  if (path !== ":memory:") {
+  let pin;
+  if (fence) {
+    pin = pinStoreFile(path, fence);
+  } else if (path !== ":memory:") {
     path = resolve(path);
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     try {
@@ -310,10 +316,17 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
       fail("unsafe_database_file");
     }
   }
-  const db = new DatabaseSync(path, { timeout: STORAGE_BUSY_TIMEOUT_MS });
+  let db;
   try {
+    // URI mode=rw is mandatory here: no mkdir/open(ax), no creation fallback.
+    db = new DatabaseSync(fence ? noncreatingStoreURI(path) : path, { timeout: STORAGE_BUSY_TIMEOUT_MS });
     db.exec("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;");
     transaction(db, () => {
+      if (fence) {
+        // Before initialize() and all migration/schema or application writes.
+        pin.check();
+        assertStoreIdentity(db, fence);
+      }
       function initialize() {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
@@ -584,7 +597,7 @@ export function openDatabase(path, { privateCards = false, rawConversations = fa
     });
     return db;
   } catch (error) {
-    db.close();
+    db?.close();
     throw error;
-  }
+  } finally { pin?.close(); }
 }

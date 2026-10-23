@@ -45,9 +45,9 @@ test('M02/M10 manifest paths, prefixes, Unicode and media refuse atomically with
     const before=importState(f);error(f.call('importMethodVersion',input('bad-path',{files:[file(path)]})),'invalid_path');assert.deepEqual(importState(f),before);
   }
   for(const paths of [['A.md','a.md'],['Ä.md','ä.md'],['same','same']])error(f.call('importMethodVersion',input('collision',{files:paths.map(path=>file(path))})),'invalid_path');
-  for(const text of ['\ud800','\udfff','x\0y','x'.repeat(100001)])error(f.call('importMethodVersion',input('bad-text',{files:[file('text',text)]})),'invalid_input');
+  for(const text of ['\ud800','\udfff','x\0y','x'.repeat(400001)])error(f.call('importMethodVersion',input('bad-text',{files:[file('text',text)]})),'invalid_input');
   error(f.call('importMethodVersion',input('bad-media',{files:[file('x','text','application/octet-stream')]})),'unsupported_media');
-  for(const files of [[],Array.from({length:65},(_,i)=>file('p'+i)),Array.from({length:11},(_,i)=>file('p'+i,'x'.repeat(100000)))])error(f.call('importMethodVersion',input('too-many',{files})),'invalid_input');
+  for(const files of [[],Array.from({length:257},(_,i)=>file('p'+i)),Array.from({length:11},(_,i)=>file('p'+i,'x'.repeat(400000)))])error(f.call('importMethodVersion',input('too-many',{files})),'invalid_input');
   error(f.call('importMethodVersion',input('title',{title:'x'.repeat(201)})),'invalid_input');
   error(f.call('importMethodVersion',input('label',{submittedBy:'x'.repeat(201)})),'invalid_input');
   assert.equal(count(f,'method_packages'),0);assert.equal(count(f,'method_operations'),0);
@@ -55,14 +55,14 @@ test('M02/M10 manifest paths, prefixes, Unicode and media refuse atomically with
   assert.equal(collect(f,'listMethodManifest',history(allowed.version),'files')[0].path,'%2e%2e/literal');
 });
 
-test('M02/M10 maximum 64-file manifest, million-unit version, 512-unit path and empty text persist',t=>{
-  const f=fixture(t),files=Array.from({length:64},(_,i)=>file(i===0?'p'.repeat(512):'file-'+i,i<10?'界'.repeat(100000):'',
+test('M02/M10 maximum 256-file manifest, four-million-unit version, 512-unit path and empty text persist',t=>{
+  const f=fixture(t),files=Array.from({length:256},(_,i)=>file(i===0?'p'.repeat(512):'file-'+i,i<10?'界'.repeat(400000):'',
     ['text/markdown','text/plain','application/json','application/yaml','text/csv'][i%5]));
   const receipt=ok(f.call('importMethodVersion',input('max',{title:'T'.repeat(200),submittedBy:'S'.repeat(200),files})));
-  const manifest=collect(f,'listMethodManifest',history(receipt.version),'files');assert.equal(manifest.length,64);
-  assert.equal(manifest.reduce((n,item)=>n+item.byteCount,0),3_000_000);
-  assert.equal(ok(f.call('getMethodPackageUsage',{namespace:ns})).retainedFileBytes,3_000_000);
-  assert.deepEqual(ok(f.call('readMethodFile',{...history(receipt.version),path:'file-63'})).parts,[]);
+  const manifest=collect(f,'listMethodManifest',history(receipt.version),'files');assert.equal(manifest.length,256);
+  assert.equal(manifest.reduce((n,item)=>n+item.byteCount,0),12_000_000);
+  assert.equal(ok(f.call('getMethodPackageUsage',{namespace:ns})).retainedFileBytes,12_000_000);
+  assert.deepEqual(ok(f.call('readMethodFile',{...history(receipt.version),path:'file-255'})).parts,[]);
 });
 
 test('M10 exact package/version caps count retained tombstones and failures do not consume ordinals',t=>{
@@ -99,8 +99,9 @@ test('M02/M10 legal maximum change metadata fits its separate input budget and e
   const f=fixture(t,{cards:true});
   const files=Array.from({length:64},(_,i)=>file('a'.repeat(508)+String(i).padStart(4,'0'),''));
   const first=ok(f.call('importMethodVersion',input('first',{files})));
-  const next=files.map((entry,i)=>({...entry,path:'b'+entry.path.slice(1),text:i<10?'x'.repeat(100000):''}));
-  const paths=[...files,...next].map(entry=>entry.path);
+  const next=[...files.map((entry,i)=>({...entry,path:'b'+entry.path.slice(1),text:i<10?'x'.repeat(400000):''})),
+    ...Array.from({length:192},(_,i)=>file('c'.repeat(508)+String(i).padStart(4,'0'),''))];
+  const paths=[...files,...next.slice(0,64)].map(entry=>entry.path);
   const change={items:Array.from({length:32},()=>({summary:'s'.repeat(500),paths})),reasonRefs:[]};
   const candidate=input('max-change',{package:first.package,expectedPackageRevision:1,basedOn:first.version,files:next,change});
   const second=ok(f.call('importMethodVersion',candidate));assert.equal(second.ordinal,2);

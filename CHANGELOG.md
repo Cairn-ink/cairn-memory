@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased — installed method packages (U3)
+
+- Keep the CLI static graph SQLite-free while preserving installed eager-module
+  observations. Fence terminal review to one rollback-journal store identity;
+  use a noncreating ordinary opener and check identities before migration.
+  Bound the observational measurement by a shared deadline and retry limit.
+
+- Keep installed eager import closure consistent without method flags. Never
+  create a store from a method command; review and approve an older store's
+  one-way v30 upgrade before opening the core. Count and retry reader/writer
+  busy outcomes in the opt-in contention measurement.
+
+- Add Linux/WSL descriptor-confined directory importing and separate real-TTY
+  import/adopt/disable approval of frozen payloads. Check mount IDs before data
+  access, reject links/special files, and bound traversal, reads and review.
+- Add nine read-only MCP method tools behind `--method-packages local-v1`;
+  personal reads from a project require `--method-read-personal`. Enforce core
+  and separately encoded transport byte bounds, preserving opaque refs and pins.
+- Raise file/version limits and derived snapshot budgets together to 256 files,
+  400,000 units/file and 4,000,000 units/version. Add read-authorized availability-
+  only `checkMethodReasonRefs`; keep v30 and the 50 MB owner cap unchanged.
+- Add actual installed, process-race and real-PTY H01–H07 coverage and an opt-in
+  synthetic maximum-read/writer-contention measurement. No package execution,
+  model authority, automatic approval or binary assets are introduced.
+
 ## Unreleased — local method bindings and pins (U2b)
 
 - Add explicit adoption/disable CAS, four-level resolution with disabled and
@@ -8,7 +33,7 @@
   and advance binding generations only on transitions. The frozen v30 layout is
   unchanged; deletion uses canonical lifecycle fences without binding fanout.
 - Extend the synthetic method example with adopt → resolve → pin → disable.
-  Installed importing, approval UI and MCP tools remain U3 work.
+  U3 adds the separately opted-in installed host workflow above.
 
 ## Unreleased — opt-in local method packages (U2a)
 

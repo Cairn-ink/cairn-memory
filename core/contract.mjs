@@ -2,6 +2,7 @@ import { methodPackageOptions } from './method-package-input.mjs';
 import { createMethodPackageFacade } from './method-package-facade.mjs';
 import { decisionReviewOption } from './confirmation-storage.mjs';
 import { rawOptions } from './raw-options.mjs';
+import { storeFenceOption } from './store-fence.mjs';
 import { existingStoreOption } from './existing-store.mjs';
 import { ownData } from './local-authority-input.mjs';
 import { types } from 'node:util';
@@ -35,7 +36,7 @@ import { qualificationInput, qualificationSources } from './claim-qualification-
 import { proposeRationale } from './rationale.mjs';
 import { reviewSourceBasis } from './source-basis.mjs';
 import {
-  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray,
+  boundedText, fingerprint, identifier, limit, MemoryStoreError, object, revision, denseArray, fail,
 } from "./validation.mjs";
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -163,7 +164,7 @@ function qualifiedDuplicatesOption(input) {
   if (!input || typeof input !== 'object' || !('captureQualifiedDuplicates' in input)) return undefined;
   const clean = ownData(input, ['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
     'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
-    'decisionReview','privateCards','methodPackages','rawConversations','existingStore']);
+    'decisionReview','privateCards','methodPackages','rawConversations','existingStore','storeFence']);
   if (!Object.hasOwn(clean, 'captureQualifiedDuplicates') ||
       clean.captureQualifiedDuplicates !== 'append-matching-evidence-v1' || clean.captureQualification !== 'source-bound-v2' ||
       Object.hasOwn(clean, 'sessionEpisodes')) throw new MemoryStoreError('invalid_input');
@@ -177,8 +178,14 @@ export function openMemoryCore(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return createMemoryCore(input);
   if ('existingStore' in input) {
     input = ownData(input, ['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy','captureRationale','captureEvidence',
-      'captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes','decisionReview','privateCards','methodPackages','rawConversations','existingStore']);
+      'captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes','decisionReview','privateCards','methodPackages','rawConversations','existingStore','storeFence']);
     input.existingStore = existingStoreOption(input.existingStore);
+  }
+  if ('storeFence' in input) {
+    input = ownData(input, ['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy','captureRationale','captureEvidence',
+      'captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes','decisionReview','privateCards','methodPackages','rawConversations','existingStore','storeFence']);
+    input.storeFence = storeFenceOption(input.storeFence);
+    if ('existingStore' in input) fail('invalid_input');
   }
   let descriptor;
   try { descriptor = Object.getOwnPropertyDescriptor(input, 'rawConversations'); }
@@ -186,7 +193,7 @@ export function openMemoryCore(input) {
   if (!descriptor) return createMemoryCore(input);
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
   ownData(input, ['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy','captureRationale','captureEvidence',
-    'captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes','decisionReview','privateCards','methodPackages','rawConversations','existingStore']);
+    'captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes','decisionReview','privateCards','methodPackages','rawConversations','existingStore','storeFence']);
   const options = rawOptions(descriptor.value);
   const fields = Object.getOwnPropertyDescriptors(input);
   delete fields.rawConversations;
@@ -200,7 +207,7 @@ export function openMemoryCore(input) {
 export function createMemoryCore(input, internal) {
   const captureQualifiedDuplicates = qualifiedDuplicatesOption(input);
   object(input, ['path', 'model', 'captureQualification', 'captureQualifiedDuplicates', 'captureSourcePolicy', 'captureRationale', 'captureEvidence',
-    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview', 'privateCards', 'methodPackages', 'existingStore']);
+    'captureDeadlineMs', 'sourceCandidatePolicy', 'sessionEpisodes', 'decisionReview', 'privateCards', 'methodPackages', 'existingStore', 'storeFence']);
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
   const decisionReview = decisionReviewOption(input);
@@ -245,6 +252,7 @@ export function createMemoryCore(input, internal) {
   if (model?.onDiagnostic !== undefined && typeof model.onDiagnostic !== 'function') throw new MemoryStoreError('invalid_input');
   const runtime = (internal?.createRuntime ?? createMemoryRuntime)({ path: input.path,
     ...(input.existingStore ? { existingStore: input.existingStore } : {}),
+    ...(input.storeFence ? { storeFence: input.storeFence } : {}),
     ...(methodPackages ? { methodPackages } : {}),
     ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
   try {

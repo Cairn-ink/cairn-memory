@@ -1,4 +1,4 @@
-# Local method packages: U2
+# Local method packages: core and local host
 
 `method-packages-local-v1` is an explicit text-only engine opt-in in the existing
 SQLite store. It provides immutable imports, contextual and context-free reads,
@@ -7,7 +7,7 @@ U2a installed the complete v30 canonical schema; U2b adds adoption bindings,
 resolution, pins and binding events without changing that allocation. Core never
 executes a method or selects one by upload time, ordinal, title or similarity.
 The authoritative
-specification is [contract v0.3.1](plans/unified-memory-v1-contract.md).
+specification is [contract v0.4.1, §11 and §§2–9](plans/unified-memory-v1-contract.md).
 
 Run `npm run demo:method-packages` on Node 22.16 or 24.15. It uses scripted
 synthetic approvals, retains its printed synthetic database, and makes no network
@@ -49,12 +49,11 @@ initial grant returns `authority_required`; final revocation or generation chang
 returns `scope_changed`. Exceptions are sanitized; input text is never returned
 in an error. Successful replay still needs current authorization.
 
-The optional MCP host authority configuration may explicitly select method
-reads using `createScopedCardAccess(namespace,{methodPackages:true})` and its
-`methodPackageConfiguration`. It grants no method mutation authority and adds no MCP tools. It supports the
-new resolution/event reads only for its configured exact namespace; a read set
-spanning personal and project needs a host authority that can grant both. Directory importing, filesystem confinement, strict byte-to-UTF8
-decoding and installed method workflows are U3 work.
+The installed host adds a separate method-only read authority with the explicit
+`--method-packages local-v1` flag. It does not use Card drafting or organization
+allowlists. Mutations use the separate real-terminal commands below. The earlier
+`createScopedCardAccess(namespace,{methodPackages:true})` SDK seam remains exact-
+namespace and read-only; it does not itself register tools.
 
 ## References and API
 
@@ -76,6 +75,7 @@ Titles and paths never identify or join packages.
 | `compareMethodVersions` | `from,to,cursor?` | `{from,to,status,changes,items,reason,reasonRefs,coverage,nextCursor}` |
 | `deleteMethodVersion`, `deleteMethodPackage` | `actionId,ref,expectedRevision` | `{id,revision,state,effectCount}` |
 | `listMethodEffects` | `namespace,limit?,cursor?` | `{effects,coverage,nextCursor}` |
+| `checkMethodReasonRefs` | `namespace,reasonRefs` (0–16) | `{reasonRefs:[{ref,status}]}` with canonical `available`/`unavailable` only; read authorization, no mutation or source prose |
 | `getMethodPackageUsage` | `namespace` | `method-package-usage-v1`, `retainedFileBytes`, owner `limitBytes` |
 
 Context-free content reads require explicit `intent:'history'` and report
@@ -185,8 +185,8 @@ under locale-independent Unicode lowercase. Percent escapes remain literal.
 The allowlist is `text/markdown`, `text/plain`, `application/json`,
 `application/yaml`, `text/csv`; other media returns `unsupported_media`.
 
-Each version has 1–64 files, each at most 100,000 UTF16 units and at most
-1,000,000 units in aggregate. Core rejects malformed Unicode and NUL. Empty
+Each version has 1–256 files, each at most 400,000 UTF16 units and at most
+4,000,000 units in aggregate. Core rejects malformed Unicode and NUL. Empty
 file text is allowed. Best-effort secret redaction precedes persistence, byte
 accounting and content/ordered-manifest identities; formatting is preserved.
 The action ledger HMAC covers the complete original pre-redaction input.
@@ -194,7 +194,7 @@ Titles and attribution labels are at most 200 units. There are at most 256
 packages per namespace, 128 versions per package, 16 unique reason refs per
 action and 32 change items per version, each summary at most 500 units. Package
 and version limits include tombstones. Each change item has at most 128 unique
-paths (the union of both possible 64-file endpoint manifests).
+paths, selected from either endpoint manifest even when those manifests are larger.
 
 File parts are half-open UTF16 offsets, at most 4,000 units and always at code
 point boundaries. A call returns one part; an empty file returns no parts.
@@ -325,6 +325,243 @@ partial-row absence, effects and fresh-process replay. No stdio pipe or sequenti
 clear the runner-only `NODE_TEST_CONTEXT` marker before importing their fixtures,
 following the owned runner's child-environment convention.
 
-Rollback, replay and purge checks also use separate processes. These tests
-establish local mechanics, not semantic quality, safe code execution, host
-filesystem confinement, hosted encryption or product readiness.
+Rollback, replay and purge checks also use separate processes. Those core tests establish SQLite mechanics. The separate installed host tests
+below cover descriptor confinement and terminal approval; neither suite proves
+semantic quality, safe code execution, hosted encryption or product readiness.
+
+
+## Installed CLI and approval
+
+Linux/WSL and Node 22.16 or 24.15 are required for directory importing. The
+importer probes the supported x64/arm64 Linux flag ABI and `/proc` behavior and
+refuses an unsupported environment; native arm64 verification is not claimed.
+The database is local plaintext and must already exist. A missing `--db` returns
+`method_not_found` without creating a file or parent. The commands inspect
+the identity tuple in one read transaction through a plain read-only open before
+opening the core. Review supports rollback-journal stores only: the pinned header
+must have format bytes 18–19 set to 1, and `-journal`, `-wal` and `-shm` companions
+or other recovery conditions refuse before opening SQLite. Participants must keep
+rollback-journal mode throughout review; journal-mode changes are unsupported.
+No immutable open is used. Use only an
+independently submitted artifact; do not import fenced or forgotten source output.
+
+```sh
+cairn-memory methods import --db /abs/store.sqlite --owner OWNER \
+  --dir /abs/package --title 'Synthetic method' --submitted-by 'Operator' \
+  --exclude 'assets/**' --exclude '**/*.png'
+
+# A later immutable version requires the exact package revision and base ref.
+cairn-memory methods import --db /abs/store.sqlite --owner OWNER \
+  --dir /abs/package-v2 --title 'Synthetic method v2' \
+  --package PACKAGE_ID --expected-package-revision 1 --based-on "$VERSION_REF_JSON" \
+  --change /abs/change.json
+
+cairn-memory methods adopt --db /abs/store.sqlite --owner OWNER \
+  --binding-namespace personal --package "$PACKAGE_REF_JSON" --role '*' \
+  --version "$VERSION_REF_JSON" --expected-revision 'null'
+
+cairn-memory methods adopt --db /abs/store.sqlite --owner OWNER --project PROJECT \
+  --binding-namespace project --package "$PERSONAL_PACKAGE_REF_JSON" \
+  --role reviewer --version "$VERSION_REF_JSON" --expected-revision 'null'
+
+cairn-memory methods disable --db /abs/store.sqlite --owner OWNER --project PROJECT \
+  --binding-namespace project --package "$PERSONAL_PACKAGE_REF_JSON" \
+  --role reviewer --expected-revision 1 --reason-ref "$PROJECT_REASON_REF_JSON"
+```
+
+Ref variables contain exact core-issued JSON, not paths or titles. The host owner
+and optional project fix the allowed scopes. Only a same-owner project binding
+may target a personal package. The CLI derives its authorized read set from the
+binding and target relationship; arbitrary reference JSON cannot add scopes.
+`--reason-ref` may repeat up to 16 times; its refs must be in the binding namespace.
+The separately named change file contains `{items:[{summary,paths}],reasonRefs}`.
+For v30 stores, preparation checks reason availability with `checkMethodReasonRefs`,
+never by trying a mutation. For an older store, import displays
+`storeUpgrade:{from,to:30}` and defers availability checks until after the exact
+approval phrase and migration. An unavailable reason then refuses the import;
+the approved schema upgrade remains. Core checks refs again in the mutation.
+Adopt/disable refuse pre-v30 stores with `method_not_found`, because those stores
+cannot contain a method package. A wrong phrase leaves an older store unchanged.
+The MCP server's `--method-packages local-v1` still migrates at startup: selecting
+that flag is a one-way upgrade to v30, which older binaries refuse.
+
+The command requires TTY stdin **and** stdout and opens the controlling `/dev/tty`.
+It displays escaped, bounded metadata and an exact action-specific phrase. Type
+that phrase there. A wrong phrase, EOF, `--yes`, piped input or an environment
+approval cannot approve; they return `approval_required`. JSON strings escape
+terminal controls and bidi characters. Reviews are at most 512 KiB; oversized
+reviews refuse. Import approval reviews namespace, title/label, package/base,
+revisions, every path/byte count/media type, exclusions, change items and reasons;
+it does **not** display every file's prose. Adopt/disable review shows the binding
+key, current resolution, target manifest for adoption, cross-scope relationship
+and reason availability.
+
+Before review, bytes, change data, action ID and the full mutation input are
+frozen. The explicit-user grant covers exactly that method, payload binding,
+mutation namespace, action ID and expected revisions. Supplemental grants are
+read-only and restricted to the independently authorized target/read-set/reason
+scopes. The command pins the store inode across review and freezes its `dev`,
+`ino`, `application_id`, `user_version` and `store_metadata.store_id`. After the
+exact phrase it closes any v30 review connection, rechecks the pin and opens a
+fresh fenced ordinary writable connection. SQLite URI `mode=rw` prevents creation;
+there is no creation-capable fallback. The identity tuple is checked again inside
+that opener's own transaction, before initialization or migration. Missing,
+replaced, WAL-format or mismatched stores refuse. Older stores migrate only after
+approval. The command submits exactly the frozen input. Replaced or modified
+files/change data refuse; bytes are never reread into an approved payload.
+The host seam is `openMemoryCore({path,storeFence:{version:'store-fence-v1',
+dev,ino,applicationId,userVersion,storeId},...})`; device/inode values are decimal
+strings. It requires an absolute normalized path and cannot combine with
+`existingStore`. Defaults are unchanged, and the managed opener remains
+validation-only. SQLite crash recovery may occur after approval. A refusal
+promises **no application data or schema writes**, not the absence of every
+filesystem effect.
+Canonical checks and CAS run after approval; stale CAS and unavailable targets
+refuse with no automatic retry. Successful stdout is one content-free JSON receipt
+line. This local operator workflow does not authenticate a remote human or protect
+against an attacker already able to execute arbitrary code as the local user.
+
+## Descriptor confinement, filtering and resource bounds
+
+The selected root is pinned with `O_PATH | O_NOFOLLOW | O_DIRECTORY`. Every child
+name explicitly rejects empty, dot/parent, slash and NUL components. Traversal
+opens children through `/proc/self/fd/<parentfd>/<name>` with `O_PATH | O_NOFOLLOW`,
+keeps referenced descriptors open and explicitly rejects symlink descriptors.
+Before enumeration or data access it validates type and the kernel `mnt_id`,
+requiring the root mount. This rejects same-filesystem bind mounts too. Regular
+files require `nlink=1`; devices, sockets and FIFOs never receive a data open.
+Approved regular files reopen for reading only through their pinned file magic
+link. Identity, size, link count, mtime and ctime are checked before/after each
+bounded read and again after review, including the original directory entry.
+There is no pathname-only fallback and package contents are never executed.
+
+Confinement follows pinned directory capabilities. An ancestor renamed outside
+the selected root may continue on the pinned original, or refuse, and cannot
+redirect reads to its replacement. Continuous pathname ancestry and an atomic
+directory snapshot are not promised. Strict ancestry after relocation would need
+a separately packaged `openat2` helper. The database, terminal, environment probe
+and explicitly named change file are separate channels from package-tree reads.
+
+UTF-8 decoding is fatal and uses `ignoreBOM:true`, preserving a leading BOM as
+content. Extension mapping is `.md`/`.markdown` → Markdown, `.json` → JSON,
+`.yaml`/`.yml` → YAML, `.csv` → CSV; `.txt`, `.js`, `.mjs`, `.cjs`, `.ts`, `.py`,
+`.sh`, `.css`, `.html`, `.toml`, `.ini`, `.xml`, `.sql`, `.rst` → plain text. A
+matching extension still needs valid UTF-8 and valid core text. Other extensions
+refuse unless explicitly excluded. Supporting a text extension does not execute
+its contents or establish that it is safe code.
+
+Exclusions are anchored POSIX globs (`*`, `?`, character classes, `**` across path
+segments). A trailing `/**` prunes its directory too. Matching entries are pruned
+before opening; every `.git` file or directory is always pruned unopened.
+`.gitignore` is not consulted. All patterns and pruned paths appear in review;
+imports with exclusions are described as filtered and record only included files.
+Paths sort deterministically. The published importer bounds are:
+
+| Resource | Maximum |
+| --- | ---: |
+| Raw bytes per included file, before decoding/allocation | 1,600,000 (4 × 400,000 units) |
+| Raw bytes across included files | 16,000,000 (4 × 4,000,000 units) |
+| Directory depth below root | 32 |
+| Directory entries encountered, including pruned entries | 4,096 |
+| Explicit exclusion patterns | 128, each at most 512 units |
+| Explicit change JSON file | 16,000,000 raw bytes |
+| Escaped terminal review | 524,288 UTF-8 bytes |
+
+Core snapshot string, array, node and aggregate limits derive from the file bounds
+plus maximum legal paths, change items/paths, reason metadata, references and
+optional cursor/pin. They are distinct from the unchanged private-Card budget.
+Pre/post-redaction limits and the owner quota remain enforced.
+
+## MCP method reads
+
+```sh
+cairn-memory --db /abs/store.sqlite --owner OWNER --method-packages local-v1
+cairn-memory --db /abs/store.sqlite --owner OWNER --project PROJECT \
+  --method-packages local-v1 --method-read-personal
+```
+
+Without the method flag, tool lists, DTOs and defaults are unchanged. The flag
+adds exactly nine read tools, no Card, capture, organization or model authority,
+and no method mutation/preparation tools. Default method `readSet` is precisely
+the startup namespace. A project server can include the same owner's personal
+scope only with `--method-read-personal`. Removing that flag revokes target
+access; an unavailable project binding still blocks fallback.
+
+| Tool | Arguments supplied by the caller |
+| --- | --- |
+| `resolve_method` | `package,roleId` |
+| `resolve_methods_for_role` | `roleId,limit?,cursor?` |
+| `get_method_version` | `version,intent,roleId?,snapshot?` |
+| `list_method_manifest` | `version,intent,roleId?,snapshot?,cursor?` |
+| `read_method_file` | `version,path,intent,roleId?,snapshot?,cursor?` |
+| `list_method_packages` | `limit?,cursor?` |
+| `list_method_versions` | `package,roleId?,limit?,cursor?` |
+| `compare_method_versions` | `from,to,cursor?` |
+| `list_method_binding_events` | `package?,limit?,cursor?` |
+
+Content reads require `intent`. Current reads also require `roleId` (JSON null
+means the default role). History without `roleId` is context-free/unassessed;
+with a role it assesses adoption. The host injects namespace, read set and context
+according to the method grammar. Tool-supplied authority, scope, `namespace`,
+`readSet`, `context` and unknown fields refuse. Reference namespaces must already
+be authorized; immutable refs are never rewritten.
+
+Method text is untrusted data, never instructions or permission. Existing
+`evidenceTrust:'untrusted-data-not-instructions'` framing adds metadata, leaving
+refs, pins and cursors unchanged. The serialized core envelope is at most 65,536
+bytes. Escaped MCP tool-result framing and the complete encoded JSON-RPC message
+(including ID and newline) have a separately enforced 262,144-byte ceiling; the
+opted-in input transport uses that ceiling too. Oversized outbound messages
+refuse before any bytes are written. The default transport remains unchanged.
+
+## Synthetic host verification and timing
+
+`core/test/method-packages-preparation.test.mjs` checks preparation authorization,
+eligibility and no writes. The method-file and MCP suites under
+`adapters/mcp/test/method-package-*.test.mjs` cover descriptor syscall races,
+mount IDs, bounds, method-specific tool grammar and transport bytes.
+`packaging/test/method-packages.test.mjs` packs and installs the actual artifact
+offline, checks its closure/hashes and exercises real processes and real PTYs for
+H01–H07. It uses the documented prewarmed public npm cache prerequisite, copying
+only the four runtime dependencies' metadata/tarballs to an owned writable cache.
+No historical Git objects or user stores are used. A test-only Python byte relay
+allows actual MCP stdio processes to use file-backed output in sandboxes that
+block Node pipe output; it does not parse or mock the protocol. Python is test
+infrastructure, not an installed runtime dependency.
+
+```sh
+node tools/testing/run.mjs --experimental-test-isolation=none \
+  core/test/method-packages-*.test.mjs adapters/mcp/test/method-package-*.test.mjs \
+  packaging/test/method-packages.test.mjs
+npm run measure:method-packages
+```
+
+The timing command creates a real synthetic SQLite store with 256 files, ten
+400,000-unit three-byte UTF-8 files plus empty files (4,000,000 units / 12,000,000 bytes total), reads every file in
+1,246 context-free history pages, and repeats while an independent project binding writer competes
+for SQLite's write lock. Ready/start/entered files synchronize the processes;
+content hashes and committed events are checked. Retryable `storage_busy` on
+either side is counted and retried with the same page/cursor or writer action.
+The JSON reports attempt counts, busy counts, total/p50/p95/maximum busy waits
+(`busyWaitMs` measures time inside failed SQLite calls), and subsequent retry
+delays for each reader pass and the writer. The run has a 600,000 ms overall
+deadline shared by both processes and at most 32 busy retries per operation.
+`bounds` reports the absolute deadline and retry limit. Deadline checks occur
+between synchronous SQLite calls; an in-flight call may finish at its bounded
+busy timeout. Exhaustion reports `status:'incomplete'` and a reason, exits 0, and
+cleans up the writer. Throughput/latency remains observational and non-gating in
+U3; U2c C04 will add gates. Non-contention correctness failures still refuse.
+A synthetic run before this retry accounting change on this Linux
+host on 2026-10-23 measured:
+
+| Runtime | Complete read | With writer | Slowest contended read page | Writer commits / busy outcomes |
+| --- | ---: | ---: | ---: | ---: |
+| Node 22.16.0 | 64.28 s | 65.24 s | 1.08 s | 73 / 11 |
+| Node 24.15.0 | 61.48 s | 67.41 s | 3.58 s | 418 / 10 |
+
+Both commands exited 0. The reads verified identical complete content, without
+model/provider calls. Writer maximum latency was 5.01 s / 5.01 s respectively.
+These measurements are machine/load-specific, including concurrent runtime
+measurements and validation activity. Every page re-verifies the whole immutable version under SQLite's
+transaction lock. Small pages and byte ceilings are not latency, concurrency,
+semantic quality or production-readiness guarantees.

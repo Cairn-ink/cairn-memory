@@ -37,7 +37,7 @@ export function createMethodPackageFacade(storage, options, ready) {
       if(payload.context!==undefined)for(const namespace of methodContext(payload.context).readSet)authorizeRead(namespace);
       // Import consent is not source-read authority. Authorize each exact reason
       // namespace before canonical shape/existence validation in the transaction.
-      if (['importMethodVersion','adoptMethodVersion','disableMethodBinding'].includes(method)) {
+      if (['importMethodVersion','adoptMethodVersion','disableMethodBinding','checkMethodReasonRefs'].includes(method)) {
         const namespaces = new Map((method==='importMethodVersion'?payload.change?.reasonRefs ?? []:payload.reasonRefs ?? []).map(ref => {
           const namespace = cardNamespace(ref.namespace);
           return [JSON.stringify(namespace),namespace];

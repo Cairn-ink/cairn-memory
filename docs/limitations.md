@@ -1,28 +1,53 @@
 # Known limitations
 
-## Text-only local method packages (U2)
+## Text-only local method packages and host workflow (U2/U3)
 
-[Method packages](method-packages-local.md) are default-off engine mechanics,
-not execution or an installed adoption workflow. U2b adds explicit binding CAS,
+[Method packages](method-packages-local.md) are default-off text-only mechanics
+with separate real-terminal import/adopt/disable and read-only MCP opt-ins. They
+never execute package text or turn it into permission. U2b adds explicit binding CAS,
 four-level resolution, authenticated pins and content-free events on the same
 frozen v30 layout. Every read set requires fresh host authorization; pins grant
 no access. Disabled/deleted targets remain barriers. Historical pins preserve
 identity and access checks, without asserting current adoption. Deletion changes
 lifecycle revisions and its deletion effect only; binding generations advance
-only on binding transitions. U3 owns safe filesystem importing
-and installed host authority; U4 owns binary assets; U5 owns dependency fences
+only on binding transitions. U3 adds descriptor-capability confinement on
+supported Linux/WSL environments and method-specific frozen-payload approval;
+U4 owns binary assets; U5 owns dependency fences
 for source-derived copies and generated summaries. Hosts must not import fenced
 or forgotten source output. Best-effort redaction is not a secret-removal
-guarantee; logical purge is not secure physical erasure. The provisional limits
-need U3 size measurement. Namespace usage excludes metadata, ledgers, effects,
+guarantee; logical purge is not secure physical erasure. Limits are 256 files,
+400,000 units/file and 4,000,000 units/version; the owner cap remains 50 MB.
+Importer depth, entry, raw-byte and change-file bounds are published in the guide.
+Each read page holds SQLite's write transaction while re-verifying the whole
+version. Tight readers can starve writers, and either readers or writers can
+receive retryable `storage_busy`. Small pages and byte ceilings are not latency
+or concurrency guarantees. The opt-in measurement counts busy outcomes and waits
+on both sides, retrying the same page or operation. Follow-up U2c will address
+whole-version verification under the write lock; U3 does not remove it. The
+observational measurement has a finite overall deadline and per-operation busy
+retry limit; exhaustion reports incomplete data rather than a performance gate.
+Method command review supports rollback-journal stores only. It refuses WAL
+headers and existing journal/WAL/SHM companions before SQLite inspection, pins
+filesystem and SQLite identities, and uses a noncreating fenced opener after
+approval. Participants must keep rollback-journal mode throughout review. A
+refusal guarantees no application data or schema writes; SQLite crash recovery
+may cause filesystem effects after approval. Approval reviews metadata
+and commits frozen bytes, rather than reviewing every file's prose. Pinned
+directories can remain usable after ancestor relocation; continuous pathname
+ancestry and atomic directory snapshots are not promised. Unsupported flag or
+`/proc` semantics refuse, with no pathname fallback. Native arm64, macOS and
+Windows importing are unverified/unsupported; tests exercise Linux x64. Namespace usage excludes metadata, ledgers, effects,
 SQLite overhead, WAL and backups; owner-wide totals are not exposed by U2.
 Synthetic migration tests consume frozen historical fixtures in shallow CI;
 maintainers verify their provenance through the opt-in full-history recipe in the
 [guide](method-packages-local.md#synthetic-verification-and-historical-fixtures).
 Process-race tests establish local SQLite serialization, not cross-host coordination.
 Schema v30 upgrade is explicit and writable-ordinary-only; stop mixed-version
-writers first. Synthetic SQLite tests do not establish hosted safety, semantic
-quality, filesystem confinement or product readiness.
+writers first. Core SQLite tests establish database mechanics; separate real-process/PTY
+installed tests exercise confinement and approval, including same-filesystem
+bind mounts in an unprivileged user+mount namespace on this host. These do not
+establish hosted safety, remote-human authentication, semantic quality, safe
+code execution or product readiness.
 
 ## Explicit local foreground setup preview
 

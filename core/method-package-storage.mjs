@@ -8,7 +8,7 @@ import { createCardRawSources } from './card-raw-sources.mjs';
 import { createOperationLedger, createPrivateEffectWriter, createPrivateCursor,
   privateBoundary as boundary, privateWhere as where, envelopeBytes as size } from './private-operation-helpers.mjs';
 import { methodPackageRef, methodVersionRef, methodFiles, methodChange, methodLabel, methodPageLimit,
-  METHOD_LIMITS, sameNamespace, methodContext, includesNamespace } from './method-package-input.mjs';
+  METHOD_LIMITS, sameNamespace, methodContext, includesNamespace, methodReasons } from './method-package-input.mjs';
 
 const now = () => new Date().toISOString();
 const completeCoverage = count => ({ status: 'complete', included: count, omitted: 0 });
@@ -178,6 +178,7 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
       input: readSet || input.snapshot!==undefined ? binding('method-stream-v1',[streamInput,access]) : streamInput };
     // Validate cursor before mutable existence/availability checks on every stream.
     if (input.cursor !== undefined) cursors.decode(input.cursor,expected,cursorScope);
+    if(method==='checkMethodReasonRefs')return {reasonRefs:methodReasons(input.reasonRefs,ns).map(ref=>({ref,status:reasonAvailable(ns,ref)?'available':'unavailable'}))};
     if(method==='resolveMethod')return bindings.resolve(input,access);
     if(method==='resolveMethodsForRole')return bindings.list(input,access,expected);
     if(method==='listMethodBindingEvents')return bindings.events(ns,input,expected);

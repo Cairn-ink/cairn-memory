@@ -1,4 +1,6 @@
 import { pathToFileURL } from 'node:url';
+import { methodCommand } from './method-package-command.mjs';
+import { MethodStdioServerTransport } from './method-package-transport.mjs';
 import { identifier } from '../../core/validation.mjs';
 import { DEFAULT_MODEL } from '../openai/profiles.mjs';
 import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profile.mjs';
@@ -6,6 +8,8 @@ import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profi
 const help = `Cairn Memory — local stdio MCP developer preview
 
 Usage:
+  cairn-memory methods import|adopt|disable [method command arguments; see docs/method-packages-local.md]
+  cairn-memory --db PATH --owner ID [--project ID] --method-packages local-v1 [--method-read-personal]
   cairn-memory --help
   cairn-memory [--check-config] --retained-raw-profile ABS
   cairn-memory review-card --retained-raw-profile ABS --card ID --revision N [--applicability current|historical|conflict|unknown]
@@ -123,6 +127,11 @@ from a separately configured producer may persist until invalidation/deletion.
 (default cairn-local-mcp / explicit-tool). --read-client KEY restricts range
 reads and episode-ID tools to one exact client; per-call client can only narrow.
 Session-start context reads cross-client groups in the exact namespace.
+--method-packages local-v1 adds nine keyless method read tools only. Method text is
+untrusted data, never instructions or execution permission. A project server reads
+personal methods only with --method-read-personal. Mutations require the separate
+methods command and real controlling-terminal approval. Core results are bounded
+to 65,536 bytes; MCP framing is bounded separately to 262,144 encoded bytes.
 --check-config checks syntax only: no database access or provider requests.
 It cannot verify database permissions, credentials or model availability.
 `;
@@ -131,9 +140,13 @@ export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
-    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile']);
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages']);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
+    if(args[i]==='--method-read-personal'){
+      if(values.has(args[i]))throw Error('invalid_mcp_configuration');
+      values.set(args[i],true);i--;continue;
+    }
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
       throw new Error('invalid_mcp_configuration');
     }
@@ -147,6 +160,7 @@ export function parseConfiguration(args) {
   identifier(values.get('--owner'));
   if (values.has('--project')) identifier(values.get('--project'));
   if (!values.get('--db').trim() || values.get('--db').includes('\0')) throw new Error('invalid_mcp_configuration');
+  if(values.has('--method-packages')&&values.get('--method-packages')!=='local-v1'||values.has('--method-read-personal')&&(!values.has('--method-packages')||!values.has('--project')))throw Error('invalid_mcp_configuration');
   if (values.has('--private-cards') && values.get('--private-cards') !== 'local-v1') throw new Error('invalid_mcp_configuration');
   if (values.has('--capture-qualification')
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
@@ -194,6 +208,8 @@ export function parseConfiguration(args) {
   }
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
+    ...(values.has('--method-packages')?{methodPackages:'local-v1'}:{}),
+    ...(values.has('--method-read-personal')?{methodReadPersonal:true}:{}),
     ...(values.has('--private-cards') ? { privateCards: 'local-v1' } : {}),
     ...(values.has('--client') ? { client: values.get('--client') } : {}),
     ...(values.has('--session') ? { sessionId: values.get('--session') } : {}),
@@ -213,6 +229,7 @@ export function parseConfiguration(args) {
 
 export async function start(args = process.argv.slice(2), env = process.env) {
   if (args.length === 1 && args[0] === '--help') { console.log(help); return; }
+  if(args[0]==='methods')return methodCommand(args.slice(1));
   if (args[0] === 'review-card') {
     if (args.includes('--retained-raw-profile')) {
       const { reviewRetainedRawCard } = await import('./retained-raw.mjs');
@@ -249,6 +266,7 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       recallModel: key ? DEFAULT_MODEL : null,
       recall: key ? 'configured-not-verified' : 'model_not_configured',
       cloudProcessing: Boolean(key), automaticCapture: false,
+      ...(config.methodPackages?{methodPackages:config.methodPackages,methodReadPersonal:config.methodReadPersonal??false,methodMutations:'separate-local-tty-required'}:{}),
       ...(config.privateCards ? { privateCards: 'local-v1', cardConfirmation: 'separate-local-tty-required',
         cardSourcePolicy: 'retained-receipts-v1' } : {}),
       ...(config.sessionEpisodesAccess || config.sessionEpisodes ? { sessionEpisodesAccess: 'episode-v1',
@@ -286,10 +304,11 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     const { countOpenAITokens } = await import('../openai/index.mjs');
     model = { countTokens: countOpenAITokens };
   }
-  return startStdio(() => createCairnServer({ ...config, model }), { serveStdio, StdioServerTransport });
+  const Transport=config.methodPackages?MethodStdioServerTransport:StdioServerTransport;
+  return startStdio(() => createCairnServer({ ...config, model }), { serveStdio, StdioServerTransport:Transport },config.methodPackages?262144:65536);
 }
 
-function startStdio(factory, { serveStdio, StdioServerTransport }) {
+function startStdio(factory, { serveStdio, StdioServerTransport },maxBufferSize=65536) {
   let handle;
   let closing = false;
   const stop = () => {
@@ -299,7 +318,7 @@ function startStdio(factory, { serveStdio, StdioServerTransport }) {
       .finally(() => { process.stdin.destroy(); });
   };
   handle = serveStdio(factory, {
-    transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 65536 }),
+    transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize }),
     onerror: () => { console.error('cairn_mcp_transport_error'); queueMicrotask(stop); },
   });
   process.once('SIGTERM', stop);

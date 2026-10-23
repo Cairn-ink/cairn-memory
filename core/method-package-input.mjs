@@ -7,10 +7,10 @@ import { denseArray, fail, identifier, object, revision } from './validation.mjs
 export const METHOD_METHODS = Object.freeze(['importMethodVersion','getMethodVersion','listMethodManifest',
   'readMethodFile','listMethodPackages','listMethodVersions','compareMethodVersions',
   'deleteMethodVersion','deleteMethodPackage','listMethodEffects','getMethodPackageUsage',
-  'adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents']);
+  'adoptMethodVersion','disableMethodBinding','resolveMethod','resolveMethodsForRole','listMethodBindingEvents','checkMethodReasonRefs']);
 export const METHOD_READS = new Set(METHOD_METHODS.filter(name => !['importMethodVersion','deleteMethodVersion','deleteMethodPackage','adoptMethodVersion','disableMethodBinding'].includes(name)));
-export const METHOD_LIMITS = Object.freeze({ packages: 256, versions: 128, bindings: 1024, files: 64, fileUnits: 100_000,
-  versionUnits: 1_000_000, pathUnits: 512, reasonRefs: 16, changeItems: 32, changeUnits: 500,
+export const METHOD_LIMITS = Object.freeze({ packages: 256, versions: 128, bindings: 1024, files: 256, fileUnits: 400_000,
+  versionUnits: 4_000_000, pathUnits: 512, reasonRefs: 16, changeItems: 32, changeUnits: 500,
   ownerBytes: 50_000_000, partUnits: 4000, pageItems: 20, responseBytes: 65536 });
 export const METHOD_MEDIA = Object.freeze(['text/markdown','text/plain','application/json','application/yaml','text/csv']);
 export function methodPackageOptions(value) {
@@ -21,12 +21,24 @@ export function methodPackageOptions(value) {
   if (typeof value.authority.authorize !== 'function' || typeof value.authority.isCurrent !== 'function') fail('authority_required');
   return Object.freeze({ ...value, authority: Object.freeze({ ...value.authority }) });
 }
+// Import text plus every legal path/change path, reason/reference and context.
+// Snapshot limits are resource ceilings, not semantic acceptance. Card budgets
+// remain independent. String keys and the maximum optional cursor/pin count too.
+export const METHOD_SNAPSHOT_LIMITS = Object.freeze({
+  stringUnits: Math.max(METHOD_LIMITS.fileUnits, 65536),
+  arrayItems: Math.max(METHOD_LIMITS.files, 128),
+  units: METHOD_LIMITS.versionUnits + METHOD_LIMITS.files * (METHOD_LIMITS.pathUnits + 128)
+    + METHOD_LIMITS.changeItems * (METHOD_LIMITS.changeUnits + 128 * (METHOD_LIMITS.pathUnits + 8) + 128)
+    + METHOD_LIMITS.reasonRefs * 2048 + 2 * 65536 + 32 * 2048,
+  nodes: METHOD_LIMITS.files * 8 + METHOD_LIMITS.changeItems * (128 + 8)
+    + METHOD_LIMITS.reasonRefs * 32 + 2048,
+});
 // Separate import budget: Card snapshots intentionally retain their original limits.
-export function methodSnapshot(value, depth = 0, budget = { nodes: 16384, units: 3_300_000 }) {
+export function methodSnapshot(value, depth = 0, budget = { nodes: METHOD_SNAPSHOT_LIMITS.nodes, units: METHOD_SNAPSHOT_LIMITS.units }) {
   if (--budget.nodes < 0 || depth > 16) fail('invalid_input');
   if (value === null || typeof value === 'boolean') return value;
   if (typeof value === 'string') {
-    if (value.length > 100_000) fail('invalid_input');
+    if (value.length > METHOD_SNAPSHOT_LIMITS.stringUnits) fail('invalid_input');
     budget.units -= value.length;
     if (budget.units < 0) fail('invalid_input');
     return value;
@@ -38,7 +50,7 @@ export function methodSnapshot(value, depth = 0, budget = { nodes: 16384, units:
   if (Reflect.ownKeys(descriptors).length > budget.nodes ||
       Reflect.ownKeys(descriptors).some(key => typeof key !== 'string')) fail('invalid_input');
   if (Array.isArray(value)) {
-    denseArray(value, 0, 128);
+    denseArray(value, 0, METHOD_SNAPSHOT_LIMITS.arrayItems);
     return Array.from({ length: value.length }, (_, i) => {
       if (!Object.hasOwn(descriptors[i], 'value')) fail('invalid_input');
       return methodSnapshot(descriptors[i].value, depth + 1, budget);
@@ -111,17 +123,17 @@ function text(value, maximum, required = false) {
 export function methodFiles(values) {
   let units = 0, retainedUnits = 0;
   const paths = new Set();
-  const files = denseArray(values, 1, 64).map(file => {
+  const files = denseArray(values, 1, METHOD_LIMITS.files).map(file => {
     object(file, ['path','text','mediaType']);
     const path = methodPath(file.path), folded = path.toLowerCase();
     if (paths.has(folded)) fail('invalid_path');
     paths.add(folded);
     if (!METHOD_MEDIA.includes(file.mediaType)) fail('unsupported_media');
-    const clean = text(file.text, 100_000);
+    const clean = text(file.text, METHOD_LIMITS.fileUnits);
     units += file.text.length; retainedUnits += clean.length;
     return { path, text: clean, mediaType: file.mediaType };
   });
-  if (units > 1_000_000 || retainedUnits > 1_000_000) fail('invalid_input');
+  if (units > METHOD_LIMITS.versionUnits || retainedUnits > METHOD_LIMITS.versionUnits) fail('invalid_input');
   return files;
 }
 export function methodReasonRef(value, ns) {
@@ -160,7 +172,7 @@ export function validateMethodCall(method, input) {
     listMethodPackages: ['namespace','limit','cursor'], listMethodVersions: ['package','context','limit','cursor'],
     compareMethodVersions: ['from','to','cursor'], deleteMethodVersion: ['actionId','ref','expectedRevision'],
     deleteMethodPackage: ['actionId','ref','expectedRevision'], listMethodEffects: ['namespace','limit','cursor'],
-    getMethodPackageUsage: ['namespace'],
+    getMethodPackageUsage: ['namespace'], checkMethodReasonRefs: ['namespace','reasonRefs'],
     adoptMethodVersion: ['bindingNamespace','actionId','package','roleId','version','expectedRevision','readSet','reasonRefs'],
     disableMethodBinding: ['bindingNamespace','actionId','package','roleId','expectedRevision','readSet','reasonRefs'],
     resolveMethod: ['readSet','package','roleId'], resolveMethodsForRole: ['readSet','roleId','limit','cursor'],
@@ -196,6 +208,11 @@ export function validateMethodCall(method, input) {
   if (method==='listMethodBindingEvents') {
     const ns=cardNamespace(input.bindingNamespace);
     if(input.package!==undefined && methodPackageRef(input.package).namespace.ownerId!==ns.ownerId)fail('method_not_found');
+    return ns;
+  }
+  if (method === 'checkMethodReasonRefs') {
+    const ns=cardNamespace(input.namespace);
+    denseArray(input.reasonRefs,0,METHOD_LIMITS.reasonRefs).forEach(ref=>cardNamespace(ref?.namespace));
     return ns;
   }
   if (method === 'importMethodVersion') {
