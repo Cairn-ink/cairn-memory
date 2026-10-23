@@ -163,3 +163,16 @@
   adapters/mcp context-read 兩檔 17／17、packaging 三檔 68／68（exit 0）。完整矩陣以 `cairn-heavy` 排在
   `/home/chichieh/cairn-memory-ci-u5b`（0a38a991，乾淨 detached checkout，離線 `npm ci` adapters/mcp、adapters/openai）。
   已回覆主控（訊息待放行）。
+- 主控煙霧測試 `0a38a991` 安裝包通過（13 工具、`read_memory_context` 正常），但報 P2：小記憶的表示法開銷過大
+  （256 預算 0 筆、512 才 1 筆）。協調者以真實 o200k 計數器在合併樹實測（15 token 本文、一條等於本文的 receipt）：
+  總計 488–497；信封 84、item 162–169（ref 55、metadata 32、sources 30、body 21）、**snapshot 236–251 且每多一筆 +90**
+  （base64url 每筆一個 fence）。每多一筆約 250 token，本文只佔 15；snapshot 一項大於主控點名的三項總和。
+- 提 U5b-2 範圍給主控（1 snapshot 移出計量文字＋壓縮、2 精簡 ref、3 metadata 只留非預設、4 `sameAsBody`、5 信封精簡、
+  6 HR-2 以真實開銷模型重跑探索曲線、7 P-top-s1 政策非預設）。**主控核准**：A 包 1–5、B 包 6–7；條件：snapshot 只放
+  `_meta`（不開第二個 content block）、先查是否有流程需模型回傳 snapshot、v2 取代 v1 不並存（`read_memory_context` 在
+  `v1-preview.2` 標 experimental）、`sameAsBody` 不丟 receipt 且要有可讀性測試；分支待主控 fast-forward 並發 preview.2
+  後再開。查證：唯一需模型回傳 snapshot 的流程是 `read_memory_context` → `fetch_memory_candidate_evidence({snapshot})`，
+  v2 改由精簡 ref（`{ns,type,id,rev}`，fetch 工具在 MCP 層加收此形式並展開，core 不動）作為模型的重取路徑。
+- §15.8 v0.10 修正案草稿完成（`.research-private/dispatch/u5b2_contract/amendment-v0.10-draft.md`，尚未提交），
+  含 A13–A19 驗收與 HR-2 addendum（`--overhead-model host-v2`）。等主控給基準 commit 後開 `integration/unified-memory-v1-u5b2`、
+  提交、派非作者稽核。`0a38a991` 矩陣仍在跑。
