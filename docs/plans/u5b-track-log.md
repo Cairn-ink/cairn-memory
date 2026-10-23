@@ -249,3 +249,10 @@
   `overhead-host-v2.json`。兩位都獨立重算 T0／T1／T2＝43／126／208，**接受 48／96／90 的上限調整**，確認 fence 核心實作、
   序列化（Spec 自建 812 bytes 期望字串位元相同）、closure 220／manifest 233、無 SQLite 連結、A19 範圍。
 - 派 fix2（resume，六項），`c8014883` 的矩陣停掉（跑了 12 工作全 0，無意義留存），最終 commit 再跑完整矩陣。
+- **fix2 完成**（worker 六項全修，core 20／20、MCP 43／43 兩版本）：精簡 ref 候選一律先以 `ownData()` 驗原始描述子（繼承資料
+  ／繼承 accessor／own accessor 皆 `invalid_input`，零 getter、零 core 呼叫）；舊完整 ref 以鍵存在性分派到原分支（Proxy、
+  非 enumerable 屬性維持原接受行為），移除 `types.isProxy`；精簡 `id` 加 core `identifier()` 精煉；A16 改 `Own body!`
+  經 canonical 準備；文件錨點改 v0.10.4；A13 測試改為比對已提交常數檔，只有 `CAIRN_PUBLISH_ASSEMBLY_OVERHEAD=1` 才以
+  temp＋rename 覆寫。協調者沙箱外八個測試檔兩版本全 exit 0、whitespace 0。
+- **提交 `c9d2a486`（fix）＋`bd6e3880`（常數檔記 commit）＝新候選 `bd6e3880`**，已推送。審查 worktree 與 CI worktree 移到
+  `bd6e3880`；Spec／Standards 以 resume 複查；完整矩陣以 `cairn-heavy` 排隊。派出時負載 1.3。
