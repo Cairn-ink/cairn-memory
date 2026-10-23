@@ -27,7 +27,9 @@ export function methodMountPreflight(workspace,source,target,label='mount-prefli
       umount "$3" || exit 78
     ' method-mount-prerequisite "$1" "$2" "$3"
     result=$?
-    if [ ! -f "$1" ] && [ "$result" -ne 0 ]; then exit 77; fi
+    # Only unshare's namespace-entry failure (1) needs marker classification.
+    # Preserve explicit mount/infrastructure statuses, including marker failure 78.
+    if [ "$result" -eq 1 ] && [ ! -f "$1" ]; then exit 77; fi
     exit "$result"
   `,'method-mount-preflight',marker,source,target]);
   if(result.status!==METHOD_MOUNT_UNAVAILABLE)assert.equal(result.status,0,result.stderr);

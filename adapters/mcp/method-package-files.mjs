@@ -92,8 +92,7 @@ export function methodExclude(pattern) {
       tokens.push({kind:'one',matches:character=>character===literal});
     }
   }
-  // Preserve the old Unicode dot semantics for ** (line terminators excluded).
-  const dot=character=>character!=='\n'&&character!=='\r'&&character!=='\u2028'&&character!=='\u2029';
+  // POSIX path characters include line terminators; globstar consumes them too.
   const trailingDirectory=pattern.endsWith('/**');
   return path=>{
     const characters=Array.from(String(path)),length=characters.length;
@@ -105,11 +104,11 @@ export function methodExclude(pattern) {
       if(token.kind==='many'){
         current[0]=previous[0];
         for(let j=1;j<=length;j++)current[j]=previous[j]||current[j-1]&&
-          (token.cross?dot(characters[j-1]):characters[j-1]!=='/');
+          (token.cross||characters[j-1]!=='/');
       }else if(token.kind==='directories'){
         current[0]=previous[0];let prefix=false;
         for(let j=1;j<=length;j++){
-          prefix=(prefix||Boolean(previous[j-1]))&&dot(characters[j-1]);
+          prefix=prefix||Boolean(previous[j-1]);
           current[j]=previous[j]||prefix&&characters[j-1]==='/';
         }
       }else for(let j=1;j<=length;j++)current[j]=previous[j-1]&&token.matches(characters[j-1]);

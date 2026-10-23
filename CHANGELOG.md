@@ -2,6 +2,8 @@
 
 ## Unreleased — method host review fixes
 
+- Treat line terminators as ordinary path characters in exclusion globs, and
+  preserve explicit bind-mount preflight infrastructure failures as failures.
 - Bound exclusion glob matching with a two-row dynamic program and preserve
   Unicode, separator, class and directory-pruning semantics.
 - Separate bind-mount prerequisite skips from mandatory importer-child success;

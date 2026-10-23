@@ -1,47 +1,56 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {spawnSync} from 'node:child_process';
-import {openSync,closeSync,readFileSync} from 'node:fs';
+import {openSync,closeSync,readFileSync,mkdirSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {createTestWorkspace} from '../../../tools/testing/workspace.mjs';
-import {methodExclude,METHOD_IMPORT_LIMITS} from '../method-package-files.mjs';
+import {methodExclude,prepareMethodFiles,METHOD_IMPORT_LIMITS} from '../method-package-files.mjs';
 import {METHOD_LIMITS} from '../../../core/method-package-input.mjs';
 
-// The pre-fix implementation is an oracle only for small, non-adversarial cases.
-// Never run the timeout regression through this backtracking implementation.
-function priorExclude(pattern){
-  let source='';
-  for(let i=0;i<pattern.length;i++){
-    const c=pattern[i];
-    if(c==='*'){
-      if(pattern[i+1]==='*'){
-        if(pattern[i+2]==='/'){source+='(?:.*/)?';i+=2;}
-        else{source+='.*';i++;}
-      }else source+='[^/]*';
-    }else if(c==='?')source+='[^/]';
-    else if(c==='['){
-      const end=pattern.indexOf(']',i+1);if(end<0)throw Error('invalid');
-      let body=pattern.slice(i+1,end);if(!body||body.includes('/')||body.includes('['))throw Error('invalid');
-      if(body[0]==='!')body='^'+body.slice(1);
-      source+='(?!/)['+body+']';i=end;
-    }else source+=c.replace(/[.()+^$|{}\]\\]/g,'\\$&');
-  }
-  const expression=new RegExp('^(?:'+source+(pattern.endsWith('/**')?'|'+source.slice(0,-3).replace(/\/$/,''):'')+')$','u');
-  return path=>expression.test(path);
-}
-
-test('H02 exclusions preserve anchored Unicode glob semantics and trailing directory matching',()=>{
-  const patterns=['**','**/a','**/*.md','assets/**','assets/**/**','a/**/b','a**/b','a***b',
-    'a?/[!x].txt','[a-c]','[!a-c]','[^ab]','[!]','[-a]','[a-]',']','a.+($)^{}|.md','😀?','[😀-🙏]','a\n**','**\nb'];
-  const paths=['','a','b','c','x','-','/','assets','assets/','assets/a/b','x/assets','a/b','ab','a/x/b',
-    'a1/b.txt','a1/x.txt','a.md','x/y.md','x/y.txt','a.+($)^{}|.md',']','😀','😀b','🙏','aa\nb','a\n/b','\r','\u2028','\u2029'];
-  const pieces=['a','b','*','**','?','[ab]','[!a]'];
-  for(const left of pieces)for(const right of pieces)patterns.push(left+right,left+'/'+right,left+'/**/'+right);
-  for(const left of ['a','b','😀','\n'])for(const right of ['a','b','/','\n'])paths.push(left+right,left+'/'+right);
-  for(const pattern of patterns){const old=priorExclude(pattern),bounded=methodExclude(pattern);
-    for(const path of paths)assert.equal(bounded(path),old(path),JSON.stringify({pattern,path}));}
+// Contract cases, rather than an oracle that inherits the former regex defects.
+test('H02 exclusions implement anchored POSIX glob syntax, Unicode classes and trailing directory matching',()=>{
+  const cases=[
+    ['**','a/b',true],['**/a','a',true],['**/a','x/a',true],['**/a','a/x',false],
+    ['**/*.md','x/y.md',true],['**/*.md','x/y.txt',false],['assets/**','assets',true],
+    ['assets/**','assets/a/b',true],['assets/**','x/assets',false],['a/**/b','a/b',true],
+    ['a/**/b','a/x/y/b',true],['a**/b','ab',true],['a***b','a/x/b',true],
+    ['a?/[!x].txt','a1/b.txt',true],['a?/[!x].txt','a1/x.txt',false],['a?/[!x].txt','a12/b.txt',false],
+    ['[a-c]','b',true],['[!a-c]','x',true],['[!a-c]','b',false],['[^ab]','x',true],
+    ['[!]','a',true],['[!]','/',false],['[-a]','-',true],['[a-]','-',true],
+    [']',']',true],['a.+($)^{}|.md','a.+($)^{}|.md',true],['a.+($)^{}|.md','prefixa.+($)^{}|.md',false],
+    ['😀?','😀b',true],['😀?','😀bc',false],['[😀-🙏]','🙏',true],
+    ['*.png','a/b.png',false],['?.png','/.png',false],['[!x].png','/.png',false],
+  ];
+  for(const [pattern,path,expected] of cases)assert.equal(methodExclude(pattern)(path),expected,JSON.stringify({pattern,path}));
   for(const pattern of ['[','[]','[z-a]','a/[a/b]','[[a]','a//b','a/../b','/a','a\\b','a\0b','x'.repeat(METHOD_IMPORT_LIMITS.excludeUnits+1)])
     assert.throws(()=>methodExclude(pattern),{code:'invalid_input'},JSON.stringify(pattern));
+});
+
+const lineTerminators=[['LF','\n'],['CR','\r'],['U+2028','\u2028'],['U+2029','\u2029']];
+for(const [name,character] of lineTerminators)test(`H02 POSIX wildcards/classes match ${name} in files and directories; globstar corrects the old matcher`,()=>{
+  const file='file'+character+'name.png',directory='dir'+character+'name';
+  const cases=[
+    ['file*.png',file],['file?name.png',file],['file['+character+']name.png',file],['file[!x]name.png',file],
+    ['**.png',file],['dir*name/image.png',directory+'/image.png'],
+    ['dir?name/image.png',directory+'/image.png'],['dir['+character+']name/image.png',directory+'/image.png'],
+    ['dir[!x]name/image.png',directory+'/image.png'],['**/*.png',directory+'/image.png'],
+    ['prefix/**/image.png','prefix/'+directory+'/nested/image.png'],['assets/**','assets/'+directory+'/'+file],
+  ];
+  for(const [pattern,path] of cases)assert.equal(methodExclude(pattern)(path),true,JSON.stringify({pattern,path}));
+  for(const pattern of ['file*.png','file?name.png','file[!x]name.png'])assert.equal(methodExclude(pattern)('file/path/name.png'),false);
+  assert.equal(methodExclude('**/*.png')(directory+'/image.png.suffix'),false);
+});
+
+test('H02 real line-terminator directory names permit explicit binary pruning, correcting the old globstar refusal',t=>{
+  const workspace=createTestWorkspace(t),root=join(workspace.path,'package');mkdirSync(root);writeFileSync(join(root,'SKILL.md'),'Synthetic method');
+  const excluded=[];
+  for(const [,character] of lineTerminators){
+    const directory='dir'+character+'name',file='file'+character+'name.png';mkdirSync(join(root,directory));
+    writeFileSync(join(root,directory,'image.png'),Buffer.from([0xff]));writeFileSync(join(root,file),Buffer.from([0xff]));
+    excluded.push(directory+'/image.png',file);
+  }
+  const prepared=prepareMethodFiles(root,['**/*.png']);workspace.defer(()=>prepared.close());
+  assert.deepEqual(prepared.files.map(file=>file.path),['SKILL.md']);assert.deepEqual(prepared.pruned,excluded.sort());prepared.validate();
 });
 
 test('H02 adversarial and maximum-length exclusion matching completes in a real process before a hard deadline',t=>{
