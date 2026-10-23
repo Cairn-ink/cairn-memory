@@ -403,3 +403,130 @@ All take `(input, authority)` and return existing envelopes. `A` = actionId.
    same-scope, reference-only, non-recursive use.
 4. **Limits** are provisional text-only defaults. U3 measures real SKILL.md and
    template packages (sizes only) before freezing them.
+
+## 11. U3: method packages on the local host (DRAFT for audit)
+
+U3 makes U2 usable on the installed local host without widening authority. It
+reuses the private-Card terminal-review pattern
+([private-card-terminal-review.md](../private-card-terminal-review.md)): MCP
+tools inspect, and only a separate real-TTY command approves mutations. U3 does
+not change v30 and does not add binary assets (those belong to U4).
+
+### 11.1 Limits recalibrated from measured packages
+
+Statistics only (no contents) from 21 real local skill packages on the
+development machine, 2026-10-23:
+- files per package: 1–122;
+- bytes per package: up to 1.85 MB;
+- largest single file: 321 KB;
+- 5 of 21 packages contain binaries (images, fonts, PDFs).
+
+U2's text limits (64 files; 100,000 units per file; 1,000,000 units per
+version) would refuse 3 of 21 packages on text grounds alone. U3 raises the
+**code constants** (no DDL):
+- files: 256 per version;
+- `fileUnits`: 400,000;
+- `versionUnits`: 4,000,000.
+
+The owner cap stays at 50,000,000 bytes, and the media allowlist is unchanged.
+Reads already page at 4,000 units, so the envelope stays ≤65,536 bytes.
+
+### 11.2 Importer (`cairn-memory methods import`)
+
+```sh
+cairn-memory methods import --db /abs/store.sqlite --owner OWNER [--project PROJECT] \
+  --dir /abs/package-dir --title TITLE [--submitted-by LABEL] \
+  [--package PACKAGE_ID --expected-package-revision N --based-on VERSION_REF_JSON] \
+  [--change /abs/change.json] [--exclude GLOB]...
+```
+
+The importer is a separate CLI process. The MCP process never imports.
+
+- **Confinement**:
+  - Resolve `--dir` once with `realpath`. Walk with `lstat`.
+  - Refuse any symlink, hardlinked file (`nlink > 1`), device, FIFO, socket or
+    mount-point crossing anywhere under the root. Never follow links.
+  - Open each regular file with `O_NOFOLLOW`. `fstat` before and after reading;
+    if dev, ino, size or mtime change, or `realpath` leaves the root, refuse the
+    whole import.
+  - Read nothing outside the root. Execute nothing.
+- **Content**:
+  - Decode strict UTF-8 (`fatal: true`). A leading BOM is preserved as content.
+  - Media type comes from the extension allowlist mapped to U2's media types.
+  - Any non-text file refuses the whole import unless the person passes an
+    explicit `--exclude` that matches it. Exclusions are displayed in the
+    review. Core receives only the included files, so the version records only
+    what was imported.
+  - `.git/` is always excluded and displayed as excluded. Other dotfiles follow
+    the same rules as ordinary files.
+  - Paths are relative POSIX, built from directory entries, never from file
+    contents.
+- **Review and approval**:
+  - The command builds the exact `importMethodVersion` input. It shows a bounded,
+    escaped review on the controlling `/dev/tty`: the namespace, package and
+    `basedOn`, title, every path with its byte count and media type, exclusions,
+    change items and reason refs. The display is capped at 512 KiB; larger
+    reviews refuse.
+  - The person must type the exact displayed phrase.
+  - Unsupported: `--yes`, piped or environment approval, and any non-TTY stdin
+    or stdout. These refuse with `approval_required`.
+  - The grant binds the exact payload (`payloadBinding`), namespace, action ID
+    and expected revisions through the existing local authority path.
+  - Any store change that makes a CAS stale refuses; re-run the command. There is
+    no automatic retry.
+- **Output**: the content-free import receipt, plus a JSON line on stdout.
+
+### 11.3 Adoption commands
+
+```sh
+cairn-memory methods adopt   --db ... --owner ... [--project ...] --binding-namespace personal|project \
+  --package PACKAGE_REF_JSON --role ROLE|'*' --version VERSION_REF_JSON --expected-revision N|null \
+  [--reason-ref REF_JSON]...
+cairn-memory methods disable --db ... --owner ... [--project ...] --binding-namespace ... \
+  --package ... --role ... --expected-revision N|null [--reason-ref ...]...
+```
+
+Same TTY approval as §11.2. The review shows:
+- the binding key;
+- the current resolution for that role;
+- the target version's manifest summary;
+- the cross-scope relation, if any (project binding to a personal package);
+- reason refs, with availability only.
+
+### 11.4 MCP read tools
+
+Opt-in at server start with `--method-packages local-v1`. Without it, nothing
+changes. Namespace and read set are fixed by host flags at startup, never by
+tool arguments.
+
+| Tool | Core method |
+| --- | --- |
+| `resolve_method` | `resolveMethod` |
+| `resolve_methods_for_role` | `resolveMethodsForRole` |
+| `get_method_version` | `getMethodVersion` |
+| `list_method_manifest` | `listMethodManifest` |
+| `read_method_file` | `readMethodFile` |
+| `list_method_packages` | `listMethodPackages` |
+| `list_method_versions` | `listMethodVersions` |
+| `compare_method_versions` | `compareMethodVersions` |
+| `list_method_binding_events` | `listMethodBindingEvents` |
+
+- Each tool passes `intent` and context exactly as in §5. `intent:'current'`
+  requires a `roleId`.
+- **No MCP mutation tools** exist for methods.
+- Tool descriptions state that method text is untrusted data, not instructions
+  or permission. Responses keep the core envelope and the 65,536-byte ceiling.
+- Snapshots returned to agents are opaque. A later `read_method_file` with a pin
+  follows §5.
+
+### 11.5 Acceptance (installed, Node 22.16 and 24.15)
+
+| ID | Observable |
+| --- | --- |
+| H01 | The installed artifact without the flag is unchanged: tool list, DTOs, defaults |
+| H02 | The importer refuses symlinks, hardlinks, special files, root escape, path swaps between `stat` and read, invalid UTF-8 and binaries without `--exclude`, each before any core call. Valid packages (including a 120-file, ~1.8 MB fixture) import exactly |
+| H03 | Real-PTY approval: the exact phrase commits; a wrong phrase, EOF, no TTY, piped input or a stale CAS refuses with no partial rows |
+| H04 | Adopt and disable through real-PTY approval. Resolution changes as §4 specifies, including a project override of a personal default and a disable barrier |
+| H05 | A fresh MCP process in a new session: `resolve_methods_for_role` → `read_method_file` delivers the adopted version; after adopting v2, the old pin reads `newer-version-available`; after a restart, it still does |
+| H06 | Deleting a version through the core host API makes MCP reads `unavailable` with no stale text, including through pins |
+| H07 | Packaging manifest, closure and installed-import tests pass on the shallow CI layout; no historical git objects are needed |
