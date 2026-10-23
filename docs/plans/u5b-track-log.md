@@ -256,3 +256,11 @@
   temp＋rename 覆寫。協調者沙箱外八個測試檔兩版本全 exit 0、whitespace 0。
 - **提交 `c9d2a486`（fix）＋`bd6e3880`（常數檔記 commit）＝新候選 `bd6e3880`**，已推送。審查 worktree 與 CI worktree 移到
   `bd6e3880`；Spec／Standards 以 resume 複查；完整矩陣以 `cairn-heavy` 排隊。派出時負載 1.3。
+- **`bd6e3880` 複查：Spec no（2 P0）、Standards no（1 P0）**，其餘 round-1 發現皆 resolved（A13 不再覆寫、A16 canonical、
+  精簡 id、繼承／accessor 拒絕）。剩下的都在 `context-read-tools.mjs:35–38` 的分派：Spec：(a) 用 `Object.keys` 分派，非
+  enumerable 的 `ns/id/rev/f` 混進合法完整 ref 會走舊分支、`f` 被丟掉（成功、一次 core 呼叫、無 fences）；(b) `in` 檢查先觸發
+  Proxy `has` trap，丟錯的 trap 讓 SDK 回原始錯誤文字而非 `invalid_input`。Standards：(c) `in` 預檢是原本舊解析器沒有的可觀察
+  操作，兩個刁鑽的 Proxy／getter 舊輸入由接受變拒絕。三者方向相反，協調者定折衷設計派 fix3：舊 schema 原樣先跑（零前置
+  檢查）→ 成功後以 `Reflect.ownKeys` 查保留的精簡鍵名（含非 enumerable）拒 hybrid → 失敗才走 `ownData()` 描述子驗證與精簡
+  schema → 整個 preprocess try/catch 轉 `invalid_input`（唯一的舊輸入行為變更：原本會崩潰的 throwing trap 改為乾淨拒絕，
+  需記錄）。`bd6e3880` 的矩陣停掉（跑了 3 工作全 0）。
