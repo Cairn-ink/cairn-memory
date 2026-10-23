@@ -102,3 +102,10 @@
   設計探針逐格相同；dev 報告判 inconclusive（家族數不足，符合協議）。
 - 派 `hr2_review_spec`／`hr2_review_standards`（read-only，detached worktree `/home/chichieh/cairn-memory-review-hr2`
   在 `e3401643`）。test split 要等雙審查與修正後由協調者跑一次。
+- **U5b 第二部分（host）**：worker `u5b_impl2` 改 13 個檔案（`read_memory_context`、新 `adapters/openai/context-counter.mjs`
+  惰性 o200k 計數器由 `server.mjs` 注入、transport 以 `meteredText` 當唯一文字塊、診斷放 `_meta`、manifest、
+  文件、changelog、limitations、兩個 U5a 斷言改成精確工具名清單、兩個新測試）。沒動 `cli.mjs`（中央注入涵蓋 CLI 路徑）。
+  worker 沙箱內 23 通過 1 失敗（loopback EPERM）；協調者沙箱外四個相關測試檔兩個 Node 版本全過（17／17）。
+  提交、推送；開 `/home/chichieh/cairn-memory-review-u5b2`（審查）與 `/home/chichieh/cairn-memory-ci-u5b`（驗收）。
+  給審查者的待評估問題：MCP adapter 靜態引入 plugin 的 `redact.mjs` 並對 query 做 redaction；`server.mjs` 靜態
+  引入 counter 模組使 flag-off 啟動也載入 tiktoken。
