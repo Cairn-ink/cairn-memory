@@ -6,7 +6,7 @@ import { createEpisodeReads } from './episode-reads.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash, randomUUID } from "node:crypto";
-import { openDatabase, transaction } from "./database.mjs";
+import { openDatabase, transaction, isConnectionDiscarded } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
@@ -50,7 +50,7 @@ export function createMemoryRuntime(input, internal) {
   if (!identity) fail("unsupported_database");
   let closed = false;
   let mocStorage;
-  const ready = () => { if (closed) fail("store_closed"); };
+  const ready = () => { if (closed || !db.isOpen || isConnectionDiscarded(db)) fail("store_closed"); };
   const internalNamespace = ns => ({ ...ns, projectId: ns.projectId ?? '' });
   const cardStorage = privateCards ? createPrivateCardStorage({ db, identity, ready, rawSources: Boolean(internal?.rawSources),
     memoryMapInside: (ns, request) => mocStorage.mapRowsInside(internalNamespace(ns), request),
@@ -730,7 +730,7 @@ export function createMemoryRuntime(input, internal) {
     },
     assertEpoch(ns, index) { ready(); return mocStorage.assertEpoch(ns, index); },
     epoch(ns) { ready(); return epoch(ns); },
-    close() { if (!closed) { db.close(); closed = true; } },
+    close() { if (!closed) { if (db.isOpen) db.close(); closed = true; } },
   });
   } catch (error) {
     try { db.close(); } catch { /* Preserve the construction failure. */ }

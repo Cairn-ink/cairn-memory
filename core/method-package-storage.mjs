@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createMethodBindingStorage } from './method-binding-storage.mjs';
-import { transaction } from './database.mjs';
+import { transaction, readTransaction } from './database.mjs';
 import { fail, MemoryStoreError } from './validation.mjs';
 import { keyed } from './private-card-input.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
@@ -33,21 +33,32 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
   const packageRef = (ns, id) => ({ type: 'method-package', namespace: ns, packageId: id });
   const versionRef = (ns, row) => ({ type: 'method-version', namespace: ns, packageId: row.package_id,
     versionId: row.id, manifestIdentity: row.manifest_identity });
-  const fileRows = id => db.prepare('SELECT * FROM method_files WHERE version_id=? ORDER BY position').all(id);
+  const fileColumns = 'version_id,position,path,byte_count,content_identity,media_type';
+  const fileRows = id => db.prepare('SELECT '+fileColumns+' FROM method_files WHERE version_id=? ORDER BY position').all(id);
   const contentIdentity = (ns, text) => binding('method-file-content-v1', [ns, text]);
   const manifestIdentity = files => binding('method-manifest-v1', files.map(file => [file.path,file.contentIdentity,file.mediaType]));
   const manifest = rows => rows.map(row => ({ path: row.path, byteCount: row.byte_count,
     contentIdentity: row.content_identity, mediaType: row.media_type }));
-  function target(ns, inputRef) {
+  function targetMetadata(ns, inputRef) {
     const ref = methodVersionRef(inputRef), pkg = packageRow(ns, ref.packageId);
     const row = pkg && versionRow(pkg.id, ref.versionId);
     if (!sameNamespace(ns, ref.namespace) || !row) fail('method_not_found');
     if (row.manifest_identity !== ref.manifestIdentity) fail('method_version_unavailable');
     if (pkg.state !== 'available' || row.state !== 'available') return { pkg, row, available: false };
     const files = fileRows(row.id);
-    if (manifestIdentity(manifest(files)) !== ref.manifestIdentity || files.some(file =>
-      file.content_identity !== contentIdentity(ns, file.text) || file.byte_count !== Buffer.byteLength(file.text, 'utf8'))) fail('method_version_unavailable');
+    if (manifestIdentity(manifest(files)) !== ref.manifestIdentity) fail('method_version_unavailable');
     return { pkg, row, files, available: true };
+  }
+  function verifyFile(ns, file) {
+    if (file.content_identity !== contentIdentity(ns,file.text) ||
+        file.byte_count !== Buffer.byteLength(file.text,'utf8')) fail('method_version_unavailable');
+    return file;
+  }
+  function target(ns, inputRef) {
+    const found=targetMetadata(ns,inputRef);
+    if (found.available) found.files=db.prepare('SELECT '+fileColumns+',text FROM method_files WHERE version_id=? ORDER BY position')
+      .all(found.row.id).map(file=>verifyFile(ns,file));
+    return found;
   }
   function excludedReceipt(id) {
     return Boolean(db.prepare(`SELECT 1 FROM raw_receipt_lineage l JOIN raw_source_exclusions x
@@ -169,7 +180,7 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
       if (--end <= start) fail('context_item_too_large');
     }
   }
-  const bindings=createMethodBindingStorage({db,binding,packageRow,packageRef,target,reasonAvailable,effect,page});
+  const bindings=createMethodBindingStorage({db,binding,packageRow,packageRef,target,targetMetadata,reasonAvailable,effect,page});
   function read(method, ns, input, accessGeneration,access) {
     const readSet=input.context!==undefined?methodContext(input.context).readSet:input.readSet;
     const cursorScope=readSet??ns;
@@ -231,14 +242,15 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     const saved=bindings.decode(input.snapshot),ref=methodVersionRef(input.version);
     bindings.pinVersion(saved,ref);
     if(readSet && !includesNamespace(readSet,ref.namespace))return method==='getMethodVersion'?{version:null,status:'unavailable',adoptionStatus:'unavailable'}:{status:'unavailable',adoptionStatus:'unavailable'};
-    const found = target(ref.namespace,input.version);
+    const found = method==='readMethodFile'?targetMetadata(ref.namespace,input.version):target(ref.namespace,input.version);
     if (!found.available) return method === 'getMethodVersion' ? { version: null, status: 'unavailable', adoptionStatus: 'unavailable' } :
       { status: 'unavailable', adoptionStatus: 'unavailable' };
     const adoptionStatus=bindings.adoption(found,input,access,saved);
     if (method === 'getMethodVersion') return { version: {...metadata(ref.namespace,found.row),adoptionStatus} };
     if (method === 'listMethodManifest') return page(cursorScope,expected,input,manifest(found.files),files => ({ files, adoptionStatus }));
-    const file = found.files.find(row => row.path === input.path);
-    if (!file) fail('method_not_found');
+    const selected = found.files.find(row => row.path === input.path);
+    if (!selected) fail('method_not_found');
+    const file=verifyFile(ref.namespace,{...selected,...db.prepare('SELECT text FROM method_files WHERE version_id=? AND path=?').get(found.row.id,input.path)});
     const cursor = cursors.decode(input.cursor,expected,cursorScope), start = cursor?.after ?? 0;
     if (!Number.isSafeInteger(start) || start < 0 || start > file.text.length ||
         start > 0 && /[\uDC00-\uDFFF]/.test(file.text[start])) fail('invalid_cursor');
@@ -253,8 +265,8 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     payloadBinding: value => binding('method-action-v1',value),
     call(method,ns,input,payloadBinding,isRead,{ accessGeneration,access }) {
       ready();
+      if (isRead) return readTransaction(db, () => read(method,ns,input,accessGeneration,access));
       return transaction(db, () => {
-        if (isRead) return read(method,ns,input,accessGeneration,access);
         const replay = ledger.replay(ns,input.actionId,method,payloadBinding);
         if (replay !== undefined) return replay;
         const result = method === 'importMethodVersion' ? importVersion(ns,input) : ['adoptMethodVersion','disableMethodBinding'].includes(method) ? bindings.transition(method,ns,input) : remove(method,ns,input);

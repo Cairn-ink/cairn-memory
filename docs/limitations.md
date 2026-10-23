@@ -18,14 +18,19 @@ or forgotten source output. Best-effort redaction is not a secret-removal
 guarantee; logical purge is not secure physical erasure. Limits are 256 files,
 400,000 units/file and 4,000,000 units/version; the owner cap remains 50 MB.
 Importer depth, entry, raw-byte and change-file bounds are published in the guide.
-Each read page holds SQLite's write transaction while re-verifying the whole
-version. Tight readers can starve writers, and either readers or writers can
-receive retryable `storage_busy`. Small pages and byte ceilings are not latency
-or concurrency guarantees. The opt-in measurement counts busy outcomes and waits
-on both sides, retrying the same page or operation. Follow-up U2c will address
-whole-version verification under the write lock; U3 does not remove it. The
-observational measurement has a finite overall deadline and per-operation busy
-retry limit; exhaustion reports incomplete data rather than a performance gate.
+The whole-version write-lock contention found in U3 is resolved by U2c:
+method reads use deferred, consistent SQLite snapshots with `query_only`
+enabled. File pages verify lifecycle and manifest metadata, then hash and check
+only the requested file's text and byte count. Out-of-band text corruption in
+file A refuses A while file B remains readable; version metadata, manifest
+listing and comparison still verify the whole version. Resolution verifies
+metadata; file content is checked when read. These semantics do not detect
+unread text corruption through resolution alone. SQLite contention can still
+return retryable `storage_busy`; byte ceilings do not guarantee latency.
+The opt-in C04 gate runs a continuous maximum-version reader and 100 independent
+binding transitions in separate processes, with finite deadlines. Any busy
+outcome fails, including retried outcomes; writer p95 must be at most 250 ms on
+the reference machine. It reports reader page p50/p95 and both child exit codes.
 Method command review supports rollback-journal stores only. It refuses WAL
 headers and existing journal/WAL/SHM companions before SQLite inspection, pins
 filesystem and SQLite identities, and uses a noncreating fenced opener after

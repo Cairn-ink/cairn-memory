@@ -1,3 +1,4 @@
+import { types } from 'node:util';
 import { storeFenceOption,pinStoreFile,assertStoreIdentity,noncreatingStoreURI } from './store-fence.mjs';
 import { migrateMethodPrerequisites } from './method-package-migration.mjs';
 import { randomBytes, randomUUID } from "node:crypto";
@@ -259,7 +260,74 @@ function migrateVersion7(db) {
   installIndexReaders(db, true);
 }
 
+// A read callback is internal, synchronous work on this connection only: no
+// await, host callbacks, nested transactions, transaction control or live cursors.
+// Return fully materialized arrays/records, never opaque containers or handles.
+const activeReads = new WeakSet(), discardedConnections = new WeakSet();
+export const isConnectionDiscarded = db => discardedConnections.has(db);
+function materializedRead(value, seen = new Set()) {
+  if (typeof value === 'function') fail('storage_error');
+  if (!value || typeof value !== 'object') return;
+  if (types.isPromise(value)) fail('storage_error');
+  const prototype = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && prototype !== null && prototype !== Object.prototype) fail('storage_error');
+  for (let prototype = value; prototype; prototype = Object.getPrototypeOf(prototype)) {
+    for (const key of ['next', 'then']) {
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, key);
+      if (descriptor && (!Object.hasOwn(descriptor, 'value') || typeof descriptor.value === 'function')) fail('storage_error');
+    }
+  }
+  if (seen.has(value)) return;
+  seen.add(value);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  for (const key of Reflect.ownKeys(descriptors)) {
+    const descriptor = descriptors[key];
+    if (!Object.hasOwn(descriptor, 'value')) fail('storage_error');
+    materializedRead(descriptor.value, seen);
+  }
+}
+export function readTransaction(db, work) {
+  if (discardedConnections.has(db) || !db.isOpen) fail('store_closed');
+  if (activeReads.has(db) || db.isTransaction || typeof work !== 'function' ||
+      types.isAsyncFunction(work) || types.isGeneratorFunction(work)) fail('storage_error');
+  activeReads.add(db);
+  let saved, began = false, attempted = false, value, error, failed = false, cleanupError, cleanupFailed = false, unsafeResult = false;
+  try {
+    saved = db.prepare('PRAGMA query_only').get().query_only;
+    db.exec('PRAGMA query_only=ON');
+    attempted = true;
+    db.exec('BEGIN');
+    began = true;
+    value = work();
+    try { materializedRead(value); } catch (failure) { unsafeResult = true; throw failure; }
+    if (!db.isTransaction) fail('storage_error');
+    db.exec('COMMIT');
+    began = false;
+  } catch (failure) {
+    error = failure; failed = true;
+    // Also covers a BEGIN that took effect before an instrumentation failure.
+    began ||= attempted && db.isTransaction;
+  } finally {
+    if (began && db.isTransaction) {
+      try { db.exec('ROLLBACK'); } catch (failure) { cleanupError = failure; cleanupFailed = true; }
+    }
+    if (saved !== undefined) {
+      try { db.exec('PRAGMA query_only=' + (saved ? 'ON' : 'OFF')); }
+      catch (failure) { if (!cleanupFailed) cleanupError = failure; cleanupFailed = true; }
+    }
+    if (cleanupFailed || unsafeResult) {
+      discardedConnections.add(db);
+      try { db.close(); } catch { /* Poisoned even if native close fails. */ }
+    }
+    activeReads.delete(db);
+  }
+  if (cleanupFailed) throw cleanupError;
+  if (failed) throw error;
+  return value;
+}
+
 export function transaction(db, work, check) {
+  if (activeReads.has(db) || discardedConnections.has(db)) fail('storage_error');
   check?.();
   db.exec("BEGIN IMMEDIATE");
   try {

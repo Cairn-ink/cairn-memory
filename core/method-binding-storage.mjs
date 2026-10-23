@@ -5,7 +5,7 @@ import { methodContext, methodRole, methodPackageRef, methodVersionRef,
   methodReasons, includesNamespace, sameNamespace, METHOD_LIMITS } from './method-package-input.mjs';
 
 // No schema installation: all storage was frozen and allocated by U2a.
-export function createMethodBindingStorage({db,binding,packageRow,packageRef,target,reasonAvailable,effect,page}) {
+export function createMethodBindingStorage({db,binding,packageRow,packageRef,target,targetMetadata,reasonAvailable,effect,page}) {
   const rowNamespace=row=>({ownerId:row.owner_id,scope:row.scope,projectId:row.project_id||null});
   const bindingRow=(ns,id,role)=>db.prepare(`SELECT * FROM method_bindings WHERE ${where} AND package_id=? AND role_key=?`).get(...boundary(ns),id,role);
   const bindingRef=(ns,pkg,row)=>({type:'method-binding',bindingNamespace:ns,package:pkg,roleKey:row.role_key,revision:row.revision});
@@ -66,7 +66,7 @@ export function createMethodBindingStorage({db,binding,packageRow,packageRef,tar
     if(winner) {
       status=row.state==='disabled'?'disabled':'unavailable';
       if(row.state==='active' && readable) {
-        const candidate=consulted.at(-1).version,found=target(pkg.namespace,candidate);
+        const candidate=consulted.at(-1).version,found=targetMetadata(pkg.namespace,candidate);
         lifecycle={...lifecycle,versionRevision:found.row.revision,versionState:found.row.state};
         if(found.available){status='current';version=candidate;}
       }

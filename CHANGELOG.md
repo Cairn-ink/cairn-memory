@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — method read concurrency (U2c)
+
+- Run method and binding reads in deferred, query-only snapshots; restore the
+  connection state on refusal and discard connections whose cleanup fails.
+- Verify manifest metadata plus the requested file on file pages and metadata
+  during resolution. Version metadata, manifest lists and comparison retain
+  whole-version verification. Out-of-band text corruption affects that file's
+  reads while other files remain readable.
+- Gate the opt-in two-process maximum-reader/binding-writer measurement on
+  100 commits, zero busy outcomes and writer p95 ≤250 ms, with finite deadlines.
+
 ## Unreleased — installed method packages (U3)
 
 - Keep the CLI static graph SQLite-free while preserving installed eager-module

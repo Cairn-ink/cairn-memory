@@ -532,36 +532,45 @@ infrastructure, not an installed runtime dependency.
 ```sh
 node tools/testing/run.mjs --experimental-test-isolation=none \
   core/test/method-packages-*.test.mjs adapters/mcp/test/method-package-*.test.mjs \
-  packaging/test/method-packages.test.mjs
+  packaging/test/method-packages.test.mjs \
+  tools/testing/measure-method-packages*.test.mjs
 npm run measure:method-packages
 ```
 
-The timing command creates a real synthetic SQLite store with 256 files, ten
-400,000-unit three-byte UTF-8 files plus empty files (4,000,000 units / 12,000,000 bytes total), reads every file in
-1,246 context-free history pages, and repeats while an independent project binding writer competes
-for SQLite's write lock. Ready/start/entered files synchronize the processes;
-content hashes and committed events are checked. Retryable `storage_busy` on
-either side is counted and retried with the same page/cursor or writer action.
-The JSON reports attempt counts, busy counts, total/p50/p95/maximum busy waits
-(`busyWaitMs` measures time inside failed SQLite calls), and subsequent retry
-delays for each reader pass and the writer. The run has a 600,000 ms overall
-deadline shared by both processes and at most 32 busy retries per operation.
-`bounds` reports the absolute deadline and retry limit. Deadline checks occur
-between synchronous SQLite calls; an in-flight call may finish at its bounded
-busy timeout. Exhaustion reports `status:'incomplete'` and a reason, exits 0, and
-cleans up the writer. Throughput/latency remains observational and non-gating in
-U3; U2c C04 will add gates. Non-contention correctness failures still refuse.
-A synthetic run before this retry accounting change on this Linux
-host on 2026-10-23 measured:
+Method reads use deferred SQLite read transactions and temporarily enable
+`query_only`; host callbacks, awaits, nested transactions and escaping
+iterators are excluded. Cleanup restores the previous setting, and a connection whose cleanup
+fails is discarded. Mutations retain immediate write transactions and the
+5,000 ms busy timeout is unchanged.
 
-| Runtime | Complete read | With writer | Slowest contended read page | Writer commits / busy outcomes |
-| --- | ---: | ---: | ---: | ---: |
-| Node 22.16.0 | 64.28 s | 65.24 s | 1.08 s | 73 / 11 |
-| Node 24.15.0 | 61.48 s | 67.41 s | 3.58 s | 418 / 10 |
+A file page checks package/version lifecycle and recomputes manifest identity
+from metadata, then fetches and verifies only the requested text and byte count.
+Resolution and adoption status use metadata verification. Out-of-band corruption
+of file A's text refuses A but leaves file B readable. `getMethodVersion`,
+`listMethodManifest` and `compareMethodVersions` retain whole-version verification.
+Import and purge are the only in-band writers of method files. A page completed
+before concurrent deletion remains complete; a later continuation is
+`cursor_stale`, while a fresh read reports `unavailable`.
 
-Both commands exited 0. The reads verified identical complete content, without
-model/provider calls. Writer maximum latency was 5.01 s / 5.01 s respectively.
-These measurements are machine/load-specific, including concurrent runtime
-measurements and validation activity. Every page re-verifies the whole immutable version under SQLite's
-transaction lock. Small pages and byte ceilings are not latency, concurrency,
-semantic quality or production-readiness guarantees.
+The opt-in C04 timing command creates a real synthetic SQLite store with 256
+files: ten 400,000-unit three-byte UTF-8 files plus empty files (4,000,000 units /
+12,000,000 bytes total). A dedicated reader process continuously reads complete
+versions in 1,246 context-free history pages per pass. A second process commits
+100 alternating adopt/disable transitions on a small independent project
+package. Ready/start/reader-active files synchronize their overlap; complete
+content hashes, binding revisions and committed events are checked. No model or provider is called.
+
+The command asserts both child exit codes, at least one complete maximum-version
+read, at least 100 transitions, no busy outcomes on either side, and writer p95
+of at most 250 ms. Busy outcomes may retry the identical page/cursor or writer
+action for diagnostic completeness, but **any busy outcome fails the gate**.
+It reports reader page p50/p95, writer p50/p95 and total/p50/p95/maximum busy waits
+(`busyWaitMs` measures failed SQLite calls), retry delays and the child exit codes.
+
+The shared overall deadline is 600,000 ms, with at most 32 busy retries per
+operation; `bounds` reports the absolute deadline and retry limit. Checks occur
+between synchronous SQLite calls, so an in-flight call can finish at its bounded
+busy timeout. Incomplete runs and failed thresholds exit nonzero and clean up
+both children. The 250 ms gate applies on the reference machine; measurements
+elsewhere must identify their environment. This synthetic local gate is not a
+latency, semantic-quality or production-readiness guarantee.
