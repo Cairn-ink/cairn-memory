@@ -40,11 +40,16 @@ function host(path,onAuthorize) {
   return {core,call:(method,input)=>core[method](input,token)};
 }
 const ok=value=>{assert.equal(value.ok,true,JSON.stringify(value));return value.value;};
-export function assertAssetImportGate(report) {
-  assert.equal(report.status,'complete');assert.equal(report.bytes,ASSET_LIMITS.versionBytes);
+function assertImportGate(report,bytes) {
+  assert.equal(report.status,'complete');assert.equal(report.bytes,bytes);
   assert.equal(report.writeTransactions,1);assert.equal(report.allMACsBeforeCallbacksAndLock,true);
-  assert.ok(report.transactionMs<=ASSET_MEASUREMENT_BOUNDS.importTransactionMs,'32-MiB import transaction exceeds 2000 ms');
+  assert.ok(report.transactionMs<=ASSET_MEASUREMENT_BOUNDS.importTransactionMs,'maximum import transaction exceeds 2000 ms');
   assert.ok(report.rssGrowthBytes<=ASSET_MEASUREMENT_BOUNDS.rssGrowthBytes,'RSS growth exceeds 128 MiB from pre-core-call baseline');
+}
+export const assertAssetImportGate=report=>assertImportGate(report,ASSET_LIMITS.versionBytes);
+export function assertMixedAssetImportGate(report) {
+  assertImportGate(report,67108864);assert.equal(report.binaryEntries,2);assert.equal(report.entries,256);
+  assert.equal(report.textUnits,4000000);assert.equal(report.hmacCalls,2306);
 }
 function stats(){return {storageBusy:0,times:[]};}
 function measured(f,method,input,s,deadlineAt){
@@ -66,10 +71,19 @@ async function pass(f,config,s,observe) {
   return {complete:true,pages,bytes:total,elapsedMs:performance.now()-started,...timings(s)};
 }
 const main=process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url);
-if(main&&process.argv[2]==='--import') {
+if(main&&['--import','--mixed-import'].includes(process.argv[2])) {
+  const mixed=process.argv[2]==='--mixed-import';
   const config=JSON.parse(readFileSync(process.argv[3],'utf8'));let preparationPeakRSS=0,phase='setup',hmacCalls=0,writeTransactions=0,started,transactionMs;
-  const f=host(config.path,()=>{preparationPeakRSS=peakRSS();assert.equal(phase,'prepare');phase='authorized';});
-  const beforeCallerRSS=process.memoryUsage().rss,bytes=Buffer.alloc(ASSET_LIMITS.versionBytes,0x61);bytes.set(Buffer.from('%PDF-1.7'));
+  const f=host(config.path,()=>{assert.ok(['prepare','authorized'].includes(phase));if(phase==='prepare')preparationPeakRSS=peakRSS();phase='authorized';});
+  const beforeCallerRSS=process.memoryUsage().rss,bytes=Buffer.alloc(mixed?67108864:ASSET_LIMITS.versionBytes,0x61);bytes.set(Buffer.from('%PDF-1.7'));
+  if(mixed)bytes.set(Buffer.from('%PDF-1.7'),ASSET_LIMITS.versionBytes);
+  const files=mixed?[
+    ...Array.from({length:254},(_,i)=>({kind:'text',path:'p'.repeat(500)+'/'+String(i).padStart(3,'0')+'.txt',mediaType:'text/plain',
+      text:'界'.repeat(Math.floor(4000000/254)+(i<4000000%254?1:0))})),
+    ...[0,1].map(i=>({kind:'binary',path:'maximum-'+i+'.pdf',mediaType:'application/pdf',bytes:bytes.subarray(i*ASSET_LIMITS.versionBytes,(i+1)*ASSET_LIMITS.versionBytes)})),
+  ]:null;
+  const textUnits=mixed?files.filter(file=>file.kind==='text').reduce((sum,file)=>sum+file.text.length,0):0;
+  const callerTextUTF8Bytes=mixed?files.filter(file=>file.kind==='text').reduce((sum,file)=>sum+Buffer.byteLength(file.text),0):0;
   const afterCallerRSS=process.memoryUsage().rss,sha256=createHash('sha256').update(bytes).digest('hex'),preCoreCallRSS=process.memoryUsage().rss;
   const originalHmac=crypto.createHmac,originalExec=DatabaseSync.prototype.exec;
   crypto.createHmac=function(...args){assert.equal(phase,'prepare','MAC preparation must precede host callbacks and locks');hmacCalls++;return originalHmac(...args);};syncBuiltinESMExports();
@@ -81,10 +95,11 @@ if(main&&process.argv[2]==='--import') {
   };
   let report;
   try {
-    phase='prepare';const receipt=ok(f.call('importAssetVersion',{namespace:ns,actionId:'maximum-asset',title:'Synthetic maximum asset',filename:'maximum.pdf',mediaType:'application/pdf',bytes}));
+    phase='prepare';const receipt=mixed?ok(f.call('importMethodVersion',{namespace:ns,actionId:'maximum-mixed',title:'t'.repeat(200),submittedBy:'s'.repeat(200),manifestFormat:'mixed-v1',files})):
+      ok(f.call('importAssetVersion',{namespace:ns,actionId:'maximum-asset',title:'Synthetic maximum asset',filename:'maximum.pdf',mediaType:'application/pdf',bytes}));
     const processPeakRSS=peakRSS();report={status:'complete',pid:process.pid,node:process.version,bytes:bytes.length,callerAllocationBytes:bytes.length,beforeCallerRSS,afterCallerRSS,
-      preCoreCallRSS,preparationPeakRSS,processPeakRSS,rssGrowthBytes:Math.max(0,processPeakRSS-preCoreCallRSS),hmacCalls,allMACsBeforeCallbacksAndLock:phase==='committed'&&hmacCalls===1026,
-      writeTransactions,transactionMs,receipt,sha256};assertAssetImportGate(report);
+      preCoreCallRSS,preparationPeakRSS,processPeakRSS,rssGrowthBytes:Math.max(0,processPeakRSS-preCoreCallRSS),hmacCalls,allMACsBeforeCallbacksAndLock:phase==='committed'&&hmacCalls===(mixed?2306:1026),
+      ...(mixed?{binaryEntries:2,entries:files.length,textUnits,callerTextUTF8Bytes}:{}),writeTransactions,transactionMs,receipt,sha256};(mixed?assertMixedAssetImportGate:assertAssetImportGate)(report);
   }catch(error){report={...report,status:'failed',reason:error.message};process.exitCode=1;}
   finally{crypto.createHmac=originalHmac;syncBuiltinESMExports();DatabaseSync.prototype.exec=originalExec;f.core.close();}
   publish(config.result,report);
@@ -140,8 +155,21 @@ if(main&&process.argv[2]==='--import') {
     let timer;const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('K13 overall deadline')),Math.max(1,bounds.deadlineAt-Date.now()));});
     try {
       await Promise.race([complete('import'),deadline]);assertAssetImportGate(observations.import);
+      launch('mixed-import');await Promise.race([complete('mixed-import'),deadline]);assertMixedAssetImportGate(observations['mixed-import']);
       const f=host(path);let binding;
-      try{binding=ok(f.call('importMethodVersion',{namespace:project,actionId:'binding-target',title:'Synthetic writer',files:[{path:'SKILL.md',text:'Synthetic binding writer',mediaType:'text/plain'}]}));}finally{f.core.close();}
+      try{
+        const hash=createHash('sha256');let bytes=0,pages=0;
+        for(let i=0;i<2;i++) {
+          let cursor;
+          do{checkDeadline(bounds.deadlineAt);const page=ok(f.call('readMethodAttachmentBytes',{version:observations['mixed-import'].receipt.version,path:'maximum-'+i+'.pdf',intent:'history',...(cursor?{cursor}:{})}));
+            const value=Buffer.from(page.bytes,'base64');hash.update(value);bytes+=value.length;pages++;assert.equal(page.totalByteCount,ASSET_LIMITS.versionBytes);
+            assert.equal(page.complete,page.nextCursor===null);assert.ok(Buffer.byteLength(JSON.stringify({ok:true,value:page}))<=65536);cursor=page.nextCursor;
+          }while(cursor);
+        }
+        assert.equal(bytes,67108864);assert.equal(pages,2048);assert.equal(hash.digest('hex'),observations['mixed-import'].sha256);
+        observations.mixedVerification={bytes,pages,exactBytes:true,independentProcess:true};
+        binding=ok(f.call('importMethodVersion',{namespace:project,actionId:'binding-target',title:'Synthetic writer',files:[{path:'SKILL.md',text:'Synthetic binding writer',mediaType:'text/plain'}]}));
+      }finally{f.core.close();}
       const reader=launch('reader',{receipt:observations.import.receipt,sha256:observations.import.sha256,baseline:join(workspace.path,'baseline.result')});
       const alive=()=>{for(const name of ['reader','writer'])if(children[name]?.exit)throw Error(name+' exited before barrier '+readFileSync(children[name].stderr,'utf8'));};
       await until(()=>{alive();return existsSync(reader.config.ready);},bounds.deadlineAt);
@@ -151,9 +179,9 @@ if(main&&process.argv[2]==='--import') {
       const exits=Object.fromEntries(await Promise.race([Promise.all(['reader','writer'].map(async name=>[name,await complete(name)])),deadline]));
       assertMethodGate({...observations,exits});
       const db=new DatabaseSync(path);try{assert.equal(db.prepare('SELECT count(*) n FROM method_binding_events').get().n,observations.writer.committed);
-        assert.equal(db.prepare('SELECT byte_count FROM binary_owner_usage').get().byte_count,ASSET_LIMITS.versionBytes);assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);}finally{db.close();}
-      console.log(JSON.stringify({status:'complete',node:process.version,bounds,...observations,exits:{import:children.import.exit,...exits},
-        methodology:'one 32-MiB standalone import; caller allocation and pre-core-call RSS baseline include caller bytes; process high-water RSS includes synchronous preparation; every MAC precedes callbacks/BEGIN IMMEDIATE; independent continuous maximum-byte reader; writer fixed pause = baseline byte-read elapsedMs / 10, spreading at least 100 transitions across ten baseline passes; reader overlap p95/max observational; gates zero busy, >=100 commits, >=200 overlap pages, writer p95 <=250 ms'},null,2));
+        assert.equal(db.prepare('SELECT byte_count FROM binary_owner_usage').get().byte_count,ASSET_LIMITS.versionBytes+67108864);assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);}finally{db.close();}
+      console.log(JSON.stringify({status:'complete',node:process.version,bounds,...observations,exits:{import:children.import.exit,'mixed-import':children['mixed-import'].exit,...exits},
+        methodology:'one 32-MiB standalone and one 64-MiB mixed import with 256 entries and 4,000,000 text units in separate fresh processes; caller allocation and pre-core-call RSS baseline include caller bytes and text; process high-water RSS includes synchronous preparation; every input MAC precedes callbacks/BEGIN IMMEDIATE; independent complete mixed-byte verification; independent continuous maximum-byte reader; writer fixed pause = baseline byte-read elapsedMs / 10, spreading at least 100 transitions across ten baseline passes; reader overlap p95/max observational; gates zero busy, >=100 commits, >=200 overlap pages, writer p95 <=250 ms'},null,2));
     }finally{clearTimeout(timer);}
   }catch(error){
     process.exitCode=1;for(const child of Object.values(children))if(!child.exit)child.child.kill('SIGKILL');await Promise.allSettled(Object.values(children).map(child=>child.closed));

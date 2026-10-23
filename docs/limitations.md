@@ -2532,8 +2532,21 @@ are not final-source evidence or measured semantic quality.
 
 `assets-local-v1` is an explicit embedded opt-in using v31 SQLite BLOB chunks.
 It matches only the contract's bounded leading signatures and does not parse,
-decode, render, execute, scan for malware or call models. No asset CLI, MCP byte
-delivery, derivative creation or mixed-method import is exposed in this packet.
+decode, render, execute, scan for malware or call models. No asset CLI or MCP byte
+delivery is exposed in this packet. Embedded derivative creation accepts only
+explicitly supplied text with `method:{kind:'user-provided'}`; it performs no
+OCR, ASR, captioning or media understanding. Optional ordered audio/video
+intervals are `user-supplied-unverified`, with no text-span alignment claim.
+Derivative history compares the exact source ordinal with the greatest imported
+ordinal; it does not infer a current source or inherit text into later versions.
+Embedded mixed-method import requires both capabilities and separate grants.
+Attachments are exclusive copies, charged independently, with no deduplication.
+Method-only processes can inspect mixed metadata and purge attachments, including
+corrupt bytes, but cannot deliver binary content without asset grants. Current
+attachment cursors stale on adoption transitions; history remains on the exact
+requested version with fresh authorization. No CLI/MCP attachment import or byte
+export is added here. The opt-in K13 measurement asserts both 32-MiB standalone
+and 64-MiB mixed-import transaction/RSS thresholds, including byte preparation.
 Every binary read verifies metadata and only the selected chunk; corruption in
 another chunk is detected when it is selected. Authenticated totals prevent
 truncated completion. Logical purge does not erase freed pages, journals/WAL or

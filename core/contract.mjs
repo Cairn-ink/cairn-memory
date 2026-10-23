@@ -1165,7 +1165,7 @@ export function createMemoryCore(input, internal) {
 
   internal?.attachCapture?.((input, registration) => capture(input, undefined, registration));
   return Object.freeze({
-    ...createMethodPackageFacade(runtime.methodPackages, methodPackages, runtime.ready),
+    ...createMethodPackageFacade(runtime.methodPackages, methodPackages, runtime.ready,assets),
     ...createAssetFacade(runtime.assets, assets, runtime.ready),
     ...createPrivateCardFacade(runtime.privateCards, privateCards, runtime.ready, internal?.rawSources ? runtime.rawSourceReader : undefined),
     sessionStartContext, closeEpisodeNextStep, listEpisodes, listMemoriesByTime, getEpisode, forgetEpisode, correctEpisode, releaseEpisodeCorrection,

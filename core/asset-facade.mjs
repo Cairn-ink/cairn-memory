@@ -17,8 +17,8 @@ export function createAssetFacade(storage,options,ready) {
       const visible=Object.fromEntries(Object.entries(payload).filter(([key])=>key!=='bytes'));
       if(payload.bytes)visible.bytes={byteCount:payload.bytes.byteLength,commitment:prepared.payloadBinding};
       const request=deepFreeze({method,namespace:ns,actionClass:read?'read':'explicit-user',actionId:read?null:payload.actionId,
-        targetId:payload.ref?.versionId??payload.ref?.assetId??payload.version?.versionId??payload.asset?.assetId??payload.actionId??null,
-        expectedRevision:payload.expectedRevision??payload.expectedAssetRevision??null,payloadBinding:prepared.payloadBinding,input:visible});
+        targetId:payload.ref?.derivativeId??payload.ref?.versionId??payload.ref?.assetId??payload.version?.versionId??payload.asset?.assetId??payload.actionId??null,
+        expectedRevision:payload.expectedRevision??payload.expectedVersionRevision??payload.expectedAssetRevision??null,payloadBinding:prepared.payloadBinding,input:visible});
       if(!authority||typeof authority!=='object')fail('authority_required');
       const grant=options.authority.authorize(request,authority);
       if(!grant||typeof grant!=='object'||typeof grant.then==='function')fail('authority_required');
@@ -32,7 +32,8 @@ export function createAssetFacade(storage,options,ready) {
     } catch(error) {return privateFailure(error);}
   };
   facade.getAssetCapabilities=()=>({ok:true,value:{version:'assets-local-v1',storage:'sqlite-blob-v1',methods:[...ASSET_METHODS],
-    refs:['asset','asset-version'],mediaTypes:[...ASSET_MEDIA],limits:{...ASSET_LIMITS},parser:'unavailable',signature:'signature-matched',
+    refs:['asset','asset-version','asset-derivative'],mediaTypes:[...ASSET_MEDIA],limits:{...ASSET_LIMITS},parser:'unavailable',signature:'signature-matched',
+    derivatives:{kinds:['caption','transcript','description','alt-text'],method:'user-provided',provenance:'asset-derivative-provenance-v1',alignment:'user-supplied-unverified'},
     usageProjection:'binary-usage-v1',usageScope:'namespace',quotaScope:'owner',modelAssisted:false,execution:false}});
   return facade;
 }

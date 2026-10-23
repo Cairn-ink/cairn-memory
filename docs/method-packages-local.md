@@ -1,6 +1,6 @@
 # Local method packages: core and local host
 
-`method-packages-local-v1` is an explicit text-only engine opt-in in the existing
+`method-packages-local-v1` is an explicit engine opt-in in the existing
 SQLite store. It provides immutable imports, contextual and context-free reads,
 mechanical comparisons, logical deletion, content-free replay and durable effects.
 U2a installed the complete v30 canonical schema; U2b adds adoption bindings,
@@ -586,5 +586,10 @@ latency, semantic-quality or production-readiness guarantee.
 
 Method-only processes also reopen complete v31 stores upgraded by the separate
 [standalone asset opt-in](assets-local.md). Selecting methods alone still upgrades
-to v30. Binary attachments remain unavailable in this packet; text-only imports,
-identities and replay keep their existing format.
+to v30. The embedded core supports explicit `mixed-v1` attachments when both the
+method and asset ports are configured, with separate operation/payload-bound
+grants. See [assets and mixed methods](assets-local.md#mixed-method-attachments)
+for tagged entries, binary limits, byte cursors and current/history fences.
+Method-only processes retain mixed metadata/text/purge; binary delivery requires
+the asset capability. Text-only imports, identities and replay keep their
+existing format. The local CLI and MCP transport remain text-only until U4b.

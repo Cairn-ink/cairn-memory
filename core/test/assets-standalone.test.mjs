@@ -97,7 +97,8 @@ test('K04 first/last version and namespace limits count tombstones, reservations
 test('K12 capabilities advertise only implemented methods, namespace-only usage and parser unavailable; no model, network or content execution',t=>{
   let calls=0;const f=fixture(t);const cap=ok(f.core.getAssetCapabilities());
   assert.deepEqual(cap.methods,[...ASSET_METHODS]);assert.equal(cap.parser,'unavailable');assert.equal(cap.limits.responseBytes,65536);
-  for(const method of ['createAssetDerivative','listAssetDerivatives','readAssetDerivative','readMethodAttachmentBytes'])assert.equal(f.core[method],undefined);
+  for(const method of ['createAssetDerivative','listAssetDerivatives','readAssetDerivative','deleteAssetDerivative'])assert.equal(typeof f.core[method],'function');
+  assert.equal(f.core.readMethodAttachmentBytes,undefined);
   const previous=globalThis.fetch;globalThis.fetch=()=>{calls++;throw Error('network');};t.after(()=>{globalThis.fetch=previous;});
   const receipt=ok(f.call('importAssetVersion',input('opaque-code',{bytes:Buffer.concat([pdf(),Buffer.from('throw new Error("DO NOT EXECUTE"); fetch("https://invalid")')])})));
   assert.equal(ok(f.call('verifyAssetBytes',{version:receipt.version,bytes:bytes(f,receipt.version)})).matches,true);

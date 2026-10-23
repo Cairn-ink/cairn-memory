@@ -5,6 +5,7 @@ import { ASSET_LIMITS, assetRef, assetVersionRef, assetPageLimit, assetLabel, va
 import { validateBinaryObject } from './asset-schema.mjs';
 import { createOperationLedger, createPrivateEffectWriter, privateBoundary as boundary, privateWhere as where, envelopeBytes } from './private-operation-helpers.mjs';
 import { fail } from './validation.mjs';
+import { createAssetDerivativeStorage } from './asset-derivative-storage.mjs';
 
 const now=()=>new Date().toISOString();
 export function createAssetStorage({db,identity,ready}) {
@@ -57,7 +58,8 @@ export function createAssetStorage({db,identity,ready}) {
     let saved;try{saved=JSON.parse(Buffer.from(body,'base64url').toString('utf8'));}catch{fail('invalid_cursor');}
     if(JSON.stringify(saved.binding)!==JSON.stringify(expected) || !Number.isSafeInteger(saved.after) || saved.after<0 ||
       !Number.isSafeInteger(saved.epoch)||saved.epoch<1 ||
-      expected.method==='readAssetBytes' && (![saved.assetRevision,saved.versionRevision].every(value=>Number.isSafeInteger(value)&&value>0)))fail('invalid_cursor');
+      ['readAssetBytes','readAssetDerivative'].includes(expected.method) && (![saved.assetRevision,saved.versionRevision,
+        ...(expected.method==='readAssetDerivative'?[saved.derivativeRevision]:[])].every(value=>Number.isSafeInteger(value)&&value>0)))fail('invalid_cursor');
     return saved;
   }
   function page(ns,input,expected,saved,entries,key) {
@@ -130,6 +132,7 @@ export function createAssetStorage({db,identity,ready}) {
   function read(method,ns,input,prepared,accessGeneration) {
     const stream=Object.fromEntries(Object.entries(input).filter(([key])=>key!=='cursor'&&key!=='bytes'));
     const expected={store:identity.storeId,method,namespace:ns,input:stream,accessGeneration},saved=decode(input.cursor,expected);
+    if(['listAssetDerivatives','readAssetDerivative'].includes(method))return derivatives.read(method,ns,input,expected,saved);
     if(method==='getAssetUsage')return {version:'binary-usage-v1',namespace:ns,
       retainedBinaryBytes:db.prepare(`SELECT coalesce(sum(byte_count),0) AS n FROM binary_objects WHERE ${where}`).get(...boundary(ns)).n,
       retainedDerivativeBytes:db.prepare(`SELECT coalesce(sum(d.byte_count),0) AS n FROM asset_derivatives d JOIN asset_versions v ON v.id=d.version_id JOIN assets a ON a.id=v.asset_id
@@ -172,8 +175,10 @@ export function createAssetStorage({db,identity,ready}) {
       byteCount:expectedLength,totalByteCount:object.byte_count,complete,nextCursor:complete?null:encode({binding:expected,epoch:epoch(ns),after:index+1,
         assetRevision:asset.revision,versionRevision:row.revision})};
   }
+  const derivatives=createAssetDerivativeStorage({db,mac,target,assetRow,effect,epoch,encode,page});
   return {prepare(method,ns,input) {
     const prepared=prepare(method,ns,input);
+    if(method==='createAssetDerivative')prepared.derivative=derivatives.prepare(ns,input);
     if(method==='verifyAssetBytes') {
       // Media is mutable storage, so prepare every allowlisted candidate outside
       // the read transaction; expose only the canonical target on comparison.
@@ -187,8 +192,9 @@ export function createAssetStorage({db,identity,ready}) {
     return transaction(db,()=>{
       const replay=ledger.replay(ns,input.actionId,method,prepared.payloadBinding);
       if(replay!==undefined)return replay;
-      const result=method==='importAssetVersion'?importVersion(ns,input,prepared):remove(method,ns,input);
-      ledger.record(ns,input.actionId,method,prepared.payloadBinding,result.asset?.assetId??result.id,result,now());
+      const result=method==='importAssetVersion'?importVersion(ns,input,prepared):method==='createAssetDerivative'?derivatives.create(ns,input,prepared.derivative):
+        method==='deleteAssetDerivative'?derivatives.remove(ns,input):remove(method,ns,input);
+      ledger.record(ns,input.actionId,method,prepared.payloadBinding,result.asset?.assetId??result.derivative?.derivativeId??result.id,result,now());
       return result;
     });
   }};

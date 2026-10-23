@@ -3,9 +3,9 @@
 The embedded core can retain explicitly submitted opaque binary versions.
 SQLite BLOBs are plaintext at rest, under the existing private-file checks. This
 preview is opt-in and has no asset CLI or MCP tools. It does not decode media,
-run parsers or models, execute content, or read import files itself. Derivatives
-and binary method attachments have reserved v31 storage but no public methods
-in this packet. `getAssetCapabilities()` advertises only implemented methods and
+run parsers or models, execute content, or read import files itself. The embedded
+API also supports user-provided derivatives and exclusive method attachments,
+using the same frozen v31 layout. `getAssetCapabilities()` advertises implemented methods and
 reports `parser:'unavailable'`.
 
 ```js
@@ -20,7 +20,13 @@ private Cards and method packages. Its allowlist must name asset methods
 explicitly. Import and deletion require `explicit-user`; every read requires a
 fresh exact-namespace `read` grant. `readAssetBytes` and `verifyAssetBytes` are
 byte-delivery permissions; metadata access does not authorize either method.
-Capture consent, model output and tool flags do not mint grants.
+Capture consent, model output and tool flags do not mint grants. Derivative
+creation/deletion also require `explicit-user`. Mixed-method import and
+`readMethodAttachmentBytes` require grants from both configured authority ports,
+binding the same operation and payload commitment. The asset port must explicitly
+allow those method names (`ASSET_METHOD_GRANTS`); method metadata/text/purge use
+only the method port. Binary authority inputs contain frozen byte-count/commitment
+descriptors, never views into the copied bytes.
 
 All methods take `(input, authorityToken)` and return `{ok:true,value}` or a
 sanitized `{ok:false,error:{code,retryable}}`. Only `storage_busy` is retryable.
@@ -38,6 +44,10 @@ Capabilities contain no private counts and require no token.
 | `deleteAsset` / `deleteAssetVersion` | `actionId, ref, expectedRevision` |
 | `getAssetUsage` | `namespace` |
 | `listAssetEffects` | `namespace, limit?, cursor?` |
+| `createAssetDerivative` | `actionId, version, expectedVersionRevision, kind, text, method`, optionally `language, timecodes` |
+| `listAssetDerivatives` | `version, limit?, cursor?` |
+| `readAssetDerivative` | `ref, cursor?` |
+| `deleteAssetDerivative` | `actionId, ref, expectedRevision` |
 
 Namespaces use `{ownerId,scope,projectId}` with `projectId:null` for personal
 scope. An asset ref is `{type:'asset',namespace,assetId}`. A version ref adds
@@ -92,13 +102,12 @@ Limits: 33,554,432 bytes per version, 64 versions per asset, 1,024 assets per
 namespace, title 200 UTF-16 units, single-component filename 512 units. Tombstones
 continue to count toward entity limits. The owner-wide binary quota is
 200,000,000 bytes, separate from the method text quota. Usage includes retained
-asset/attachment bytes and retained derivative UTF-8 text; this packet only
-creates standalone assets. Namespace usage is authorized independently; no
+asset/attachment bytes and retained derivative UTF-8 text. Namespace usage is authorized independently; no
 owner aggregate is implicitly disclosed. Metadata, ledgers, effects, SQLite
 page overhead, journals/WAL and backups are outside accounting.
 
 Deletion purges descriptions, names, media labels, binary objects/chunks and
-future derivatives. Content-free tombstones, opaque identities, ordinals,
+derivatives. Content-free tombstones, opaque identities, ordinals,
 revisions and receipts remain. Object-delete triggers alone release object
 bytes; derivative-transition triggers alone release derivative text, preventing
 double release. Each requested deletion emits one durable target effect;
@@ -114,7 +123,7 @@ Stop older writers before upgrading: actual v30 binaries refuse v31. No asset
 facade is enabled merely by reopening an upgraded database.
 
 `npm run measure:assets` is an opt-in synthetic K13 gate on Node 22.16 and 24.15.
-It asserts the 32-MiB import transaction and RSS bounds and the independent
+It asserts the 32-MiB standalone and 64-MiB mixed import transaction and RSS bounds and the independent
 maximum-byte-reader/binding-writer contention bounds, including zero busy,
 at least 100 committed transitions, at least 200 overlapping reader pages and
 writer p95 ≤250 ms. Its fixed writer pause is one tenth of a complete byte-read baseline, spreading
@@ -130,4 +139,58 @@ restore those immutable bytes without git or historical objects. Run
 `node tools/testing/run.mjs --experimental-test-isolation=none core/test/assets-migration.test.mjs`
 to verify their integrity, complete installed closure, refusal and migrations.
 `core/testing/asset-v31-layout.json` freezes every new canonical definition for
-the next packet, which must add behavior without DDL changes.
+all core behaviors; derivatives and mixed attachments add no DDL.
+
+## User-provided derivatives
+
+`createAssetDerivative` accepts `caption`, `transcript`, `description` or
+`alt-text`, an exact source version, `expectedVersionRevision:1` and
+`method:{kind:'user-provided'}`. Text is valid Unicode without NUL, at most
+20,000 UTF-16 units before and after best-effort redaction. Formatting remains
+intact. A version has at most 32 derivatives, including deleted tombstones.
+An optional BCP 47 language tag has at most 35 units. Audio/video alone can have
+up to 256 ordered safe-integer `{startMs,endMs}` intervals. Their explicit
+`alignment:'user-supplied-unverified'` describes supplied intervals, without any
+text-span alignment or media-understanding claim.
+
+Creation returns `{derivative,source,revision}`. A derivative ref is
+`{type:'asset-derivative',namespace,assetId,versionId,derivativeId}`. Lists and reads
+report exact versioned provenance, source ordinal, greatest imported ordinal and
+`historical` (source ordinal is lower). New versions inherit nothing. Reads
+return code-point-safe parts of at most 4,000 units. Deletion purges text, kind,
+language, intervals and provenance through the sole quota-release trigger.
+Source deletion cascades without descendant effects. Every delivery requires
+fresh exact-namespace read authority; a historical reference never grants access.
+
+## Mixed method attachments
+
+Configure both method and asset ports. `importMethodVersion` accepts explicit
+`manifestFormat:'mixed-v1'` and ordered tagged `files`: either
+`{kind:'text',path,text,mediaType}` or `{kind:'binary',path,bytes,mediaType}`.
+At least one entry is binary. There are at most 256 total entries, each binary
+at most 33,554,432 bytes and the binary total at most 67,108,864 bytes. Existing
+text limits also apply. Binary paths/declarations/signatures must agree. Text-only
+imports keep their existing untagged wire format and identities.
+
+Each binary entry owns a separate object and all copies count toward the binary
+quota. Text and binary entries share positions. Mixed manifests expose `kind`
+and bind kind, path, media, byte count and content identity. Comparisons use kind,
+media and identity; no semantic reason is inferred.
+
+`readMethodAttachmentBytes({version,path,intent,context?,snapshot?,cursor?},token)`
+delivers one authenticated base64 chunk with the existing method adoption status.
+Current intent requires context and the available winning target. Adoption
+changes stale current pins/cursors without substituting another version. History
+pins and continuations remain exact through adoption/disable, with fresh grants;
+parent/version lifecycle changes stale live continuations and deleted targets are
+unavailable. The cursor also binds both ports' access generations. Revocation
+blocks bytes. Method-only processes retain mixed metadata and text reads;
+byte delivery without the asset capability returns `unsupported_media`.
+`readMethodFile` on a binary entry also returns `unsupported_media`.
+
+Every attachment page checks lifecycle and manifest metadata plus only its selected
+chunk. It does not load method text or hash unrelated chunks. Whole method version,
+manifest and comparison reads retain whole-text verification. Purge checks only
+canonical identity, lifecycle and CAS, so corrupted payloads can still be removed
+with assets disabled. There are no asset references or asset effects for method
+attachments; method receipts/effects retain their existing format.

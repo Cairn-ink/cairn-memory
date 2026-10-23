@@ -78,7 +78,7 @@ test('K04 v31 ownership, exact references, STRICT chunk shapes and deferred excl
   assert.deepEqual(f.db.prepare('PRAGMA foreign_key_check').all(),[]);
   assert.equal(f.db.prepare('SELECT byte_count FROM binary_owner_usage').get().byte_count,8);
 });
-test('K01/K09 reserved derivative layout supports exact-source constraints and sole-writer release without a derivative API',t=>{
+test('K01/K09 derivative layout supports exact-source constraints and sole-writer release alongside the derivative API',t=>{
   const f=fixture(t),saved=ok(f.call('importAssetVersion',input())),provenance=JSON.stringify({source:saved.version,method:{kind:'user-provided'}}),text='synthetic derivative';
   f.db.exec('BEGIN IMMEDIATE');
   try {
@@ -87,7 +87,7 @@ test('K01/K09 reserved derivative layout supports exact-source constraints and s
       .run(saved.version.versionId,saved.version.contentIdentity,text,'d'.repeat(43),provenance,Buffer.byteLength(text));
     f.db.exec('COMMIT');
   }catch(failure){f.db.exec('ROLLBACK');throw failure;}
-  assert.equal(f.core.createAssetDerivative,undefined);
+  assert.equal(typeof f.core.createAssetDerivative,'function');
   ok(f.call('deleteAsset',{actionId:'parent-delete',ref:saved.asset,expectedRevision:1}));
   const row=f.db.prepare('SELECT * FROM asset_derivatives').get();assert.equal(row.state,'deleted');assert.equal(row.revision,2);assert.equal(row.byte_count,0);
   for(const key of ['kind','text','provenance','language','timecodes'])assert.equal(row[key],null);

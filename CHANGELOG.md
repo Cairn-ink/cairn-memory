@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — derivatives and method attachments (U4a-2)
+
+- Add immutable, explicitly supplied asset derivatives with exact source
+  provenance, formatting-preserving redaction, bounded unverified intervals,
+  paged text, replay and trigger-driven purge accounting.
+- Add explicit `mixed-v1` method manifests and exclusively owned binary
+  attachments. Imports and byte delivery require separate method and asset
+  grants; metadata and purge remain available to method-only processes.
+  Current attachment reads respect adoption pins and never switch versions.
+- Preserve text-only action/manifest bindings and the frozen v31 schema.
+  Extend `measure:assets` with asserted 64-MiB mixed-import lock/RSS gates.
+
 ## Unreleased — standalone assets (U4a-1)
 
 - Add the opt-in assets-local-v1 embedded facade with immutable binary versions,

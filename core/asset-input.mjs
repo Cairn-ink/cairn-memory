@@ -7,10 +7,13 @@ import { binaryView } from './asset-identity.mjs';
 import { fail, identifier, object, revision } from './validation.mjs';
 
 export const ASSET_METHODS = Object.freeze(['importAssetVersion','listAssets','listAssetVersions','getAssetVersion',
-  'readAssetBytes','verifyAssetBytes','deleteAsset','deleteAssetVersion','getAssetUsage','listAssetEffects']);
-export const ASSET_READS = new Set(ASSET_METHODS.filter(method => !['importAssetVersion','deleteAsset','deleteAssetVersion'].includes(method)));
+  'readAssetBytes','verifyAssetBytes','deleteAsset','deleteAssetVersion','getAssetUsage','listAssetEffects',
+  'createAssetDerivative','listAssetDerivatives','readAssetDerivative','deleteAssetDerivative']);
+export const ASSET_METHOD_GRANTS = Object.freeze(['importMethodVersion','readMethodAttachmentBytes']);
+export const ASSET_READS = new Set(ASSET_METHODS.filter(method => !['importAssetVersion','deleteAsset','deleteAssetVersion','createAssetDerivative','deleteAssetDerivative'].includes(method)));
 export const ASSET_LIMITS = Object.freeze({ versionBytes:33554432,versions:64,assets:1024,derivatives:32,derivativeUnits:20000,
-  ownerBytes:200000000,chunkBytes:32768,responseBytes:65536,pageItems:20,titleUnits:200,filenameUnits:512 });
+  ownerBytes:200000000,chunkBytes:32768,responseBytes:65536,pageItems:20,titleUnits:200,filenameUnits:512,
+  derivativePartUnits:4000,timecodes:256,languageUnits:35 });
 export const ASSET_MEDIA = Object.freeze(['image/png','image/jpeg','image/gif','image/webp','audio/wav','application/pdf',
   'audio/mpeg','video/mp4','font/ttf','font/otf','font/woff','font/woff2']);
 export function assetOptions(value) {
@@ -62,6 +65,62 @@ export function freezeAssetMetadata(value) {
 const identity = value => {
   if (typeof value!=='string' || !/^[A-Za-z0-9_-]{43}$/.test(value)) fail('invalid_input'); return value;
 };
+export function assetDerivativeRef(value) {
+  object(value,['type','namespace','assetId','versionId','derivativeId']);
+  if(value.type!=='asset-derivative')fail('invalid_input');
+  return {type:value.type,namespace:cardNamespace(value.namespace),assetId:identifier(value.assetId),
+    versionId:identifier(value.versionId),derivativeId:identifier(value.derivativeId)};
+}
+export function derivativeText(value) {
+  if(typeof value!=='string'||!value.isWellFormed()||value.includes('\0')||value.length>20000)fail('invalid_input');
+  const clean=redactSecrets(value);if(clean.length>20000)fail('invalid_input');return clean;
+}
+const grandfatheredLanguages=new Set(['art-lojban','cel-gaulish','en-gb-oed','i-ami','i-bnn','i-default','i-enochian','i-hak','i-klingon',
+  'i-lux','i-mingo','i-navajo','i-pwn','i-tao','i-tay','i-tsu','no-bok','no-nyn','sgn-be-fr','sgn-be-nl','sgn-ch-de',
+  'zh-guoyu','zh-hakka','zh-min','zh-min-nan','zh-xiang']);
+function languageTag(value) {
+  // BCP 47, including extlangs, grandfathered tags and private use. Intl's
+  // Unicode locale grammar excludes legal BCP 47 extlangs and private-use tags.
+  const tag=value.toLowerCase();if(grandfatheredLanguages.has(tag))return;
+  const parts=tag.split('-');let i=1;
+  const alpha=(part,min,max)=>typeof part==='string'&&part.length>=min&&part.length<=max&&/^[a-z]+$/.test(part);
+  const alnum=(part,min,max)=>typeof part==='string'&&part.length>=min&&part.length<=max&&/^[a-z0-9]+$/.test(part);
+  function privateUse(){if(parts[i++]!=='x'||i===parts.length)fail('invalid_input');while(i<parts.length)if(!alnum(parts[i++],1,8))fail('invalid_input');}
+  if(parts[0]==='x'){i=0;privateUse();return;}
+  if(!alpha(parts[0],2,8))fail('invalid_input');
+  if(parts[0].length<=3)for(let n=0;n<3&&alpha(parts[i],3,3);n++)i++;
+  if(alpha(parts[i],4,4))i++;
+  if(alpha(parts[i],2,2)||typeof parts[i]==='string'&&/^\d{3}$/.test(parts[i]))i++;
+  const variants=new Set(),extensions=new Set();
+  while(alnum(parts[i],5,8)||typeof parts[i]==='string'&&/^\d[a-z0-9]{3}$/.test(parts[i])) {
+    if(variants.has(parts[i]))fail('invalid_input');variants.add(parts[i++]);
+  }
+  while(i<parts.length&&parts[i]!=='x') {
+    if(!alnum(parts[i],1,1)||extensions.has(parts[i]))fail('invalid_input');extensions.add(parts[i++]);
+    const start=i;while(alnum(parts[i],2,8))i++;
+    if(i===start)fail('invalid_input');
+  }
+  if(i<parts.length)privateUse();
+}
+export function derivativeInput(input) {
+  if(!['caption','transcript','description','alt-text'].includes(input.kind))fail('invalid_input');
+  object(input.method,['kind']);if(input.method.kind!=='user-provided')fail('invalid_input');
+  const text=derivativeText(input.text);
+  if(input.language!==undefined) {
+    if(typeof input.language!=='string'||input.language.length>35||!input.language||!/^[A-Za-z0-9-]+$/.test(input.language))fail('invalid_input');
+    languageTag(input.language);
+  }
+  if(input.timecodes!==undefined) {
+    if(!Array.isArray(input.timecodes)||input.timecodes.length>256)fail('invalid_input');
+    let end=0;
+    for(const interval of input.timecodes) {
+      object(interval,['startMs','endMs']);
+      if(!Number.isSafeInteger(interval.startMs)||!Number.isSafeInteger(interval.endMs)||interval.startMs<end||interval.endMs<interval.startMs)fail('invalid_input');
+      end=interval.endMs;
+    }
+  }
+  return text;
+}
 export function assetRef(value) {
   object(value,['type','namespace','assetId']);
   if (value.type!=='asset') fail('invalid_input');
@@ -91,11 +150,21 @@ export function validateAssetCall(method,input) {
   const fields={importAssetVersion:['namespace','actionId','title','filename','mediaType','bytes','asset','expectedAssetRevision'],
     listAssets:['namespace','limit','cursor'],listAssetVersions:['asset','limit','cursor'],getAssetVersion:['version'],
     readAssetBytes:['version','cursor'],verifyAssetBytes:['version','bytes'],deleteAsset:['actionId','ref','expectedRevision'],
-    deleteAssetVersion:['actionId','ref','expectedRevision'],getAssetUsage:['namespace'],listAssetEffects:['namespace','limit','cursor']};
+    deleteAssetVersion:['actionId','ref','expectedRevision'],getAssetUsage:['namespace'],listAssetEffects:['namespace','limit','cursor'],
+    createAssetDerivative:['actionId','version','expectedVersionRevision','kind','text','method','language','timecodes'],
+    listAssetDerivatives:['version','limit','cursor'],readAssetDerivative:['ref','cursor'],deleteAssetDerivative:['actionId','ref','expectedRevision']};
   object(input,fields[method]);
   if (input.cursor!==undefined && (typeof input.cursor!=='string' || !input.cursor || input.cursor.length>8192)) fail('invalid_cursor');
   if (input.limit!==undefined) assetPageLimit(input.limit);
   if (!ASSET_READS.has(method)) identifier(input.actionId);
+  if(method==='createAssetDerivative') {
+    revision(input.expectedVersionRevision);derivativeInput(input);return assetVersionRef(input.version).namespace;
+  }
+  if(method==='listAssetDerivatives')return assetVersionRef(input.version).namespace;
+  if(method==='readAssetDerivative'||method==='deleteAssetDerivative') {
+    if(method==='deleteAssetDerivative')revision(input.expectedRevision);
+    return assetDerivativeRef(input.ref).namespace;
+  }
   if (method==='importAssetVersion') {
     const ns=cardNamespace(input.namespace);
     assetLabel(input.title,200); assetFilename(input.filename);
