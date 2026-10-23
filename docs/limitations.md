@@ -95,14 +95,30 @@ unread text corruption through resolution alone. SQLite contention can still
 return retryable `storage_busy`; byte ceilings do not guarantee latency.
 The opt-in C04 gate runs a continuous maximum-version reader and at least 100
 independent binding transitions in separate processes, with finite deadlines.
-The writer uses a fixed pause derived from an uncontended reader baseline and
-continues through the first complete contended read. At least 200 reader pages
-must overlap writer activity. Any busy outcome fails, including retried outcomes;
-writer p95 must be at most 250 ms on the reference machine. Rollback-journal
-readers can queue behind pending commits even when neither side returns busy.
-Reader page p50, p95 and maximum during the overlap are reported separately from
-the whole run; overlap reader p95 and maximum are observations without thresholds.
+It runs separate labelled paced and unpaced scenarios. The paced gate uses a
+fixed writer pause derived from an uncontended reader baseline and requires a
+complete contended read, at least 100 commits, and at least 200 distinct reader
+pages overlapping actual synchronous writer-call intervals. Writer sleeps and
+report publication do not count as active overlap. Any busy outcome fails this
+gate, including retried outcomes; writer p95 must be at most 250 ms on the
+reference machine. Rollback-journal readers can queue behind pending commits
+even when neither side returns busy. Reader page p50, p95 and maximum during
+active calls and across the writer's whole lifetime are reported separately
+from the whole run; reader overlap p95 and maximum have no threshold.
 Both child exit codes are checked.
+
+A process that writes continuously, without pauses, can starve readers under
+rollback-journal locking. Readers then receive retryable `storage_busy`.
+Normal capture and imports are sporadic and meet the paced gates. The unpaced
+scenario is a bounded stress observation: the writer stops when the reader
+finishes or its duration bound expires, and the reader retries the same page
+and cursor with bounded backoff within the overall deadline. Reports include
+pages, busy outcomes, SQLite waits, retry delays, maximum page latency and
+whether an exact-byte read eventually completed. Busy reader outcomes and
+reader latency do not fail this observation; corruption, byte mismatches,
+writer errors and deadline breaches do. WAL mode is a separate store-wide
+follow-up decision, affecting every V1 opener and the terminal-review store
+fence, which currently requires rollback-journal mode.
 Method command review supports rollback-journal stores only. It refuses WAL
 headers and existing journal/WAL/SHM companions before SQLite inspection, pins
 filesystem and SQLite identities, and uses a noncreating fenced opener after
@@ -2598,8 +2614,8 @@ are not final-source evidence or measured semantic quality.
 
 `assets-local-v1` is an explicit embedded opt-in using v31 SQLite BLOB chunks.
 It matches only the contract's bounded leading signatures and does not parse,
-decode, render, execute, scan for malware or call models. No asset CLI or MCP byte
-delivery is exposed in this packet. Embedded derivative creation accepts only
+decode, render, execute, scan for malware or call models. Asset mutations use separate real-TTY commands. MCP exposes metadata and supplied
+derivative text only, with no binary delivery or mutations. Embedded derivative creation accepts only
 explicitly supplied text with `method:{kind:'user-provided'}`; it performs no
 OCR, ASR, captioning or media understanding. Optional ordered audio/video
 intervals are `user-supplied-unverified`, with no text-span alignment claim.
@@ -2610,8 +2626,13 @@ Attachments are exclusive copies, charged independently, with no deduplication.
 Method-only processes can inspect mixed metadata and purge attachments, including
 corrupt bytes, but cannot deliver binary content without asset grants. Current
 attachment cursors stale on adoption transitions; history remains on the exact
-requested version with fresh authorization. No CLI/MCP attachment import or byte
-export is added here. The opt-in K13 measurement asserts both 32-MiB standalone
+requested version with fresh authorization. CLI attachment import is explicit via `--attachments local-v1`; there is no MCP
+attachment import or byte export. Local asset export uses a pinned operator-owned
+parent, private source name and create-only link publication. A post-publication
+fsync/cleanup failure reports `published-but-durability-uncertain`; termination can
+leave private partials. Recovery never overwrites/removes the final, and cleanup
+never adopts stale names. Same-UID processes remain inside the Unix owner trust
+boundary. See [the host and recovery guide](assets-local.md#local-host-commands). The opt-in K13 measurement asserts both 32-MiB standalone
 and 64-MiB mixed-import transaction/RSS thresholds, including byte preparation.
 Every binary read verifies metadata and only the selected chunk; corruption in
 another chunk is detected when it is selected. Authenticated totals prevent
@@ -2619,5 +2640,15 @@ truncated completion. Logical purge does not erase freed pages, journals/WAL or
 backups, and the binary quota excludes that physical overhead. Deferred reads
 avoid the previous write-lock contention mechanism, but rollback-journal readers
 can still queue behind commits; overlap reader latency is reported without a
-latency threshold. Selecting assets performs a one-way v31 upgrade; older v30
+latency threshold. A continuously writing process can starve readers, producing
+retryable `storage_busy`. The paced K13 gate requires at least 200 pages
+overlapping actual writer calls, excluding pacing sleeps. The unpaced scenario
+observes bounded stress with reader retries and eventual exact-byte verification;
+normal sporadic capture/imports meet the paced gates. WAL mode remains a separate
+store-wide follow-up decision. The unreleased
+v31 guards reject replacement of retained tombstones and immutable payload keys,
+including method tombstones and stale binding revisions. Every opener rejects
+unexpected triggers on owned tables and ASCII-case-varied premature artifacts;
+this is schema validation, not protection against a party able to rewrite the
+database and remove its guards. Selecting assets performs a one-way v31 upgrade; older v30
 binaries refuse the upgraded store.

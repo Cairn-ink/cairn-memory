@@ -10,8 +10,33 @@
   that text alone, with separate core/transport byte bounds. See the
   [context guide](docs/context-read-local.md) and [limitations](docs/limitations.md).
 
+## Unreleased — asset schema review fixes
+
+- Harden unreleased v31 against replacement-insert/update tombstone resurrection and
+  stale payload/binding restoration, without changing the v30 installer.
+- Reject unexpected triggers on method/asset tables and case-varied premature
+  asset artifacts through every opener. Match snapshot prototype rules to
+  canonical binary identity encoding before authority callbacks.
+- Keep C04/K13 contention gates on the paced scenario, with reader overlap
+  counted against actual writer calls. Report unpaced rollback-journal reader
+  starvation as bounded stress data, retrying the same page through busy waits
+  and verifying eventual byte-exact completion.
+
+## Unreleased — local asset host (U4b)
+
+- Add terminal-approved asset import, supplied derivatives and CAS deletion,
+  using confined descriptors, frozen payloads and the noncreating v31 store fence.
+- Add pure-Node create-only export with protected source names, readback
+  verification, link publication and explicit uncertain-durability receipts.
+- Add `methods import --attachments local-v1`, including exclusive binary
+  attachment review and SVG text, and five opt-in metadata/derivative MCP reads.
+  Default tools remain unchanged; MCP exposes neither bytes nor asset mutations.
+- Ship the complete host closure and real-process, PTY, publication fault and
+  installed-artifact acceptance. See [the asset guide](docs/assets-local.md).
+
 ## Unreleased — context retrieval host (U5a part 3)
 
+- Renormalize OpenAI provider vectors in the adapter before strict float32 validation.
 - Add explicit context MCP startup options and two read tools, fixed host read
   sets, strict reference-preserving grammars and separate core/transport bounds.
 - Add bounded `context refresh`, syntax-only context configuration checks and

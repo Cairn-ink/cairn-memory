@@ -557,30 +557,46 @@ files: ten 400,000-unit three-byte UTF-8 files plus empty files (4,000,000 units
 12,000,000 bytes total). A dedicated reader process first measures an
 uncontended baseline, then reads continuously in 1,246 context-free history pages per complete pass. A second
 process commits at least 100 alternating adopt/disable transitions on a small
-independent project package. Between transitions, it pauses for the fixed
-baseline duration divided by 100 (at least 1 ms), and continues through the
-reader's first complete contended pass. The reader continues until the writer
-finishes, stopping between pages once a complete pass has been verified.
+independent project package. Each measurement runs two labelled scenarios:
+the paced writer pauses for the fixed baseline duration divided by 100 (at
+least 1 ms). The paced scenario continues until at least 100 commits, a complete
+contended pass, and at least 200 reader pages overlapping actual writer calls
+have been observed. Its reader continues until the writer finishes, stopping
+between pages once a complete pass has been verified. The unpaced writer has
+no deliberate delay and stops when its reader completes or after 10 seconds
+(plus an in-flight bounded SQLite call). Its reader retries the same page/cursor
+through busy outcomes and finishes an exact-byte read within the overall deadline.
 Ready/start/reader-active files synchronize the processes; complete content
 hashes, binding revisions and committed events are checked. No model or provider
 is called.
 
 The command asserts both child exit codes, at least one complete maximum-version
-read, at least 100 transitions, at least 200 pages overlapping writer activity,
-no busy outcomes on either side, and writer p95 of at most 250 ms. Busy outcomes may retry the identical page/cursor or writer
-action for diagnostic completeness, but **any busy outcome fails the gate**.
+read, at least 100 transitions, at least 200 distinct pages overlapping actual
+synchronous writer-call intervals in the paced scenario (excluding sleeps/reporting),
+no busy outcomes on either side, and writer p95 of at most 250 ms. Paced gate
+children record the first busy outcome and fail immediately. The unpaced scenario
+is labelled `stress-observation`, with no transition, overlap or latency threshold.
+It reports reader pages, busy counts, waits, maximum page latency and whether
+retried reads eventually completed with exact bytes. Only corruption, byte
+mismatch, writer errors or deadline breaches fail this observation.
 It reports reader page p50/p95/maximum for the whole run and separately under
-`reader.duringOverlap`, including page calls crossing either writer boundary.
+`reader.duringOverlap` for the writer's lifetime and `reader.duringActiveWrites`
+for actual calls, including page calls crossing a call boundary. A page spanning
+several calls counts once. The parent observes timing logs before stopping each
+scenario; time spent merely pacing cannot satisfy the overlap gate.
 Rollback-journal readers can queue behind pending commits without returning
 `storage_busy`; overlap reader p95 and maximum have no threshold. The JSON also
 reports writer p50/p95 and total/p50/p95/maximum busy waits
 (`busyWaitMs` measures failed SQLite calls), retry delays and the child exit codes.
 
-The shared overall deadline is 600,000 ms, with at most 32 busy retries per
-operation; `bounds` reports the absolute deadline and retry limit. Checks occur
-between synchronous SQLite calls, so an in-flight call can finish at its bounded
-busy timeout. Incomplete runs and failed thresholds exit nonzero and clean up
-both children. The 250 ms gate applies on the reference machine; measurements
+The shared overall deadline is 600,000 ms. The diagnostic retry helper defaults
+to at most 32 retries per operation; stress readers instead derive a finite
+retry budget from the time remaining and their minimum 10 ms backoff, increasing
+to at most 250 ms. The deadline ends retries before that budget can be exhausted.
+`bounds` reports the deadline, stress writer duration and backoff bounds; child
+reports include their retry limits. Checks bracket synchronous SQLite calls,
+so an in-flight call can finish at its bounded busy timeout. Incomplete reads,
+writer errors and failed paced thresholds exit nonzero and clean up both children. The 250 ms gate applies on the reference machine; measurements
 elsewhere must identify their environment. This synthetic local gate is not a
 latency, semantic-quality or production-readiness guarantee.
 

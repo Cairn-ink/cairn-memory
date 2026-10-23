@@ -20,10 +20,22 @@
       "sql": "CREATE TRIGGER asset_derivative_no_delete BEFORE DELETE ON asset_derivatives BEGIN SELECT RAISE(ABORT,'asset_tombstone_required'); END"
     },
     {
+      "name": "asset_derivative_no_replace",
+      "type": "trigger",
+      "tbl_name": "asset_derivatives",
+      "sql": "CREATE TRIGGER asset_derivative_no_replace BEFORE INSERT ON asset_derivatives WHEN\n  EXISTS(SELECT 1 FROM asset_derivatives WHERE id=NEW.id OR rowid=NEW.rowid)\n  BEGIN SELECT RAISE(ABORT,'asset_derivative_immutable'); END"
+    },
+    {
       "name": "asset_derivative_release",
       "type": "trigger",
       "tbl_name": "asset_derivatives",
       "sql": "CREATE TRIGGER asset_derivative_release AFTER UPDATE OF state ON asset_derivatives WHEN OLD.state='available' AND NEW.state='deleted' BEGIN\n  UPDATE binary_owner_usage SET byte_count=byte_count-OLD.byte_count WHERE owner_id=(SELECT a.owner_id FROM assets a JOIN asset_versions v ON v.asset_id=a.id WHERE v.id=OLD.version_id);\n  INSERT INTO asset_epochs SELECT a.owner_id,a.scope,a.project_id,2 FROM assets a JOIN asset_versions v ON v.asset_id=a.id WHERE v.id=OLD.version_id\n   ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=generation+1;\n END"
+    },
+    {
+      "name": "asset_derivative_rowid_immutable",
+      "type": "trigger",
+      "tbl_name": "asset_derivatives",
+      "sql": "CREATE TRIGGER asset_derivative_rowid_immutable BEFORE UPDATE ON asset_derivatives WHEN NEW.rowid!=OLD.rowid\n  BEGIN SELECT RAISE(ABORT,'asset_derivative_rowid_immutable'); END"
     },
     {
       "name": "asset_derivative_source",
@@ -80,6 +92,12 @@
       "sql": "CREATE TRIGGER asset_no_delete BEFORE DELETE ON assets BEGIN SELECT RAISE(ABORT,'asset_tombstone_required'); END"
     },
     {
+      "name": "asset_no_replace",
+      "type": "trigger",
+      "tbl_name": "assets",
+      "sql": "CREATE TRIGGER asset_no_replace BEFORE INSERT ON assets WHEN NEW.state!='available' OR NEW.revision!=1 OR\n  EXISTS(SELECT 1 FROM assets WHERE id=NEW.id OR rowid=NEW.rowid)\n  BEGIN SELECT RAISE(ABORT,'asset_terminal'); END"
+    },
+    {
       "name": "asset_operations",
       "type": "table",
       "tbl_name": "asset_operations",
@@ -90,6 +108,12 @@
       "type": "trigger",
       "tbl_name": "assets",
       "sql": "CREATE TRIGGER asset_purge AFTER UPDATE OF state ON assets WHEN OLD.state='available' AND NEW.state='deleted' BEGIN\n  UPDATE asset_versions SET state='deleted',revision=2,title=NULL,filename=NULL,media_type=NULL,byte_count=0,object_id=NULL WHERE asset_id=NEW.id AND state='available';\n END"
+    },
+    {
+      "name": "asset_rowid_immutable",
+      "type": "trigger",
+      "tbl_name": "assets",
+      "sql": "CREATE TRIGGER asset_rowid_immutable BEFORE UPDATE ON assets WHEN NEW.rowid!=OLD.rowid\n  BEGIN SELECT RAISE(ABORT,'asset_rowid_immutable'); END"
     },
     {
       "name": "asset_scope",
@@ -128,6 +152,12 @@
       "sql": "CREATE TRIGGER asset_version_no_delete BEFORE DELETE ON asset_versions BEGIN SELECT RAISE(ABORT,'asset_tombstone_required'); END"
     },
     {
+      "name": "asset_version_no_replace",
+      "type": "trigger",
+      "tbl_name": "asset_versions",
+      "sql": "CREATE TRIGGER asset_version_no_replace BEFORE INSERT ON asset_versions WHEN\n  EXISTS(SELECT 1 FROM asset_versions WHERE id=NEW.id OR rowid=NEW.rowid OR (asset_id=NEW.asset_id AND ordinal=NEW.ordinal))\n  BEGIN SELECT RAISE(ABORT,'asset_version_immutable'); END"
+    },
+    {
       "name": "asset_version_parent",
       "type": "index",
       "tbl_name": "asset_versions",
@@ -138,6 +168,12 @@
       "type": "trigger",
       "tbl_name": "asset_versions",
       "sql": "CREATE TRIGGER asset_version_purge AFTER UPDATE OF state ON asset_versions WHEN OLD.state='available' AND NEW.state='deleted' BEGIN\n  DELETE FROM binary_objects WHERE asset_version_id=NEW.id;\n  UPDATE asset_derivatives SET state='deleted',revision=2,kind=NULL,text=NULL,provenance=NULL,language=NULL,timecodes=NULL,byte_count=0\n   WHERE version_id=NEW.id AND state='available';\n END"
+    },
+    {
+      "name": "asset_version_rowid_immutable",
+      "type": "trigger",
+      "tbl_name": "asset_versions",
+      "sql": "CREATE TRIGGER asset_version_rowid_immutable BEFORE UPDATE ON asset_versions WHEN NEW.rowid!=OLD.rowid\n  BEGIN SELECT RAISE(ABORT,'asset_version_rowid_immutable'); END"
     },
     {
       "name": "asset_versions",
@@ -156,6 +192,12 @@
       "type": "trigger",
       "tbl_name": "binary_chunks",
       "sql": "CREATE TRIGGER binary_chunk_immutable BEFORE UPDATE ON binary_chunks BEGIN SELECT RAISE(ABORT,'binary_chunk_immutable'); END"
+    },
+    {
+      "name": "binary_chunk_no_replace",
+      "type": "trigger",
+      "tbl_name": "binary_chunks",
+      "sql": "CREATE TRIGGER binary_chunk_no_replace BEFORE INSERT ON binary_chunks WHEN\n  EXISTS(SELECT 1 FROM binary_chunks WHERE rowid=NEW.rowid OR (object_id=NEW.object_id AND chunk_index=NEW.chunk_index))\n  BEGIN SELECT RAISE(ABORT,'binary_chunk_immutable'); END"
     },
     {
       "name": "binary_chunk_shape",
@@ -180,6 +222,12 @@
       "type": "index",
       "tbl_name": "binary_objects",
       "sql": "CREATE INDEX binary_object_method ON binary_objects(method_version_id,position)"
+    },
+    {
+      "name": "binary_object_no_replace",
+      "type": "trigger",
+      "tbl_name": "binary_objects",
+      "sql": "CREATE TRIGGER binary_object_no_replace BEFORE INSERT ON binary_objects WHEN\n  EXISTS(SELECT 1 FROM binary_objects WHERE id=NEW.id OR rowid=NEW.rowid OR asset_version_id=NEW.asset_version_id OR\n   (method_version_id=NEW.method_version_id AND position=NEW.position))\n  BEGIN SELECT RAISE(ABORT,'binary_object_immutable'); END"
     },
     {
       "name": "binary_object_owner",
@@ -212,10 +260,100 @@
       "sql": "CREATE TABLE binary_owner_usage (owner_id TEXT PRIMARY KEY, byte_count INTEGER NOT NULL CHECK(byte_count BETWEEN 0 AND 200000000)) STRICT"
     },
     {
+      "name": "method_binary_binding_insert",
+      "type": "trigger",
+      "tbl_name": "method_bindings",
+      "sql": "CREATE TRIGGER method_binary_binding_insert BEFORE INSERT ON method_bindings WHEN\n  EXISTS(SELECT 1 FROM method_bindings WHERE rowid=NEW.rowid) OR\n  NEW.generation IS NOT (SELECT generation FROM method_binding_generations WHERE owner_id=NEW.owner_id AND\n   scope=NEW.scope AND project_id=NEW.project_id AND package_id=NEW.package_id) OR\n  (NEW.state='active' AND NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id\n   WHERE v.id=NEW.version_id AND v.package_id=NEW.package_id AND v.manifest_identity=NEW.manifest_identity AND\n    v.state='available' AND p.state='available')) OR\n  EXISTS(SELECT 1 FROM method_bindings WHERE owner_id=NEW.owner_id AND scope=NEW.scope AND project_id=NEW.project_id AND\n   package_id=NEW.package_id AND role_key=NEW.role_key AND\n   (NEW.revision!=revision+1 OR NEW.generation<=generation OR NEW.created_at!=created_at))\n  BEGIN SELECT RAISE(ABORT,'method_binding_revision'); END"
+    },
+    {
+      "name": "method_binary_binding_no_delete",
+      "type": "trigger",
+      "tbl_name": "method_bindings",
+      "sql": "CREATE TRIGGER method_binary_binding_no_delete BEFORE DELETE ON method_bindings\n  BEGIN SELECT RAISE(ABORT,'method_binding_retained'); END"
+    },
+    {
+      "name": "method_binary_binding_update",
+      "type": "trigger",
+      "tbl_name": "method_bindings",
+      "sql": "CREATE TRIGGER method_binary_binding_update BEFORE UPDATE ON method_bindings WHEN NEW.rowid!=OLD.rowid OR\n  NEW.owner_id!=OLD.owner_id OR NEW.scope!=OLD.scope OR NEW.project_id!=OLD.project_id OR NEW.package_id!=OLD.package_id OR\n  NEW.role_key!=OLD.role_key OR NEW.created_at!=OLD.created_at OR NEW.revision!=OLD.revision+1 OR NEW.generation<=OLD.generation OR\n  NEW.generation IS NOT (SELECT generation FROM method_binding_generations WHERE owner_id=NEW.owner_id AND\n   scope=NEW.scope AND project_id=NEW.project_id AND package_id=NEW.package_id)\n  BEGIN SELECT RAISE(ABORT,'method_binding_revision'); END"
+    },
+    {
+      "name": "method_binary_change_insert",
+      "type": "trigger",
+      "tbl_name": "method_changes",
+      "sql": "CREATE TRIGGER method_binary_change_insert BEFORE INSERT ON method_changes WHEN\n  NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id\n   WHERE v.id=NEW.to_id AND v.state='available' AND p.state='available') OR\n  (NEW.from_ref IS NOT NULL AND NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id\n   WHERE v.id=json_extract(NEW.from_ref,'$.versionId') AND v.package_id=(SELECT package_id FROM method_versions WHERE id=NEW.to_id)\n    AND v.manifest_identity=json_extract(NEW.from_ref,'$.manifestIdentity') AND v.state='available' AND p.state='available')) OR\n  EXISTS(SELECT 1 FROM method_changes WHERE to_id=NEW.to_id OR rowid=NEW.rowid)\n  BEGIN SELECT RAISE(ABORT,'method_change_immutable'); END"
+    },
+    {
+      "name": "method_binary_change_update",
+      "type": "trigger",
+      "tbl_name": "method_changes",
+      "sql": "CREATE TRIGGER method_binary_change_update BEFORE UPDATE ON method_changes WHEN NEW.rowid!=OLD.rowid OR NEW.to_id!=OLD.to_id OR\n  NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id\n   WHERE v.id=NEW.to_id AND v.state='available' AND p.state='available')\n  BEGIN SELECT RAISE(ABORT,'method_change_immutable'); END"
+    },
+    {
+      "name": "method_binary_event_insert",
+      "type": "trigger",
+      "tbl_name": "method_binding_events",
+      "sql": "CREATE TRIGGER method_binary_event_insert BEFORE INSERT ON method_binding_events WHEN\n  EXISTS(SELECT 1 FROM method_binding_events WHERE event_id=NEW.event_id OR rowid=NEW.rowid OR ordinal=NEW.ordinal OR\n   (owner_id=NEW.owner_id AND scope=NEW.scope AND project_id=NEW.project_id AND package_id=NEW.package_id AND\n    (generation=NEW.generation OR (role_key=NEW.role_key AND revision=NEW.revision))))\n  BEGIN SELECT RAISE(ABORT,'method_binding_event_immutable'); END"
+    },
+    {
+      "name": "method_binary_event_no_delete",
+      "type": "trigger",
+      "tbl_name": "method_binding_events",
+      "sql": "CREATE TRIGGER method_binary_event_no_delete BEFORE DELETE ON method_binding_events\n  BEGIN SELECT RAISE(ABORT,'method_binding_event_immutable'); END"
+    },
+    {
+      "name": "method_binary_event_update",
+      "type": "trigger",
+      "tbl_name": "method_binding_events",
+      "sql": "CREATE TRIGGER method_binary_event_update BEFORE UPDATE ON method_binding_events\n  BEGIN SELECT RAISE(ABORT,'method_binding_event_immutable'); END"
+    },
+    {
+      "name": "method_binary_file_insert",
+      "type": "trigger",
+      "tbl_name": "method_files",
+      "sql": "CREATE TRIGGER method_binary_file_insert BEFORE INSERT ON method_files WHEN\n  NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id\n   WHERE v.id=NEW.version_id AND v.state='available' AND p.state='available') OR\n  EXISTS(SELECT 1 FROM method_files WHERE rowid=NEW.rowid OR (version_id=NEW.version_id AND (position=NEW.position OR path=NEW.path)))\n  BEGIN SELECT RAISE(ABORT,'method_file_immutable'); END"
+    },
+    {
+      "name": "method_binary_file_update",
+      "type": "trigger",
+      "tbl_name": "method_files",
+      "sql": "CREATE TRIGGER method_binary_file_update BEFORE UPDATE ON method_files WHEN NEW.rowid!=OLD.rowid OR\n  NEW.version_id!=OLD.version_id OR NEW.position!=OLD.position OR NEW.path!=OLD.path OR\n  NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id\n   WHERE v.id=NEW.version_id AND v.state='available' AND p.state='available')\n  BEGIN SELECT RAISE(ABORT,'method_file_immutable'); END"
+    },
+    {
+      "name": "method_binary_generation_insert",
+      "type": "trigger",
+      "tbl_name": "method_binding_generations",
+      "sql": "CREATE TRIGGER method_binary_generation_insert BEFORE INSERT ON method_binding_generations WHEN\n  EXISTS(SELECT 1 FROM method_binding_generations WHERE rowid=NEW.rowid) OR\n  EXISTS(SELECT 1 FROM method_binding_generations WHERE owner_id=NEW.owner_id AND scope=NEW.scope AND\n   project_id=NEW.project_id AND package_id=NEW.package_id AND NEW.generation!=generation+1)\n  BEGIN SELECT RAISE(ABORT,'method_binding_generation'); END"
+    },
+    {
+      "name": "method_binary_generation_update",
+      "type": "trigger",
+      "tbl_name": "method_binding_generations",
+      "sql": "CREATE TRIGGER method_binary_generation_update BEFORE UPDATE ON method_binding_generations WHEN NEW.rowid!=OLD.rowid OR\n  NEW.owner_id!=OLD.owner_id OR NEW.scope!=OLD.scope OR NEW.project_id!=OLD.project_id OR NEW.package_id!=OLD.package_id OR\n  NEW.generation!=OLD.generation+1\n  BEGIN SELECT RAISE(ABORT,'method_binding_generation'); END"
+    },
+    {
+      "name": "method_binary_package_insert",
+      "type": "trigger",
+      "tbl_name": "method_packages",
+      "sql": "CREATE TRIGGER method_binary_package_insert BEFORE INSERT ON method_packages WHEN NEW.state!='available' OR NEW.revision!=1 OR\n  EXISTS(SELECT 1 FROM method_packages WHERE id=NEW.id OR rowid=NEW.rowid)\n  BEGIN SELECT RAISE(ABORT,'method_package_terminal'); END"
+    },
+    {
+      "name": "method_binary_package_no_delete",
+      "type": "trigger",
+      "tbl_name": "method_packages",
+      "sql": "CREATE TRIGGER method_binary_package_no_delete BEFORE DELETE ON method_packages\n  BEGIN SELECT RAISE(ABORT,'method_tombstone_required'); END"
+    },
+    {
       "name": "method_binary_package_purge",
       "type": "trigger",
       "tbl_name": "method_packages",
       "sql": "CREATE TRIGGER method_binary_package_purge AFTER UPDATE OF state ON method_packages WHEN OLD.state='available' AND NEW.state='deleted' BEGIN\n  DELETE FROM binary_objects WHERE method_version_id IN (SELECT id FROM method_versions WHERE package_id=NEW.id);\n  DELETE FROM method_mixed_entries WHERE version_id IN (SELECT id FROM method_versions WHERE package_id=NEW.id);\n END"
+    },
+    {
+      "name": "method_binary_package_terminal",
+      "type": "trigger",
+      "tbl_name": "method_packages",
+      "sql": "CREATE TRIGGER method_binary_package_terminal BEFORE UPDATE ON method_packages WHEN OLD.state='deleted' OR NEW.rowid!=OLD.rowid OR\n  NEW.id!=OLD.id OR NEW.owner_id!=OLD.owner_id OR NEW.scope!=OLD.scope OR NEW.project_id!=OLD.project_id OR NEW.created_at!=OLD.created_at\n  BEGIN SELECT RAISE(ABORT,'method_package_terminal'); END"
     },
     {
       "name": "method_binary_purge",
@@ -224,10 +362,34 @@
       "sql": "CREATE TRIGGER method_binary_purge AFTER UPDATE OF state ON method_versions WHEN OLD.state='available' AND NEW.state='deleted' BEGIN\n  DELETE FROM binary_objects WHERE method_version_id=NEW.id;\n  DELETE FROM method_mixed_entries WHERE version_id=NEW.id;\n END"
     },
     {
+      "name": "method_binary_version_insert",
+      "type": "trigger",
+      "tbl_name": "method_versions",
+      "sql": "CREATE TRIGGER method_binary_version_insert BEFORE INSERT ON method_versions WHEN NEW.state!='available' OR NEW.revision!=1 OR\n  NOT EXISTS(SELECT 1 FROM method_packages WHERE id=NEW.package_id AND state='available') OR\n  EXISTS(SELECT 1 FROM method_versions WHERE id=NEW.id OR rowid=NEW.rowid OR (package_id=NEW.package_id AND ordinal=NEW.ordinal))\n  BEGIN SELECT RAISE(ABORT,'method_version_terminal'); END"
+    },
+    {
+      "name": "method_binary_version_no_delete",
+      "type": "trigger",
+      "tbl_name": "method_versions",
+      "sql": "CREATE TRIGGER method_binary_version_no_delete BEFORE DELETE ON method_versions\n  BEGIN SELECT RAISE(ABORT,'method_tombstone_required'); END"
+    },
+    {
+      "name": "method_binary_version_terminal",
+      "type": "trigger",
+      "tbl_name": "method_versions",
+      "sql": "CREATE TRIGGER method_binary_version_terminal BEFORE UPDATE ON method_versions WHEN OLD.state='deleted' OR NEW.rowid!=OLD.rowid OR\n  NEW.id!=OLD.id OR NEW.package_id!=OLD.package_id OR NEW.ordinal!=OLD.ordinal OR NEW.manifest_identity!=OLD.manifest_identity OR\n  NEW.based_on IS NOT OLD.based_on OR NEW.imported_at!=OLD.imported_at\n  BEGIN SELECT RAISE(ABORT,'method_version_terminal'); END"
+    },
+    {
       "name": "method_format_immutable",
       "type": "trigger",
       "tbl_name": "method_manifest_formats",
       "sql": "CREATE TRIGGER method_format_immutable BEFORE UPDATE ON method_manifest_formats BEGIN SELECT RAISE(ABORT,'method_format_immutable'); END"
+    },
+    {
+      "name": "method_format_no_replace",
+      "type": "trigger",
+      "tbl_name": "method_manifest_formats",
+      "sql": "CREATE TRIGGER method_format_no_replace BEFORE INSERT ON method_manifest_formats WHEN\n  EXISTS(SELECT 1 FROM method_manifest_formats WHERE version_id=NEW.version_id OR rowid=NEW.rowid)\n  BEGIN SELECT RAISE(ABORT,'method_format_immutable'); END"
     },
     {
       "name": "method_format_parent",
@@ -258,6 +420,12 @@
       "type": "trigger",
       "tbl_name": "method_mixed_entries",
       "sql": "CREATE TRIGGER method_mixed_immutable BEFORE UPDATE ON method_mixed_entries BEGIN SELECT RAISE(ABORT,'method_entry_immutable'); END"
+    },
+    {
+      "name": "method_mixed_no_replace",
+      "type": "trigger",
+      "tbl_name": "method_mixed_entries",
+      "sql": "CREATE TRIGGER method_mixed_no_replace BEFORE INSERT ON method_mixed_entries WHEN\n  EXISTS(SELECT 1 FROM method_mixed_entries WHERE rowid=NEW.rowid OR (version_id=NEW.version_id AND\n   (position=NEW.position OR folded_path=NEW.folded_path)) OR binary_object_id=NEW.binary_object_id)\n  BEGIN SELECT RAISE(ABORT,'method_entry_immutable'); END"
     },
     {
       "name": "method_mixed_parent",

@@ -152,6 +152,8 @@ test('R04/R05 installed explicit refresh and fresh semantic MCP use an actual fa
   const command=['context','refresh','--db',f.path,'--owner',ns.ownerId,'--types','memory','--intent','current','--max-items','128','--max-ms','5000',...contextProviderArgs];
   assert.equal(ok(await run(workspace,[f.entry,...command],{preload:server.preload,key:true})).status,'complete');
   assert.equal(server.state.requests.length,1);
+  assert.equal(server.state.responses[0].encoding,'brotli');assert.equal(server.state.responses[0].contentLength,null);
+  for(let i=0;i<2;i++)assert.ok(Math.abs(server.state.responses[0].norms[i]-[1.000225,.99981][i])<1e-12);
   const canonicalTexts=captured.memories.map(memory=>memory.content).sort();
   assert.deepEqual([...server.state.requests[0].body.input].sort(),canonicalTexts);
   const fresh=await contextHost(workspace,f.path,{entry:f.entry,provider:true,preload:server.preload});
@@ -162,5 +164,12 @@ test('R04/R05 installed explicit refresh and fresh semantic MCP use an actual fa
   const car=captured.memories.find(memory=>memory.content==='car');assert.ok(value.items.some(row=>row.ref.memoryId===car.id&&Math.abs(row.channels.semantic.rawScore-1)<1e-5));
   const fetched=ok(await contextCall(fresh.client,'fetch_memory_candidate_evidence',{refs:value.items.map(row=>row.ref),intent:'current'}));
   assert.deepEqual(fetched.items.map(item=>item.content).sort(),canonicalTexts);
+  server.state.mode='norm-too-large';
+  const degraded=ok(await contextCall(fresh.client,'find_memory_candidates',{...request,query:'car'}));
+  assert.deepEqual(degraded.channels.semantic,{state:'provider_error',causes:['provider_error']});
+  assert.equal(degraded.trace.effective,'lexical');assert.ok(degraded.items.some(row=>row.ref.memoryId===car.id));
+  server.state.mode='ready';server.state.encoding='chunked';
+  assert.equal(ok(await contextCall(fresh.client,'find_memory_candidates',request)).channels.semantic.state,'ready');
+  assert.equal(server.state.responses.at(-1).encoding,'chunked');assert.equal(server.state.responses.at(-1).contentLength,null);
   await fresh.client.close();
 });

@@ -144,6 +144,11 @@
   "core/prompts/recall-rank-rationale-evidence.md",
   "core/prompts/recall-select.md",
   "adapters/mcp/cli.mjs",
+  "adapters/mcp/asset-access.mjs",
+  "adapters/mcp/asset-command.mjs",
+  "adapters/mcp/asset-export.mjs",
+  "adapters/mcp/asset-files.mjs",
+  "adapters/mcp/asset-tools.mjs",
   "adapters/mcp/context-read-access.mjs",
   "adapters/mcp/context-read-command.mjs",
   "adapters/mcp/context-read-configuration.mjs",
@@ -225,5 +230,6 @@
   "LICENSE",
   "docs/context-read-local.md",
   "docs/method-packages-local.md",
-  "docs/assets-local.md"
+  "docs/assets-local.md",
+  "docs/v1-preview-integration.md"
 ]

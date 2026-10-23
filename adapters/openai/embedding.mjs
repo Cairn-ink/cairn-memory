@@ -17,6 +17,19 @@ function price(model, rate) {
 }
 export function embeddingPrice(model = DEFAULT_EMBEDDING_MODEL, usdPerMillionTokens) { return price(model, usdPerMillionTokens); }
 function tokenBound(texts) { return texts.reduce((sum, text) => sum + Buffer.byteLength(text) + 16, 0); }
+function providerVector(input, metadata) {
+  if (!Array.isArray(input) || input.length !== metadata.dimensions) throw failure('dimension_mismatch');
+  let squared = 0;
+  for (const component of input) {
+    if (typeof component !== 'number' || !Number.isFinite(component)) throw failure('provider_error');
+    squared += component * component;
+  }
+  const norm = Math.sqrt(squared);
+  if (!Number.isFinite(norm) || norm < .9 || norm > 1.1) throw failure('provider_error');
+  // Provider L2 vectors are approximate. Normalize in float64, then subject
+  // persisted float32 values to the same strict validation as every embedder.
+  return validateVector(Float32Array.from(input, component => component / norm), metadata);
+}
 export function estimateEmbeddingUsd(texts, { model = DEFAULT_EMBEDDING_MODEL, usdPerMillionTokens } = {}) {
   return tokenBound(texts) * price(model, usdPerMillionTokens) / 1_000_000;
 }
@@ -46,7 +59,7 @@ export function createOpenAIEmbedder({ apiKey, model = DEFAULT_EMBEDDING_MODEL, 
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) controller.abort();
     const timer = setTimeout(abort, Math.max(0, deadlineAt - performance.now()));
-    let reader;
+    let reader, bodyComplete = false;
     const check = () => { beforeDispatch(); if (controller.signal.aborted || performance.now() >= deadlineAt) throw failure('timeout'); };
     try {
       check();
@@ -60,7 +73,9 @@ export function createOpenAIEmbedder({ apiKey, model = DEFAULT_EMBEDDING_MODEL, 
       if (length !== null && (!/^[0-9]+$/.test(length) || Number(length) > maximum) || !response.body) throw failure('provider_error');
       reader = response.body.getReader(); const chunks = []; let size = 0;
       while (true) {
-        const { value, done } = await reader.read(); check(); if (done) break;
+        const { value, done } = await reader.read();
+        if (done) bodyComplete = true;
+        check(); if (done) break;
         size += value.byteLength; if (size > maximum) throw failure('provider_error'); chunks.push(value);
       }
       let json;
@@ -78,7 +93,7 @@ export function createOpenAIEmbedder({ apiKey, model = DEFAULT_EMBEDDING_MODEL, 
       const vectors = new Array(texts.length);
       for (const item of json.data) {
         if (!Number.isInteger(item?.index) || item.index < 0 || item.index >= texts.length || vectors[item.index] !== undefined) throw failure('provider_error');
-        try { vectors[item.index] = validateVector(item.embedding, metadata); }
+        try { vectors[item.index] = providerVector(item.embedding, metadata); }
         catch (error) { throw failure(error.code === 'dimension_mismatch' ? 'dimension_mismatch' : 'provider_error'); }
       }
       return vectors;
@@ -87,8 +102,11 @@ export function createOpenAIEmbedder({ apiKey, model = DEFAULT_EMBEDDING_MODEL, 
       if (controller.signal.aborted || error?.code === 'timeout' || error?.name === 'AbortError') throw failure('timeout');
       throw failure(['rate_limited', 'dimension_mismatch', 'invalid_input'].includes(error?.code) ? error.code : 'provider_error');
     } finally {
-      clearTimeout(timer); signal?.removeEventListener('abort', abort); controller.abort();
-      if (reader) { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+      clearTimeout(timer); signal?.removeEventListener('abort', abort);
+      // EOF already settled the response. In particular, a known validation
+      // failure must not wait on cancellation of an exhausted decoded stream.
+      if (!bodyComplete) controller.abort();
+      if (reader) { if (!bodyComplete) await reader.cancel().catch(() => {}); reader.releaseLock(); }
     }
   } });
 }

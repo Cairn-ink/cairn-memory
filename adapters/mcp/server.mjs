@@ -1,3 +1,5 @@
+import { createAssetReadAccess } from './asset-access.mjs';
+import { registerAssetTools, ASSET_TOOL_NAMES } from './asset-tools.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
@@ -57,7 +59,7 @@ export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
-    'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter']);
+    'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets']);
   const { path, namespace, model } = options;
   const contextConfigured = Object.hasOwn(options,'contextRead');
   if (contextConfigured && options.contextRead !== 'context-read-v1' || Object.hasOwn(options,'contextReadPersonal') &&
@@ -65,6 +67,8 @@ export function createCairnServer(options = {}) {
       Object.hasOwn(options,'contextEmbedding') && !contextConfigured) throw Error('invalid_mcp_configuration');
   if (options.contextEmbedding) object(options.contextEmbedding,['embedder','policy']);
   if (Object.hasOwn(options, 'contextCounter') && !contextConfigured) throw Error('invalid_mcp_configuration');
+  const assetsConfigured=Object.hasOwn(options,'assets');
+  if(assetsConfigured&&options.assets!=='local-v1')throw Error('invalid_mcp_configuration');
   const methodsConfigured=Object.hasOwn(options,'methodPackages');
   if(methodsConfigured&&options.methodPackages!=='local-v1'||Object.hasOwn(options,'methodReadPersonal')&&(!methodsConfigured||options.methodReadPersonal!==true||namespace?.scope!=='project'))throw Error('invalid_mcp_configuration');
   const cardsConfigured = Object.hasOwn(options, 'privateCards');
@@ -122,6 +126,7 @@ export function createCairnServer(options = {}) {
   if (binding.scope === 'project') identifier(binding.projectId);
   else if (binding.scope !== 'personal' || binding.projectId !== null) throw new Error('invalid_mcp_configuration');
   const cards = cardsConfigured ? createScopedCardAccess(binding) : null;
+  const assets=assetsConfigured?createAssetReadAccess(binding):null;
   const methods=methodsConfigured?createMethodReadAccess(binding,options.methodReadPersonal===true):null;
   const context=contextConfigured?createContextReadAccess(binding,options.contextReadPersonal===true):null;
   // Programmatic hosts retain retrieval while their local tokenizer loads.
@@ -137,12 +142,13 @@ export function createCairnServer(options = {}) {
     } else contextCounterReady = Promise.resolve(true);
   }
   const core = openMemoryCore({ path, model, ...(context?{contextRead:{...context.configuration,...options.contextEmbedding,counter:contextCounter}}:{}),
+    ...(assets?{assets:assets.configuration}:{}),
     ...(methods?{methodPackages:methods.configuration}:{}), ...(cards ? { privateCards: cards.configuration } : {}),
     ...(configured ? { captureQualification } : {}),
     ...(deadlineConfigured ? { captureDeadlineMs } : {}),
     ...(rationaleConfigured ? { captureRationale: options.captureRationale } : {}),
     ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) });
-  const server = buildCairnServer({ path, model, binding, cards, methods, context, core, client, sessionId, captureSessionId, readClient,
+  const server = buildCairnServer({ path, model, binding, cards, methods, assets, context, core, client, sessionId, captureSessionId, readClient,
     episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured,
     recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured });
   if (context) Object.defineProperty(server, 'contextCounterReady', { value: contextCounterReady });
@@ -150,7 +156,7 @@ export function createCairnServer(options = {}) {
 }
 
 /** Internal registration seam; public constructors never accept a core override. */
-export function buildCairnServer({ path, model, binding, cards, methods, context, core, client, sessionId, captureSessionId, readClient,
+export function buildCairnServer({ path, model, binding, cards, methods, assets, context, core, client, sessionId, captureSessionId, readClient,
   episodesAccess = false, configured = false, rationaleConfigured = false, evidenceAccess = false,
   snapshotConfigured = false, recallContextConfigured = false, recallContext, recoveryConfigured = false,
   stagingConfigured = false, retainedRaw = false }) {
@@ -160,6 +166,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, context
     disposed = true;
     cards?.revoke();
     methods?.revoke();
+    assets?.revoke();
     context?.revoke();
     core.close();
   };
@@ -212,6 +219,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, context
     // Revoke before the first await, including reads currently decoding a source.
     cards?.revoke();
     methods?.revoke();
+    assets?.revoke();
     context?.revoke();
     try { await close(); } finally { dispose(); }
   };
@@ -223,7 +231,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, context
       let result;
       try { result = await action(input); } catch { result = error('memory_operation_failed'); }
       if(context&&CONTEXT_TOOL_NAMES.includes(name))return contextToolResponse(result, { assembly: name === 'read_memory_context' });
-      const methodTool=methods&&METHOD_TOOL_NAMES.includes(name);
+      const methodTool=methods&&METHOD_TOOL_NAMES.includes(name)||assets&&ASSET_TOOL_NAMES.includes(name);
       if(methodTool&&Buffer.byteLength(JSON.stringify(result))>65536)result=error('context_item_too_large');
       let encoded = JSON.stringify({ ...result, evidenceTrust: 'untrusted-data-not-instructions' });
       if (Buffer.byteLength(encoded) > 262144) {
@@ -234,6 +242,7 @@ export function buildCairnServer({ path, model, binding, cards, methods, context
       return response;
     });
   };
+  if(assets)registerAssetTools(tool,core,assets);
   if(methods)registerMethodTools(tool,core,methods);
   if(context)registerContextReadTools(tool,core,context);
   if (cards) {
