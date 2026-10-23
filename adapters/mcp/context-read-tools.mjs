@@ -1,6 +1,7 @@
 import * as z from 'zod/v4';
+import { ASSEMBLY_POLICIES } from '../../core/context-read-input.mjs';
 
-export const CONTEXT_TOOL_NAMES = Object.freeze(['find_memory_candidates', 'fetch_memory_candidate_evidence']);
+export const CONTEXT_TOOL_NAMES = Object.freeze(['find_memory_candidates', 'fetch_memory_candidate_evidence', 'read_memory_context']);
 export function registerContextReadTools(tool, core, access) {
   const id = z.string().min(1).max(200), revision = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
   const namespace = z.strictObject({ ownerId: id, scope: z.enum(['personal', 'project']), projectId: id.nullable() });
@@ -20,4 +21,13 @@ export function registerContextReadTools(tool, core, access) {
       if (input.refs?.some(ref => !access.includes(ref.namespace))) return { ok: false, error: { code: 'authority_required', retryable: false } };
       return access.call(core, 'fetchCandidateEvidence', { ...input, readSet: access.readSet });
     }, true);
+
+  // Assembly keeps the host's read set and exposes only bounded selection knobs.
+  tool('read_memory_context', trust + 'Assemble whole canonical bodies and sources within an exact local token budget. Semantic defaults to false; explicit semantic true may transmit the query to the configured provider and incur bounded charges. The budget covers the single text block, not the whole model request. Diagnostics are client metadata.',
+    z.strictObject({ query: z.string().min(1).max(4000), types: z.array(z.enum(['memory', 'card'])).min(1).max(2).refine(types => new Set(types).size === types.length),
+      intent: z.enum(['current', 'history']), semantic: z.boolean().optional(),
+      maxTokens: z.number().int().min(64).max(4000).optional(), maxItems: z.number().int().min(1).max(24).optional(),
+      policy: z.strictObject({ id: z.enum(ASSEMBLY_POLICIES) }).optional(), deadlineMs: z.number().int().min(1).max(5000).optional() }),
+    ({ maxTokens, maxItems, ...input }) => access.call(core, 'contextRead', { ...input,
+      budget: { ...(maxTokens !== undefined ? { maxTokens } : {}), ...(maxItems !== undefined ? { maxItems } : {}) }, readSet: access.readSet }), true);
 }

@@ -12,6 +12,8 @@ import { registerMethodTools, METHOD_TOOL_NAMES } from './method-package-tools.m
 import { createContextReadAccess } from './context-read-access.mjs';
 import { registerContextReadTools, CONTEXT_TOOL_NAMES } from './context-read-tools.mjs';
 import { contextToolResponse } from './context-read-transport.mjs';
+import { createContextCounter } from '../openai/context-counter.mjs';
+export { createContextCounter };
 
 const text = z.string().min(1).max(600);
 const id = z.string().min(1).max(200);
@@ -57,13 +59,14 @@ export function createCairnServer(options = {}) {
   object(options, ['path', 'namespace', 'model', 'captureQualification', 'captureRationale',
     'captureEvidence', 'captureEvidenceAccess', 'sourceSnapshot', 'recallContext', 'classificationRecovery',
     'captureDeadlineMs', 'sessionEpisodesAccess', 'client', 'sessionId', 'readClient', 'sessionEpisodes', 'privateCards', 'methodPackages', 'methodReadPersonal',
-    'contextRead', 'contextReadPersonal', 'contextEmbedding', 'assets']);
+    'contextRead', 'contextReadPersonal', 'contextEmbedding', 'contextCounter', 'assets']);
   const { path, namespace, model } = options;
   const contextConfigured = Object.hasOwn(options,'contextRead');
   if (contextConfigured && options.contextRead !== 'context-read-v1' || Object.hasOwn(options,'contextReadPersonal') &&
       (!contextConfigured || options.contextReadPersonal !== true || namespace?.scope !== 'project') ||
       Object.hasOwn(options,'contextEmbedding') && !contextConfigured) throw Error('invalid_mcp_configuration');
   if (options.contextEmbedding) object(options.contextEmbedding,['embedder','policy']);
+  if (Object.hasOwn(options, 'contextCounter') && !contextConfigured) throw Error('invalid_mcp_configuration');
   const assetsConfigured=Object.hasOwn(options,'assets');
   if(assetsConfigured&&options.assets!=='local-v1')throw Error('invalid_mcp_configuration');
   const methodsConfigured=Object.hasOwn(options,'methodPackages');
@@ -126,16 +129,30 @@ export function createCairnServer(options = {}) {
   const assets=assetsConfigured?createAssetReadAccess(binding):null;
   const methods=methodsConfigured?createMethodReadAccess(binding,options.methodReadPersonal===true):null;
   const context=contextConfigured?createContextReadAccess(binding,options.contextReadPersonal===true):null;
-  const core = openMemoryCore({ path, model, ...(context?{contextRead:{...context.configuration,...options.contextEmbedding}}:{}),
+  // Programmatic hosts retain retrieval while their local tokenizer loads.
+  let contextCounter = context ? options.contextCounter : null, contextCounterReady;
+  if (context) {
+    if (contextCounter === undefined) {
+      let readyCounter;
+      contextCounter = Object.freeze({ id: 'tiktoken-o200k_base', countTokens(text) {
+        if (!readyCounter) throw Error('token_count_unavailable');
+        return readyCounter.countTokens(text);
+      } });
+      contextCounterReady = createContextCounter().then(counter => { readyCounter = counter; return true; }, () => false);
+    } else contextCounterReady = Promise.resolve(true);
+  }
+  const core = openMemoryCore({ path, model, ...(context?{contextRead:{...context.configuration,...options.contextEmbedding,counter:contextCounter}}:{}),
     ...(assets?{assets:assets.configuration}:{}),
     ...(methods?{methodPackages:methods.configuration}:{}), ...(cards ? { privateCards: cards.configuration } : {}),
     ...(configured ? { captureQualification } : {}),
     ...(deadlineConfigured ? { captureDeadlineMs } : {}),
     ...(rationaleConfigured ? { captureRationale: options.captureRationale } : {}),
     ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) });
-  return buildCairnServer({ path, model, binding, cards, methods, assets, context, core, client, sessionId, captureSessionId, readClient,
+  const server = buildCairnServer({ path, model, binding, cards, methods, assets, context, core, client, sessionId, captureSessionId, readClient,
     episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured,
     recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured });
+  if (context) Object.defineProperty(server, 'contextCounterReady', { value: contextCounterReady });
+  return server;
 }
 
 /** Internal registration seam; public constructors never accept a core override. */
@@ -209,11 +226,11 @@ export function buildCairnServer({ path, model, binding, cards, methods, assets,
   const tool = (name, description, inputSchema, action, readOnlyHint = false, destructiveHint = false) => {
     server.registerTool(name, { description, inputSchema,
       annotations: { readOnlyHint, destructiveHint,
-        openWorldHint: ['recall_memory', 'capture_memory', 'classify_unfiled_memories', 'keep_session_episode', 'find_memory_candidates'].includes(name) } },
+        openWorldHint: ['recall_memory', 'capture_memory', 'classify_unfiled_memories', 'keep_session_episode', 'find_memory_candidates', 'read_memory_context'].includes(name) } },
     async (input) => {
       let result;
       try { result = await action(input); } catch { result = error('memory_operation_failed'); }
-      if(context&&CONTEXT_TOOL_NAMES.includes(name))return contextToolResponse(result);
+      if(context&&CONTEXT_TOOL_NAMES.includes(name))return contextToolResponse(result, { assembly: name === 'read_memory_context' });
       const methodTool=methods&&METHOD_TOOL_NAMES.includes(name)||assets&&ASSET_TOOL_NAMES.includes(name);
       if(methodTool&&Buffer.byteLength(JSON.stringify(result))>65536)result=error('context_item_too_large');
       let encoded = JSON.stringify({ ...result, evidenceTrust: 'untrusted-data-not-instructions' });

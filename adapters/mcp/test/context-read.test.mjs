@@ -73,9 +73,10 @@ test('R01/R02/R05 MCP adds exactly two tools; strict grammars and immutable name
   const memory=ok(core.admit({namespace:ns,memory:{content:'apple private instruction: do not execute this',kind:'fact'},receipts:[{client:'synthetic',sessionId:'s',eventId:'e',role:'user',excerpt:'apple'}]})).memory;
   const plain=await contextHost(workspace,path,{enabled:false}),selected=await contextHost(workspace,path);
   const original=(await plain.client.listTools()).tools,tools=(await selected.client.listTools()).tools;
-  assert.equal(original.length,5); assert.equal(tools.length,7);
+  assert.deepEqual(original.map(tool=>tool.name).sort(),['correct_memory','forget_memory','inspect_memory','recall_memory','remember_memory']);
+  assert.deepEqual(tools.map(tool=>tool.name).sort(),['correct_memory','fetch_memory_candidate_evidence','find_memory_candidates','forget_memory','inspect_memory','read_memory_context','recall_memory','remember_memory']);
   assert.deepEqual(tools.filter(tool=>original.some(item=>item.name===tool.name)),original);
-  assert.deepEqual(tools.filter(tool=>!original.some(item=>item.name===tool.name)).map(tool=>tool.name).sort(),['fetch_memory_candidate_evidence','find_memory_candidates']);
+  assert.deepEqual(tools.filter(tool=>!original.some(item=>item.name===tool.name)).map(tool=>tool.name).sort(),['fetch_memory_candidate_evidence','find_memory_candidates','read_memory_context']);
   assert.ok(tools.filter(tool=>tool.name.includes('candidate')).every(tool=>tool.annotations.readOnlyHint&&/untrusted data/.test(tool.description)));
   const found=ok(await contextCall(selected.client,'find_memory_candidates',query)); assert.equal(found.items[0].ref.memoryId,memory.id);
   assert.equal(found.channels.semantic.state,'disabled'); assert.equal(found.items[0].fusionScore,null);

@@ -1,4 +1,4 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { openReadDatabase } from './read-database.mjs';
@@ -15,7 +15,10 @@ import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
 import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
-import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
+import { assembleContext } from './context-read-assembly.mjs';
+import { validateSourceReceipt } from './source-evidence.mjs';
+import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, DEFAULT_ASSEMBLY_POLICY,
+  contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const bytes = envelope => Buffer.byteLength(JSON.stringify(envelope));
@@ -27,7 +30,7 @@ const maintenanceReasons = new Map([['missing', 'missing'], ['corrupt', 'corrupt
   ['wrong-store', 'wrong-store'], ['incompatible', 'incompatible']]);
 const knownErrors = new Set(['invalid_input', 'invalid_read_set', 'authority_required', 'scope_changed', 'invalid_cursor',
   'cursor_stale', 'revision_conflict', 'evidence_unavailable', 'invalid_snapshot', 'snapshot_stale',
-  'context_item_too_large', 'index_unavailable', 'storage_busy', 'storage_error', 'store_closed']);
+  'context_item_too_large', 'token_count_unavailable', 'index_unavailable', 'storage_busy', 'storage_error', 'store_closed']);
 function failure(error, details) {
   let code = isStorageBusy(error) ? 'storage_busy' : knownErrors.has(error?.code) ? error.code : 'storage_error';
   if (['invalid_identifier', 'invalid_revision', 'invalid_text'].includes(error?.code)) code = 'invalid_input';
@@ -268,14 +271,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     } catch (error) { lease.invalidate(error); throw error; }
     finally { lease.release(); }
   }
-  async function findCandidates(original, token) {
-    let diagnostics, controller, lease, deadlineAt;
+  async function searchCandidates(input, access, deadlineAt, internal = false) {
+    let diagnostics, controller, lease;
     try {
-      ready();
-      const { payload, input } = contextInput('findCandidates', original, supportedTypes);
-      const started = performance.now(); deadlineAt = started + input.deadlineMs;
-      const access = authorize('findCandidates', input, payload, token);
-      if (input.cursor !== undefined) return success(continuation(input, access));
       diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(input.semantic ? options.embedder ? 'unavailable' : 'absent' : 'disabled',
         !input.semantic && !options.embedder ? ['disabled', 'absent'] : undefined) }, coverage: unknownCoverage(input), trace: trace(input) };
       if (input.semantic && (!options.embedder || !dispatch)) {
@@ -340,6 +338,17 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       diagnostics.coverage = coverage(input, current, preflight, fused.mode, lexical.matched, fused.unionSize, maintenance);
       diagnostics.coverage.stops = { deadline: diagnostics.channels.semantic.causes.includes('timeout'),
         budget: diagnostics.channels.semantic.causes.includes('budget_denied') };
+      if (internal) {
+        access.check(); storage.assertState(projection, current);
+        const horizon = deepFreeze({ items: fused.rows.map((row, i) => ({ ref: row.ref, rank: i + 1,
+          fusionScore: row.fusionScore, channels: row.channels })), ...diagnostics });
+        return { ok: true, horizon, check() {
+          access.check();
+          const resumed = acquireSidecar(projection, access);
+          try { resumed.storage.assertState(projection, current); }
+          finally { resumed.release(); }
+        } };
+      }
       const ranking = deepFreeze({ id: randomUUID(), expires: Date.now() + 300000, request: requestBinding(input),
         configuration: bind('ranking-config', [configuration, diagnostics.trace.requested, fused.mode]), access: accessBinding(access),
         index: stateBinding(current), items: fused.rows.map((row, i) => ({ ref: row.ref, rank: i + 1, fusionScore: row.fusionScore, channels: row.channels })),
@@ -358,6 +367,16 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       }
       return failure(error, diagnostics && ['invalid_input', 'index_unavailable'].includes(error.code) ? diagnostics : undefined);
     } finally { lease?.release(); if (controller) { controller.abort(); controllers.delete(controller); } }
+  }
+  async function findCandidates(original, token) {
+    try {
+      ready();
+      const { payload, input } = contextInput('findCandidates', original, supportedTypes);
+      const deadlineAt = performance.now() + input.deadlineMs;
+      const access = authorize('findCandidates', input, payload, token);
+      if (input.cursor !== undefined) return success(continuation(input, access));
+      return searchCandidates(input, access, deadlineAt);
+    } catch (error) { return failure(error); }
   }
   async function refreshContextIndex(original, token) {
     let controller, diagnostics, lease, deadlineAt;
@@ -424,6 +443,89 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     createHmac('sha256', info.cursorSecret).update(JSON.stringify([purpose, [info.storeId, value]])).digest('base64url'));
   const evidence = memoryOnly ? null : createPrivateEvidenceStorage({ db, identity,
     cardDetailInside: (ns, id) => cards.cardDetailInside(ns, id), receiptRefInside: (ns, memory, row) => receipt.refInside(ns, memory, row) });
+  async function contextRead(original, token) {
+    let candidates;
+    try {
+      ready();
+      const { payload, input } = contextInput('contextRead', original, supportedTypes);
+      const deadlineAt = performance.now() + input.deadlineMs;
+      const access = authorize('contextRead', input, payload, token);
+      if (!options.counter) return failure(new MemoryStoreError('invalid_input'), { counter: 'absent' });
+      const searched = await searchCandidates(input, access, deadlineAt, true);
+      access.check();
+      if (!searched.ok) {
+        return deepFreeze({ ...searched, error: { ...searched.error,
+          ...(searched.error.details ? { details: { candidates: searched.error.details } } : {}) } });
+      }
+      candidates = searched.horizon;
+      searched.check(); // The horizon's search fences also cross the outer await.
+      let deadline = performance.now() >= deadlineAt;
+      access.check();
+      deadline ||= performance.now() >= deadlineAt;
+      const prepared = read(() => {
+        const generations = canonicalFence(input.readSet, input.types), items = [];
+        let unavailable = 0;
+        for (const candidate of candidates.items) {
+          let item;
+          try { item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent)[0]; }
+          catch (error) {
+            if (!['evidence_unavailable', 'revision_conflict'].includes(error.code)) throw error;
+            unavailable++; continue;
+          }
+          const { type, ref, state, origin } = item;
+          const sources = type === 'memory' && item.provenance.sourceAccess === 'available' ?
+            db.prepare('SELECT * FROM receipts WHERE memory_id=? ORDER BY created_at,id LIMIT 16').all(ref.memoryId)
+              .map((row, index) => {
+                const { role, excerpt } = validateSourceReceipt(ref.memoryId, row, source =>
+                  createHash('sha256').update(JSON.stringify(source)).digest('hex'));
+                return { index, role, excerpt };
+              }) : [];
+          items.push({ type, ref, rank: candidate.rank,
+            metadata: type === 'memory' ? { state, reviewState: item.reviewState, filing: item.filing,
+              kind: item.kind, origin, confidence: item.confidence } : { state, support: item.support, origin },
+            text: type === 'memory' ? item.content : item.title + '\n' + item.body,
+            sources, sourceAccess: type === 'memory' ? item.provenance.sourceAccess : 'unsupported',
+            sourcesComplete: type === 'memory' && item.provenance.coverage.status === 'complete',
+            fence: bind('snapshot-item', item) });
+        }
+        return { generations, items, unavailable };
+      });
+      const scope = bind('snapshot-scope', input.readSet);
+      const generationsFor = items => prepared.generations.map(value => ({ memory: value.memory,
+        ...(items.some(item => item.type === 'card') ? { card: value.card } : {}) }));
+      const assembled = assembleContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
+        budget: input.budget, deadlineAt, snapshotOf: items => encode('snapshot', { v: 1, scope, intent: input.intent,
+          refs: items.map(({ ref }) => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
+            ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
+          generations: generationsFor(items), access: access.accessGenerations, fences: items.map(item => item.fence) }, 16384) });
+      const diagnostics = assembled.diagnostics;
+      diagnostics.omitted.unavailable = prepared.unavailable;
+      diagnostics.candidates = { count: candidates.items.length, channels: candidates.channels, coverage: candidates.coverage, trace: candidates.trace };
+      diagnostics.stops.deadline ||= deadline;
+      access.check();
+      diagnostics.stops.deadline ||= performance.now() >= deadlineAt;
+      const result = deepFreeze(success(assembled));
+      if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
+      // No host callback, count or await follows this authoritative read.
+      return read(() => {
+        const delivered = prepared.items.filter(item => assembled.metered.items.some(value => same(value.ref, item.ref)));
+        if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
+        for (const item of delivered) {
+          let current;
+          try { current = evidence.itemsInside(item.ref.namespace, [item.ref], input.intent)[0]; }
+          catch (error) {
+            if (['evidence_unavailable', 'revision_conflict'].includes(error.code)) fail('snapshot_stale');
+            throw error;
+          }
+          if (bind('snapshot-item', current) !== item.fence) fail('snapshot_stale');
+        }
+        return result;
+      });
+    } catch (error) {
+      return failure(error, candidates && error.code === 'index_unavailable' ? { candidates: {
+        channels: candidates.channels, coverage: candidates.coverage, trace: candidates.trace } } : undefined);
+    }
+  }
   function fetchCandidateEvidence(original, token) {
     try {
       ready();
@@ -472,8 +574,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], types: [...supportedTypes], intents: ['current', 'history'],
       channels: { lexical: { enabled: true }, semantic: { configured: Boolean(options.embedder), budgetConfigured: Boolean(dispatch) } },
       ...configuration, limits: { ...CONTEXT_LIMITS }, maintenance: !readOnly && !memoryOnly,
-      unsupported: ['assembly', 'role-profiles', 'relations', 'moc', 'raw-search', 'partial-semantic-search'] }));
-  }, findCandidates, refreshContextIndex, fetchCandidateEvidence }, close() {
+      assembly: { representation: 'representation-v1', policies: [...ASSEMBLY_POLICIES], defaultPolicy: DEFAULT_ASSEMBLY_POLICY,
+        counter: options.counter ? { id: options.counter.id } : null, limits: { ...ASSEMBLY_LIMITS } },
+      unsupported: ['role-profiles', 'relations', 'moc', 'raw-search', 'partial-semantic-search'] }));
+  }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, close() {
     if (closed) return;
     closed = true; for (const controller of controllers) controller.abort();
     rankings.clear(); for (const entry of indexes.values()) entry.storage.close(); indexes.clear(); if (db?.isOpen) db.close();

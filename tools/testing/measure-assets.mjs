@@ -18,6 +18,13 @@ import { appendTimings,readTimings,waitForActiveOverlap,CONTENTION_STRESS_BOUNDS
   stressWriterStopReason,waitForStressObservation,assertStressObservation } from './measure-contention.mjs';
 
 export const ASSET_MEASUREMENT_BOUNDS=Object.freeze({overallMs:600000,baselinePassesPer100Transitions:10,importTransactionMs:2000,rssGrowthBytes:134217728,minimumTransitions:100,minimumOverlapPages:200,writerP95Ms:250});
+export function assetContentionCases() {
+  return ['standalone','mixed'].flatMap(workload=>['paced','unpaced'].map(scenario=>({
+    key:workload==='standalone'?scenario:'mixed-'+scenario,workload,scenario,
+    readMethod:workload==='mixed'?'readMethodAttachmentBytes':'readAssetBytes',
+    ...(workload==='mixed'?{attachments:[0,1].map(i=>({path:'maximum-'+i+'.pdf',byteCount:ASSET_LIMITS.versionBytes})),manifestEntries:256}:{}),
+  })));
+}
 // Byte pages have much less metadata than maximum text pages. Spread the
 // minimum 100 transitions across ten baseline complete byte reads, keeping a
 // fixed reader-derived pause and sustained overlap without a saturated writer.
@@ -55,16 +62,26 @@ export function assertMixedAssetImportGate(report) {
 const stats=contentionStats,timings=contentionReport;
 async function pass(f,config,s,observe) {
   const hash=createHash('sha256'),started=performance.now();let cursor,total=0,pages=0;
-  do {
-    const input={version:config.receipt.version,...(cursor?{cursor}:{})},startedAt=absoluteNow();
-    const page=ok(await retryStorageBusy(()=>f.call('readAssetBytes',input),s,config)),finishedAt=absoluteNow();
-    const bytes=Buffer.from(page.bytes,'base64');hash.update(bytes);total+=bytes.length;pages++;
-    assert.equal(page.totalByteCount,ASSET_LIMITS.versionBytes);assert.equal(page.index,pages-1);
-    assert.equal(page.complete,page.nextCursor===null);assert.ok(Buffer.byteLength(JSON.stringify({ok:true,value:page}))<=65536);
-    observe?.({startedAt,finishedAt,elapsedMs:finishedAt-startedAt});cursor=page.nextCursor;
-  }while(cursor);
-  assert.equal(total,ASSET_LIMITS.versionBytes);assert.equal(hash.digest('hex'),config.sha256);
-  return {complete:true,pages,bytes:total,elapsedMs:performance.now()-started,...timings(s)};
+  const mixed=config.workload==='mixed',readMethod=mixed?'readMethodAttachmentBytes':'readAssetBytes';
+  const targets=mixed?config.attachments:[{byteCount:ASSET_LIMITS.versionBytes}];
+  assert.ok(Array.isArray(targets)&&targets.length>0,'reader has byte targets');
+  for(const target of targets) {
+    assert.ok(Number.isSafeInteger(target.byteCount)&&target.byteCount>0&&target.byteCount<=ASSET_LIMITS.versionBytes);
+    if(mixed)assert.equal(typeof target.path,'string');
+    cursor=undefined;let index=0;
+    do {
+      const input={version:config.receipt.version,...(mixed?{path:target.path,intent:'history'}:{}),...(cursor?{cursor}:{})},startedAt=absoluteNow();
+      const page=ok(await retryStorageBusy(()=>f.call(readMethod,input),s,config)),finishedAt=absoluteNow();
+      const bytes=Buffer.from(page.bytes,'base64');hash.update(bytes);total+=bytes.length;pages++;
+      assert.equal(page.status,'available');assert.equal(bytes.length,page.byteCount);
+      assert.equal(page.totalByteCount,target.byteCount);assert.equal(page.index,index++);
+      assert.equal(page.complete,page.nextCursor===null);assert.ok(Buffer.byteLength(JSON.stringify({ok:true,value:page}))<=65536);
+      observe?.({startedAt,finishedAt,elapsedMs:finishedAt-startedAt});cursor=page.nextCursor;
+    }while(cursor);
+    assert.equal(index,Math.ceil(target.byteCount/32768));
+  }
+  assert.equal(total,targets.reduce((sum,target)=>sum+target.byteCount,0));assert.equal(hash.digest('hex'),config.sha256);
+  return {complete:true,pages,bytes:total,readMethod,sha256:config.sha256,elapsedMs:performance.now()-started,...timings(s)};
 }
 const main=process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url);
 if(main&&['--import','--mixed-import'].includes(process.argv[2])) {
@@ -101,7 +118,7 @@ if(main&&['--import','--mixed-import'].includes(process.argv[2])) {
   publish(config.result,report);
 }else if(main&&['--reader','--writer'].includes(process.argv[2])) {
   const kind=process.argv[2].slice(2),config=JSON.parse(readFileSync(process.argv[3],'utf8')),f=host(config.path),s=stats(),pageTimes=[];
-  let status='complete',reason=null,passes=0,pages=0,committed=0,startedAt,finishedAt,flushed=0,stopReason=null;const callTimes=[];
+  let status='complete',reason=null,passes=0,pages=0,committed=0,startedAt,finishedAt,flushed=0,stopReason=null,lastPass;const callTimes=[];
   try {
     if(kind==='reader')publish(config.baseline,await pass(f,config,stats()));
     writeFileSync(config.ready,String(process.pid));await until(()=>existsSync(config.start),config.deadlineAt);
@@ -109,7 +126,7 @@ if(main&&['--import','--mixed-import'].includes(process.argv[2])) {
     startedAt=absoluteNow();
     if(kind==='reader') {
       do {
-        await pass(f,config,s,timing=>{pageTimes.push(timing);pages++;if(pages===1)writeFileSync(config.readerActive,String(process.pid));
+        lastPass=await pass(f,config,s,timing=>{pageTimes.push(timing);pages++;if(pages===1)writeFileSync(config.readerActive,String(process.pid));
           if(pageTimes.length-flushed>=32){appendTimings(config.readerPages,pageTimes.slice(flushed));flushed=pageTimes.length;}
           if(pages%500===0)console.error(JSON.stringify({kind,pages,passes}));});
         passes++;if(passes===1)publish(config.readerPassDone,{at:absoluteNow()});
@@ -123,7 +140,7 @@ if(main&&['--import','--mixed-import'].includes(process.argv[2])) {
         }
         if(committed>0&&config.intervalMs>0){checkDeadline(config.deadlineAt);await delay(config.intervalMs);}
         const method=committed%2===0?'adoptMethodVersion':'disableMethodBinding';
-        const input={bindingNamespace:project,package:config.binding.package,roleId:'measurement',readSet:[project],actionId:'asset-writer-'+config.scenario+'-'+committed,
+        const input={bindingNamespace:project,package:config.binding.package,roleId:'measurement',readSet:[project],actionId:'asset-writer-'+(config.runId??config.scenario)+'-'+committed,
           expectedRevision:committed||null,...(method==='adoptMethodVersion'?{version:config.binding.version}:{})};
         const value=ok(await retryStorageBusy(()=>{
           const startedAt=absoluteNow();try{return f.call(method,input);}
@@ -144,6 +161,7 @@ if(main&&['--import','--mixed-import'].includes(process.argv[2])) {
   publish(config.result,{status,reason,pid:process.pid,startedAt,finishedAt,elapsedMs:finishedAt-startedAt,intervalMs:config.intervalMs??null,
     stressWriterMs:config.stressWriterMs??null,stopReason,deadlineAt:config.deadlineAt,
     maxBusyRetries:config.maxBusyRetries,passes,pages,committed,readCompleted:passes>=1,byteExact:passes>=1,
+    ...(lastPass?{readMethod:lastPass.readMethod,bytesPerPass:lastPass.bytes,pagesPerPass:lastPass.pages,sha256:lastPass.sha256}:{}),
     maxPageMs:pageTimes.reduce((max,page)=>Math.max(max,page.elapsedMs),0),
     calls:callTimes.length,activeCallMs:callTimes.reduce((sum,call)=>sum+call.elapsedMs,0),pagesDuringWriter:duringOverlap.pages,duringOverlap,
     pagesDuringActiveWrites:duringActiveWrites.pages,duringActiveWrites,...timings(s)});
@@ -182,33 +200,39 @@ if(main&&['--import','--mixed-import'].includes(process.argv[2])) {
         }
         assert.equal(bytes,67108864);assert.equal(pages,2048);assert.equal(hash.digest('hex'),observations['mixed-import'].sha256);
         observations.mixedVerification={bytes,pages,exactBytes:true,independentProcess:true};
-        targets=Object.fromEntries(['paced','unpaced'].map(scenario=>[scenario,ok(f.call('importMethodVersion',{namespace:project,actionId:'binding-target-'+scenario,title:'Synthetic writer',files:[{path:'SKILL.md',text:'Synthetic binding writer',mediaType:'text/plain'}]}))]));
+        targets=Object.fromEntries(assetContentionCases().map(({key})=>[key,ok(f.call('importMethodVersion',{namespace:project,actionId:'binding-target-'+key,title:'Synthetic writer',files:[{path:'SKILL.md',text:'Synthetic binding writer',mediaType:'text/plain'}]}))]));
       }finally{f.core.close();}
-      for(const scenario of ['paced','unpaced']) {
-        const markers={scenario,stressWriterMs:bounds.stress.writerMs,...Object.fromEntries(['start','stop','readerActive','readerPassDone','writerEntered','writerDone','readerPages','writerCalls'].map(name=>[name,join(workspace.path,scenario+'-'+name)]))};
-        const readerName=scenario+'-reader',writerName=scenario+'-writer';
+      for(const readerCase of assetContentionCases()) {
+        const {key,scenario}=readerCase;
+        const markers={...readerCase,runId:key,stressWriterMs:bounds.stress.writerMs,...Object.fromEntries(['start','stop','readerActive','readerPassDone','writerEntered','writerDone','readerPages','writerCalls'].map(name=>[name,join(workspace.path,key+'-'+name)]))};
+        const readerName=key+'-reader',writerName=key+'-writer',source=readerCase.workload==='mixed'?observations['mixed-import']:observations.import;
         const reader=launch(readerName,{...markers,...(scenario==='unpaced'?stressReaderOptions(bounds.deadlineAt):{}),
-          receipt:observations.import.receipt,sha256:observations.import.sha256,baseline:join(workspace.path,scenario+'-baseline.result')},'reader');
+          receipt:source.receipt,sha256:source.sha256,baseline:join(workspace.path,key+'-baseline.result')},'reader');
         const alive=()=>{for(const name of [readerName,writerName])if(children[name]?.exit&&
           (children[name].exit.code!==0||children[name].exit.signal!==null||!existsSync(name===readerName?markers.readerPassDone:markers.writerDone)))
           throw Error(name+' exited before completion '+readFileSync(children[name].stderr,'utf8'));};
         await until(()=>{alive();return existsSync(reader.config.ready);},bounds.deadlineAt);
         const baseline=JSON.parse(readFileSync(reader.config.baseline,'utf8'));assert.equal(baseline.storageBusy,0);
-        const writer=launch(writerName,{...markers,binding:targets[scenario],intervalMs:scenario==='paced'?assetWriterInterval(baseline.elapsedMs):0},'writer');
+        assert.equal(baseline.readMethod,readerCase.readMethod);assert.equal(baseline.bytes,source.bytes);
+        assert.equal(baseline.pages,source.bytes/32768);
+        const writer=launch(writerName,{...markers,binding:targets[key],intervalMs:scenario==='paced'?assetWriterInterval(baseline.elapsedMs):0},'writer');
         await until(()=>{alive();return existsSync(writer.config.ready);},bounds.deadlineAt);writeFileSync(markers.start,'go');
         const completed=Promise.all([readerName,writerName].map(async name=>[name===readerName?'reader':'writer',await complete(name)]));
         const workload=async()=>{const supervise=scenario==='paced'?waitForActiveOverlap:waitForStressObservation;
           const [,result]=await Promise.all([supervise({...markers,deadlineAt:bounds.deadlineAt},alive),completed]);return Object.fromEntries(result);};
         const exits=await Promise.race([workload(),deadline]);
-        const report={scenario,kind:scenario==='paced'?'gate':'stress-observation',baseline,reader:observations[readerName],writer:observations[writerName],exits};
-        observations.scenarios[scenario]=report;(scenario==='paced'?assertMethodGate:assertStressObservation)(report);delete observations[readerName];delete observations[writerName];
+        const report={scenario,workload:readerCase.workload,kind:scenario==='paced'?'gate':'stress-observation',baseline,reader:observations[readerName],writer:observations[writerName],exits};
+        observations.scenarios[key]=report;(scenario==='paced'?assertMethodGate:assertStressObservation)(report);
+        assert.equal(report.reader.readMethod,readerCase.readMethod);assert.equal(report.reader.bytesPerPass,source.bytes);
+        assert.equal(report.reader.pagesPerPass,source.bytes/32768);assert.equal(report.reader.sha256,source.sha256);
+        delete observations[readerName];delete observations[writerName];
       }
       const db=new DatabaseSync(path);try{assert.equal(db.prepare('SELECT count(*) n FROM method_binding_events').get().n,Object.values(observations.scenarios).reduce((sum,report)=>sum+report.writer.committed,0));
-        for(const scenario of ['paced','unpaced'])assert.equal(db.prepare('SELECT revision FROM method_bindings WHERE package_id=?').get(targets[scenario].package.packageId)?.revision??0,observations.scenarios[scenario].writer.committed);
+        for(const {key}of assetContentionCases())assert.equal(db.prepare('SELECT revision FROM method_bindings WHERE package_id=?').get(targets[key].package.packageId)?.revision??0,observations.scenarios[key].writer.committed);
         assert.equal(db.prepare('SELECT byte_count FROM binary_owner_usage').get().byte_count,ASSET_LIMITS.versionBytes+67108864);assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);}finally{db.close();}
       console.log(JSON.stringify({status:'complete',node:process.version,bounds,...observations,...observations.scenarios.paced,
         exits:{...observations.scenarios.paced.exits,...Object.fromEntries(Object.entries(children).map(([name,state])=>[name,state.exit]))},
-        methodology:'one 32-MiB standalone and one 64-MiB mixed import with 256 entries and 4,000,000 text units in separate fresh processes; caller allocation and pre-core-call RSS baseline include caller bytes and text; process high-water RSS includes synchronous preparation; every input MAC precedes callbacks/BEGIN IMMEDIATE; independent complete mixed-byte verification; paced gate: continuous maximum-byte reader and independent binding writer, baseline elapsedMs / 10 pauses, >=100 commits, complete read, >=200 distinct pages overlapping actual writer calls (excluding sleeps/reporting), zero busy, writer p95 <=250 ms, both exits checked; unpaced stress observation: no writer delay, writer stops on reader completion or after 10 seconds (plus an in-flight bounded SQLite call), same page/cursor retried with 10–250 ms bounded backoff within shared deadline; report pages, busy counts/waits, maximum page latency and eventual exact-byte completion; only corruption, byte mismatch, writer errors or deadline breaches fail stress; reader whole-run, lifetime-overlap and active-overlap latencies observational'},null,2));
+        methodology:'one 32-MiB standalone and one 64-MiB mixed import with 256 entries and 4,000,000 text units in separate fresh processes; caller allocation and pre-core-call RSS baseline include caller bytes and text; process high-water RSS includes synchronous preparation; every input MAC precedes callbacks/BEGIN IMMEDIATE; independent complete mixed-byte verification; two paced gates: standalone readAssetBytes (32 MiB/1024 pages) and maximum mixed readMethodAttachmentBytes (64 MiB/2048 pages, 256 manifest entries verified per page), each with an independent binding writer and baseline elapsedMs / 10 pauses, >=100 commits, complete read, >=200 distinct pages overlapping actual writer calls (excluding sleeps/reporting), zero busy, writer p95 <=250 ms, both exits checked; an unpaced stress observation for each reader workload: no writer delay, writer stops on reader completion or after 10 seconds (plus an in-flight bounded SQLite call), same page/cursor retried with 10–250 ms bounded backoff within shared deadline; report pages, busy counts/waits, maximum page latency and eventual exact-byte completion; only corruption, byte mismatch, writer errors or deadline breaches fail stress; reader whole-run, lifetime-overlap and active-overlap latencies observational'},null,2));
     }finally{clearTimeout(timer);}
   }catch(error){
     process.exitCode=1;for(const child of Object.values(children))if(!child.exit)child.child.kill('SIGKILL');await Promise.allSettled(Object.values(children).map(child=>child.closed));

@@ -2,8 +2,10 @@
 
 `context-read-v1` is an explicit opt-in over the existing canonical SQLite store.
 It retrieves qualified Memory/Card references, then refetches canonical evidence.
-It does not assemble context, execute saved instructions or prove answer quality.
-The authoritative specification is [contract §13](plans/unified-memory-v1-contract.md#13-u5a-m6-candidate-retrieval-v062-audited-and-confirmed).
+It can also assemble whole evidence units within an exact local token budget.
+Saved instructions never grant execution permission or prove answer quality.
+The authoritative specifications are [contract §13](plans/unified-memory-v1-contract.md#13-u5a-m6-candidate-retrieval-v062-audited-and-confirmed)
+and [§15](plans/unified-memory-v1-contract.md#15-u5b-m7-budgeted-assembly-v091-audited-and-confirmed).
 Use Node 22.16.0 or 24.15.0. Flag-off tools, DTOs and provider calls stay unchanged.
 
 ## MCP startup
@@ -19,12 +21,13 @@ it adds that owner's personal namespace, without fallback to another owner or
 project. It can sit beside the separate zero-value `--method-read-personal` flag.
 This opt-in is incompatible with the exclusive retained-Raw profile mode.
 
-Only two tools are added:
+Three tools are added:
 
 | Tool | Arguments |
 | --- | --- |
 | `find_memory_candidates` | `query,types,intent,semantic?,limit?,deadlineMs?,cursor?` |
 | `fetch_memory_candidate_evidence` | either `refs,intent` or `snapshot`; optional `responseByteLimit` |
+| `read_memory_context` | `query,types,intent,semantic?,maxTokens?,maxItems?,policy?,deadlineMs?` |
 
 Types are a nonempty supported subset of `memory,card`. Intent is explicitly
 `current` or `history`. Tool input cannot supply authority, namespace, readSet,
@@ -44,6 +47,79 @@ Rankings expire five minutes after creation, with at most 128 retained per handl
 The complete core envelope is at most 65,536 UTF-8 bytes. The complete encoded
 JSON-RPC transport message, including ID and newline, has a separate 262,144-byte
 bound. Escaped transport framing can therefore refuse a core result that fits.
+
+## Budgeted context assembly (U5b)
+
+`read_memory_context` uses the same host-fixed read set and lexical/semantic
+candidate search. `maxTokens` is an integer from 64–4,000 (default 1,500);
+`maxItems` is 1–24 (default 12), counting admitted bodies. `deadlineMs` is
+1–5,000 (default 1,000). The host maps the two size arguments to core `budget`;
+callers cannot supply `budget`, a cursor, authority or configuration. `policy`
+is a strict `{id}` object: `rank-first-whole-v1` (initial default) or
+`coverage-first-v1`. Unknown fields and policies refuse. Bodies and sources
+are admitted whole or omitted; sources never appear without their body.
+
+Context-enabled CLI startup awaits the local `o200k_base` counter
+`tiktoken-o200k_base` after configuration checks, independently of the legacy
+model. Programmatic startup also loads the counter automatically, without
+changing the established synchronous call shape:
+
+```js
+import { createCairnServer } from '../adapters/mcp/server.mjs';
+const server = createCairnServer({ path, namespace, contextRead: 'context-read-v1' });
+const counterReady = await server.contextCounterReady;
+```
+
+The context-enabled server's `contextCounterReady` promise resolves `true`
+when the counter is ready, or `false` if loading fails; it never rejects.
+The §13 retrieval tools work while loading and after a failed load. Assembly
+returns sanitized `token_count_unavailable` until readiness, and keeps returning
+that error if loading fails. The server continues serving retrieval tools.
+The CLI awaits its counter before serving, so stdio clients never see this
+unready window. A programmatic host can also supply an optional trusted
+`contextCounter` from the exported async factory, with immediate readiness:
+
+```js
+import { createCairnServer, createContextCounter } from '../adapters/mcp/server.mjs';
+const contextCounter = await createContextCounter();
+const server = createCairnServer({ path, namespace, contextRead: 'context-read-v1', contextCounter });
+```
+
+Importing these local modules, default keyless flag-off startup and `--check-config` never
+load the tokenizer package or WASM. A missing tokenizer refuses explicit
+counter creation and CLI startup with `context_tokenizer_unavailable`;
+automatic programmatic loading resolves readiness to `false` instead.
+This needs no API key, provider or network. Capabilities
+advertise `contextRead` and an `assembly` block with representation, policies,
+default policy, counter identity and limits. Core hosts without a counter
+advertise `counter:null` and refuse assembly; retrieval still works.
+
+On success the tool returns exactly one text block, byte for byte equal to
+core `meteredText(result.value.metered)`:
+`JSON.stringify({ok:true,value:metered,evidenceTrust:'untrusted-data-not-instructions'})`.
+The token budget measures that complete string, including framing and snapshot.
+Diagnostics, including budget usage, omissions and timings, appear only under
+`_meta['ink.cairn/context-read-diagnostics']`, never in a text block. Assembly
+errors retain their envelope, error code, retryability and trust framing in
+text, but move `error.details.candidates` into that same metadata key as
+`{candidates}`. Any other error details remain in the error envelope; an empty
+details object is omitted. This isolation covers both successful assembly and
+candidate-search failures, including absent embedding configuration and an
+unavailable index. The §13 tools keep their existing response shape. A client
+that uses these diagnostics must explicitly keep `_meta` in its host/UI state
+and send only the text block to the model; this contract is tested with a
+client that constructs model input from `content` alone. No invisibility is
+claimed for arbitrary clients. The portable guarantee bounds the exact text
+block alone, not total model-request spend. The independent 65,536-byte core
+envelope and 262,144-byte transport bounds also apply, including diagnostics;
+both successful and error responses include diagnostics in those byte checks.
+
+The default is versioned and swappable. HR-2 ran on a short, single-fact,
+receipt-oriented synthetic fixture and kept rank-first as the initial default;
+it does not establish long-item validity. No answer-quality
+or correctness claim, generated summaries, prefix/window degradation, Card
+source units, role profiles, relations or MOC support is supplied by U5b.
+No budget number is a recommendation.
 
 ## Hosted embeddings and explicit refresh
 
@@ -73,7 +149,8 @@ time separately. Rebuilding is resumable; call again with another bounded budget
 The command may report `rebuilding` or `partial` without implying an empty index.
 
 `--check-config` on a context MCP configuration, or on `context refresh`, checks
-syntax without opening a database, looking up a key or constructing a provider.
+syntax without opening a database, looking up a key, constructing a provider
+or constructing the assembly counter.
 It does not attest database readiness, credentials, current pricing or model
 availability. Real startup reads the existing `OPENAI_API_KEY` lookup only when
 the explicit provider group is present for embedding. Never put credentials in
@@ -148,7 +225,7 @@ That exception is asserted separately from standalone one-Han, overlapping
 two-Han, supplementary-Han and mixed-width fixtures. Measurements and fake
 embeddings use synthetic data and are observational. They do not establish
 answer correctness, complete semantic recall, native activation, production
-latency or a 100,000-Memory guarantee. Assembly/U5b, role profiles, relations,
+latency or a 100,000-Memory guarantee. Role profiles, relations,
 MOC retrieval, Raw search and local-model adapters remain unsupported.
 
 `node tools/testing/context-embedding-live.mjs` prints an unrun notice without

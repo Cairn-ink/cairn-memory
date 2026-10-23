@@ -6,6 +6,7 @@ Status:
 - U4 (§12) v0.5.2 is confirmed by the auditor as ready for U4a implementation after U2c.
 - U5a (§13) v0.6.2 is confirmed by the auditor as ready for implementation.
 - U2c (§14) v0.7.1 is confirmed by the auditor as ready for implementation. It precedes U4a and U5a's wiring.
+- U5b (§15) v0.9.1 is confirmed by the auditor as ready for implementation (`0e92245d`, two re-checks). It builds only on U5a's facade and does not change §13.
 
 History:
 - v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
@@ -1087,6 +1088,330 @@ capability change.
   | C03 | Corrupting file A's text refuses reads of A, `getMethodVersion` and manifest listing, while reads of file B succeed. Corrupting a stored `content_identity` or manifest row refuses the reads and resolutions that verify the affected version. Unrelated package lists, usage, effects and reason checks are unaffected |
   | C04 | Gate: a continuous maximum-size `readMethodFile` reader and the existing small independent binding writer run in separate processes, with at least 100 committed transitions and finite deadlines. Any busy outcome fails the gate, even if it was retried. Writer p95 must be ≤250 ms on the reference machine. `npm run measure:method-packages` asserts these thresholds and both processes' exit codes on both runtimes, and reports reader page p50/p95. This is plausibly achievable, not yet established: rollback-mode PENDING locks let short deferred reads coexist with writer progress |
   | C05 | A concurrent deletion permits complete pages linearized before the deletion. A later continuation returns `cursor_stale` under the existing U2 epoch precedence (`core/test/method-packages-deletion.test.mjs:72`), and a fresh read returns `unavailable`. No page mixes snapshots or versions. Existing §5 behaviour and assertions are preserved. U4's separately specified deleted-target precedence does not change U2c |
+
+## 15. U5b: M7 budgeted assembly (v0.9.1, audited and confirmed)
+
+Authored by the U5b coordinator on 2026-10-23 on branch
+`integration/unified-memory-v1-u5b` (base: U5a `389512d`). v0.8 (`f5ee8133`)
+was audited by an independent, non-author, read-only Codex
+(`u5b_contract_audit`, gpt-6.1-sol/xhigh), which found eight P0, four P1 and
+one P2; v0.9 applies all thirteen, and v0.9.1 applies the re-check's two new
+P0 (per-trial snapshot derivation; no hidden-channel claim for diagnostics)
+and one P1 (omission and race boundaries). It specifies the `contextRead()` facade
+reserved in §13.1 and nothing else. Every §13 method, default, DTO, cursor,
+snapshot, sidecar, channel and error stays byte-identical. Without
+`contextRead` opt-in nothing changes. `HR-2/` denotes the research checkout on
+`experiment/hr2-assembly`.
+
+**Evidence status.** HR-2 (`HR-2/docs/plans/budgeted-assembly-hr2.md`, frozen
+v1.1 at `c863e9d6`) ran on 2026-10-24
+(`HR-2/docs/plans/budgeted-assembly-hr2-results.md`, harness `241fad89`,
+dual non-author review). The preregistered contrast, coverage-first minus
+rank-first whole units on bge-m3 + A3 at 512 tokens, came out −2.5 points with
+a 95% family-bootstrap CI of [−6.6, +1.5], so **`rank-first-whole-v1` stays
+the initial default** under the protocol's rule. The primary had approved that
+default on 2026-10-23, with the policy versioned and swappable so that later
+evidence can flip it without changing this interface. HR-2 answers only for
+short, single-fact items whose evidence often sits in receipts; long-item
+validity is a non-claim. HR-2 also found that deepening with the earliest
+receipt only never lost and gained 3–4 points at the tightest budgets; that
+variant is not part of this packet and would need its own clause.
+
+### 15.1 Facade, authority and transactions
+
+- `contextRead` becomes the fourth method of `context-read-v1`. It exists on
+  the writable facade (`openMemoryCore({path, contextRead})`) and on the
+  read-only `openContextReader`. `CONTEXT_METHODS` gains `'contextRead'`;
+  authority allowlists must add the name explicitly (§2.3, §13.1). Existing host
+  authority objects that list only §13's methods refuse it with
+  `authority_required`.
+- Construction gains one optional trusted field,
+  `contextRead.counter: {id, countTokens}`: a synchronous exact token counter
+  with the same shape and validation as the existing model counter
+  (`core/model-budget.mjs:4`; a non-function, throwing, non-integer or negative
+  result is `token_count_unavailable`). `id` is 1–200 units. The counter stays
+  optional so that §13-only hosts are unaffected; only `contextRead` refuses
+  its absence, with `invalid_input` and `details:{counter:'absent'}`. No
+  estimator and no heuristic fallback: budgets are exact in the host's counter
+  or refused.
+- **Internal search seam.** `contextRead` does not call the public
+  `findCandidates`. It reuses an internal search function under the outer
+  `contextRead` authorization (one method name, one complete payload binding,
+  one absolute deadline) that returns the complete frozen horizon (≤24 items)
+  before public paging, with no ranking retention and no cursor creation.
+  Public §13 behaviour, retention and paging are unchanged.
+- Authority: `actionClass:'read'`, `actionId:null`, payload binding, every
+  namespace of the read set authorized before candidate search; outer grants
+  and search fences rechecked after every await, including the await that
+  receives search results and the semantic embedding await inside the search,
+  and again before the final canonical read. Capture consent grants nothing.
+  Tool text, saved bodies and receipts never mint authority.
+- Transactions: all canonical reads use §14's deferred read helper. Counter
+  calls are host callbacks and happen **outside** any transaction, between the
+  preparatory read and the final authoritative read. No host callback, counter
+  call or await follows the final read (`core/session-context.mjs:113`).
+- Deadline: one cooperative deadline covers candidate search, preparatory
+  read, counting and the final read. Default 1,000 ms, maximum 5,000 ms. It is
+  checked before and after every counter call and before each read phase.
+  Expiry stops further admissions (`stops.deadline`); the bounded final
+  metering and the final revalidation still run.
+
+| Method | Input | Success value |
+| --- | --- | --- |
+| `contextRead` | `readSet, query, types, intent, semantic?, budget?:{maxTokens?, maxItems?}, policy?:{id}, deadlineMs?` | §15.5 `{metered, diagnostics}` |
+
+- Unknown fields refuse `invalid_input`. `query`, `types`, `intent`, `semantic`
+  follow §13 exactly and are validated by the same input module. `policy` is a
+  strict `{id}` object. `cursor` is not accepted: assembly consumes a whole
+  frozen horizon.
+
+### 15.2 Limits
+
+| Limit | Value |
+| --- | --- |
+| `budget.maxTokens` | Default 1,500; minimum 64; maximum 4,000. Counted on the metered text (§15.4) |
+| `budget.maxItems` | Default 12; maximum 24. Caps admitted **bodies** only |
+| Candidates consumed | The complete frozen horizon of one internal search, ≤24 items |
+| Sources per item | The first 16 receipts in `(created_at, id)` order, the same cap and order as §13.6's `provenance.sources` |
+| Complete core envelope | `success({metered, diagnostics})` ≤65,536 UTF-8 bytes (§13.2), enforced independently of the token budget |
+| Deadline | Default 1,000 ms; maximum 5,000 ms |
+| Counter calls | With `U ≤ 408` attempted units and `R ≤ U` rejected trials needing an oversized check: one initial, `U` unit-text, `U` trial-envelope, `R` minimal-envelope and one final count, `2 + 2U + R ≤ 1,226` per call; the actual number is reported |
+
+The defaults are the existing session-context numbers (`core/session-context.mjs:15`).
+The 4,000 maximum is the new contract from the integration draft; it is a cap,
+not a recommendation, and HR-2 does not choose it.
+
+### 15.3 Candidates, units and representations (`representation-v1`)
+
+- **Candidates.** The internal search runs the §13 lexical or hybrid search
+  with the same request binding, preset, channels, coverage and degraded
+  modes. The §13 `channels`, `coverage` and `trace` of that search are returned
+  unchanged under `diagnostics.candidates`. A failed search returns the §13
+  error unchanged, with its diagnostics; total failure never means "no
+  matches".
+- **Items.** One candidate is one item: a Memory or a Card ref with exact
+  revisions. During the preparatory read each item is refetched canonically
+  through the §13.6 evidence reader; an item that is `evidence_unavailable` or
+  in `revision_conflict` **at preparation** is omitted with
+  `omitted.unavailable++` rather than failing the call. The prepared, capped
+  set of items and units is the **universe** over which every counter in
+  §15.5 is defined.
+- **Units.** Each item has one **body unit** and zero or more **source
+  units**:
+  - Memory body: `content` as stored (canonical, already normalized).
+  - Card body: `title + '\n' + body`, the §13.3 indexed text.
+  - Memory source: one receipt `{role, excerpt}` validated by the existing
+    `validateSourceReceipt` (`core/source-evidence.mjs:6`), in `(created_at,
+    id)` order, at most 16. Source units exist only when the canonical item
+    reports `sourceAccess:'available'` (`core/private-evidence-storage.mjs:77`);
+    that value is used unchanged for every intent, so `history` reads can
+    carry sources for items that are canonically current. Items with
+    `'unavailable-for-noncurrent-memory'` have no source units.
+  - Card source access is `'unsupported'` in U5b and Card `sourcesComplete` is
+    always false. Card bindings stay reachable through `fetchCandidateEvidence`.
+- **Representations.** A unit is delivered whole or not at all. There is no
+  prefix, window or generated summary representation in `representation-v1`:
+  HR-2 found body prefixes inert on the frozen fixture, and generated summaries
+  need a model. A body that exceeds the budget contributes neither body nor
+  receipts, and is tested with canonical long content. Degradation under
+  budget means omitting units and counting them (§15.5), never silently
+  shortening text. Prefix and window representations stay deferred and
+  separately versioned.
+- **Ordering invariant.** A source unit is scheduled only after its item's
+  body unit was admitted; a rejected body excludes all of its sources. Sources
+  never appear detached from their Memory.
+
+### 15.4 Policies, metering and dedup
+
+- **Policy** is the visitation order over units. It is versioned, chosen per
+  call by `policy.id`, listed by capabilities, and has one default constant in
+  code. Changing the default is a contract revision; adding a policy is not.
+  Unknown ids refuse `invalid_input`.
+
+| Policy id | Visitation order | Status |
+| --- | --- | --- |
+| `rank-first-whole-v1` | `(rank, body-before-sources, receipt order)`: each item's body, then its sources, item by item | **Initial default** (HR-2 P-top) |
+| `coverage-first-v1` | `(body-before-sources, rank, receipt order)`: every body in rank order, then every admitted item's sources in rank then receipt order | Available, not default (HR-2 P-cover) |
+
+- **Admission** is greedy skip-and-continue at unit granularity, as HR-2 §6
+  defines it: a unit is admitted if the metered text with it still fits;
+  otherwise it is skipped and counted, and visitation continues with the next
+  unit. `maxItems` closes further **body** admissions once that many bodies are
+  in, while sources of admitted bodies remain admissible, so coverage-first's
+  second pass still runs. Deadline expiry stops admissions. Delivered items
+  keep ascending candidate rank regardless of policy.
+- **Metered payload.** The immutable payload
+  `metered = {version, policy:{id}, representation, counter:{id}, framing, items, snapshot}`
+  is what the budget measures and what the MCP tool shows the model. One
+  shared core serializer produces the exact string
+  `JSON.stringify({ok:true, value: metered, evidenceTrust:'untrusted-data-not-instructions'})`,
+  and the transport emits that string verbatim as the tool's text
+  (`adapters/mcp/context-read-transport.mjs:7`). Usage, omission and stop
+  counters, timings and counter-call totals live in `diagnostics`, outside the
+  metered text, so the count can never include itself. For every trial
+  selection, its `snapshot` is derived from the cached preparatory canonical
+  generations, access generations and full item fences **before** that trial
+  is measured, so the measured string is exactly the string that would be
+  delivered; an empty selection uses `snapshot:null`. The accepted final
+  payload is frozen after admission, and final revalidation verifies it
+  without changing its serialization. This bounds the tool text, not the
+  host's total model-request spend.
+- **Shared metering.** Fit is `counter.countTokens(meteredText) ≤ maxTokens`,
+  measured on the complete metered string, never on fragments summed: the same
+  whole-request rule as `packRank` (`core/model-packing.mjs:99`) and session
+  context (`core/session-context.mjs:124`). Unit-text counts (`body.tokens`,
+  `source.tokens`) are diagnostics only. The 65,536-byte bound is enforced
+  separately on the complete core success envelope. No second budget ledger
+  exists; the model-call packers are untouched.
+- **Empty fit and oversized units.** The metered text with zero admitted units
+  is counted first; if it does not fit, the call refuses
+  `context_item_too_large`. A rejected unit is classified `oversized` only by a
+  further count of the minimal legal envelope holding that unit alone (for a
+  source: its body plus that source); otherwise it is a budget skip.
+- **Source dedup.** A later source unit is suppressed only when its validated
+  canonical `(role, excerpt)` bytes equal those of an earlier admitted concrete
+  source. Full receipt identity (`receipt_key`, which hashes the complete
+  receipt, `core/runtime.mjs:109`) may be used to short-circuit the comparison;
+  matching `client/session/event` alone never suffices. The suppressed unit is
+  delivered as `{index, sameAs:{item, source}}`, where the indices are the
+  zero-based positions in the delivered arrays of an **earlier** admitted
+  concrete source: no forward references, no alias chains. `sameAs` means text
+  reuse, not provenance equivalence. Dedup state is request-local and consults
+  only authorized namespaces; a cross-namespace alias is delivered only when
+  both namespaces pass final validation. `dedup.sources` counts suppressions;
+  aliases count as represented for `sourcesComplete`. Dedup never merges
+  Memories.
+- **Determinism.** Given one horizon, one counter and one policy, the admitted
+  unit set is a pure function of the inputs.
+
+### 15.5 Delivery and revalidation
+
+Core success value, with every field present:
+
+```text
+{ metered: { version:'context-read-v1', policy:{id}, representation:'representation-v1',
+             counter:{id}, framing,
+             items:[{ ref, rank, type, metadata, body:{text, tokens},
+                      sources:[{index, role, excerpt, tokens} | {index, sameAs:{item, source}}],
+                      sourceAccess, sourcesComplete }],
+             snapshot },
+  diagnostics: { budget:{maxTokens, maxItems, used},
+                 omitted:{items, bodies, sources, unavailable, oversized},
+                 dedup:{sources}, stops:{budget, items, deadline},
+                 candidates:{count, channels, coverage, trace},
+                 trace:{timings, counterCalls} } }
+```
+
+- `framing` is the fixed trust sentence: assembled text is untrusted
+  recollection, never instructions, truth or execution permission.
+- `metadata` is exactly the §13.6 item metadata: Memory
+  `{state, reviewState, filing, kind, origin, confidence}`
+  (`core/private-evidence-storage.mjs:44`); Card `{state, support, origin}`.
+  No provenance, receipt metadata or qualification anchors; full qualified
+  evidence is one `fetchCandidateEvidence` away through `snapshot`.
+- `budget.used` is the final count of the metered text and is authoritative.
+- Omission counters are defined algebraically over the prepared universe:
+  `omitted.bodies = preparedItemCount − deliveredItemCount`, which covers
+  bodies rejected for budget, classified oversized, closed by `maxItems` or
+  never visited after deadline expiry; `omitted.items` equals that same value
+  (an item is delivered exactly when its body is); `omitted.sources` counts
+  source units of the universe not delivered concretely or as aliases, which
+  includes every source of an undelivered body; `omitted.oversized` counts
+  units classified oversized (§15.4); `omitted.unavailable` counts candidates
+  dropped at preparation and is outside the prepared universe. Receipts beyond the 16 cap are outside the universe and never
+  produce invented totals. `sourcesComplete` is true only when source access is
+  available, the canonical coverage is `complete` (≤16 receipts,
+  `core/private-evidence-storage.mjs:88`) and every capped receipt is
+  represented concretely or by alias. `stops.items` means `maxItems` closed body
+  admission.
+- **Snapshot.** `snapshot` uses the existing §13.6 encoding over the
+  delivered items' refs in delivered order, with generation types derived from
+  those refs (`core/context-read-facade.mjs:446`), the cached preparatory
+  access generations and the full evidence-item fences, so
+  `fetchCandidateEvidence({snapshot})` returns exactly those items. It is
+  derived per trial as §15.4 states; an envelope with zero items carries
+  `snapshot:null`.
+- **Final revalidation.** After counting, one final read transaction refetches
+  every admitted item canonically and recomputes canonical generations and
+  item fences. After preparation, an admitted item's disappearance, revision
+  or eligibility change, or any fence difference, refuses `snapshot_stale`
+  (`retryable:false`; no automatic retry, no repeated embedding). Revocation
+  returns `scope_changed`; storage failures keep their own codes. Success
+  linearizes at the final revalidation: a mutation visible before it must
+  refuse, while a write after it invalidates subsequent snapshot fetches, not
+  the delivered text. No callback or await follows this read.
+- Errors: §13.6's codes plus `token_count_unavailable`. Diagnostics follow
+  §13.6: sanitized `details:{candidates}` on candidate failures; no text,
+  vectors, credentials, paths or foreign aggregates.
+
+### 15.6 Host wiring
+
+- **Capabilities.** `getContextReadCapabilities()` lists `contextRead`, adds
+  `assembly:{representation:'representation-v1', policies:['rank-first-whole-v1','coverage-first-v1'],
+  defaultPolicy:'rank-first-whole-v1', counter:{id}|null, limits}` and removes
+  `'assembly'` from `unsupported`. Hosts that construct without a counter see
+  `counter:null`.
+- **MCP.** After the configuration check has returned, context-enabled MCP
+  startup (keyless or keyed, CLI or programmatic `createCairnServer`) injects a
+  separate trusted counter built from the keyless local tokenizer already
+  shipped for recall (`adapters/mcp/cli.mjs:327`, `o200k_base`, id
+  `tiktoken-o200k_base`), independently of the legacy `model` construction, with
+  no key, provider or network. One tool is added, `read_memory_context`, with
+  arguments `query, types, intent, semantic?, maxTokens?, maxItems?, policy?,
+  deadlineMs?`; the host flattens `maxTokens`/`maxItems` into core `budget`,
+  passes `policy` as strict `{id}`, fixes the read set, applies the §11.4
+  refusals of supplied authority, namespace, readSet or configuration, sets
+  `readOnlyHint:true` and `openWorldHint:true`, and emits the metered string
+  as the tool's only text block. Diagnostics stay in the core result; the MCP
+  result carries them only under a namespaced `_meta` key, and only under an
+  explicit, tested client contract that excludes that field from model input.
+  No invisibility is claimed for arbitrary clients: the portable token
+  guarantee covers the exact text block alone. The 65,536-byte core envelope
+  and the separate 262,144-byte transport bound stay. The tool is added to the context tool
+  allowlist (`adapters/mcp/context-read-access.mjs:4`). No CLI subcommand is
+  added.
+- **Existing exact-list assertions.** Two U5a tests assert exactly seven tools
+  and exactly two context additions (`adapters/mcp/test/context-read.test.mjs:76`,
+  `packaging/test/context-read.test.mjs:51`). Additive assembly tool and
+  capability announcements are exempt from the byte-identical expectation of
+  A01; those assertions are updated by their test owner (the primary, U5a
+  part 3) through coordinator integration. U5b workers never edit them.
+- **OpenAI adapter.** Unchanged; the counter is the adapter's existing export.
+- **Packaging.** New runtime modules and the shipped doc update
+  (`docs/context-read-local.md`) go in `packaging/artifact-files.json`,
+  cross-checked mechanically against the static import graph. New CLI-reachable
+  modules are imported statically and stay SQLite-free at link time (TRAPS 2–4).
+- Shared files (`core/contract.mjs`, `core/database.mjs`, `adapters/mcp/cli.mjs`,
+  `adapters/mcp/server.mjs`, `packaging/artifact-files.json`, `CHANGELOG.md`,
+  `docs/limitations.md`) receive minimal additive edits only, coordinated through
+  the user before the worker touches them.
+
+### 15.7 Acceptance (installed, Node 22.16 and 24.15, under the machine-wide queue)
+
+| ID | Observable |
+| --- | --- |
+| A01 | Flag-off bytes, DTOs, defaults, prompts, tools, capabilities, errors and provider-call counts unchanged; every §13 retrieval observable (R01–R13) still passes with no edited assertions, except the two exact-list assertions named in §15.6, which the test owner updates |
+| A02 | **Research equivalence**: policy visitation orders are verified against the pinned HR-2 protocol (`c863e9d6`, hashes recorded), and product admissions are verified against an independent oracle that uses the identical product serialization, body prerequisites, dedup and caps, on a **U5b-owned fixture** with receipts, canonical normalized text, fixed orderings, fixed horizons and binding budgets. The existing `hr1-sample.json` is not modified. Equal admissions across the two cost models are not required |
+| A03 | Every success has `budget.used ≤ maxTokens`, `used` recomputed independently from the delivered metered string equals the reported value, and the core envelope is ≤65,536 bytes, across budgets 64, 256, 1,500, 4,000, both policies, Memory-only and Card stores; the empty-fit refusal is expected separately when the framing cannot fit |
+| A04 | Omission accounting over the prepared universe: oversized classification by minimal envelope, rejected bodies with their sources, `maxItems` closing bodies but not sources, deadline stops, >16 receipts, canonical long content; no text is shortened anywhere |
+| A05 | Dedup: equal canonical `(role, excerpt)` across two Memories is delivered once with a backward `sameAs`; equal `client/session/event` with different text is not merged; cross-namespace aliases in a two-namespace read set; counts match |
+| A06 | Second-process correction, supersession, forget, deletion, refiling, Card revision or source invalidation that is visible before final revalidation produces `snapshot_stale`; a write after that linearization point leaves the delivered text intact and makes the subsequent snapshot fetch refuse; revocation produces `scope_changed`; pre-preparation unavailability produces omission; an instrumented counter proves no counter call or await follows the final read |
+| A07 | Authority: allowlists without `contextRead` refuse; every namespace authorized; revoke at each await; foreign fixtures influence no text, counts, ranks or `used`; identical requests after populating another scope return identical stable fields (timing and work telemetry excluded) after equivalent warm-up |
+| A08 | Degraded channels and `semantic:false` behave as §13 (zero embedding calls); lexical-only assembly succeeds; candidate-search failures propagate with diagnostics; `history` intent delivers sources for canonically current items |
+| A09 | Counter contract: absent counter refuses; throwing, non-integer or negative counters give `token_count_unavailable`; counter calls ≤ `2 + 2U + R`; deadline checks before and after every count; `counterCalls` reported |
+| A10 | Read-only reader and managed-existing matrix; real-process monitoring sees no transient files; unchanged canonical DDL |
+| A11 | MCP: argument parsing and refusals, strict `policy`, flattened budget, annotations, the single text block equals the core serializer's string byte for byte, diagnostics absent from every text block and present only under the namespaced `_meta` key when the tested client contract applies, capability defaults, secret sanitization, 65,536/262,144 bounds; `--check-config` opens nothing and constructs no counter |
+| A12 | Independently derive and diff the installed closure and the manifest; print counts, differences and actual build/test exit codes |
+
+Measurements (observations, not gates): at 10³ and 10⁴ Memories with 1–16
+receipts each, `contextRead` p50/p95 at 1,500 and 4,000 tokens under both
+policies with the real `o200k_base` counter, counter calls per request, and
+event-loop delay. Label fake-counter timings separately.
+
+**Non-claims:** answer quality or correctness; generated summaries; prefix or
+window degradation; Card source units; role profiles, relations and MOC (U5c);
+long-item validity of the default (HR-2 §3); total model-request spend; any
+budget number as a recommendation.
 
 ## 16. Amendment: contention gates under rollback-journal mode (v0.7.2, primary, 2026-10-24)
 

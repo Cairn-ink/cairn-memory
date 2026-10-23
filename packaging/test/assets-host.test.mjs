@@ -24,7 +24,7 @@ test('L01–L06 installed asset CLI/MCP, complete reads, transport and independe
     const assetTools=['list_assets','list_asset_versions','get_asset_version','list_asset_derivatives','read_asset_derivative'];
     const methodTools=['resolve_method','resolve_methods_for_role','get_method_version','list_method_manifest','read_method_file',
       'list_method_packages','list_method_versions','compare_method_versions','list_method_binding_events'];
-    const contextTools=['find_memory_candidates','fetch_memory_candidate_evidence'];
+    const contextTools=['find_memory_candidates','fetch_memory_candidate_evidence','read_memory_context'];
     let combinations=0;
     for(const assets of [false,true])for(const context of [false,true])for(const enabled of [false,true]){
       const server=await host(workspace,path,{command:entry,assets,context,enabled}),tools=(await server.client.listTools()).tools;

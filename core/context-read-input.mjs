@@ -6,19 +6,27 @@ import { denseArray, fail } from './validation.mjs';
 import { validateEmbedder } from './context-read-embedder.mjs';
 
 export const CONTEXT_VERSION = 'context-read-v1';
-export const CONTEXT_METHODS = Object.freeze(['findCandidates', 'refreshContextIndex', 'fetchCandidateEvidence']);
+export const CONTEXT_METHODS = Object.freeze(['findCandidates', 'refreshContextIndex', 'fetchCandidateEvidence', 'contextRead']);
+export const ASSEMBLY_POLICIES = Object.freeze(['rank-first-whole-v1', 'coverage-first-v1']);
+export const DEFAULT_ASSEMBLY_POLICY = 'rank-first-whole-v1';
+export const ASSEMBLY_LIMITS = Object.freeze({ defaultMaxTokens: 1500, minTokens: 64, maxTokens: 4000,
+  defaultMaxItems: 12, maxItems: 24, candidates: 24, sourcesPerItem: 16, responseBytes: 65536,
+  defaultDeadlineMs: 1000, deadlineMs: 5000, counterCalls: 1226 });
 export const CONTEXT_LIMITS = Object.freeze({ defaultLimit: 12, horizon: 24, queryUnits: 4000,
   defaultDeadlineMs: 1000, deadlineMs: 5000, responseBytes: 65536, cursorUnits: 8192,
   snapshotUnits: 16384, refreshItems: 1024, batchRows: 128, batchTextUnits: 2_000_000,
   vectors: 20000, cacheBytes: 134217728, dimensions: 32768, embedderMetadataUnits: 200, rankings: 128, rankingTtlMs: 300000 });
 export function contextOptions(value) {
-  const options = ownData(value, ['version', 'authority', 'embedder', 'policy']);
+  const options = ownData(value, ['version', 'authority', 'embedder', 'policy', 'counter']);
   if (options.version !== CONTEXT_VERSION) fail('invalid_input');
   const authority = ownData(options.authority, ['authorize', 'isCurrent']);
   if (typeof authority.authorize !== 'function' || typeof authority.isCurrent !== 'function' ||
       [authority.authorize, authority.isCurrent].some(fn => types.isAsyncFunction(fn))) fail('authority_required');
   const embedder = options.embedder === undefined ? null : validateEmbedder(ownData(options.embedder,
     ['id', 'revision', 'dimensions', 'normalization', 'embed']));
+  const counter = options.counter === undefined ? null : ownData(options.counter, ['id', 'countTokens']);
+  if (counter && (typeof counter.id !== 'string' || !counter.id.isWellFormed() ||
+      counter.id.includes('\0') || counter.id.length < 1 || counter.id.length > 200)) fail('invalid_input');
   const policy = options.policy === undefined ? {} : ownData(options.policy,
     ['family', 'maxRequests', 'maxUsd', 'maxConcurrent', 'estimateUsd']);
   const family = policy.family ?? 'local';
@@ -28,7 +36,7 @@ export function contextOptions(value) {
       !Number.isFinite(policy.maxUsd) || policy.maxUsd <= 0 || typeof policy.estimateUsd !== 'function' ||
       types.isAsyncFunction(policy.estimateUsd) || policy.maxConcurrent !== undefined &&
       (!Number.isInteger(policy.maxConcurrent) || policy.maxConcurrent < 1 || policy.maxConcurrent > 1024))) fail('invalid_input');
-  return Object.freeze({ authority: Object.freeze(authority), embedder, family,
+  return Object.freeze({ authority: Object.freeze(authority), embedder, counter: counter && Object.freeze(counter), family,
     preset: family === 'hosted' ? 'rrf-k10' : 'rrf-k60-d12',
     policy: Object.freeze({ ...policy, maxConcurrent: policy.maxConcurrent ?? 1 }),
     budgetConfigured: budgeted });
@@ -85,7 +93,8 @@ export function contextRefs(values, readSet, supportedTypes) {
 export function contextInput(method, value, supportedTypes) {
   const payload = deepFreeze(contextSnapshot(value));
   const selected = ownData(payload, method === 'findCandidates' ?
-    ['readSet', 'query', 'types', 'intent', 'semantic', 'limit', 'deadlineMs', 'cursor'] : method === 'refreshContextIndex' ?
+    ['readSet', 'query', 'types', 'intent', 'semantic', 'limit', 'deadlineMs', 'cursor'] : method === 'contextRead' ?
+      ['readSet', 'query', 'types', 'intent', 'semantic', 'budget', 'policy', 'deadlineMs'] : method === 'refreshContextIndex' ?
       ['readSet', 'types', 'intent', 'budget'] : ['readSet', 'refs', 'intent', 'snapshot', 'responseByteLimit']);
   const result = { readSet: contextReadSet(selected.readSet) };
   if (method === 'fetchCandidateEvidence') {
@@ -103,11 +112,19 @@ export function contextInput(method, value, supportedTypes) {
     if (new Set(selected.types).size !== selected.types.length || selected.types.some(type => !supportedTypes.includes(type)) ||
         !['current', 'history'].includes(selected.intent)) fail('invalid_input');
     result.types = ['memory', 'card'].filter(type => selected.types.includes(type)); result.intent = selected.intent;
-    if (method === 'findCandidates') {
+    if (method === 'findCandidates' || method === 'contextRead') {
       if (typeof selected.query !== 'string' || !selected.query.trim() || selected.query.length > 4000 ||
           selected.semantic !== undefined && typeof selected.semantic !== 'boolean') fail('invalid_input');
       result.query = selected.query; result.semantic = selected.semantic ?? false;
-      result.limit = integer(selected.limit, 12, 24); result.deadlineMs = integer(selected.deadlineMs, 1000, 5000);
+      result.deadlineMs = integer(selected.deadlineMs, 1000, 5000);
+      if (method === 'contextRead') {
+        const budget = selected.budget === undefined ? {} : ownData(selected.budget, ['maxTokens', 'maxItems']);
+        result.budget = { maxTokens: integer(budget.maxTokens, 1500, 4000), maxItems: integer(budget.maxItems, 12, 24) };
+        if (result.budget.maxTokens < 64) fail('invalid_input');
+        const policy = selected.policy === undefined ? { id: DEFAULT_ASSEMBLY_POLICY } : ownData(selected.policy, ['id']);
+        if (!ASSEMBLY_POLICIES.includes(policy.id)) fail('invalid_input');
+        result.policy = { id: policy.id };
+      } else result.limit = integer(selected.limit, 12, 24);
       if (Object.hasOwn(selected, 'cursor')) {
         if (typeof selected.cursor !== 'string' || selected.cursor.length > 8192) fail('invalid_cursor');
         result.cursor = selected.cursor;
