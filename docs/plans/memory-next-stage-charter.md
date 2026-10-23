@@ -170,10 +170,12 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
   - U2 方法包 core（雙審查 Yes）
   - U3 契約（v0.4.1 審查通過，之後補到 v0.4.5）與實作
   - U4 §12、U5a §13、U2c §14 三份契約都經非作者審查並確認可以實作
+- **已完成（續）**
+  - U3：`7124a8d`＋修正 `e9d7c58`、`e63b24c`，雙審查都判 Yes
+  - U2c：`5b1202d`，主控驗收通過，C04 門檻達標
 - **進行中**
-  - U3 已提交（`7124a8d`），非作者雙審查進行中
-  - U2c 實作
-  - U5a 第一部分的效能修正（獨立 worktree）
+  - U5a 第二部分：core 接線（獨立 worktree）
+  - U4a 第一部分：v31 schema、遷移、素材的匯入／讀取／刪除、用量與量測門檻
 - **下一步**
   1. U3 雙審查與修正輪。
   2. U2c 實作：解決讀寫鎖競爭，U4a 和 U5a 的接線都要靠它。
@@ -266,4 +268,5 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | 主控（U5a 第一部分驗收） | 沙箱外重複跑新測試 | — | 沙箱外 | U5a worktree | 06:1x | 兩個 Node 版本各跑 3 次，每次 40／40、exit 0（負載 3–4）；空白檢查連 16 個新檔都 exit 0。worker 在沙箱內看到的那次失敗沒有重現。主控把 U5a 分支快轉到 `5b1202d`：worker 的沙箱無法寫入 git 資料 |
 | `umv1_u5a_impl`（U5a 第二部分） | core 接線：改用 U2c 的讀取輔助函式、facade、`openContextReader`、`findCandidates`（自動做有界的字面維護）、`refreshContextIndex`、`fetchCandidateEvidence`、游標與診斷，以及 core 層級的 R02–R12；同時刪掉那個 C 檔 | gpt-6.1-sol/xhigh | workspace-write | U5a worktree，`5b1202d`＋第一部分 | 06:2x– | 執行中；第三部分是 MCP、CLI、OpenAI adapter 與已安裝測試 |
 | `u3_review_spec`／`u3_review_standards`（複查） | 複查修正 3（`e9d7c58`） | gpt-6.1-sol/xhigh → 同 | read-only | `e9d7c58` | 06:3x–06:5x | Spec 第一次因模型滿載失敗，重試成功。兩邊都判 **No**，但都只剩 P2：(1) bind mount 工具會把「寫標記檔失敗（78）」轉成「略過（77）」，兩位審查者各自發現；(2) `**`、`*`、`?` 不匹配換行，這是從舊正規表示式繼承的毛病，新比對器為了跟舊行為一致而保留了它。原本的問題都已解決 → 修正 4 |
-| `umv1_u2_impl`（U3 修正 4） | 保留狀態碼 78；glob 依 POSIX 把換行當一般字元 | gpt-6.1-sol/xhigh | workspace-write | `e9d7c58` | 06:5x– | 執行中 |
+| `umv1_u2_impl`（U3 修正 4） | 保留狀態碼 78；glob 依 POSIX 把換行當一般字元 | gpt-6.1-sol/xhigh → 同 | workspace-write | `e9d7c58` | 06:53–07:04 | exit 0，5 個檔案。主控驗收兩個 Node 版本全部 exit 0（負載一度到 44）→ 提交為 `e63b24c` |
+| `u3_review_spec`／`u3_review_standards`（最終確認） | `e63b24c` | gpt-6.1-sol/xhigh → 同 | read-only | `e63b24c` | 07:1x–07:20 | **兩邊都判 Yes**，沒有剩下任何問題 → **U3 完成** |
