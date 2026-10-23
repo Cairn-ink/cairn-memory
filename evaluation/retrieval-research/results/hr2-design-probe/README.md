@@ -19,4 +19,5 @@ token volume and the test labels for category filtering and fidelity counts;
 `probe.mjs` computed coverage on **dev** rankings only. No HR-2 test coverage
 was computed before the protocol froze. After the audit, `probe.mjs` was
 changed to schedule a span only after its memory's body was admitted (protocol
-§6); the dev output was identical before and after that change.
+§6); reported coverage values were unchanged, while 15 token-use medians
+changed.

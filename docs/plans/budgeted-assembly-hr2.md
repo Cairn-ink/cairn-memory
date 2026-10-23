@@ -1,4 +1,4 @@
-# HR-2: budgeted assembly, offline protocol (v1, frozen)
+# HR-2: budgeted assembly, offline protocol (v1.1, frozen)
 
 Status: **v1, frozen before any HR-2 test-coverage run.** v0.1 was written
 2026-10-23 by the U5b coordinator after two mechanical findings on the frozen
@@ -8,7 +8,9 @@ external-validity statement (§3, §10), "initial default" wording (§4), and an
 optional length-stress arm (§6.1). v0.2 was audited by an independent,
 non-author, read-only Codex (`hr2_protocol_audit`, gpt-6.1-sol/xhigh), which
 found three P0, seven P1 and one P2; v1 applies all of them. The auditor
-reproduced every mechanical claim in §1 and the dev probe output exactly.
+reproduced every mechanical claim in §1 and the dev probe output exactly, and
+confirmed v1 (`2d7b7fe6`); v1.1 applies its four remaining editorial and
+factual corrections without changing any rule.
 
 **Pre-freeze inspection declaration.** This protocol is dev-informed and
 preregistered before any HR-2 test-coverage scoring. Pre-freeze inspection
@@ -78,7 +80,8 @@ raw output: `evaluation/retrieval-research/results/hr2-design-probe/`.
    First-span-only rank-first improved by at most 1.8 points; first-span-only
    body-first improved body-first by 5.3 points on A1 at 512. The probe was
    re-run after the audit with the §6 rule that a span is scheduled only after
-   its body was admitted; the table above shows the re-run.
+   its body was admitted; reported coverage values were unchanged, while 15
+   token-use medians changed. The table above shows the re-run.
 
 ## 2. Deviations from the charter §6 plan (approved by the primary, 2026-10-23)
 
@@ -116,16 +119,18 @@ short, single-fact items whose evidence often sits in spans. It is not evidence
 about long memories or long receipts, and the results document must not
 generalize to them.
 
-## 4. Decision rule (dev-free; everything below is preregistered)
+## 4. Decision rule (dev-informed; preregistered before test coverage)
 
 - **Primary comparison**: P-cover versus P-top on the local nominated ranking
   (bge-m3 + A3), budget 512, overhead `O = 0`, test split, S1000, macro group
   coverage over C1–C7, family cluster bootstrap 95% CI (one preregistered
   comparison). The local ranking is the primary because it is the stronger
   frozen ranking; the hosted product default is an exploratory replicate (§4
-  secondary). On dev, P-top at 512 already reaches that ranking's ceiling, so
-  the test can only show whether coverage-first loses, ties or gains at the
-  budget where the probe saw the largest difference.
+  secondary). 512 is the preregistered intermediate budget, where dev P-top
+  already reached its ranking ceiling (the dev gap there is about 0.9 points,
+  against about 31 points at 128), so the test can only show whether
+  coverage-first loses, ties or gains at a budget where the top of the ranking
+  already fits.
 
 | Outcome | Condition |
 | --- | --- |
@@ -211,9 +216,10 @@ realistic lengths and production reliability need separate evidence.
   `{128, 192, 256, 384, 512, 768, 1024, 1536}`, test split, S1000. Only the §4
   primary cell is confirmatory; every other contrast, including P-cover-s1, is
   exploratory.
-- Not run, recorded as degenerate: **P-prefix** (a 120-unit prefix then
-  widening equals P-top because no body exceeds 82 units) and **P-window** (a
-  query-term window inside an 82-unit body is the body).
+- Not run: **P-prefix** (its body-shortening stage is inert because no body
+  exceeds 82 units; the current `packRank` as a whole is not benchmarked) and
+  **P-window** (a short-body fixture does not meaningfully test the intended
+  window treatment). See §1.2.
 
 ### 6.1 Optional exploratory arm: length stress (skipped in v1)
 
