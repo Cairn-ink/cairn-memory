@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { scoreCell, summarize } from '../assembly/score.mjs';
 import { PROTOCOL, PROTOCOL_COMMIT } from '../assembly/auth.mjs';
 import { COUNTER_ID } from '../assembly/counter.mjs';
+import { assemble } from '../assembly/arms.mjs';
+import { prepareItems } from '../assembly/units.mjs';
 
 function example() {
-  const memory = id => ({ id, content: 'hello', spans: [{ id: `${id}#first`, text: 'hello' }, { id: `${id}#required`, text: 'hello world' }] });
+  const memory = id => ({ id, content: 'hello', spans: [{ id: `${id}#first`, text: id === 'm1' ? 'x '.repeat(256) : 'hello' }, { id: `${id}#required`, text: 'hello world' }] });
   const member = (memory, where) => ({ memory, where, spans: [`${memory}#required`], namespace: 'target', scale: 'S300' });
   const queries = [
     { id: 'q1', family: 'f1', category: 'C1', lang: 'en', intent: 'current', groups: [{ members: [member('m1', 'body')] }, { members: [member('m2', 'span')] }] },
@@ -14,10 +16,11 @@ function example() {
   ];
   const fixture = { hashes: {}, corpus: { memories: ['m1', 'm2', 'm3'].map(memory) }, queries: { queries }, split: { f1: 'dev', f2: 'dev', f3: 'dev' }, labels: { queries: queries.map(query => ({ ...query, split: 'dev' })) } };
   const admission = (id, tokens = 1) => ({ id, tokens, cost: tokens });
-  const cell = { format: 'hr2-cell-v1', run: { protocol: PROTOCOL, protocolCommit: PROTOCOL_COMMIT, counter: COUNTER_ID, status: 'complete', fixtureHashes: {}, arm: 'P-top-s1', ranking: 'A1', split: 'dev', scale: 'S1000', budget: 128, overhead: 0 },
+  const implementation = { format: 'hr2-implementation-v1', commit: 'a'.repeat(40), sourceHash: 'b'.repeat(64), sourceFiles: ['arms.mjs'], dirty: false, detached: true };
+  const cell = { format: 'hr2-cell-v1', run: { protocol: PROTOCOL, protocolCommit: PROTOCOL_COMMIT, counter: COUNTER_ID, status: 'complete', commit: implementation.commit, implementation: { assembly: implementation }, fixtureHashes: {}, arm: 'P-top-s1', ranking: 'A1', split: 'dev', scale: 'S1000', budget: 128, overhead: 0 },
     queries: [{ id: 'q1', ranked: ['m1', 'm2'], admitted: [admission('m1#body'), admission('m2#body'), admission('m2#first')], used: 3 },
       { id: 'q2', ranked: ['m1'], admitted: [admission('m1#body')], used: 1 },
-      { id: 'q3', ranked: ['m2'], admitted: [admission('m2#body')], used: 1 }] };
+      { id: 'q3', ranked: ['m2'], admitted: [admission('m2#body'), admission('m2#first')], used: 2 }] };
   return { fixture, cell };
 }
 
@@ -28,7 +31,7 @@ test('hand-computed required body/span coverage, all-required, full-ranking ceil
   assert.equal(result.summary.categories.C1.allRequired, 0.5);
   assert.equal(result.summary.macroCoverage, null);
   assert.equal(summarize(result.queries).macroCoverage, 0.375);
-  assert.deepEqual(result.summary.tokenUse, { p50: 1 / 128, p95: 2.8 / 128 });
+  assert.deepEqual(result.summary.tokenUse, { p50: 2 / 128, p95: 2.9 / 128 });
   assert.deepEqual(result.queries[0].admitted, cell.queries[0].admitted);
   assert.equal(result.queries[0].used, 3);
 });
@@ -50,10 +53,22 @@ test('named required span alone satisfies its group; unrelated span does not; ce
   const { fixture, cell } = example();
   const first = scoreCell(fixture, cell);
   cell.run.arm = 'P-top';
-  cell.queries[0].admitted.push({ id: 'm2#required', tokens: 2, cost: 2 }); cell.queries[0].used += 2;
+  for (const row of cell.queries) Object.assign(row, assemble(prepareItems(fixture.corpus.memories), row.ranked, { arm: cell.run.arm, budget: 128, overhead: 0 }));
   const full = scoreCell(fixture, cell);
   assert.equal(full.queries[0].coverage, 1); assert.equal(full.queries[0].allRequired, true);
   assert.deepEqual(full.queries.map(row => row.ceiling), first.queries.map(row => row.ceiling));
+});
+
+test('scorer rejects omitted, empty, reordered admissions and a swapped declared arm', () => {
+  for (const mutate of [
+    cell => { cell.queries[0].admitted = []; cell.queries[0].used = 0; },
+    cell => { cell.queries[0].admitted.pop(); cell.queries[0].used--; },
+    cell => { cell.queries[0].admitted.reverse(); },
+    cell => { cell.run.arm = 'P-cover'; },
+  ]) {
+    const { fixture, cell } = example(); mutate(cell);
+    assert.throws(() => scoreCell(fixture, cell), /cell_assembly_replay_mismatch/);
+  }
 });
 
 test('empty fidelity stratum reports zero counts and no macro; invalid cell costs and detached spans refuse', () => {

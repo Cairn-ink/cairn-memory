@@ -43,3 +43,39 @@ test('preparation passes only opaque IDs, texts and costs across the assembly bo
   const prepared = prepareItems([{ id: 'x', content: 'hello', spans: [{ id: 'x#z', text: 'world', fact: 'SECRET' }], expresses: ['SECRET'], family: 'SECRET' }]);
   assert.deepEqual(prepared, [{ id: 'x', body: { id: 'x#body', text: 'hello', tokens: 1 }, spans: [{ id: 'x#z', text: 'world', tokens: 1 }] }]);
 });
+
+const reordered = {
+  'P-top': ['b#body', 'b#s1', 'a#body', 'a#s1'],
+  'P-top-s1': ['b#body', 'b#s1', 'a#body', 'c#body'],
+  'P-cover': ['b#body', 'a#body', 'c#body', 'b#s1'],
+  'P-cover-s1': ['b#body', 'a#body', 'c#body', 'b#s1'],
+  'P-top+tail': ['b#body', 'b#s1', 'a#body', 'c#body'],
+};
+for (const arm of ARMS) test(`${arm} preserves ranking [b,a,c] despite item order [a,b,c]`, () => {
+  assert.deepEqual(assemble(items, ['b', 'a', 'c'], { arm, budget: 12, overhead: 0 }).admitted.map(unit => unit.id), reordered[arm]);
+});
+
+const surcharged = [
+  { id: 'a', body: unit('a#body', 12), spans: [unit('a#first', 14), unit('a#second', 10)] },
+  { id: 'b', body: unit('b#body', 3), spans: [unit('b#first', 3)] },
+];
+const overheadCases = {
+  42: { 'P-top': [['a#body', 20], ['a#first', 22]], 'P-top-s1': [['a#body', 20], ['a#first', 22]],
+    'P-cover': [['a#body', 20], ['b#body', 11], ['b#first', 11]], 'P-cover-s1': [['a#body', 20], ['b#body', 11], ['b#first', 11]], 'P-top+tail': [['a#body', 20], ['b#body', 11]] },
+  59: { 'P-top': [['a#body', 20], ['a#first', 22], ['b#body', 11]], 'P-top-s1': [['a#body', 20], ['a#first', 22], ['b#body', 11]],
+    'P-cover': [['a#body', 20], ['b#body', 11], ['a#first', 22]], 'P-cover-s1': [['a#body', 20], ['b#body', 11], ['a#first', 22]], 'P-top+tail': [['a#body', 20], ['b#body', 11]] },
+  60: { 'P-top': [['a#body', 20], ['a#first', 22], ['a#second', 18]], 'P-top-s1': [['a#body', 20], ['a#first', 22], ['b#body', 11]],
+    'P-cover': [['a#body', 20], ['b#body', 11], ['a#first', 22]], 'P-cover-s1': [['a#body', 20], ['b#body', 11], ['a#first', 22]], 'P-top+tail': [['a#body', 20], ['a#first', 22], ['a#second', 18]] },
+};
+for (const [budget, cases] of Object.entries(overheadCases)) for (const arm of ARMS) test(`${arm} multi-unit O=8 at budget ${budget}, with exact fits and atomic tail boundary`, () => {
+  const result = assemble(surcharged, ['a', 'b'], { arm, budget: Number(budget), overhead: 8 });
+  assert.deepEqual(result.admitted.map(unit => [unit.id, unit.cost]), cases[arm]);
+  assert.deepEqual(result.admitted.map(unit => unit.tokens), cases[arm].map(([, cost]) => cost - 8));
+  assert.equal(result.used, cases[arm].reduce((sum, [, cost]) => sum + cost, 0));
+});
+test('the same complete a bundle costs 36 without overhead, and 60 with O=8', () => {
+  for (const [overhead, budget] of [[0, 36], [8, 60]]) {
+    const result = assemble(surcharged, ['a'], { arm: 'P-top+tail', budget, overhead });
+    assert.equal(result.used, budget); assert.deepEqual(result.admitted.map(unit => unit.cost), [12 + overhead, 14 + overhead, 10 + overhead]);
+  }
+});

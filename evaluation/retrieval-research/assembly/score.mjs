@@ -3,13 +3,15 @@ import { join } from 'node:path';
 import { CATEGORIES, compareIds, loadFixture, labelEntries, cliMain, requiredOption, writeJson } from '../lib/fixture.mjs';
 import { average, scoreGroups } from '../lib/metrics.mjs';
 import { percentile } from '../lib/stats.mjs';
-import { ARMS } from './arms.mjs';
-import { BUDGETS } from './run.mjs';
+import { ARMS, assemble } from './arms.mjs';
+import { BUDGETS } from './grid.mjs';
+import { implementationIdentity, validateImplementation } from './identity.mjs';
 import { prepareItems } from './units.mjs';
 import { COUNTER_ID } from './counter.mjs';
 import { PROTOCOL, PROTOCOL_COMMIT, RANKINGS, authenticateFixture, authenticateRanking, selectedQueries, inputManifest, sha256, fail } from './auth.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const SCORER_IMPLEMENTATION = await implementationIdentity();
 function metrics(groups, have, ranked) {
   if (!groups.length) fail('empty_required_groups');
   const covered = groups.filter(group => group.members.some(member => member.where === 'body'
@@ -39,6 +41,8 @@ export function scoreCell(fixture, cell) {
       !ARMS.includes(run.arm) || !RANKINGS[run.ranking] || !BUDGETS.includes(run.budget) || ![0, 8].includes(run.overhead) || run.scale !== 'S1000' || !['test', 'dev'].includes(run.split)) fail('invalid_cell_run');
   if (!same(Object.keys(run.fixtureHashes ?? {}).sort(compareIds), Object.keys(fixture.hashes).sort(compareIds)) ||
       Object.entries(fixture.hashes).some(([name, hash]) => run.fixtureHashes[name] !== hash)) fail('cell_fixture_hash_mismatch');
+  validateImplementation(run.implementation?.assembly);
+  if (run.commit !== run.implementation.assembly.commit) fail('cell_implementation_commit');
   const expected = selectedQueries(fixture, run.split).map(query => query.id);
   if (!Array.isArray(cell.queries) || !same(cell.queries.map(row => row.id).sort(compareIds), expected)) fail('cell_query_set');
   const labels = new Map(labelEntries(fixture.labels).filter(label => !label.dropped && label.split === run.split && CATEGORIES.includes(label.category)).map(label => [label.id, label]));
@@ -68,6 +72,8 @@ export function scoreCell(fixture, cell) {
       if (item.spans.some(span => have.has(span.id)) && !have.has(item.body.id)) fail('cell_detached_span');
     }
     if (used !== row.used || used > run.budget) fail('cell_total_cost');
+    const replay = assemble([...items.values()], row.ranked, { arm: run.arm, budget: run.budget, overhead: run.overhead });
+    if (replay.used !== row.used || !same(replay.admitted, row.admitted)) fail(`cell_assembly_replay_mismatch:${row.id}`);
     const groups = label.groups.map(group => {
       const members = group.members.filter(member => member.namespace === 'target' && ['S300', 'S1000-extra'].includes(member.scale));
       if (!members.length || members.some(member => !['body', 'span'].includes(member.where))) fail('invalid_required_group');
@@ -81,7 +87,7 @@ export function scoreCell(fixture, cell) {
     stratum(`language:${label.lang}`, groups); stratum(`category:${label.category}`, groups);
     return result;
   });
-  return { format: 'hr2-scored-cell-v1', ok: true, run: { ...run, expectedQueryIds: expected }, queries,
+  return { format: 'hr2-scored-cell-v1', ok: true, run: { ...run, implementation: { ...run.implementation, scorer: SCORER_IMPLEMENTATION }, expectedQueryIds: expected }, queries,
     summary: summarize(queries, { requireAllCategories: true }),
     strata: Object.fromEntries(Object.entries(strataRows).map(([key, rows]) => [key, { ...summarize(rows), queries: rows }])) };
 }

@@ -4,23 +4,50 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { runCli } from './fixtures-tooling/cli.mjs';
+import { buildLabels } from '../tools/labels.mjs';
+import { factsView } from '../tools/facts-view.mjs';
+import * as tokenizers from '../lib/tokenize.mjs';
+import { ARMS } from '../assembly/arms.mjs';
+import { BUDGETS, expectedCellCount } from '../assembly/grid.mjs';
+import { RANKINGS } from '../assembly/auth.mjs';
 import { FILES, sha256, inputManifest, authenticateFixture } from '../assembly/auth.mjs';
 
 // Mirror the HR-1 shapes with tiny authored data; no retrieval or test-split run.
 function toy() {
-  const memory = (id, state = 'current', namespace = 'target') => ({ id, state, namespace, scale: namespace === 'target' ? 'S300' : 'foreign', content: 'hello', spans: [{ id: `${id}#z9`, text: 'hello world' }] });
-  const queries = ['C1', 'C2', 'C8', 'FOREIGN'].map((category, i) => ({ id: `q${i}`, family: 'f', category, lang: 'en', intent: 'current', text: 'hello', requiredFacts: [`fact${i}`] }));
-  return { corpus: { version: 'hr1-fixture-v2', memories: [memory('m1'), memory('m2'), memory('old', 'historical'), memory('foreign', 'current', 'foreign')] },
-    queries: { version: 'hr1-fixture-v2', queries }, split: { f: 'dev' },
-    labels: { queries: queries.map(query => ({ ...query, split: 'dev', groups: [{ fact: query.requiredFacts[0], members: [{ memory: 'm1', where: 'body', spans: ['m1#z9'], scale: 'S300', namespace: 'target' }] }] })) } };
+  const version = 'hr1-fixture-v2', eventTime = '2026-08-14T09:00:00Z';
+  const families = [{ id: 'f', role: 'target', domain: 'engineering', summary: 'A synthetic monitoring decision.' },
+    { id: 'foreign-f', role: 'foreign', domain: 'engineering', summary: 'An isolated foreign decision.' }];
+  const fact = (id, statement, fields = {}) => ({ id, family: 'f', kind: 'fact', state: 'current', supersedes: null, reasonFor: null,
+    nearDuplicateOf: null, eventTime, entities: ['monitoring'], statementLang: 'zh', statement, rendered: true, coverage: 'body', ...fields });
+  const facts = [fact('fact0', 'ALPHA-42 啟用觀測系統。', { kind: 'decision', supersedes: 'old-fact' }),
+    fact('fact1', '啟用追蹤系統。'), fact('fact2', '尚未存在的設備。', { rendered: false, coverage: null }),
+    fact('old-fact', '舊版使用人工紀錄。', { kind: 'decision', state: 'historical' }),
+    fact('foreign-fact', '外部 ALPHA-42 啟用觀測系統。', { family: 'foreign-f', nearDuplicateOf: 'fact0' })];
+  const memory = (id, factId, namespace = 'target') => {
+    const f = facts.find(fact => fact.id === factId), spans = [{ id: `${id}#s1`, role: 'user', eventTime, text: f.statement }];
+    return { id, namespace, scale: namespace === 'target' ? 'S300' : 'foreign', lang: 'zh', kind: f.kind, state: f.state,
+      supersedes: id === 'm1' ? 'old' : null, eventTime, domain: 'engineering', authoring: 'hand', content: f.statement, spans,
+      expresses: [{ fact: factId, where: 'body', span: spans[0].id }] };
+  };
+  const queries = ['C1', 'C2', 'C8', 'FOREIGN'].map((category, i) => ({ id: `q${i}`, family: category === 'FOREIGN' ? 'foreign-f' : 'f',
+    category, secondaryTags: [], lang: 'zh', intent: 'current',
+    text: ['ALPHA-42 的決定是什麼？', '追蹤如何處理？', '尚未存在的設備為何？', '外部的 ALPHA-42 決定？'][i],
+    requiredFacts: [category === 'FOREIGN' ? 'foreign-fact' : `fact${i}`],
+    ...(i < 2 ? { keyTerm: i === 0 ? 'ALPHA-42' : '追蹤' } : {}), note: 'One independently specified synthetic fact is required.' }));
+  const fixture = { facts: { version, families, facts }, corpus: { version, memories: [memory('m1', 'fact0'), memory('m2', 'fact1'), memory('old', 'old-fact'), memory('foreign', 'foreign-fact', 'foreign')] },
+    queries: { version, queries }, split: { f: 'dev', 'foreign-f': 'dev' }, audit: { version, overrides: [] } };
+  fixture.labels = buildLabels(fixture, tokenizers);
+  return fixture;
 }
+
 async function writeToy(workspace, modifyFixture = () => {}) {
   const fixture = toy(); modifyFixture(fixture);
   const dir = join(workspace.path, 'fixture'), rankings = join(workspace.path, 'rankings'), hashes = {};
   await mkdir(dir); await mkdir(join(rankings, 'lexical-S1000'), { recursive: true });
-  const contents = { 'hr1-corpus.json': fixture.corpus, 'hr1-queries.json': fixture.queries, 'hr1-split.json': fixture.split, 'hr1-labels.json': fixture.labels };
+  const contents = { 'hr1-facts.json': fixture.facts, 'hr1-facts-view.json': factsView(fixture), 'hr1-label-audit.json': fixture.audit,
+    'hr1-corpus.json': fixture.corpus, 'hr1-queries.json': fixture.queries, 'hr1-split.json': fixture.split, 'hr1-labels.json': fixture.labels };
   for (const name of FILES) {
-    const bytes = `${JSON.stringify(contents[name] ?? { version: 'hr1-fixture-v2' })}\n`;
+    const bytes = `${JSON.stringify(contents[name])}\n`;
     await writeFile(join(dir, name), bytes); hashes[name] = sha256(bytes);
   }
   await writeFile(join(dir, 'FROZEN.md'), FILES.map(name => `| \`${name}\` | \`${hashes[name]}\` |`).join('\n'));
@@ -38,6 +65,7 @@ test('toy dev CLI runs assembly, scoring and report end to end; all dev output i
   const workspace = createTestWorkspace(t, { prefix: 'hr2-toy-' }), inputs = await writeToy(workspace);
   const result = await invoke(workspace, inputs);
   assert.equal(result.code, 0, result.stderr); assert.equal(JSON.parse(result.stdout).cells, 4);
+  assert.equal(JSON.parse(result.stdout).expectedCells, expectedCellCount(JSON.parse(result.stdout).grid));
   const scored = await runCli(workspace, ['evaluation/retrieval-research/assembly/score.mjs', '--fixture-dir', inputs.dir, '--cells', join(workspace.path, 'cells'), '--out', join(workspace.path, 'scores.json')]);
   assert.equal(scored.code, 0, scored.stderr);
   const report = await runCli(workspace, ['evaluation/retrieval-research/assembly/report.mjs', '--scores', join(workspace.path, 'scores.json'), '--out', join(workspace.path, 'report.json'), '--markdown', join(workspace.path, 'report.md')]);
@@ -46,6 +74,13 @@ test('toy dev CLI runs assembly, scoring and report end to end; all dev output i
   assert.equal(content.outcome, 'inconclusive');
   assert.equal(content.outcomeReason, 'primary_cell_absent');
   assert.ok(content.comparisons.every(comparison => comparison.designation === 'exploratory'));
+  assert.match(content.implementation.report.commit, /^[a-f0-9]{40}$/);
+  const sourceHash = content.implementation.report.sourceHash;
+  for (const cell of content.cells) for (const stage of ['assembly', 'scorer']) {
+    assert.equal(cell.run.implementation[stage].sourceHash, sourceHash);
+    assert.equal(typeof cell.run.implementation[stage].dirty, 'boolean');
+    assert.equal(typeof cell.run.implementation[stage].detached, 'boolean');
+  }
   const cellPath = join(workspace.path, 'cells/P-top--A1--O0--B128.json');
   const cell = JSON.parse(await readFile(cellPath)); cell.queries[0].admitted[0].cost++;
   await writeFile(cellPath, JSON.stringify(cell));
@@ -123,5 +158,25 @@ test('history intent allows historical support and a zero-span item contributes 
   const result = await invoke(workspace, inputs);
   assert.equal(result.code, 0, result.stderr);
   const cell = JSON.parse(await readFile(join(workspace.path, 'cells/P-top--A1--O0--B128.json')));
-  assert.deepEqual(cell.queries[0].admitted.map(unit => unit.id), ['old#body', 'old#z9', 'm2#body']);
+  assert.deepEqual(cell.queries[0].admitted.map(unit => unit.id), ['old#body', 'old#s1', 'm2#body']);
+});
+
+
+test('CLI toy has full schema metadata, generated label checks and isolated diagnostics', () => {
+  const fixture = toy();
+  assert.equal(fixture.labels.version, fixture.corpus.version);
+  assert.equal(fixture.facts.facts.length, 5);
+  for (const memory of fixture.corpus.memories) {
+    for (const key of ['lang', 'kind', 'state', 'supersedes', 'eventTime', 'domain', 'authoring', 'expresses']) assert.ok(Object.hasOwn(memory, key), key);
+    assert.equal(memory.expresses.length, 1); assert.equal(memory.spans.length, 1);
+    assert.equal(memory.spans[0].id, `${memory.id}#s1`);
+  }
+  for (const label of fixture.labels.queries) assert.equal(Boolean(label.checks[label.category].pass), true, label.category);
+  assert.equal(fixture.labels.queries.find(label => label.category === 'C8').groups[0].members.length, 0);
+  assert.ok(fixture.labels.queries.find(label => label.category === 'FOREIGN').groups[0].members.every(member => member.namespace === 'foreign'));
+  assert.equal(factsView(fixture).facts.length, 5);
+});
+
+test('expected default cell count is derived from the configured grid', () => {
+  assert.equal(expectedCellCount({ arms: ARMS, rankings: Object.keys(RANKINGS), overheads: [0, 8], budgets: BUDGETS }), 240);
 });

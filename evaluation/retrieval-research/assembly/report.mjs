@@ -1,7 +1,11 @@
 import { writeFile } from 'node:fs/promises';
-import { CATEGORIES, compareIds, cliMain, readJson, writeJson, requiredOption } from '../lib/fixture.mjs';
-import { clusterBootstrap, exactMcNemar } from '../lib/stats.mjs';
+import { CATEGORIES, cliMain, readJson, writeJson, requiredOption } from '../lib/fixture.mjs';
+import { clusterBootstrap, exactMcNemar, pairedQueries } from '../lib/stats.mjs';
 import { PROTOCOL, fail } from './auth.mjs';
+import { implementationIdentity, implementationKey } from './identity.mjs';
+import { validateScoredCell } from './provenance.mjs';
+
+const REPORT_IMPLEMENTATION = await implementationIdentity();
 
 export function statisticsRows(queries) {
   if (!Array.isArray(queries) || !queries.length || new Set(queries.map(row => row.id)).size !== queries.length) fail('invalid_statistics_query_set');
@@ -13,17 +17,22 @@ export function statisticsRows(queries) {
 }
 const identity = run => JSON.stringify([run.split, run.scale, run.ranking, run.overhead, run.budget]);
 const primary = run => run.split === 'test' && run.scale === 'S1000' && run.ranking === 'A3--bge-m3' && run.overhead === 0 && run.budget === 512;
+const cellKey = run => `${identity(run)}:${run.arm}`;
+
+function comparisonRows(baseline, candidate) {
+  validateScoredCell(baseline); validateScoredCell(candidate);
+  if (baseline.run.arm !== 'P-top' || identity(baseline.run) !== identity(candidate.run) ||
+      baseline.run.rankingHash !== candidate.run.rankingHash ||
+      implementationKey(baseline.run.implementation.assembly) !== implementationKey(candidate.run.implementation.assembly) ||
+      JSON.stringify(Object.entries(baseline.run.fixtureHashes).sort()) !== JSON.stringify(Object.entries(candidate.run.fixtureHashes).sort())) fail('invalid_comparison_cells');
+  const before = statisticsRows(baseline.queries), after = statisticsRows(candidate.queries);
+  pairedQueries(before, after);
+  return { before, after };
+}
 
 export function compareCells(baseline, candidate) {
   try {
-    if (!baseline?.ok || !candidate?.ok || baseline.run.arm !== 'P-top' || identity(baseline.run) !== identity(candidate.run) ||
-        baseline.run.rankingHash !== candidate.run.rankingHash || baseline.run.counter !== candidate.run.counter ||
-        baseline.run.protocol !== PROTOCOL || candidate.run.protocol !== PROTOCOL ||
-        JSON.stringify(Object.entries(baseline.run.fixtureHashes).sort()) !== JSON.stringify(Object.entries(candidate.run.fixtureHashes).sort())) fail('invalid_comparison_cells');
-    for (const cell of [baseline, candidate]) {
-      if (!Array.isArray(cell.run.expectedQueryIds) || JSON.stringify(cell.queries.map(row => row.id).sort(compareIds)) !== JSON.stringify([...cell.run.expectedQueryIds].sort(compareIds))) fail('incomplete_comparison_queries');
-    }
-    const before = statisticsRows(baseline.queries), after = statisticsRows(candidate.queries);
+    const { before, after } = comparisonRows(baseline, candidate);
     const bootstrap = clusterBootstrap(before, after, { seed: 'hr2-bootstrap-v1', resamples: 10000,
       categories: CATEGORIES, exploratory: true, minimumFamilies: 10 });
     const mcnemar = exactMcNemar(before, after);
@@ -48,6 +57,18 @@ export function decision(comparison) {
 export function buildReport(scores) {
   if (scores?.format !== 'hr2-scores-v1' || !Array.isArray(scores.cells)) fail('invalid_scores_format');
   const cells = scores.cells, seen = new Set();
+  try {
+    if (scores.ok !== true || !cells.length) fail('invalid_scores_status');
+    for (const cell of cells) { validateScoredCell(cell); statisticsRows(cell.queries); }
+    const baselines = new Map(cells.filter(cell => cell.run.arm === 'P-top').map(cell => [identity(cell.run), cell]));
+    for (const cell of cells) {
+      const baseline = baselines.get(identity(cell.run));
+      if (cell.run.arm !== 'P-top') comparisonRows(baseline, cell);
+    }
+  } catch (error) {
+    return { format: 'hr2-report-v1', protocol: PROTOCOL, implementation: { report: REPORT_IMPLEMENTATION }, ok: false,
+      outcome: 'inconclusive', outcomeReason: 'invalid_inputs', error: error.message, comparisons: [], cells };
+  }
   for (const cell of cells) {
     const key = `${identity(cell.run)}:${cell.run.arm}`;
     if (seen.has(key)) fail('duplicate_report_cell');
@@ -64,7 +85,7 @@ export function buildReport(scores) {
   });
   const confirmatory = comparisons.find(comparison => comparison.designation === 'confirmatory');
   const inputValid = scores.ok === true && cells.every(cell => cell.ok === true);
-  return { format: 'hr2-report-v1', protocol: PROTOCOL, ok: inputValid, outcome: inputValid ? decision(confirmatory) : 'inconclusive',
+  return { format: 'hr2-report-v1', protocol: PROTOCOL, implementation: { report: REPORT_IMPLEMENTATION }, ok: inputValid, outcome: inputValid ? decision(confirmatory) : 'inconclusive',
     outcomeReason: !inputValid ? 'invalid_inputs' : !confirmatory ? 'primary_cell_absent' : confirmatory.bootstrap.reason ?? null,
     comparisons, cells };
 }
@@ -73,26 +94,52 @@ const number = value => value == null ? 'NA' : value.toFixed(4);
 export function reportMarkdown(report) {
   const lines = ['# HR-2 budgeted assembly', '', `Protocol: ${report.protocol}. Primary decision: **${report.outcome}**. Reason: ${report.outcomeReason ?? 'decision rule §4'}.`, '',
     'The sole confirmatory contrast is P-cover − P-top on test / S1000 / A3--bge-m3 / O=0 / B=512. Every other contrast and all dev output are exploratory. The shared statistics library receives exploratory:true solely to select the preregistered 95% endpoints.', '',
-    'This is a short, single-fact synthetic fixture with bodies at most 82 UTF-16 units and about 40% span-only required groups. These results do not establish behavior on long items, generated summaries, hosted applicability or production reliability. The initial policy must be revisited with a long-item fixture. McNemar is underpowered by design.', '',
-    '| Split | Ranking | Arm | O | B | Designation | Coverage | All-required | Full-ranking ceiling | Assembly loss | Token use p50 / p95 |',
-    '| --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- |'];
-  for (const cell of report.cells) {
+    'This is a short, single-fact synthetic fixture with bodies at most 82 UTF-16 units and about 40% span-only required groups. These results do not establish behavior on long items, generated summaries, hosted applicability or production reliability. The initial policy must be revisited with a long-item fixture. McNemar is underpowered by design.', ''];
+  if (!report.ok) return [...lines, `Invalid inputs: ${report.error ?? report.outcomeReason}. No confirmatory designation or bootstrap was produced.`, ''].join('\n');
+  const runs = report.cells.map(cell => cell.run);
+  lines.push('## Shared provenance', '', `Frozen commit: ${runs[0].protocolCommit}; counter: ${runs[0].counter}.`, '',
+    'All unrounded metrics, complete source runs, per-query admissions and stage identities are retained in JSON. Cell numbers below refer to the metrics table.', '',
+    '| Stage | Commit | Source SHA-256 | Dirty | Detached |', '| --- | --- | --- | --- | --- |');
+  const implementations = new Map();
+  for (const [stage, implementation] of [['report', report.implementation.report], ...runs.flatMap(run => Object.entries(run.implementation))]) {
+    implementations.set(`${stage}:${implementationKey(implementation)}`, [stage, implementation]);
+  }
+  for (const [stage, impl] of implementations.values()) lines.push(`| ${stage} | ${impl.commit} | ${impl.sourceHash} | ${impl.dirty} | ${impl.detached} |`);
+  lines.push('', 'Fixture hash sets:');
+  for (const hashes of new Set(runs.map(run => JSON.stringify(run.fixtureHashes)))) lines.push('', hashes);
+  lines.push('', 'Environments:');
+  for (const env of new Set(runs.map(run => JSON.stringify(run.environment)))) lines.push('', env ?? 'not recorded');
+  lines.push('', '| Split | Ranking | Member SHA-256 |', '| --- | --- | --- |');
+  for (const row of new Set(runs.map(run => `| ${run.split} | ${run.ranking} | ${run.rankingHash} |`))) lines.push(row);
+  lines.push('', '## Cell metrics', '', '| Cell | Split | Ranking | Arm | O | B | Designation | Coverage | All-required | Full-ranking ceiling | Assembly loss | Token use p50 / p95 |',
+    '| ---: | --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- |');
+  report.cells.forEach((cell, index) => {
     const r = cell.run, s = cell.summary;
-    lines.push(`| ${r.split} | ${r.ranking} | ${r.arm} | ${r.overhead} | ${r.budget} | ${primary(r) && ['P-top', 'P-cover'].includes(r.arm) ? 'confirmatory' : 'exploratory'} | ${number(s.macroCoverage)} | ${number(s.macroAllRequired)} | ${number(s.macroCeiling)} | ${number(s.macroAssemblyLoss)} | ${number(s.tokenUse.p50)} / ${number(s.tokenUse.p95)} |`);
-  }
-  lines.push('', '## Paired comparisons', '');
+    lines.push(`| ${index + 1} | ${r.split} | ${r.ranking} | ${r.arm} | ${r.overhead} | ${r.budget} | ${primary(r) && ['P-top', 'P-cover'].includes(r.arm) ? 'confirmatory' : 'exploratory'} | ${number(s.macroCoverage)} | ${number(s.macroAllRequired)} | ${number(s.macroCeiling)} | ${number(s.macroAssemblyLoss)} | ${number(s.tokenUse.p50)} / ${number(s.tokenUse.p95)} |`);
+  });
+  lines.push('', '## Paired comparisons', '', 'Deltas and CIs are percentage points. Family counts are C1–C7; bootstrap status, accepted/rejected draws and McNemar discordants are explicit.', '',
+    '| Cell | Designation | Status | Delta | 95% CI | Families / C1–C7 | Accepted / rejected | Reason | McNemar baseline-only / candidate-only / p |',
+    '| ---: | --- | --- | ---: | --- | --- | --- | --- | --- |');
   for (const comparison of report.comparisons) {
-    const r = comparison.run;
-    lines.push(`### ${comparison.designation}: ${r.split} / ${r.ranking} / O=${r.overhead} / B=${r.budget} / ${r.arm} − P-top`, '',
-      `Statistics (delta and CI in percentage points): ${JSON.stringify({ status: comparison.status, bootstrap: comparison.bootstrap, mcnemar: comparison.mcnemar })}`, '',
-      `Category coverage deltas (percentage points): ${JSON.stringify(comparison.categoryDeltas)}`, '');
+    const b = comparison.bootstrap, m = comparison.mcnemar, index = report.cells.findIndex(cell => cellKey(cell.run) === cellKey(comparison.run)) + 1;
+    lines.push(`| ${index} | ${comparison.designation} | ${b.status} | ${number(b.point)} | ${b.ci?.map(number).join(' / ') ?? 'NA'} | ${b.families ?? 'NA'} / ${CATEGORIES.map(category => b.familyCounts?.[category] ?? 'NA').join(',')} | ${b.accepted} / ${b.rejected} | ${b.reason ?? '—'} | ${m ? `${m.baselineOnly} / ${m.candidateOnly} / ${number(m.p)}` : 'NA'} |`);
   }
-  lines.push('## Category means, strata and provenance', '');
-  for (const cell of report.cells) lines.push(`### ${cell.run.split} / ${cell.run.ranking} / ${cell.run.arm} / O=${cell.run.overhead} / B=${cell.run.budget}`, '',
-    `Run: ${JSON.stringify(cell.run)}`, '', `Category means: ${JSON.stringify(cell.summary.categories)}`, '',
-    `Strata (empty strata omit queries; macros average represented categories): ${JSON.stringify(Object.fromEntries(Object.entries(cell.strata).map(([key, value]) => [key, { ...value, queries: undefined }])))}`, '');
-  lines.push('Per-query admitted unit IDs, costs, totals, coverage, all-required, ceiling and loss are retained in the scores JSON. The ceiling always uses the complete ranking including all spans, even for s1 arms.', '');
-  return lines.join('\n');
+  lines.push('', '## Category means and deltas', '', '| Cell | Category | Queries | Groups | Coverage | All-required | Ceiling | Loss | Coverage delta vs P-top (pp) |',
+    '| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
+  report.cells.forEach((cell, index) => {
+    const comparison = report.comparisons.find(row => cellKey(row.run) === cellKey(cell.run));
+    for (const category of CATEGORIES) {
+      const s = cell.summary.categories[category];
+      if (s.queries) lines.push(`| ${index + 1} | ${category} | ${s.queries} | ${s.groups} | ${number(s.coverage)} | ${number(s.allRequired)} | ${number(s.ceiling)} | ${number(s.assemblyLoss)} | ${comparison ? number(comparison.categoryDeltas[category]) : '—'} |`);
+    }
+  });
+  lines.push('', '## Fidelity and language strata', '', 'Queries without matching groups are omitted; macros average represented categories. Category strata appear in the category table.', '',
+    '| Cell | Stratum | Queries | Groups | Represented categories | Coverage | All-required | Ceiling | Loss |',
+    '| ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: |');
+  report.cells.forEach((cell, index) => {
+    for (const [key, s] of Object.entries(cell.strata)) if (!key.startsWith('category:')) lines.push(`| ${index + 1} | ${key} | ${s.queryCount} | ${s.groupCount} | ${s.representedCategories.join(',') || '—'} | ${number(s.macroCoverage)} | ${number(s.macroAllRequired)} | ${number(s.macroCeiling)} | ${number(s.macroAssemblyLoss)} |`);
+  });
+  return [...lines, '', 'The ceiling uses the complete ranking and all spans, including for s1 arms. JSON retains exhaustive per-query, stratum and provenance data.', ''].join('\n');
 }
 
 await cliMain(import.meta.url, async options => {

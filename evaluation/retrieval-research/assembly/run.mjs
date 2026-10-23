@@ -1,29 +1,15 @@
-import { mkdir, readdir, open, readFile } from 'node:fs/promises';
+import { mkdir, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
 import os from 'node:os';
-import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { cliMain, requiredOption, writeJson } from '../lib/fixture.mjs';
 import { ARMS, assemble } from './arms.mjs';
 import { COUNTER_ID } from './counter.mjs';
 import { prepareItems } from './units.mjs';
+import { implementationIdentity } from './identity.mjs';
+import { BUDGETS, expectedCellCount } from './grid.mjs';
 import { PROTOCOL, PROTOCOL_COMMIT, RANKINGS, authenticateFixture, authenticateRanking, readRanking, inputManifest, fail } from './auth.mjs';
 
-export const BUDGETS = Object.freeze([128, 192, 256, 384, 512, 768, 1024, 1536]);
-async function implementationCommit() {
-  const workspace = createTestWorkspace(null, { prefix: 'hr2-commit-' });
-  let output;
-  try {
-    const path = join(workspace.path, 'commit');
-    output = await open(path, 'w');
-    const child = spawn('git', ['rev-parse', 'HEAD'], { cwd: new URL('../../../', import.meta.url), stdio: ['ignore', output.fd, 'inherit'] });
-    const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
-    if (code !== 0) fail(`implementation_commit_exit:${code}`);
-    const commit = (await readFile(path, 'utf8')).trim();
-    if (!/^[a-f0-9]{40}$/.test(commit)) fail('implementation_commit_invalid');
-    return commit;
-  } finally { await output?.close(); await workspace.cleanup(); }
-}
+export { BUDGETS } from './grid.mjs';
 export function environment() {
   return { node: process.version, cpu: os.cpus()[0]?.model, logicalCores: os.cpus().length,
     ramBytes: os.totalmem(), platform: os.platform(), os: os.release(), arch: os.arch() };
@@ -59,13 +45,14 @@ export async function runAssembly(options) {
     sources.push({ ...source, selection, queries });
   }
   const items = prepareItems(fixture.corpus.memories);
-  const commit = await implementationCommit();
+  const assembly = await implementationIdentity();
+  const commit = assembly.commit;
   const env = environment();
   await emptyOutput(out);
   let cells = 0;
   for (const source of sources) for (const arm of arms) for (const overhead of overheads) for (const budget of budgets) {
     const cell = { format: 'hr2-cell-v1', run: { protocol: PROTOCOL, protocolCommit: PROTOCOL_COMMIT, commit, fixtureHashes: fixture.hashes,
-      counter: COUNTER_ID, environment: env, split, scale, arm, ranking: source.selection, rankingPath: resolve(source.path),
+      implementation: { assembly }, counter: COUNTER_ID, environment: env, split, scale, arm, ranking: source.selection, rankingPath: resolve(source.path),
       rankingMember: source.member, rankingHash: source.hash, rankingRun: source.ranking.run, overhead, budget, status: 'complete' },
     queries: source.queries.map(query => {
       const ranked = source.ranking.queries[query.id].ranked;
@@ -73,7 +60,9 @@ export async function runAssembly(options) {
     }) };
     await writeJson(join(out, `${arm}--${source.selection}--O${overhead}--B${budget}.json`), cell); cells++;
   }
-  return { ok: true, split, cells, queriesPerCell: sources[0].queries.length };
+  const grid = { arms, rankings: selections, overheads, budgets }, expectedCells = expectedCellCount(grid);
+  if (cells !== expectedCells) fail('grid_cell_count_mismatch');
+  return { ok: true, split, cells, expectedCells, grid, queriesPerCell: sources[0].queries.length };
 }
 
 await cliMain(import.meta.url, async options => { console.log(JSON.stringify(await runAssembly(options))); });
