@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — asset schema review fixes
+
+- Harden unreleased v31 against replacement-insert/update tombstone resurrection and
+  stale payload/binding restoration, without changing the v30 installer.
+- Reject unexpected triggers on method/asset tables and case-varied premature
+  asset artifacts through every opener. Match snapshot prototype rules to
+  canonical binary identity encoding before authority callbacks.
+- Keep C04/K13 contention gates on the paced scenario, with reader overlap
+  counted against actual writer calls. Report unpaced rollback-journal reader
+  starvation as bounded stress data, retrying the same page through busy waits
+  and verifying eventual byte-exact completion.
+
 ## Unreleased — derivatives and method attachments (U4a-2)
 
 - Add immutable, explicitly supplied asset derivatives with exact source

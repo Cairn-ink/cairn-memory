@@ -191,13 +191,125 @@ const triggerSQL = `
   DELETE FROM binary_objects WHERE method_version_id IN (SELECT id FROM method_versions WHERE package_id=NEW.id);
   DELETE FROM method_mixed_entries WHERE version_id IN (SELECT id FROM method_versions WHERE package_id=NEW.id);
  END;
+ -- REPLACE deletes conflicts without DELETE triggers when recursive_triggers=0.
+ -- Check declared keys and the hidden rowid before SQLite resolves conflicts.
+ CREATE TRIGGER asset_no_replace BEFORE INSERT ON assets WHEN NEW.state!='available' OR NEW.revision!=1 OR
+  EXISTS(SELECT 1 FROM assets WHERE id=NEW.id OR rowid=NEW.rowid)
+  BEGIN SELECT RAISE(ABORT,'asset_terminal'); END;
+ CREATE TRIGGER asset_version_no_replace BEFORE INSERT ON asset_versions WHEN
+  EXISTS(SELECT 1 FROM asset_versions WHERE id=NEW.id OR rowid=NEW.rowid OR (asset_id=NEW.asset_id AND ordinal=NEW.ordinal))
+  BEGIN SELECT RAISE(ABORT,'asset_version_immutable'); END;
+ CREATE TRIGGER asset_derivative_no_replace BEFORE INSERT ON asset_derivatives WHEN
+  EXISTS(SELECT 1 FROM asset_derivatives WHERE id=NEW.id OR rowid=NEW.rowid)
+  BEGIN SELECT RAISE(ABORT,'asset_derivative_immutable'); END;
+ CREATE TRIGGER asset_rowid_immutable BEFORE UPDATE ON assets WHEN NEW.rowid!=OLD.rowid
+  BEGIN SELECT RAISE(ABORT,'asset_rowid_immutable'); END;
+ CREATE TRIGGER asset_version_rowid_immutable BEFORE UPDATE ON asset_versions WHEN NEW.rowid!=OLD.rowid
+  BEGIN SELECT RAISE(ABORT,'asset_version_rowid_immutable'); END;
+ CREATE TRIGGER asset_derivative_rowid_immutable BEFORE UPDATE ON asset_derivatives WHEN NEW.rowid!=OLD.rowid
+  BEGIN SELECT RAISE(ABORT,'asset_derivative_rowid_immutable'); END;
+ CREATE TRIGGER binary_object_no_replace BEFORE INSERT ON binary_objects WHEN
+  EXISTS(SELECT 1 FROM binary_objects WHERE id=NEW.id OR rowid=NEW.rowid OR asset_version_id=NEW.asset_version_id OR
+   (method_version_id=NEW.method_version_id AND position=NEW.position))
+  BEGIN SELECT RAISE(ABORT,'binary_object_immutable'); END;
+ CREATE TRIGGER binary_chunk_no_replace BEFORE INSERT ON binary_chunks WHEN
+  EXISTS(SELECT 1 FROM binary_chunks WHERE rowid=NEW.rowid OR (object_id=NEW.object_id AND chunk_index=NEW.chunk_index))
+  BEGIN SELECT RAISE(ABORT,'binary_chunk_immutable'); END;
+ CREATE TRIGGER method_format_no_replace BEFORE INSERT ON method_manifest_formats WHEN
+  EXISTS(SELECT 1 FROM method_manifest_formats WHERE version_id=NEW.version_id OR rowid=NEW.rowid)
+  BEGIN SELECT RAISE(ABORT,'method_format_immutable'); END;
+ CREATE TRIGGER method_mixed_no_replace BEFORE INSERT ON method_mixed_entries WHEN
+  EXISTS(SELECT 1 FROM method_mixed_entries WHERE rowid=NEW.rowid OR (version_id=NEW.version_id AND
+   (position=NEW.position OR folded_path=NEW.folded_path)) OR binary_object_id=NEW.binary_object_id)
+  BEGIN SELECT RAISE(ABORT,'method_entry_immutable'); END;
+ -- v30 definitions stay frozen. These additional v31 guards protect retained
+ -- method lifecycles and prevent stale binding replacements while allowing CAS upserts.
+ CREATE TRIGGER method_binary_package_insert BEFORE INSERT ON method_packages WHEN NEW.state!='available' OR NEW.revision!=1 OR
+  EXISTS(SELECT 1 FROM method_packages WHERE id=NEW.id OR rowid=NEW.rowid)
+  BEGIN SELECT RAISE(ABORT,'method_package_terminal'); END;
+ CREATE TRIGGER method_binary_package_terminal BEFORE UPDATE ON method_packages WHEN OLD.state='deleted' OR NEW.rowid!=OLD.rowid OR
+  NEW.id!=OLD.id OR NEW.owner_id!=OLD.owner_id OR NEW.scope!=OLD.scope OR NEW.project_id!=OLD.project_id OR NEW.created_at!=OLD.created_at
+  BEGIN SELECT RAISE(ABORT,'method_package_terminal'); END;
+ CREATE TRIGGER method_binary_package_no_delete BEFORE DELETE ON method_packages
+  BEGIN SELECT RAISE(ABORT,'method_tombstone_required'); END;
+ CREATE TRIGGER method_binary_version_insert BEFORE INSERT ON method_versions WHEN NEW.state!='available' OR NEW.revision!=1 OR
+  NOT EXISTS(SELECT 1 FROM method_packages WHERE id=NEW.package_id AND state='available') OR
+  EXISTS(SELECT 1 FROM method_versions WHERE id=NEW.id OR rowid=NEW.rowid OR (package_id=NEW.package_id AND ordinal=NEW.ordinal))
+  BEGIN SELECT RAISE(ABORT,'method_version_terminal'); END;
+ CREATE TRIGGER method_binary_version_terminal BEFORE UPDATE ON method_versions WHEN OLD.state='deleted' OR NEW.rowid!=OLD.rowid OR
+  NEW.id!=OLD.id OR NEW.package_id!=OLD.package_id OR NEW.ordinal!=OLD.ordinal OR NEW.manifest_identity!=OLD.manifest_identity OR
+  NEW.based_on IS NOT OLD.based_on OR NEW.imported_at!=OLD.imported_at
+  BEGIN SELECT RAISE(ABORT,'method_version_terminal'); END;
+ CREATE TRIGGER method_binary_version_no_delete BEFORE DELETE ON method_versions
+  BEGIN SELECT RAISE(ABORT,'method_tombstone_required'); END;
+ CREATE TRIGGER method_binary_file_insert BEFORE INSERT ON method_files WHEN
+  NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id
+   WHERE v.id=NEW.version_id AND v.state='available' AND p.state='available') OR
+  EXISTS(SELECT 1 FROM method_files WHERE rowid=NEW.rowid OR (version_id=NEW.version_id AND (position=NEW.position OR path=NEW.path)))
+  BEGIN SELECT RAISE(ABORT,'method_file_immutable'); END;
+ CREATE TRIGGER method_binary_file_update BEFORE UPDATE ON method_files WHEN NEW.rowid!=OLD.rowid OR
+  NEW.version_id!=OLD.version_id OR NEW.position!=OLD.position OR NEW.path!=OLD.path OR
+  NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id
+   WHERE v.id=NEW.version_id AND v.state='available' AND p.state='available')
+  BEGIN SELECT RAISE(ABORT,'method_file_immutable'); END;
+ CREATE TRIGGER method_binary_change_insert BEFORE INSERT ON method_changes WHEN
+  NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id
+   WHERE v.id=NEW.to_id AND v.state='available' AND p.state='available') OR
+  (NEW.from_ref IS NOT NULL AND NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id
+   WHERE v.id=json_extract(NEW.from_ref,'$.versionId') AND v.package_id=(SELECT package_id FROM method_versions WHERE id=NEW.to_id)
+    AND v.manifest_identity=json_extract(NEW.from_ref,'$.manifestIdentity') AND v.state='available' AND p.state='available')) OR
+  EXISTS(SELECT 1 FROM method_changes WHERE to_id=NEW.to_id OR rowid=NEW.rowid)
+  BEGIN SELECT RAISE(ABORT,'method_change_immutable'); END;
+ CREATE TRIGGER method_binary_change_update BEFORE UPDATE ON method_changes WHEN NEW.rowid!=OLD.rowid OR NEW.to_id!=OLD.to_id OR
+  NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id
+   WHERE v.id=NEW.to_id AND v.state='available' AND p.state='available')
+  BEGIN SELECT RAISE(ABORT,'method_change_immutable'); END;
+ CREATE TRIGGER method_binary_generation_insert BEFORE INSERT ON method_binding_generations WHEN
+  EXISTS(SELECT 1 FROM method_binding_generations WHERE rowid=NEW.rowid) OR
+  EXISTS(SELECT 1 FROM method_binding_generations WHERE owner_id=NEW.owner_id AND scope=NEW.scope AND
+   project_id=NEW.project_id AND package_id=NEW.package_id AND NEW.generation!=generation+1)
+  BEGIN SELECT RAISE(ABORT,'method_binding_generation'); END;
+ CREATE TRIGGER method_binary_generation_update BEFORE UPDATE ON method_binding_generations WHEN NEW.rowid!=OLD.rowid OR
+  NEW.owner_id!=OLD.owner_id OR NEW.scope!=OLD.scope OR NEW.project_id!=OLD.project_id OR NEW.package_id!=OLD.package_id OR
+  NEW.generation!=OLD.generation+1
+  BEGIN SELECT RAISE(ABORT,'method_binding_generation'); END;
+ CREATE TRIGGER method_binary_binding_insert BEFORE INSERT ON method_bindings WHEN
+  EXISTS(SELECT 1 FROM method_bindings WHERE rowid=NEW.rowid) OR
+  NEW.generation IS NOT (SELECT generation FROM method_binding_generations WHERE owner_id=NEW.owner_id AND
+   scope=NEW.scope AND project_id=NEW.project_id AND package_id=NEW.package_id) OR
+  (NEW.state='active' AND NOT EXISTS(SELECT 1 FROM method_versions v JOIN method_packages p ON p.id=v.package_id
+   WHERE v.id=NEW.version_id AND v.package_id=NEW.package_id AND v.manifest_identity=NEW.manifest_identity AND
+    v.state='available' AND p.state='available')) OR
+  EXISTS(SELECT 1 FROM method_bindings WHERE owner_id=NEW.owner_id AND scope=NEW.scope AND project_id=NEW.project_id AND
+   package_id=NEW.package_id AND role_key=NEW.role_key AND
+   (NEW.revision!=revision+1 OR NEW.generation<=generation OR NEW.created_at!=created_at))
+  BEGIN SELECT RAISE(ABORT,'method_binding_revision'); END;
+ CREATE TRIGGER method_binary_binding_update BEFORE UPDATE ON method_bindings WHEN NEW.rowid!=OLD.rowid OR
+  NEW.owner_id!=OLD.owner_id OR NEW.scope!=OLD.scope OR NEW.project_id!=OLD.project_id OR NEW.package_id!=OLD.package_id OR
+  NEW.role_key!=OLD.role_key OR NEW.created_at!=OLD.created_at OR NEW.revision!=OLD.revision+1 OR NEW.generation<=OLD.generation OR
+  NEW.generation IS NOT (SELECT generation FROM method_binding_generations WHERE owner_id=NEW.owner_id AND
+   scope=NEW.scope AND project_id=NEW.project_id AND package_id=NEW.package_id)
+  BEGIN SELECT RAISE(ABORT,'method_binding_revision'); END;
+ CREATE TRIGGER method_binary_binding_no_delete BEFORE DELETE ON method_bindings
+  BEGIN SELECT RAISE(ABORT,'method_binding_retained'); END;
+ CREATE TRIGGER method_binary_event_insert BEFORE INSERT ON method_binding_events WHEN
+  EXISTS(SELECT 1 FROM method_binding_events WHERE event_id=NEW.event_id OR rowid=NEW.rowid OR ordinal=NEW.ordinal OR
+   (owner_id=NEW.owner_id AND scope=NEW.scope AND project_id=NEW.project_id AND package_id=NEW.package_id AND
+    (generation=NEW.generation OR (role_key=NEW.role_key AND revision=NEW.revision))))
+  BEGIN SELECT RAISE(ABORT,'method_binding_event_immutable'); END;
+ CREATE TRIGGER method_binary_event_update BEFORE UPDATE ON method_binding_events
+  BEGIN SELECT RAISE(ABORT,'method_binding_event_immutable'); END;
+ CREATE TRIGGER method_binary_event_no_delete BEFORE DELETE ON method_binding_events
+  BEGIN SELECT RAISE(ABORT,'method_binding_event_immutable'); END;
 `;
 export function installAssets(db) { db.exec(canonicalSQL + triggerSQL); }
 let definitions;
+let ownedTables,ownedTriggers;
+const asciiLower=value=>value.replace(/[A-Z]/g,char=>String.fromCharCode(char.charCodeAt(0)+32));
+const assetName=name=>ASSET_TABLES.includes(name) || /^(asset_|binary_|method_mixed_|method_binary_|method_format_)/.test(name);
 export function assertNoAssets(db) {
   const names = db.prepare("SELECT name,tbl_name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").all();
-  if (names.some(row => ASSET_TABLES.includes(row.name) || ASSET_TABLES.includes(row.tbl_name) ||
-    /^(asset_|binary_|method_mixed_|method_binary_|method_format_)/.test(row.name))) fail('unsupported_database');
+  if (names.some(row => [row.name,row.tbl_name].some(name=>assetName(asciiLower(name))))) fail('unsupported_database');
 }
 export function validateAssets(db) {
   if (!definitions) {
@@ -208,6 +320,8 @@ export function validateAssets(db) {
       const previous = new Set(reference.prepare('SELECT name FROM sqlite_master').all().map(row=>row.name));
       installAssets(reference);
       definitions = reference.prepare('SELECT name,type,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name').all().filter(row=>!previous.has(row.name));
+      ownedTables = new Set(reference.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row=>row.name));
+      ownedTriggers = reference.prepare("SELECT name,tbl_name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name").all();
     }
     finally { reference.close(); }
   }
@@ -216,6 +330,9 @@ export function validateAssets(db) {
     const actual = find.get(expected.name);
     if (!actual || actual.type !== expected.type || actual.tbl_name !== expected.tbl_name || actual.sql !== expected.sql) fail('unsupported_database');
   }
+  const actualTriggers=db.prepare("SELECT name,tbl_name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name").all()
+    .filter(row=>ownedTables.has(asciiLower(row.tbl_name)) || assetName(asciiLower(row.name)));
+  if (JSON.stringify(actualTriggers)!==JSON.stringify(ownedTriggers)) fail('unsupported_database');
 }
 // Complete shapes, not one row per page: writers call this before COMMIT.
 export function validateBinaryObject(db, objectId) {

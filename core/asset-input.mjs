@@ -40,8 +40,10 @@ export function assetSnapshot(value, depth=0, budget={nodes:METHOD_SNAPSHOT_LIMI
     if (!value.isWellFormed() || value.length>METHOD_SNAPSHOT_LIMITS.stringUnits || (budget.units-=value.length)<0) fail('invalid_input');
     return value;
   }
-  if (!value || typeof value!=='object' || types.isProxy(value) || ![Object.prototype,Array.prototype,null].includes(Object.getPrototypeOf(value))) fail('invalid_input');
-  const descriptors=Object.getOwnPropertyDescriptors(value), keys=Reflect.ownKeys(descriptors), array=Array.isArray(value);
+  if (!value || typeof value!=='object' || types.isProxy(value)) fail('invalid_input');
+  const array=Array.isArray(value),prototype=Object.getPrototypeOf(value);
+  if (array ? prototype!==Array.prototype : prototype!==Object.prototype && prototype!==null) fail('invalid_input');
+  const descriptors=Object.getOwnPropertyDescriptors(value), keys=Reflect.ownKeys(descriptors);
   if (keys.length>budget.nodes || keys.some(key=>typeof key!=='string' || !key.isWellFormed() || !Object.hasOwn(descriptors[key],'value')) ||
       array && (value.length>METHOD_SNAPSHOT_LIMITS.arrayItems || keys.length!==value.length+1)) fail('invalid_input');
   if (array) return Array.from({length:value.length},(_,i)=>{

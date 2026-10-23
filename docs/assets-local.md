@@ -125,11 +125,28 @@ facade is enabled merely by reopening an upgraded database.
 `npm run measure:assets` is an opt-in synthetic K13 gate on Node 22.16 and 24.15.
 It asserts the 32-MiB standalone and 64-MiB mixed import transaction and RSS bounds and the independent
 maximum-byte-reader/binding-writer contention bounds, including zero busy,
-at least 100 committed transitions, at least 200 overlapping reader pages and
-writer p95 ≤250 ms. Its fixed writer pause is one tenth of a complete byte-read baseline, spreading
-the minimum 100 transitions across ten baseline passes. It has a finite overall
-deadline and reports reader latency
-during overlap separately. It is not a media parser or product benchmark.
+at least 100 committed transitions, at least 200 reader pages overlapping actual
+writer-call intervals, and writer p95 ≤250 ms in the labelled paced scenario.
+That writer pauses one tenth of a complete byte-read baseline between transitions
+until a complete contended read and the active-overlap threshold are reached.
+Writer sleeps and reporting time do not count as active overlap. The labelled
+unpaced scenario is a stress observation: its writer stops at reader completion
+or after 10 seconds (plus an in-flight bounded SQLite call). Readers retry busy
+outcomes on the same page/cursor with 10–250 ms backoff within the shared
+600,000 ms overall deadline, then verify an exact-byte complete read. It reports
+pages, busy counts/waits, retry delays, maximum page latency and completion;
+only corruption, byte mismatch, writer errors or deadline breaches fail stress.
+Both child exits are checked. Reader latency is reported for the whole run,
+writer lifetime (`duringOverlap`), and actual calls (`duringActiveWrites`),
+without a reader latency threshold. See [rollback-journal limitations](limitations.md).
+It is not a media parser or product benchmark.
+
+The unreleased v31 layout guards terminal rows and immutable payload keys against
+insertion and update replacement (including hidden rowid conflicts), plus method tombstones and stale binding
+revisions. They reject replacement inserts even with SQLite's default
+`recursive_triggers=0`; normal binding CAS upserts and re-adoption remain valid.
+The v30 installer is unchanged. Validation checks the complete owned trigger set
+and refuses extra triggers, including additional quota-release writers.
 
 The shallow-CI historical fixtures under `core/testing/fixtures/assets-v30/`
 contain the actual install archive captured directly from the clean `e63b24c`
