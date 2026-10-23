@@ -55,6 +55,67 @@ test('M05/M09 canonical cross-scope identity, read-set authority and foreign nam
   for(const readSet of [[],[ns,ns],[project,{...project,projectId:'other'}],[ns,{...project,ownerId:'foreign'}],[ns,project,ns]])error(f.call('resolveMethodsForRole',context(readSet)),'invalid_input');
 });
 
+test('M05 role listing includes unrelated-role bindings only within the authorized read set',t=>{
+  const f=bindingFixture(t),personal=ok(f.call('importMethodVersion',input()));
+  const local=ok(f.call('importMethodVersion',input('project-only',{namespace:project})));
+  ok(f.call('importMethodVersion',input('unbound')));
+  ok(f.call('adoptMethodVersion',adoption(personal,'personal-planner',{roleId:'planner'})));
+  ok(f.call('adoptMethodVersion',adoption(local,'project-planner',{bindingNamespace:project,roleId:'planner',readSet:[project]})));
+  for(const roleId of ['reviewer',null]){
+    const page=ok(f.call('resolveMethodsForRole',context([ns],roleId)));
+    const {snapshot,...expected}=resolve(f,personal.package,[ns],roleId);
+    assert.equal(expected.status,'no-active-version');assert.equal(expected.binding,null);assert.equal(expected.version,null);
+    assert.deepEqual(page.methods,[expected]);assert.ok(page.snapshot);assert.ok(snapshot);
+    assert.equal(page.nextCursor,null);
+  }
+  const combined=ok(f.call('resolveMethodsForRole',context([ns,project])));
+  assert.deepEqual(combined.methods.map(method=>method.package.packageId),[personal.package.packageId,local.package.packageId].sort((a,b)=>a.localeCompare(b)));
+  assert.ok(combined.methods.every(method=>method.status==='no-active-version'));
+});
+
+test('M05/M06/M10 mixed role results page in package order with barriers, bounded envelopes and usable snapshots',t=>{
+  const f=bindingFixture(t),ctx=context([ns,project]),expected=[],imports=[];
+  const statuses=['current','disabled','unavailable','no-active-version'];
+  for(let i=0;i<24;i++){
+    const imported=ok(f.call('importMethodVersion',input('mixed-'+i)));imports.push(imported);
+    ok(f.call('adoptMethodVersion',adoption(imported,'planner-'+i,{roleId:'planner'})));
+    if(i%4!==3)ok(f.call('adoptMethodVersion',adoption(imported,'default-'+i,{roleId:null})));
+    if(i%4===1)ok(f.call('disableMethodBinding',disable(imported,'disabled-'+i,{bindingNamespace:project,readSet:ctx.readSet})));
+    if(i%4===2){
+      const later=ok(f.call('importMethodVersion',input('later-'+i,{package:imported.package,expectedPackageRevision:1,basedOn:imported.version})));
+      ok(f.call('adoptMethodVersion',adoption(later,'deleted-target-'+i,{bindingNamespace:project,readSet:ctx.readSet})));
+      ok(f.call('deleteMethodVersion',{actionId:'delete-'+i,ref:later.version,expectedRevision:1}));
+      assert.deepEqual(resolve(f,imported.package,[ns]).version,imported.version,'the unavailable higher binding blocks an available fallback');
+    }
+    const {snapshot,...resolved}=resolve(f,imported.package);
+    assert.equal(resolved.status,statuses[i%4]);assert.ok(snapshot);expected.push(resolved);
+  }
+  expected.sort((a,b)=>a.package.packageId.localeCompare(b.package.packageId));
+  const first=ok(f.call('resolveMethodsForRole',ctx));
+  assert.ok(first.methods.length<=20);assert.ok(first.nextCursor);
+  assert.deepEqual(first.methods,expected.slice(0,first.methods.length));
+  const all=[],pins=[];let cursor,pages=0;
+  do{
+    const result=f.call('resolveMethodsForRole',{...ctx,limit:3,...(cursor?{cursor}:{})});
+    assert.ok(Buffer.byteLength(JSON.stringify(result))<=65536);
+    const page=ok(result);assert.equal(page.methods.length,3);assert.ok(page.snapshot);pages++;
+    for(const method of page.methods)if(method.status==='current'){
+      const request={version:method.version,intent:'current',context:ctx,snapshot:page.snapshot};
+      assert.equal(ok(f.call('getMethodVersion',request)).version.adoptionStatus,'current');pins.push(request);
+    }
+    all.push(...page.methods);cursor=page.nextCursor;
+  }while(cursor);
+  assert.equal(pages,8);assert.deepEqual(all,expected);
+  for(const status of statuses)assert.equal(all.filter(method=>method.status===status).length,6);
+  const formerlyUnrelated=imports[3];
+  ok(f.call('adoptMethodVersion',adoption(formerlyUnrelated,'now-reviewer')));
+  error(f.call('resolveMethodsForRole',{...ctx,cursor:first.nextCursor}),'cursor_stale');
+  for(const request of pins){
+    error(f.call('getMethodVersion',request),'cursor_stale');
+    assert.deepEqual(ok(f.call('getMethodVersion',{...request,intent:'history'})).version.ref,request.version);
+  }
+});
+
 test('M10 role listing and binding-event pages cap at 20, bind cursors and keep envelopes bounded',t=>{
   const f=bindingFixture(t);
   for(let i=0;i<23;i++){

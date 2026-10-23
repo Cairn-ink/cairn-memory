@@ -119,8 +119,7 @@ export function createMethodBindingStorage({db,binding,packageRow,packageRef,tar
   }
   function list(input,access,expected) {
     const context=methodContext({readSet:input.readSet,roleId:input.roleId}),packages=new Map();
-    const roles=methodRole(context.roleId)==='*'?['*']:[methodRole(context.roleId),'*'];
-    for(const ns of context.readSet)for(const row of db.prepare(`SELECT DISTINCT package_id FROM method_bindings WHERE ${where} AND role_key IN (${roles.map(()=>'?').join(',')})`).all(...boundary(ns),...roles)) {
+    for(const ns of context.readSet)for(const row of db.prepare(`SELECT DISTINCT package_id FROM method_bindings WHERE ${where}`).all(...boundary(ns))) {
       const pkg=identity(row.package_id);packages.set(pkg.packageId,pkg);
     }
     const entries=[...packages.values()].sort((a,b)=>a.packageId.localeCompare(b.packageId)).map(pkg=>stateFor(pkg,context,access));
