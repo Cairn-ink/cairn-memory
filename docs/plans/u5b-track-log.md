@@ -176,3 +176,7 @@
 - §15.8 v0.10 修正案草稿完成（`.research-private/dispatch/u5b2_contract/amendment-v0.10-draft.md`，尚未提交），
   含 A13–A19 驗收與 HR-2 addendum（`--overhead-model host-v2`）。等主控給基準 commit 後開 `integration/unified-memory-v1-u5b2`、
   提交、派非作者稽核。`0a38a991` 矩陣仍在跑。
+- **`0a38a991` 完整矩陣：100 工作全部 exit 0**（`cairn-heavy`，乾淨 detached worktree，Node 22.16.0／24.15.0 各 50，前後
+  dirty=0，記錄的最高負載 6.78），無 flake、無需單獨重跑；plugin-validation N/A 同前。已回報主控。主控的合併解法審查
+  （非作者）yes，無發現；主控要求 A15 再加兩案（精簡 ref 指到已變更修訂必須以 §13.6 的碼明顯失敗、`ns` 索引經主機
+  read set 重新授權），已補進草稿。等主控 fast-forward 到 `0a38a991`、發 `v1-preview.2`、給基準 commit。
