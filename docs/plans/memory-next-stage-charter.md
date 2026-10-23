@@ -244,5 +244,9 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `u4_inventory` | U4 素材的設計盤點 | gpt-6.1-sol/xhigh → 同 | read-only | `1265b4b`＋U3 工作目錄 | 02:14–02:21 | exit 0：建議 SQLite 分塊 BLOB，列出六項待決設計 |
 | `u5_inventory` | U5a 檢索接口的設計盤點 | gpt-6.1-sol/xhigh → 同 | read-only | 同上 | 02:24–02:37 | exit 0：建議附屬索引檔、BM25-T1、非同步 embedder、授權先於排名 |
 | `u4_contract_author` | 依主控決定起草 §12 | gpt-6.1-sol/xhigh → 同 | read-only | 同上 | 02:25–02:38 | exit 0；主控改 3 處後併入契約（`d148a34`，v0.5 草稿） |
-| `u5_contract_author` | 依主控決定起草 §13 | gpt-6.1-sol/xhigh | read-only | 同上 | 02:38– | 執行中 |
-| `umv1_contract_audit`（U4） | §12 的非作者審查 | gpt-6.1-sol/xhigh | read-only | `d148a34` | 02:44– | 執行中 |
+| `u5_contract_author` | 依主控決定起草 §13 | gpt-6.1-sol/xhigh → 同 | read-only | 同上 | 02:38–02:50 | exit 0：提出異議，指出 T1 會漏掉嵌在詞中的單一漢字 → 主控決定凍結 T1，列為明確的已知漏抓，另開 HR-1b 研究；主控也調高向量掃描上限並補維護政策 → 契約 §13 v0.6（`2669a3c`） |
+| `umv1_contract_audit`（U4） | §12 的非作者審查 | gpt-6.1-sol/xhigh → 同 | read-only | `d148a34` | 02:44–02:55 | 第一次因模型滿載失敗，接續原對話重試後 exit 0。**判 No**：7 項 P0、4 項 P1、1 項 P2，主控全部接受。重點有四：<br>• 擁有權與配額釋放要有唯一寫入者；<br>• 讀取不可重蹈整版驗證與寫入鎖 → **U2c 要排在 U4a 之前**；<br>• 核准前的「存在檢查」不足以當圍欄 → U3 契約加上 store 圍欄 v0.4.3（`bf61a02`）；<br>• 匯出時暫存檔的名稱會被調包、發布後的失敗處理。<br>已交原作者修訂 |
+| 主控（U2c 契約） | 方法包讀取不拿寫入鎖 | — | — | `63678be` | 02:5x | 契約 §14 v0.7：讀取改用延遲的只讀交易，以 `query_only` 防寫；`readMethodFile` 只驗清單身分和被讀的檔案，其他讀取保留整版驗證，既有測試不改；量測門檻是寫入者 p95 ≤250 ms、零逾時 |
+| `u5_contract_audit` | §13 的非作者審查（全新審查者） | gpt-6.1-sol/xhigh → 同 | read-only | `2669a3c` | 02:51–03:01 | **判 No**：沒有 P0，4 項 P1、3 項 P2，主控全部接受。內容包括：<br>• 未完成的索引不可搜尋；<br>• 要有真正唯讀的建構器；<br>• 游標要綁定語意設定；<br>• `semantic` 預設關閉、旗標要寫明；<br>• 向量轉成 float32 後再驗；<br>• 覆蓋不足時不付錢嵌入查詢。<br>主控另外決定做增量對齊（比對 id 與 revision）。已交原作者修訂 |
+| `u4_contract_author`（修訂 1） | 依審查意見修訂 §12 | gpt-6.1-sol/xhigh | read-only | `bf61a02` | 02:58– | 執行中 |
+| `u5_contract_author`（修訂 1） | 依審查意見修訂 §13 | gpt-6.1-sol/xhigh | read-only | `63678be` | 03:03– | 執行中 |
