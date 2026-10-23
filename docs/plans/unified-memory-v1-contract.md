@@ -2,10 +2,10 @@
 
 Status:
 - U2 (§§2–9, v0.3.1) is implemented and accepted.
-- U3 (§11, v0.4.3) is implemented and in acceptance.
-- U4 (§12) is draft v0.5.1: audit round 1 is applied and the re-check is pending.
+- U3 (§11, v0.4.4) is implemented and in acceptance.
+- U4 (§12) is draft v0.5.2: the re-check findings are applied and confirmation is pending.
 - U5a (§13) is draft v0.6.1: audit round 1 is applied and the re-check is pending.
-- U2c (§14) is draft v0.7, not yet audited; it precedes U4a.
+- U2c (§14) is draft v0.7.1: audit findings are applied and confirmation is pending. It precedes U4a.
 
 History:
 - v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
@@ -410,7 +410,7 @@ All take `(input, authority)` and return existing envelopes. `A` = actionId.
 4. **Limits** are provisional text-only defaults. U3 measures real SKILL.md and
    template packages (sizes only) before freezing them.
 
-## 11. U3: method packages on the local host (v0.4.3; v0.4.1 audited)
+## 11. U3: method packages on the local host (v0.4.4; v0.4.1 audited)
 
 The draft (`fc5b9ea`) was audited by the same non-author auditor, who found
 four P0, five P1 and one P2 issue. This section incorporates all of them.
@@ -586,6 +586,26 @@ The importer is a separate CLI process. The MCP process never imports.
     creating, migrating or mutating anything.
   - The opener option is a host seam: default construction is unchanged. U4
     reuses the same fence.
+- **Store fence semantics (v0.4.4, from the U4 re-check).** A read-only SQLite
+  connection can still create WAL/SHM files, and today's ordinary opener creates
+  parent directories and the file before it checks identity
+  (`core/database.mjs:299-320`). The rules are therefore:
+  - Review supports rollback-journal stores only. Before opening SQLite at all,
+    inspect the pinned file header. Refuse WAL-format stores, existing
+    rollback-journal files and any other auxiliary or recovery condition.
+    Never use an immutable open on a live store.
+  - Read the SQLite identity tuple in one consistent read transaction.
+  - After approval, the ordinary opener's new noncreating mode skips `mkdir`
+    and `open(ax)`. It opens without creation, using SQLite `mode=rw` where the
+    runtime supports it; the worker probes support on both runtimes and reports
+    the residual race if it does not. Inside its transaction, before
+    initialization or migration, it checks the expected filesystem and SQLite
+    identities.
+  - The managed existing-store opener remains validation-only. Neither today's
+    ordinary branch nor the managed branch is sufficient by itself.
+  - Promise: SQLite crash recovery may occur after approval. A refusal
+    guarantees **no application data or schema writes**. It does not promise
+    the absence of every filesystem effect.
 - **Output**: the content-free import receipt, plus a JSON line on stdout.
 
 ### 11.3 Adoption commands
@@ -674,7 +694,7 @@ tool arguments.
 | H06 | Deleting a version through the core host API makes MCP reads `unavailable` with no stale text, including through pins |
 | H07 | Packaging manifest, closure and installed-import tests pass on the shallow CI layout; no historical git objects are needed. Every new helper is in the installed closure |
 
-## 12. U4: assets, derivatives and binary method attachments (draft v0.5.1, audit round 1 applied; re-check pending)
+## 12. U4: assets, derivatives and binary method attachments (draft v0.5.2, re-check findings applied; confirmation pending)
 
 Revised by `u4_contract_author` after the `umv1_contract_audit` audit of v0.5 (`d148a34`).
 Independently checked by the primary: both known-answer vectors in §12.2 reproduce exactly.
@@ -711,9 +731,9 @@ U4a delivers v31, migration/openers, assets, derivatives, attachment core, usage
 
 - Asset lifecycle/CAS follows §3; imports/version deletions advance asset revision. Deletion is terminal. Titles ≤200 units; single-component filenames ≤512.
 - New HMACs use SHA-256, existing UTF-8 cursor-secret key (`core/method-package-storage.mjs:17`), unpadded base64url, and `E([domain,storeId,...fields])`.
-- Canonical `E`: one-byte tags 0=null, 1=false, 2=true, 3=finite number, 4=string, 5=bytes, 6=array, 7=object. Number/string/bytes carry unsigned 64-bit big-endian byte length then payload: JSON number spelling, exact unnormalized UTF-8, or selected view bytes. Arrays/objects carry 64-bit element/property counts; arrays preserve order; object properties sort by UTF-8 key bytes and encode key/value pairs. Undefined/accessors/proxies refuse. Domain namespace fields use `[ownerId,scope,projectId]`.
-- Domains/ordered fields: `binary-content-v1:[namespace,mediaType,bytes]`; `binary-chunk-v1:[objectId,contentIdentity,index,length,bytes]`; `method-mixed-manifest-v1:[namespace,orderedEntries]`; `binary-action-v1:[method,completePreRedactionInput]`; `asset-derivative-v1:[source,derivativeId,kind,text,provenance,language,timecodes]` (absent optionals become null).
-- Tagged entries are exactly `{kind:'text',path,text,mediaType}` or `{kind:'binary',path,bytes,mediaType}`; manifest tuples are `[kind,path,mediaType,contentIdentity]`. `mixed-v1` requires a binary entry. Text-only imports retain legacy wire, manifest and action bindings byte-for-byte (`core/method-package-storage.mjs:37`). Mixed comparison uses kind/media/content identity.
+- Canonical `E`: one-byte tags 0=null, 1=false, 2=true, 3=finite number, 4=string, 5=bytes, 6=array, 7=object. Number/string/bytes carry unsigned 64-bit big-endian byte length then payload: JSON number spelling, exact unnormalized UTF-8, or selected view bytes. Arrays/objects carry 64-bit element/property counts; arrays preserve order; object properties sort by UTF-8 key bytes and encode key/value pairs. Undefined/accessors/proxies refuse. Domain namespace fields use `[ownerId,scope,projectId]`. Before encoding or authority commitment, reject ill-formed Unicode in every string and property key. Objects have only own string data properties: reject symbol keys and unsupported prototypes. Arrays must be dense with no extra properties. JSON number spelling is ECMAScript `JSON.stringify`, which canonicalizes negative zero to zero. Freeze rejection and ordering vectors.
+- Domains/ordered fields: `binary-content-v1:[namespace,mediaType,bytes]`; `binary-chunk-v1:[namespace,objectId,contentIdentity,mediaType,totalByteCount,index,chunkByteCount,bytes]`; `method-mixed-manifest-v1:[namespace,orderedEntries]`; `binary-action-v1:[method,completePreRedactionInput]`; `asset-derivative-v1:[source,derivativeId,kind,text,provenance,language,timecodes]` (absent optionals become null).
+- Tagged entries are exactly `{kind:'text',path,text,mediaType}` or `{kind:'binary',path,bytes,mediaType}`; mixed manifest tuples are `[kind,path,mediaType,byteCount,contentIdentity]`. `mixed-v1` requires a binary entry. Text-only imports retain legacy wire, manifest and action bindings byte-for-byte (`core/method-package-storage.mjs:37`). Mixed comparison uses kind/media/content identity.
 - Known answers: `E(bytes[1,2])=0500000000000000020102`. With secret ASCII `0` repeated 64 times, storeId `00000000-0000-0000-0000-000000000000`, namespace `["owner","personal",null]`, media `application/pdf` and ASCII bytes `%PDF-1.7`, binary-content identity is `qvUt2CJYzxoVvrN-yax7kWA8AqUJwyOr6JyTVXWWd4o`.
 - Freeze known-answer encoding/HMAC vectors for every domain, metadata ordering, Unicode and offset views; action encoding includes every byte exactly once. No public digest; cross-namespace equal bytes never compare equal.
 
@@ -796,7 +816,7 @@ Calls take `(input,authority)`; A=actionId, P=limit/cursor; lists default/cap 20
 | `getAssetUsage` / `listAssetEffects` | read; namespace / namespace,P → projection/effects |
 | `readMethodAttachmentBytes` | read; version,path,intent,context?,snapshot?,cursor? → chunk/adoptionStatus |
 
-- Reuse U2c's short consistent deferred `BEGIN` per page, never `BEGIN IMMEDIATE`. Verify selected chunk MAC and immutable manifest metadata only; no whole-object/version hashing per page.
+- Reuse U2c's short consistent deferred `BEGIN` per page, never `BEGIN IMMEDIATE`. Verify selected chunk MAC and immutable manifest metadata only; no whole-object/version hashing per page. Each page verifies the `binary-chunk-v1` MAC against canonical metadata, validates the expected chunk length and index from the authenticated `totalByteCount`, and derives completion only from that total. Tests cover reduced and increased totals, premature completion, missing final chunks and metadata substitution.
 - Authorize exact target and authenticate cursor bindings before lookup. Cursor binds store, exact version/content identity, index, access generation and parent/version lifecycle revisions; contains no supplied bytes/echoed pins. Malformed/substituted cursors give `invalid_cursor`; valid deleted-target cursors give `unavailable` before epoch staleness.
 - Revalidate authority/lifecycle each page; one base64 chunk ≤32,768 raw bytes; final page gives completion/total count. Verification needs byte-delivery permission and a live exact version; return only canonical target identity, never candidate-derived HMAC.
 - Reuse §5 pins/statuses (`core/method-binding-storage.mjs:99`): adoption switch stales current, never mixes versions; history remains exact, disable marks withdrawn, deletion/revocation blocks pins. Binary `readMethodFile` gives `unsupported_media`.
@@ -814,7 +834,7 @@ cairn-memory assets export --version REF_JSON --out ABS
 ```
 
 - Mutations reuse §11.2 descriptor confinement, bounded escaped review, frozen payload, real-TTY phrase/CAS. Derive obtains source revision and supplies user-provided provenance.
-- Reuse §11.2 **Store fence (v0.4.3)** exactly: noncreating read-only opening freezes `dev`/`ino`, `application_id`, `user_version`, `store_id`; display `storeUpgrade:{from,to:31}`. After mutation approval recheck `dev`/`ino`; a noncreating ordinary writable opener validates expected identities inside its transaction before migration. Missing/replaced/mismatched stores refuse without recreation/mutation. Commands never create stores; derive/delete/export refuse pre-v31 with `asset_not_found`. Managed openers remain validation-only.
+- Reuse §11.2 **Store fence (v0.4.3) and its semantics (v0.4.4)** exactly, including the rollback-journal-only review and the no-application-write refusal promise: noncreating read-only opening freezes `dev`/`ino`, `application_id`, `user_version`, `store_id`; display `storeUpgrade:{from,to:31}`. After mutation approval recheck `dev`/`ino`; a noncreating ordinary writable opener validates expected identities inside its transaction before migration. Missing/replaced/mismatched stores refuse without recreation/mutation. Commands never create stores; derive/delete/export refuse pre-v31 with `asset_not_found`. Managed openers remain validation-only.
 - Read-authorized, pure-Node create-only export: pin operator-owned, non-group/other-writable destination parent; validate final basename; exclusively create random 0600 temporary file with no-follow. Prevent untrusted source-name replacement until publication.
 - Write pages; verify readback count/identity through `verifyAssetBytes`; fsync completed file before link. Both link arguments use pinned directory prefixes; never use `/proc/self/fd/<filefd>` directly as source. Existing paths/symlinks fail EEXIST.
 - Successful link is publication. Reopen O_RDONLY|O_DIRECTORY on pinned parent for fsync; O_PATH is insufficient. Fsync publication, unlink temporary name, fsync cleanup. Never remove/overwrite final as rollback; subsequent cleanup/fsync failure reports `published-but-durability-uncertain`. Recovery may find complete final, private partial, both/neither, never partial final. Cleanup identifies owned leftovers, never matching names blindly.
@@ -847,7 +867,11 @@ Record actual exit codes, finite deadlines and independently verified output byt
 | L05 | Installed complete-read/transport measurements; preserve U4a gates |
 | L06 | Independently cross-check installed manifest/archive/closure, helpers/docs/config; print counts/differences; shallow CI without historical git objects |
 
-**U4a measurement gates:** AMD Ryzen 9 9950X, WSL2, both runtimes; acceptance thresholds, not product guarantees. Report actual numbers, run counts, deadlines and RSS baseline including byte preparation; any failure fails U4a.
+**U4a measurement gates:** AMD Ryzen 9 9950X, WSL2, both runtimes; acceptance thresholds, not product guarantees. Report actual numbers, run counts, deadlines and RSS baseline including byte preparation; any failure fails U4a. Workloads:
+- Measure both 32-MiB standalone imports and 64-MiB mixed attachment imports.
+- Record caller allocation, the pre-core-call RSS baseline, the preparation peak and the absolute process peak. The 128-MiB growth gate applies from that baseline.
+- Contention uses the maximum reader and the existing small independent binding writer, with at least 100 committed transitions.
+- Use finite deadlines. Any busy outcome fails the gate, even if it was retried. Assert the thresholds and both processes' exit codes.
 
 | Measurement | Gate |
 | --- | --- |
@@ -1002,7 +1026,7 @@ At 10³/10⁴/10⁵ Memories on both runtimes measure full build/rebuild, increm
 
 **Non-claims:** answer correctness, complete semantic recall, M7 assembly/U5b, role profiles/relations/U5c, MOC channel, local-model adapter, Raw search, secure physical erasure or 10⁵ latency guarantees. HR-1 remains synthetic directional evidence (`HR-1/docs/plans/hybrid-retrieval-hr1-results.md:161`).
 
-## 14. U2c: method reads without the write lock (draft v0.7, primary-authored, not yet audited)
+## 14. U2c: method reads without the write lock (draft v0.7.1, primary-authored, audit findings applied; confirmation pending)
 
 The primary's U3 acceptance (§11.1 v0.4.2) found the cause of the contention.
 Every method read runs inside `BEGIN IMMEDIATE` (`core/database.mjs:261`,
@@ -1015,9 +1039,14 @@ capability change.
 
 - **Read transactions.** Add one core helper for consistent read transactions:
   - It opens with deferred `BEGIN`, never `BEGIN IMMEDIATE`.
-  - `PRAGMA query_only` is on for its duration and restored on every exit
-    path, so an accidental write fails.
-  - It returns `storage_busy` only after the existing busy timeout.
+  - It exclusively owns the synchronous connection for its duration: no
+    await, host callbacks, escaping iterators or nested transactions.
+  - It saves the previous `query_only` value and enables it before `BEGIN`. It
+    restores that saved value on every exit, including a `BEGIN` failure.
+  - It rolls back only a transaction this invocation started. A connection
+    whose cleanup fails is discarded.
+  - It preserves the existing 5,000 ms busy timeout and error mapping. That
+    timeout is not a guaranteed minimum delay.
 
   All method-package and binding read paths use it, including resolution,
   manifests, files, compare, lists, effects, usage and
@@ -1030,10 +1059,14 @@ capability change.
   - `getMethodVersion`, `listMethodManifest` and `compareMethodVersions` keep
     whole-version verification, unchanged in meaning
     (`core/test/method-packages-reads.test.mjs:34-36` stays as is).
-  - Resolution paths (`resolveMethod`, `resolveMethodsForRole`, current-intent
-    checks) must not hash file texts for every bound package. They verify
-    lifecycle and stored manifest identity; content is verified when a file is
-    read. The worker inventories the current behaviour and reports it.
+  - Manifest-only verification selects metadata columns, never text. Today's
+    `SELECT *` (`core/method-package-storage.mjs:36`) loads every text, so it
+    must change. A requested-file read fetches and verifies only that file's
+    text.
+  - Binding resolution and adoption-status checks use the metadata verifier.
+    That includes `stateFor`'s target lookup, `resolveMethod`,
+    `resolveMethodsForRole` and current-intent checks. Content is verified when
+    a file is read.
 - **Semantics change, documented.** Out-of-band corruption of one file's text
   makes reads of that file `method_version_unavailable`. Reads of other files
   stay available. `getMethodVersion` and manifest listing still report the
@@ -1045,6 +1078,6 @@ capability change.
   | --- | --- |
   | C01 | Every existing core, MCP, packaging and installed suite passes with no edited assertions |
   | C02 | A forced write inside each read path fails under `query_only`, and the connection's state is restored afterwards |
-  | C03 | Corrupting file A's text refuses reads of A, `getMethodVersion` and manifest listing, while reads of file B succeed. Corrupting a stored `content_identity` or manifest row refuses every read |
-  | C04 | Gate: a continuous maximum-size `readMethodFile` reader and a concurrent binding writer in separate processes produce zero busy timeouts on either side. Writer p95 is ≤250 ms on the reference machine. `npm run measure:method-packages` reports reader page p50/p95 and writer statistics, and exits 0 on both runtimes |
-  | C05 | A deletion in another process during paging yields whole pages of the available version or `unavailable`, never mixed content. Cursors and snapshots behave as §5 |
+  | C03 | Corrupting file A's text refuses reads of A, `getMethodVersion` and manifest listing, while reads of file B succeed. Corrupting a stored `content_identity` or manifest row refuses the reads and resolutions that verify the affected version. Unrelated package lists, usage, effects and reason checks are unaffected |
+  | C04 | Gate: a continuous maximum-size `readMethodFile` reader and the existing small independent binding writer run in separate processes, with at least 100 committed transitions and finite deadlines. Any busy outcome fails the gate, even if it was retried. Writer p95 must be ≤250 ms on the reference machine. `npm run measure:method-packages` asserts these thresholds and both processes' exit codes on both runtimes, and reports reader page p50/p95. This is plausibly achievable, not yet established: rollback-mode PENDING locks let short deferred reads coexist with writer progress |
+  | C05 | A concurrent deletion permits complete pages linearized before the deletion. A later continuation returns `cursor_stale` under the existing U2 epoch precedence (`core/test/method-packages-deletion.test.mjs:72`), and a fresh read returns `unavailable`. No page mixes snapshots or versions. Existing §5 behaviour and assertions are preserved. U4's separately specified deleted-target precedence does not change U2c |
