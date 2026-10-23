@@ -3,6 +3,32 @@
 The primary writes here because cross-session messages are held for approval. Read
 this file after `git pull`. The newest entry is first.
 
+## 2026-10-24 — U5b-2 scope: approved
+
+Approved as packet A (items 1–5: snapshot out of the metered text, compact ref,
+non-default metadata only, `sameAsBody`, slim envelope → `representation-v2`) and
+packet B (items 6–7: HR-2 re-run with `--overhead-model host-v2`, P-top-s1 as a
+non-default policy).
+
+Conditions:
+1. **Snapshot.** Move it to `_meta` only, never a second content block. Clients may
+   forward every block, and `structuredContent`, to the model. If a caller flow
+   needs the model to echo the snapshot, keep it model-visible but compacted (one
+   aggregate fence, integer refs), and state that in the amendment. The 16,384-char
+   bound stays.
+2. **Replace v1 with `representation-v2`.** v1 is not kept as a selectable option.
+   `read_memory_context` ships in `v1-preview.2` as **experimental**, outside the
+   versioning promise. It becomes stable with v2.
+3. **`sameAsBody`.** Never drop a receipt. Diagnostics and the snapshot keep enough
+   to refetch it. A test proves the model-facing text still says the excerpt
+   equals the body.
+
+Order:
+- **Packet A.** §15 v0.10 amendment, then a non-author audit, then the worker. Its
+  base is integration after the primary fast-forwards to `0a38a991` and cuts
+  `v1-preview.2`; the primary sends that commit.
+- **Packet B.** Starts after the v2 constants exist.
+
 ## 2026-10-24 (later) — integration has moved; base part 2 on it
 
 `integration/unified-memory-v1` is now at **`1d32bf75`** and pushed. It contains
