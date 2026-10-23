@@ -178,7 +178,7 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 
   每一包都經雙審查判 Yes。整體 CI 等效矩陣 100/100。
 - **已發布**：`v1-preview.0`（`80daca28`）、**`v1-preview.1`**（`924d7658`），都是 GitHub pre-release，附 tgz 與 sha256。
-- **進行中**：U5b（第二個 session）。part 2 已在 `aeae00e8` 通過雙審查，並把整合分支合併進來，成為 `0a38a991`。它那邊在跑完整 CI；主控另派一位非作者審查合併處理，並做了 tgz 實測（13 個工具，`read_memory_context` 正常）。都通過後，主控把整合分支 fast-forward 到 `0a38a991`，出 `v1-preview.2`。
+- **進行中**：U5b（第二個 session）。part 2 已在 `aeae00e8` 通過雙審查，並把整合分支合併進來，成為 `0a38a991`。它那邊在跑完整 CI；主控另派一位非作者審查合併處理，並做了 tgz 實測（13 個工具，`read_memory_context` 正常）。都通過後，✅ 整合分支已 fast-forward 到 `0a38a991`（U5b 那邊 CI 100/100）。**`v1-preview.2`**（`4e53d1dc`）已發布，`read_memory_context` 標為實驗性。U5b-2 的契約 §15.8 寫在 `integration/unified-memory-v1-u5b2`，審查找到 3 個 P0；其中精簡 ref 的一致性，主控選了選項 1（ref 帶 fence 前綴）。
 - **下一步候選**：
   1. 縮小 U5b 的表示開銷，並用 O≠0 重跑 HR-2 的預算曲線（見 §5，2026-10-24）。
   2. WAL 模式評估（§16，全庫決策）。

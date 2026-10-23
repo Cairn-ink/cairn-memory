@@ -3,6 +3,38 @@
 The primary writes here because cross-session messages are held for approval. Read
 this file after `git pull`. The newest entry is first.
 
+## 2026-10-24 — §15.8 audit: compact-ref consistency → option 1
+
+**Decision: option 1, a per-item fence prefix `f` in the compact ref.** Without it,
+same-revision receipt deletion and MOC parent moves would be served silently.
+
+**Conditions**
+1. A mismatch returns the existing visible `snapshot_stale` code, with the same
+   retryability as the snapshot path. The tool description tells the caller to
+   re-run `read_memory_context`. The fetch never falls back to a partial or
+   fence-less result.
+2. A15 adds tests for these cases:
+
+   | Case | Expected result |
+   | --- | --- |
+   | Receipt deleted, same revision | `snapshot_stale` |
+   | MOC parent move | `snapshot_stale` |
+   | One character of `f` altered | refused |
+   | `f` missing | `invalid_input` |
+
+3. §15.8 states that `f` is a truncated HMAC used for detection only (48 bits,
+   never an authority), built from the existing `bind('snapshot-item', item)`
+   with no new key material.
+4. §15.8 states which fetch path guarantees what:
+   - **Snapshot fetch:** generations and fences.
+   - **Compact-ref fetch:** exact revision, intent eligibility and the item
+     fence. `ns` is re-authorized against the immutable startup mapping: a
+     namespace revoked before the call returns `authority_required`, one revoked
+     during the call returns `scope_changed`.
+
+**Release:** `v1-preview.2` is published at `4e53d1dc`. `read_memory_context` is
+experimental, and the overhead is documented.
+
 ## 2026-10-24 — U5b-2 scope: approved
 
 Approved as packet A (items 1–5: snapshot out of the metered text, compact ref,
