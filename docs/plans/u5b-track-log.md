@@ -62,3 +62,13 @@
   token 中位數變動）、統計經 adapter 走 `lib/stats.mjs`（95% 端點、minimumFamilies 10）、輸入要重算 hash
   並凍結輸入清單、長度壓力臂 v1 略過。
 - 派 `hr2_harness`（gpt-6.1-sol/xhigh，workspace-write，無網路，附 TRAPS，只跑自己的測試檔，不跑 test split）。
+- **U5b 契約審計。** `u5b_contract_audit`（thread `01a1696c-…`）對 v0.8 提出 8 P0／4 P1／1 P2，機械檢查
+  （打包閉包 213／225、CLI 靜態圖 73 個模組無 SQLite 連結）都 exit 0。v0.9（`2915ec8a`，已推送）全部套用：
+  計量對象改成不含診斷的 `metered` payload，由核心單一序列化器產生的字串就是 MCP 工具文字（診斷只放
+  `structuredContent`）；計數器呼叫上限 `2+2U+R ≤ 1,226`；不走公開 `findCandidates`，改用外層授權下的內部搜尋
+  seam；`maxItems` 只限本文、兩個 policy 的訪問順序分開寫；去重以 canonical `(role, excerpt)` 位元相等為準，
+  `sameAs` 只能往前指；A02 改成「訪問順序對協議、允入對獨立 oracle」並用 U5b 自有 fixture；競態結果寫死
+  （`snapshot_stale`／`scope_changed`）；U5a 兩個「恰好 7 個工具」的斷言（`966e107`，主控的）豁免並交由
+  測試擁有者更新，U5b worker 不碰。複查中。
+- **要問使用者／主控的事**：(1) U5a 那兩個精確工具數斷言由主控更新的流程；(2) 共用檔案
+  （`cli.mjs`、`server.mjs`、`artifact-files.json`、`CHANGELOG.md`、`docs/limitations.md`）的最小增量改法與順序。
