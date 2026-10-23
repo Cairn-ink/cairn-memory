@@ -241,3 +241,11 @@
   開審查 worktree `/home/chichieh/cairn-memory-review-u5b2c`（`c8014883`，離線 `npm ci`），派 Spec／Standards 雙審查
   （gpt-6.1-sol/xhigh，read-only；派工單含 §15.8 v0.10.4 歷程、主控條件、worker 宣告的決定、A13 上限調整是否合理）。
   完整矩陣以 `cairn-heavy` 排在 `/home/chichieh/cairn-memory-ci-u5b2`（`c8014883`）。派出時負載 0.7。
+- **`c8014883` 雙審查：Spec no、Standards no**。共同 P0：(1) 只有繼承屬性的精簡 ref（`Object.create({...})`）繞過描述子
+  守衛，zod 讀繼承欄位後進到 core（兩位都用 SDK `InMemoryTransport` 重現，繼承 getter 被執行）；(2) 外層無條件
+  `types.isProxy` 守衛改變了舊完整 ref 的行為（透明 Proxy、非 enumerable 屬性原本接受、現在被拒）。Spec 另 P0：(3) 精簡 `id`
+  沿用只檢長度的 schema，前置空白／NUL／未配對代理字元會先打一次 core 才被拒；P1：A16 的一位元差異 fixture 用尾端空白，
+  非 canonical（會被正規化掉）；P2：文件錨點指到 `v0103`。Standards P2：A13 測試每次執行都覆寫已提交的
+  `overhead-host-v2.json`。兩位都獨立重算 T0／T1／T2＝43／126／208，**接受 48／96／90 的上限調整**，確認 fence 核心實作、
+  序列化（Spec 自建 812 bytes 期望字串位元相同）、closure 220／manifest 233、無 SQLite 連結、A19 範圍。
+- 派 fix2（resume，六項），`c8014883` 的矩陣停掉（跑了 12 工作全 0，無意義留存），最終 commit 再跑完整矩陣。
