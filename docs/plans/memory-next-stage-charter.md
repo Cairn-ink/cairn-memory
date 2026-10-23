@@ -174,7 +174,7 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
   - U3：`7124a8d`＋修正 `e9d7c58`、`e63b24c`，雙審查都判 Yes
   - U2c：`5b1202d`，主控驗收通過，C04 門檻達標
 - **進行中**
-  - U5a 第二部分：core 接線（獨立 worktree）
+  - U5a 第一＋二部分已提交（U5a 分支 `54259bf`），雙審查中；第三部分（MCP、CLI、OpenAI adapter、已安裝測試）等審查之後
   - U4a 第一部分：v31 schema、遷移、素材的匯入／讀取／刪除、用量與量測門檻
 - **下一步**
   1. U3 雙審查與修正輪。
@@ -272,3 +272,5 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `umv1_u2_impl`（U3 修正 4） | 保留狀態碼 78；glob 依 POSIX 把換行當一般字元 | gpt-6.1-sol/xhigh → 同 | workspace-write | `e9d7c58` | 06:53–07:04 | exit 0，5 個檔案。主控驗收兩個 Node 版本全部 exit 0（負載一度到 44）→ 提交為 `e63b24c` |
 | `u3_review_spec`／`u3_review_standards`（最終確認） | `e63b24c` | gpt-6.1-sol/xhigh → 同 | read-only | `e63b24c` | 07:1x–07:20 | **兩邊都判 Yes**，沒有剩下任何問題 → **U3 完成** |
 | `umv1_u2_impl`（U4a 第一部分） | 完整 v31 schema（11 張表與觸發器）、遷移與開啟器、正規編碼與已知答案向量、獨立素材的匯入／讀取／刪除、分塊 MAC、配額、K01–K07、K09、K12、K13 門檻 | gpt-6.1-sol/xhigh | workspace-write | `e63b24c` | 07:2x– | 執行中；第二部分是衍生文字與方法包附件，不改 DDL |
+| `umv1_u5a_impl`（修正 2）＋主控重跑 | 打包清單加入 9 個新的執行期模組 | gpt-6.1-sol/xhigh → 同 | workspace-write | U5a worktree | 08:1x–08:3x | 兩種方式核對：從 import 圖走到的 198 個檔案都在清單內，差異 0。補裝依賴後主控重跑：local、mcp、workspace-lifecycle 在兩個 Node 版本都過；Node 24 的 core 2,076／2,076（競態偶發失敗沒有重現）；打包在 Node 24 是 182＋1 略過；Node 22 有 3 個試點測試在負載 39 時逾時，單獨重跑 14／14 通過 → **在 U5a 分支提交 `54259bf`**（28 個檔案） |
+| `u5a_review_spec`／`u5a_review_standards` | U5a 第一＋二部分（core）的非作者雙審查 | gpt-6.1-sol/xhigh | read-only | `54259bf`，在乾淨的 worktree `/home/chichieh/cairn-memory-review-u5a` | 08:3x– | 執行中 |
