@@ -95,3 +95,10 @@
 - 派 `u5b_review_spec`／`u5b_review_standards`（read-only，乾淨 detached worktree `/home/chichieh/cairn-memory-review-u5b`
   在 `4bfd576c`）；同時派 `u5b_impl2`（第二部分 host 接線，workspace-write，含主控的條件與兩個斷言改法）。
   協調者給審查者的待評估問題：`contextRead` 是否像 `fetchCandidateEvidence` 一樣處理 `:memory:`。
+- **HR-2 harness 提交 `e3401643`**（`experiment/hr2-assembly`，17 個檔案：`assembly/` 的 run／score／report／
+  arms／units／auth／counter、INPUTS.md、README、五個測試、研究套件釘 tiktoken 1.0.22）。worker `hr2_harness`
+  在沙箱內驗證未完成（git spawnSync EPERM；用 cairn-heavy 排隊 30 分鐘沒拿到鎖後取消）。協調者沙箱外驗證：
+  兩個 Node 版本 76／76、exit 0；dev 240 格 smoke（run→score→report）全部 exit 0，A1 與 bge-m3 的覆蓋率與
+  設計探針逐格相同；dev 報告判 inconclusive（家族數不足，符合協議）。
+- 派 `hr2_review_spec`／`hr2_review_standards`（read-only，detached worktree `/home/chichieh/cairn-memory-review-hr2`
+  在 `e3401643`）。test split 要等雙審查與修正後由協調者跑一次。
