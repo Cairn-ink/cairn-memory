@@ -1,7 +1,11 @@
 # Unified memory integration V1: P0 contract and first packet (method packages)
 
-Status: **v0.3.1, audited and confirmed for U2a implementation. Nothing is
-implemented yet.**
+Status:
+- U2 (§§2–9, v0.3.1) is implemented and accepted.
+- U3 (§11, v0.4.2) is implemented and in acceptance.
+- U4 (§12) is draft v0.5, not yet audited.
+
+History:
 - v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
   read-only), which found seven P0, four P1 and one P2 issue.
 - v0.2 (`91a7825`) adopted them.
@@ -652,3 +656,178 @@ tool arguments.
 | H05 | A fresh MCP process in a new session: `resolve_methods_for_role` → `read_method_file` delivers the adopted version. Current reads are distinguished from pinned history: after adopting v2, the old pin reads `newer-version-available` and still does after a restart. Disable, scope revocation and stale snapshots/cursors behave as §5 specifies, with no fallback |
 | H06 | Deleting a version through the core host API makes MCP reads `unavailable` with no stale text, including through pins |
 | H07 | Packaging manifest, closure and installed-import tests pass on the shallow CI layout; no historical git objects are needed. Every new helper is in the installed closure |
+
+## 12. U4: assets, derivatives and binary method attachments (draft v0.5, not yet audited)
+
+Drafted by Codex `u4_contract_author` (gpt-6.1-sol/xhigh, read-only) from the
+primary's decisions and the `u4_inventory` report. The primary then edited three
+points: create-only export in pure Node, the pre-approval store rule, and the
+U5 dependency for searchable derivatives.
+
+U4a delivers v31, migration/openers, the asset facade, derivatives, attachment core, usage, deletion, replay and effects. U4b delivers CLI, MCP and installed tests, and waits for U4a acceptance.
+
+Hosted storage, media understanding, ASR/OCR, physical erasure and U5 retrieval are not claimed.
+
+### 12.1 Capability and migration
+
+- Opt-in: `assets:{version:'assets-local-v1',storage:'sqlite-blob-v1',authority}`. Reuse §2.3's synchronous grants with asset-specific allowlists. Mutations are `explicit-user`; reads are `read`. Capture consent and hooks never import or derive.
+- Method-attachment imports/reads require both method-package and asset capabilities and grants. Method deletion cascades under method authority even with assets disabled.
+- Extend §2.1: only the ordinary writable opener migrates fresh or supported populated v18, v20–v30 stores to v31, atomically, when assets are selected. v19 refuses. Unselected stores retain their version.
+- Read-only and managed openers validate only. New method-only processes work on v31; old binaries reject it. Update:
+  - `core/database.mjs:291`;
+  - `core/existing-store.mjs:85`;
+  - `core/read-database.mjs:27`;
+  - `adapters/local/configuration.mjs:79`;
+  - `integrations/client/raw/local-setup.mjs:61`.
+- Extend the schema-only migrator (`core/method-package-migration.mjs:15`), without enabling prerequisite features.
+- Capabilities advertise implemented methods, refs, media, storage, limits, quota accounting and `parser:'unavailable'`. Capability inspection needs no authority. Defaults and old DTOs stay unchanged.
+
+### 12.2 Identity, ownership and limits
+
+- IDs are core-minted random IDs. One asset belongs to exactly one namespace. Each attachment belongs exclusively to one method version; it is never a standalone asset. No sharing or deduplication across owners, namespaces, packages, assets or versions; every retained copy is charged.
+
+| Ref | Shape |
+| --- | --- |
+| `AssetRef` | `{type:'asset',namespace,assetId}` |
+| `AssetVersionRef` | `{type:'asset-version',namespace,assetId,versionId,contentIdentity}` |
+| `AssetDerivativeRef` | `{type:'asset-derivative',namespace,assetId,versionId,derivativeId}` |
+
+- Content identity uses the existing store secret and store binding (`core/method-package-storage.mjs:17`), a separate binary-content purpose, and length-framed exact namespace, media type and bytes. Equal bytes in different namespaces never compare equal. No public digest.
+- Asset lifecycle/CAS follows §3; version imports/deletions advance asset revision. Deletion is terminal. Titles are ≤200 units; filenames are single components ≤512 units.
+- Mixed imports explicitly select `manifestFormat:'mixed-v1'`, with `files` containing tagged text/byte entries. Mixed manifests add `kind:'text'|'binary'`. Their domain-separated identity covers every ordered entry's kind, path, media type and content identity.
+- Text-only identities remain byte-for-byte v30. Replace text-only canonical verification (`core/method-package-storage.mjs:41`) with format-specific verification, including byte identities. Compare mixed entries mechanically by kind, media and content identity.
+
+**Unmeasured defaults**; U4b measures them as §11.1.
+
+| Limit | Value |
+| --- | --- |
+| Asset version / attachment | 33,554,432 bytes each |
+| Versions per asset / assets per namespace | 64 / 1,024, including tombstones |
+| Derivatives per version | 32, including tombstones |
+| Derivative text | 20,000 UTF-16 units, before and after redaction |
+| Method version | 256 total entries; 67,108,864 attachment bytes; §11.1 text limits |
+| Owner binary quota | 200,000,000 bytes |
+| Method-text quota | Separate, unchanged 50,000,000 bytes |
+| Chunk / success envelope | 32,768 raw bytes / 65,536 serialized UTF-8 bytes |
+
+- Binary quota counts retained asset bytes, attachment bytes and redacted derivative UTF-8 bytes across the owner's namespaces. Metadata, ledger, effects, SQLite overhead, WAL and backups are excluded.
+- Usage delivery is namespace-scoped; owner aggregates require separate authority.
+- Extension, declaration and bounded signature must agree: `.png→image/png`, `.jpg/.jpeg→image/jpeg`, `.gif→image/gif`, `.webp→image/webp`, `.pdf→application/pdf`, `.wav→audio/wav`, `.mp3→audio/mpeg`, `.mp4→video/mp4`, `.ttf→font/ttf`, `.otf→font/otf`, `.woff→font/woff`, `.woff2→font/woff2`.
+- Check at most 4,096 prefix bytes; reject ambiguity or mismatch. No decoding, rendering, parsing or inferred description. Only derivatives supply descriptions/transcripts; filenames and titles are untrusted labels.
+
+### 12.3 Canonical v31 schema
+
+Keep v30 definitions and rows unchanged; add these 11 STRICT tables. `ns` means owner/scope/project, with §2's namespace CHECKs. Positive revisions/generations, nonnegative counts and exact foreign keys are mandatory.
+
+| Table | Keys and constraints |
+| --- | --- |
+| `assets` | `id` PK; ns, state, revision, next ordinal, timestamps; state CHECK available/deleted |
+| `asset_versions` | `id` PK; asset FK; unique asset/ordinal and id/content-identity; lifecycle, title, filename, media, byte count, timestamp; deleted ⇒ descriptive fields NULL, retained count zero |
+| `asset_derivatives` | `id` PK; exact version/content-identity FK; lifecycle, kind, text, text identity, provenance, language, timecodes, byte count, timestamp; kind allowlist; provenance/timecodes JSON CHECKs; deleted ⇒ descriptive content NULL, count zero |
+| `binary_objects` | `id` PK; ns, media, identity, byte count; exactly one exclusive owner: unique asset-version FK, or method-version FK with unique version/entry-position |
+| `binary_chunks` | PK object/index; object FK with cascade; BLOB length CHECK 1–32,768; index ≥0; non-final chunks exactly 32,768 |
+| `method_manifest_formats` | version PK/FK; format CHECK mixed-v1; absence means text-v30 |
+| `method_mixed_entries` | PK version/position; unique version/case-folded-path; kind CHECK text/binary; metadata; unique object FK required only for binary; text joins exact `method_files` position |
+| `binary_owner_usage` | owner PK; count CHECK 0–200,000,000 |
+| `asset_operations` | PK ns/actionId; method, payload binding, target, content-free result, timestamp |
+| `asset_effects` | effectId PK; ns, kind, entity, revision, actionId; unique positive ordinal |
+| `asset_epochs` | ns PK; positive generation |
+
+- Versions/derivatives have revision 1, then 2 on deletion; state CHECK available/deleted. Available records require their content fields.
+- Triggers reject ownership/namespace changes, mixed path/position collisions, invalid chunk size/position and insertion beneath deleted parents. Transaction validation requires contiguous complete chunks and matching byte counts/identities.
+- Lifecycle triggers purge owned objects/chunks and derivative content, release usage exactly once and advance epochs, including method/package deletion by feature-off writers. Tombstones cannot return to available.
+- Validate tables, CHECKs, indexes, foreign keys and trigger bodies exactly, following `core/method-package-schema.mjs:116`.
+
+### 12.4 Transactions, replay and deletion
+
+- `sqlite-blob-v1` is a versioned internal port. Chunks, metadata, both quota reservations, ledger and effects commit in one `BEGIN IMMEDIATE` (`core/database.mjs:261`). No separately committed staging or filesystem objects.
+- APIs accept `Uint8Array` bytes. Before callbacks, copy bounded non-shared views into private backing storage; freeze wrappers and expose only descriptors/bindings to authority. Never freeze a nonempty typed array or expose its mutable backing.
+- Extend snapshots separately from `core/method-package-input.mjs:37`: byte leaves consume raw-byte budgets above, not per-byte JSON nodes/string units; metadata keeps U3 budgets. Never stringify/base64 the complete import. Response envelopes retain their independent bound.
+- Streaming HMAC binds the complete length-framed pre-redaction input, including bytes. Preserve legacy text-only action bindings.
+- Reuse ledger replay-before-existence (`core/private-operation-helpers.mjs:9`). Changed payload gives `action_conflict`; authorized replay after deletion returns the original receipt without reinsertion. Kill before commit leaves no import rows.
+- Import → `{asset,version,ordinal,assetRevision}`, effect `asset_version_imported`.
+- Derive → `{derivative,source,revision}`, effect `asset_derivative_created`.
+- Delete → §7 delete receipt, one target effect `asset_deleted|asset_version_deleted|asset_derivative_deleted`. Cascades need no descendant effects. Mixed method operations retain U2 receipts/effects, without asset refs.
+- Purge bytes, derivatives and descriptive metadata. Receipts/effects/tombstones retain only opaque refs/identities, lifecycle state, revisions, timestamps, ordinals and counts.
+- Promise canonical non-resurrection and exact usage release across replay, rebuild and restart. Physical erasure from freelist, WAL, journal or backups is excluded (`docs/local-store.md:196`). No `secure_delete` change.
+
+### 12.5 Derivatives and reads
+
+- Immutable derivatives bind exactly one standalone `AssetVersionRef`; attachments receive none. Kinds: `caption|transcript|description|alt-text`.
+- Versioned provenance records exact source and `method:{kind:'user-provided'}` only.
+- Optional BCP 47 language ≤35 units. Optional `timecodes:[{startMs,endMs}]` contains ≤256 ordered safe-integer intervals, 0≤start≤end, only for audio/video; mark `alignment:'user-supplied-unverified'`.
+- Validate Unicode/NUL and redact before persistence, preserving formatting. New versions inherit nothing. Earlier derivatives remain readable, marked historical with exact provenance. Derivative/version/asset deletion purges; namespace revocation blocks delivery.
+- U5 may index text in disposable sidecars keyed by exact derivative/source identities, canonically revalidating before delivery; no canonical schema change. U4 itself makes derivatives readable, not searchable. Draft M5's "retrievable" requirement is met only when a U5 packet adds derivatives as a candidate type.
+
+Facade calls take `(input,authority)`; `A` = actionId, `P` = limit/cursor. Lists default/cap at 20 and paginate by envelope bytes.
+
+| Method | Class; input → value |
+| --- | --- |
+| `getAssetCapabilities` | public; none → capabilities |
+| `importAssetVersion` | explicit-user; namespace,A,title,filename,mediaType,bytes,asset?,expectedAssetRevision? → receipt |
+| `createAssetDerivative` | explicit-user; A,version,expectedVersionRevision,kind,text,method,language?,timecodes? → receipt |
+| `deleteAsset` / `deleteAssetVersion` / `deleteAssetDerivative` | explicit-user; A,ref,expectedRevision → receipt |
+| `listAssets` / `listAssetVersions` | read; namespace,P / asset,P → metadata pages |
+| `getAssetVersion` | read; version → metadata |
+| `listAssetDerivatives` / `readAssetDerivative` | read; version,P / ref,cursor? → provenance/metadata or ≤4,000-unit text parts |
+| `readAssetBytes` | read; version,cursor? → chunk page |
+| `verifyAssetBytes` | read; version,bytes → matches,byteCount,contentIdentity |
+| `getAssetUsage` / `listAssetEffects` | read; namespace / namespace,P → projection / effects |
+| `readMethodAttachmentBytes` | read; version,path,intent,context?,snapshot?,cursor? → chunk page and adoptionStatus |
+
+- Each byte page contains one base64 chunk ≤32,768 raw bytes. HMAC cursor binds store, exact version/content identity, chunk index, access generation and parent/version lifecycle revisions.
+- Revalidate authority and lifecycle every page; deletion mid-read returns `unavailable`, before generic epoch staleness, with no bytes. Final page reports completion and total byte count.
+- Attachment reads reuse §5's current/history, pins and `adoptionStatus` (`core/method-binding-storage.mjs:99`); switching adoption stales current reads, never substitutes attachments. Historical pins retain exact versions; disable marks withdrawn; deletion/revocation blocks delivery.
+- Binary `readMethodFile` requests fail `unsupported_media`.
+- Reuse §7 errors. Add `asset_not_found` (foreign/missing identical), `asset_version_unavailable`, `asset_limit_reached`; malformed/oversized input is `invalid_input`, media mismatch `unsupported_media`. Unavailable canonical reads deliver no content. Only `storage_busy` retries.
+
+### 12.6 U4b host
+
+Commands inherit §11's database/scope flags:
+
+```sh
+cairn-memory assets import --file ABS --title T [--asset ID --expected-asset-revision N]
+cairn-memory assets derive --version REF_JSON --kind K --text-file ABS [--language L] [--timecodes ABS]
+cairn-memory assets delete --ref REF_JSON --expected-revision N
+cairn-memory assets export --version REF_JSON --out ABS
+```
+
+- Mutations reuse descriptor confinement (`adapters/mcp/method-package-files.mjs:104`), bounded escaped review, frozen payload, real-TTY exact approval and post-review CAS (`adapters/mcp/method-package-command.mjs:125`). Derive supplies user-provided provenance and reads the source revision for approval.
+- Export is read-authorized and create-only, in pure Node with no native helper:
+  - Pin the `--out` parent directory with U3's descriptor rules, and reject a final name that is empty, `.`, `..` or contains `/` or NUL.
+  - Create a private temporary file through `/proc/self/fd/<dirfd>/<random>.partial` with `O_CREAT|O_EXCL|O_NOFOLLOW|O_WRONLY` and mode 0600.
+  - Write every page, `fsync`, then verify the byte count and content identity through `verifyAssetBytes`.
+  - Publish with `link()` from the temporary name to `/proc/self/fd/<dirfd>/<final>`. `link()` never replaces, so an existing path or symlink fails with `EEXIST`.
+  - Unlink the temporary name, and `fsync` the directory.
+  - Any failure unlinks the temporary file and leaves the final name absent. A crash may leave only a `.partial` name, never a partial final file.
+- `methods import --attachments local-v1` includes allowlisted binaries, reviewed as exclusive attachments. Without it U3 behaviour stays unchanged. Add `.svg` as `text/plain` to U3's text map.
+- No irreversible store effect before approval, as in §11.2 v0.4.2:
+  - Commands never create a store.
+  - `user_version` is read through a plain read-only open.
+  - Below v31, the import review shows `storeUpgrade:{from,to:31}`, and the core opens (and migrates) only after the exact phrase.
+  - Derive, delete and export refuse a store below v31 before opening it, with `asset_not_found`.
+- MCP `--assets local-v1` adds only `list_assets`, `list_asset_versions`, `get_asset_version`, `list_asset_derivatives`, `read_asset_derivative`. Method manifests show attachment metadata.
+- Fixed host scopes and strict grammars follow §11.4. MCP never returns bytes or mutation tools. Preserve the 262,144-byte transport bound (`adapters/mcp/method-package-transport.mjs:3`).
+
+### 12.7 Acceptance (real processes, Node 22.16 and 24.15)
+
+| ID | Observable |
+| --- | --- |
+| K01 | Populated supported migrations preserve rows; injected failure rolls back. All openers validate v31; method-only and feature-off processes work; unselected stores stay unchanged |
+| K02 | Frozen actual v30 binary and installed closure reject v31 unchanged, without git-history dependence |
+| K03 | Every allowlisted media type round-trips exact bytes/identity after restart; signature/extension/declaration mismatch refuses atomically |
+| K04 | Maximum boundaries and one-over refusals; namespace identities differ; retained copies charge fully; text-only identities/replays remain unchanged |
+| K05 | Kill before commit leaves no new chunks, metadata, quota, receipt or effects |
+| K06 | Separate-process quota/CAS contenders yield exactly one winner; neither quota leaks |
+| K07 | Tampered/substituted cursors, wrong scopes and revoked generations leak nothing; deletion between byte pages yields unavailable |
+| K08 | Derivatives redact without reformatting, never inherit, preserve historical provenance and unverified alignment |
+| K09 | Derivative/version/asset/package purges release exact usage; restart, replay and stale-sidecar rebuild cannot resurrect; effects occur once |
+| K10 | Adoption switch never mixes text/attachments; current stales, history remains exact, disable/delete/revoke fence pins |
+| K11 | Feature-off method deletion purges attachments; existing conversation-deletion/invalidation regressions pass |
+| K12 | Envelopes remain bounded at worst escaping; absent parser is unavailable while metadata remains readable; no media execution/network/model calls |
+| L01 | Installed defaults unchanged; flags advertise exactly authorized tools/capabilities |
+| L02 | Real-PTY approval/refusal and every H02/H03 confinement/replacement attack exercise assets, derivative input files and attachments atomically |
+| L03 | Fresh MCP process reads historical derivative provenance and attachment metadata; no tool/path returns binary bytes |
+| L04 | Create-only export verifies exact bytes after restart; existing files/symlinks, parent swaps, corruption and failed publication never overwrite or expose partial output |
+| L05 | Maximum complete reads and concurrent writers measured on both runtimes, including memory, transaction time and transport size |
+| L06 | Installed manifest/closure checked independently with counts, including helpers, docs and config; shallow CI needs no historical git objects |
