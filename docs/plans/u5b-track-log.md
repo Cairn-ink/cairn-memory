@@ -153,3 +153,13 @@
   單獨重跑 3／3 通過（負載 14.5），判 flake；Node 24 同套件全過。plugin-validation N/A（無 native claude binary，
   與主控矩陣相同）。本地無 Node 20，同 CI 缺口。
 - 交接訊息（含 HR-2 結果與 U5b 最終 commit）發給主控，待放行。
+- 2026-10-24 主控訊息送達（`docs/plans/primary-to-u5b.md` 7be03118 同文）：要求第二部分動 `cli.mjs`／`server.mjs` 前先合
+  `integration/unified-memory-v1` 的 `1d32bf75`（含 U4a-1 修正、契約 §16、U4b `--assets local-v1` 五個資產工具、U5a、
+  preview 修正），並在 `packaging/test/assets-host.test.mjs` 以確切名稱補 `read_memory_context`。訊息先前過期，第二部分已在
+  U5a 基準完成，故由協調者自己合併：**merge commit `0a38a991`**（已推送）。四個衝突檔都是「兩邊保留」：`cli.mjs` 保留
+  計數器注入並讓傳輸選擇／262144 緩衝也認 `config.assets`；`server.mjs` 同時接受 `contextCounter` 與 `assets`，assets 進
+  `openMemoryCore` 與 `buildCairnServer`，組裝分支與 `ASSET_TOOL_NAMES` 並存；CHANGELOG 與契約 §15／§16 串接。
+  `assets-host.test.mjs` L01 的 `contextTools` 加入 `read_memory_context`（四個 context 組合全為確切清單）。合併樹上
+  adapters/mcp context-read 兩檔 17／17、packaging 三檔 68／68（exit 0）。完整矩陣以 `cairn-heavy` 排在
+  `/home/chichieh/cairn-memory-ci-u5b`（0a38a991，乾淨 detached checkout，離線 `npm ci` adapters/mcp、adapters/openai）。
+  已回覆主控（訊息待放行）。
