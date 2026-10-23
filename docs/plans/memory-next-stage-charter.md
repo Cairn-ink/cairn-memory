@@ -97,7 +97,20 @@
 
 ## 7. 工程軌（草案 M1–M8）
 
-**進度（2026-10-23）**：P0 契約經兩輪非作者審查後為 v0.3（整合分支 `docs/plans/unified-memory-v1-contract.md`，`2b2e3cf`）。**U2 已完成**：U2a 在 `d8eaba8`、U2b 在 `a8323cb`，都經過主控驗收與雙審查（Spec、Standards 都判 Yes）。下一步是 U3（方法包的 host 端：匯入器、TTY 核准、MCP 唯讀工具）。分包順序：U2 方法包 core → U3 方法包 host（匯入器、TTY 核准、MCP 唯讀工具）→ U4 素材 → U5 共同讀取與檢索（等 HR-1／HR-2）。
+**進度（2026-10-23 上午）**：
+- **P0 契約**經兩輪非作者審查後為 v0.3（`2b2e3cf`）。
+- **U2 已完成**：U2a 在 `d8eaba8`、U2b 在 `a8323cb`，都經過主控驗收與雙審查（皆判 Yes）。
+- **U3 已實作**。主控在沙箱外驗收時抓到三個問題：
+  - 打包閉包回歸；
+  - 打錯核准口令，仍會先建立或升級資料庫；
+  - 讀寫鎖競爭。
+
+  契約因此升為 v0.4.2（`26ad5ef`）。修正輪進行中，修完提交後再派雙審查。
+- **U4**（素材、衍生文字、方法包二進位附件，schema v31）已完成盤點，契約草稿 §12 v0.5（`d148a34`）審查中。
+- **U5a**（候選檢索接口）已完成盤點，契約草稿撰寫中。內容：中文 BM25、選配的向量通路、RRF 融合、分種類回報降級。是選配接口，不改 V1 現有行為。
+- 另開後續包 **U2c**：讀取時不在寫入鎖裡驗證整個版本。
+
+分包順序：U2 → U3 → U4 與 U5a（實作先後待定，主控建議 U5a 先）→ U5b 組裝（等 HR-2）→ U5c 角色與關聯。
 
 P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 `.research-private/dispatch/p0_inventory/last.md`，因引用私有產品檔案而不進 git）。
@@ -132,14 +145,28 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 ## 8. 進度與下一步
 
 - **已完成**
-  - 基準核對、上游核對
-  - HR-1 協議凍結（`d1a64f5`）
-  - Codex 隔離驗證
+  - 基準與上游核對、Codex 隔離驗證
+  - HR-1：協議、語料凍結、執行、結果與審查（見 §6）
+  - U2 方法包 core（雙審查 Yes）
+  - U3 契約（v0.4.1 審查通過，v0.4.2 由主控補充）與實作
+- **進行中**
+  - U3 修正輪 1 → 主控重跑打包、MCP 與量測 → 提交 → 雙審查
+  - U4 契約 §12 的非作者審查
+  - U5a 契約起草
 - **下一步**
-  1. 派 Codex 唯讀審查 HR-1 協議，並修正協議。
-  2. 平行派語料作者和測試框架兩位互相獨立的 worker。
-  3. 標註稽核後凍結語料，接著執行、驗收、報告。
-  4. 平行派工程軌 P0 盤點。
+  1. U3 雙審查與修正輪。
+  2. U4、U5a 契約定稿。實作順序主控建議 U5a 先：它直接服務「找得回」，HR-1 證據已足夠。
+  3. U2c 讀取效能修正（契約另寫）。
+  4. HR-2 只寫計畫，等使用者對齊後才做原型。
+- **等使用者決定**
+  - 是否推送分支或開 PR（兩條分支都只在本機）。
+  - 本機 embedding 預設：bge-m3 約需 2.2 GB RSS，下載 2.3 GB。
+  - 產品端用 3-small 還是 3-large。
+  - `selectEvidence` 改成全庫 BM25 的快速改善：會改變 V1 行為，也屬於另一個 session 的範圍。
+  - HR-3 的付費預算。
+  - HR-2 是否照計畫進行。
+  - 是否通知另一個 session，或在 issue #453 留言。
+  - HR-1 最終 Spec 審查者的 §9.7 爭議（已記錄在結果報告）。
 - **金鑰已就緒（2026-10-23）**：`~/.config/cairn-hr1/openai.env` 權限 600。原檔尾端誤帶「空白＋│」兩個字元，主控去掉後，用不計費的 `GET /v1/models/{model}` 確認 3-small 與 3-large 都回 200，才寫回檔案。內容從未印出。API 組會在測試框架驗收後，由主控在 US$1 上限內執行。
 
 ## 9. 派工紀錄
@@ -156,9 +183,9 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `hr1_protocol_audit`（確認） | 確認 v2.1 | gpt-6.1-sol/xhigh → 同 | read-only | `e1aa7da` | 2026-10-22T19:47–19:49 | exit 0；v2.1 可以進行；3 項配套文件 P1 已修（`5c1c90f`） |
 | `hr1_world_author`（W1） | 寫語料：家族、事實、記憶、原文片段 | gpt-6.1-sol/xhigh → 同 | workspace-write，無網路 | `e1aa7da` | 19:47–20:30 | exit 0；40 個目標家族、1,095 個事實；S300＝300、額外 700、外部 100；40% 只寫在原文片段 |
 | 主控抽查 W1 | 洩漏與品質 | — | — | — | 20:3x | 事實陳述與記憶本文：沒有照抄，用詞重疊度中位數 0.36。事實清單：目標 namespace 零洩漏；80 段外部範本與陳述相同（只影響不計分的 FOREIGN 控制）。**S300 有 20 組本文完全相同 → A0 無法建資料**，交回 W1 修正 |
-| `hr1_world_author`（修正 1） | 讓重複本文措辭自然不同 | gpt-6.1-sol/xhigh | workspace-write | — | 20:3x– | 執行中 |
-| `hr1_query_author`（W2） | 只看事實清單寫查詢（隔離在 `/home/chichieh/cairn-hr1-w2`） | gpt-6.1-sol/xhigh | workspace-write，無網路 | 事實清單 | 20:3x– | 執行中 |
-| `hr1_arms`／`hr1_tooling`（修正 1） | 修正雙審查指出的問題 | gpt-6.1-sol/xhigh | workspace-write | `a424c23` | 20:2x– | 執行中 |
+| `hr1_world_author`（修正 1） | 讓重複本文措辭自然不同 | gpt-6.1-sol/xhigh | workspace-write | — | 20:3x | 完成：20 組相同本文已改寫，A0 可建資料 |
+| `hr1_query_author`（W2） | 只看事實清單寫查詢（隔離在 `/home/chichieh/cairn-hr1-w2`） | gpt-6.1-sol/xhigh | workspace-write，無網路 | 事實清單 | 20:31– | 完成，見下方結果列 |
+| `hr1_arms`／`hr1_tooling`（修正 1） | 修正雙審查指出的問題 | gpt-6.1-sol/xhigh | workspace-write | `a424c23` | 20:24– | 完成，見下方結果列 |
 | `hr1_query_author`（W2） | 結果 | gpt-6.1-sol/xhigh → 同（cwd＝隔離資料夾） | — | 事實清單 | 20:31–20:42 | exit 0；160 題；每類 20 個家族；只寫在原文片段的證據占 39.8%。主控稽核 38 個指令，沒有碰過資料夾外的任何東西 |
 | 主控（標註） | 分組、標註、驗證器 | — | — | `f029055` | 20:5x | 分組符合配額與家族下限（開發集 32.1%）。驗證器：15 個缺席事實被誤判 → W4a 修正 2；C6 有 9 題問的是沒改過的決策 → 協議 v2.2 澄清，交 W2 修正 1 |
 | `hr1_tooling`（W4a 修正 1）／`hr1_arms`（W4b 修正 1） | 雙審查的修正 | gpt-6.1-sol/xhigh → 同 | workspace-write | `a424c23` | 20:24–20:48 | exit 0；主控在沙箱外驗收：兩個 Node 版本各 124 項、123 通過、0 失敗、1 略過；commit `f029055`；兩位審查者複查中 |
@@ -168,7 +195,7 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | 主控（凍結） | 凍結語料 | — | — | `46b9691` | 21:1x | `FROZEN.md` 記錄 7 個檔案的 SHA-256 |
 | 主控（開發集選擇） | 開發集 S1000 | — | — | `1a200af` | 21:1x | L*＝A1（0.845，A1+ 為 0.798）；本機提名 bge-m3＋A3（0.954）；產品端提名 openai-3-small＋F-RRF10（0.973）；沒有飽和；API 花費 US$0.0035 |
 | 主控（測試集排名） | 從固定在 `1a200af` 的獨立 worktree 跑 | — | — | `1a200af` | 21:21–21:2x | 本機、OpenAI、A5、字面基準在兩種規模都 exit 0。**A0 失敗**（`a0_core_error`）：原始錯誤是 `supersession_limit`，因為 W4b 的建資料程式讓 20 筆歷史記憶都由同一筆記憶取代，超過 core 上限 5 → 交 W4b 修正 3。尚未計分 |
-| `hr1_arms`（修正 2） | 產生「拿掉外部 namespace」的配對排名參數 | gpt-6.1-sol/xhigh | workspace-write | `1a200af` | 21:2x– | 執行中 |
+| `hr1_arms`（修正 2） | 產生「拿掉外部 namespace」的配對排名參數 | gpt-6.1-sol/xhigh | workspace-write | `1a200af` | 21:2x– | 完成，見下方結果列 |
 | 主控（U2a 驗收） | 沙箱外的完整測試矩陣 | — | — | `b9eb2a6` | 21:3x–22:00 | Node 22.16 全部 exit 0（core 1,904／1,904、整體 635／635）；Node 24.15 全部 exit 0，打包測試是第 3 次才 exit 0（前兩次的失敗證實是負載：R29 單獨跑時與 b8fa224 一樣 6.9 秒）→ commit `b9eb2a6` |
 | `u2a_review_spec`／`u2a_review_standards` | U2a 的非作者雙審查 | gpt-6.1-sol/xhigh → 同 | read-only | `b9eb2a6` | 22:0x–22:1x | 兩邊都判 No：淺層 CI 拿不到歷史 commit（P1）；schema 驗證只看觸發器名稱（P2）；缺少真正同時搶寫的程序測試（P2）→ U2a 修正 2 執行中 |
 | `umv1_u2_impl`（U2a 修正 2） | 淺層 CI、schema 驗證、多程序搶寫測試 | gpt-6.1-sol/xhigh → 同 | workspace-write | `b9eb2a6` | 22:1x–22:34 | exit 0；13 個檔案 |
@@ -180,7 +207,7 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | 主控（U3 契約） | 方法包的 host 端：匯入器、TTY 核准、MCP 唯讀工具 | — | — | 整合分支 `fc5b9ea` | 00:5x | 先量測本機 21 個真實 skill 套件（只看大小）：1–122 個檔案、最大 1.85 MB、單檔最大 321 KB、5 個含二進位檔 → 提高文字上限 |
 | `umv1_contract_audit`（U3） | U3 契約的非作者審查 | gpt-6.1-sol/xhigh → 同 | read-only | `fc5b9ea` | 01:0x | 4 項 P0（隔離擋不住上層目錄被換、常數寫死在多處、要用方法包專屬授權、MCP 範圍與參數格式）→ 契約 v0.4（`69e22b3`），用 `/proc/self/fd` 逐層開啟取代 openat2；審查者確認中 |
 | `umv1_contract_audit`（U3 確認） | v0.4 與 /proc 隔離做法 | gpt-6.1-sol/xhigh → 同 | read-only | `69e22b3` | 01:1x | 方向正確，但要補 `O_PATH` 先檢查再讀、明確拒絕 `..`、說明隔離跟的是釘住的 handle → 契約 v0.4.1（`1265b4b`）；審查者表示修完即可實作 |
-| `umv1_u2_impl`（U3） | 方法包 host 端實作 | gpt-6.1-sol/xhigh | workspace-write | `1265b4b` | 01:2x– | 執行中 |
+| `umv1_u2_impl`（U3） | 方法包 host 端實作 | gpt-6.1-sol/xhigh → 同 | workspace-write | `1265b4b` | 00:57–02:09 | exit 0；27 個檔案；worker 自報沙箱內的打包失敗屬於沙箱限制（主控驗收證實其中有真回歸，見下方） |
 | `hr1_arms`（修正 2／3）＋`hr1_tooling`（修正 3） | 隔離參數；A0 建資料的 bug；A0 容量預檢 | gpt-6.1-sol/xhigh → 同 | workspace-write | `1a200af` | 21:2x–21:39 | 主控驗收：兩個 Node 版本各 136 項、135 通過、0 失敗、1 略過 → commit `4fcec31`；Spec 判定：隔離參數符合，另提 A0 容量前提應加入預檢（P1）→ W4a 修正 3 |
 | 主控（HR-1 最終執行） | 從固定在 `4fcec31` 的 worktree 跑測試集兩種版本（有／沒有外部 namespace）、延遲與計分 | — | — | `4fcec31` | 22:0x–22:2x | 16 個批次全部 exit 0；66 個非 A0 排名檔和 `1a200af` 逐筆相同；**兩個情境都判「繼續」**；A5 未達門檻；API 累計 US$0.0050 → commit `34f6ea9` |
 | `hr1_review_spec`（最終） | 確認 `51dbdf6` 與程序揭露 | gpt-6.1-sol/xhigh → 同 | read-only | `51dbdf6` | 22:2x | 框架判 **Yes**；接受證據保留的推理，但不接受「程序完全合規」的說法 → 結果報告已加註爭議與限縮的說法（`9ce7328`） |
@@ -190,5 +217,12 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `hr1_review_spec`／`hr1_review_standards` | 測試框架的非作者雙審查 | gpt-6.1-sol/xhigh → 同 | read-only | `a424c23` → `f029055` | 20:15–20:22；複查 20:5x | 第一輪兩邊都判「No」（Spec 3 P0＋3 P1；Standards 3 P1＋3 P2）。修正後複查：**兩邊都判 Yes**，12 項全部解決，沒有新問題 |
 | `umv1_contract_audit` | 工程軌 P0 契約的非作者設計審查 | gpt-6.1-sol/xhigh → 同 | read-only | 整合分支 `81e0f21` | 19:51–19:58 | exit 0；7 項 P0 → v0.2（`91a7825`） |
 | `umv1_contract_audit`（複查） | 檢查 v0.2 | gpt-6.1-sol/xhigh | read-only | `91a7825` | 19:59–20:02 | exit 0；3 項 P0 → v0.3（`2b2e3cf`） |
-| `umv1_contract_audit`（確認） | 確認 v0.3 | gpt-6.1-sol/xhigh | read-only | `2b2e3cf` | 20:03– | 執行中 |
-| `umv1_u2_impl`（U2a） | 方法包 core：schema v30 與升級程式、匯入、讀取、比較、刪除 | gpt-6.1-sol/xhigh | workspace-write，無網路 | 整合分支 `2b2e3cf` | 20:03– | 執行中 |
+| `umv1_contract_audit`（確認） | 確認 v0.3 | gpt-6.1-sol/xhigh | read-only | `2b2e3cf` | 20:03– | 完成：兩項澄清 → v0.3.1 |
+| `umv1_u2_impl`（U2a） | 方法包 core：schema v30 與升級程式、匯入、讀取、比較、刪除 | gpt-6.1-sol/xhigh | workspace-write，無網路 | 整合分支 `2b2e3cf` | 20:03– | 完成，見上方結果列 |
+| 主控（U3 驗收） | 沙箱外完整矩陣＋真 PTY 手動試用 | — | 沙箱外 | `1265b4b`＋U3 工作目錄 | 02:10–02:40 | 兩個 Node 版本：core 1,964／1,964、local 37、mcp 178（含新的 PTY、競態、bind mount 測試）、整體 635、示範、驗證、歷史資料檔都 exit 0。**打包測試 exit 1**：6 項已安裝生命週期測試失敗，原因是新模組在閉包內卻沒被載入，屬於真回歸。**Node 24 量測 exit 1**：讀取者遇到 `storage_busy`；Node 22 的寫入者 14 次中 10 次逾時。手動試用：打錯口令仍會留下新建的 v30 資料庫 → 契約 v0.4.2（`26ad5ef`） |
+| `umv1_u2_impl`（U3 修正 1） | 打包閉包、核准前不動資料庫、量測把 busy 當資料 | gpt-6.1-sol/xhigh | workspace-write | `26ad5ef` | 02:42– | 執行中 |
+| `u4_inventory` | U4 素材的設計盤點 | gpt-6.1-sol/xhigh → 同 | read-only | `1265b4b`＋U3 工作目錄 | 02:14–02:21 | exit 0：建議 SQLite 分塊 BLOB，列出六項待決設計 |
+| `u5_inventory` | U5a 檢索接口的設計盤點 | gpt-6.1-sol/xhigh → 同 | read-only | 同上 | 02:24–02:37 | exit 0：建議附屬索引檔、BM25-T1、非同步 embedder、授權先於排名 |
+| `u4_contract_author` | 依主控決定起草 §12 | gpt-6.1-sol/xhigh → 同 | read-only | 同上 | 02:25–02:38 | exit 0；主控改 3 處後併入契約（`d148a34`，v0.5 草稿） |
+| `u5_contract_author` | 依主控決定起草 §13 | gpt-6.1-sol/xhigh | read-only | 同上 | 02:38– | 執行中 |
+| `umv1_contract_audit`（U4） | §12 的非作者審查 | gpt-6.1-sol/xhigh | read-only | `d148a34` | 02:44– | 執行中 |
