@@ -1,5 +1,51 @@
 # Known limitations
 
+## Context retrieval host (U5a part 3)
+
+The [context host](context-read-local.md) adds two explicit MCP read tools and a
+separate bounded document-refresh command. Startup fixes provider, preset and
+read set. Tool arguments cannot select authority, configuration or another
+namespace; returned source text remains untrusted data. Semantic query embedding
+is off by default; a key alone does not construct an embedder. Known coverage
+gaps send no query request. Hosted configuration uses frozen `rrf-k10`.
+
+The OpenAI adapter uses reviewed frozen accounting inputs, not live price quotes
+or billing attestation. Reported-token settlement releases unused reservations
+only at actual completion; unknown usage keeps the full conservative charge.
+Caps and concurrency share process totals by embedder identity, including
+configuration changes; they are not durable or account-wide spending limits.
+Inputs/transport bytes and cooperative deadlines are bounded without a latency
+guarantee. No hidden retry occurs. A paid smoke script exists but is unrun by
+default and never executes in offline tests. Actual fake HTTP and installed
+process tests use synthetic sources, not paid calls or native-product evidence.
+Sidecars remain sensitive, invalidation is logical rather than secure physical
+erasure, and the intentional `中` versus `中文` miss is unchanged. Assembly,
+complete semantic recall, answer correctness and 100,000-Memory latency remain
+non-claims. See the separate core limitations below.
+
+## Opt-in core candidate retrieval (U5a parts 1–2)
+
+Candidate retrieval requires explicit `contextRead` configuration and method-specific
+host authority. Flag-off behaviour stays unchanged. This packet provides core
+lookup, refresh and canonical evidence refetch; MCP, CLI and hosted adapter wiring
+remain deferred. Candidate ranks do not assemble context or establish answer quality.
+
+The local `<store>.context-read-v1.sqlite` sidecar is sensitive: lexical terms,
+postings, projection statistics, identities and optional embedding vectors can
+reveal private information. It is a protected plaintext-derived cache, not an
+encryption boundary. Canonical revisions and eligibility changes cause logical
+invalidation. Removing entries or the sidecar is not secure physical erasure of
+SQLite pages, journals, filesystem blocks or backups. Read-only handles refuse
+unsupported auxiliary files and never repair or maintain the sidecar.
+
+Frozen T1 tokenization intentionally misses an embedded single-Han query: `中`
+does not match `中文`. Exact-term and CJK fixture results describe these frozen
+mechanics, not general semantic recall. Measurements use synthetic data only and
+are observational. Reported timings vary with runtime, workload and filesystem;
+they are not production-latency guarantees or evidence of answer correctness.
+Paid API smoke remains unrun by default, and no 100,000-Memory latency guarantee
+is made.
+
 ## Text-only local method packages and host workflow (U2/U3)
 
 [Method packages](method-packages-local.md) are default-off text-only mechanics
@@ -2548,8 +2594,8 @@ are not final-source evidence or measured semantic quality.
 
 `assets-local-v1` is an explicit embedded opt-in using v31 SQLite BLOB chunks.
 It matches only the contract's bounded leading signatures and does not parse,
-decode, render, execute, scan for malware or call models. No asset CLI or MCP byte
-delivery is exposed in this packet. Embedded derivative creation accepts only
+decode, render, execute, scan for malware or call models. Asset mutations use separate real-TTY commands. MCP exposes metadata and supplied
+derivative text only, with no binary delivery or mutations. Embedded derivative creation accepts only
 explicitly supplied text with `method:{kind:'user-provided'}`; it performs no
 OCR, ASR, captioning or media understanding. Optional ordered audio/video
 intervals are `user-supplied-unverified`, with no text-span alignment claim.
@@ -2560,8 +2606,13 @@ Attachments are exclusive copies, charged independently, with no deduplication.
 Method-only processes can inspect mixed metadata and purge attachments, including
 corrupt bytes, but cannot deliver binary content without asset grants. Current
 attachment cursors stale on adoption transitions; history remains on the exact
-requested version with fresh authorization. No CLI/MCP attachment import or byte
-export is added here. The opt-in K13 measurement asserts both 32-MiB standalone
+requested version with fresh authorization. CLI attachment import is explicit via `--attachments local-v1`; there is no MCP
+attachment import or byte export. Local asset export uses a pinned operator-owned
+parent, private source name and create-only link publication. A post-publication
+fsync/cleanup failure reports `published-but-durability-uncertain`; termination can
+leave private partials. Recovery never overwrites/removes the final, and cleanup
+never adopts stale names. Same-UID processes remain inside the Unix owner trust
+boundary. See [the host and recovery guide](assets-local.md#local-host-commands). The opt-in K13 measurement asserts both 32-MiB standalone
 and 64-MiB mixed-import transaction/RSS thresholds, including byte preparation.
 Every binary read verifies metadata and only the selected chunk; corruption in
 another chunk is detected when it is selected. Authenticated totals prevent

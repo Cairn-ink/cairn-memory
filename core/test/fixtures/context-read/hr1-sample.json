@@ -1,0 +1,50 @@
+{
+  "source": {
+    "file": "evaluation/retrieval-research/fixtures/hr1-corpus.json",
+    "sha256": "1ce357439f1ed28cfd2e2c8bf31e0bde1581e1110c40577f06d0a915d8db0bf5",
+    "freeze": "hr1-fixture-v2/FROZEN.md",
+    "selection": "first four Memories and Memories 8–11; verbatim synthetic content only"
+  },
+  "documents": [
+    {
+      "memoryId": "m-70f13f4b654adb",
+      "docId": "m-70f13f4b654adb",
+      "text": "使用者三月把月報庫的資料庫定為 SQLite。"
+    },
+    {
+      "memoryId": "m-4813f94dd21ed6",
+      "docId": "m-4813f94dd21ed6",
+      "text": "使用者八月決定讓月報庫改用 PostgreSQL。"
+    },
+    {
+      "memoryId": "m-d1e32ea0605b90",
+      "docId": "m-d1e32ea0605b90",
+      "text": "使用者補充月報庫換資料庫的原因。"
+    },
+    {
+      "memoryId": "m-ba601828696d4c",
+      "docId": "m-ba601828696d4c",
+      "text": "使用者為月報庫設定每月 hosting 預算。"
+    },
+    {
+      "memoryId": "m-a9d1a8f0d3c3c9",
+      "docId": "m-a9d1a8f0d3c3c9",
+      "text": "The user originally chose a 60-second response cache for RelayCart."
+    },
+    {
+      "memoryId": "m-c81ad880753ae7",
+      "docId": "m-c81ad880753ae7",
+      "text": "The user shortened RelayCart's response-cache lifetime."
+    },
+    {
+      "memoryId": "m-e20e1a4e0e7e58",
+      "docId": "m-e20e1a4e0e7e58",
+      "text": "The user explained the RelayCart response-cache change."
+    },
+    {
+      "memoryId": "m-d5d265c7f25406",
+      "docId": "m-d5d265c7f25406",
+      "text": "The user capped RelayCart response caching at US$48 a month."
+    }
+  ]
+}

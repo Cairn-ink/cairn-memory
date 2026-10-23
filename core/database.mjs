@@ -36,6 +36,10 @@ const VERSION = CONFIRMATION_SCHEMA_VERSION;
 // Existing layouts accepted without an upgrade by the ordinary opener.
 export const READ_SCHEMA_VERSIONS = Object.freeze([VERSION, 20, PRIVATE_CARD_SCHEMA_VERSION,
   PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION, 30, 31]);
+// Context reads also validate existing pre-control Raw stores. The retained
+// topic reader's narrower supported-version list remains unchanged.
+export const CONTEXT_READ_SCHEMA_VERSIONS = Object.freeze([...new Set([...READ_SCHEMA_VERSIONS,
+  RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION, RAW_LINEAGE_SCHEMA_VERSION, RAW_DELETION_SCHEMA_VERSION, RAW_SOURCE_SCHEMA_VERSION])]);
 
 function createVersion3(db) {
   db.exec(`

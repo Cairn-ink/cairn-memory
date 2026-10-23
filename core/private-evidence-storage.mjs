@@ -170,7 +170,11 @@ export function createPrivateEvidenceStorage({ db, identity, cardDetailInside, r
         accessGeneration, after, turn }, 8192),
       snapshot: makeSnapshot(ns, input.intent, refs, items, accessGeneration) };
   }
-  return Object.freeze({ call(method, ns, original, accessGeneration) {
+  return Object.freeze({
+    // Internal U5 read seam: authorization and the deferred transaction belong
+    // to the caller. Reuses the exact current/history canonical predicate/DTO.
+    itemsInside(ns, refs, intent) { return refs.map(ref => item(ns, ref, intent)); },
+    call(method, ns, original, accessGeneration) {
     const input = evidenceInput(method, original, ns);
     if (method === 'selectEvidence') return select(ns, input, original, accessGeneration);
     if (method === 'fetchEvidence') return fetched(ns, input, accessGeneration);

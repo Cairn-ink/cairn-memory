@@ -12,6 +12,41 @@
   starvation as bounded stress data, retrying the same page through busy waits
   and verifying eventual byte-exact completion.
 
+## Unreleased — local asset host (U4b)
+
+- Add terminal-approved asset import, supplied derivatives and CAS deletion,
+  using confined descriptors, frozen payloads and the noncreating v31 store fence.
+- Add pure-Node create-only export with protected source names, readback
+  verification, link publication and explicit uncertain-durability receipts.
+- Add `methods import --attachments local-v1`, including exclusive binary
+  attachment review and SVG text, and five opt-in metadata/derivative MCP reads.
+  Default tools remain unchanged; MCP exposes neither bytes nor asset mutations.
+- Ship the complete host closure and real-process, PTY, publication fault and
+  installed-artifact acceptance. See [the asset guide](docs/assets-local.md).
+
+## Unreleased — context retrieval host (U5a part 3)
+
+- Add explicit context MCP startup options and two read tools, fixed host read
+  sets, strict reference-preserving grammars and separate core/transport bounds.
+- Add bounded `context refresh`, syntax-only context configuration checks and
+  the budgeted OpenAI embedding port. Hosted configuration selects frozen
+  `rrf-k10`; default construction and legacy tools remain unchanged.
+- Use fake HTTP and actual installed-process acceptance; paid smoke remains a
+  separate unrun opt-in. Accounting rates are frozen inputs, not live billing
+  attestation. See [the context guide](docs/context-read-local.md).
+
+## Unreleased — opt-in core candidate retrieval (U5a parts 1–2)
+
+- Add the explicit `contextRead` core opt-in, read-only `openContextReader`,
+  candidate lookup, bounded index refresh and canonical evidence refetch. Existing
+  flag-off behaviour is unchanged; MCP, CLI and hosted adapter wiring are deferred.
+- Keep lexical postings, statistics and optional vectors in a sensitive local
+  sidecar. Canonical changes invalidate retrieval logically; deleting or
+  invalidating entries does not provide secure physical erasure.
+- Freeze T1 tokenization and BM25/RRF presets, including the intentional embedded
+  single-Han miss: `中` does not match `中文`. Measurements use synthetic data and
+  are observational, not semantic-quality or production-latency guarantees.
+
 ## Unreleased — derivatives and method attachments (U4a-2)
 
 - Add immutable, explicitly supplied asset derivatives with exact source
