@@ -147,3 +147,9 @@
   派 Spec／Standards 第二次複查；完整矩陣以 `cairn-heavy` 排在 `/home/chichieh/cairn-memory-ci-u5b`（aeae00e8）。
 - `1a589129` 矩陣結果：100 工作 97 通過；3 個失敗＝tokenizer 載入測試（兩版本，已修）＋Node 22 artifact 兩個
   （`local-host` B4c、`mcp-capture-deadline` H5），單獨重跑 8／8、1／1 通過，判為負載 9 時的 flake。
+- **U5b 完成，交接 commit `aeae00e8`**（`integration/unified-memory-v1-u5b`，基準 U5a `389512d`）。第二部分第二次複查
+  Spec／Standards 都 **yes**。完整矩陣（`cairn-heavy`，worktree `/home/chichieh/cairn-memory-ci-u5b`）：100 工作 99 通過；
+  唯一失敗 Node 22 `test:artifact` 的 R29（`topic-overview-raw29.test.mjs`，另一 session 的 Worker closure 測試），
+  單獨重跑 3／3 通過（負載 14.5），判 flake；Node 24 同套件全過。plugin-validation N/A（無 native claude binary，
+  與主控矩陣相同）。本地無 Node 20，同 CI 缺口。
+- 交接訊息（含 HR-2 結果與 U5b 最終 commit）發給主控，待放行。
