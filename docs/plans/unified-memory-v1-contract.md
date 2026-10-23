@@ -404,7 +404,7 @@ All take `(input, authority)` and return existing envelopes. `A` = actionId.
 4. **Limits** are provisional text-only defaults. U3 measures real SKILL.md and
    template packages (sizes only) before freezing them.
 
-## 11. U3: method packages on the local host (v0.4.1, audited)
+## 11. U3: method packages on the local host (v0.4.2; v0.4.1 audited)
 
 The draft (`fc5b9ea`) was audited by the same non-author auditor, who found
 four P0, five P1 and one P2 issue. This section incorporates all of them.
@@ -449,6 +449,17 @@ checks, owner quota, identities, replay and pagination. Verify 256 files, a
 - Every file page currently re-verifies the whole version. Measure complete
   maximum-version reading and concurrent-writer contention on both runtimes;
   4,000-unit pages alone are not a latency guarantee.
+- **Contention found (v0.4.2).** The primary's first acceptance run measured
+  this: every read page holds the write transaction while it re-verifies the
+  whole version.
+  - A tight maximum-version reader starved a concurrent binding writer. Ten of
+    its 14 attempts waited out the busy timeout, at p50 about 5 s.
+  - On Node 24 the reader itself received retryable `storage_busy`.
+
+  U3 keeps the limits, and its measurement treats `storage_busy` on either side
+  as data: retry the same page and count it, never abort. A follow-up packet,
+  **U2c**, removes whole-version verification under the write lock from reads.
+  U2c needs its own contract text.
 
 ### 11.2 Importer (`cairn-memory methods import`)
 
@@ -540,6 +551,20 @@ The importer is a separate CLI process. The MCP process never imports.
     and expected revisions through the existing local authority path.
   - Any store change that makes a CAS stale refuses; re-run the command. There is
     no automatic retry.
+- **No irreversible store effect before approval (v0.4.2).** The primary's
+  smoke test showed a mistyped phrase still left a newly created v30 store
+  behind. The commands now follow these rules:
+  - They never create a store; a missing `--db` refuses.
+  - They read `user_version` with a plain read-only open, which creates no
+    files.
+  - If the store is below v30, the import review shows the one-way upgrade as
+    `storeUpgrade: {from, to: 30}`. The core opens, and so migrates, only after
+    the exact phrase. Reason availability is then checked before the mutation,
+    and a failed check refuses.
+  - Adopt and disable refuse a pre-v30 store before opening it, with
+    `method_not_found`, because it cannot hold a package.
+  - The MCP server's `--method-packages local-v1` keeps §2.1's opt-in
+    migration at startup. The documentation states that it is one-way.
 - **Output**: the content-free import receipt, plus a JSON line on stdout.
 
 ### 11.3 Adoption commands
