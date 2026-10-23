@@ -1,14 +1,33 @@
 import { runFile } from './asset-support.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdirSync,writeFileSync,readFileSync,renameSync,unlinkSync,linkSync,symlinkSync,readdirSync,chmodSync,openSync,closeSync } from 'node:fs';
+import { mkdirSync,writeFileSync,readFileSync,renameSync,unlinkSync,linkSync,symlinkSync,readdirSync,chmodSync,openSync,closeSync,existsSync,lstatSync,readlinkSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { STORAGE_BUSY_TIMEOUT_MS } from '../../../core/database.mjs';
 import { fixture,ns,input,pdf,ok,bytes,restoreV30 } from '../../../core/testing/asset-fixtures.mjs';
 import { host,call,review,phrase,receipt,cli } from './asset-support.mjs';
 import { parseConfiguration } from '../cli.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
+
+// Independent pathname-based observation, never the fixture's retained handle.
+function storeState(path){
+  const stat=lstatSync(path,{bigint:true}),bytes=readFileSync(path),db=new DatabaseSync(path,{readOnly:true,timeout:STORAGE_BUSY_TIMEOUT_MS});
+  let schema,tables,identity;
+  try{
+    db.exec('BEGIN');
+    identity={applicationId:db.prepare('PRAGMA application_id').get().application_id,userVersion:db.prepare('PRAGMA user_version').get().user_version};
+    schema=db.prepare('SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name').all();
+    tables=schema.filter(row=>row.type==='table').map(({name})=>({name,rows:db.prepare('SELECT * FROM "'+name.replaceAll('"','""')+'"').all()}));
+    db.exec('COMMIT');
+  }finally{db.close();}
+  const companions=['-journal','-wal','-shm'].map(suffix=>{
+    let stat;try{stat=lstatSync(path+suffix);}catch(error){if(error.code==='ENOENT')return {suffix,absent:true};throw error;}
+    return {suffix,mode:stat.mode,...(stat.isSymbolicLink()?{link:readlinkSync(path+suffix)}:{bytes:readFileSync(path+suffix)})};
+  });
+  return {file:{dev:stat.dev,ino:stat.ino,mode:stat.mode,size:stat.size},bytes,identity,schema,tables,companions};
+}
 
 const base=f=>['--db',f.path,'--owner',ns.ownerId];
 async function approve(f,args,options={}){const terminal=review(f.workspace,args,options),prompt=await terminal.prompt;terminal.answer(phrase(prompt.output));const done=await terminal.done;assert.equal(done.code,0,done.output);return {saved:ok(receipt(done.output)),prompt:prompt.output};}
@@ -49,12 +68,23 @@ for(const attack of ['wrong','eof','file-replace','hardlink','store-delete','sto
   const terminal=review(f.workspace,['import',...base(f),'--file',file,'--title','review']),prompt=await terminal.prompt;
   if(attack==='file-replace'){renameSync(file,file+'.old');writeFileSync(file,pdf());}
   if(attack==='hardlink')linkSync(file,file+'.link');
-  if(attack==='store-delete')unlinkSync(f.path);
-  if(attack==='store-replace'){renameSync(f.path,f.path+'.old');restoreV30(f.path);}
+  let replacementBefore,originalBefore;const original=f.path+'.original';
+  if(attack==='store-delete'){linkSync(f.path,original);unlinkSync(f.path);originalBefore=storeState(original);}
+  if(attack==='store-replace'){
+    renameSync(f.path,original);restoreV30(f.path);
+    // Baselines follow the deliberate attack, before the approved reopen.
+    replacementBefore=storeState(f.path);originalBefore=storeState(original);
+  }
   if(attack==='schema')f.db.exec('PRAGMA user_version=30');
   if(attack==='schema-definition'){const row=f.db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='assets' ORDER BY name LIMIT 1").get();assert.ok(row);f.db.exec('DROP TRIGGER '+row.name);}
   if(attack==='eof')terminal.eof();else terminal.answer(attack==='wrong'?'WRONG':phrase(prompt.output));
   const done=await terminal.done;assert.equal(done.code,1,done.output);assert.equal(receipt(done.output).ok,false);
+  if(attack==='store-delete'){
+    assert.throws(()=>lstatSync(f.path),{code:'ENOENT'},'the deleted pathname must never be recreated, even as a dangling symlink');
+    for(const suffix of ['-journal','-wal','-shm'])assert.throws(()=>lstatSync(f.path+suffix),{code:'ENOENT'});
+  }
+  if(replacementBefore)assert.deepEqual(storeState(f.path),replacementBefore,'replacement bytes, identity, schema, rows and companions stay unchanged');
+  if(originalBefore)assert.deepEqual(storeState(original),originalBefore,'independent reads of the retained original stay unchanged');
   assert.equal(f.db.prepare('SELECT count(*) n FROM assets').get().n,0);
 });
 for(const kind of ['symlink','hardlink','fifo','utf8','signature'])test('L02 descriptor input rejects '+kind+' before mutation',{timeout:30000},async t=>{
@@ -110,4 +140,22 @@ for(const channel of ['text','timecodes'])test('L02 '+channel+' replacement afte
   const terminal=review(f.workspace,['derive',...base(f),'--version',JSON.stringify(saved.version),'--kind','transcript','--text-file',text,'--timecodes',timecodes]),prompt=await terminal.prompt;
   const target=channel==='text'?text:timecodes;renameSync(target,target+'.old');writeFileSync(target,channel==='text'?'replacement':'[]');terminal.answer(phrase(prompt.output));const done=await terminal.done;
   assert.equal(done.code,1,done.output);assert.equal(f.db.prepare('SELECT count(*) n FROM asset_derivatives').get().n,0);
+});
+for(const operation of ['import','derive'])for(const index of operation==='import'?[1,2,3]:[1,2,3,4,5,6])test(`L02 ${operation} input close ${index} still closes all and reports sanitized failure`,{timeout:30000},async t=>{
+  const f=fixture(t),parent=join(f.workspace.path,'input');mkdirSync(parent);
+  const file=join(parent,'private.pdf'),text=join(parent,'private.txt'),timecodes=join(parent,'private.json');
+  writeFileSync(file,pdf());writeFileSync(text,'Private supplied derivative prose');writeFileSync(timecodes,'[]');
+  let args=['import',...base(f),'--file',file,'--title','Private supplied title'],names=['private.pdf'];
+  if(operation==='derive'){
+    const saved=ok(f.call('importAssetVersion',input('wav',{filename:'a.wav',mediaType:'audio/wav',bytes:Buffer.from('RIFF1234WAVE')})));
+    args=['derive',...base(f),'--version',JSON.stringify(saved.version),'--kind','transcript','--text-file',text,'--timecodes',timecodes];names=['private.txt','private.json'];
+  }
+  const config=join(f.workspace.path,'close-fault.json'),trace=join(f.workspace.path,'close-trace'),audit=join(f.workspace.path,'close-audit.json');
+  writeFileSync(config,JSON.stringify({mode:'input',inputParent:parent,names,operation:'close',index,phase:'after',action:'throw',trace,audit}));
+  const terminal=review(f.workspace,args,{imports:[new URL('./fixtures/asset-export-fault.mjs',import.meta.url).href],env:{U4B_FAULT_CONFIG:config}}),prompt=await terminal.prompt;
+  terminal.answer(phrase(prompt.output));const done=await terminal.done,result=receipt(done.output);assert.equal(done.code,1,done.output);
+  assert.deepEqual(result,{ok:false,error:{code:'storage_error',retryable:false}});
+  const observed=JSON.parse(readFileSync(audit,'utf8'));
+  assert.equal(observed.opened.length,operation==='import'?3:6);assert.deepEqual(observed.closeAttempts,[...observed.opened].reverse());
+  assert.equal(readFileSync(trace,'utf8').trim().split('\n').length,1);
 });

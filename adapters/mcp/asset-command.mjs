@@ -94,6 +94,17 @@ export async function assetCommand(args){
     if(error.code==='method_not_found')error=new MemoryStoreError('asset_not_found');
     if(error.code==='EEXIST')result={ok:false,error:{code:'EEXIST',retryable:false}};
     else{const {privateFailure}=await import('../../core/private-card-facade.mjs');result=privateFailure(error);}
-  }finally{closed=true;try{core?.close();}finally{try{files?.close();}finally{try{store?.close();}finally{if(terminal!==undefined)closeSync(terminal);}}}}
+  }finally{
+    closed=true;let first;
+    for(const close of [()=>core?.close(),()=>files?.close(),()=>store?.close(),()=>{if(terminal!==undefined)closeSync(terminal);}]){
+      try{close();}catch(error){first??=error;}
+    }
+    if(first){
+      if(['published','published-but-durability-uncertain'].includes(result?.value?.status)){
+        result={ok:false,error:{code:'published-but-durability-uncertain',retryable:false},
+          value:{status:'published-but-durability-uncertain',version:result.value.version,byteCount:result.value.byteCount}};
+      }else{const {privateFailure}=await import('../../core/private-card-facade.mjs');result=privateFailure(first);}
+    }
+  }
   console.log(JSON.stringify(result));if(!result.ok)process.exitCode=1;return result;
 }

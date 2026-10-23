@@ -3,16 +3,28 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync,writeFileSync,readFileSync,readdirSync,statSync,symlinkSync,chmodSync,existsSync } from 'node:fs';
 import { fixture,input,pdf,ok,ns } from '../../../core/testing/asset-fixtures.mjs';
-import { runFile } from './asset-support.mjs';
+import { runFile,assertExportReceipt } from './asset-support.mjs';
 const preload=fileURLToPath(new URL('./fixtures/asset-export-fault.mjs',import.meta.url));
 export async function exportCases(test,{command}={}){
-function setup(t){const f=fixture(t),data=pdf(65537),saved=ok(f.call('importAssetVersion',input('export',{bytes:data}))),parent=join(f.workspace.path,'output');mkdirSync(parent,{mode:0o700});return {...f,data,saved,parent,command};}
+function setup(t){
+  const f=fixture(t),data=pdf(65537),prose='Confidential supplied binary prose',title='Confidential supplied asset title',filename='private-source.pdf';
+  data.set(Buffer.from(prose),16);
+  const saved=ok(f.call('importAssetVersion',input('export',{bytes:data,title,filename}))),parent=join(f.workspace.path,'private-output');
+  mkdirSync(parent,{mode:0o700});return {...f,data,saved,parent,prose,title,filename,command};
+}
 function run(f,extra={},options={}){
   const args=['assets','export','--db',f.path,'--owner',ns.ownerId,'--version',JSON.stringify(f.saved.version),'--out',join(f.parent,'final.pdf')];
-  if(!extra.operation)return runFile(f.workspace,args,{command:f.command,...options});
-  const config=join(f.workspace.path,'fault.json'),trace=join(f.workspace.path,'trace');writeFileSync(config,JSON.stringify({...extra,parent:f.parent,trace}));
-  const result=runFile(f.workspace,args,{command:f.command,...options,imports:[preload],env:{U4B_FAULT_CONFIG:config},signal:extra.action==='kill'?'SIGKILL':null});
-  assert.equal(readFileSync(trace,'utf8').trim().split('\n').length,1,'fault must execute exactly once');return result;
+  const check=result=>{
+    assertExportReceipt(result.output,{version:f.saved.version,byteCount:f.data.length,
+      forbidden:[f.workspace.path,f.parent,'final.pdf',f.filename,f.title,f.prose,'%PDF-1.7',f.data.toString('base64'),f.data.toString('hex'),'synthetic private I/O prose']});
+    return result;
+  };
+  if(!extra.operation)return check(runFile(f.workspace,args,{command:f.command,...options}));
+  const config=join(f.workspace.path,'fault.json'),trace=join(f.workspace.path,'trace'),audit=join(f.workspace.path,'audit.json');
+  writeFileSync(config,JSON.stringify({...extra,parent:f.parent,trace,audit}));
+  const result=check(runFile(f.workspace,args,{command:f.command,...options,imports:[preload],env:{U4B_FAULT_CONFIG:config},signal:extra.action==='kill'?'SIGKILL':null}));
+  assert.equal(readFileSync(trace,'utf8').trim().split('\n').length,1,'fault must execute exactly once');
+  return {...result,...(extra.action==='kill'?{}:{audit:JSON.parse(readFileSync(audit,'utf8'))})};
 }
 await test('L04 export create-only exact multi-page bytes; existing file/symlink and unsafe parents refuse',{timeout:30000},t=>{
   const f=setup(t),final=join(f.parent,'final.pdf');mkdirSync(join(f.parent,'.cairn-export-stale'));writeFileSync(join(f.parent,'.cairn-export-stale','foreign'),'preserve');
@@ -39,6 +51,27 @@ for(const operation of ['write','fsync','link','unlink'])for(const index of oper
       for(const temp of readdirSync(dir)){const actual=readFileSync(join(dir,temp));assert.deepEqual(actual,operation==='write'?f.data.subarray(0,phase==='before'?0:32768):f.data);assert.equal(statSync(join(dir,temp)).mode&0o777,0o600);}
     }
   }
+});
+for(const [operation,index] of [['open-parent',1],['inspect-parent',1],['mkdir-stage',1],['open-stage',1],['inspect-stage',1],['inspect-stage',2],['open-data',1],['inspect-data',1]])await test(`L04 setup ${operation} ${index} failure removes owned staging`,{timeout:30000},t=>{
+  const f=setup(t),result=run(f,{operation,index,phase:'before',action:'throw'});
+  assert.equal(result.code,1,result.output);assert.deepEqual(readdirSync(f.parent),[]);
+  assert.deepEqual(result.audit.closeAttempts,[...result.audit.opened].reverse(),'every acquired setup descriptor closes once');
+});
+for(const operation of ['open-sync-parent','open-sync-stage'])await test(`L04 ${operation} failure reports content-free uncertain publication`,{timeout:30000},t=>{
+  const f=setup(t),result=run(f,{operation,index:1,phase:'before',action:'throw'});
+  assert.equal(result.code,1,result.output);assert.equal(JSON.parse(result.output).error.code,'published-but-durability-uncertain');
+  assert.deepEqual(readFileSync(join(f.parent,'final.pdf')),f.data);assert.deepEqual(readdirSync(f.parent),['final.pdf']);
+  const expected=operation==='open-sync-parent'?['data','stage','parent']:['data','sync-parent','stage','parent'];
+  assert.deepEqual(result.audit.closeAttempts,expected);
+});
+for(const beforePublish of [true,false])for(const index of beforePublish?[1,2,3]:[1,2,3,4,5])for(const phase of ['before','after'])await test(`L04 close ${index} ${phase}, ${beforePublish?'before':'after'} publication attempts remaining closes`,{timeout:30000},t=>{
+  const f=setup(t),result=run(f,{operation:'close',index,phase,action:'throw',beforePublish}),final=join(f.parent,'final.pdf');
+  assert.equal(result.code,1,result.output);assert.equal(existsSync(final),!beforePublish);
+  if(!beforePublish){assert.deepEqual(readFileSync(final),f.data);assert.equal(JSON.parse(result.output).error.code,'published-but-durability-uncertain');}
+  else assert.equal(JSON.parse(result.output).error.code,'storage_error');
+  const expected=beforePublish?['data','stage','parent']:['sync-stage','data','sync-parent','stage','parent'];
+  assert.deepEqual(result.audit.closeAttempts,expected,'each acquired fd is attempted exactly once, even after a failed close');
+  assert.deepEqual(readdirSync(f.parent),beforePublish?[]:['final.pdf']);
 });
 await test('L04 completed-file readback detects disk byte substitution before publication',{timeout:30000},t=>{
   const f=setup(t),result=run(f,{operation:'write',index:1,phase:'before',action:'corrupt'});

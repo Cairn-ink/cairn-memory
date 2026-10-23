@@ -15,18 +15,24 @@ export function exportAsset(call,version,path){
   probeMethodFileEnvironment();
   if(typeof path!=='string'||!isAbsolute(path)||path.includes('\0'))fail('invalid_path');
   const name=assetFilename(methodEntryName(basename(path))),uid=BigInt(process.getuid());
-  let parent,stage,syncParent,data,stageName,stageStat,dataStat,published=false,result;
+  let parent,stage,syncParent,syncStage,data,stageName,stageStat,dataStat,published=false,result,failure,cleanupError,total=0;
+  const uncertain=()=>({ok:false,error:{code:'published-but-durability-uncertain',retryable:false},
+    value:{status:'published-but-durability-uncertain',version,byteCount:total}});
   const temporary='payload-'+randomUUID();
   try{
     parent=openSync(dirname(path),PATH_FLAGS|constants.O_DIRECTORY);const root=inspectFile(parent,undefined,'directory');
     privateDirectory(parent,uid,0o022n);
     // A private directory protects the source entry from writers to the parent.
     stageName='.cairn-export-'+randomUUID();mkdirSync(entry(parent,stageName),{mode:0o700});
-    stage=openSync(entry(parent,stageName),PATH_FLAGS|constants.O_DIRECTORY);stageStat=inspectFile(stage,root.mount,'directory').stat;
+    // Save the new entry identity before descriptor acquisition or inspection
+    // can fail (for example EMFILE). Cleanup needs only the pinned parent.
+    stageStat=lstatSync(entry(parent,stageName),{bigint:true});
+    stage=openSync(entry(parent,stageName),PATH_FLAGS|constants.O_DIRECTORY);
+    if(!same(stageStat,inspectFile(stage,root.mount,'directory').stat))fail('invalid_path');
     privateDirectory(stage,uid,0o077n);
     data=openSync(entry(stage,temporary),constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW|constants.O_RDWR,0o600);
     dataStat=inspectFile(data,root.mount,'file').stat;
-    let cursor,index=0,total=0,expectedTotal;
+    let cursor,index=0,expectedTotal;
     do{
       const page=value(call('readAssetBytes',{version,...(cursor?{cursor}:{})}));
       if(page.status!=='available'||page.index!==index++||page.encoding!=='base64'||!Number.isSafeInteger(page.totalByteCount)||
@@ -55,27 +61,34 @@ export function exportAsset(call,version,path){
     fsyncSync(syncParent);
     if(!owned(stage,temporary,dataStat))fail('invalid_path');
     unlinkSync(entry(stage,temporary));
-    const syncStage=openSync(fdPath(stage),constants.O_RDONLY|constants.O_DIRECTORY);
-    try{fsyncSync(syncStage);}finally{closeSync(syncStage);}
+    syncStage=openSync(fdPath(stage),constants.O_RDONLY|constants.O_DIRECTORY);
+    fsyncSync(syncStage);
     if(!owned(parent,stageName,stageStat))fail('invalid_path');
     rmdirSync(entry(parent,stageName));fsyncSync(syncParent);
-    result={ok:true,value:{status:'published',path,version,byteCount:total}};
+    result={ok:true,value:{status:'published',version,byteCount:total}};
   }catch(error){
-    if(!published&&parent!==undefined&&dataStat&&owned(parent,name,dataStat))published=true;
-    if(published)result={ok:false,error:{code:'published-but-durability-uncertain',retryable:false},value:{status:'published-but-durability-uncertain',path,version}};
-    else throw error;
+    failure=error;
+    // A syscall may publish before its return is interrupted. Observe the
+    // owned final, without ever unlinking or replacing it as rollback.
+    try{if(!published&&parent!==undefined&&dataStat&&owned(parent,name,dataStat))published=true;}
+    catch(error){cleanupError??=error;}
   }finally{
     // Clean only entries still owned by this invocation. Never glob or recurse.
-    try{
-      if(stage!==undefined&&dataStat&&owned(stage,temporary,dataStat))unlinkSync(entry(stage,temporary));
-      if(parent!==undefined&&stageStat&&owned(parent,stageName,stageStat))rmdirSync(entry(parent,stageName));
-    }catch{if(published)result={ok:false,error:{code:'published-but-durability-uncertain',retryable:false},value:{status:'published-but-durability-uncertain',path,version}};}
-    for(const fd of [data,syncParent,stage,parent])if(fd!==undefined){
-      try{closeSync(fd);}catch(error){
-        if(!published)throw error;
-        result={ok:false,error:{code:'published-but-durability-uncertain',retryable:false},value:{status:'published-but-durability-uncertain',path,version}};
-      }
+    // If initial payload inspection failed, its held creation fd can establish
+    // the identity for cleanup; a pathname alone cannot establish that identity.
+    if(data!==undefined&&!dataStat){try{dataStat=fstatSync(data,{bigint:true});}catch(error){cleanupError??=error;}}
+    try{if(stage!==undefined&&dataStat&&owned(stage,temporary,dataStat))unlinkSync(entry(stage,temporary));}
+    catch(error){cleanupError??=error;}
+    try{if(parent!==undefined&&stageStat&&owned(parent,stageName,stageStat))rmdirSync(entry(parent,stageName));}
+    catch(error){cleanupError??=error;}
+    // A failing close may already have released its fd. Attempt each once,
+    // retaining the first error while allowing every remaining close to run.
+    for(const fd of [syncStage,data,syncParent,stage,parent])if(fd!==undefined){
+      try{closeSync(fd);}catch(error){cleanupError??=error;}
     }
   }
+  if(published&&(failure||cleanupError))return uncertain();
+  if(cleanupError)throw cleanupError;
+  if(failure)throw failure;
   return result;
 }

@@ -8,7 +8,11 @@ export function prepareAssetFiles() {
   probeMethodFileEnvironment();
   const fds=[],pins=[];
   const hold=fd=>{fds.push(fd);return fd;};
-  const close=()=>{for(const fd of fds.splice(0).reverse())closeSync(fd);};
+  const close=()=>{
+    let first;
+    for(const fd of fds.splice(0).reverse())try{closeSync(fd);}catch(error){first??=error;}
+    if(first)throw first;
+  };
   function read(path,maximum,{binary=false,json=false}={}) {
     if(typeof path!=='string'||!isAbsolute(path)||path.includes('\0'))fail('invalid_path');
     const name=methodEntryName(basename(path)),parent=hold(openSync(dirname(path),PATH_FLAGS|constants.O_DIRECTORY));

@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
 import { installedMethods,fileCommand } from './fixtures/method-packages.mjs';
 import { installedImportClosure } from './fixtures/installed-import-closure.mjs';
-import { host,call,review,phrase,receipt,runFile,namespace as ns,ok } from '../../adapters/mcp/test/asset-support.mjs';
+import { host,call,review,phrase,receipt,runFile,namespace as ns,ok,assertExportReceipt } from '../../adapters/mcp/test/asset-support.mjs';
 
 test('L01–L06 installed asset CLI/MCP, complete reads, transport and independent archive/closure counts',{timeout:180000},async t=>{
   const workspace=createTestWorkspace(t,{prefix:'installed-asset-host-'}),installed=await installedMethods(workspace),{root,entry}=installed;
@@ -19,20 +19,29 @@ test('L01–L06 installed asset CLI/MCP, complete reads, transport and independe
   const base=['--db',path,'--owner',ns.ownerId],f={workspace,path};
   async function approve(args,{group='assets'}={}){const start=performance.now(),terminal=review(workspace,args,{command:entry,group}),prompt=await terminal.prompt;terminal.answer(phrase(prompt.output));const done=await terminal.done;assert.equal(done.code,0,done.output);return {saved:ok(receipt(done.output)),ms:performance.now()-start,prompt:prompt.output};}
   let imported,derivative;
-  await t.test('L01 defaults and independent flag combinations add exactly five asset and nine method reads',async()=>{
-    for(const assets of [false,true])for(const enabled of [false,true]){
-      const server=await host(workspace,path,{command:entry,assets,enabled}),tools=(await server.client.listTools()).tools;
-      assert.equal(tools.length,5+(assets?5:0)+(enabled?9:0));
+  await t.test('L01 all eight asset/context/method combinations start with exact tool lists',async()=>{
+    const defaults=['remember_memory','recall_memory','inspect_memory','correct_memory','forget_memory'];
+    const assetTools=['list_assets','list_asset_versions','get_asset_version','list_asset_derivatives','read_asset_derivative'];
+    const methodTools=['resolve_method','resolve_methods_for_role','get_method_version','list_method_manifest','read_method_file',
+      'list_method_packages','list_method_versions','compare_method_versions','list_method_binding_events'];
+    const contextTools=['find_memory_candidates','fetch_memory_candidate_evidence'];
+    let combinations=0;
+    for(const assets of [false,true])for(const context of [false,true])for(const enabled of [false,true]){
+      const server=await host(workspace,path,{command:entry,assets,context,enabled}),tools=(await server.client.listTools()).tools;
+      assert.deepEqual(tools.map(tool=>tool.name).sort(),[...defaults,...(assets?assetTools:[]),...(context?contextTools:[]),...(enabled?methodTools:[])].sort(),JSON.stringify({assets,context,methods:enabled}));
+      combinations++;
       for(const tool of tools.filter(x=>x.name.includes('asset')))assert.equal(tool.annotations.readOnlyHint,true);
       for(const name of ['read_asset_bytes','verify_asset_bytes','import_asset_version','create_asset_derivative','delete_asset','read_method_attachment_bytes','capture_memory','create_private_card_draft'])assert.ok(!tools.some(x=>x.name===name));
       await server.client.close();
     }
+    assert.equal(combinations,8);
     const plain=openMemoryCore({path});try{assert.equal(plain.importAssetVersion,undefined);assert.equal(plain.getAssetCapabilities,undefined);}finally{plain.close();}
   });
   await t.test('L02/L04/L05 real terminal maximum 32-MiB import and independently hashed complete export',async()=>{
     const data=Buffer.alloc(33554432,0xa7);data.set(Buffer.from('%PDF-1.7'));const file=join(workspace.path,'maximum.pdf');writeFileSync(file,data);
     const result=await approve(['import',...base,'--file',file,'--title','Maximum installed asset']);imported=result.saved;
     const out=join(workspace.path,'export.pdf'),start=performance.now(),exported=runFile(workspace,['assets','export',...base,'--version',JSON.stringify(imported.version),'--out',out],{command:entry});
+    assertExportReceipt(exported.output,{version:imported.version,byteCount:data.length,forbidden:[workspace.path,out,'maximum.pdf','export.pdf','Maximum installed asset','%PDF-1.7',data.toString('base64')]});
     assert.equal(exported.code,0,exported.output);assert.equal(lstatSync(out).size,data.length);
     const sha=bytes=>createHash('sha256').update(bytes).digest('hex');assert.equal(sha(readFileSync(out)),sha(data));
     assert.deepEqual(readFileSync(out),data);
