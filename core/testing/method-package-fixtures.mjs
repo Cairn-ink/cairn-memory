@@ -8,6 +8,7 @@ import { after } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore } from '../contract.mjs';
+import { STORAGE_BUSY_TIMEOUT_MS } from '../database.mjs';
 import { METHOD_METHODS } from '../method-package-input.mjs';
 import { CARD_METHODS } from '../private-card-input.mjs';
 import { createTestWorkspace } from '../../tools/testing/workspace.mjs';
@@ -51,7 +52,7 @@ export function fixture(t,{ cards = false,model } = {}) {
   const config = { path,methodPackages:trusted.options,...(cards ? { privateCards:trusted.cards } : {}),...(model ? { model } : {}) };
   let core = openMemoryCore(config);
   workspace.defer(() => core.close());
-  const db = new DatabaseSync(path); workspace.defer(() => db.close());
+  const db = new DatabaseSync(path, { timeout: STORAGE_BUSY_TIMEOUT_MS }); workspace.defer(() => db.close());
   return { workspace,path,db,trusted,get core(){return core;},
     call(method,input) { return trusted.call(core,method,input); },
     reopen(){ core.close(); core = openMemoryCore(config); return core; } };
@@ -110,7 +111,7 @@ export function restoreHistoricalStore(path,version) {
     return object;
   });
   closeSync(openSync(path,'wx',0o600));
-  const db=new DatabaseSync(path);
+  const db=new DatabaseSync(path,{timeout:STORAGE_BUSY_TIMEOUT_MS});
   try {
     db.exec('PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE');
     for(const object of definitions.filter(object=>object.type==='table' && !object.name.startsWith('sqlite_')))db.exec(object.sql);
