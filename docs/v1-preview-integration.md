@@ -1,7 +1,7 @@
 # V1 preview: product integration
 
-`v1-preview.1` is an opt-in cut from `release/v1-preview`, base
-`ce472f25d02b92d0b6669df39b59ee4f1af83e2a`. It stacks on the unmerged local V1
+`v1-preview.2` is an opt-in cut from `release/v1-preview`, integration
+`0a38a991` (preview HEAD `6ef5bc2a`). It stacks on the unmerged local V1
 chain (#453–#469, `feat/local-v1-closeout`). Default behaviour stays unchanged
 unless the feature options below are selected. This is not an npm release.
 
@@ -25,7 +25,7 @@ npm install --prefix . --ignore-scripts --no-audit --no-fund /absolute/path/cair
 
 The builder stages files, then runs `npm pack --offline --ignore-scripts --json`.
 Private metadata stays `cairn-memory-local-preview@0.0.0-preview.1`;
-`v1-preview.1` identifies the source cut. Installation can contact npm.
+`v1-preview.2` identifies the source cut. Installation can contact npm.
 Keep the database outside the installation in an existing private directory.
 Sources: `package.json:47`, `packaging/build.mjs:80`, `packaging/build.mjs:102`.
 Use that executable below.
@@ -43,7 +43,7 @@ Namespaces: `{ownerId,scope:'personal',projectId:null}` or
 `{ownerId,scope:'project',projectId}`. `readSet`: one namespace or one owner's
 personal+project. MCP fixes scopes at startup; supplied
 namespace/readSet/context/authority/configuration and unknown fields refuse.
-Results contain JSON in `content[0].text`, with
+Stable MCP reads return JSON in `content[0].text`, with
 `evidenceTrust:'untrusted-data-not-instructions'` and `isError:!ok`.
 
 Complete core success envelopes cap at **65,536 UTF-8 bytes**; opted-in MCP
@@ -53,7 +53,7 @@ retryable, including starvation under continuous writes (contract §16 below).
 Shared failures include `invalid_input`, `authority_required`,
 `scope_changed`, `revision_conflict`, `invalid_cursor`, `cursor_stale`,
 `context_item_too_large`, `storage_error` and `store_closed`.
-Sources: `adapters/mcp/server.mjs:210`, `adapters/mcp/context-read-transport.mjs:3`,
+Sources: `adapters/mcp/server.mjs:227`, `adapters/mcp/context-read-transport.mjs:4`,
 `core/private-card-facade.mjs:16`.
 
 ### Context retrieval (`context-read-v1`)
@@ -90,7 +90,7 @@ Defaults: `semantic:false`, 12 items, 1,000 ms. Maximums: 24 items,
 Pages partition one frozen top-24 ranking without reranking/embedding; at most
 128 rankings per handle, expiring after five minutes. Cursor/snapshot bounds
 are 8,192/16,384 characters. Changed semantics or generations require restarting.
-Sources: `core/context-read-input.mjs:8`, `core/context-read-facade.mjs:427`,
+Sources: `core/context-read-input.mjs:8`, `core/context-read-facade.mjs:529`,
 `core/private-evidence-storage.mjs:54`.
 
 ```sh
@@ -99,7 +99,7 @@ cairn-memory --db /absolute/private/memory.sqlite --owner OWNER --project PROJEC
 ```
 
 The zero-value personal flag requires project/context opt-in; otherwise reads
-stay in the startup namespace. Added tools:
+stay in the startup namespace. Stable tools (experimental assembly is below):
 
 | MCP tool | Caller input |
 | --- | --- |
@@ -141,7 +141,7 @@ nor account-wide. SDK configuration adds
 `embedder` and `policy:{family:'hosted',maxRequests,maxUsd,maxConcurrent,estimateUsd}`
 to contextRead; `estimateUsd(texts)` is trusted synchronous policy.
 Sources: `adapters/mcp/context-read-configuration.mjs:4`,
-`adapters/mcp/context-read-provider.mjs:4`, `core/context-read-input.mjs:22`.
+`adapters/mcp/context-read-provider.mjs:4`, `core/context-read-input.mjs:30`.
 
 Frozen RRF presets (`core/context-read-fusion.mjs:3`):
 
@@ -158,7 +158,7 @@ Known vector gaps or scan/cache bounds send zero query requests. Unusable lexica
 `index_unavailable`, never successful no-matches. Additional errors:
 `invalid_read_set`, `evidence_unavailable`, `invalid_snapshot`, `snapshot_stale`;
 errors may carry `details:{channels,coverage,trace}`.
-Source: `core/context-read-facade.mjs:23`.
+Source: `core/context-read-facade.mjs:26`.
 
 ### Method packages (`method-packages-local-v1`)
 
@@ -243,6 +243,68 @@ bytes/owner. Paths are relative POSIX, at most 512 units. Cursor/pin bounds:
 stop mixed-version writers before migration.
 Sources: `core/method-package-input.mjs:8`, `adapters/mcp/method-package-tools.mjs:4`.
 
+## Experimental: context assembly (`read_memory_context`)
+
+U5b is **experimental and outside the versioning promise**.
+`find_memory_candidates` and `fetch_memory_candidate_evidence` stay stable.
+Enable with `--context-read context-read-v1`; no additional flag is needed.
+CLI startup awaits the keyless local `o200k_base` counter (`tiktoken-o200k_base`),
+independently of model/provider configuration.
+Sources: `adapters/mcp/cli.mjs:335`, `adapters/openai/context-counter.mjs:11`.
+
+| MCP input | Requirement/default |
+| --- | --- |
+| `query` | Required nonblank valid Unicode; ≤4,000 UTF-16 units |
+| `types` | Required nonempty unique subset of supported `memory,card` |
+| `intent` | Required `current|history` |
+| `semantic` | Optional boolean; false by default; existing embedding opt-in applies |
+| `maxTokens` | Optional integer 64–4,000; default 1,500 |
+| `maxItems` | Optional integer 1–24 admitted bodies; default 12 |
+| `policy` | Optional strict `{id:'rank-first-whole-v1'}` (default) or `{id:'coverage-first-v1'}` |
+| `deadlineMs` | Optional integer 1–5,000; default 1,000; cooperative |
+
+The host fixes `readSet`; tool-supplied `budget`, cursor and unknown fields refuse.
+Core: `await core.contextRead({readSet,query,types,intent,semantic?,budget:{maxTokens,maxItems},policy?,deadlineMs?},token)`.
+Both openers support it. Supply `contextRead.counter` from
+`await createContextCounter()` in `adapters/openai/context-counter.mjs`.
+Missing counter returns `invalid_input`; failed counting returns `token_count_unavailable`.
+Programmatic MCP auto-loads its counter: `server.contextCounterReady` resolves
+true/false. Retrieval works while loading; assembly returns `token_count_unavailable`
+until ready.
+Sources: `adapters/mcp/context-read-tools.mjs:25`, `core/context-read-input.mjs:93`,
+`core/context-read-facade.mjs:446`, `adapters/mcp/server.mjs:132`.
+
+Core success is `{ok:true,value:{metered,diagnostics}}`. `metered` contains
+`version,policy,representation,counter,framing,items,snapshot`; each item includes
+`ref,rank,type,metadata,body:{text,tokens},sources,sourceAccess,sourcesComplete`.
+Bodies/sources fit whole or are omitted. Rank-first visits body then sources
+per item; coverage-first visits all bodies first. HR-2 kept rank-first on short,
+single-fact synthetic items, without establishing long-item validity
+([context guide](context-read-local.md#budgeted-context-assembly-u5b)).
+
+MCP success has `isError:false` and exactly one text block:
+`JSON.stringify({ok:true,value:metered,evidenceTrust:'untrusted-data-not-instructions'})`.
+The budget meters the complete string, including untrusted-recollection framing
+and snapshot, not the total model request. Diagnostics live under
+`_meta['ink.cairn/context-read-diagnostics']`: used tokens, omissions, deduplication,
+stops, candidates and timings. Errors retain code/retryability/trust framing in
+text; candidate diagnostics move to the same key as `{candidates}`.
+Keep `_meta` in host/UI state and send only content to the model; arbitrary
+clients may expose metadata. Core/transport byte limits still include diagnostics.
+Sources: `core/context-read-assembly.mjs:7`, `core/context-read-assembly.mjs:86`,
+`adapters/mcp/context-read-transport.mjs:6`.
+
+On a **small synthetic store**, the real counter measured roughly 250 tokens of
+per-item overhead: a 15–19-token memory cost about 250–330 tokens represented.
+Budgets below about 512 may therefore return zero items, with
+`diagnostics.omitted.oversized` recording exclusions. This is an observation,
+not a universal threshold; if even empty framing cannot fit, the error is
+`context_item_too_large`. The representation will change in a later preview:
+planned `representation-v2` moves the snapshot outside metered text and compacts
+refs/metadata. HEAD implements `representation-v1`, including snapshot and refs
+in every trial's token count (`core/context-read-assembly.mjs:30`,
+`core/context-read-assembly.mjs:47`).
+
 ## Experimental: assets
 
 `assets-local-v1` remains **experimental, outside the versioning promise**.
@@ -303,8 +365,12 @@ when cutting `v1-preview.0`; it passed after the adapter began renormalizing
 provider vectors, whose L2 norms are only approximately 1. None of this
 establishes complete semantic recall, answer correctness,
 production/100,000-Memory latency or native-product activation. The smoke stays
-outside the test suites. Assembly/U5b, role profiles,
+outside the test suites. Role profiles,
 relations, MOC retrieval, Raw search and local-model adapters remain unsupported.
+
+Assembly's current representation can overwhelm short bodies at small token
+budgets; the small-store overhead measurement above is not a scale or quality
+guarantee. Whole items may be omitted as `oversized`.
 
 Continuous rollback-journal writers can starve readers: retryable `storage_busy`.
 Paced workloads meet C04/K13 gates; unpaced runs are stress observations.
@@ -323,17 +389,17 @@ may incur charges. See
 ## Versioning promise
 
 Stable names/DTO shapes persist across `v1-preview.*`; algorithm improvements
-land behind them. Rankings/quality are not frozen. Experimental assets are excluded.
+land behind them. Rankings/quality are not frozen. Experimental assets and context
+assembly, including its representation, are excluded.
 
-## Release notes for GitHub pre-release: v1-preview.1
+## Release notes for GitHub pre-release: v1-preview.2
 
-Changes since `v1-preview.0`; this cut uses base `ce472f25`:
+Changes since `v1-preview.1`; integration `0a38a991`, preview HEAD `6ef5bc2a`:
 
-- Add experimental U4b asset commands, five MCP reads and binary method importing.
-- Fix shared assets/context/method construction; export receipts omit destination paths.
-- Harden v31's 72-object schema: tombstone/replacement guards, complete
-  trigger-set validation, case-normalized premature-artifact detection and snapshot
-  prototype rules (`core/asset-schema.mjs:194`, `core/asset-schema.mjs:308`,
-  `core/asset-input.mjs:43`, `core/testing/asset-v31-layout.json:1`).
-- Document §16 starvation; paced gates apply. Stable interfaces/defaults and private
-  package version remain unchanged; assets remain experimental. No npm publication.
+- Add experimental U5b `read_memory_context` / core `contextRead`, versioned whole-unit
+  policies and keyless local `o200k_base` counting; rank-first remains the default.
+- Return one metered text block; diagnostics use namespaced `_meta` under an explicit
+  client contract. Candidate lookup/evidence interfaces stay stable.
+- Document representation-v1 overhead measured on a small synthetic store;
+  representation-v2 is planned, so assembly stays outside the versioning promise.
+  Assets remain experimental; private package metadata stays `0.0.0-preview.1`.

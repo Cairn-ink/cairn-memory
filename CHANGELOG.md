@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — v1-preview.2 integration guide
+
+- Document integration `0a38a991` (preview HEAD `6ef5bc2a`): experimental U5b
+  assembly, exact metered text, namespaced diagnostics, versioned policies and
+  small-store representation overhead. Candidate/evidence interfaces stay stable;
+  representation-v2 is planned and the private package version is unchanged.
+
 ## Unreleased — v1-preview.1 integration guide
 
 - Document the `ce472f25` preview cut: experimental U4b CLI/MCP, v31 review
