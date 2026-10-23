@@ -129,3 +129,15 @@
   （含 `source-snapshot`、`installed-import-closure`、`raw-installed-lifecycle`），提交、推送，派兩位審查者複查。
 - **HR-2 test grid 由協調者執行**（`experiment/hr2-assembly` `241fad89`，乾淨工作樹）：run→score→report 寫到
   `evaluation/retrieval-research/results/hr2-final/`。
+- **HR-2 完成。** test grid 一次跑完（240 格、run→score→report 都 exit 0）。主要比較 P-cover − P-top（bge-m3+A3、
+  O=0、B=512）：**−2.5 點，95% CI [−6.6, +1.5]**，29 家族、每類 ≥12 → **依名次放全文維持 U5b 初始預設**。
+  類別差 C3 −20、C5 +2.8。探索：小預算（128–384）coverage-first 落後 16–29 點、CI 不含 0；768 以上各臂相同；
+  只放第一段 receipt 的 P-top-s1 從未落後、在 128 時多 3–4 點（CI 下界 >0）；P-top+tail 與 P-top 差 ≤1.2 點。
+  機制：40% span-only 群組的本文是沒答案的指標。結果文件 `docs/plans/budgeted-assembly-hr2-results.md`、
+  limitations 條目、壓縮結果（6.6 MB，含 SHA256SUMS.uncompressed）提交在 `experiment/hr2-assembly`。
+  身分欄位 `dirty:true` 是 run 自己產生的未追蹤輸出造成，乾淨 checkout 的 source hash 相同。
+- **U5b 第二部分複查**：Standards yes；Spec No，新 P0：`contextCounter` 變成必填，既有程式化呼叫
+  `createCairnServer({path,namespace,contextRead})` 會壞。派 fix2：改選配、缺省時 server 自己非同步載入並注入
+  惰性計數器（載好前組裝回 `token_count_unavailable`），CLI 照舊先 await。
+- `1a589129` 矩陣（修正前）Node 22：mcp 1 失敗＝已修的 tokenizer 載入測試；artifact 2 失敗（B4c、H5，與 context
+  無關，負載 9 時）要在最終 commit 的矩陣確認是否為 flake。Node 24 進行中。
