@@ -3,7 +3,7 @@
 狀態：**進行中**。最後更新：2026-10-23。主控：Claude（統籌與驗收）。
 這份文件是本研究的目標、邊界、決定與進度的**唯一來源**。每次有新決定或到達里程碑，
 主控就更新本文件並 commit。每個 Codex 派工的第一步都是先讀本文件。
-目前位於研究分支，只在本機 commit；推上公開 repo 前要先跟使用者確認。
+研究分支已推上 origin（`experiment/hybrid-retrieval-hr1`，使用者授權主控決定分支與 PR，2026-10-23）。
 
 ## 1. 最終目標（使用者原話）
 
@@ -290,3 +290,4 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `umv1_u2_impl`（eager SQLite 修正） | 兩個 schema 模組在連結時不載入 SQLite，並加入不改動對方 fixture 的回歸測試 | gpt-6.1-sol/xhigh → 同 | workspace-write | U4a-2 工作目錄（改的是不同檔案） | 10:5x–11:01 | exit 0；3 個檔案，改用 `new db.constructor(':memory:')`。新測試在獨立程序裡檢查 8 個入口。兩個 Node 版本的守門測試都 exit 0；U4a-2 的 25 個檔案沒有任何改動 |
 | 主控（CI 等效補驗 `74956b5`，完成） | 照 ci.yml 跑全部 job | — | 沙箱外 | `/home/chichieh/cairn-memory-ci` | 10:2x–11:0x | 95 項 exit 0。失敗：(1) local-transport／host-import，兩個 Node 版本都失敗，就是上面那個回歸，修正已完成；(2) pairing 在 Node 22 負載 28 時 EPIPE，Node 24 通過，屬於負載偶發；(3) plugin-validation，原因是用 `--ignore-scripts` 安裝，沒有 claude 原生執行檔。兩條分支自 b8fa224 以來在 plugin 路徑上的變更都是 0 個檔案，這項判定為不適用，腳本已改成會自動判斷。openai、local-host、codex、client、raw-producer、longmemeval、實驗預算、打包快取在兩個 Node 版本都 exit 0。U5a 分支只帶著同一條已知的鏈，沒有新增 eager 路徑 |
 | 主控（CI 等效：整合分支修正＋U4a-2；U5a 第三部分） | 兩條分支同時跑 | — | 沙箱外 | umv1、u5a worktree | 11:1x– | 執行中 |
+| 主控（推送與 draft PR） | 依使用者授權決定 | — | — | — | 12:3x | 推送前先掃描公開內容：整合分支新增的部分沒有本機路徑、私有參照或金鑰（5 個 `sk-` 字串都是遮罩測試用的假值）。研究分支只清掉一個個人下載路徑（`2345a4c`）；`cairn-wiki` 和 `/home/...` 路徑在公開主線本來就有。已推 `experiment/hybrid-retrieval-hr1`（`2345a4c`，不開 PR）與 `integration/unified-memory-v1`（`71377c9`），並開 **draft PR #470**，base 為 #469 的 `feat/local-v1-closeout`，內文列出未完成的審查（U4a-1 的 P1 修正中、U4a-2 審查中） |
