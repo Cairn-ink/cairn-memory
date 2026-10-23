@@ -5,6 +5,7 @@ Status:
 - U3 (§11, v0.4.3) is implemented and in acceptance.
 - U4 (§12) is draft v0.5, not yet audited.
 - U5a (§13) is draft v0.6, not yet audited.
+- U2c (§14) is draft v0.7, not yet audited; it precedes U4a.
 
 History:
 - v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
@@ -972,3 +973,50 @@ All data methods take `(input, token)` and return success/error envelopes; `find
 Measure at 10³, 10⁴ and 10⁵ Memories on both runtimes: full build/rebuild, incremental refresh throughput/time, cold/warm query p50/p95, sidecar plus journal bytes and peak RSS. Record hardware, corpus/Card mix, budgets, coverage and failures. Fake-provider timing is labelled; paid timing remains unrun absent approval. These are observations, not latency guarantees.
 
 **Non-claims:** answer correctness, complete semantic recall, M7 assembly (U5b), role profiles/relations (U5c), MOC channel, local-model adapter, Raw search, secure physical erasure and 10⁵ latency guarantees. HR-1 is synthetic directional evidence, not product acceptance (`HR-1/docs/plans/hybrid-retrieval-hr1-results.md:161`).
+
+## 14. U2c: method reads without the write lock (draft v0.7, primary-authored, not yet audited)
+
+The primary's U3 acceptance (§11.1 v0.4.2) found the cause of the contention.
+Every method read runs inside `BEGIN IMMEDIATE` (`core/database.mjs:261`,
+`core/method-package-storage.mjs:256`). On every page, `target()` also recomputes
+every file's content identity (`core/method-package-storage.mjs:41`). At the
+maximum version size (12 MB, 1,246 pages) each `readMethodFile` page held the
+write lock for about 49 ms, and a tight reader starved concurrent writers. U2c
+fixes this before U4a, which reuses its read helper. U2c makes no DDL, API or
+capability change.
+
+- **Read transactions.** Add one core helper for consistent read transactions:
+  - It opens with deferred `BEGIN`, never `BEGIN IMMEDIATE`.
+  - `PRAGMA query_only` is on for its duration and restored on every exit
+    path, so an accidental write fails.
+  - It returns `storage_busy` only after the existing busy timeout.
+
+  All method-package and binding read paths use it, including resolution,
+  manifests, files, compare, lists, effects, usage and
+  `checkMethodReasonRefs`. Mutations keep `transaction()`.
+- **Verification by read type.**
+  - `readMethodFile` verifies the package and version rows and lifecycle. It
+    recomputes `manifestIdentity` from the stored `(path, content_identity,
+    media_type)` rows, and checks only the requested file's text against its
+    `content_identity` and `byte_count`. Other files' texts are not hashed.
+  - `getMethodVersion`, `listMethodManifest` and `compareMethodVersions` keep
+    whole-version verification, unchanged in meaning
+    (`core/test/method-packages-reads.test.mjs:34-36` stays as is).
+  - Resolution paths (`resolveMethod`, `resolveMethodsForRole`, current-intent
+    checks) must not hash file texts for every bound package. They verify
+    lifecycle and stored manifest identity; content is verified when a file is
+    read. The worker inventories the current behaviour and reports it.
+- **Semantics change, documented.** Out-of-band corruption of one file's text
+  makes reads of that file `method_version_unavailable`. Reads of other files
+  stay available. `getMethodVersion` and manifest listing still report the
+  whole version unavailable. In-band writers cannot modify `method_files`;
+  only import and purge write it.
+- **Acceptance (Node 22.16 and 24.15, real processes)**:
+
+  | ID | Observable |
+  | --- | --- |
+  | C01 | Every existing core, MCP, packaging and installed suite passes with no edited assertions |
+  | C02 | A forced write inside each read path fails under `query_only`, and the connection's state is restored afterwards |
+  | C03 | Corrupting file A's text refuses reads of A, `getMethodVersion` and manifest listing, while reads of file B succeed. Corrupting a stored `content_identity` or manifest row refuses every read |
+  | C04 | Gate: a continuous maximum-size `readMethodFile` reader and a concurrent binding writer in separate processes produce zero busy timeouts on either side. Writer p95 is ≤250 ms on the reference machine. `npm run measure:method-packages` reports reader page p50/p95 and writer statistics, and exits 0 on both runtimes |
+  | C05 | A deletion in another process during paging yields whole pages of the available version or `unavailable`, never mixed content. Cursors and snapshots behave as §5 |
