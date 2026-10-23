@@ -10,7 +10,8 @@ import { registerMethodTools, METHOD_TOOL_NAMES } from './method-package-tools.m
 import { createContextReadAccess } from './context-read-access.mjs';
 import { registerContextReadTools, CONTEXT_TOOL_NAMES } from './context-read-tools.mjs';
 import { contextToolResponse } from './context-read-transport.mjs';
-export { createContextCounter } from '../openai/context-counter.mjs';
+import { createContextCounter } from '../openai/context-counter.mjs';
+export { createContextCounter };
 
 const text = z.string().min(1).max(600);
 const id = z.string().min(1).max(200);
@@ -64,7 +65,6 @@ export function createCairnServer(options = {}) {
       Object.hasOwn(options,'contextEmbedding') && !contextConfigured) throw Error('invalid_mcp_configuration');
   if (options.contextEmbedding) object(options.contextEmbedding,['embedder','policy']);
   if (Object.hasOwn(options, 'contextCounter') && !contextConfigured) throw Error('invalid_mcp_configuration');
-  if (contextConfigured && !options.contextCounter) throw Error('context_counter_required');
   const methodsConfigured=Object.hasOwn(options,'methodPackages');
   if(methodsConfigured&&options.methodPackages!=='local-v1'||Object.hasOwn(options,'methodReadPersonal')&&(!methodsConfigured||options.methodReadPersonal!==true||namespace?.scope!=='project'))throw Error('invalid_mcp_configuration');
   const cardsConfigured = Object.hasOwn(options, 'privateCards');
@@ -124,16 +124,29 @@ export function createCairnServer(options = {}) {
   const cards = cardsConfigured ? createScopedCardAccess(binding) : null;
   const methods=methodsConfigured?createMethodReadAccess(binding,options.methodReadPersonal===true):null;
   const context=contextConfigured?createContextReadAccess(binding,options.contextReadPersonal===true):null;
-  const contextCounter = context ? options.contextCounter : null;
+  // Programmatic hosts retain retrieval while their local tokenizer loads.
+  let contextCounter = context ? options.contextCounter : null, contextCounterReady;
+  if (context) {
+    if (contextCounter === undefined) {
+      let readyCounter;
+      contextCounter = Object.freeze({ id: 'tiktoken-o200k_base', countTokens(text) {
+        if (!readyCounter) throw Error('token_count_unavailable');
+        return readyCounter.countTokens(text);
+      } });
+      contextCounterReady = createContextCounter().then(counter => { readyCounter = counter; return true; }, () => false);
+    } else contextCounterReady = Promise.resolve(true);
+  }
   const core = openMemoryCore({ path, model, ...(context?{contextRead:{...context.configuration,...options.contextEmbedding,counter:contextCounter}}:{}),
     ...(methods?{methodPackages:methods.configuration}:{}), ...(cards ? { privateCards: cards.configuration } : {}),
     ...(configured ? { captureQualification } : {}),
     ...(deadlineConfigured ? { captureDeadlineMs } : {}),
     ...(rationaleConfigured ? { captureRationale: options.captureRationale } : {}),
     ...(stagingConfigured ? { captureEvidence: options.captureEvidence } : {}) });
-  return buildCairnServer({ path, model, binding, cards, methods, context, core, client, sessionId, captureSessionId, readClient,
+  const server = buildCairnServer({ path, model, binding, cards, methods, context, core, client, sessionId, captureSessionId, readClient,
     episodesAccess, configured, rationaleConfigured, evidenceAccess, snapshotConfigured,
     recallContextConfigured, recallContext, recoveryConfigured, stagingConfigured });
+  if (context) Object.defineProperty(server, 'contextCounterReady', { value: contextCounterReady });
+  return server;
 }
 
 /** Internal registration seam; public constructors never accept a core override. */

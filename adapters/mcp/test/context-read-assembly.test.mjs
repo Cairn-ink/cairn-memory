@@ -22,6 +22,14 @@ import { contextHost, contextNamespace as ns, contextProviderArgs } from './cont
 const query = { query: 'assembly', types: ['memory'], intent: 'current' };
 const metaKey = 'ink.cairn/context-read-diagnostics';
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
+const childMcp = `
+  const {Client}=await import(${JSON.stringify(new URL('../node_modules/@modelcontextprotocol/client/dist/index.mjs', import.meta.url).href)});
+  const {InMemoryTransport}=await import(${JSON.stringify(new URL('../node_modules/@modelcontextprotocol/server/dist/index.mjs', import.meta.url).href)});
+  async function attach(server){const client=new Client({name:'programmatic-compatibility',version:'1'});
+    const [serverSide,clientSide]=InMemoryTransport.createLinkedPair();await server.connect(serverSide);await client.connect(clientSide);return client;}
+  const call=(client,name,args)=>client.callTool({name,arguments:args});
+  const envelope=response=>JSON.parse(response.content[0].text);
+`;
 async function connect(workspace, server) {
   const client = new Client({ name: 'assembly-client', version: '1' });
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
@@ -120,7 +128,7 @@ test('A11 actual MCP text equals core meteredText; diagnostics stay only in clie
   assert.equal(JSON.stringify(thrown).includes(secret), false);
 });
 
-test('A11 programmatic keyless startup injects the exact local counter independently of a legacy model', async t => {
+test('A11 explicit programmatic counter is immediately ready and independent of a legacy model', async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('network/provider call'));
   const counter = await createContextCounter();
   for (const text of ['', 'synthetic ASCII', '資料庫 𠀁𠀂', 'ＡＢＣ１２', '<|endoftext|>', ASSEMBLY_FRAMING]) {
@@ -130,7 +138,9 @@ test('A11 programmatic keyless startup injects the exact local counter independe
   for (const model of [undefined, { countTokens() { assert.fail('legacy model counter'); } }]) {
     const workspace = createTestWorkspace(t, { prefix: 'assembly-api-' }), path = join(workspace.path, 'store.sqlite');
     const seed = openMemoryCore({ path }); admit(seed); seed.close();
-    const client = await connect(workspace, createCairnServer({ path, namespace: ns, contextRead: 'context-read-v1', contextCounter: counter, model }));
+    const server = createCairnServer({ path, namespace: ns, contextRead: 'context-read-v1', contextCounter: counter, model });
+    assert.equal(await server.contextCounterReady, true);
+    const client = await connect(workspace, server);
     const response = await client.callTool({ name: 'read_memory_context', arguments: query });
     const value = ok(JSON.parse(response.content[0].text));
     assert.equal(value.counter.id, 'tiktoken-o200k_base'); assert.equal(value.policy.id, 'rank-first-whole-v1');
@@ -138,6 +148,45 @@ test('A11 programmatic keyless startup injects the exact local counter independe
     assert.equal(response._meta[metaKey].budget.maxTokens, 1500); assert.equal(response._meta[metaKey].budget.maxItems, 12);
     assert.equal(value.items.length, 1);
   }
+});
+
+test('A01/A11 original programmatic call shape preserves §13 while loading; assembly succeeds after awaitable readiness', t => {
+  const workspace = createTestWorkspace(t, { prefix: 'assembly-programmatic-ready-' });
+  const factory = new URL('../../openai/context-counter.mjs', import.meta.url).href;
+  const source = `import assert from 'node:assert/strict';import {registerHooks} from 'node:module';
+    let release;globalThis.counterGate=new Promise(resolve=>release=resolve);globalThis.counterStarts=0;
+    registerHooks({load(url,context,next){const result=next(url,context);if(url!==${JSON.stringify(factory)})return result;
+      const source=typeof result.source==='string'?result.source:Buffer.from(result.source).toString('utf8');
+      const marker='export async function createContextCounter() {';assert.ok(source.includes(marker));
+      return {...result,source:source.replace(marker,marker+' globalThis.counterStarts++; await globalThis.counterGate;')};}});
+    globalThis.fetch=()=>assert.fail('provider call');
+    const {createCairnServer}=await import(${JSON.stringify(new URL('../server.mjs', import.meta.url).href)});
+    ${childMcp}
+    const server=createCairnServer({path:${JSON.stringify(join(workspace.path, 'store.sqlite'))},namespace:${JSON.stringify(ns)},contextRead:'context-read-v1'});
+    assert.ok(server.contextCounterReady instanceof Promise);assert.equal(globalThis.counterStarts,1);
+    let settled=false;server.contextCounterReady.then(()=>settled=true);
+    const client=await attach(server);
+    try{
+      const names=(await client.listTools()).tools.map(tool=>tool.name);
+      assert.ok(names.includes('find_memory_candidates'));assert.ok(names.includes('fetch_memory_candidate_evidence'));
+      const saved=envelope(await call(client,'remember_memory',{content:'assembly ＡＢＣ compatibility'}));assert.equal(saved.ok,true);
+      const inspected=envelope(await call(client,'inspect_memory',{memoryId:saved.value.memory.id}));assert.equal(inspected.ok,true);
+      const found=envelope(await call(client,'find_memory_candidates',${JSON.stringify(query)}));assert.equal(found.ok,true);assert.equal(found.value.items.length,1);
+      const fetched=envelope(await call(client,'fetch_memory_candidate_evidence',{refs:found.value.items.map(item=>item.ref),intent:'current'}));
+      assert.equal(fetched.ok,true);assert.equal(fetched.value.items[0].content,inspected.value.memory.content);
+      const early=await call(client,'read_memory_context',${JSON.stringify(query)});
+      assert.deepEqual(envelope(early),{ok:false,error:{code:'token_count_unavailable',retryable:false},evidenceTrust:'untrusted-data-not-instructions'});
+      assert.equal(early.isError,true);assert.equal(early._meta,undefined);
+      for(const block of early.content)for(const field of ['diagnostics','candidates','channels','coverage','trace'])assert.equal(block.text.includes(field),false);
+      assert.equal(settled,false);release();assert.equal(await server.contextCounterReady,true);
+      const response=await call(client,'read_memory_context',${JSON.stringify(query)}),assembled=envelope(response);
+      assert.equal(assembled.ok,true);assert.equal(assembled.value.counter.id,'tiktoken-o200k_base');
+      assert.equal(assembled.value.items.length,1);assert.equal(assembled.value.items[0].body.text,inspected.value.memory.content);
+      assert.equal(assembled.value.items[0].ref.memoryId,saved.value.memory.id);
+      assert.ok(response._meta[${JSON.stringify(metaKey)}].budget.used<=1500);assert.equal(globalThis.counterStarts,1);
+    }finally{release();await client.close();await server.close();}
+    console.log('programmatic-readiness-verified');`;
+  assert.equal(runModule(workspace, 'readiness', source), 'programmatic-readiness-verified');
 });
 
 test('A01/A11 assembly preserves candidate query ranking and rejects invalid Unicode/NUL without laundering', async t => {
@@ -268,24 +317,39 @@ test('A11 check-config never resolves tokenizer/WASM, links SQLite or opens a da
   assert.equal(runModule(workspace, 'check', source), 'check-and-laziness-verified');
 });
 
-test('A01/A11 missing tiktoken permits server import and flag-off startup; explicit context startup reports a clear error', t => {
+test('A01/A11 missing tokenizer preserves programmatic retrieval, settles readiness false and refuses only assembly; CLI still fails clearly', t => {
   const workspace = createTestWorkspace(t, { prefix: 'assembly-missing-tokenizer-' }), missing = join(workspace.path, 'missing.sqlite');
   const source = `import assert from 'node:assert/strict';import {existsSync} from 'node:fs';import {registerHooks} from 'node:module';
-    let resolutions=0;
+    let resolutions=0;const unhandled=[];process.on('unhandledRejection',error=>unhandled.push(error));
     registerHooks({resolve(specifier,context,next){if(specifier==='tiktoken'){
       resolutions++;throw Object.assign(Error('synthetic package absent'),{code:'ERR_MODULE_NOT_FOUND'});}return next(specifier,context);}});
     globalThis.fetch=()=>assert.fail('provider call');
     const {createCairnServer,createContextCounter}=await import(${JSON.stringify(new URL('../server.mjs', import.meta.url).href)});
+    ${childMcp}
     assert.equal(resolutions,0);
     const plain=createCairnServer({path:${JSON.stringify(join(workspace.path, 'plain.sqlite'))},namespace:${JSON.stringify(ns)}});
-    await plain.close();assert.equal(resolutions,0);
-    assert.throws(()=>createCairnServer({path:${JSON.stringify(missing)},namespace:${JSON.stringify(ns)},contextRead:'context-read-v1'}),/context_counter_required/);
-    assert.equal(resolutions,0);assert.equal(existsSync(${JSON.stringify(missing)}),false);
-    await assert.rejects(createContextCounter(),{code:'context_tokenizer_unavailable'});assert.equal(resolutions,1);
+    assert.equal(plain.contextCounterReady,undefined);await plain.close();assert.equal(resolutions,0);
+    const server=createCairnServer({path:${JSON.stringify(missing)},namespace:${JSON.stringify(ns)},contextRead:'context-read-v1'});
+    const client=await attach(server);
+    try{
+      assert.equal(await server.contextCounterReady,false);assert.equal(resolutions,1);
+      const saved=envelope(await call(client,'remember_memory',{content:'assembly still retrievable'}));assert.equal(saved.ok,true);
+      const found=envelope(await call(client,'find_memory_candidates',${JSON.stringify(query)}));assert.equal(found.ok,true);
+      assert.deepEqual(found.value.items.map(item=>item.ref.memoryId),[saved.value.memory.id]);
+      const fetched=envelope(await call(client,'fetch_memory_candidate_evidence',{refs:found.value.items.map(item=>item.ref),intent:'current'}));assert.equal(fetched.ok,true);
+      for(let i=0;i<2;i++){
+        const refused=await call(client,'read_memory_context',${JSON.stringify(query)});
+        assert.deepEqual(envelope(refused),{ok:false,error:{code:'token_count_unavailable',retryable:false},evidenceTrust:'untrusted-data-not-instructions'});
+        assert.equal(refused.isError,true);assert.equal(refused._meta,undefined);
+        for(const block of refused.content)for(const field of ['diagnostics','candidates','channels','coverage','trace','synthetic package absent'])assert.equal(block.text.includes(field),false);
+      }
+      await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(unhandled,[]);assert.equal(resolutions,1);
+    }finally{await client.close();await server.close();}
+    await assert.rejects(createContextCounter(),{code:'context_tokenizer_unavailable'});assert.equal(resolutions,2);
     const {start}=await import(${JSON.stringify(new URL('../cli.mjs', import.meta.url).href)}),errors=[],error=console.error;
     console.error=value=>errors.push(value);
-    await assert.rejects(start(['--db',${JSON.stringify(missing)},'--owner',${JSON.stringify(ns.ownerId)},'--context-read','context-read-v1'],{}),/context_tokenizer_unavailable/);
-    console.error=error;assert.equal(resolutions,2);assert.equal(existsSync(${JSON.stringify(missing)}),false);
+    await assert.rejects(start(['--db',${JSON.stringify(join(workspace.path, 'cli-missing.sqlite'))},'--owner',${JSON.stringify(ns.ownerId)},'--context-read','context-read-v1'],{}),/context_tokenizer_unavailable/);
+    console.error=error;assert.equal(resolutions,3);assert.equal(existsSync(${JSON.stringify(join(workspace.path, 'cli-missing.sqlite'))}),false);
     assert.deepEqual(errors,['cairn_context_tokenizer_unavailable: check the documented tiktoken runtime dependency']);
     console.log('missing-tokenizer-verified');`;
   assert.equal(runModule(workspace, 'missing', source), 'missing-tokenizer-verified');
