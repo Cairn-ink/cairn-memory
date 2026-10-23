@@ -7,7 +7,7 @@ Status:
 - U5a (§13) v0.6.2 is confirmed by the auditor as ready for implementation.
 - U2c (§14) v0.7.1 is confirmed by the auditor as ready for implementation. It precedes U4a and U5a's wiring.
 - U5b (§15) v0.9.1 is confirmed by the auditor as ready for implementation (`0e92245d`, two re-checks). It builds only on U5a's facade and does not change §13.
-- U5b-2 (§15.8, v0.10 draft) amends §15 after the preview.2 smoke test: `representation-v2`, host-only snapshot, first-source policy. Awaiting non-author audit.
+- U5b-2 (§15.8) v0.10.3 is confirmed by the auditor as ready for implementation (`ccc9602a`, one audit and three re-checks). It amends §15 after the preview.2 smoke test: `representation-v2`, host-only snapshot with fence-prefixed compact refs, first-source policy.
 
 History:
 - v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
@@ -1432,7 +1432,8 @@ core fetch input is approved under three conditions). The second re-check
 (`22a017f5`) resolved all of them and found one P1: A15's blanket
 `snapshot_stale` expectation for the snapshot path ignored the existing
 error precedence when the canonical refetch itself fails; v0.10.3 narrows
-it. Status: **v0.10.3, awaiting third re-check.** Where this subsection contradicts §§15.1–15.7, including their
+it. The third re-check (`ccc9602a`) found no blocking items. Status:
+**v0.10.3, confirmed by the auditor for implementation.** Where this subsection contradicts §§15.1–15.7, including their
 return-value and envelope descriptions, this subsection wins; every other U5b
 rule stays in force. `read_memory_context` ships in `v1-preview.2` as
 **experimental**, outside the versioning promise; experimental labelling and
