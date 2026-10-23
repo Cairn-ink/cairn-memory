@@ -174,7 +174,7 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
   - U3：`7124a8d`＋修正 `e9d7c58`、`e63b24c`，雙審查都判 Yes
   - U2c：`5b1202d`，主控驗收通過，C04 門檻達標
 - **進行中**
-  - U5a 第一＋二部分已提交（U5a 分支 `54259bf`），雙審查中；第三部分（MCP、CLI、OpenAI adapter、已安裝測試）等審查之後
+  - U5a 第一＋二部分（core）完成：U5a 分支 `54259bf`＋`c798695`，雙審查 Yes。第三部分（host）實作中
   - U4a 第一部分：v31 schema、遷移、素材的匯入／讀取／刪除、用量與量測門檻
 - **下一步**
   1. U3 雙審查與修正輪。
@@ -276,3 +276,5 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `umv1_u5a_impl`（修正 2）＋主控重跑 | 打包清單加入 9 個新的執行期模組 | gpt-6.1-sol/xhigh → 同 | workspace-write | U5a worktree | 08:1x–08:3x | 兩種方式核對：從 import 圖走到的 198 個檔案都在清單內，差異 0。補裝依賴後主控重跑：local、mcp、workspace-lifecycle 在兩個 Node 版本都過；Node 24 的 core 2,076／2,076（競態偶發失敗沒有重現）；打包在 Node 24 是 182＋1 略過；Node 22 有 3 個試點測試在負載 39 時逾時，單獨重跑 14／14 通過 → **在 U5a 分支提交 `54259bf`**（28 個檔案） |
 | `u5a_review_spec`／`u5a_review_standards` | U5a 第一＋二部分（core）的非作者雙審查 | gpt-6.1-sol/xhigh → 同 | read-only | `54259bf`，在乾淨的 worktree `/home/chichieh/cairn-memory-review-u5a` | 08:16–08:27 | **兩邊都判 No**。Spec 有 1 項 P1：預算帳本的鍵包含並行上限，改了上限，累計花費就歸零，審查者實測在 $1 的上限下花掉 $2。另有 4 項 P2：診斷沒有回報重建原因、檔案監看漏掉 `-journal/-wal/-shm`、R10 沒有用獨立程序驗證寫入者、R06 少了索引存取的監看與「預留後撤權」。Standards 有 4 項 P2：建構失敗時沒有關閉連線、檔案系統錯誤會帶出路徑、測試等待沒有上限、缺少 CHANGELOG 與限制說明 → 9 項全部交給修正輪 |
 | `umv1_u5a_impl`（U5a 審查修正） | 上述 9 項，每項都附回歸測試 | gpt-6.1-sol/xhigh → 同 | workspace-write | `54259bf` | 08:27–08:49 | exit 0，12 個檔案。主控在沙箱外驗收，兩個 Node 版本全部 exit 0（core 2,090、mcp 180、整體 635、打包 182＋1 略過）→ **在 U5a 分支提交 `c798695`**；兩位審查者在乾淨的 worktree 複查中 |
+| `u5a_review_spec`／`u5a_review_standards`（複查） | 複查 `c798695` | gpt-6.1-sol/xhigh → 同 | read-only | `c798695` | 09:1x–09:22 | **兩邊都判 Yes**：9 項逐一確認解決，沒有新問題 → **U5a 第一＋二部分（core）完成** |
+| `umv1_u5a_impl`（U5a 第三部分） | host 端：MCP 旗標與兩個工具、`cairn-memory context refresh`、OpenAI embedding adapter（預設 3-small，可設定；測試只用假的 HTTP 伺服器，真實付費的 smoke 預設不跑）、已安裝測試 R01／R12／R13、`docs/context-read-local.md` | gpt-6.1-sol/xhigh | workspace-write | U5a 分支 `c798695` | 09:2x– | 執行中；完成後在 U4b 開工前合併回整合分支 |
