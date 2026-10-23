@@ -201,3 +201,18 @@
   不可變啟動 read-set 映射的授權順序、無 receipt 文字的診斷、A13 以 T0／T1／T2 差分定義常數、A15 逐變更類型×意圖的碼、
   A16 經工具描述證明可讀、A17–A19 遷移範圍（八個可改檔）、host-v2 獨立成本函數且以身分排除於 O=0 確認性比較。
   派複查（resume 同一 thread，worktree 移到 `165d7f99`），負載 0.5。已回報主控。
+- **v0.10.1 複查**：未確認，三個阻斷項＋一個新 P1。(1) `f` 的驗證不能放在工具層：`bind`／`read`／`fetchInside` 都是 facade
+  私有閉包，core 不動就無法在交易內比對；且 item fence 只涵蓋 canonical DTO（只有 `filing.status`，無 MOC 成員），filed→filed
+  的父節點搬移只升 namespace epoch，fence 看不到。(5) host-v2 成本式重複計算本文。(7) A15 Card 變更矩陣的碼錯（history 下
+  support 喪失是 `revision_conflict`／`snapshot_stale`）。另修正「`f` 外洩無害」為「穩定的帶鑰指紋，揭露相等／變更資訊，
+  非明文或鑰匙；2⁻⁴⁸ 漏判、M/2⁴⁸ 聯集界；偵測意外變更，非對抗性完整性」。
+- 提主控：父節點搬移 (1) 文件化為兩路徑的已知差異（精簡 ref fetch 位元相同成功、snapshot fetch `snapshot_stale`），
+  (2) fence 納入 membership（需動 U5a 的 evidence reader），(3) 每個 ref 帶 namespace generation（太脆弱，我反對）。
+  **主控選 (1)**，撤回「MOC 搬移→`snapshot_stale`」；核准 core `fetchCandidateEvidence` 加選配對齊的 `fences` 前綴向量，
+  條件：無向量的呼叫位元相同且 U5a 既有測試不改、MCP 只能經精簡 ref 展開到達（呼叫端自帶向量或與完整 ref／snapshot
+  並用→`invalid_input`）、向量納入授權 payload；兩處措辭修正照稽核者版本。
+- **§15.8 v0.10.2 提交 `22a017f5`**（+80／−27）：fence 驗證移入 core（兩次 `fetchInside` 都比對）、父節點搬移寫成文件化差異
+  （§15.8.3、§15.8.6、A15、limitations）、`refs` schema 保留原完整 ref 分支不變（SDK 先驗證，`server.mjs:226`）、相容性放寬
+  為「合法輸入位元相同、不合法輸入同拒絕類別與碼、訊息文字差異需回報」、A15 Card 逐意圖的碼、host-v2 成本式改為
+  `E + h1 + (n−1)·hN + Σ本文 + Σ具體 receipt (C−15+excerpt) + Σ alias A`、`score.mjs` 加 host-v2 重算驗證。派第二次複查
+  （同 thread，worktree `22a017f5`），負載 0.2。
