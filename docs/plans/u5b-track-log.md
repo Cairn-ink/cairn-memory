@@ -226,3 +226,11 @@
   離線 `npm ci` adapters/mcp＋adapters/openai 已裝，zod 4.5.4）。派工單：主控預核的共用檔案清單、`cli.mjs`／`server.mjs`／
   `core/contract.mjs`／`core/database.mjs` 不動、U5a 必不改測試逐一點名、`fences` 向量是 fetch 唯一改動、zod 原分支不變、
   limitations 記父節點搬移差異、只跑改到的測試檔、TRAPS 11 條。派出時負載 2.8。
+- **A 包 worker 完成（未提交，exit 0）**：15 個檔案（13 修改＋`overhead-host-v2.json`＋報告檔），共用檔案只有 tools／
+  transport／docs／CHANGELOG／limitations，無新模組、manifest 不動；closure 220／manifest 233／missing 0；靜態 CLI 圖 82 模組
+  無 `node:sqlite`。受影響測試兩版本各 69 過 1 敗：唯一失敗是 A13 門檻（實測 envelope 43、firstItem 83、furtherItem 82
+  對估計上限 40／90／80；worker 依「規範序列化優先」不改框架也不放寬斷言，留給協調者）。協調者沙箱外重跑：assembly
+  三檔＋MCP＋packaging 同結果；U5a 的 core context-read 十個測試檔、`adapters/mcp` 與 `packaging` 的 context-read、
+  `assets-host` 全過（兩版本）。
+- **契約 v0.10.4 提交 `c646c4cc`**：只改 A13 三個數字為實測值加約 10% 餘裕（48／96／90），理由寫在 A13；無規則變動，
+  隨實作一起交雙審查。resume worker 做 fix1：只改 A13 斷言數字並重跑該檔。
