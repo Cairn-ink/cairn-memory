@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — v1-preview.1 integration guide
+
+- Document the `ce472f25` preview cut: experimental U4b CLI/MCP, v31 review
+  guards, combined assets/context handles, path-free export receipts and the
+  §16 continuous-writer limitation. Stable preview interfaces and the private
+  `0.0.0-preview.1` package version remain unchanged; no npm publication.
+
 ## Unreleased — asset schema review fixes
 
 - Harden unreleased v31 against replacement-insert/update tombstone resurrection and

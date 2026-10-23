@@ -1,21 +1,21 @@
 # V1 preview: product integration
 
-`v1-preview.0` is an opt-in preview cut from `release/v1-preview`: base
-`389512d7146b5c493560017d45bc96a9be6a31f7` plus the preview fixes. The tag names the exact commit. It stacks on the unmerged local V1
+`v1-preview.1` is an opt-in cut from `release/v1-preview`, base
+`ce472f25d02b92d0b6669df39b59ee4f1af83e2a`. It stacks on the unmerged local V1
 chain (#453–#469, `feat/local-v1-closeout`). Default behaviour stays unchanged
 unless the feature options below are selected. This is not an npm release.
 
 ## Install the preview build
 
-Use Node **>=22.16.0**, npm and `tar`; the recorded verification baselines are
-22.16 and 24.15. From the pinned source checkout:
+Requires Node **>=22.16.0**, npm and `tar`; verification baselines: 22.16/24.15.
+From the pinned checkout:
 
 ```sh
 npm run build:artifact
 ```
 
-Read `artifactPath` and `sha256` from its JSON build report. Verify a distributed
-archive against that hash. In a dedicated installation directory, run:
+Use build-report `artifactPath`/`sha256` to locate/verify the archive.
+In a dedicated directory:
 
 ```sh
 npm init -y
@@ -23,38 +23,37 @@ npm install --prefix . --ignore-scripts --no-audit --no-fund /absolute/path/cair
 ./node_modules/.bin/cairn-memory --help
 ```
 
-The existing builder runs `npm pack --offline --ignore-scripts --json` on staged
-files. Its private package metadata remains `cairn-memory-local-preview@0.0.0-preview.1`;
-`v1-preview.0` identifies this source/release cut. Root `npm pack` is not the
-artifact workflow. Dependency installation can contact npm. Keep the database
-outside the installation; its private parent directory must exist.
+The builder stages files, then runs `npm pack --offline --ignore-scripts --json`.
+Private metadata stays `cairn-memory-local-preview@0.0.0-preview.1`;
+`v1-preview.1` identifies the source cut. Installation can contact npm.
+Keep the database outside the installation in an existing private directory.
 Sources: `package.json:47`, `packaging/build.mjs:80`, `packaging/build.mjs:102`.
-Below, `cairn-memory` means the installed executable above.
+Use that executable below.
 
 ## Stable preview interfaces
 
-Core exports come from `cairn-memory-local-preview/core/index.mjs`. Data calls
-take `(input, token)` and return `{ok:true,value}` or
-`{ok:false,error:{code,retryable}}`; lookup/refresh are asynchronous. The host
-provides synchronous `authority:{authorize,isCurrent}` and an opaque token,
-authorizing each namespace and checking access generations. Tokens, snapshots,
-roles and saved prose grant no access. See [authority details](method-packages-local.md#construction-and-authority).
+Core exports: `cairn-memory-local-preview/core/index.mjs`. Data calls take
+`(input,token)`, returning `{ok:true,value}` or `{ok:false,error:{code,retryable}}`;
+lookup/refresh are asynchronous. The host supplies synchronous
+`authority:{authorize,isCurrent}` and an opaque token for namespace/generation
+checks. Snapshots, roles and prose grant no access.
+See [authority](method-packages-local.md#construction-and-authority).
 
-An exact namespace is `{ownerId,scope:'personal',projectId:null}` or
-`{ownerId,scope:'project',projectId}`. A `readSet` contains one namespace, or
-personal plus one project of the same owner. MCP fixes these at startup and
-rejects caller-supplied namespace/readSet/context/authority/configuration and
-unknown fields. MCP results contain JSON in `content[0].text`, with
+Namespaces: `{ownerId,scope:'personal',projectId:null}` or
+`{ownerId,scope:'project',projectId}`. `readSet`: one namespace or one owner's
+personal+project. MCP fixes scopes at startup; supplied
+namespace/readSet/context/authority/configuration and unknown fields refuse.
+Results contain JSON in `content[0].text`, with
 `evidenceTrust:'untrusted-data-not-instructions'` and `isError:!ok`.
 
-Both interfaces bound complete core success envelopes to **65,536 UTF-8 bytes**;
-opted-in MCP messages have a separate **262,144-byte encoded bound**, including
-JSON-RPC ID and newline. Escaping can exhaust transport before the core bound;
-`response_too_large` or transport refusal is possible. Only `storage_busy` is
-retryable. Shared failures include `invalid_input`, `authority_required`,
+Complete core success envelopes cap at **65,536 UTF-8 bytes**; opted-in MCP
+messages at **262,144 encoded bytes**, including JSON-RPC ID/newline. Escaping can
+cause `response_too_large` or transport refusal. Only `storage_busy` is
+retryable, including starvation under continuous writes (contract §16 below).
+Shared failures include `invalid_input`, `authority_required`,
 `scope_changed`, `revision_conflict`, `invalid_cursor`, `cursor_stale`,
 `context_item_too_large`, `storage_error` and `store_closed`.
-Sources: `adapters/mcp/server.mjs:202`, `adapters/mcp/context-read-transport.mjs:3`,
+Sources: `adapters/mcp/server.mjs:210`, `adapters/mcp/context-read-transport.mjs:3`,
 `core/private-card-facade.mjs:16`.
 
 ### Context retrieval (`context-read-v1`)
@@ -66,11 +65,10 @@ const core = openMemoryCore({ path, contextRead });
 // Alternative: const core = openContextReader({ path, contextRead });
 ```
 
-`getContextReadCapabilities()` needs no token and returns an envelope describing
-methods, supported types/intents, channel configuration, preset, limits,
-maintenance availability and unsupported features. Use its `types`; Card support
-depends on the existing canonical schema. The read-only opener never maintains
-or repairs the sidecar; refresh returns `invalid_input`.
+`getContextReadCapabilities()` needs no token: it reports methods, types/intents,
+channels, preset, limits, maintenance and unsupported features. Card support
+depends on schema. The read-only opener never maintains/repairs the sidecar;
+refresh returns `invalid_input`.
 
 | Core method | Input | Success value |
 | --- | --- | --- |
@@ -78,13 +76,13 @@ or repairs the sidecar; refresh returns `invalid_input`.
 | `fetchCandidateEvidence` | `readSet`, either `refs,intent` or `snapshot`; `responseByteLimit?` | `{items,snapshot}` |
 | `refreshContextIndex` | `readSet,types,intent,budget:{maxItems,maxMs}` | `{status,progress,coverage,channels}` |
 
-Types are a nonempty subset of `memory,card`; intent is explicitly `current|history`.
-Each candidate is `{ref,rank,fusionScore,channels:{lexical,semantic}}`; channel
-scores are `{rank,rawScore}|null`. Lexical-only fusionScore is null. Candidates
-have no text. Refs are `{type:'memory',namespace,memoryId,revision}` or
+Types: nonempty subset of `memory,card`; intent: `current|history`.
+Candidates are text-free `{ref,rank,fusionScore,channels:{lexical,semantic}}`;
+channel scores: `{rank,rawScore}|null`; lexical-only fusionScore: null.
+Refs: `{type:'memory',namespace,memoryId,revision}` or
 `{type:'card',namespace,cardId,revision,bodyRevision}`. Fetch accepts 1–24 refs
-and returns canonical content, qualification and provenance, then an opaque
-snapshot for refetch. Receipt/source prose is read separately. Current Cards
+and returns canonical content, qualification, provenance and a refetch snapshot.
+Read receipt/source prose separately. Current Cards
 require confirmed, eligible support and current applicability.
 
 Defaults: `semantic:false`, 12 items, 1,000 ms. Maximums: 24 items,
@@ -100,16 +98,16 @@ cairn-memory --db /absolute/private/memory.sqlite --owner OWNER --project PROJEC
   --context-read context-read-v1 --context-read-personal
 ```
 
-The zero-value personal flag requires project scope and context opt-in; omit it
-to read only the startup namespace. This adds only:
+The zero-value personal flag requires project/context opt-in; otherwise reads
+stay in the startup namespace. Added tools:
 
 | MCP tool | Caller input |
 | --- | --- |
 | `find_memory_candidates` | `query,types,intent,semantic?,limit?,deadlineMs?,cursor?` |
 | `fetch_memory_candidate_evidence` | either `refs,intent` or `snapshot`; `responseByteLimit?` |
 
-There is no refresh tool. To enable OpenAI embeddings, append **all five** options
-to MCP startup; supply `OPENAI_API_KEY` in the process environment:
+No refresh tool exists. For OpenAI embeddings, append **all five** startup options;
+set `OPENAI_API_KEY` in the environment:
 
 ```sh
 --context-embedder openai --context-embed-model text-embedding-3-small \
@@ -117,11 +115,10 @@ to MCP startup; supply `OPENAI_API_KEY` in the process environment:
 --context-embed-max-usd 0.10
 ```
 
-The adapter defaults to `text-embedding-3-small`/1,536 dimensions, but CLI
-model/dimensions are mandatory. A key alone never creates an embedder; legacy
-model behaviour remains unchanged. Semantic lookup requires explicit
-`semantic:true`, embeds only the query, and refuses `invalid_input` without a
-configured, budgeted embedder. Only explicit refresh embeds documents:
+Adapter defaults: `text-embedding-3-small`/1,536 dimensions; CLI model/dimensions
+remain mandatory. A key alone creates no embedder; legacy behaviour is unchanged.
+`semantic:true` embeds only the query and returns `invalid_input` without a
+budgeted embedder. Only explicit refresh embeds documents:
 
 ```sh
 cairn-memory context refresh --db /absolute/private/memory.sqlite --owner OWNER \
@@ -131,17 +128,16 @@ cairn-memory context refresh --db /absolute/private/memory.sqlite --owner OWNER 
   --context-embed-max-usd 0.10
 ```
 
-Refresh requires an existing private rollback-journal store and a noncreating
-fenced opener; it selects no feature-schema installation. Budgets are 1–1,024 transformation/embedding attempts
-and 1–5,000 ms. Repeat bounded refreshes on `rebuilding`/`partial`; `complete`
-means this projection completed. Ordinary writable lookup maintains lexical data
-without models. `--check-config` checks syntax without database/key/provider access.
-For MCP, put `--check-config` first.
+Refresh uses an existing private rollback-journal store and noncreating fenced
+opener, without feature-schema installation. Budgets: 1–1,024 transformation/embedding
+attempts, 1–5,000 ms. Repeat on `rebuilding`/`partial`. Writable lookup maintains
+lexical data without models. `--check-config` checks syntax without database/key/provider
+access; for MCP, put it first.
 
-Request caps are positive safe integers; USD caps finite and positive. Reservations
-precede transport and share cumulative totals across handles by embedder identity
-within the process. Unknown usage retains conservative charges; no automatic retry.
-Caps are neither durable nor account-wide. SDK configuration adds
+Request caps are positive safe integers; USD caps finite/positive. Reserve before
+transport, sharing process totals across handles by embedder identity. Unknown
+usage retains conservative charges; no automatic retry. Caps are neither durable
+nor account-wide. SDK configuration adds
 `embedder` and `policy:{family:'hosted',maxRequests,maxUsd,maxConcurrent,estimateUsd}`
 to contextRead; `estimateUsd(texts)` is trusted synchronous policy.
 Sources: `adapters/mcp/context-read-configuration.mjs:4`,
@@ -154,12 +150,11 @@ Frozen RRF presets (`core/context-read-fusion.mjs:3`):
 | local / `rrf-k60-d12` | 60 | 12 | 0.45/0.45 |
 | hosted / `rrf-k10` | 10 | 24 | 0.5/0.5 |
 
-Ranks start at 1; sum `weight/(k+rank)`, then cap the final horizon at 24.
+RRF sums `weight/(k+rank)`, starting ranks at 1.
 Degraded semantic search preserves lexical BM25. States include `ready`,
 `unavailable`, `disabled`, `absent`, `timeout`, `provider_error`, `rate_limited`,
 `budget_denied`, `stale_index`, `dimension_mismatch`, `partial_coverage`.
-Coverage/trace report counts, freshness, maintenance and stops. Known vector gaps
-or scan/cache bounds send zero query requests. Unusable lexical indexes return
+Known vector gaps or scan/cache bounds send zero query requests. Unusable lexical indexes return
 `index_unavailable`, never successful no-matches. Additional errors:
 `invalid_read_set`, `evidence_unavailable`, `invalid_snapshot`, `snapshot_stale`;
 errors may carry `details:{channels,coverage,trace}`.
@@ -173,12 +168,11 @@ const core = openMemoryCore({ path, methodPackages: {
 } });
 ```
 
-`getMethodPackageCapabilities()` requires no token. The text facade supports
-immutable imports, reads, comparisons, adoption/disable, deletion, effects, usage
-and reason checks. Core content/version-list reads replace MCP roleId with
+`getMethodPackageCapabilities()` requires no token. Core content/version-list
+reads replace MCP roleId with
 optional `context:{readSet,roleId}`; resolution adds `readSet`,
 package listing receives `namespace`, and event listing `bindingNamespace`.
-Other text-facade calls:
+Core-only calls:
 
 | Core method | Input | Success value |
 | --- | --- | --- |
@@ -191,10 +185,9 @@ Other text-facade calls:
 | `checkMethodReasonRefs` | `namespace,reasonRefs` | `{reasonRefs:[{ref,status}]}` |
 
 Files are `{path,text,mediaType}`; change is `{items:[{summary,paths}],reasonRefs}`.
-[Detailed DTOs](method-packages-local.md#references-and-api) define metadata/ref fields.
-Mutations require `explicit-user`, `actionId` and applicable expected
-revisions; reads require `read`. Imports never adopt. Exact replay is content-free;
-changed input under the same action ID returns `action_conflict`.
+Mutations need `explicit-user`, `actionId` and applicable expected revisions; reads
+need `read`. Imports never adopt. Replay is content-free; changed input under the
+same action ID returns `action_conflict`.
 
 ```sh
 cairn-memory methods import --db /abs/store.sqlite --owner OWNER \
@@ -207,13 +200,13 @@ cairn-memory methods disable --db /abs/store.sqlite --owner OWNER \
   --expected-revision 1
 ```
 
-Optional `--project` selects project scope. Import accepts `--submitted-by`,
-repeated `--exclude`, `--change`; later versions require `--package PACKAGE_ID`,
+`--project` selects project scope. Import accepts `--submitted-by`, repeated
+`--exclude`, `--change`; later versions require `--package PACKAGE_ID`,
 `--expected-package-revision N`, `--based-on VERSION_REF_JSON`. Binding commands
 accept repeated `--reason-ref REF_JSON`; expected revision is `null` for creation,
-otherwise positive. Commands require an existing rollback-journal store and real
-controlling-terminal approval, with frozen payloads; no `--yes` or piped approval.
-Directory importing requires supported Linux/WSL semantics.
+otherwise positive. Commands require an existing rollback-journal store,
+frozen-payload controlling-terminal approval; no `--yes` or pipes.
+Import requires supported Linux/WSL semantics.
 Source: `adapters/mcp/method-package-command.mjs:12`.
 
 MCP startup: `--method-packages local-v1`; add zero-value
@@ -231,15 +224,14 @@ MCP startup: `--method-packages local-v1`; add zero-value
 | `compare_method_versions` / `compareMethodVersions` | `from,to,cursor?` | `from,to,status,changes,items,reason,reasonRefs,coverage,nextCursor` |
 | `list_method_binding_events` / `listMethodBindingEvents` | `package?,limit?,cursor?` | `events,coverage,nextCursor` |
 
-Use core-issued JSON refs unchanged: package is
+Use unchanged core refs: package is
 `{type:'method-package',namespace,packageId}`; version adds
 `type:'method-version',versionId,manifestIdentity`. Current reads require roleId
 (null means default; otherwise 1–200 ASCII letters/digits/`._-`);
 history without roleId is unassessed. Resolution precedence:
 project+role, project+default, personal+role, personal+default. Disabled/unavailable
 bindings block fallback. Resolution status is `current|disabled|unavailable|no-active-version`.
-Pass resolution snapshots to content reads; stale current
-pins return `cursor_stale`. Unavailable content is explicitly labelled.
+Pass snapshots to content reads; stale current pins return `cursor_stale`.
 
 Pages default/cap at 20 items; file parts cap at 4,000 UTF-16 units. Imports:
 1–256 files, 400,000 units/file, 4,000,000/version, 50,000,000 retained UTF-8
@@ -253,46 +245,95 @@ Sources: `core/method-package-input.mjs:8`, `adapters/mcp/method-package-tools.m
 
 ## Experimental: assets
 
-`assets-local-v1` is an embedded core API, **not for product integration yet**.
-U4b CLI/MCP work is in progress and review fixes are landing. This cut exposes
-neither asset commands nor asset MCP tools. Selecting assets upgrades supported
-stores to v31. Known issue in `v1-preview.0`: configuring `assets` together with
-`contextRead` in one `openMemoryCore` call fails with `invalid_input`. Keep them
-in separate handles; a fix lands in a later preview. Keep binary attachments and derivatives outside the stable scope.
-See [assets](assets-local.md), `core/contract.mjs:1177`, and
-[contract §12](plans/unified-memory-v1-contract.md#12-u4-assets-derivatives-and-binary-method-attachments-v052-audited-and-confirmed).
+`assets-local-v1` remains **experimental, outside the versioning promise**.
+U4b adds CLI/MCP; core opt-in:
+`assets:{version:'assets-local-v1',storage:'sqlite-blob-v1',authority}`; selecting
+assets upgrades supported stores one-way to v31. The assets/contextRead constructor
+issue is fixed; regression coverage enumerates all eight asset/context/method
+combinations (`core/contract.mjs:45`,
+`core/test/assets-context-options.test.mjs:7`).
+
+Asset commands require an existing store and
+`--db ABS --owner OWNER [--project PROJECT]`:
+
+| Command | Arguments |
+| --- | --- |
+| `cairn-memory assets import` | `--file ABS --title TITLE [--asset ID --expected-asset-revision N]` |
+| `cairn-memory assets derive` | `--version REF_JSON --kind KIND --text-file ABS [--language TAG] [--timecodes ABS]` |
+| `cairn-memory assets delete` | `--ref REF_JSON --expected-revision N` |
+| `cairn-memory assets export` | `--version REF_JSON --out ABS` |
+
+Import/derive/delete require Linux/WSL, TTY stdin/stdout and typed
+approval of frozen payloads on `/dev/tty`; no `--yes` or piped
+approval. Import reviews metadata/byte commitment; derive reviews text.
+Import returns `{asset,version,ordinal,assetRevision}`. Export needs byte-read
+authority, **no mutation approval**, verifies readback and publishes create-only
+(`EEXIST` if occupied). Its receipt is `{status:'published',version,byteCount}`;
+no destination path. Publication followed by failure reports
+`published-but-durability-uncertain`, exit 1; inspect before retrying.
+Sources: `adapters/mcp/asset-command.mjs:14`, `adapters/mcp/asset-command.mjs:43`,
+`adapters/mcp/asset-export.mjs:14`, `core/asset-storage.mjs:108`.
+
+MCP: `--db ABS --owner OWNER [--project PROJECT] --assets local-v1`.
+Five tools read only that namespace; no personal expansion, bytes or mutations:
+
+| Tool | Caller input |
+| --- | --- |
+| `list_assets` | `limit?,cursor?` |
+| `list_asset_versions` | `asset,limit?,cursor?` |
+| `get_asset_version` | `version` |
+| `list_asset_derivatives` | `version,limit?,cursor?` |
+| `read_asset_derivative` | `ref,cursor?` |
+
+List pages default/cap at 20; core/MCP bounds remain 65,536/262,144 bytes. Versions
+cap at 33,554,432 bytes; owner binary quota is 200,000,000 bytes. Derivatives
+are user-provided, at most 20,000 UTF-16 units, in 4,000-unit parts;
+no OCR/ASR. `methods import --attachments local-v1` enables experimental binary
+attachments; MCP never delivers their bytes. Both remain experimental.
+Sources: `adapters/mcp/asset-tools.mjs:3`,
+`core/asset-input.mjs:14`, `adapters/mcp/method-package-command.mjs:41`;
+see [asset DTOs and operator details](assets-local.md).
 
 ## Limitations and non-claims
 
-Frozen tokenization misses embedded single Han: `中` does not match `中文`.
-Evidence for these interfaces is synthetic/offline, including fake HTTP and
-installed-process checks. One paid smoke request against the real OpenAI API
-passed after the adapter began renormalizing provider vectors, whose L2 norms
-are only approximately 1. The smoke stays opt-in and outside every test suite. No complete
-semantic recall, answer correctness, production latency, 100,000-Memory guarantee
-or native-product activation is established. Assembly/U5b, role profiles,
+Frozen tokenization misses embedded single Han: `中` misses `中文`.
+Evidence is synthetic/offline mechanism checks, plus one paid opt-in smoke
+request against the real OpenAI embeddings API. The primary ran that request
+when cutting `v1-preview.0`; it passed after the adapter began renormalizing
+provider vectors, whose L2 norms are only approximately 1. None of this
+establishes complete semantic recall, answer correctness,
+production/100,000-Memory latency or native-product activation. The smoke stays
+outside the test suites. Assembly/U5b, role profiles,
 relations, MOC retrieval, Raw search and local-model adapters remain unsupported.
 
-Storage is local plaintext, including the sensitive `.context-read-v1.sqlite`
-sidecar; logical deletion/invalidation provides no physical erasure from pages,
-journals or backups. Method text never executes or grants permission;
-source-derived imports await dependency fences. This preview offers local core
-and stdio integration, no hosted-service support or hosted-safety claim. Explicit
-OpenAI use sends selected text externally and may incur charges. See
+Continuous rollback-journal writers can starve readers: retryable `storage_busy`.
+Paced workloads meet C04/K13 gates; unpaced runs are stress observations.
+WAL requires a later store-wide decision, including review/store-fence changes.
+Sources: [contract §16](plans/unified-memory-v1-contract.md#16-amendment-contention-gates-under-rollback-journal-mode-v072-primary-2026-10-24),
+`core/database.mjs:30`, `core/private-card-facade.mjs:16`.
+
+Storage and `.context-read-v1.sqlite` are sensitive local plaintext. Logical deletion
+does not physically erase pages/journals/backups. Method text grants no execution
+permission; source-derived imports await dependency fences. Local core/stdio have
+no hosted-service support/safety claim. OpenAI use transmits selected text and
+may incur charges. See
 [limitations](limitations.md#context-retrieval-host-u5a-part-3) and
 [contract non-claims](plans/unified-memory-v1-contract.md#1-scope-and-sequencing).
 
 ## Versioning promise
 
-Interfaces listed as stable above retain their names and DTO shapes across
-`v1-preview.*`. Algorithm improvements land behind those interfaces; rankings
-and quality are not frozen. Experimental assets are outside this promise.
+Stable names/DTO shapes persist across `v1-preview.*`; algorithm improvements
+land behind them. Rankings/quality are not frozen. Experimental assets are excluded.
 
-## Release notes for GitHub pre-release
+## Release notes for GitHub pre-release: v1-preview.1
 
-- Opt-in local V1 preview (base `389512d` plus preview fixes); no npm publication or default changes.
-- Fix: the OpenAI adapter renormalizes provider vectors. Before the fix, real embeddings failed validation; verified with one live request.
-- Stable context candidates/evidence, explicit refresh and budgeted OpenAI embeddings.
-- Stable text method packages with terminal import/adopt/disable and nine MCP reads.
-- Assets remain experimental. Synthetic evidence only; retain the documented
-  single-Han miss, local-storage and logical-deletion limitations.
+Changes since `v1-preview.0`; this cut uses base `ce472f25`:
+
+- Add experimental U4b asset commands, five MCP reads and binary method importing.
+- Fix shared assets/context/method construction; export receipts omit destination paths.
+- Harden v31's 72-object schema: tombstone/replacement guards, complete
+  trigger-set validation, case-normalized premature-artifact detection and snapshot
+  prototype rules (`core/asset-schema.mjs:194`, `core/asset-schema.mjs:308`,
+  `core/asset-input.mjs:43`, `core/testing/asset-v31-layout.json:1`).
+- Document §16 starvation; paced gates apply. Stable interfaces/defaults and private
+  package version remain unchanged; assets remain experimental. No npm publication.
