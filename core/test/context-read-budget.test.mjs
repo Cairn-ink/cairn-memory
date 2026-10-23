@@ -14,6 +14,15 @@ function dispatcher(port, overrides = {}) {
 }
 const port = embed => ({ id: 'budget-review-' + randomUUID(), revision: '1', dimensions: 1, normalization: 'none', embed });
 
+test('R04/R05 budget preserves synchronous and asynchronous provider errors rather than reporting timeout', async () => {
+  for (const asynchronous of [false, true]) {
+    const expected = Object.assign(Error('provider_error'), { code: 'provider_error' });
+    const embedder = port(asynchronous ? async () => { await Promise.resolve(); throw expected; } : () => { throw expected; });
+    await assert.rejects(dispatcher(embedder)(), error => { assert.equal(error, expected); return true; });
+    await assert.rejects(dispatcher(embedder)(), { code: 'budget_denied' });
+  }
+});
+
 test('R04/R10 review 1: concurrency, caps and family changes constrain the same cumulative requests and charges', async () => {
   let transmissions = 0;
   const embedder = port(() => { transmissions++; return [[1]]; });

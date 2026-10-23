@@ -100,6 +100,7 @@ retries; an explicit repeated call takes a new reservation.
 The adapter defaults to `text-embedding-3-small`, 1,536 dimensions and the honest
 revision stamp `provider-unversioned`. The port declares L2 normalization and
 validates persisted float32 values, dimensions, finite components and norm.
+The OpenAI adapter renormalizes provider vectors with finite norms in [0.9, 1.1] before strict float32 validation.
 Embedding-3 models accept explicit dimensions; ada-002 stays at 1,536.
 
 The frozen accounting rates are USD per million reported input tokens:

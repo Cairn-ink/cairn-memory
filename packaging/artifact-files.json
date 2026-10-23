@@ -223,5 +223,6 @@
   "LICENSE",
   "docs/context-read-local.md",
   "docs/method-packages-local.md",
-  "docs/assets-local.md"
+  "docs/assets-local.md",
+  "docs/v1-preview-integration.md"
 ]
