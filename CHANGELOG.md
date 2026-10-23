@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — context representation v2 (U5b-2)
+
+- Replace the experimental preview.2 assembly shape with `representation-v2`:
+  compact refs with verified fence prefixes, string bodies, lossless default
+  omission and `sameAsBody` receipts; full refs and unit counts stay in diagnostics.
+- Keep the snapshot only in namespaced host `_meta`, beside diagnostics, and
+  add the non-default first-source policy. Parent-only MOC moves preserve compact
+  refetch evidence but stale the snapshot path. See the
+  [context guide](docs/context-read-local.md) and [limitations](docs/limitations.md).
+
 ## Unreleased — budgeted context assembly (U5b)
 
 - Add opt-in `read_memory_context` with whole canonical evidence units, strict

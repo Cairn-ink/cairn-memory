@@ -1,0 +1,96 @@
+U5b-2 packet A handoff — uncommitted, based on f6bc33f6
+
+Implemented representation-v2, host-only snapshot, independently carried prepared identities, compact-ref expansion/authorization and both-read fence checks, diagnostics, defaults, first-source policy, documentation and A13–A19 observables.
+
+Acceptance remains blocked by measured contract bounds: unchanged normative framing gives T0=43 (>40); the frozen probe gives furtherItem=82 (>80). The assertions remain failing, not relaxed. Coordinator resolution is required; this is not sandbox-only.
+
+Changed files (15, including this report):
+CHANGELOG.md
+adapters/mcp/context-read-tools.mjs
+adapters/mcp/context-read-transport.mjs
+adapters/mcp/test/context-read-assembly.test.mjs
+core/context-read-assembly.mjs
+core/context-read-facade.mjs
+core/context-read-input.mjs
+core/test/context-read-assembly-races.test.mjs
+core/test/context-read-assembly.test.mjs
+core/testing/context-read-assembly-fixture.mjs
+docs/context-read-local.md
+docs/limitations.md
+evaluation/retrieval-research/assembly/overhead-host-v2.json
+packaging/test/context-read-assembly.test.mjs
+u5b2-implementation-report.txt
+
+Inventory: git status --porcelain=v1 --untracked-files=all versus find -newer /tmp/u5b2-start-marker over touched directories/root files, sorted and diffed: 15 versus 15; zero differences. Whitespace checked on tracked AND untracked files.
+
+Shared-file blocks (current inclusive lines):
+CHANGELOG.md:3–12.
+adapters/mcp/context-read-tools.mjs:2–4,12–34,42–43,46–65,69.
+adapters/mcp/context-read-transport.mjs:11–12.
+docs/context-read-local.md:59–61,96,102–134,143–144,151–161.
+docs/limitations.md:14–28.
+No runtime modules added; manifest unchanged. Static closure:220, manifest:233, missing:0; installed filesystem/archive:239/239, differences:0; pack/install exit:0/0. Independent static CLI traversal:82 modules, node:sqlite links:0, exit:0. Closure/manifest check exit:0.
+
+Tests: N22=/home/chichieh/.nvm/versions/node/v22.16.0/bin/node; N24=/home/chichieh/.nvm/versions/node/v24.15.0/bin/node. Each command was "$N FILE", redirected to /tmp/u5b2-*.log, then rc=$? printed explicitly. Files ran sequentially. Results for BOTH versions, shown as pass/fail/exit:
+core/test/context-read-assembly.test.mjs:18/1/1.
+core/test/context-read-assembly-races.test.mjs:7/0/0.
+adapters/mcp/test/context-read-assembly.test.mjs:41/0/0.
+packaging/test/context-read-assembly.test.mjs:3/0/0.
+Totals per version:69 passed,1 failed; no skips. A13 is the sole final failure.
+An initial Node22 --test invocation returned exit1, pass0/fail1 with only an aggregate child failure; direct execution exposed the real assertion and produced the detailed results above. No EPERM/EROFS occurred; no failures are classified sandbox-only. Earlier migration/fixture mistakes were corrected and rerun.
+
+A13: tiktoken-o200k_base; T0/T1/T2=43/126/208; envelope=43, firstItem=83, furtherItem=82, bodyOnlyItem=73, concreteSource=22, aliasSource=10; B1/B2=73/145, h1/hN=58/57. Artifact contains six complete probe strings, approximate-model label and implementationCommit=__COMMIT__. Frozen ns is synthetic-u5a/project/test, IDs 00000000-0000-4000-8000-000000000001 and ...0002, f=AbCdEfGh, ranks1/2. Body: "assembly one two three four five six seven eight nine ten eleven twelve thirteen fourteen" (15 tokens); concrete excerpt substitutes "source" for "assembly" (15). Each principal item has one user sameAsBody receipt. Body-only probes omit sources and retain sourcesComplete:false.
+
+Existing assertion migration (HEAD line numbers; C=core assembly test, R=races, M=MCP assembly, P=packaging assembly):
+C86: bound now checks complete public v2 envelope, excluding internal selection.
+C111: schedule expectation adds first-source branch only.
+C119: independent literal uses v2 envelope.
+C120: production literal uses v2 envelope.
+C131: oracle equality uses v2; snapshot/tokens checked separately.
+C133: dedup diagnostics gain body aliases.
+C329: canonical oracle equality uses v2; snapshot/tokens checked separately.
+C138: string body and compact id.
+C150: default true is omitted.
+C173: snapshot sibling.
+C228: compact id.
+C229: string body.
+C230: tokens move to diagnostics; first-source branch only.
+C232: first-source unvisited receipts count omitted; legacy outcomes unchanged.
+C337: full refs compared through diagnostics.
+C362: first-source branch has no second-receipt alias.
+C363: type now in ref.
+C366: namespace comparison uses compact indices; legacy alias check retained.
+C441: original equality/invariant retained; sibling snapshot checked separately.
+R88: snapshot sibling.
+R120: string body.
+M94: v2 capabilities/defaults.
+M107: snapshot metadata key added.
+M114: string bodies.
+M115: redaction checked on string body.
+M123-comparison: assembly transport serializer includes metadata.
+M123-isError: smaller envelope permits empty success.
+M124: empty success has metadata/null snapshot.
+M146-counter: counter moved to diagnostics.
+M146-policy: policy moved to diagnostics.
+M183: counter moved to diagnostics.
+M184: string body.
+M185: compact id.
+M199: compare compact/full id-revision pairs.
+M244: counter moved to diagnostics.
+P71: counter moved to diagnostics.
+P72: policy moved to diagnostics.
+P73: compact id.
+P74: string body; canonical text unchanged.
+P77: snapshot metadata key added.
+
+Decisions/limits: normative serialization wins over conflicting A13 estimates; no thresholds/framing changed. Parent-move evidence comparison excludes the newly generated fetch snapshot, whose generation necessarily changes. Original full-ref schema arm is unchanged; added nested-union SDK validation messages may differ, but refusal class/code remain; no existing assertion depends on that wording. The fixture reviewState is corrected to none. No unlisted/prohibited files, git metadata, network, model or credentials were touched. The later "only test files you touch" restriction was followed; untouched U5a/read-only suites and full CI remain coordinator work despite the earlier unmodified-test rerun instruction. No -o path was supplied; this report uses the announced fallback path. No commit was made.
+
+Fix 1
+
+Read contract §15.8 v0.10.4 at c646c4cc. Changed core/test/context-read-assembly.test.mjs:577–578 only: A13 bounds and diagnostic label are now 48/96/90. Constants, probes, framing and every other assertion are unchanged; measurements remain 43/83/82.
+
+Direct commands:
+/home/chichieh/.nvm/versions/node/v22.16.0/bin/node core/test/context-read-assembly.test.mjs — actual exit 0; 19 passed, 0 failed, 0 skipped.
+/home/chichieh/.nvm/versions/node/v24.15.0/bin/node core/test/context-read-assembly.test.mjs — actual exit 0; 19 passed, 0 failed, 0 skipped.
+
+Inventory re-derived from git status --porcelain=v1 --untracked-files=all and independently from find -newer /tmp/u5b2-start-marker, filtering candidates by byte comparison against HEAD (to exclude the committed contract amendment): 15/15 files, zero differences. Fix 1 changes exactly two files by before/after hashes: this test and this appended report; the A13 artifact remains byte-identical. No suites or other test files ran; no commit.

@@ -8,7 +8,8 @@ export function contextToolResponse(envelope, { assembly = false } = {}) {
   const response = value => {
     if (assembly && value.ok) return {
       content: [{ type: 'text', text: meteredText(value.value.metered) }], isError: false,
-      _meta: { 'ink.cairn/context-read-diagnostics': value.value.diagnostics },
+      _meta: { 'ink.cairn/context-read-diagnostics': value.value.diagnostics,
+        'ink.cairn/context-read-snapshot': value.value.snapshot },
     };
     let diagnostics;
     if (assembly && value.error?.details && Object.hasOwn(value.error.details, 'candidates')) {

@@ -14,12 +14,13 @@ import { createContextCounter } from '../../openai/context-counter.mjs';
 import { countOpenAITokens } from '../../openai/index.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { meteredText, ASSEMBLY_FRAMING } from '../../../core/context-read-assembly.mjs';
-import { ASSEMBLY_POLICIES, ASSEMBLY_LIMITS } from '../../../core/context-read-input.mjs';
+import { ASSEMBLY_POLICIES, ASSEMBLY_LIMITS, ASSEMBLY_DEFAULTS } from '../../../core/context-read-input.mjs';
 import { assemblyFixture, assemblyQuery, sample } from '../../../core/testing/context-read-assembly-fixture.mjs';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { contextHost, contextNamespace as ns, contextProviderArgs } from './context-support.mjs';
 
 const query = { query: 'assembly', types: ['memory'], intent: 'current' };
+const snapshotKey = 'ink.cairn/context-read-snapshot';
 const metaKey = 'ink.cairn/context-read-diagnostics';
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 const childMcp = `
@@ -91,7 +92,7 @@ test('A11 actual MCP text equals core meteredText; diagnostics stay only in clie
   const memory = admit(core), secret = 'sk-' + 'S'.repeat(32), sanitized = admit(core, 'assembly secret ' + secret);
   const caps = ok(core.getContextReadCapabilities());
   assert.ok(caps.methods.includes('contextRead')); assert.ok(!caps.unsupported.includes('assembly'));
-  assert.deepEqual(caps.assembly, { representation: 'representation-v1', policies: [...ASSEMBLY_POLICIES],
+  assert.deepEqual(caps.assembly, { representation: 'representation-v2', defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES],
     defaultPolicy: 'rank-first-whole-v1', counter: { id: 'tiktoken-o200k_base' }, limits: { ...ASSEMBLY_LIMITS } });
   let envelope, supplied;
   const wrapped = { ...core, async contextRead(input, token) { supplied = input; envelope = await core.contextRead(input, token); return envelope; } };
@@ -104,15 +105,15 @@ test('A11 actual MCP text equals core meteredText; diagnostics stay only in clie
     const value = ok(envelope);
     assert.deepEqual(response.content, [{ type: 'text', text: meteredText(value.metered) }]);
     assert.deepEqual(Object.keys(response).sort(), ['_meta', 'content', 'isError']);
-    assert.deepEqual(response._meta, { [metaKey]: value.diagnostics });
+    assert.deepEqual(response._meta, { [metaKey]: value.diagnostics, [snapshotKey]: value.snapshot });
     assert.equal(response.isError, false); assert.equal(value.metered.framing, ASSEMBLY_FRAMING);
     assert.equal(countOpenAITokens(modelInput(response)), value.diagnostics.budget.used);
     assert.ok(value.diagnostics.budget.used <= 4000);
     assert.equal(modelInput(response).includes('diagnostics'), false);
     assert.equal(modelInput(response).includes('counterCalls'), false);
     assert.equal(modelInput(response).includes(secret), false);
-    assert.deepEqual(value.metered.items.map(item => item.body.text).sort(), [memory.content, sanitized.content].sort());
-    assert.ok(value.metered.items.some(item => item.body.text.includes('[REDACTED]')));
+    assert.deepEqual(value.metered.items.map(item => item.body).sort(), [memory.content, sanitized.content].sort());
+    assert.ok(value.metered.items.some(item => item.body.includes('[REDACTED]')));
   }
   const successful = supplied;
   for (const field of ['authority', 'namespace', 'readSet', 'configuration', 'unknown']) {
@@ -120,8 +121,9 @@ test('A11 actual MCP text equals core meteredText; diagnostics stay only in clie
     assert.equal(supplied, successful, 'invalid fields never reach core');
   }
   const refused = await client.callTool({ name: tool.name, arguments: { ...query, maxTokens: 64 } });
-  assert.deepEqual(refused, contextToolResponse(envelope)); assert.equal(refused.isError, true);
-  assert.equal(refused._meta, undefined);
+  assert.deepEqual(refused, contextToolResponse(envelope, { assembly: true })); assert.equal(refused.isError, false);
+  assert.deepEqual(JSON.parse(refused.content[0].text).value.items, []);
+  assert.equal(refused._meta[snapshotKey], null);
   wrapped.contextRead = () => { throw Error(secret); };
   const thrown = await client.callTool({ name: tool.name, arguments: query });
   assert.equal(JSON.parse(thrown.content[0].text).error.code, 'memory_operation_failed');
@@ -143,7 +145,7 @@ test('A11 explicit programmatic counter is immediately ready and independent of 
     const client = await connect(workspace, server);
     const response = await client.callTool({ name: 'read_memory_context', arguments: query });
     const value = ok(JSON.parse(response.content[0].text));
-    assert.equal(value.counter.id, 'tiktoken-o200k_base'); assert.equal(value.policy.id, 'rank-first-whole-v1');
+    assert.equal(response._meta[metaKey].counter.id, 'tiktoken-o200k_base'); assert.equal(response._meta[metaKey].policy.id, 'rank-first-whole-v1');
     assert.equal(response._meta[metaKey].budget.used, countOpenAITokens(response.content[0].text));
     assert.equal(response._meta[metaKey].budget.maxTokens, 1500); assert.equal(response._meta[metaKey].budget.maxItems, 12);
     assert.equal(value.items.length, 1);
@@ -180,9 +182,9 @@ test('A01/A11 original programmatic call shape preserves §13 while loading; ass
       for(const block of early.content)for(const field of ['diagnostics','candidates','channels','coverage','trace'])assert.equal(block.text.includes(field),false);
       assert.equal(settled,false);release();assert.equal(await server.contextCounterReady,true);
       const response=await call(client,'read_memory_context',${JSON.stringify(query)}),assembled=envelope(response);
-      assert.equal(assembled.ok,true);assert.equal(assembled.value.counter.id,'tiktoken-o200k_base');
-      assert.equal(assembled.value.items.length,1);assert.equal(assembled.value.items[0].body.text,inspected.value.memory.content);
-      assert.equal(assembled.value.items[0].ref.memoryId,saved.value.memory.id);
+      assert.equal(assembled.ok,true);assert.equal(response._meta[${JSON.stringify(metaKey)}].counter.id,'tiktoken-o200k_base');
+      assert.equal(assembled.value.items.length,1);assert.equal(assembled.value.items[0].body,inspected.value.memory.content);
+      assert.equal(assembled.value.items[0].ref.id,saved.value.memory.id);
       assert.ok(response._meta[${JSON.stringify(metaKey)}].budget.used<=1500);assert.equal(globalThis.counterStarts,1);
     }finally{release();await client.close();await server.close();}
     console.log('programmatic-readiness-verified');`;
@@ -196,7 +198,7 @@ test('A01/A11 assembly preserves candidate query ranking and rejects invalid Uni
   const input = { ...query, query: 'apple sk-' + 'S'.repeat(32), semantic: false, deadlineMs: 5000 };
   const found = ok(JSON.parse((await client.callTool({ name: 'find_memory_candidates', arguments: { ...input, limit: 24 } })).content[0].text));
   const assembled = ok(JSON.parse((await client.callTool({ name: 'read_memory_context', arguments: { ...input, maxTokens: 4000, maxItems: 24 } })).content[0].text));
-  assert.deepEqual(assembled.items.map(item => item.ref), found.items.map(item => item.ref));
+  assert.deepEqual(assembled.items.map(item => [item.ref.id, item.ref.rev]), found.items.map(item => [item.ref.memoryId, item.ref.revision]));
   assert.deepEqual(found.items.map(item => item.ref.memoryId), [apple.id]);
   for (const invalid of ['api_key=abcdefgh\0', 'api_key=abcdefgh\ud800', '\udc00', 'apple\0']) {
     for (const name of ['find_memory_candidates', 'read_memory_context']) {
@@ -241,22 +243,22 @@ test('A11 CLI keyless and keyed context startup inject the counter without dispa
     const { client } = await contextHost(workspace, path, { key });
     const response = await client.callTool({ name: 'read_memory_context', arguments: query });
     const value = ok(JSON.parse(response.content[0].text));
-    assert.equal(value.counter.id, 'tiktoken-o200k_base'); assert.equal(value.items.length, 1);
+    assert.equal(response._meta[metaKey].counter.id, 'tiktoken-o200k_base'); assert.equal(value.items.length, 1);
     assert.equal(response._meta[metaKey].budget.used, countOpenAITokens(response.content[0].text));
     await client.close();
   }
 });
 
 test('A11 complete core envelope bound includes diagnostics; encoded transport has its independent exact byte bound', async () => {
-  const metered = { framing: ASSEMBLY_FRAMING, items: [], snapshot: null }, diagnostics = { padding: '' };
-  const base = { ok: true, value: { metered, diagnostics } };
+  const metered = { framing: ASSEMBLY_FRAMING, items: [] }, diagnostics = { padding: '' };
+  const base = { ok: true, value: { metered, snapshot: null, diagnostics } };
   diagnostics.padding = '界'.repeat(20000);
   diagnostics.padding += 'x'.repeat(65536 - Buffer.byteLength(JSON.stringify(base)));
   assert.equal(Buffer.byteLength(JSON.stringify(base)), 65536);
   const response = contextToolResponse(base, { assembly: true });
   assert.equal(response.isError, false); assert.equal(response.content[0].text, meteredText(metered));
   assert.deepEqual(response._meta[metaKey], diagnostics);
-  const tooLarge = { ...base, value: { metered, diagnostics: { padding: diagnostics.padding + 'x' } } };
+  const tooLarge = { ...base, value: { metered, snapshot: null, diagnostics: { padding: diagnostics.padding + 'x' } } };
   assert.deepEqual(contextToolResponse(tooLarge, { assembly: true }), contextToolResponse(tooLarge));
   assert.equal(JSON.parse(contextToolResponse(tooLarge, { assembly: true }).content[0].text).error.code, 'context_item_too_large');
   const error = { ok: false, error: { code: 'index_unavailable', retryable: false,
@@ -353,4 +355,230 @@ test('A01/A11 missing tokenizer preserves programmatic retrieval, settles readin
     assert.deepEqual(errors,['cairn_context_tokenizer_unavailable: check the documented tiktoken runtime dependency']);
     console.log('missing-tokenizer-verified');`;
   assert.equal(runModule(workspace, 'missing', source), 'missing-tokenizer-verified');
+});
+
+test('A15 raw compact descriptors, SDK schema, mixed expansion and caller prefix-vector refusals', async () => {
+  const tools = new Map(), calls = [], access = createContextReadAccess({ ...ns, scope: 'project', projectId: 'p' }, true);
+  registerContextReadTools((name, description, schema, action) => tools.set(name, { description, schema, action }),
+    { fetchCandidateEvidence(input) { calls.push(input); return { ok: true, value: input }; } }, access);
+  const tool = tools.get('fetch_memory_candidate_evidence');
+  const ref = { ns: 0, type: 'memory', id: 'memory', rev: 1, f: 'abcdefgh' };
+  const full = { type: 'card', namespace: access.readSet[1], cardId: 'card', revision: 2, bodyRevision: 1 };
+  const parsed = tool.schema.parse({ refs: [ref, full], intent: 'current' });
+  ok(await tool.action(parsed));
+  assert.deepEqual(calls[0], { refs: [
+    { type: 'memory', namespace: access.readSet[0], memoryId: 'memory', revision: 1 }, full,
+  ], intent: 'current', fences: ['abcdefgh', null], readSet: access.readSet });
+  const { f: unused, ...missing } = ref;
+  let getters = 0;
+  const accessor = { ...ref }; Object.defineProperty(accessor, 'ns', { enumerable: true, get() { getters++; return 0; } });
+  const nonenumerable = { ...ref }; Object.defineProperty(nonenumerable, 'ns', { value: 0 });
+  assert.equal(tool.schema.safeParse({ refs: [nonenumerable], intent: 'current' }).success, true, 'own data may be non-enumerable');
+  for (const bad of [missing, ...['', 'short', '123456789', '!!!!abcd'].map(f => ({ ...ref, f })),
+    ...[-1, .5, Number.MAX_SAFE_INTEGER + 1].map(ns => ({ ...ref, ns })), accessor,
+    Object.assign(Object.create({ ns: 0 }), { type: 'memory', id: 'memory', rev: 1, f: 'abcdefgh' }),
+    { ...ref, namespace: ns }, { ...ref, memoryId: 'memory' }, { ...ref, bodyRev: 1 },
+    { ...ref, type: 'card' }, JSON.parse('{"ns":0,"type":"memory","id":"memory","rev":1,"f":"abcdefgh","__proto__":{}}'),
+    { ...ref, constructor: 'no' }, { ...ref, prototype: 'no' },
+  ]) {
+    assert.equal(tool.schema.safeParse({ refs: [bad], intent: 'current' }).success, false);
+  }
+  assert.equal(getters, 0, 'descriptor validation never invokes compact getters');
+  for (const input of [{ refs: [ref], intent: 'current', fences: [ref.f] }, { refs: [full], intent: 'current', fences: [null] },
+    { snapshot: 'opaque', fences: [ref.f] }]) {
+    assert.equal(tool.schema.safeParse(input).success, false);
+    assert.equal((await tool.action(input)).error.code, 'invalid_input');
+  }
+  assert.equal(calls.length, 1);
+  assert.equal((await tool.action(tool.schema.parse({ refs: [{ ...ref, ns: 2 }], intent: 'current' }))).error.code, 'invalid_input');
+  assert.equal(calls.length, 1);
+  access.revoke();
+  assert.equal((await tool.action(parsed)).error.code, 'authority_required'); assert.equal(calls.length, 1);
+});
+
+function assemblyTools(core, access) {
+  const tools = new Map();
+  registerContextReadTools((name, description, schema, action) => tools.set(name, { description, schema, action }), core, access);
+  return tools;
+}
+function confirmedCard(f, namespace, memory) {
+  const draft = ok(f.host.call(f.core, 'createCardDraft', { namespace, actionId: 'draft-' + namespace.scope, drafting: 'authored', input: {
+    title: 'assembly Card', body: 'Canonical Card body.',
+    ...(memory ? { sourcePolicy: 'retained-receipts-v1', memoryRefs: [
+      { type: 'memory', namespace, memoryId: memory.id, revision: memory.revision }] } :
+    { authoredInput: { text: 'Canonical note.', occurredAt: null } }),
+  } }));
+  return ok(f.host.call(f.core, 'confirmCardDraft', { namespace, cardId: draft.id, expectedRevision: draft.revision,
+    actionId: 'confirm-' + namespace.scope, applicability: 'current' }));
+}
+
+test('A14–A17 actual listed description, one/two namespace compact round trips, canonical metadata and host snapshots', async t => {
+  for (const two of [false, true]) {
+    const f = assemblyFixture(t, { cards: true, counter: { id: 'fit', countTokens: () => 1 } });
+    const access = createContextReadAccess({ ownerId: 'synthetic-u5a', scope: 'project', projectId: 'test' }, two);
+    const core = f.reopen({ ...access.configuration, counter: { id: 'fit', countTokens: () => 1 } });
+    for (const namespace of access.readSet) { const memory = f.admit('assembly own body ' + namespace.scope, namespace); confirmedCard(f, namespace, memory); }
+    const tools = assemblyTools(core, access), fetchTool = tools.get('fetch_memory_candidate_evidence');
+    const client = await connect(f.workspace, buildCairnServer({ path: f.path, binding: access.namespace, core, context: access }));
+    const listed = (await client.listTools()).tools.find(tool => tool.name === 'read_memory_context');
+    assert.ok(listed.description.includes("`sameAsBody` means this receipt's excerpt equals this item's body verbatim"));
+    assert.ok(listed.description.includes(JSON.stringify(ASSEMBLY_DEFAULTS)));
+    assert.match(listed.description, /snapshot_stale means re-run read_memory_context/);
+    for (const intent of ['current', 'history']) {
+      const response = await client.callTool({ name: 'read_memory_context', arguments: { ...query, types: ['memory', 'card'], intent, maxTokens: 4000 } });
+      const value = ok(JSON.parse(modelInput(response))), diagnostics = response._meta[metaKey], snapshot = response._meta[snapshotKey];
+      assert.equal(value.items.length, two ? 4 : 2);
+      assert.deepEqual(Object.keys(value), ['framing', 'items']); assert.equal(response.content.length, 1); assert.equal(response.structuredContent, undefined);
+      assert.equal(modelInput(response).includes(snapshot), false);
+      const fences = JSON.parse(Buffer.from(snapshot.split('.')[0], 'base64url')).fences;
+      assert.ok(fences.every(fence => !modelInput(response).includes(fence)));
+      assert.deepEqual(value.items.map(item => item.ref.f), fences.map(fence => fence.slice(0, 8)));
+      const compactResponse = await client.callTool({ name: 'fetch_memory_candidate_evidence', arguments: { refs: value.items.map(item => item.ref), intent } });
+      const compact = ok(JSON.parse(compactResponse.content[0].text));
+      const canonical = ok(await fetchTool.action(fetchTool.schema.parse({ refs: diagnostics.items.map(item => item.ref), intent })));
+      assert.deepEqual(compact, canonical);
+      assert.deepEqual(compactResponse, contextToolResponse({ ok: true, value: canonical }));
+      assert.deepEqual(ok(await fetchTool.action(fetchTool.schema.parse({ snapshot }))), canonical);
+      const mixed = value.items.map((item, i) => i % 2 ? diagnostics.items[i].ref : item.ref);
+      assert.deepEqual(ok(await fetchTool.action(fetchTool.schema.parse({ refs: mixed, intent }))), canonical);
+      value.items.forEach((item, i) => {
+        assert.deepEqual(compact.items[i].ref, diagnostics.items[i].ref);
+        assert.deepEqual(item.ref.ns, access.readSet.findIndex(ns => JSON.stringify(ns) === JSON.stringify(compact.items[i].ref.namespace)));
+        if (item.ref.type === 'memory') {
+          assert.equal(item.metadata, undefined); assert.equal(item.sourceAccess, undefined); assert.equal(item.sourcesComplete, undefined);
+          assert.deepEqual(item.sources, [{ index: 0, role: 'user', sameAsBody: true }]);
+          assert.equal(JSON.stringify(item).split(JSON.stringify(item.body)).length, 2, 'body appears only once');
+          assert.equal(diagnostics.items[i].sources[0].kind, 'sameAsBody');
+          assert.equal(compact.items[i].provenance.sources.length, 1);
+          assert.equal(JSON.stringify(compact.items[i].provenance).includes(item.body), false);
+        } else {
+          assert.deepEqual(Object.keys(item.metadata), ['support', 'origin']);
+          assert.equal(item.sourceAccess, 'unsupported'); assert.equal(item.sourcesComplete, false);
+        }
+      });
+    }
+  }
+});
+
+function place(f, memoryId, title) {
+  const namespace = { ownerId: 'synthetic-u5a', scope: 'project', projectId: 'test' };
+  return ok(f.core.applyPlacement({ namespace, proposal: { items: [{ memoryId, parentIds: [], newL1: { title, parentL2Ids: [] } }] },
+    expectedMemoryRevisions: [{ memoryId, revision: ok(f.core.get({ namespace, memoryId })).memory.revision }],
+    expectedIndexRevision: f.db.prepare('SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?')
+      .get(namespace.ownerId, namespace.scope, namespace.projectId).epoch }));
+}
+
+test('A15 every mutation × intent pins eligibility, revisions, generations and both refetch-path error precedences', async t => {
+  const cases = [
+    ['correction', 'memory', true, 'revision_conflict', 'revision_conflict'],
+    ['filing', 'memory', true, 'revision_conflict', 'revision_conflict'],
+    ['supersession', 'memory', true, 'evidence_unavailable', 'revision_conflict'],
+    ['forget', 'memory', true, 'evidence_unavailable', 'evidence_unavailable'],
+    ['deletion', 'memory', false, 'evidence_unavailable', 'evidence_unavailable'],
+    ['receipt', 'memory', false, 'snapshot_stale', 'snapshot_stale'],
+    ['support', 'card', false, 'evidence_unavailable', 'snapshot_stale'],
+    ['support-revision', 'card', false, 'evidence_unavailable', 'revision_conflict'],
+    ['applicability', 'card', false, 'evidence_unavailable', 'snapshot_stale'],
+    ['applicability-revision', 'card', false, 'evidence_unavailable', 'revision_conflict'],
+    ['edit-current', 'card', false, 'revision_conflict', 'revision_conflict'],
+    ['edit-ineligible', 'card', false, 'evidence_unavailable', 'revision_conflict'],
+    ['parent-move', 'memory', true, null, null],
+  ];
+  for (const [change, type, generationsChange, currentCode, historyCode] of cases) for (const intent of ['current', 'history']) await t.test(change + '/' + intent, async () => {
+    const f = assemblyFixture(t, { cards: true, counter: { id: 'fit', countTokens: () => 1 } });
+    const namespace = { ownerId: 'synthetic-u5a', scope: 'project', projectId: 'test' };
+    const access = createContextReadAccess(namespace), core = f.reopen({ ...access.configuration, counter: { id: 'fit', countTokens: () => 1 } });
+    const memory = f.admit('assembly original mutation target');
+    if (change === 'parent-move') place(f, memory.id, 'First parent');
+    const card = type === 'card' ? confirmedCard(f, namespace, memory) : null;
+    const tools = assemblyTools(core, access), fetchTool = tools.get('fetch_memory_candidate_evidence');
+    const delivered = ok(await tools.get('read_memory_context').action({ ...query, types: [type], intent, maxTokens: 4000 }));
+    const compact = delivered.metered.items[0].ref, full = delivered.diagnostics.items[0].ref;
+    const before = ok(await fetchTool.action(fetchTool.schema.parse({ refs: [full], intent })));
+    assert.deepEqual(ok(await fetchTool.action(fetchTool.schema.parse({ refs: [compact], intent }))), before);
+    const generations = () => ({ memory: f.db.prepare('SELECT epoch FROM namespace_epochs WHERE owner_id=? AND scope=? AND project_id=?')
+      .get(namespace.ownerId, namespace.scope, namespace.projectId).epoch,
+    card: f.db.prepare('SELECT generation FROM card_epochs WHERE owner_id=? AND scope=? AND project_id=?')
+      .get(namespace.ownerId, namespace.scope, namespace.projectId)?.generation ?? 1 });
+    const oldGenerations = generations();
+    const receipt = { client: 'synthetic', sessionId: 'mutation', eventId: change, role: 'user', excerpt: 'post-mutation source' };
+    if (change === 'correction') ok(f.core.correct({ namespace, memoryId: memory.id, expectedRevision: memory.revision,
+      content: 'assembly post-mutation corrected', kind: 'fact', receipt }));
+    if (change === 'filing') place(f, memory.id, 'New parent');
+    if (change === 'supersession') ok(f.core.supersede({ namespace, memoryId: memory.id, expectedRevision: memory.revision,
+      replacement: { content: 'assembly post-mutation replacement', kind: 'fact' }, receipts: [receipt] }));
+    if (change === 'forget') ok(f.core.forget({ namespace, memoryId: memory.id, expectedRevision: memory.revision }));
+    if (['deletion', 'receipt', 'support', 'support-revision'].includes(change)) f.writer.prepare('DELETE FROM receipts WHERE memory_id=?').run(memory.id);
+    if (change === 'deletion') f.writer.prepare('DELETE FROM memories WHERE id=?').run(memory.id);
+    if (change.endsWith('-revision') || change.startsWith('edit-')) {
+      f.writer.prepare('UPDATE private_cards SET revision=revision+1 WHERE id=?').run(card.id);
+    }
+    if (change.startsWith('applicability')) f.writer.prepare("UPDATE card_applicability_reviews SET applicability='historical',reviewed_revision=? WHERE card_id=?")
+      .run(card.revision + Number(change.endsWith('-revision')), card.id);
+    if (change.startsWith('edit-')) {
+      f.writer.prepare("UPDATE private_cards SET body='post-mutation Card',body_revision=body_revision+1 WHERE id=?").run(card.id);
+      if (change === 'edit-current') f.writer.prepare('UPDATE card_applicability_reviews SET reviewed_revision=? WHERE card_id=?').run(card.revision + 1, card.id);
+    }
+    if (change === 'parent-move') place(f, memory.id, 'Second parent');
+    const afterGenerations = generations();
+    assert.equal(JSON.stringify(afterGenerations) !== JSON.stringify(oldGenerations), generationsChange, 'namespace generations pinned');
+    if (type === 'memory') {
+      const row = f.db.prepare('SELECT revision,currentness,review_state,filing_status,deleted FROM memories WHERE id=?').get(memory.id);
+      const expectedRevision = full.revision + Number(['correction', 'filing', 'supersession', 'forget'].includes(change));
+      if (change === 'deletion') assert.equal(row, undefined);
+      else {
+        assert.equal(row.revision, expectedRevision, 'Memory revision pinned');
+        assert.equal(row.currentness, change === 'supersession' ? 'historical' : 'current');
+        assert.equal(row.review_state, 'none'); assert.equal(row.deleted, change === 'forget' ? 1 : 0);
+        assert.equal(row.filing_status, ['filing', 'parent-move'].includes(change) ? 'filed' : 'unfiled');
+      }
+    } else {
+      const row = f.db.prepare('SELECT revision,body_revision FROM private_cards WHERE id=?').get(card.id);
+      assert.equal(row.revision, card.revision + Number(change.endsWith('-revision') || change.startsWith('edit-')));
+      assert.equal(row.body_revision, card.bodyRevision + Number(change.startsWith('edit-')));
+      const latest = { ...full, revision: row.revision, bodyRevision: row.body_revision };
+      const item = ok(await fetchTool.action(fetchTool.schema.parse({ refs: [latest], intent: 'history' }))).items[0];
+      assert.equal(item.state, 'confirmed');
+      assert.equal(item.support.status, change.startsWith('support') ? 'unavailable' : 'eligible');
+      assert.equal(item.support.applicability, change.startsWith('applicability') ? 'historical' :
+        ['support-revision', 'edit-ineligible'].includes(change) ? 'unknown' : 'current');
+    }
+    const expectedCode = intent === 'current' ? currentCode : historyCode;
+    const fetched = await fetchTool.action(fetchTool.schema.parse({ refs: [compact], intent }));
+    const snapshotFetched = await fetchTool.action(fetchTool.schema.parse({ snapshot: delivered.snapshot }));
+    if (expectedCode === null) {
+      assert.equal(JSON.stringify(ok(fetched).items), JSON.stringify(before.items), 'parent-only moves preserve byte-identical canonical evidence');
+    } else {
+      assert.deepEqual(fetched, { ok: false, error: { code: expectedCode, retryable: false } });
+      assert.equal(JSON.stringify(contextToolResponse(fetched)).includes('post-mutation'), false);
+    }
+    const snapshotCode = generationsChange || expectedCode === 'snapshot_stale' ? 'snapshot_stale' : expectedCode;
+    assert.deepEqual(snapshotFetched, { ok: false, error: { code: snapshotCode, retryable: false } });
+  });
+});
+
+test('A15 compact prefixes detect one-character changes, re-derive authority, and canonicalize reversed core read sets', async t => {
+  const f = assemblyFixture(t), namespace = { ownerId: 'synthetic-u5a', scope: 'project', projectId: 'test' };
+  const access = createContextReadAccess(namespace, true), core = f.reopen({ ...access.configuration, counter: { id: 'fit', countTokens: () => 1 } });
+  for (const ns of access.readSet) f.admit('assembly ' + ns.scope, ns);
+  const tools = assemblyTools(core, access), tool = tools.get('fetch_memory_candidate_evidence');
+  const value = ok(await access.call(core, 'contextRead', { ...assemblyQuery(), readSet: [...access.readSet].reverse() }));
+  value.metered.items.forEach((item, i) => assert.deepEqual(access.readSet[item.ref.ns], value.diagnostics.items[i].ref.namespace));
+  const ref = value.metered.items[0].ref, bad = { ...ref, f: (ref.f[0] === 'a' ? 'b' : 'a') + ref.f.slice(1) };
+  assert.deepEqual(await tool.action(tool.schema.parse({ refs: [bad], intent: 'current' })), { ok: false, error: { code: 'snapshot_stale', retryable: false } });
+  const foreign = createContextReadAccess({ ...namespace, ownerId: 'other-host' }, true);
+  f.admit('assembly FOREIGN_HOST_FIXTURE', foreign.readSet[0]);
+  const other = f.reopen({ ...foreign.configuration, counter: { id: 'fit', countTokens: () => 1 } });
+  const otherTool = assemblyTools(other, foreign).get('fetch_memory_candidate_evidence');
+  assert.equal((await otherTool.action(otherTool.schema.parse({ refs: [ref], intent: 'current' }))).error.code, 'evidence_unavailable');
+  const revoked = createContextReadAccess(namespace, true);
+  let checks = 0;
+  const authority = { authorize: revoked.configuration.authority.authorize, isCurrent(grant, request) {
+    if (++checks === 3) revoked.revoke();
+    return revoked.configuration.authority.isCurrent(grant, request);
+  } };
+  const during = f.reopen({ authority, counter: { id: 'fit', countTokens: () => 1 } });
+  const duringTool = assemblyTools(during, revoked).get('fetch_memory_candidate_evidence');
+  assert.equal((await duringTool.action(duringTool.schema.parse({ refs: [ref], intent: 'current' }))).error.code, 'scope_changed');
+  assert.equal((await duringTool.action(duringTool.schema.parse({ refs: [ref], intent: 'current' }))).error.code, 'authority_required');
 });
