@@ -1104,13 +1104,18 @@ snapshot, sidecar, channel and error stays byte-identical. Without
 `experiment/hr2-assembly`.
 
 **Evidence status.** HR-2 (`HR-2/docs/plans/budgeted-assembly-hr2.md`, frozen
-v1.1 at `c863e9d6`) has not yet run. Its dev-split design probe points to
-rank-first whole units; the primary approved that as the **initial** default on
-2026-10-23, with the policy versioned and swappable so that HR-2's verdict can
-flip the default without changing this interface. HR-2 answers only for short,
-single-fact items whose evidence often sits in receipts; long-item validity is
-a non-claim, and neither HR-2 execution nor long-item degradation blocks the
-initial default.
+v1.1 at `c863e9d6`) ran on 2026-10-24
+(`HR-2/docs/plans/budgeted-assembly-hr2-results.md`, harness `241fad89`,
+dual non-author review). The preregistered contrast, coverage-first minus
+rank-first whole units on bge-m3 + A3 at 512 tokens, came out −2.5 points with
+a 95% family-bootstrap CI of [−6.6, +1.5], so **`rank-first-whole-v1` stays
+the initial default** under the protocol's rule. The primary had approved that
+default on 2026-10-23, with the policy versioned and swappable so that later
+evidence can flip it without changing this interface. HR-2 answers only for
+short, single-fact items whose evidence often sits in receipts; long-item
+validity is a non-claim. HR-2 also found that deepening with the earliest
+receipt only never lost and gained 3–4 points at the tightest budgets; that
+variant is not part of this packet and would need its own clause.
 
 ### 15.1 Facade, authority and transactions
 

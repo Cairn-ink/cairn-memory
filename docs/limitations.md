@@ -11,8 +11,10 @@ diagnostics require an explicit client contract that excludes them from model
 input; no invisibility is claimed for arbitrary clients. Separate core/transport byte bounds remain.
 Whole units may be omitted; no body or source is silently shortened.
 
-HR-2 has not run. The initial rank-first default is versioned and swappable;
-the research design addresses short, single-fact items with evidence often in
+HR-2 has run on the frozen HR-1 fixture: coverage-first did not beat
+rank-first whole units (−2.5 points, 95% CI [−6.6, +1.5] at the preregistered
+cell), so the rank-first default stands; it is versioned and swappable. That
+research design addresses short, single-fact items with evidence often in
 receipts and provides no external validity for long items. U5b makes no claim
 about answer quality or correctness, generated summaries, prefix/window
 degradation, Card source units, role profiles, relations, MOC (U5c), total

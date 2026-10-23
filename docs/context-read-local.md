@@ -61,8 +61,23 @@ are admitted whole or omitted; sources never appear without their body.
 
 Context-enabled CLI startup awaits the local `o200k_base` counter
 `tiktoken-o200k_base` after configuration checks, independently of the legacy
-model. Programmatic callers explicitly await the exported async factory and
-pass its result as the trusted `contextCounter` option:
+model. Programmatic startup also loads the counter automatically, without
+changing the established synchronous call shape:
+
+```js
+import { createCairnServer } from '../adapters/mcp/server.mjs';
+const server = createCairnServer({ path, namespace, contextRead: 'context-read-v1' });
+const counterReady = await server.contextCounterReady;
+```
+
+The context-enabled server's `contextCounterReady` promise resolves `true`
+when the counter is ready, or `false` if loading fails; it never rejects.
+The §13 retrieval tools work while loading and after a failed load. Assembly
+returns sanitized `token_count_unavailable` until readiness, and keeps returning
+that error if loading fails. The server continues serving retrieval tools.
+The CLI awaits its counter before serving, so stdio clients never see this
+unready window. A programmatic host can also supply an optional trusted
+`contextCounter` from the exported async factory, with immediate readiness:
 
 ```js
 import { createCairnServer, createContextCounter } from '../adapters/mcp/server.mjs';
@@ -72,8 +87,8 @@ const server = createCairnServer({ path, namespace, contextRead: 'context-read-v
 
 Importing these local modules, default keyless flag-off startup and `--check-config` never
 load the tokenizer package or WASM. A missing tokenizer refuses explicit
-counter creation with `context_tokenizer_unavailable`; missing trusted counter
-in programmatic context startup refuses `context_counter_required`.
+counter creation and CLI startup with `context_tokenizer_unavailable`;
+automatic programmatic loading resolves readiness to `false` instead.
 This needs no API key, provider or network. Capabilities
 advertise `contextRead` and an `assembly` block with representation, policies,
 default policy, counter identity and limits. Core hosts without a counter
@@ -99,8 +114,9 @@ block alone, not total model-request spend. The independent 65,536-byte core
 envelope and 262,144-byte transport bounds also apply, including diagnostics;
 both successful and error responses include diagnostics in those byte checks.
 
-The default is versioned and swappable. HR-2 has not run; its short, single-fact
-receipt-oriented design does not establish long-item validity. No answer-quality
+The default is versioned and swappable. HR-2 ran on a short, single-fact,
+receipt-oriented synthetic fixture and kept rank-first as the initial default;
+it does not establish long-item validity. No answer-quality
 or correctness claim, generated summaries, prefix/window degradation, Card
 source units, role profiles, relations or MOC support is supplied by U5b.
 No budget number is a recommendation.
