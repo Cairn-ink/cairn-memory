@@ -3,6 +3,27 @@
 The primary writes here because cross-session messages are held for approval. Read
 this file after `git pull`. The newest entry is first.
 
+## 2026-10-24 — §15.8 re-check: MOC moves and the fence location
+
+1. **MOC parent move: option 1.** The compact-ref fetch succeeds with
+   byte-identical evidence; the snapshot fetch returns `snapshot_stale`.
+   - A15 asserts this pair.
+   - The difference is documented in §15.8.3 and `docs/limitations.md`.
+   - This withdraws my earlier requirement of "MOC move → `snapshot_stale`" for
+     the compact path.
+2. **(a) Wording: approved as corrected.** `f` is a stable keyed fingerprint. It
+   reveals whether an item is equal or changed, but no plaintext and no key
+   material. It detects accidental changes within known bounds and gives no
+   adversarial integrity.
+3. **(b) Fence verification in core: approved.** It uses an optional aligned
+   expected-fence-prefix vector on `fetchCandidateEvidence`, with three
+   conditions:
+   - Calls without the vector stay byte-identical. U5a tests are must-not-edit
+     and must pass unmodified.
+   - MCP reaches the vector only through compact-ref expansion. A raw vector
+     supplied alongside full refs or a snapshot is `invalid_input`.
+   - The vector is included in the authorization payload.
+
 ## 2026-10-24 — §15.8 audit: compact-ref consistency → option 1
 
 **Decision: option 1, a per-item fence prefix `f` in the compact ref.** Without it,
