@@ -6,7 +6,7 @@ Status:
 - U4 (§12) v0.5.2 is confirmed by the auditor as ready for U4a implementation after U2c.
 - U5a (§13) v0.6.2 is confirmed by the auditor as ready for implementation.
 - U2c (§14) v0.7.1 is confirmed by the auditor as ready for implementation. It precedes U4a and U5a's wiring.
-- U5b (§15) v0.9.1 applies the non-author audit of v0.8 (eight P0, four P1, one P2) and the re-check's two P0 and one P1, and awaits the auditor's confirmation. It builds only on U5a's facade and does not change §13.
+- U5b (§15) v0.9.1 is confirmed by the auditor as ready for implementation (`0e92245d`, two re-checks). It builds only on U5a's facade and does not change §13.
 
 History:
 - v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
@@ -1089,7 +1089,7 @@ capability change.
   | C04 | Gate: a continuous maximum-size `readMethodFile` reader and the existing small independent binding writer run in separate processes, with at least 100 committed transitions and finite deadlines. Any busy outcome fails the gate, even if it was retried. Writer p95 must be ≤250 ms on the reference machine. `npm run measure:method-packages` asserts these thresholds and both processes' exit codes on both runtimes, and reports reader page p50/p95. This is plausibly achievable, not yet established: rollback-mode PENDING locks let short deferred reads coexist with writer progress |
   | C05 | A concurrent deletion permits complete pages linearized before the deletion. A later continuation returns `cursor_stale` under the existing U2 epoch precedence (`core/test/method-packages-deletion.test.mjs:72`), and a fresh read returns `unavailable`. No page mixes snapshots or versions. Existing §5 behaviour and assertions are preserved. U4's separately specified deleted-target precedence does not change U2c |
 
-## 15. U5b: M7 budgeted assembly (v0.9.1, revised after audit, awaiting confirmation)
+## 15. U5b: M7 budgeted assembly (v0.9.1, audited and confirmed)
 
 Authored by the U5b coordinator on 2026-10-23 on branch
 `integration/unified-memory-v1-u5b` (base: U5a `389512d`). v0.8 (`f5ee8133`)
