@@ -23,6 +23,8 @@ const success = value => ({ ok: true, value });
 const states = new Set(['ready', 'unavailable', 'disabled', 'absent', 'timeout', 'provider_error', 'rate_limited',
   'budget_denied', 'stale_index', 'dimension_mismatch', 'partial_coverage']);
 const channel = (state, causes = state === 'ready' ? [] : [state]) => ({ state, causes: [...new Set(causes)] });
+const maintenanceReasons = new Map([['missing', 'missing'], ['corrupt', 'corrupt'], ['wrong_store', 'wrong-store'],
+  ['wrong-store', 'wrong-store'], ['incompatible', 'incompatible']]);
 const knownErrors = new Set(['invalid_input', 'invalid_read_set', 'authority_required', 'scope_changed', 'invalid_cursor',
   'cursor_stale', 'revision_conflict', 'evidence_unavailable', 'invalid_snapshot', 'snapshot_stale',
   'context_item_too_large', 'index_unavailable', 'storage_busy', 'storage_error', 'store_closed']);
@@ -60,7 +62,7 @@ export function openContextCore(baseOptions, contextRead, openBase) {
   try {
     const context = createContextFacade(baseOptions.path === ':memory:' ? ':memory:' : resolve(baseOptions.path), options, { readOnly });
     return Object.freeze({ ...base, ...context.methods, close() { context.close(); return base.close(); } });
-  } catch (error) { base.close(); throw error; }
+  } catch (error) { try { base.close(); } catch { /* Preserve the initialization refusal. */ } throw error; }
 }
 export function openContextReader(value) {
   const input = ownData(value, ['path', 'contextRead']);
@@ -70,11 +72,21 @@ export function openContextReader(value) {
 }
 
 function createContextFacade(path, options, { readOnly }) {
-  let closed = false, database;
+  let database;
+  try {
+    if (path !== ':memory:') database = openReadDatabase(path, { contextRead: true,
+      preflight: () => { if (readOnly) assertContextReadReadOnlyAuxiliaries(path); } });
+    return initializeContextFacade(path, options, { readOnly, database });
+  } catch (error) {
+    try { if (database?.db.isOpen) database.db.close(); } catch { /* Preserve the initialization refusal. */ }
+    throw error;
+  }
+}
+function initializeContextFacade(path, options, { readOnly, database }) {
+  let closed = false;
   const rankings = new Map(), controllers = new Set(), indexes = new Map(), dispatch = contextBudget(options);
   const memoryOnly = path === ':memory:';
   const guardAuxiliaries = () => { if (readOnly) assertContextReadReadOnlyAuxiliaries(path); };
-  if (!memoryOnly) database = openReadDatabase(path, { contextRead: true, preflight: guardAuxiliaries });
   const db = database?.db;
   function ready() {
     if (closed || db && (!db.isOpen || isConnectionDiscarded(db))) fail('store_closed');
@@ -83,6 +95,7 @@ function createContextFacade(path, options, { readOnly }) {
   const read = work => { ready(); return readTransaction(db, work); };
   const info = memoryOnly ? { storeId: null, cursorSecret: null, cards: false, raw: false } : read(() => {
     const row = db.prepare('SELECT store_id,cursor_secret FROM store_metadata WHERE singleton=1').get();
+    if (!row) fail('unsupported_database');
     const has = table => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table));
     return { storeId: row.store_id, cursorSecret: row.cursor_secret,
       cards: has('private_cards') && has('card_memory_bindings') && has('card_applicability_reviews'), raw: has('card_raw_bindings') };
@@ -178,12 +191,24 @@ function createContextFacade(path, options, { readOnly }) {
   function unknownCoverage(input) {
     return { status: 'unavailable', byType: Object.fromEntries((input?.types ?? supportedTypes).map(type =>
       [type, { eligible: null, indexed: null, embedded: null, scanned: null, embeddedFraction: null, scannedFraction: null }])),
-    freshness: 'unverified', maintenance: { available: !readOnly && !memoryOnly, state: 'rebuilding', buildState: 'rebuilding', progress: null },
+    freshness: 'unverified', maintenance: { available: !readOnly && !memoryOnly, state: 'rebuilding', buildState: 'rebuilding', reason: null, progress: null },
     depths: { lexical: 0, semantic: 0 }, omitted: { lexical: null, semantic: null, horizon: null }, stops: { deadline: false, budget: false } };
   }
-  function coverage(input, state, preflight, mode, matched, unionSize) {
+  function maintenanceCoverage(value, maintenance, { deadlineAt, maxItems } = {}) {
+    if (maintenance) {
+      value.maintenance.reason = maintenanceReasons.get(maintenance.reason) ?? null;
+      value.maintenance.buildState = ['rebuilding', 'rebuilt', 'ready'].includes(maintenance.buildState) ? maintenance.buildState : 'rebuilding';
+      value.maintenance.state = maintenance.status === 'complete' ? 'ready' : 'rebuilding';
+      value.maintenance.progress = maintenance.progress;
+    }
+    value.stops.deadline ||= Boolean(maintenance?.stops?.deadline) || deadlineAt !== undefined && performance.now() >= deadlineAt;
+    value.stops.budget ||= Boolean(maintenance?.stops?.budget) || maxItems !== undefined && (maintenance?.metrics.transformed ?? 0) >= maxItems;
+    return value;
+  }
+  function coverage(input, state, preflight, mode, matched, unionSize, maintenance) {
     const value = unknownCoverage(input); value.status = 'complete'; value.freshness = 'current';
     value.maintenance.state = 'ready'; value.maintenance.buildState = 'ready'; value.maintenance.progress = state.progress;
+    maintenanceCoverage(value, maintenance ?? { ...state, status: 'complete' });
     for (const type of input.types) {
       const counts = state.byType[type], semantic = preflight?.byType?.[type];
       const scanned = mode === 'hybrid' ? semantic?.scanned ?? 0 : 0;
@@ -243,11 +268,11 @@ function createContextFacade(path, options, { readOnly }) {
     finally { lease.release(); }
   }
   async function findCandidates(original, token) {
-    let diagnostics, controller, lease;
+    let diagnostics, controller, lease, deadlineAt;
     try {
       ready();
       const { payload, input } = contextInput('findCandidates', original, supportedTypes);
-      const started = performance.now(), deadlineAt = started + input.deadlineMs;
+      const started = performance.now(); deadlineAt = started + input.deadlineMs;
       const access = authorize('findCandidates', input, payload, token);
       if (input.cursor !== undefined) return success(continuation(input, access));
       diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(input.semantic ? options.embedder ? 'unavailable' : 'absent' : 'disabled',
@@ -269,8 +294,9 @@ function createContextFacade(path, options, { readOnly }) {
       access.check();
       const current = storage.state(projection);
       diagnostics.coverage.maintenance.progress = maintenance?.progress ?? current.progress;
+      maintenanceCoverage(diagnostics.coverage, maintenance, { deadlineAt, maxItems: readOnly ? undefined : 1024 });
       if (!current.ready) fail('index_unavailable');
-      diagnostics.coverage = coverage(input, current, null, 'lexical', null, 0);
+      diagnostics.coverage = coverage(input, current, null, 'lexical', null, 0, maintenance);
       let time = performance.now();
       const lexical = storage.lexicalPage(projection, input.query, 24, { deadlineAt });
       diagnostics.trace.timings.lexicalMs = performance.now() - time;
@@ -310,7 +336,7 @@ function createContextFacade(path, options, { readOnly }) {
       const fused = fuseCandidates(lexical.rows, semantic, { preset: options.preset,
         semanticState: diagnostics.channels.semantic.state, coverageComplete: preflight?.state === 'ready' });
       diagnostics.trace.timings.fusionMs = performance.now() - time; diagnostics.trace.effective = fused.mode;
-      diagnostics.coverage = coverage(input, current, preflight, fused.mode, lexical.matched, fused.unionSize);
+      diagnostics.coverage = coverage(input, current, preflight, fused.mode, lexical.matched, fused.unionSize, maintenance);
       diagnostics.coverage.stops = { deadline: diagnostics.channels.semantic.causes.includes('timeout'),
         budget: diagnostics.channels.semantic.causes.includes('budget_denied') };
       const ranking = deepFreeze({ id: randomUUID(), expires: Date.now() + 300000, request: requestBinding(input),
@@ -324,15 +350,16 @@ function createContextFacade(path, options, { readOnly }) {
     } catch (error) {
       lease?.invalidate(error);
       if (diagnostics && (error.code === 'index_unavailable' || error.reason === 'timeout')) {
+        diagnostics.coverage.maintenance.reason ??= maintenanceReasons.get(error.reason) ?? null;
         diagnostics.channels.lexical = channel(error.reason === 'timeout' ? 'timeout' : 'unavailable');
-        diagnostics.coverage.stops.deadline = error.reason === 'timeout';
+        diagnostics.coverage.stops.deadline ||= error.reason === 'timeout' || performance.now() >= deadlineAt;
         return failure(new MemoryStoreError('index_unavailable'), diagnostics);
       }
       return failure(error, diagnostics && ['invalid_input', 'index_unavailable'].includes(error.code) ? diagnostics : undefined);
     } finally { lease?.release(); if (controller) { controller.abort(); controllers.delete(controller); } }
   }
   async function refreshContextIndex(original, token) {
-    let controller, diagnostics, lease;
+    let controller, diagnostics, lease, deadlineAt;
     try {
       ready();
       if (readOnly) fail('invalid_input');
@@ -340,14 +367,15 @@ function createContextFacade(path, options, { readOnly }) {
       diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(options.embedder ? 'unavailable' : 'absent') },
         coverage: unknownCoverage(input), trace: trace({ semantic: Boolean(options.embedder) }) };
       if (options.embedder && !dispatch) { diagnostics.channels.semantic = channel('budget_denied'); fail('invalid_input'); }
-      const deadlineAt = performance.now() + input.budget.maxMs, projection = selected(input, access);
+      deadlineAt = performance.now() + input.budget.maxMs; const projection = selected(input, access);
       lease = acquireSidecar(projection, access); const storage = lease.storage;
       const remaining = Math.floor(deadlineAt - performance.now());
-      if (remaining < 1) fail('index_unavailable');
+      if (remaining < 1) { diagnostics.coverage.stops.deadline = true; fail('index_unavailable'); }
       const maintenance = storage.reconcile({ ...projection, budget: { ...input.budget, maxMs: remaining } }, { isCurrent: access.check });
       diagnostics.trace.maintenance = maintenance.metrics;
       access.check();
       let vectorProgress = { attempted: 0, embedded: 0 }, preflight, current = storage.state(projection);
+      maintenanceCoverage(diagnostics.coverage, maintenance, { deadlineAt, maxItems: input.budget.maxItems });
       if (!current.ready) {
         diagnostics.coverage.maintenance.progress = maintenance.progress;
         return success({ status: 'rebuilding', progress: { lexical: maintenance.progress, transformed: maintenance.metrics.transformed,
@@ -374,7 +402,7 @@ function createContextFacade(path, options, { readOnly }) {
       }
       access.check(); current = storage.state(projection);
       if (!current.ready) fail('index_unavailable');
-      diagnostics.coverage = coverage(input, current, preflight, 'lexical', 0, 0);
+      diagnostics.coverage = coverage(input, current, preflight, 'lexical', 0, 0, maintenance);
       diagnostics.coverage.stops = { deadline: performance.now() >= deadlineAt,
         budget: maintenance.metrics.transformed + vectorProgress.attempted >= input.budget.maxItems || diagnostics.channels.semantic.causes.includes('budget_denied') };
       return success({ status: !options.embedder || diagnostics.channels.semantic.state === 'ready' ? 'complete' : 'partial',
@@ -382,6 +410,8 @@ function createContextFacade(path, options, { readOnly }) {
           embeddingAttempts: vectorProgress.attempted, embedded: vectorProgress.embedded }, coverage: diagnostics.coverage, channels: diagnostics.channels });
     } catch (error) {
       lease?.invalidate(error);
+      if (diagnostics && deadlineAt !== undefined) diagnostics.coverage.stops.deadline ||= performance.now() >= deadlineAt;
+      if (diagnostics) diagnostics.coverage.maintenance.reason ??= maintenanceReasons.get(error.reason) ?? null;
       return failure(error, ['scope_changed', 'authority_required', 'store_closed'].includes(error.code) ? undefined : diagnostics);
     }
     finally { lease?.release(); if (controller) { controller.abort(); controllers.delete(controller); } }

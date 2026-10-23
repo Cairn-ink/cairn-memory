@@ -1,15 +1,14 @@
 import { performance } from 'node:perf_hooks';
 
-// One ledger per frozen embedder/family/cap profile in this process. Rebuilding
-// a handle or copying its constructor policy cannot reset requests or charges.
+// One ledger per embedder identity in this process. Limits and representation
+// options constrain shared totals; changing them never creates a new allowance.
 const ledgers = new Map();
 const refused = code => Object.assign(new Error(code), { code });
 export function contextBudget(options) {
   if (!options.budgetConfigured) return null;
   const { policy } = options;
   const port = options.embedder;
-  const binding = JSON.stringify([port?.id, port?.revision, port?.dimensions, port?.normalization, options.family,
-    policy.maxRequests, policy.maxUsd, policy.maxConcurrent]);
+  const binding = JSON.stringify([port?.id, port?.revision]);
   let ledger = ledgers.get(binding);
   if (!ledger) { ledger = { requests: 0, usd: 0, active: 0 }; ledgers.set(binding, ledger); }
   return async function dispatch(port, texts, { signal, deadlineAt, guard }) {

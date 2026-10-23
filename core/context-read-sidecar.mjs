@@ -19,7 +19,10 @@ const boundary = ns => [ns.ownerId, ns.scope, ns.projectId ?? ''];
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const unavailable = reason => { const error = Object.assign(new Error('index_unavailable'), { code: 'index_unavailable', reason }); throw error; };
 function stat(path) {
-  try { return lstatSync(path); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  try { return lstatSync(path); } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    unavailable('unsafe_file');
+  }
 }
 function protectedFile(path, required = true) {
   const value = stat(path);
@@ -38,7 +41,8 @@ function walHeader(path) {
     const header = Buffer.alloc(20), bytes = readSync(fd, header, 0, header.length, 0);
     return bytes === 20 && header.subarray(0, 16).toString('binary') === 'SQLite format 3\0' &&
       (header[18] === 2 || header[19] === 2);
-  } finally { closeSync(fd); }
+  } catch { unavailable('unsafe_file'); }
+  finally { try { closeSync(fd); } catch { unavailable('unsafe_file'); } }
 }
 function auxiliaries(path, readOnly) {
   for (const suffix of ['-wal', '-shm', '-journal']) {
@@ -492,6 +496,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
     const ready = fresh(p, g);
     return { status: ready ? 'complete' : 'rebuilding', buildState: ready ? g.reason === 'reconcile' ? 'ready' : 'rebuilt' : 'rebuilding',
       reason: g.reason, progress: { phase: g.phase, checkpoint: g.checkpoint, sequence: g.sequence, baseSequence: g.base_sequence }, metrics: m,
+      stops: { deadline: !ready && m.elapsedMs >= budget.maxMs, budget: !ready && m.transformed >= budget.maxItems },
       coverage: ready ? sideRead(() => ({ ...side.prepare("SELECT n,total_length FROM statistics WHERE generation=? AND term=''").get(p.id) })) : { n: null, total_length: null } };
   }
 
@@ -609,7 +614,7 @@ export function openContextReadSidecar({ path, db: canonical, readOnly = false, 
       }
     }
     return { ready, fence: current, sequence: g?.sequence ?? null, checkpoint: g?.checkpoint ?? null, incarnation: g?.incarnation ?? null,
-      buildState: ready ? 'ready' : 'rebuilding', byType,
+      buildState: ready ? g.reason === 'reconcile' ? 'ready' : 'rebuilt' : 'rebuilding', reason: g?.reason ?? rebuildReason ?? null, byType,
       progress: g ? { phase: g.phase, checkpoint: g.checkpoint, sequence: g.sequence, baseSequence: g.base_sequence } : null };
   }
   function assertState(input, expected, { checkpoint = true } = {}) {

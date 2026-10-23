@@ -1,5 +1,28 @@
 # Known limitations
 
+## Opt-in core candidate retrieval (U5a parts 1–2)
+
+Candidate retrieval requires explicit `contextRead` configuration and method-specific
+host authority. Flag-off behaviour stays unchanged. This packet provides core
+lookup, refresh and canonical evidence refetch; MCP, CLI and hosted adapter wiring
+remain deferred. Candidate ranks do not assemble context or establish answer quality.
+
+The local `<store>.context-read-v1.sqlite` sidecar is sensitive: lexical terms,
+postings, projection statistics, identities and optional embedding vectors can
+reveal private information. It is a protected plaintext-derived cache, not an
+encryption boundary. Canonical revisions and eligibility changes cause logical
+invalidation. Removing entries or the sidecar is not secure physical erasure of
+SQLite pages, journals, filesystem blocks or backups. Read-only handles refuse
+unsupported auxiliary files and never repair or maintain the sidecar.
+
+Frozen T1 tokenization intentionally misses an embedded single-Han query: `中`
+does not match `中文`. Exact-term and CJK fixture results describe these frozen
+mechanics, not general semantic recall. Measurements use synthetic data only and
+are observational. Reported timings vary with runtime, workload and filesystem;
+they are not production-latency guarantees or evidence of answer correctness.
+Paid API smoke remains unrun by default, and no 100,000-Memory latency guarantee
+is made.
+
 ## Text-only local method packages and host workflow (U2/U3)
 
 [Method packages](method-packages-local.md) are default-off text-only mechanics

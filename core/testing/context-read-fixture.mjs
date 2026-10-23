@@ -21,11 +21,13 @@ import { readTransaction } from '../database.mjs';
 // same ordered event queue, avoiding sleeps and events from fixture setup.
 export async function observeDatabaseFiles(f, work) {
   const name = basename(f.path), sentinel = '.u5a-observe-' + randomUUID(), markers = [], events = [];
+  const observed = new Set([name, name + '.context-read-v1.sqlite'].flatMap(database =>
+    ['', '-journal', '-wal', '-shm'].map(suffix => database + suffix)));
   let barrier, timer, watchError, expectedSentinel;
   const monitor = watch(f.workspace.path, (event, filename) => {
     const selected = String(filename);
     if (selected === expectedSentinel) barrier?.();
-    else if (selected === name || selected.startsWith(name + '.')) events.push([event, selected]);
+    else if (observed.has(selected)) events.push([event, selected]);
   });
   monitor.on('error', error => { watchError = error; });
   async function flush() {
@@ -40,7 +42,7 @@ export async function observeDatabaseFiles(f, work) {
   }
   try {
     await flush(); events.length = 0;
-    const result = await work();
+    const result = await work(flush);
     await flush();
     if (watchError) throw watchError;
     return { result, events };

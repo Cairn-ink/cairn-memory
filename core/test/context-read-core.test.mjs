@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { performance } from 'node:perf_hooks';
-import { coreFixture, query, refresh, policy, ns, personal, foreign, ok, denied, receipt, openContextReader, mutateProcess, host } from '../testing/context-read-core-fixture.mjs';
+import { coreFixture, query, refresh, policy, ns, personal, foreign, ok, denied, receipt, openContextReader, mutateProcess, host, waitForContextEntry } from '../testing/context-read-core-fixture.mjs';
 import { createFakeEmbedder } from '../context-read-embedder.mjs';
 import { createBM25 } from '../context-read-bm25.mjs';
 import { fuseCandidates } from '../context-read-fusion.mjs';
@@ -180,17 +180,21 @@ test('R06/R10 revoke and mutate at provider await/dispatch fences; independent w
   pending = true;
   const started = new Promise(resolve => { entered = resolve; });
   const lookup = f.call('findCandidates', query({ semantic: true, deadlineMs: 5000 }));
-  await Promise.race([started, lookup.then(value => { throw Error('lookup settled before dispatch: ' + JSON.stringify(value)); })]);
-  const writer = await mutateProcess(f, { method: 'correct', input: { namespace: ns, memoryId: b.id, expectedRevision: b.revision,
-    content: 'pear changed independently', kind: 'fact', receipt: receipt('concurrent') } });
-  assert.equal(writer.memory.revision, 2); gate();
-  denied(await lookup, 'index_unavailable');
+  try {
+    await waitForContextEntry(started, lookup);
+    const writer = await mutateProcess(f, { method: 'correct', input: { namespace: ns, memoryId: b.id, expectedRevision: b.revision,
+      content: 'pear changed independently', kind: 'fact', receipt: receipt('concurrent') } });
+    assert.equal(writer.memory.revision, 2); gate();
+    denied(await lookup, 'index_unavailable');
+  } finally { gate?.(); await lookup; }
   pending = false; ok(await f.call('refreshContextIndex', refresh()));
   pending = true; gate = undefined;
   const awaiting = new Promise(resolve => { entered = resolve; });
   const revoked = f.call('findCandidates', query({ semantic: true, deadlineMs: 5000 }));
-  await Promise.race([awaiting, revoked.then(value => { throw Error('lookup settled before dispatch: ' + JSON.stringify(value)); })]);
-  f.trusted.state.enabled = false; gate(); denied(await revoked, 'scope_changed');
+  try {
+    await waitForContextEntry(awaiting, revoked);
+    f.trusted.state.enabled = false; gate(); denied(await revoked, 'scope_changed');
+  } finally { gate?.(); await revoked; }
   assert.equal(a.revision, 1);
 });
 
@@ -324,7 +328,7 @@ test('R04/R05 budgets retain concurrency until actual settlement and enforce req
   assert.equal(blocked.channels.semantic.state, 'budget_denied'); assert.equal(fake.calls.length, count);
   hang = false; release(); await settled; await new Promise(resolve => setImmediate(resolve));
   assert.equal(ok(await f.call('findCandidates', query({ semantic: true }))).channels.semantic.state, 'ready');
-  const cappedPort = spyEmbedder(), capped = coreFixture(t, { embedder: cappedPort.port,
+  const cappedPort = spyEmbedder({ ...createFakeEmbedder(), id: 'synthetic-capped-test' }), capped = coreFixture(t, { embedder: cappedPort.port,
     selectedPolicy: policy({ maxRequests: 1, maxUsd: .25, estimateUsd: () => .25 }) }); capped.admit('apple');
   ok(await capped.call('refreshContextIndex', refresh()));
   assert.equal(ok(await capped.call('findCandidates', query({ semantic: true }))).channels.semantic.state, 'budget_denied');
@@ -332,7 +336,7 @@ test('R04/R05 budgets retain concurrency until actual settlement and enforce req
   capped.reopen({ policy: policy({ maxRequests: 1, maxUsd: .25, estimateUsd: () => .25 }) });
   assert.equal(ok(await capped.call('findCandidates', query({ semantic: true }))).channels.semantic.state, 'budget_denied');
   assert.equal(cappedPort.calls.length, 1, 'closing/reopening a handle cannot reset the process policy ledger');
-  const expensivePort = spyEmbedder(), expensive = coreFixture(t, { embedder: expensivePort.port,
+  const expensivePort = spyEmbedder({ ...createFakeEmbedder(), id: 'synthetic-expensive-test' }), expensive = coreFixture(t, { embedder: expensivePort.port,
     selectedPolicy: policy({ maxUsd: .1, estimateUsd: () => .2 }) }); expensive.admit('apple');
   const stopped = ok(await expensive.call('refreshContextIndex', refresh()));
   assert.equal(stopped.channels.semantic.state, 'budget_denied'); assert.equal(expensivePort.calls.length, 0);
@@ -346,6 +350,8 @@ test('R04 cache-byte preflight refuses an oversized authorized projection before
   const first = await f.call('findCandidates', query({ semantic: true, deadlineMs: 5000 }));
   denied(first, 'index_unavailable');
   assert.equal(first.error.details.coverage.byType.memory.eligible, null);
+  assert.equal(first.error.details.coverage.stops.budget, first.error.details.trace.maintenance.transformed >= 1024);
+  assert.ok(first.error.details.coverage.stops.budget || first.error.details.coverage.stops.deadline);
   let resumed;
   // Rebuilding is the documented resumable protocol, not a test retry. The
   // projection must finish before asserting semantic coverage under any load.
@@ -367,9 +373,12 @@ test('R06 refresh revocation after await and reservation revocation discard resu
     entered(); await new Promise(resolve => { release = resolve; }); options.beforeDispatch(); return base.embed(texts, options);
   });
   const f = coreFixture(t, { embedder: fake.port, selectedPolicy: policy() }); f.admit('apple');
-  const pending = f.call('refreshContextIndex', refresh()); await started;
-  f.trusted.state.enabled = false; release();
-  const result = await pending; denied(result, 'scope_changed'); assert.equal(result.error.details, undefined);
+  const pending = f.call('refreshContextIndex', refresh());
+  try {
+    await waitForContextEntry(started, pending);
+    f.trusted.state.enabled = false; release();
+    const result = await pending; denied(result, 'scope_changed'); assert.equal(result.error.details, undefined);
+  } finally { release?.(); await pending; }
   const side = new DatabaseSync(f.path + '.context-read-v1.sqlite', { readOnly: true });
   try { assert.equal(side.prepare('SELECT count(*) AS n FROM vectors').get().n, 0); } finally { side.close(); }
   let other;
@@ -460,10 +469,13 @@ test('R06 concurrent scope access cannot evict a pending request or alter its co
   ok(await f.call('refreshContextIndex', refresh())); ok(await f.call('refreshContextIndex', refresh({ readSet: [personal] })));
   const expected = ok(await f.call('findCandidates', query({ semantic: true })));
   const gate = new Promise(resolve => { entered = resolve; }); pending = true;
-  const request = f.call('findCandidates', query({ semantic: true })); await gate;
-  ok(await f.call('findCandidates', query({ readSet: [personal], query: 'pear' })));
-  pending = false; release(); const actual = ok(await request);
-  assert.deepEqual(actual.items, expected.items); assert.deepEqual(actual.channels, expected.channels); assert.deepEqual(actual.coverage, expected.coverage);
+  const request = f.call('findCandidates', query({ semantic: true, deadlineMs: 5000 }));
+  try {
+    await waitForContextEntry(gate, request);
+    ok(await f.call('findCandidates', query({ readSet: [personal], query: 'pear' })));
+    pending = false; release(); const actual = ok(await request);
+    assert.deepEqual(actual.items, expected.items); assert.deepEqual(actual.channels, expected.channels); assert.deepEqual(actual.coverage, expected.coverage);
+  } finally { pending = false; release?.(); await request; }
 });
 
 test('R10 every context read is query_only and all authority/provider callbacks run after transactions end', async t => {

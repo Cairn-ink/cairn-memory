@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — opt-in core candidate retrieval (U5a parts 1–2)
+
+- Add the explicit `contextRead` core opt-in, read-only `openContextReader`,
+  candidate lookup, bounded index refresh and canonical evidence refetch. Existing
+  flag-off behaviour is unchanged; MCP, CLI and hosted adapter wiring are deferred.
+- Keep lexical postings, statistics and optional vectors in a sensitive local
+  sidecar. Canonical changes invalidate retrieval logically; deleting or
+  invalidating entries does not provide secure physical erasure.
+- Freeze T1 tokenization and BM25/RRF presets, including the intentional embedded
+  single-Han miss: `中` does not match `中文`. Measurements use synthetic data and
+  are observational, not semantic-quality or production-latency guarantees.
+
 ## Unreleased — method read concurrency (U2c)
 
 - Run method and binding reads in deferred, query-only snapshots; restore the

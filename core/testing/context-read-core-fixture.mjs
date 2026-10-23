@@ -15,6 +15,13 @@ export const query = (patch = {}) => ({ readSet: [ns], types: ['memory'], intent
 export const refresh = (patch = {}) => ({ readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 }, ...patch });
 export const policy = (patch = {}) => ({ family: 'local', maxRequests: 10000, maxUsd: 1, estimateUsd: () => 0, ...patch });
 export const denied = (result, code) => { assert.equal(result.ok, false, JSON.stringify(result)); assert.equal(result.error.code, code, JSON.stringify(result)); };
+export async function waitForContextEntry(entry, operation, timeoutMs = 10000) {
+  let timer;
+  try {
+    await Promise.race([entry, operation.then(value => { throw Error('operation_settled_before_entry: ' + JSON.stringify(value)); }),
+      new Promise((resolve, reject) => { timer = setTimeout(() => reject(Error('context_entry_timeout')), timeoutMs); })]);
+  } finally { clearTimeout(timer); }
+}
 export function host() {
   const tokens = new WeakMap(), grants = new WeakMap();
   const state = { enabled: true, generation: 1, allowed: [ns, personal], methods: new Set(CONTEXT_METHODS),
