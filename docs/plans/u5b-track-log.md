@@ -56,3 +56,9 @@
   keyless `o200k_base` 計數器；驗收 A01–A12，含「研究等價」A02（核心的兩個 policy 要和 HR-2 harness 逐單位相同）。
 - 派 `u5b_contract_audit`（gpt-6.1-sol/xhigh，read-only，附 TRAPS）審計 §15；紀錄在 U5b worktree
   `.research-private/dispatch/u5b_contract_audit/`。HR-2 協議審計仍在跑。
+- **HR-2 協議審計與凍結。** `hr2_protocol_audit`（thread `01a16966-…`）對 v0.2 提出 3 P0／7 P1／1 P2，
+  所有機械主張都獨立重現。v1（`2d7b7fe6`）套用全部；複查判 **Yes**，另提四項編輯性修正 → v1.1。
+  關鍵規則：整單位允入、片段只在本文已允入後排程（與契約 §15 一致；探針改規則後覆蓋率全同、15 個
+  token 中位數變動）、統計經 adapter 走 `lib/stats.mjs`（95% 端點、minimumFamilies 10）、輸入要重算 hash
+  並凍結輸入清單、長度壓力臂 v1 略過。
+- 派 `hr2_harness`（gpt-6.1-sol/xhigh，workspace-write，無網路，附 TRAPS，只跑自己的測試檔，不跑 test split）。
