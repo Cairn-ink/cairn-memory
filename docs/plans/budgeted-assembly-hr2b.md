@@ -1,8 +1,12 @@
-# HR-2b: long-item budgeted assembly, offline protocol (v1.1 draft, amending frozen v1)
+# HR-2b: long-item budgeted assembly, offline protocol (v1.1, frozen)
 
-Status: **v1.1 draft, 2026-10-24: a pre-outcome amendment of frozen v1
-(`c546bfc1`), pending its non-author audit; the v1.1 freeze commit will replace
-this line.** v1.1 changes four things and nothing else: the receipt-count
+Status: **v1.1, frozen 2026-10-24: a pre-outcome amendment of frozen v1
+(`c546bfc1`); the commit carrying this line is the v1.1 protocol freeze.** The
+non-author auditor (`hr2b_protocol_audit`, gpt-6.1-sol/xhigh, read-only)
+reviewed the draft `9d34f911` (four P1, two P2, all applied in `4343f3a7`) and
+re-checked `4343f3a7` (five items resolved, one residual P1: a §4 sentence,
+replaced verbatim with the auditor's wording in this commit). v1.1 changes
+four things and nothing else: the receipt-count
 distribution of §3.1 (1–4 receipts, because core `admit` accepts at most four
 receipts per call and the fixture is seeded by one admission per memory), the
 guard statistic of §4/§7 (pooled over the
@@ -303,9 +307,9 @@ changes; a defect creates `hr2b-fixture-v2`, reported alongside.
   later-receipt Δ **per represented category descriptively** (point value,
   groups and families, no CI and no decision), beside the pooled guard. v1
   defined the guard as a macro over the represented categories with the
-  per-category family minimum; it was replaced because that minimum cannot be
-  met by a 45/25/30 world with 20 queries per category. **What the guard
-  means:**
+  per-category family minimum. It was replaced after the first candidate
+  failed the original per-category minimum, as disclosed in the amendment
+  provenance. **What the guard means:**
   on strict later-only groups P-top-s1 can never admit the evidence, so its
   stratum coverage is zero by construction and the guard Δ equals minus
   P-top's stratum coverage. The guard therefore bounds the **incremental
