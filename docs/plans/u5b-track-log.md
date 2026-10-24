@@ -421,3 +421,8 @@
   結果選擇或修改規則」。§9 從 candidate 0 重啟判定合法。協調者逐項核實（`core/contract.mjs` admit 上限、`runtime.mjs` attach；
   從 labels＋audit 重算審後群數 4/7/9/10/8/13/6；81 筆拆分）後全部套用，並把兩份驗證器輸出（去掉 Node 警告行）保留到
   `fixtures-hr2b/build/candidate0-v1-validation/`：**`4343f3a7`**。派第四次複查（xhigh＋fast）。W1 範本加上不得讀該目錄。
+- **稽核第四次複查（`4343f3a7`）**：六項中五項 resolved（稽核者自行從 labels＋audit 重算出 190 群／265 行／46/66/78、審後向量與 49 個
+  出現數、81＝24/48/9 都吻合），殘留一個 P1：§4 一句仍寫「45/25/30 世界 20 題／類別不可能達到」，給了逐字替換句。套用該句、
+  狀態行改凍結：**HR-2b 協定 v1.1 凍結 `d3a6e24f`**。並行派出：W1 重建（resume W1 執行緒，workspace-write，high＋fast，只改
+  `fixtures-hr2b/`，同 seed 1924440465 重渲染、四格 receipt 分布、機械身分檢查）、`hr2b_tools` v1.1 修訂（resume，high＋fast，
+  四格直方圖、新配額、pooled bootstrap、描述表、pin `d3a6e24f`）、稽核者凍結確認（read-only，xhigh＋fast）。凍結 commit 送主控。
