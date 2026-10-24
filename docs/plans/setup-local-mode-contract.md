@@ -1,11 +1,12 @@
 # Installer local mode: contract for `@cairn-ink/memory` 0.6.0
 
-Status: v0.6 (setup session, 2026-10-25). v0.1 (`f053a18c`) was audited by a
+Status: v0.7 (setup session, 2026-10-25). v0.1 (`f053a18c`) was audited by a
 non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, fourteen P1,
 two P2. v0.2 (`4332b800`): no P0, ten P1, three P2. v0.3 (`3f337e9d`): no
 P0, six P1, two P2. v0.4 (`e4462168`): no P0, three P1, one P2. v0.5
-(`e8108791`): no P0, two P1, one P2, and **ready for S1 review**. v0.6 adopts
-those; the auditor re-checks v0.6 for S2 readiness.
+(`e8108791`): no P0, two P1, one P2, and **ready for S1 review**. v0.6
+(`975de335`) was confirmed **ready for S2 implementation**. v0.7 adds the two
+amendments the S1 reviewers asked for (§5.2 step 3, §5.3 child ownership).
 
 Base: `main` at `b2513501` (PR #469 local V1 Raw chain and PR #470 unified
 memory V1 are merged). Branch `feat/setup-local-mode`.
@@ -182,7 +183,9 @@ Rules:
   §5.3, and only when `<engineId>` is not a published registration reference),
   `root/engine` (uninstall, §9 step 5), `root/.setup.lock`, and with
   `--purge-config` `root/installation.json` and `root/.npmrc`. Nothing nested
-  inside a generation is ever renamed or removed. `database.path` resolving
+  inside a generation is ever renamed or removed. Every rename or removal
+  `lstat`s its source immediately before acting and refuses symlinks; reused
+  owned directories must be `0700` and owned by the current uid. `database.path` resolving
   inside any allowlisted path is `local_recovery_required`.
 - **Client destinations are recorded before mutation**: each checkpoint
   records `destination` when it is `planned` (Claude: canonical `HOME`, where
@@ -199,9 +202,11 @@ Rules:
   a non-`detached` checkpoint.
 - **Writes**: temp file + `fsync` + `rename` in the root, 0600, only while
   the lock is held.
-- **Lock**: `.setup.lock` with `wx`. On `EEXIST`, read it; if the recorded
-  pid is not alive, `local_lock_stale` prints the path and the exact `rm`
-  command (never auto-removed); otherwise `lock_retry` as today.
+- **Lock**: `.setup.lock` with `wx`, content `{"pid", "startedAt", "child"}`
+  (`child` = the npm pid while an engine install runs, else null; §5.3). On
+  `EEXIST`, read it; if the recorded setup pid and child pid are both dead,
+  `local_lock_stale` prints the path and the exact `rm` command (never
+  auto-removed); if either is alive, `lock_retry` as today.
 - Paths are private: printed only by `status --verbose`, recovery lines and
   manual snippets, always through `write.literal`, shell-quoted with
   `shellArgument` (`packages/setup/lib/output.mjs`).
@@ -276,8 +281,9 @@ twice), subject to §6.3 conflicts.
      fresh directory, returns that `engineId`, and the caller moves clients to it
      through the normal registration journal (`desired` = the new generation,
      `previous` = the old one); the old generation stays until `uninstall`.
-3. Write `app/package.json` (0600, `wx`; `EEXIST` after an interrupted attempt
-   is tolerated when the content is identical).
+3. Write `app/package.json` (0600, `wx`). An interrupted earlier attempt never
+   reaches this step again: step 2 has already quarantined or reused the
+   existing generation.
 4. Spawn `npm install --prefix <app> --ignore-scripts --no-audit --no-fund
    [--offline] <tarball>` with **exactly** this environment: `PATH` =
    directory of `node` + `path.delimiter` + the caller's `PATH`;
@@ -315,6 +321,16 @@ twice), subject to §6.3 conflicts.
   directory at the final `engineId`; because the checkpoint was still
   `planned`, the generation is unreferenced, so the next run quarantines it
   and installs afresh. L10 tests SIGKILL during npm.
+- **Child ownership.** `installEngine` reports every spawned child's pid
+  through `onChild({ kind, pid })`; the coordinator (S2) records the npm pid in
+  `.setup.lock` (`{"pid", "startedAt", "child": pid | null}`). Stale-lock
+  recovery (§4.1) treats the lock as stale only when **both** the setup pid
+  and the recorded child pid are dead; while either is alive the run refuses
+  with `lock_retry`. Quarantine of a generation is therefore never attempted
+  while a previous npm child may still be writing into it. When the child pid
+  cannot be determined (no `child` field, older lock format), recovery is
+  conservative: `local_lock_stale` prints the path and asks the user to
+  confirm no `npm` process is running before removing the lock.
 - `.failed-*` directories are removed only by `uninstall --local`;
   `status --verbose` lists them.
 - Previous `engine/<id>` directories are never removed by `setup` (S10).
@@ -641,7 +657,7 @@ after normalizing the version string and the runtime directory digest
 | L17 | option errors: `--local --endpoint`; `--local --cloud`; `--owner` without `--local`; `--owner -x`; `--project` on an `installed` descriptor (rejected) and on an `uninstalled` one (accepted, owner and database kept); `--cloud status`; `pause` on local-only; `--local` with existing descriptor plus `--db` | each exit 2 with its key, no writes (except the accepted `uninstalled` + `--project` case) |
 | L18 | Windows platform injected | `local_windows_unsupported`, exit 2, nothing written |
 | L19 | fake `claude` without `mcp add` | `claude_mcp_required`, manual snippet, Claude `manual`, Codex registered, exit 1 |
-| L20 | stale lock (dead pid) and live lock | `local_lock_stale` with the `rm` command / `lock_retry`; nothing written |
+| L20 | stale lock (both pids dead); live setup pid; dead setup pid but live child pid; lock without `child` field | `local_lock_stale` with the `rm` command / `lock_retry` / `lock_retry` / conservative `local_lock_stale` wording; nothing written in any case |
 | L21 | `--dry-run` with `--local` and effective local, with and without a pending `operation`; `--dry-run` with a Claude registration pointing at a nonexistent database | planned actions printed, pending operation described, no lock, no root, no child other than detection; database stays nonexistent |
 | L22 | quoted Codex header `[mcp_servers."cairn"]`; a multiline string containing `[mcp_servers.cairn-local]`; a valid empty `config.toml`; unknown + local (Codex registered, Claude `plugin list` failing) with no flag; Claude `~/.claude.json` with `cairn-local` but no descriptor, then `setup --cloud`; malformed `~/.claude.json`, then `setup --cloud` | first detected as cloud; second not detected as local; third is `none`; fourth refuses with `mode_unknown`; fifth refuses with `local_orphan`; sixth refuses with `mode_unknown`; `~/.claude.json` as `{}`, as unrelated settings only, with `mcpServers: null`, and with `mcpServers: []` → the first two are absent (cloud flow proceeds), the last two are `mode_unknown`; a sibling `mcpServers` entry carrying a synthetic secret header never appears in any output or error params; all refusals write nothing and run no hosted mutation |
 | L23 | literal output: paths containing spaces, `$`, backticks, `"`, `'` and `\` in manual snippets and recovery commands | shell lines round-trip through a POSIX shell parser; the TOML snippet parses with native `codex mcp list --json` in a temporary home to the exact vector; argv display is valid JSON; width check exempts only literal lines |
