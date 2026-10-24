@@ -1858,3 +1858,150 @@ Therefore, for §14 C04 and §12.7 K13:
 - **WAL mode** is a separate, store-wide follow-up decision. It would remove
   this starvation, but it touches every V1 opener and the §11.2 store fence,
   whose review currently requires rollback-journal mode.
+
+## 17. U5c-2: one-hop relations and MOC channel (v0.11 draft)
+
+U5c-2 adds two independently selectable candidate sources to §13: `relations-one-hop-v1` and `moc-v1`. Their candidates enter §15 assembly through its existing internal search seam. Assembly policies, canonical evidence, metering and compact refs are unchanged.
+
+No canonical schema change, table, trigger or relation-creation operation is added. Role/task reads and receipts belong to U5c-1; current-dependent invalidation belongs to U5c-3. MOC compilation and pending-change lifecycle require E1.
+
+### 17.1 Opt-in and compatibility
+
+- Host grammar:
+
+  ```text
+  --context-read context-read-v1
+    --context-read-sources relations-one-hop-v1,moc-v1
+  ```
+
+- The new flag consumes one comma-separated value containing either or both IDs. Empty entries, duplicates, unknown IDs or use without `--context-read` refuse `invalid_mcp_configuration`. Programmatic MCP construction gains matching `contextReadSources`; core construction gains `contextRead.sources`, a nonempty array of distinct supported IDs.
+- Only source-enabled construction advertises source capabilities, effective preset and additional limits. Without it, preserve bytes, ordering, presets, compact refs, errors, provider-call counts and `tools/list`, including under `--context-read context-read-v1`.
+- Only source-enabled `findCandidates` and `contextRead` inputs gain optional `sources`; their MCP equivalents gain the same field. Omission selects every host-enabled source; `[]` disables them; other values must be a distinct subset of the host-enabled IDs. Source-disabled hosts retain their original strict schemas and refusals (`adapters/mcp/context-read-tools.mjs:42`).
+- This extends §13’s host-fixed pattern by permitting narrowing only. The host fixes availability, preset, weights, caps, provider and read set. A call cannot enable an unconfigured source or change ranking parameters.
+- `--check-config` reports the selected sources and preset only when opted in. It opens no database and constructs no provider or counter.
+- Sources add no model calls. Existing semantic authorization, coverage preflight, transmission and spending rules remain unchanged.
+
+### 17.2 Placement, bounds and continuation
+
+- Form the pre-expansion list from lexical/semantic fusion, including MOC ranks when configured. Keep its top 24 as the **direct horizon**.
+- Run relation expansion after fusion and before freezing or paging (`core/context-read-facade.mjs:333`). Seeds come only from this direct horizon. Additions never become seeds.
+- Deduplicate against the entire direct horizon and earlier additions. Relations preserve every direct candidate’s membership, relative order and fusion score.
+- Place each seed’s additions immediately after that seed, in seed order; append remaining direct candidates in their existing order. Assign consecutive candidate ranks. This exposes additions within the early positions that existing U5b policies visit, without changing a policy (`core/context-read-assembly.mjs:91`).
+
+| Limit | Source-enabled value |
+| --- | --- |
+| Relation seeds | First ≤4 direct candidates |
+| Additions per seed / call | ≤2 / ≤8 |
+| Frozen horizon | ≤24 direct + ≤8 additions = ≤32 |
+| Public page size | Default 12; maximum 24 |
+| Assembly admitted bodies / fetch refs | Existing maximum 24 |
+| Assembly candidate universe | ≤32; conservative `U≤544`, counter calls `2+2U+R≤1,634`, `R≤U` |
+| Work per optional source | ≤50,000 authorized row visits; ≤8 MiB retained state |
+| Synchronous batch | Existing ≤128 rows / ≤2,000,000 text units |
+
+- The 4/2/8 limits are constants of `relations-one-hop-v1`, never request knobs. Legacy horizon and counter-call announcements remain unchanged without source opt-in.
+- Sources share the existing cooperative deadline. Check it between bounded batches. Relation work may retain a validated prefix; MOC contributes nothing unless its statistics and member ranking complete.
+- Freeze once. Bind configured and requested source IDs, source versions, effective preset, source fences and resulting horizon into ranking/configuration bindings. Source-enabled cursor positions support 32; continuation never reranks or embeds. Existing page, retention, expiry and refusal rules remain.
+- New source state and witnesses are request-local or retained with the existing in-memory ranking. This draft adds no persisted source data; sidecar format 1 remains (`core/context-read-sidecar.mjs:15`). Any later persistence requires a sidecar format bump, never canonical DDL.
+
+### 17.3 One-hop typed relations
+
+`relations-one-hop-v1` runs only for `intent:'current'`; history reports `unavailable`, reason `unsupported_intent`.
+
+| Priority / family | Traversal and reused mechanism |
+| --- | --- |
+| 1. `supports-decision` | Incoming and outgoing; revision- and receipt-bound rationale rows (`core/rationale-schema.mjs:3`) |
+| 2. `challenges-premise` | Incoming and outgoing; same binding validation |
+| 3. `contradicts` | Undirected, exact endpoint revisions (`core/conflict-storage.mjs:55`) |
+| 4. `card-memory` | Card→bound Memory and reverse, through existing Memory bindings (`core/private-card-schema.mjs:58`) |
+
+- Within each seed, order by family priority, then binary canonical `(owner,scope,project,type,id)` identity (`core/context-read-bm25.mjs:6`). Resolve remaining witness ties by direction, then stored edge/binding key. The first valid path wins.
+- Deduplicate typed logical identity after validating exact revisions; a changed revision never becomes a substitute endpoint. Repeated receipts or paths do not create additional candidates.
+- Every addition carries `via:{seed:<full revision-bound ref>,family,direction}`. Direction is `incoming|outgoing`, relative to the seed; contradictions use `undirected`; Card bindings are canonically Card→Memory. Relation-only candidates have null fusion score and null rank-channel entries.
+- Check both endpoints for authorized namespace, requested type, exact revision, current eligibility and availability. Validate rationale receipt bindings/digests and Card Memory/receipt bindings; edge existence alone is insufficient (`core/rationale-storage.mjs:133`; `core/private-card-storage.mjs:125`).
+- Reuse canonical eligibility, including Card support **and current applicability** (`core/private-evidence-storage.mjs:54`).
+- Implement a bounded incident-edge reader. Do not call the decision-context walker: it follows challenges to supporting Memories, a second hop (`core/rationale-storage.mjs:127`).
+- Exclude supersession, qualification, Raw/receipt provenance traversal, episodes, operational lineage and MOC siblings. Supersession retires its predecessor (`core/supersession-storage.mjs:60`). Receipt validation does not make receipts candidate endpoints.
+- Preserve interpretation as proposed/unassessed. Relation existence does not confirm truth, applicability or adoption.
+
+### 17.4 MOC rank channel
+
+- Implement `core/context-read-moc.mjs` as a read-only adapter over existing Memory MOC and Card organization storage. Do not edit `topic-overview-*` or `memory-reader` files.
+- Search valid titles of authorized Memory/Card topics for the requested types. Validate every original title-source binding; an omitted or stale binding cannot make a title valid (`core/moc-storage.mjs:32`; `core/private-organization-storage.mjs:47`).
+- Respect Memory active-generation visibility and exact projected revisions; never bypass an unavailable projection (`core/index-schema.mjs:38`). Card organization tables are optional; never query absent tables.
+- Include L1 members and L2 descendants through valid, revision-bound L2→L1 containment. Do not traverse reviewed cross-map mappings.
+- Members must be current eligible Memory/Card evidence, even during a history search. Require exact topic, containment and member revisions, including Card body revision. Apply §13’s canonical current predicate rather than the organization reader’s weaker support-only predicate.
+- Each valid typed topic is one title document. Compute T1 BM25 with §13 parameters over the complete authorized title corpus, including nonmatching titles (`core/context-read-tokenize.mjs:15`; `core/context-read-bm25.mjs:22`). Foreign topics enter no statistics.
+- A member’s MOC raw score is the maximum score of its matching containing topics. Deduplicate members, sort descending score then canonical typed identity, and retain 12. Multiple memberships never multiply a member’s contribution.
+
+| New preset | k | Depth per channel | Lexical / semantic / MOC |
+| --- | --- | --- | --- |
+| `rrf-k60-d12-moc-v1` | 60 | 12 | 0.45 / 0.45 / 0.10 |
+
+- Configuring `moc-v1` fixes this preset at startup, for either provider family. Otherwise retain the existing preset selection.
+- `score(x)=Σ weight/(60+rank)`; ranks start at 1. Union ≤36, direct horizon ≤24; ties use canonical typed identity.
+- Disabled or unavailable channels contribute zero; weights never renormalize. The new preset still uses RRF when semantic or MOC is disabled. It does not take the existing lexical-only fallback (`core/context-read-fusion.mjs:25`). Existing presets and fallback behavior remain unchanged.
+- Incomplete statistics, work/state limits, deadline expiry or unavailable required storage discard that MOC channel’s contribution and report degradation. Existing lexical failure remains `index_unavailable`.
+- MOC membership never filters direct retrieval. Unfiled and MOC-omitted evidence remains eligible for lexical and semantic discovery.
+
+### 17.5 Revalidation and diagnostics
+
+- Authorize every namespace before source access, statistics or scoring. Use §14 deferred, `query_only` reads. No host callback or await occurs inside a transaction.
+- Source fences additionally cover relevant namespace/Card epochs, Card MOC epochs and Memory active-projection identity. Card placement/title changes advance a separate organization epoch (`core/private-organization-storage.mjs:17`, `:133`, `:154`); the existing context fence alone is insufficient (`core/context-read-facade.mjs:189`).
+- Recheck grants and fences after every await and before publication. Candidate-page delivery revalidates addition endpoints, seeds and witnessing bindings, including seeds absent from that page. Changed frozen dependencies refuse `cursor_stale`.
+- Assembly preparation validates those same dependencies; unavailable additions count under `omitted.unavailable`. Its final transaction revalidates both endpoints and witnesses for admitted additions, including undelivered seeds. Changes after preparation refuse `snapshot_stale`; revocation remains `scope_changed`. No callback, count or await follows final reading (`core/context-read-facade.mjs:509`).
+- Independent full-ref, compact-ref and snapshot fetches retain §§13/15.8 evidence semantics. Neither compact refs nor snapshots become durable discovery-path proofs.
+
+Only opted-in calls add:
+
+| Location | Diagnostics |
+| --- | --- |
+| `find_memory_candidates` | `value.trace.sources`, keyed by configured source ID; additions also carry item `via`; MOC ranks appear under item `channels.moc` |
+| `read_memory_context` | Same source trace under `diagnostics.candidates.trace.sources`, carried only in `_meta['ink.cairn/context-read-diagnostics']` |
+| Assembly snapshot | Existing `_meta['ink.cairn/context-read-snapshot']`; unchanged format and bounds |
+
+- Each source reports `status:'ok'|'degraded'|'unavailable'` and bounded, enumerated reason codes: `disabled`, `unsupported_intent`, `unsupported_schema`, `index_unavailable`, `stale_source`, `deadline`, `work_limit`, `state_limit`, `capped`.
+- Relations report `examined`, `rejected` by `revision|ineligible|unavailable|invalid_binding|type_excluded|duplicate`, `capped`, `added`, and at most eight `{ref,via}` records. Counters describe visited authorized records; unknown remaining work is `null`, never an invented total.
+- MOC reports `topicsMatched`, `membersRanked`, completeness and `summaryFreshness:'unavailable'`, with `summaryFreshnessReason:'e1_seam_unavailable'`. Unknown totals are null. Valid titles establish no summary freshness.
+- Filter foreign endpoints/topics before statistics, public counters and source work allowances. Foreign rejection counts are not exposed. Adding foreign fixtures changes no visible name, count, score or rank.
+- An unavailable source never masquerades as exhausted empty search. Diagnostics contain no body/title/receipt prose, paths or credentials.
+- §15.8’s metered text, serializer, compact refs and omission algebra remain unchanged. Diagnostics and snapshots add no text block or `structuredContent` (`adapters/mcp/context-read-transport.mjs:9`). Existing envelope bounds and client-contract limitations remain.
+
+### 17.6 Ownership
+
+- Worker-owned new runtime modules: `core/context-read-relations.mjs`, `core/context-read-moc.mjs`, `adapters/mcp/context-read-sources-configuration.mjs`, `adapters/mcp/context-read-sources-tools.mjs`.
+- Worker-owned existing modules: `core/context-read-facade.mjs`, `core/context-read-input.mjs`, `core/context-read-fusion.mjs`, `core/context-read-sidecar.mjs`.
+- Add dedicated tests/fixtures. Existing other-owner tests remain owner-managed. New MCP registration composes existing context tools; source-disabled registration stays unchanged.
+
+Coordinator-owned paths, exactly:
+
+| Path | Allowed integration |
+| --- | --- |
+| `core/index.mjs` | Exports |
+| `adapters/mcp/cli.mjs` | Flag/configuration wiring |
+| `adapters/mcp/server.mjs` | Configuration and registration |
+| `packaging/artifact-files.json` | Shipped closure |
+| `CHANGELOG.md` | Change record |
+| `docs/plans/unified-memory-v1-contract.md` | This section |
+| `docs/context-read-local.md` | Configuration and behavior |
+| `docs/limitations.md` | Limits and non-claims |
+
+The **12 existing ownership paths** were independently matched through `rg --files` and filesystem enumeration: **zero differences**. New CLI-reachable modules remain SQLite-free at link time.
+
+### 17.7 Acceptance
+
+Requirements below are not executed results. Use synthetic fixtures, real child processes, Node **22.16.0 and 24.15.0**, under the machine-wide queue.
+
+| ID | Observable |
+| --- | --- |
+| C04 | A graph authored through public operations retrieves an endpoint missed by direct retrieval. Assert every family/direction, no second-hop expansion, 4/2/8 caps, ordering, dedup, stale endpoints, foreign exclusion and exact observed coverage/unknown remainder |
+| C05 | Unfiled/MOC-omitted Memory and Card evidence remains directly discoverable. Independent T1/BM25/member-ranking/RRF oracle verifies scores, ties, channel toggles, zero contributions, no renormalization and degraded channels |
+| C06 | Same-commit source-disabled/control hosts produce byte-identical legacy responses, compact refs, errors and `tools/list`; existing presets and `rank-first-whole-v1` defaults remain unchanged |
+| C07 | Second-process correction, forget, deletion, Card support/applicability loss and witness removal between expansion and delivery never deliver stale additions. Include undelivered seeds, paged delivery, Card MOC epoch races and active-projection changes |
+| C08 | Foreign relations/topics change no visible names, counts, scores or ranks. Revoke at every await; spies observe no foreign scoring, title transmission or evidence access |
+| C09 | Installed tgz exercises both sources. Independently derive import closure versus manifest and actual archive entries; diff both routes and print counts. Verify SQLite-free CLI linking, read-only no-file-creation behavior and unchanged canonical DDL |
+| C10 | Re-run applicable §13/§15 gates; independent metering verifies expanded candidate bounds and unchanged admitted-item/snapshot limits. Report actual process/build/test exit codes; pipelines preserve producer status |
+
+Measurements are observations: `findCandidates` p50/p95 at 10³ and 10⁴ Memories, sources off, each source alone and both; cold/warm, coverage, source work, state size and failures. Label fake-provider timings. Contention follows §16.
+
+**Non-claims:** retrieval-quality improvement from either source; two-hop typed relation expansion; MOC summary freshness/A14; role profiles; invalidation. No HR evidence selects these sources as defaults; both remain off by default.
