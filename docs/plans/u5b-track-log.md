@@ -473,3 +473,6 @@
   0 與 1 精確端點；`evaluatePooledDraw`／`bootstrapPooledDraws` 抽出逐抽評估，零／非有限／不安全抽樣→null→`invalid_bootstrap_draw`
   不重抽；worker 自報兩版 Node 54/54、回歸 240/240、120/120、手算例與參考區間不變。協調者提交後派 Standards 複查（xhigh＋fast），
   並自行以 `cairn-heavy` 重跑四個測試檔。
+- **工具修訂 v1.1 驗收完成 `9e2e86c3`**：Standards 複查三項皆 resolved、無新發現、不需再修；協調者 `cairn-heavy` 在 Node 22.16.0／
+  24.15.0 跑 tooling-hr2b、assembly-hr2b、legacy 回歸、host-v2 回歸共八個命令全 exit 0。工具側已就緒，等 fixture 凍結後
+  跑 calibrate-host-v2、排名、80 格。
