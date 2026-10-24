@@ -300,3 +300,7 @@
   `run.extensionCommit`），已推送。派 harness worker `hr2_ext_harness`（workspace-write，worktree
   `/home/chichieh/cairn-memory-u5b-hr2`，派工單：成本模型抽象＋host-v2、兩條嚴格驗證分支、report 排除與 48 對比／飽和／
   被拒計數、README／INPUTS、240 個封存 cell 的回歸測試、只跑改到的測試檔、不得跑 test split、TRAPS）。
+- **host-v2 harness worker 完成**（12 檔：arms／cost／host-v2／run／score／provenance／report／README／INPUTS／報告檔＋兩個新
+  測試檔）。worker 自測 55／55＋舊結果回歸 240／240 兩版本；協調者沙箱外全套 `test/assembly-*.test.mjs` **183／183 兩版本
+  exit 0**、whitespace 0，dev split host-v2 煙霧 run→score→report 全 exit 0（45 cells、18 對比、outcome inconclusive 如預期）。
+  **提交 `5d0a344b`**（已推送）；審查 worktree 移到 `5d0a344b`，派 Spec／Standards 雙審查（read-only）。
