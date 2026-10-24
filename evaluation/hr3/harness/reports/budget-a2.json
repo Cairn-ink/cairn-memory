@@ -4,26 +4,40 @@
   "bindingPrePilotCriterion": "pilotFit",
   "pilotFit": {
     "pass": true,
-    "responsesUSD": 17.5104,
+    "responsesUSD": 20.5824,
     "sharedEmbeddingsUSD": 2.56,
-    "conservativeTotalUSD": 20.0704,
+    "conservativeTotalUSD": 23.1424,
     "limitUSD": 24,
-    "marginUSD": 3.9296
+    "marginUSD": 0.8576
   },
   "a3PilotRerun": {
-    "priorRun": "pilot-cf24810f",
-    "priorReportedSpendUSD": 0.84,
-    "source": "A-3 finding; reported first-pilot spend, not a new settlement",
-    "freshRunConservativeUSD": 20.0704,
-    "combinedConservativeUSD": 20.9104,
+    "carryForward": {
+      "path": "evaluation/hr3/harness/reports/a3-carry-forward.json",
+      "sha256": "9d9b8c43eec335f0f95f0160e6f21383e577f10180704204e3b6c5483c47e691"
+    },
+    "priorSettledNanodollars": 835244260,
+    "priorOutstandingNanodollars": 11667200,
+    "priorExposureNanodollars": 846911460,
+    "priorEmbeddingUnits": {
+      "research": 174846,
+      "product": 68457
+    },
+    "remainingEmbeddingNanodollars": 2555133940,
+    "remainingPilotAllowanceNanodollars": 23153088540,
+    "freshResponseCeilingNanodollars": 20582400000,
+    "combinedConservativeNanodollars": 23984445400,
+    "combinedConservativeUSD": 23.9844454,
     "limitUSD": 24,
+    "preparationComplete": false,
+    "scope": "Known verified exposure only; exact preparation receipts still pending",
     "pass": true,
+    "realRerunAllowed": false,
     "pooled": false,
     "paidAuthorization": false
   },
   "theoreticalEnvelope": {
     "covered": false,
-    "totalUSD": 614.74816,
+    "totalUSD": 716.38016,
     "operationalStopUSD": 450,
     "blockingBeforePilot": false,
     "interpretation": "Informational all-maximum-plus-retry envelope, superseded as a feasibility gate by revised A-2. It is not spending authorization."
@@ -36,7 +50,7 @@
     "allStageLimitsRequired": true,
     "projectionInputSchema": {
       "path": "evaluation/hr3/harness/reports/pre-development-projection.schema.json",
-      "sha256": "7a857dca3bbd1e3e40139163a47ccaf3205353c9daa6d99a0af9f99598e79d88"
+      "sha256": "12805aa382633cc560f4d783624803936f4c47e5134991bd3a3556081aec4f66"
     },
     "completeTestRequired": true,
     "budgetExhaustionOutcome": "Inconclusive"
@@ -44,12 +58,15 @@
   "paidReadiness": false,
   "sources": {
     "evaluation/hr3/protocol/protocol-v0.3.4.md": "639c55edb6633186580af434ee2fe3ed39bffc2bf36a9292dac03b7a1b20b3cc",
-    "evaluation/hr3/protocol/errata.md": "7fc82c0c0973495403de8ab231f1ca8aaa212c74a1961820f6389cf4e7913ff7",
-    "evaluation/hr3/harness/budget-a2.mjs": "898665fe53f9582a26a629a243087ebb2be439cc84101cc033da79cea019fbf8",
-    "evaluation/hr3/harness/requests.mjs": "120f81547fa8d51990e69df1f28f79b3676d32d01a94f5cdb1a722e9b9dcad46",
-    "evaluation/hr3/harness/ledger.mjs": "e0e1257be2460ea2465d1d2763ad04fc65fe2cb150139b4d33360d2283b5d322",
+    "evaluation/hr3/protocol/errata.md": "758af3ad956f1187a8d34477e5c724e623fdebd097cb118c770e65d3fb1a26c9",
+    "evaluation/hr3/harness/budget-a2.mjs": "4736dc4d71f6f0d638efc12a1162739955f63a0c865b5f3e8be0a74be934d828",
+    "evaluation/hr3/harness/accounting.mjs": "ef81b7e1515e36aaef57753e415bf605bfa904ec75530846836ba0fd9567432c",
+    "evaluation/hr3/harness/reports/a3-carry-forward.json": "9d9b8c43eec335f0f95f0160e6f21383e577f10180704204e3b6c5483c47e691",
+    "evaluation/hr3/harness/reports/request-certification-a3.json": "c9680454ce3b0ad25c5209f732cbd7c0643da552e11dd8fbe4a7da1b32995ccb",
+    "evaluation/hr3/harness/requests.mjs": "6372f7ca96800a2ef409f892bd0674c76256361072afe3549f642eb33a22fd2b",
+    "evaluation/hr3/harness/ledger.mjs": "aff48f3c4093c7de9e71031c2d976e033ff4599f2b9ee2972f71601c7a13bc4d",
     "evaluation/hr3/harness/projection-schema.mjs": "6d1c9e0f24674d74f96221086dffdb19cc9e20f959cfe2129e49c9428d6372cc",
-    "evaluation/hr3/harness/reports/pre-development-projection.schema.json": "7a857dca3bbd1e3e40139163a47ccaf3205353c9daa6d99a0af9f99598e79d88"
+    "evaluation/hr3/harness/reports/pre-development-projection.schema.json": "12805aa382633cc560f4d783624803936f4c47e5134991bd3a3556081aec4f66"
   },
   "prices": {
     "units": "USD per 1M input/output tokens",
@@ -82,10 +99,10 @@
     "attemptsPerLogicalCall": 2,
     "retry": "One transport retry only; no quality retry. Protocol ceiling conservatively includes every retry even though the cumulative three-failure stop may stop execution earlier.",
     "inputCeilings": {
-      "extraction": 16384,
-      "reader": 20000
+      "reader": 30000,
+      "extraction": 16384
     },
-    "inputReservation": "UTF8 bytes of complete provider body + 4096, subject to the unchanged input ceilings.",
+    "inputReservation": "UTF8 bytes of complete provider body + 4096, subject to the A-3 certified input ceilings.",
     "outputCaps": {
       "reader": 2176,
       "extraction": 4352
@@ -111,10 +128,10 @@
         "USD": 0.0135168
       },
       "reader": {
-        "inputCeiling": 20000,
+        "inputCeiling": 30000,
         "outputCeiling": 2176,
-        "nanodollars": 11481600,
-        "USD": 0.0114816
+        "nanodollars": 15481600,
+        "USD": 0.0154816
       }
     },
     "alternative": {
@@ -133,18 +150,25 @@
       "extractionCalls": 240,
       "readerCalls": 480,
       "extractor": "primary",
+      "readerInputCeiling": 28000,
+      "readerInputCeilingByArm": {
+        "U": 30000,
+        "T": 30000,
+        "O": 22000,
+        "P": 30000
+      },
       "extractionAttempts": 480,
       "readerAttempts": 960,
       "extractionNanodollars": 6488064000,
-      "readerNanodollars": 11022336000,
-      "worstNanodollars": 17510400000,
-      "worstUSD": 17.5104,
+      "readerNanodollars": 14094336000,
+      "worstNanodollars": 20582400000,
+      "worstUSD": 20.5824,
       "expectedNanodollars": 5262336000,
       "expectedUSD": 5.262336,
       "existingLimitUSD": 24,
-      "existingMarginUSD": 6.4896,
+      "existingMarginUSD": 3.4176,
       "responsesCovered": true,
-      "ceilingIfAllSharedEmbeddingsChargedHereUSD": 20.0704,
+      "ceilingIfAllSharedEmbeddingsChargedHereUSD": 23.1424,
       "entireSharedEmbeddingAllowanceCovered": true
     },
     {
@@ -153,18 +177,25 @@
       "extractionCalls": 800,
       "readerCalls": 1600,
       "extractor": "primary",
+      "readerInputCeiling": 28000,
+      "readerInputCeilingByArm": {
+        "U": 30000,
+        "T": 30000,
+        "O": 22000,
+        "P": 30000
+      },
       "extractionAttempts": 1600,
       "readerAttempts": 3200,
       "extractionNanodollars": 21626880000,
-      "readerNanodollars": 36741120000,
-      "worstNanodollars": 58368000000,
-      "worstUSD": 58.368,
+      "readerNanodollars": 46981120000,
+      "worstNanodollars": 68608000000,
+      "worstUSD": 68.608,
       "expectedNanodollars": 17541120000,
       "expectedUSD": 17.54112,
       "existingLimitUSD": 46,
-      "existingMarginUSD": -12.368,
+      "existingMarginUSD": -22.608,
       "responsesCovered": false,
-      "ceilingIfAllSharedEmbeddingsChargedHereUSD": 60.928,
+      "ceilingIfAllSharedEmbeddingsChargedHereUSD": 71.168,
       "entireSharedEmbeddingAllowanceCovered": false
     },
     {
@@ -173,18 +204,25 @@
       "extractionCalls": 6400,
       "readerCalls": 12800,
       "extractor": "primary",
+      "readerInputCeiling": 28000,
+      "readerInputCeilingByArm": {
+        "U": 30000,
+        "T": 30000,
+        "O": 22000,
+        "P": 30000
+      },
       "extractionAttempts": 12800,
       "readerAttempts": 25600,
       "extractionNanodollars": 173015040000,
-      "readerNanodollars": 293928960000,
-      "worstNanodollars": 466944000000,
-      "worstUSD": 466.944,
+      "readerNanodollars": 375848960000,
+      "worstNanodollars": 548864000000,
+      "worstUSD": 548.864,
       "expectedNanodollars": 140328960000,
       "expectedUSD": 140.32896,
       "existingLimitUSD": 345,
-      "existingMarginUSD": -121.944,
+      "existingMarginUSD": -203.864,
       "responsesCovered": false,
-      "ceilingIfAllSharedEmbeddingsChargedHereUSD": 469.504,
+      "ceilingIfAllSharedEmbeddingsChargedHereUSD": 551.424,
       "entireSharedEmbeddingAllowanceCovered": false
     },
     {
@@ -193,18 +231,20 @@
       "extractionCalls": 800,
       "readerCalls": 800,
       "extractor": "alternative",
+      "readerInputCeiling": 30000,
+      "readerInputCeilingByArm": null,
       "extractionAttempts": 1600,
       "readerAttempts": 1600,
       "extractionNanodollars": 50995200000,
-      "readerNanodollars": 18370560000,
-      "worstNanodollars": 69365760000,
-      "worstUSD": 69.36576,
+      "readerNanodollars": 24770560000,
+      "worstNanodollars": 75765760000,
+      "worstUSD": 75.76576,
       "expectedNanodollars": 25172480000,
       "expectedUSD": 25.17248,
       "existingLimitUSD": 45,
-      "existingMarginUSD": -24.36576,
+      "existingMarginUSD": -30.76576,
       "responsesCovered": false,
-      "ceilingIfAllSharedEmbeddingsChargedHereUSD": 71.92576,
+      "ceilingIfAllSharedEmbeddingsChargedHereUSD": 78.32576,
       "entireSharedEmbeddingAllowanceCovered": false
     }
   ],
@@ -220,30 +260,30 @@
     "productSourceAllowanceUnits": 63329280
   },
   "totals": {
-    "responsesWorstUSD": 612.18816,
-    "worstNanodollars": 614748160000,
-    "worstUSD": 614.74816,
+    "responsesWorstUSD": 713.82016,
+    "worstNanodollars": 716380160000,
+    "worstUSD": 716.38016,
     "expectedNanodollars": 190864896000,
     "expectedUSD": 190.864896,
     "contingencyPercent": 25,
     "contingencyUSD": 47.716224,
     "forecastWithContingencyUSD": 238.58112,
     "historicalWorstUSD": 440.905728,
-    "increaseUSD": 173.842432,
+    "increaseUSD": 275.474432,
     "operationalStopUSD": 450,
     "operationalCovered": false,
-    "shortfallUSD": 164.74816,
+    "shortfallUSD": 266.38016,
     "authorizationUSD": 500,
     "unavailableHeadroomUSD": 50,
     "effectiveSpendCeilingUSD": 450,
     "grossAuthorizationCovered": false,
-    "grossAuthorizationShortfallUSD": 114.74816
+    "grossAuthorizationShortfallUSD": 216.38016
   },
   "stageLimitProposal": {
     "status": "deferred_to_continuation_projection",
     "proposedLimits": null,
     "applied": false,
-    "arithmetic": "17.510400 + 58.368000 + 466.944000 + 69.365760 + 2.560000 = 614.748160",
+    "arithmetic": "20.582400 + 68.608000 + 548.864000 + 75.765760 + 2.560000 = 716.380160",
     "reason": "Existing stage limits remain unchanged until the paid-pilot continuation projection. The uncovered theoretical envelope does not block pilot budget fit or decide later-stage feasibility.",
     "requiredNextStep": "After paid pilot settlement, freeze a reproducible total-completion projection <= $400 and verify every stage limit. Disclose any stage-limit rederivation within $450 before development; retain $500 authorization and full-test/Inconclusive rules."
   }

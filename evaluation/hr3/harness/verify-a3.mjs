@@ -23,15 +23,16 @@ const steps=[
   node('inspected-references',h+'/inspected-references.mjs'),
   node('projection-schema',h+'/projection-schema.mjs'),
   node('cap-certificate',h+'/cap-certification.mjs'),
+  node('request-certificate',h+'/request-certification.mjs'),
   node('budget',h+'/budget-a2.mjs'),
   node('generator-tests','--import','./'+h+'/test/redirect-generator-temp.mjs','--test','--experimental-test-isolation=none','evaluation/hr3/generator/test/generator.test.mjs'),
   node('integration-tests','--test','--experimental-test-isolation=none','evaluation/hr3/integration/test/integration.test.mjs'),
   node('harness-tests',h+'/test.mjs',...dependencies),
   node('pilot-inputs','evaluation/hr3/generator/cli.mjs','--split','pilot','--out',artifacts+'/inputs'),
-  node('fake-pilot',h+'/cli.mjs','--stage','pilot','--inputs',artifacts+'/inputs','--out',artifacts+'/pilot',...dependencies),
+  node('fake-pilot',h+'/cli.mjs','--stage','pilot','--inputs',artifacts+'/inputs','--out',artifacts+'/pilot','--carry-forward',h+'/reports/a3-carry-forward.json',...dependencies),
   node('bound-report',h+'/cli.mjs','--bound-report',artifacts+'/pilot','--inputs',artifacts+'/inputs','--out',artifacts+'/bounds.json'),
 ];
-const verification={version:'hr3-a3-offline-verification-v2',status:'RUNNING',networkCalls:0,paidCalls:0,commands:[]};
+const verification={version:'hr3-a3-audited-offline-verification-v3',status:'RUNNING',networkCalls:0,paidCalls:0,commands:[]};
 const save=()=>atomicJSON(h+'/reports/a3-verification.json',verification);
 save();
 async function execute({name,args}) {

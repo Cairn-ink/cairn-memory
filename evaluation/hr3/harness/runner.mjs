@@ -2,9 +2,11 @@ import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { atomicJSON, canonical, fail } from './common.mjs';
 import { verifiedInputs, scorerGold } from './inputs.mjs';
+import {FIRST_PILOT_LEDGER_SHA256} from './accounting.mjs';
 import { Ledger } from './ledger.mjs';
 import { GuardedTransport, FakeTransport, createEmbedder } from './transport.mjs';
 import { extractionDiagnostics } from './extraction-diagnostics.mjs';
+import { identifyEvents } from './event-identity.mjs';
 import { extract } from './extraction.mjs';
 import { materialize, literalQuery, retrieve } from './research.mjs';
 import { responseRequest } from './requests.mjs';
@@ -20,18 +22,19 @@ export function planFor(families) {
     {operation:'reader',ids:ids+'reader/[UTOP]/[24]/attempt-[01]$',maxDispatches:families.length*16},
     ...['research','product'].map(channel=>({operation:channel+'-embedding',ids:ids+channel+'-embedding/\\d+/attempt-[01]$',maxDispatches:families.length*1000}))];
 }
-export async function run({stage='smoke',inputs,out,transport=new FakeTransport(),counter,progress=()=>{}}) {
+export async function run({stage='smoke',inputs,out,transport=new FakeTransport(),counter,carryForward=null,progress=()=>{}}) {
   if(!['smoke','pilot'].includes(stage))fail('offline_stage_only');
   const root=resolve(out);mkdirSync(root,{recursive:true,mode:0o700});if(readdirSync(root).length)fail('output_not_empty');
   const data=verifiedInputs(inputs),families=stage==='smoke'?data.families.slice(0,2):data.families;
   const productVerification=verifyProductPin();
+  const ledger=new Ledger(join(root,'ledger.jsonl'),{stage,plan:planFor(families),carryForward}),guarded=new GuardedTransport(transport,ledger);
+  if(!(transport instanceof FakeTransport)&&(!ledger.configuration.carryForward?.preparationComplete||!ledger.configuration.carryForward.exposure.sourceHashes.includes(FIRST_PILOT_LEDGER_SHA256)))fail('verified_complete_carry_forward_required');
   const {ProductAgent}=await import('./product.mjs');
   let ownedCounter=false;if(!counter){counter=await tokenCounter();ownedCounter=true;}if(counter.id!=='tiktoken-o200k_base')fail('actual_tokenizer_required');
-  const ledger=new Ledger(join(root,'ledger.jsonl'),{stage,plan:planFor(families)}),guarded=new GuardedTransport(transport,ledger);
   for(const directory of ['extractions','states','deliveries','answers','scores'])mkdirSync(join(root,directory),{mode:0o700});
   const observations=[],extractionSummary=[],written=['ledger.jsonl'];let stopped=null;
   const persist=(path,value)=>{atomicJSON(path,value);written.push(path.slice(root.length+1));};
-  persist(join(root,'run.json'),{stage,offline:transport instanceof FakeTransport,transport:transport.constructor.name,protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
+  persist(join(root,'run.json'),{stage,carryForward:ledger.configuration.carryForward??null,offline:transport instanceof FakeTransport,transport:transport.constructor.name,protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
   try {
     for(const family of families) {
       const researchEmbedder=createEmbedder(guarded,{prefix:family.family_id+'/research-embedding'}),productEmbedder=createEmbedder(guarded,{channel:'product',prefix:family.family_id+'/product-embedding'});
@@ -40,8 +43,9 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
         for(const batch of family.batches) {
           const extraction=await extract({family,batch:batch.ordinal,transport:guarded,cache:join(root,'extractions')});
           written.push('extractions/'+extraction.key+'.json');
-          extractionSummary.push({family:family.family_id,batch:batch.ordinal,key:extraction.key,error:extraction.error,diagnostics:extraction.diagnostics});
-          const next=(extraction.value?.events??[]).map((e,ordinal)=>({...e,batch:batch.ordinal,ordinal}));events.push(...next);
+          const raw=extraction.value?.events??[],next=identifyEvents(family.family_id,batch.ordinal,raw);
+          extractionSummary.push({family:family.family_id,batch:batch.ordinal,key:extraction.key,error:extraction.error,diagnostics:{...extraction.diagnostics,identities:raw.map((e,i)=>({raw_event_id:e.event_id,internal_key:next[i].event_id}))}});
+          events.push(...next);
           await product.ingest(next,batch.observed_at);await product.controls(family.controls,batch.ordinal);
           if(ledger.snapshot().stopped)fail(ledger.snapshot().stopped);
           const checkpoint=family.checkpoints.find(c=>c.batch===batch.ordinal);if(!checkpoint)continue;

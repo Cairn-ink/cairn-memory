@@ -15,17 +15,17 @@ test('complete all-retries ceiling and single-attempt forecast match independent
   // Hand-derived dollar arithmetic from the four §14 call-count rows, not
   // from the report's totals or its per-attempt helper.
   const perAttempt = { primaryExtraction: (16384 * .40 + 4352 * 1.60) / 1e6,
-    primaryReader: (20000 * .40 + 2176 * 1.60) / 1e6,
+    primaryReader: (28000 * .40 + 2176 * 1.60) / 1e6,
     alternativeExtraction: (16384 * .75 + 4352 * 4.50) / 1e6 };
-  const rows = [[240,480,17.510400,5.262336], [800,1600,58.368000,17.541120],
-    [6400,12800,466.944000,140.328960], [800,800,69.365760,25.172480]];
+  const rows = [[240,480,20.582400,5.262336], [800,1600,68.608000,17.541120],
+    [6400,12800,548.864000,140.328960], [800,800,75.765760,25.172480]];
   rows.forEach(([extraction,reader,worst,expected],i) => {
-    const ceiling = 2 * extraction * (i === 3 ? perAttempt.alternativeExtraction : perAttempt.primaryExtraction) + 2 * reader * perAttempt.primaryReader;
+    const ceiling = 2 * extraction * (i === 3 ? perAttempt.alternativeExtraction : perAttempt.primaryExtraction) + 2 * reader * (i===3?(30000*.40+2176*1.60)/1e6:perAttempt.primaryReader);
     assert.ok(Math.abs(ceiling - worst) < 1e-10);
     assert.equal(report.stages[i].worstNanodollars, Math.round(worst * 1e9));
     assert.equal(report.stages[i].expectedNanodollars, Math.round(expected * 1e9));
   });
-  assert.equal(report.totals.worstNanodollars, 614748160000);
+  assert.equal(report.totals.worstNanodollars, 716380160000);
   assert.equal(report.totals.expectedNanodollars, 190864896000);
   assert.equal(report.totals.forecastWithContingencyUSD, 238.581120);
   assert.equal(report.totals.historicalWorstUSD, 440.905728);
@@ -35,13 +35,13 @@ test('complete all-retries ceiling and single-attempt forecast match independent
 test('revised A-2 binds pilot fit while envelope coverage and later-stage feasibility stay separate',()=>{
  const r=budgetA2();
  assert.equal(r.status,'PASS_PILOT_BUDGET');assert.equal(r.bindingPrePilotCriterion,'pilotFit');
- assert.equal(r.pilotFit.conservativeTotalUSD,20.070400);assert.equal(r.pilotFit.pass,true);assert.equal(r.pilotFit.marginUSD,3.929600);
+ assert.equal(r.pilotFit.conservativeTotalUSD,23.142400);assert.equal(r.pilotFit.pass,true);assert.equal(r.pilotFit.marginUSD,0.857600);
  assert.equal(r.theoreticalEnvelope.covered,false);assert.equal(r.theoreticalEnvelope.blockingBeforePilot,false);
  assert.equal(r.laterStageFeasibility.status,'pending_paid_pilot_projection');assert.equal(r.laterStageFeasibility.computed,false);
  assert.equal(r.laterStageFeasibility.completionCeilingUSD,400);assert.equal(r.laterStageFeasibility.allStageLimitsRequired,true);
  assert.equal(r.stageLimitProposal.status,'deferred_to_continuation_projection');assert.equal(r.stageLimitProposal.applied,false);
  assert.equal(r.laterStageFeasibility.completeTestRequired,true);assert.equal(r.laterStageFeasibility.budgetExhaustionOutcome,'Inconclusive');
- assert.equal(r.a3PilotRerun.combinedConservativeUSD,20.9104);assert.equal(r.a3PilotRerun.pass,true);assert.equal(r.a3PilotRerun.pooled,false);
+ assert.equal(r.a3PilotRerun.combinedConservativeUSD,23.9844454);assert.equal(r.a3PilotRerun.pass,true);assert.equal(r.a3PilotRerun.priorSettledNanodollars,835244260);assert.equal(r.a3PilotRerun.priorOutstandingNanodollars,11667200);assert.equal(r.a3PilotRerun.pooled,false);
  assert.equal(r.paidReadiness,false);assert.deepEqual(['pilot','development','test','alternative'].map(s=>CAPS[s]),[24,46,345,45]);
 });
 

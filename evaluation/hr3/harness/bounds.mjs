@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {verifyCarrySnapshot} from './accounting.mjs';
 import { extractionDiagnostics } from './extraction-diagnostics.mjs';
 import { canonical, hash, fail } from './common.mjs';
 
@@ -157,20 +158,25 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
   check(summary.attempted === observations.length, 'summary_denominator_mismatch');
   check(typeof run.offline === 'boolean' && Number.isSafeInteger(summary.ledger.total) && summary.ledger.total >= 0, 'spend_metadata');
   check(observations.every(o => o.version === 'hr3-scorer-v1' && o.protocol === 'v0.3.4'), 'scorer_version');
-  const billing = verifiedBilling(jsonl(join(stageDirectory, 'ledger.jsonl')));
+  const ledgerEvents=jsonl(join(stageDirectory,'ledger.jsonl'));
+  const billing = verifiedBilling(ledgerEvents);
+  if(ledgerEvents[0].configuration?.carryForward)check(canonical(run.carryForward)===canonical(ledgerEvents[0].configuration.carryForward),'carry_forward_metadata');
   check(billing.total === summary.ledger.total && canonical(billing.unsettled) === canonical(summary.ledger.unsettled) && billing.stopped === summary.ledger.stopped, 'ledger_summary_mismatch');
   const failure = Object.hasOwn(manifest.files,'failure.json') ? readJSON(join(stageDirectory,'failure.json')) : null;
   const stageStatus = {complete:summary.complete, stopReason:billing.stopped ?? failure?.reason ?? null,
     observedCohort:summary.complete && observations.length === 480 ? 'completed-pilot cohort' : 'partial observed cohort; not completed-pilot bounds'};
+  const carried=billing.carried;
+  const actualKnown=(run.offline?carried.unsettled.length===0:billing.unsettled.length===0)&&(!run.carryForward||run.carryForward.preparationComplete);
   const metadata = { protocol:'v0.3.4', errata:run.protocol?.includes('A-3')?'revised E-1; E-2/A-1/A-2/A-3 (2026-10-25)':'revised E-1 and A-1 (2026-10-25); E-2', scorer:'hr3-scorer-v1',
     offline:run.offline, stageStatus,
-    actualSpendUSD:run.offline ? 0 : billing.unsettled.length ? null : billing.settled / 1e9,
-    actualSpendKnown:run.offline || billing.unsettled.length === 0,
-    settledSpendUSD:run.offline ? 0 : billing.settled / 1e9,
+    actualSpendUSD:actualKnown?(run.offline?carried.settled:billing.settled)/1e9:null,
+    actualSpendKnown:actualKnown,
+    settledSpendUSD:(run.offline?carried.settled:billing.settled)/1e9,
+    carriedExposure:{settledNanodollars:carried.settled,outstandingNanodollars:carried.outstanding,embeddingUnits:carried.embedding,sourceHashes:carried.sourceHashes,preparationComplete:run.carryForward?.preparationComplete??null},
     settledLedgerChargeUSD:billing.settled / 1e9,
     outstandingReservations:{count:billing.unsettled.length, ids:billing.unsettled, reservedUSD:billing.outstanding / 1e9},
     ledgerChargeUSD:billing.total / 1e9,
-    ledgerChargeInterpretation:run.offline ? 'simulated fake usage/reservations; actual spend is zero' : 'settled charges plus outstanding reservation ceilings; unknown final billing is not actual spend',
+    ledgerChargeInterpretation:run.offline ? 'Current-run usage/reservations are simulated; carried prior exposure remains real and is reported separately' : 'settled charges plus outstanding reservation ceilings; unknown final billing is not actual spend',
     frozenArtifacts:run.frozenArtifacts, completedStageManifestSHA256:hash(manifestBytes),
     reportModuleSHA256:hash(readFileSync(new URL('./bounds.mjs', import.meta.url))) };
   if(run.protocol?.includes('A-3'))check(Object.hasOwn(manifest.files,'extraction-summary.json'),'missing_extraction_diagnostics');
@@ -190,7 +196,8 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
 
 export function verifiedBilling(events) {
   check(events.length > 0 && events[0].type === 'configuration', 'ledger_configuration_required');
-  let prior = '', stopped = null, settled = 0;
+  const carried=verifyCarrySnapshot(events[0].configuration?.carryForward);
+  let prior = '', stopped = null, settled = carried.settled;
   const reservations = new Map(), settlements = new Set();
   for (const event of events) {
     const {digest,...data} = event;
@@ -204,8 +211,9 @@ export function verifiedBilling(events) {
     } else if (event.type === 'stop') stopped = event.reason;
     else check(['configuration','failure'].includes(event.type), 'ledger_event_type');
   }
-  const unsettled = [...reservations.keys()].filter(id => !settlements.has(id));
-  const outstanding = sum(unsettled.map(id => reservations.get(id)));
+  const currentUnsettled=[...reservations.keys()].filter(id=>!settlements.has(id));
+  const unsettled=[...carried.unsettled,...currentUnsettled];
+  const outstanding=carried.outstanding+sum(currentUnsettled.map(id=>reservations.get(id)));
   check(Number.isSafeInteger(settled + outstanding), 'ledger_total_overflow');
-  return {settled, outstanding, total:settled + outstanding, unsettled, stopped};
+  return {settled, outstanding, total:settled + outstanding, unsettled, stopped,carried};
 }

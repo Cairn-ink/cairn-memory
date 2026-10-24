@@ -234,7 +234,8 @@ Two out-of-ledger diagnostic probes confirmed that both schemas are accepted. Th
 ## A-3 extraction amendment (offline implementation)
 
 Extraction quotes now use `{turn_id, quote, occurrence}`. Occurrences are
-one-based exact matches, including overlapping matches. JavaScript string search
+one-based exact matches, including overlaps, for extraction anchors only. Reader
+citations retain their existing ambiguity check. JavaScript string search
 computes UTF-16 offsets for internal source maps. Supplied offsets are ignored;
 there is no normalization, fuzzy matching, or gold-assisted repair. Missing or
 ill-typed anchor fields are schema failures. A nonexistent occurrence or
@@ -242,7 +243,12 @@ non-verbatim quote excludes its event and its dependent reason edges.
 
 Schema-invalid or unparseable output fails the batch. Otherwise every event is
 checked independently; valid events survive, and zero survivors is a successful
-empty extraction. Duplicate event IDs exclude all events sharing that ID.
+empty extraction. Within-batch duplicate event IDs exclude all events sharing
+that ID. Before arm fan-out, `event-identity.mjs` replaces retained provider IDs
+with canonical JSON keys `[family_id, batch_ordinal, raw_event_id]`. Raw IDs and
+internal keys are recorded in extraction diagnostics. Source-turn predecessor
+anchors and semantic fields are preserved. P selects only newly received keys,
+including when an already received batch is submitted again.
 Cached records and `extraction-summary.json` retain event indices/IDs, all
 rejection reasons, and indices of edges with invalid quotes. `summary.json` and
 the bound report include `pipelineStageDiagnostics`: one row per shared batch,
@@ -270,8 +276,8 @@ node evaluation/hr3/harness/verify-a3.mjs
 Each invocation creates a fresh `artifacts/a3-verification-*` destination.
 The sequence checks both
 provider schemas and replays the fixtures, then regenerates the inspected
-exclusion manifest, projection schema, certificate and budget in the order
-specified above. It then runs all generator tests, all integration tests, and
+exclusion manifest, projection schema, output certificate, complete-request
+certificate, and budget in that order. It then runs all generator tests, all integration tests, and
 all harness tests, in that order. The harness suite includes its own full fake
 pilot. After the suites pass, the sequence generates only pilot inputs, runs
 a separate full fake CLI pilot, and writes a bound report.
@@ -283,9 +289,74 @@ the sequence stops at its first failure. The generator test's existing temporary
 directory is redirected into harness artifacts without changing sibling files.
 This command is attended and supplies no unattended agent supervision.
 
-Only the two withdrawn E-1 prompt clauses change. Models, caps, policies,
+Prompt changes cover only revised E-1 and the extraction quote-format
+instruction; the stale request for model-computed offsets is removed. Models,
+output caps, policies,
 scorer, arms, and development/test materials retain their frozen definitions.
 `strict-schema.mjs` checks every schema node's type, closed concrete objects,
 required properties, references and `anyOf` offline; it makes no provider call.
-The A-3 combined pilot budget uses the first run's reported $0.84 separately
-from the fresh-run conservative ceiling; it is not a settlement or paid approval.
+The A-3 combined pilot budget now uses exact hash-verified ledger exposure.
+
+`request-certification.mjs` certifies complete provider JSON bodies, including
+schemas, prompts, checkpoint questions/metadata and both delivered intents.
+It uses the real tokenizer, every pilot family and all 180 independent engineering
+reference structures for U/T/O under two legal deterministic embedding fixtures.
+P is exercised through public operations for all 60 pilot families plus 36
+maximal engineering graph/language/boundary cases. Its actual response envelope
+is counted as well. Existing whole-item delivery budgets and P's public
+`maxTokens: 2000` argument are unchanged. No evidence is truncated to satisfy the
+provider framing bound. Exact P identities and token selections can vary across
+fresh stores; the observed worst bodies and their hashes are retained.
+
+`reports/request-certification-a3.json` records each measured request, the worst
+complete bodies, and the auditor's original U/T regressions (20,855 and 24,133).
+Input reservations remain complete-body UTF-8 bytes plus 4,096. The extraction
+ceiling is 16,384. Reader ceilings are U/T/P 30,000 and O 22,000, enforced from
+frozen reader call IDs before dispatch. Certification requires 5% input headroom,
+separately from A-2's 10% output margin. The pilot budget uses equal call counts
+per arm, an effective reader ceiling of 28,000, rather than incorrectly charging
+every O call at the U/T/P maximum. Unclassified standalone reader requests use
+the global 30,000 ceiling; the runtime plan permits only classified arm calls.
+
+A fresh run can supply cumulative exposure with:
+
+```sh
+node evaluation/hr3/harness/cli.mjs --stage pilot \
+  --inputs GENERATED_PILOT --out NEW_RUN \
+  --carry-forward evaluation/hr3/harness/reports/a3-carry-forward.json \
+  --mcp-dependencies adapters/mcp/node_modules \
+  --tokenizer-dependencies adapters/openai/node_modules
+```
+
+The carry-forward manifest is `hr3-carry-forward-v1`, with `ledgers` containing
+repository-relative `{path, sha256}` entries and `preparation` containing
+`{complete, receipts}`. Each preparation receipt is hash-pinned JSON containing
+`version: "hr3-preparation-charge-v1"`, `charge_id`, `stage`, exact integer
+`settledNanodollars`, `outstandingNanodollars`, and
+`embeddingUnits: {research, product}`. Only the primary can attest that all
+preparation charges are included; rounded spending is never a receipt.
+
+`accounting.mjs` verifies source bytes, complete hash chains, reservation/usage
+arithmetic, provider IDs, inherited carry snapshots, and disjoint source
+ancestry. Already settled charges, full unresolved reservations, and reserved
+embedding units seed the new journal's immutable configuration. Reopening a
+writer must reproduce the same verified carry input. Stage, operational,
+authorization and shared embedding limits apply to cumulative exposure before
+any new dispatch. Carrying prior exposure grants no ability to settle old
+reservations from a new journal.
+
+The committed manifest preserves the exact first-pilot ledger and the earlier
+schema-rejection ledger, whose reservation has no settlement. Exact records for
+the two preparation probes are not present in the supplied evidence, so
+`preparation.complete` is false. The budget reports a conditional ceiling for
+known exposure, and real execution refuses missing/incomplete preparation input
+or omission of the first pilot. An explicit fake carry-forward run exercises the
+same accounting without spending. A final real-rerun feasibility decision needs
+all exact preparation receipts and any reconciliation of the old reservation.
+
+The source-only occurrence-1 replay separately reproduces 730/725/723 event
+quote counts and 973/968/965 including edge quotes; 605 of 728 events remain
+formally valid. It reproduces 55 families with cross-batch ID collisions,
+257 duplicate-ID errors (56 adopted), and 68 eligible earlier adopted events
+reselected by P's former filter. The shared internal-key boundary eliminates
+these identifier errors and reselections without changing extraction semantics.

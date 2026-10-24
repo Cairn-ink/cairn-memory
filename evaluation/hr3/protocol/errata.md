@@ -100,7 +100,7 @@ All non-adjudication preflight requirements remain binding.
 | `invalid_extraction_provenance` | 15 |
 | `invalid_extraction_interval` | 6 |
 
-Of 612 returned source quotes, 608 had model-computed UTF-16 offsets that did not match, yet **605 of those quote strings occur verbatim in the cited turn**. Because a single defect discards the whole batch, every arm received little or no evidence. Pilot scores therefore measure the validator, not the memory policies or the product. Two further defects: the frozen extraction and reader prompts still carry the withdrawn draft-E-1 wording ("deadlines are triggers, not an unstated rationale"; "a deadline alone is not rationale"), which contradicts revised E-1.
+Of 730 event source quotes, 725 had incorrect model-computed offsets, and 723 of those strings occurred verbatim in the cited turn. Including reason-edge quotes, the counts are 973, 968 and 965 (corrected after non-author audit; the first draft's 612/608/605 did not match the committed fixture). Because a single defect discards the whole batch, every arm received little or no evidence. Pilot scores therefore measure the validator, not the memory policies or the product. Two further defects: the frozen extraction and reader prompts still carry the withdrawn draft-E-1 wording ("deadlines are triggers, not an unstated rationale"; "a deadline alone is not rationale"), which contradicts revised E-1.
 
 **Amendment.** This applies identically to the shared extraction stage, so every arm receives the same extraction.
 - **Quote anchoring.** The model supplies `turn_id`, the verbatim `quote` and a one-based `occurrence`.
@@ -118,3 +118,23 @@ Of 612 returned source quotes, 608 had model-computed UTF-16 offsets that did no
 - **Prompt alignment with revised E-1.** The extraction and reader system prompts replace the withdrawn wording with the revised E-1 rule: an explicitly stated deadline that caused a decision to stop applying is a supported cause of the change, while a bare deadline citation without stating it as the cause earns no reason credit. No other prompt text changes.
 - **Pilot rerun.** The engineering pilot is re-run once, as a fresh run under A-3. The first run is retained and reported as an engineering finding, and it is not pooled. The pilot cap (US$24) covers both runs.
 - **Unchanged.** Development and test materials are untouched. Pilot use stays restricted by A-1. Caps, models, schemas (except the quote-anchor fields), arms, scorer and decision rules are unchanged.
+
+### A-3 clarifications after non-author audit (2026-10-25)
+
+- **Event identity.** Provider event IDs are batch-local.
+  - Before arm fan-out, assign each event a deterministic internal key `(family_id, batch_ordinal, raw_event_id)`, and keep the raw IDs in diagnostics.
+  - Reject duplicates within a batch.
+  - Preserve source-turn predecessor anchoring and all semantic fields.
+  - P processes only newly received internal keys.
+- **Request input bound.** Before the rerun, certify complete provider request bodies (schemas, prompts, questions, metadata and both delivered intents) for maximal required structures.
+  - Establish a sufficient input reservation bound and recompute the combined pilot budget.
+  - Preserve the required evidence and delivery budgets; never silently truncate them to fit framing limits.
+- **Quote convention.**
+  - **Extraction anchors** use `{turn_id, quote, occurrence}`. Count exact matches at successive UTF-16 start positions, including overlaps; the harness computes the offsets.
+  - **Scope.** This convention applies only to extraction anchors. Reader-citation ambiguity handling is unchanged.
+  - **Prompt changes.** These cover revised E-1 and this quote-format instruction. The stale "UTF-16 offsets" instruction is removed.
+- **Cumulative accounting.** The rerun uses fresh stores, requests and artifacts but preserves cumulative accounting.
+  - Carry forward verified settled charges, full outstanding reservations, applicable preparation charges and shared embedding-unit counters from the first run.
+  - Enforce the remaining pilot allowance within US$24 across both runs, using exact ledger amounts rather than rounded spending.
+  - Recompute feasibility after the input-bound change.
+- **Replay evidence.** The counterfactual occurrence-1 replay retains 605 of 728 events. This is formal validity, not adjudicated accuracy.

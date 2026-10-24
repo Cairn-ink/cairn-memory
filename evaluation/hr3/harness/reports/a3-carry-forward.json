@@ -1,0 +1,17 @@
+{
+  "version": "hr3-carry-forward-v1",
+  "ledgers": [
+    {
+      "path": "evaluation/hr3/harness/test/fixtures/pilot-cf24810f-ledger.jsonl",
+      "sha256": "785bd208619a9448f7e4d56c1aeb81bd775b487d4d3cb70af6a2e2244451a750"
+    },
+    {
+      "path": "evaluation/hr3/harness/test/fixtures/pilot-15b8f1a7-ledger.jsonl",
+      "sha256": "be4c7e9de1a58f6c66040cb16e6142d6d9c00bddbfe766b2bd1ace6aaa01d97f"
+    }
+  ],
+  "preparation": {
+    "complete": false,
+    "receipts": []
+  }
+}

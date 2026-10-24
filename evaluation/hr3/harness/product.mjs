@@ -6,6 +6,7 @@ import { mkdtempSync, chmodSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { canonical, normalize, hash, orderEvents, intervalStart } from './common.mjs';
+import { freshEvents } from './event-identity.mjs';
 import { resolveLinks, unit } from './research.mjs';
 const ok=r=>{if(!r.ok)throw Object.assign(Error(r.error.code),{code:r.error.code});return r.value;};
 const TOKEN=Object.freeze({fixtureAuthority:'explicit-user'});
@@ -58,8 +59,9 @@ export class ProductAgent {
     this.contentOrigins.set(normalize(text),{segments,normalize:true,truncate:null});
   }
   async ingest(events,at) {
-    this.events.push(...events);
-    const linked=resolveLinks(this.events);const fresh=new Set(events.map(e=>e.event_id));
+    const incoming=freshEvents(this.events,events);
+    this.events.push(...incoming);
+    const linked=resolveLinks(this.events);const fresh=new Set(incoming.map(e=>e.event_id));
     for(const e of linked.filter(e=>fresh.has(e.event_id))) {
       if(e.commitment!=='adopted'){this.log.push({surface:'agent',method:'skip_nonadopted',event:e.event_id});continue;}
       if(e.unresolved){this.log.push({surface:'agent',method:'unresolved_mapping',event:e.event_id,errors:e.link_errors});continue;}

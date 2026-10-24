@@ -37,7 +37,8 @@ export function providerSchema(schema) {
 }
 
 // indexOf and string.length use UTF-16 code units. Count overlapping exact
-// matches, in the same way as the scorer's occurrence-addressed citations.
+// matches for extraction anchors only. The reader/scorer retains its separate
+// ambiguity check when overlapping and non-overlapping interpretations differ.
 export function anchorQuote(q,turns) {
   const text=turns.get(q.turn_id);
   if(typeof text!=='string'||!q.quote||!Number.isSafeInteger(q.occurrence)||q.occurrence<1)return null;
@@ -76,7 +77,7 @@ export function validateExtraction(value,input) {
     const edges=e.reason_edges.map(edge=>({...edge,source_quotes:edge.source_quotes.map(q=>anchorQuote(q,turns))}));
     const invalidQuoteEdges=edges.flatMap((edge,i)=>edge.source_quotes.some(q=>!q)?[i]:[]);
     if(anchored.some(q=>!q)||invalidQuoteEdges.length)reasons.add('invalid_extraction_quote');
-    if(reasons.size)rejected.push({index,event_id:e.event_id,reasons:[...reasons].sort(),invalidQuoteEdges});
+    if(reasons.size)rejected.push({index,event_id:e.event_id,raw_event_id:e.event_id,reasons:[...reasons].sort(),invalidQuoteEdges});
     else events.push({...e,source_quotes:anchored,reason_edges:edges});
   }
   const diagnostics={stage:'extraction',armIndependent:true,totalEvents:raw.events.length,validEvents:events.length,rejectedEvents:rejected.length,

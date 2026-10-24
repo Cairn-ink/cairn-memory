@@ -70,7 +70,7 @@
   },
   "inspectedHeldOutManifest": {
     "path": "evaluation/hr3/harness/reports/inspected-heldout-references.json",
-    "sha256": "2279f8835f8fd27fe37d105211cc7ae9d5cb2b45ec048c971c7dc0822746b2fc"
+    "sha256": "92df9c67373a8859afe6714ab41ab8b43e5899e05fa23c405ef76a2faab09ae6"
   },
   "historicalReport": {
     "path": "evaluation/hr3/harness/reports/cap-certification.json",
@@ -201,7 +201,7 @@
   },
   "sources": {
     "evaluation/hr3/protocol/protocol-v0.3.4.md": "639c55edb6633186580af434ee2fe3ed39bffc2bf36a9292dac03b7a1b20b3cc",
-    "evaluation/hr3/protocol/errata.md": "7fc82c0c0973495403de8ab231f1ca8aaa212c74a1961820f6389cf4e7913ff7",
+    "evaluation/hr3/protocol/errata.md": "758af3ad956f1187a8d34477e5c724e623fdebd097cb118c770e65d3fb1a26c9",
     "evaluation/hr3/generator/freeze.json": "04e10b2c1f8910fc7e84ad5a570cfaf6a8f33e4b3787b620d130cb74bbd99413",
     "evaluation/hr3/generator/README.md": "881df5d0785e524b8a1e8be00f6f17cd3bd656b7e9b65ec8e41bb428d8876b80",
     "evaluation/hr3/generator/answer.schema.json": "7d837d51df0ca69835932254ee0b858c8a0fa973ed1c573dac2111824dda58de",
@@ -216,13 +216,13 @@
     "evaluation/hr3/generator/reason-strata.mjs": "11e2c8721122005b68e27c0e07ad92efdf77ce3fe212cc97f8f2577027f3f60a",
     "evaluation/hr3/generator/test/generator.test.mjs": "82751f09f3a9ded99e633be566e816d52f224213f89ed39c33be475c5eb443e6",
     "evaluation/hr3/generator/validate.mjs": "b5750ff19521a6a52aec558561decdb42e3480937bd1ceb11a9b18cba9f68dde",
-    "evaluation/hr3/harness/schema.mjs": "29654212e8888cdc8013ed9acfc0fc304c532ba7e21582612911d505c8cff1fb",
-    "evaluation/hr3/harness/requests.mjs": "120f81547fa8d51990e69df1f28f79b3676d32d01a94f5cdb1a722e9b9dcad46",
+    "evaluation/hr3/harness/schema.mjs": "b18f970de887fbb50b50dad7d4db993dbb06e60cb0ae7779266555bed3985fab",
+    "evaluation/hr3/harness/requests.mjs": "6372f7ca96800a2ef409f892bd0674c76256361072afe3549f642eb33a22fd2b",
     "evaluation/hr3/harness/inputs.mjs": "91979fe5de95a8e310cbef47542874edee824eb4ccbf2b4fdc0fd401acb1feb0",
     "evaluation/hr3/harness/extraction.mjs": "9e9b7d1a44c0427b5a8c0f4312bc20431ccb9fcb026c48fb3abb5315483caa29",
     "evaluation/hr3/harness/cap-certification.mjs": "d01f71d1828979d0b0d6f58677aedfc12a71d18cc089a9e0e1335e4a2874f977",
     "evaluation/hr3/harness/cap-stress-fixtures.mjs": "649bd7176107e19514ef95acfa79f84a5b765b9d4e3ae262c013bca488116e14",
-    "evaluation/hr3/harness/reports/inspected-heldout-references.json": "2279f8835f8fd27fe37d105211cc7ae9d5cb2b45ec048c971c7dc0822746b2fc",
+    "evaluation/hr3/harness/reports/inspected-heldout-references.json": "92df9c67373a8859afe6714ab41ab8b43e5899e05fa23c405ef76a2faab09ae6",
     "evaluation/hr3/harness/reports/cap-certification-a2-pre-cap-revision.json": "4d75c09649fbe82318b7a05b83eb2e1674f82f63da977ae3f07d972f00c8ef3f",
     "evaluation/hr3/scorer/schema.mjs": "da864e622d6f7aeea610ba41ef1c560dd112505aa7726d2d44799425c35e4656",
     "evaluation/hr3/scorer/canonical.mjs": "d71a2203a6de43f64fc2bd44a1394a017345858e7a3c37511b135913f05add3f",

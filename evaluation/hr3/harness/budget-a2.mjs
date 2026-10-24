@@ -5,7 +5,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { CAPS as STAGE_LIMITS } from './ledger.mjs';
-import { OUTPUT_CAPS, responseRequest, embeddingRequest, validateRequest } from './requests.mjs';
+import { OUTPUT_CAPS, INPUT_CAPS, READER_INPUT_CAPS, responseRequest, embeddingRequest, validateRequest } from './requests.mjs';
+import {loadCarryForward} from './accounting.mjs';
 import { hash } from './common.mjs';
 
 // USD per token expressed in integer nanodollars. Prices supplied as verified
@@ -18,7 +19,7 @@ export const STAGES = Object.freeze([
   { stage: 'alternative', families: 200, extractionCalls: 800, readerCalls: 800, extractor: 'alternative' },
 ]);
 const usd = n => n / 1e9;
-const inputCeilings = { extraction: 16384, reader: 20000 };
+const inputCeilings = INPUT_CAPS;
 const inputForecast = { extraction: 8000, reader: 6000 };
 const charge = (input, output, rate) => input * rate.input + output * rate.output;
 
@@ -46,11 +47,12 @@ export function budgetA2() {
   const stages = STAGES.map(spec => {
     const extractionAttempts = spec.extractionCalls * 2, readerAttempts = spec.readerCalls * 2;
     const extractionNanodollars = extractionAttempts * unitReservations[spec.extractor].extraction.nanodollars;
-    const readerNanodollars = readerAttempts * unitReservations.primary.reader.nanodollars;
+    const readerInputCeiling=spec.stage==='alternative'?INPUT_CAPS.reader:Object.values(READER_INPUT_CAPS).reduce((a,b)=>a+b,0)/4;
+    const readerNanodollars=readerAttempts*charge(readerInputCeiling,OUTPUT_CAPS.reader,RATES.primary);
     const worstNanodollars = extractionNanodollars + readerNanodollars;
     const expectedNanodollars = spec.extractionCalls * charge(inputForecast.extraction, OUTPUT_CAPS.extraction, RATES[spec.extractor])
       + spec.readerCalls * charge(inputForecast.reader, OUTPUT_CAPS.reader, RATES.primary);
-    return { ...spec, extractionAttempts, readerAttempts, extractionNanodollars, readerNanodollars,
+    return { ...spec, readerInputCeiling,readerInputCeilingByArm:spec.stage==='alternative'?null:READER_INPUT_CAPS,extractionAttempts, readerAttempts, extractionNanodollars, readerNanodollars,
       worstNanodollars, worstUSD: usd(worstNanodollars), expectedNanodollars, expectedUSD: usd(expectedNanodollars),
       existingLimitUSD: STAGE_LIMITS[spec.stage], existingMarginUSD: usd(Math.round(STAGE_LIMITS[spec.stage] * 1e9) - worstNanodollars),
       responsesCovered: worstNanodollars <= Math.round(STAGE_LIMITS[spec.stage] * 1e9),
@@ -66,27 +68,35 @@ export function budgetA2() {
   assert.equal(expectedNanodollars % 4, 0);
   const contingencyNanodollars = expectedNanodollars / 4;
   // Reproduce §14's original ceiling as an independent transcription check.
-  const historicalNanodollars = STAGES.reduce((n, s) => n + 2 * s.extractionCalls * charge(inputCeilings.extraction, 1024, RATES[s.extractor])
-    + 2 * s.readerCalls * charge(inputCeilings.reader, 768, RATES.primary), 0) + embeddingNanodollars;
+  const historicalNanodollars = STAGES.reduce((n, s) => n + 2 * s.extractionCalls * charge(16384, 1024, RATES[s.extractor])
+    + 2 * s.readerCalls * charge(20000, 768, RATES.primary), 0) + embeddingNanodollars;
   assert.equal(historicalNanodollars, 440905728000);
+  const carry=loadCarryForward(new URL('./reports/a3-carry-forward.json',import.meta.url));
+  const remainingEmbeddingNanodollars=(128000000-carry.exposure.embedding.research-carry.exposure.embedding.product)*20;
+  const combined=carry.exposure.total+stages[0].worstNanodollars+remainingEmbeddingNanodollars;
   return {
     version: 'hr3-budget-a2-audited-v2', status: stages[0].worstNanodollars + embeddingNanodollars < 24e9 ? 'PASS_PILOT_BUDGET' : 'FAIL_PILOT_BUDGET',
     bindingPrePilotCriterion:'pilotFit',
     pilotFit:{pass:stages[0].worstNanodollars + embeddingNanodollars < 24e9,responsesUSD:usd(stages[0].worstNanodollars),sharedEmbeddingsUSD:usd(embeddingNanodollars),conservativeTotalUSD:usd(stages[0].worstNanodollars + embeddingNanodollars),limitUSD:24,marginUSD:usd(24e9-stages[0].worstNanodollars-embeddingNanodollars)},
-    a3PilotRerun:{priorRun:'pilot-cf24810f',priorReportedSpendUSD:0.84,source:'A-3 finding; reported first-pilot spend, not a new settlement',freshRunConservativeUSD:usd(stages[0].worstNanodollars+embeddingNanodollars),combinedConservativeUSD:usd(stages[0].worstNanodollars+embeddingNanodollars+840000000),limitUSD:24,pass:stages[0].worstNanodollars+embeddingNanodollars+840000000<24e9,pooled:false,paidAuthorization:false},
+    a3PilotRerun:{carryForward:{path:'evaluation/hr3/harness/reports/a3-carry-forward.json',sha256:carry.manifestSHA256},
+      priorSettledNanodollars:carry.exposure.settled,priorOutstandingNanodollars:carry.exposure.outstanding,priorExposureNanodollars:carry.exposure.total,
+      priorEmbeddingUnits:carry.exposure.embedding,remainingEmbeddingNanodollars,remainingPilotAllowanceNanodollars:24000000000-carry.exposure.total,
+      freshResponseCeilingNanodollars:stages[0].worstNanodollars,combinedConservativeNanodollars:combined,combinedConservativeUSD:usd(combined),limitUSD:24,
+      preparationComplete:carry.preparationComplete,scope:carry.preparationComplete?'Complete verified prior exposure':'Known verified exposure only; exact preparation receipts still pending',
+      pass:combined<=24000000000,realRerunAllowed:carry.preparationComplete&&combined<=24000000000,pooled:false,paidAuthorization:false},
     theoreticalEnvelope:{covered:worstNanodollars<=450e9,totalUSD:usd(worstNanodollars),operationalStopUSD:450,blockingBeforePilot:false,interpretation:'Informational all-maximum-plus-retry envelope, superseded as a feasibility gate by revised A-2. It is not spending authorization.'},
     laterStageFeasibility:{status:'pending_paid_pilot_projection',computed:false,bindingBeforeDevelopment:true,completionCeilingUSD:400,allStageLimitsRequired:true,projectionInputSchema:{path:'evaluation/hr3/harness/reports/pre-development-projection.schema.json',sha256:hash(readFileSync(new URL('./reports/pre-development-projection.schema.json',import.meta.url)))},completeTestRequired:true,budgetExhaustionOutcome:'Inconclusive'},
     paidReadiness: false,
     sources: Object.fromEntries([
       ['evaluation/hr3/protocol/protocol-v0.3.4.md', protocol], ['evaluation/hr3/protocol/errata.md', errata],
-      ...['budget-a2.mjs', 'requests.mjs', 'ledger.mjs', 'projection-schema.mjs', 'reports/pre-development-projection.schema.json'].map(name => ['evaluation/hr3/harness/' + name, new URL(name, import.meta.url)]),
+      ...['budget-a2.mjs', 'accounting.mjs', 'reports/a3-carry-forward.json', 'reports/request-certification-a3.json', 'requests.mjs', 'ledger.mjs', 'projection-schema.mjs', 'reports/pre-development-projection.schema.json'].map(name => ['evaluation/hr3/harness/' + name, new URL(name, import.meta.url)]),
     ].map(([name, url]) => [name, hash(readFileSync(url))])),
     prices: { units: 'USD per 1M input/output tokens', primary: [0.40, 1.60], alternative: [0.75, 4.50], embeddingInput: 0.02,
       provenance: 'Primary-supplied verification of the OpenAI pricing page on 2026-10-25; no network verification in this offline run.', integerNanodollarsPerToken: RATES },
     assumptions: {
       authority: 'Protocol §14 counts/input ceilings/retry envelope/embedding allowances; A-2 output caps.',
       attemptsPerLogicalCall: 2, retry: 'One transport retry only; no quality retry. Protocol ceiling conservatively includes every retry even though the cumulative three-failure stop may stop execution earlier.',
-      inputCeilings, inputReservation: 'UTF8 bytes of complete provider body + 4096, subject to the unchanged input ceilings.',
+      inputCeilings, inputReservation: 'UTF8 bytes of complete provider body + 4096, subject to the A-3 certified input ceilings.',
       outputCaps: OUTPUT_CAPS, forecastInputTokens: inputForecast, forecastOutputTokens: OUTPUT_CAPS,
       forecast: 'Same §14 planning method: single attempts, forecast input token assumptions, full output caps. A planning estimate, not measured usage or a probability-weighted expectation. Embedding allowances fully charged; 25% contingency added once.',
       alternative: '800 alternative extractions and 800 primary reader calls, not a second four-arm run; no additional P embedding allowance.',
@@ -116,7 +126,7 @@ export function markdownSummary(report) {
 
 **Binding pre-pilot budget gate: ${report.pilotFit.pass?'PASS':'FAIL'}.** Pilot responses ${money(report.pilotFit.responsesUSD)} + the entire shared embedding allowance ${money(report.pilotFit.sharedEmbeddingsUSD)} = **${money(report.pilotFit.conservativeTotalUSD)}**, below $24 by ${money(report.pilotFit.marginUSD)}. This is budget fit only; certification and other scientific/resource gates remain separate.
 
-**A-3 combined pilot ceiling:** first-run reported spend ${money(report.a3PilotRerun.priorReportedSpendUSD)} + fresh-run conservative ceiling ${money(report.a3PilotRerun.freshRunConservativeUSD)} = ${money(report.a3PilotRerun.combinedConservativeUSD)}, below the shared $24 pilot cap. The source is A-3's reported first-run spending, not a new ledger settlement. The runs are separate and are never pooled. This calculation does not authorize a paid rerun.
+**A-3 combined pilot ceiling (known verified exposure):** settled ${(report.a3PilotRerun.priorSettledNanodollars/1e9).toFixed(9)} USD + outstanding ${(report.a3PilotRerun.priorOutstandingNanodollars/1e9).toFixed(9)} USD + fresh responses ${(report.a3PilotRerun.freshResponseCeilingNanodollars/1e9).toFixed(9)} USD + remaining shared embeddings ${(report.a3PilotRerun.remainingEmbeddingNanodollars/1e9).toFixed(9)} USD = **${(report.a3PilotRerun.combinedConservativeNanodollars/1e9).toFixed(9)} USD**, within the shared $24 cap. Preparation completeness: **${report.a3PilotRerun.preparationComplete?'verified':'PENDING exact receipts; real rerun blocked'}**. All amounts derive from hash-verified ledger arithmetic, not the rounded $0.84. Embedding units already reserved are not restored. Runs are separate; this is not spending authorization.
 
 | Stage | Calls extraction / reader | Planned cost | Theoretical all-maximum-plus-retry envelope | Existing stage limit |
 |---|---:|---:|---:|---:|

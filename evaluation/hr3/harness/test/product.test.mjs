@@ -55,3 +55,13 @@ test('named forgetting suppresses replay, keeps independent copy, excludes forei
 test('P pin hashes cover the current public product implementation',async()=>{
  const {verifyProductPin}=await import('../pin.mjs');assert.deepEqual(verifyProductPin(),{commit:'b2513501a6747a163ab1cefb7d37a16744c9621a',verifiedPaths:195});
 });
+
+
+test('P freshness uses internal keys and never reprocesses an already ingested event',async t=>{
+ const {identifyEvents}=await import('../event-identity.mjs');const p=await fixture(t);
+ const first=identifyEvents('same-family',1,[event(1)]),second=identifyEvents('same-family',2,[event(1,{source_turns:['t2'],observed_at:date(2)})]);
+ await p.ingest(first,date(1));await p.ingest(second,date(2));
+ assert.equal(p.events.length,2);assert.equal(p.refs.size,2);
+ const selections=p.log.filter(x=>x.method==='receipt_selection').length;
+ await p.ingest(first,date(3));assert.equal(p.events.length,2);assert.equal(p.log.filter(x=>x.method==='receipt_selection').length,selections);
+});
