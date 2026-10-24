@@ -2431,7 +2431,7 @@ C11 proves synthetic invalidation mechanics. **A17’s installed, fresh-session 
 
 **Decisions for the auditor:** verify authorization-filtered projections, deadline-safe final validation, v33 referential/namespace integrity, intent-specific predicates, the enumerated read matrix and accepted compatibility boundaries before implementation.
 
-## 20. Optional local embedder: bge-m3 model pack (v0.14.2 draft)
+## 20. Optional local embedder: bge-m3 model pack (v0.14.2, audited and confirmed)
 
 **Status:** normative draft; implementation, release-artifact verification and acceptance remain outstanding. v0.14.2 retains all five accepted findings from the non-author audit of `5b7c81f9` and applies both new accepted findings from the re-check of `67c7f645`; the affected seams were rechecked at that HEAD. This section extends §13's embedding configuration and resource policy only when local embedding is explicitly selected; §§17–19 remain frozen. Research measurements are observations, not release qualification.
 
