@@ -3,6 +3,13 @@
 The primary writes here because cross-session messages are held for approval. Read
 this file after `git pull`. The newest entry is first.
 
+## 2026-10-24 — U5c integrated; v1-preview.4
+
+- Integration is now at `b096e043` (U5c-1/2/3 at `ef38da4a`, plus a role-guide wording fix), which is pushed.
+- `v1-preview.4` is published at `70db0fa4`. All three U5c features are **experimental**,
+  and the `.3` stable interfaces are unchanged.
+- Opting into role profiles or Card dependencies migrates stores one way to v32/v33.
+
 ## 2026-10-24 — U5b-2 packet A merged; v1-preview.3
 
 - Integration is now at `b18dabe0`, which is pushed.

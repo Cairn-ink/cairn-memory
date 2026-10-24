@@ -95,6 +95,7 @@
 | 2026-10-24 | **U5c 產品決定**（使用者）：(1) agent 可**直接建立並生效**角色說明，不需使用者確認；保留不可覆寫版本、建立者紀錄、CAS 防並行覆寫、可撤回，角色名稱不給任何權限；(2) 任務快照是**回傳給呼叫端的收據**，由 agent／host 保存，Cairn 不存；(3) 必填欄位是**職責與應交付成果**，方法與相關記憶選填，必填項放不進預算時回 `budget_insufficient`。主控決定：角色說明存成 schema v32 的不可覆寫版本紀錄（類似方法版本），不放在 Memory／Card 本文，因為 Card 確認需要使用者授權，而 Memory 修正會原地覆寫，無法支援「當時」讀取。U5c 分三包：U5c-1 角色與任務讀取、U5c-2 一跳關聯與 MOC 通路、U5c-3 採用切換的失效傳遞。MOC 摘要新鮮度（A14）要等 E1 的接點，先回報 unavailable |
 | 2026-10-24 | **HR-2b 協議 v1.1 核可**（主控）：凍結前修兩個結構性缺陷：guard 改成合併各類別的 pooled 對比（測試集每層 ≥30 組、≥12 族），每篇記憶的來源數上限改為 4（`core.admit` 單次最多 4 筆）。門檻與判定規則不變；要寫明修訂時看過哪些數字，各類別差值只做描述性報告 |
 | 2026-10-24 | **HR-2b 結果：Keep**（`experiment/hr2-assembly` `8d9a51f5`）。長項目（本文 120–400 tokens、每篇 ≤4 筆來源）下，「只帶第一筆來源」反而比「依名次整筆」差：確認性結果 −11.5 分，CI [−23.8, −0.15]；後段來源的 guard −38.8 分。`rank-first-whole-v1` 維持 §15 預設，`rank-first-first-source-v1` 維持可選、非預設，不開 §15 修訂。主控抽查報告第 157 列，數字相符 |
+| 2026-10-24 | **U5c 在 `.4` 標為實驗中**（主控）：角色說明、關聯／MOC、Card 依附三項的名稱與形狀在轉成穩定前都可能改；`.3` 的穩定介面不動。U5c-3 的 MCP 依附工具一律回 `approval_required`，核准只走終端機 `review-card --dependencies` |
 
 ## 6. 研究問題與順序
 
@@ -175,21 +176,21 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 
 ## 8. 進度與下一步（2026-10-24 更新）
 
-- **已完成並併入整合分支**（`integration/unified-memory-v1` `b18dabe0`，已推；draft PR #470）：
+- **已完成並併入整合分支**（`integration/unified-memory-v1` `b096e043`，已推；draft PR #470）：
   - U2／U3／U2c 方法包；
   - U4a 素材 core（含 U4a-1 修正與 U4a-2 驗收補強）、U4b 素材 CLI／MCP；
   - U5a 檢索（候選與證據）；
   - U5b 組裝（`read_memory_context`）與 U5b-2 packet A（representation-v2、精簡 ref 帶 fence 前綴）；
-  - 契約 §16（rollback-journal 的並行門檻）。
+  - 契約 §16（rollback-journal 的並行門檻）；
+  - **U5c 全部**：U5c-1 角色說明與任務收據（§18，schema v32）、U5c-2 關聯一跳＋MOC（§17）、U5c-3 Card 依附目前採用版本（§19，schema v33）。
 
   每一包都經雙審查判 Yes。
-- **已發布**（都是 GitHub pre-release，附 tgz 與 sha256，不上 npm）：`v1-preview.0`（`80daca28`）、`v1-preview.1`（`924d7658`，素材）、`v1-preview.2`（`4e53d1dc`，`read_memory_context` 實驗性）、**`v1-preview.3`**（`7197d800`，`read_memory_context` v2 列為穩定；每筆開銷約 250 → 82 tokens）。
+- **已發布**（都是 GitHub pre-release，附 tgz 與 sha256，不上 npm）：`v1-preview.0`（`80daca28`）、`v1-preview.1`（`924d7658`，素材）、`v1-preview.2`（`4e53d1dc`，`read_memory_context` 實驗性）、**`v1-preview.3`**（`7197d800`，`read_memory_context` v2 列為穩定；每筆開銷約 250 → 82 tokens）、**`v1-preview.4`**（`70db0fa4`，U5c 三項皆實驗中）。
 - **研究**：HR-1、HR-2（v1.0、v1.1）、HR-2b（Keep，`8d9a51f5`）都已完成，見 §6。組裝預設維持 `rank-first-whole-v1`。
-- **工程進行中（U5c）**：§17（U5c-2）與 §18（U5c-1）都已凍結，在 `integration/unified-memory-v1-u5c`；U5c-2 實作 `1f29ec00` 審查中；U5c-1 part 1 `61db8b33` 與 part 2 修正中。U5c-3（採用切換時的失效傳遞）排在 U5c-1 之後。
 - **下一步候選**：
-  1. U5c 完成並整合，之後出 `v1-preview.4`。
-  2. WAL 模式評估（§16，全庫決策）。
-  3. HR-3（分類型更新政策），需付費，要另外批預算。
+  1. WAL 模式評估（§16，全庫決策）。
+  2. HR-3（分類型更新政策），需付費，要另外批預算。
+  3. 後續：R10 測試改用 rendezvous 點去掉時間依賴；MOC 新鮮度的 E1 seam（A14）；MOC 在預設上限下約 1 萬筆記憶開始降級，要不要放寬上限或改索引。
 - **等使用者決定**：
   - HR-3 預算；
   - 合併進 main 或發布到 npm 的時機；
@@ -307,3 +308,4 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | 主控＋U5b session | U5b-2 packet A 合併＋**v1-preview.3** | gpt-6.1-sol/xhigh | — | `0a38a991` | 至 10/24 | §15.8 v0.10→v0.10.4，經四輪非作者審查，確認版是 `ccc9602a`。實作經兩輪修正後雙審查 Yes（`7a3ad58e`），CI 100/100，在 `b18dabe0` 刪掉 worker 報告。主控補跑檢查：validate、import guards、test:artifact 兩個 Node 版本都是 253/253 → 整合分支 fast-forward 到 `b18dabe0`。預覽分支在 `7197d800`，打 tag **v1-preview.3**：`read_memory_context` 的 v2 格式和精簡 ref 取回列為**穩定介面**。每筆開銷約 250→82 tokens，一筆記憶 488→126 tokens。tgz 實測：256 tokens 的預算放得下 2 筆；f 錯一個字元回 snapshot_stale；修正後用舊 ref 取回回 revision_conflict。主控的決定：精簡 ref 帶 fence 前綴 f；MOC 換分類只在 snapshot 取回時報錯，並寫進文件 |
 | U5b session＋主控 | U5b-2 packet B：**HR-2 v1.1**（host-v2 重跑） | gpt-6.1-sol/xhigh → 同 | workspace-write | `14ff5dc7` | 10/24 | 協議 v1.2 §11 → 非作者稽核（0 P0、4 P1、2 P2）→ v1.2.1 凍結 `4fb90832`；harness `5d0a344b`＋修正 `14fdacb5`（雙審 yes）；120 格一次跑完，各階段 exit 0；轉錄檢查修 4 項 P1 → `8ed4dadb`。主控抽查 bge-m3＠256 的 P-top-s1 − P-top（+1.6667 [+0.3401, +3.4091]）與 report.md 一致 |
 | `u5c_inventory`、`u5c2_contract_author`、`u5c2_contract_audit`、`u5c1_contract_author` | U5c 盤點、§17 起草與稽核、§18 起草 | gpt-6.1-sol/xhigh＋fast → 同 | read-only | `b18dabe0`／`6151fcb6` | 10/24 | 盤點：分三包、需要 v32；§17 草稿 v0.11 已提交在 `integration/unified-memory-v1-u5c` `6151fcb6`，稽核中；§18 起草中 |
+| `umv1_u5c1_impl`、`umv1_u5c2_impl`、`umv1_u5c3_impl`、`u5c{1,2,3}_review_{spec,standards}`、`u5c{1,3}_contract_*`、`umv1_preview_docs` | U5c-1／2／3 實作、雙審查、§18／§19 稽核；**v1-preview.4** 指南 | 實作 gpt-6.1-sol/high＋fast；審查與稽核 xhigh＋fast | workspace-write／read-only | `ef38da4a`／`70db0fa4` | 10/24 | U5c-1：part 1＋2＋兩輪修正，雙審 Yes；並行門檻移到 `measure:role-profiles`（TRAPS 第 12 條）。U5c-2：三輪修正，誠實計算後 MOC 約 1 萬筆降級並寫進文件。合併時 U5c-1 的 flag-off fixture 重新從 `4aa9327b` 產生（`6a3c660c`）。U5c-3：§19 經稽核到 v0.13.2，實作兩輪修正後雙審 Yes（`ef38da4a`）。CI 等效矩陣 104/104（含 tokenizer 步驟與兩個 measure）。整合分支 fast-forward 到 `ef38da4a`，再補一個角色指南用語修正 `b096e043`。預覽 `70db0fa4`：validate、test:artifact 259/259 兩版本都過；安裝後實測 check-config、無 flag 時工具清單與 `.3` 逐位元相同、角色 CAS／重放／then／refresh、來源診斷與逐次關閉、依附工具回 approval_required、store 為 v33、`.3` 拒開且資料庫完整。打 tag **v1-preview.4** |
