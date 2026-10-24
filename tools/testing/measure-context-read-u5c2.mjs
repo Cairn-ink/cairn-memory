@@ -87,7 +87,7 @@ else {
       // records, including rejected rows, independently of returned cardinality.
       const db = new DatabaseSync(path, { readOnly: true });
       try {
-        const nativePrepare = db.prepare.bind(db), meter = instrumentSourceWork(db);
+        const nativePrepare = db.prepare.bind(db), meter = instrumentSourceWork(db, { readSet: [ns] });
         const row = nativePrepare('SELECT store_id,cursor_secret FROM store_metadata').get();
         const identity = { storeId: row.store_id, cursorSecret: row.cursor_secret };
         const direct = nativePrepare("SELECT id,revision FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND content LIKE '%needle%' ORDER BY id LIMIT 4")
@@ -99,11 +99,13 @@ else {
             expandRelations(meter.database, identity, {}, { readSet: [ns], types: ['memory'], intent: 'current' }, direct, Infinity));
           const privateWork = { lookups: meter.counts.private.lookups - before.private.lookups, visits: meter.counts.private.visits - before.private.visits };
           const d = boundary.diagnostic, independent = { lookups: meter.counts.lookups - before.lookups, visits: meter.counts.visits - before.visits };
-          if (privateWork.lookups + privateWork.visits > 50000 || d.records !== independent.visits || d.lookups !== independent.lookups || d.work + d.reservedWork > 50000 || d.peakBytes > 8 * 1024 * 1024)
+          const physical = { visits: independent.visits + privateWork.visits, lookups: independent.lookups + privateWork.lookups };
+          const breakdown = Object.fromEntries([...new Set([...Object.keys(meter.counts.byTable), ...Object.keys(meter.counts.lookupsByTable)])].map(table => [table, { visits: (meter.counts.byTable[table] ?? 0) - (before.byTable[table] ?? 0), lookups: (meter.counts.lookupsByTable[table] ?? 0) - (before.lookupsByTable[table] ?? 0) }]));
+          if (d.work !== independent.visits + independent.lookups + d.checks || privateWork.lookups + privateWork.visits > 50000 || d.records !== independent.visits || d.lookups !== independent.lookups || d.work + d.reservedWork > 50000 || d.peakBytes > 8 * 1024 * 1024)
             throw Error('source_boundary_exceeded_or_work_mismatch: ' + JSON.stringify({ source, independent, diagnostic: d }));
           console.log(JSON.stringify({ kind: 'source_boundary', size, shape, source, elapsedMs: performance.now() - started,
             independent: { ...independent, databaseWork: independent.lookups + independent.visits, plansChecked: meter.counts.plansChecked - before.plansChecked },
-            privateScopeWork: privateWork, chargedDatabaseWork: d.records + d.lookups, diagnostic: d }));
+            physical, breakdown, privateScopeWork: privateWork, chargedDatabaseWork: d.records + d.lookups, diagnostic: d }));
         }
       } finally { db.close(); }
       // Build the complete lexical projection outside query timing; maintenance

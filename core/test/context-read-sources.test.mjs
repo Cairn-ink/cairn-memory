@@ -1,3 +1,4 @@
+import { instrumentSourceWork } from '../../tools/testing/context-read-source-work.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { readTransaction, STORAGE_BUSY_TIMEOUT_MS } from '../database.mjs';
 import { expandRelations } from '../context-read-relations.mjs';
@@ -151,9 +152,14 @@ test('C04/C08 inconsistent foreign incident edges across physical batches leave 
   const metadata = db.prepare('SELECT store_id,cursor_secret FROM store_metadata').get();
   const identity = { storeId: metadata.store_id, cursorSecret: metadata.cursor_secret };
   const direct = [memoryRef(seed), card].map(ref => ({ ref }));
-  const rank = () => JSON.stringify(readTransaction(db, () => expandRelations(db, identity, { cards: true, receipts: true, reviews: true },
+  const meter = instrumentSourceWork(db, { readSet: [ns] });
+  const rank = () => JSON.stringify(readTransaction(db, () => expandRelations(meter.database, identity, { cards: true, receipts: true, reviews: true },
     { readSet: [ns], types: ['memory', 'card'], intent: 'current' }, direct, Infinity)));
-  const before = rank(), template = db.prepare('SELECT * FROM rationale_edges').get();
+  const before = rank(), counts = structuredClone(meter.counts), template = db.prepare('SELECT * FROM rationale_edges').get();
+  const diagnostic = JSON.parse(before).diagnostic;
+  assert.equal(diagnostic.records, counts.visits); assert.equal(diagnostic.lookups, counts.lookups);
+  assert.equal(diagnostic.work, counts.visits + counts.lookups + diagnostic.checks);
+  assert.equal(counts.private.visits + counts.private.lookups, 0);
   // Deliberate out-of-band inconsistent links: preserve public-authored receipt
   // material, vary only the foreign endpoint IDs/revisions. No authority follows.
   db.exec('BEGIN');
@@ -171,4 +177,8 @@ test('C04/C08 inconsistent foreign incident edges across physical batches leave 
   db.prepare('INSERT INTO card_memory_bindings VALUES(?,?,?,?,?,?)').run(foreignCard.cardId, seed.id, 1, localReceipt, '{}', 0);
   db.exec('COMMIT');
   assert.equal(rank(), before);
+  assert.equal(meter.counts.visits - counts.visits, diagnostic.records);
+  assert.equal(meter.counts.lookups - counts.lookups, diagnostic.lookups);
+  assert.ok(meter.counts.private.visits + meter.counts.private.lookups > 0);
+  assert.ok(meter.counts.private.visits + meter.counts.private.lookups <= 50000);
 });

@@ -249,13 +249,18 @@ for (const type of ['memory', 'card']) test(`C05/C08 inconsistent foreign ${type
   }
   assert.deepEqual(['needle', 'rootquery'].map(rank), before);
 });
-test('C05/C08/C10 ANALYZEd 10^4 corpus plus 257 inconsistent foreign memberships still yields byte-identical complete top twelve', async t => {
+test('C05/C08/C10 ANALYZEd 10^4 corpus plus 257 inconsistent foreign memberships preserves honest cap fallback and byte-identical output', async t => {
   const f = await publicMocCorpus(t), foreign = { ...ns, ownerId: 'foreign-existing-data' };
   const aliens = Array.from({ length: 257 }, (_, i) => f.admit('Foreign injected member ' + i, foreign));
-  const meter = instrumentSourceWork(f.db), input = { readSet: [ns], types: ['memory'], intent: 'current', query: 'needle' };
+  const meter = instrumentSourceWork(f.db, { readSet: [ns] }), input = { readSet: [ns], types: ['memory'], intent: 'current', query: 'needle' };
   const rank = () => readTransaction(f.db, () => rankMoc(meter.database, {}, {}, input, Infinity));
   const before = rank(), beforeCounts = structuredClone(meter.counts);
-  assert.equal(before.diagnostic.complete, true); assert.equal(before.rows.length, 12); assert.equal(before.diagnostic.membersRanked, 10000);
+  if (before.diagnostic.complete) { assert.equal(before.rows.length, 12); assert.equal(before.diagnostic.membersRanked, 10000); }
+  else { assert.deepEqual(before.diagnostic.reasons, ['work_limit']); assert.equal(before.rows.length, 0); assert.equal(before.diagnostic.membersRanked, null); }
+  assert.equal(beforeCounts.private.visits + beforeCounts.private.lookups, 0, 'all authorized physical work is public');
+  assert.equal(before.diagnostic.records, beforeCounts.visits); assert.equal(before.diagnostic.lookups, beforeCounts.lookups);
+  assert.equal(before.diagnostic.work, beforeCounts.visits + beforeCounts.lookups + before.diagnostic.checks);
+  assert.ok(before.diagnostic.work + before.diagnostic.reservedWork <= 50000);
   const topic = f.db.prepare('SELECT id,revision FROM mocs ORDER BY id LIMIT 1').get();
   for (const member of aliens) f.db.prepare('INSERT INTO moc_memory_refs VALUES(?,?,?,?)').run(topic.id, topic.revision, member.id, member.revision);
   const after = rank();

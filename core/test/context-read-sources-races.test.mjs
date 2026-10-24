@@ -6,20 +6,20 @@ import { DatabaseSync } from 'node:sqlite';
 import { sourcesFixture, ns, ok, memoryRef, sourceChild, sourceQuery } from '../testing/context-read-sources-fixture.mjs';
 import { denied } from '../testing/context-read-core-fixture.mjs';
 
-for (const mutation of ['correct', 'forget', 'undelivered-seed', 'witness-removal']) {
+for (const mutation of ['correct', 'forget', 'undelivered-seed', 'witness-removal', 'shared-scope-cache']) {
   test(`C07 real source-disabled ${mutation} during counting refuses snapshot_stale`, async t => {
     let armed = false, changed = false, job, f;
     const counter = { id: 'synthetic-race', countTokens(text) {
       if (armed && !changed) { changed = true; const result = sourceChild(f, job, { sync: true }); ok(result); assert.equal(result.sourceEnabled ?? result.value.sourceEnabled, false); }
       return mutation === 'undelivered-seed' && text.includes('needle seed body') ? 5001 : 1;
     } };
-    f = sourcesFixture(t, { sources: ['relations-one-hop-v1'], counter });
-    const seed = f.admit('needle seed body'), endpoint = f.admit('Endpoint canonical body'); await f.relate(endpoint, seed);
+    f = sourcesFixture(t, { sources: mutation === 'shared-scope-cache' ? ['relations-one-hop-v1', 'moc-v1'] : ['relations-one-hop-v1'], counter });
+    const seed = f.admit('needle seed body'), endpoint = mutation === 'shared-scope-cache' ? f.topic(f.admit('Endpoint canonical body'), 'Other MOC title').memories[0] : f.admit('Endpoint canonical body'); await f.relate(endpoint, seed);
     const first = ok(await f.find({ limit: 1 })); assert.ok(first.nextCursor);
     const target = mutation === 'undelivered-seed' ? seed : endpoint;
     job = mutation === 'witness-removal' ? { kind: 'corruption-probe', sql: 'DELETE FROM rationale_edges' } :
-      { method: mutation === 'correct' ? 'correct' : 'forget', input: { namespace: ns, memoryId: target.id, expectedRevision: target.revision,
-        ...(mutation === 'correct' ? { content: 'Changed endpoint', kind: 'fact', receipt: { client: 'synthetic', sessionId: 'writer', eventId: 'changed', role: 'user', excerpt: 'Changed endpoint' } } : {}) } };
+      { method: ['correct', 'shared-scope-cache'].includes(mutation) ? 'correct' : 'forget', input: { namespace: ns, memoryId: target.id, expectedRevision: target.revision,
+        ...(['correct', 'shared-scope-cache'].includes(mutation) ? { content: 'Changed endpoint', kind: 'fact', receipt: { client: 'synthetic', sessionId: 'writer', eventId: 'changed', role: 'user', excerpt: 'Changed endpoint' } } : {}) } };
     armed = true;
     denied(await f.assemble({ budget: { maxItems: mutation === 'witness-removal' ? 2 : 1, maxTokens: 4000 } }), 'snapshot_stale'); assert.equal(changed, true);
     denied(await f.find({ cursor: first.nextCursor, limit: 1 }), 'cursor_stale');

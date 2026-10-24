@@ -11,7 +11,7 @@ import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
 import { MemoryStoreError, fail } from './validation.mjs';
 import { openContextReadSidecar, assertContextReadReadOnlyAuxiliaries, contextSourceFences } from './context-read-sidecar.mjs';
-import { expandRelations, relationDiagnostic, sourceReader, sourceBudget, sourceStateBytes, validateRelationWitness, SourceStop } from './context-read-relations.mjs';
+import { createSourceContext, expandRelations, relationDiagnostic, sourceReader, sourceBudget, sourceStateBytes, validateRelationWitness, SourceStop } from './context-read-relations.mjs';
 import { rankMoc, mocDiagnostic } from './context-read-moc.mjs';
 import { fuseCandidates, RRF_PRESETS } from './context-read-fusion.mjs';
 import { REPRESENTATION_VERSION, TOKENIZER_VERSION } from './context-read-tokenize.mjs';
@@ -340,13 +340,14 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       diagnostics.trace.timings.lexicalMs = performance.now() - time;
       diagnostics.channels.lexical = channel('ready');
       let moc = [];
+      const sourceContext = options.sources ? createSourceContext() : undefined;
       if (options.sources) {
         access.check();
         const collected = read(() => {
           const fences = captureSources(input), sources = {};
           for (const id of options.sources) sources[id] = id === 'moc-v1' ? mocDiagnostic('disabled') : relationDiagnostic('disabled');
           if (input.sources.includes('moc-v1')) {
-            const ranked = rankMoc(db, { storeId: info.storeId, cursorSecret: info.cursorSecret }, info, input, deadlineAt);
+            const ranked = rankMoc(db, { storeId: info.storeId, cursorSecret: info.cursorSecret }, info, input, deadlineAt, sourceContext);
             moc = ranked.rows; sources['moc-v1'] = ranked.diagnostic;
           }
           return { fences, sources };
@@ -403,7 +404,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           assertSourcesInside(input, sourceState, internal ? 'snapshot_stale' : 'cursor_stale');
           if (input.sources.includes('relations-one-hop-v1')) {
             const expanded = expandRelations(db, { storeId: info.storeId, cursorSecret: info.cursorSecret }, info,
-              { ...input, mocPreset: options.preset === 'rrf-k60-d12-moc-v1' }, candidateItems, deadlineAt);
+              { ...input, mocPreset: options.preset === 'rrf-k60-d12-moc-v1' }, candidateItems, deadlineAt, sourceContext);
             candidateItems = expanded.items.map((item, i) => ({ ...item, rank: i + 1 }));
             sourceState.witnesses = expanded.witnesses;
             diagnostics.trace.sources['relations-one-hop-v1'] = expanded.diagnostic;
