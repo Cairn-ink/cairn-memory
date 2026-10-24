@@ -18,7 +18,7 @@ import { authenticateHostV2 } from '../assembly/host-v2.mjs';
 import { countTokens } from '../assembly/counter.mjs';
 import { validateOutputPath, validateOutputPaths } from '../assembly/output-paths.mjs';
 import { sourceIdentity } from '../assembly/identity.mjs';
-import { pooledGuardComparison, POOLED_GUARD_STATISTIC } from '../lib/pooled-coverage.mjs';
+import { pooledGuardComparison, POOLED_GUARD_STATISTIC, evaluatePooledDraw, bootstrapPooledDraws } from '../lib/pooled-coverage.mjs';
 import { seededRandom } from '../tools/split.mjs';
 import { clusterBootstrap, percentile } from '../lib/stats.mjs';
 
@@ -30,6 +30,10 @@ function pooledToy(families = 2) {
     category: i % 2 ? 'C3' : 'C1', groupCount: i % 2 ? 6 : 2, coveredGroups: i % 2 ? 1 : 2, ceiling: i % 2 ? 5 / 6 : 1 }));
   const candidate = baseline.map((row, i) => ({ ...row, coveredGroups: i % 2 ? 4 : 0 }));
   return { baseline, candidate };
+}
+function countedPooledToy(groupCount, coveredGroups, candidateCoveredGroups, ceiling, families = 10) {
+  const baseline = Array.from({ length: families }, (_, i) => ({ id: `q${i}`, family: `f${i}`, category: 'C1', groupCount, coveredGroups, ceiling }));
+  return { baseline, candidate: baseline.map(row => ({ ...row, coveredGroups: candidateCoveredGroups })) };
 }
 test('HR-2b primary selector and every §4 decision outcome and Inconclusive gate', () => {
   const gates = { quotasOK: true, guardCeiling: .1 }, main = compare(3, [.01, 6]), guard = guardCompare(-3, [-5, -1]);
@@ -98,6 +102,99 @@ test('pooled family bootstrap recomputes denominators with full family multiplic
   assert.deepEqual(result.bootstrap.ci, [.025, .975].map(p => percentile(samples, p)));
   assert.deepEqual(pooledGuardComparison(baseline, candidate, pooledOptions), result);
   assert.deepEqual(pooledGuardComparison([...baseline].reverse(), [...candidate].reverse(), pooledOptions), result);
+});
+
+test('twelve-family reference interval and point remain equal to the pre-fix helper', () => {
+  const { baseline, candidate } = pooledToy(12);
+  baseline.push({ id: 'extra', family: 'f00', category: 'C3', groupCount: 4, coveredGroups: 2, ceiling: .75 });
+  candidate.push({ ...baseline.at(-1), coveredGroups: 1 });
+  const result = pooledGuardComparison(baseline, candidate, pooledOptions);
+  assert.equal(result.status, 'ok'); assert.equal(result.bootstrap.point, 5 / 52 * 100);
+  assert.deepEqual(result.bootstrap.ci, [-25, 35]);
+  assert.equal(result.bootstrap.accepted, 10000); assert.equal(result.bootstrap.rejected, 0);
+});
+
+test('ceiling recovery refuses near-zero/near-integer ratios and exactly accepts scorer divisions', () => {
+  for (const [groups, ratio] of [[1, 1e-10], [1, 1 - 1e-10], [3, (1 + 1e-10) / 3], [3, (2 - 1e-10) / 3], [3, 1 / 3 + Number.EPSILON], [3, -0]]) {
+    const { baseline, candidate } = countedPooledToy(groups, 0, 0, ratio);
+    assert.throws(() => pooledGuardComparison(baseline, candidate, pooledOptions), /^Error: invalid_pooled_ceiling:q0$/);
+  }
+  for (const covered of [0, 1, 2, 3]) {
+    const { baseline, candidate } = countedPooledToy(3, 0, 0, covered / 3);
+    const result = pooledGuardComparison(baseline, candidate, pooledOptions);
+    assert.equal(result.status, 'ok'); assert.equal(result.absolute.baseline.ceiling, covered / 3);
+    assert.equal(result.absolute.baseline.ceilingCoveredGroups, covered * 10);
+  }
+  // Multiplying an exact scorer ratio back by a large denominator can round
+  // one integer away. Recovery still must match the original division exactly.
+  for (const [groups, covered] of [[8256740327948287, 4295720279636052], [7623134517657599, 4388166870651392], [5625530923614207, 3894941932831209]]) {
+    const { baseline, candidate } = countedPooledToy(groups, 0, 0, covered / groups, 1);
+    const result = pooledGuardComparison(baseline, candidate, { ...pooledOptions, minimumFamilies: 1, resamples: 3 });
+    assert.equal(result.status, 'ok'); assert.equal(result.absolute.baseline.ceilingCoveredGroups, covered);
+    assert.equal(result.absolute.baseline.ceiling, covered / groups);
+  }
+});
+
+test('pooled totals and family reductions enforce safe-integer boundaries without losing small differences', () => {
+  const maximum = Number.MAX_SAFE_INTEGER;
+  const single = countedPooledToy(maximum, maximum - 1, maximum, 1, 1);
+  const options = { ...pooledOptions, minimumFamilies: 1, resamples: 3 };
+  const result = pooledGuardComparison(single.baseline, single.candidate, options);
+  assert.equal(result.status, 'ok'); assert.equal(result.absolute.baseline.groupCount, maximum);
+  assert.equal(result.bootstrap.point, 1 / maximum * 100); assert.ok(result.bootstrap.point > 0);
+  const boundary = countedPooledToy(maximum - 1, maximum - 2, maximum - 1, 1, 1);
+  boundary.baseline.push({ id: 'extra', family: 'f0', category: 'C1', groupCount: 1, coveredGroups: 0, ceiling: 1 });
+  boundary.candidate.push({ ...boundary.baseline.at(-1), coveredGroups: 1 });
+  const family = pooledGuardComparison(boundary.baseline, boundary.candidate, options);
+  assert.equal(family.status, 'ok'); assert.equal(family.absolute.baseline.groupCount, maximum);
+  assert.equal(family.bootstrap.point, 2 / maximum * 100);
+  boundary.baseline[0].groupCount++; boundary.candidate[0].groupCount++;
+  assert.throws(() => pooledGuardComparison(boundary.baseline, boundary.candidate, options), /^Error: unsafe_pooled_aggregate$/);
+  const unsafe = countedPooledToy(maximum, maximum - 1, maximum, 1);
+  assert.throws(() => pooledGuardComparison(unsafe.baseline, unsafe.candidate, pooledOptions), /^Error: unsafe_pooled_aggregate$/);
+});
+
+test('accepted safe totals can produce unsafe family resamples, which are Inconclusive without redraw', () => {
+  const { baseline, candidate } = countedPooledToy(Number.MAX_SAFE_INTEGER - 1, 0, 0, 1, 1);
+  baseline.push({ id: 'q1', family: 'f1', category: 'C1', groupCount: 1, coveredGroups: 0, ceiling: 1 });
+  candidate.push({ ...baseline.at(-1) });
+  const result = pooledGuardComparison(baseline, candidate, { ...pooledOptions, minimumFamilies: 2, resamples: 25 });
+  assert.equal(result.absolute.baseline.groupCount, Number.MAX_SAFE_INTEGER);
+  assert.equal(result.status, 'inconclusive'); assert.equal(result.bootstrap.reason, 'invalid_bootstrap_draw');
+  assert.ok(result.bootstrap.rejected > 0); assert.ok(result.bootstrap.accepted > 0);
+  assert.equal(result.bootstrap.accepted + result.bootstrap.rejected, 25); assert.equal(result.bootstrap.attempts, 25);
+  assert.equal(result.bootstrap.ci, null);
+});
+
+test('checked draw evaluation rejects zero, nonfinite and unsafe arithmetic with injected draws and no redraw', () => {
+  const maximum = Number.MAX_SAFE_INTEGER;
+  for (const invalid of [
+    [], [{ groups: 0, delta: 0 }], [{ groups: -1, delta: 0 }],
+    [{ groups: NaN, delta: 0 }], [{ groups: Infinity, delta: 0 }], [{ groups: maximum + 1, delta: 0 }],
+    [{ groups: 1, delta: NaN }], [{ groups: 1, delta: Infinity }], [{ groups: 1, delta: maximum + 1 }],
+    [{ groups: maximum, delta: 0 }, { groups: 1, delta: 0 }],
+    [{ groups: 1, delta: maximum }, { groups: 1, delta: 1 }],
+    [{ groups: 1, delta: -maximum }, { groups: 1, delta: -1 }],
+    [{ groups: 1, delta: maximum }, { groups: 1, delta: 1 }, { groups: 1, delta: -1 }],
+  ]) {
+    assert.equal(evaluatePooledDraw(invalid), null);
+    const calls = [];
+    const result = bootstrapPooledDraws({ requested: 3, endpoints: [.025, .975], point: 0 }, index => {
+      calls.push(index);
+      return index === 1 ? invalid : [{ groups: 2, delta: index ? 1 : -1 }];
+    });
+    assert.deepEqual(calls, [0, 1, 2]); assert.equal(result.status, 'inconclusive');
+    assert.equal(result.reason, 'invalid_bootstrap_draw'); assert.equal(result.accepted, 2); assert.equal(result.rejected, 1);
+    assert.equal(result.attempts, 3); assert.equal(result.rejectionFrequency, 1 / 3); assert.equal(result.ci, null);
+  }
+  let consumed = 0;
+  function* invalidFamilyDraw() { for (const delta of [Infinity, 0, 0]) { consumed++; yield { groups: 1, delta }; } }
+  assert.equal(evaluatePooledDraw(invalidFamilyDraw()), null); assert.equal(consumed, 3);
+  assert.equal(evaluatePooledDraw([{ groups: maximum, delta: maximum }]), 100);
+  assert.equal(evaluatePooledDraw([{ groups: maximum, delta: -maximum }]), -100);
+  const valid = bootstrapPooledDraws({ requested: 3, endpoints: [.025, .975], point: 0 }, index => [{ groups: 2, delta: index - 1 }]);
+  assert.equal(valid.status, 'ok'); assert.deepEqual(valid.ci, [-47.5, 47.5]);
+  assert.equal(valid.accepted, 3); assert.equal(valid.rejected, 0);
 });
 
 test('pooled minimum counts stratum families, with no category floor or category redraw', () => {

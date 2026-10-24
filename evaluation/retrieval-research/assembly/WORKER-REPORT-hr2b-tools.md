@@ -94,3 +94,72 @@ No HR-2b fixture content was read/authored, no real ranking or assembly was run,
 no inference/network/new dependency/private-data access occurred. W1's fixture
 was not inspected or modified. External non-author reviews and coordinator
 acceptance cannot be performed by this implementation worker and remain pending.
+
+## 2026-10-24 — v1.1 fix round 1
+
+All three Standards findings fixed; no commit. Started at `b4aaf84f` (amendment
+`91d24a40`). Concurrent HEAD advanced to `870b59f7`; its committed worker-source
+trees equal the starting commit, scoped diff exit 0. Protocol pin unchanged.
+
+Two independent worker inventories—Git diff/untracked versus HEAD blob SHA-1
+comparison/filesystem walk—match: **3 changed files, diff actual exit 0**:
+
+```text
+assembly/WORKER-REPORT-hr2b-tools.md
+lib/pooled-coverage.mjs
+test/assembly-hr2b.test.mjs
+```
+
+Paths are research-relative; W2's concurrent fixture is excluded from both methods.
+
+1. `lib/pooled-coverage.mjs:21` replaces the old tolerance with exact scorer
+   division round trips, including explicit 0/1 handling. Adjacent integer
+   candidates handle multiplication rounding at large safe denominators; each
+   must reproduce the stored ratio exactly. Invalid values raise
+   `invalid_pooled_ceiling:<id>`. Tests at `test/assembly-hr2b.test.mjs:117`
+   reject near-zero/near-integer ratios and accept exact endpoints/thirds.
+2. `lib/pooled-coverage.mjs:7` checks every count sum/difference: totals,
+   categories, ceiling numerators and family reductions. Overflow raises
+   `unsafe_pooled_aggregate`. Tests at `test/assembly-hr2b.test.mjs:138` cover
+   MAX_SAFE_INTEGER acceptance, overflow refusal and preserved small deltas.
+3. `lib/pooled-coverage.mjs:45` evaluates checked draws;
+   `lib/pooled-coverage.mjs:61` records any invalid draw as Inconclusive,
+   `invalid_bootstrap_draw`, with no CI/redraw. Tests at
+   `test/assembly-hr2b.test.mjs:169` inject zero denominators, nonfinite values
+   and unsafe arithmetic; a production resample also exercises overflow.
+   Entire draws are consumed; zero numerators remain valid. Authenticated
+   comparison options gain no sampling override.
+
+Full pre-fix helper outputs still match for the hand and weighted references:
+**+12.5 pp, 3/8 versus 4/8, ceiling 7/8**; weighted 12-family CI **[-25,35]**;
+existing 10-family reference and authenticated 12-family CI **[-100,-100]**
+also unchanged. Seed ordering, sample count and percentiles are preserved.
+
+Tests ran sequentially using `~/.nvm/versions/node/v22.16.0/bin/node` and
+`~/.nvm/versions/node/v24.15.0/bin/node`:
+
+```sh
+<node> tools/testing/run.mjs evaluation/retrieval-research/test/<file>
+<node> tools/testing/run.mjs --script evaluation/retrieval-research/test/<file>
+```
+
+Entries: **script pass/fail; actual normal/script exits**.
+
+|File|22.16.0|24.15.0|
+|---|---|---|
+|assembly-hr2b.test.mjs|24/0;0/0|24/0;0/0|
+|tooling-hr2b.test.mjs|28/0;0/0|28/0;0/0|
+|assembly-legacy-regression.test.mjs|1/0;0/0|1/0;0/0|
+|assembly-host-v2-regression.test.mjs|1/0;0/0|1/0;0/0|
+
+Each runtime: **54/0**, no skips; all 16 commands exit **0**. Initial Node-22
+assembly check: **24/0, exit 0**. Both regressions remain **240/240;120/120**,
+reports equal under prescribed scorer/report identity exclusions; regression
+files and archives unchanged. HR-1 byte identity passes. No EROFS/EPERM failures.
+Logs: `/tmp/hr2b-v11-fix1-Eao9ww/`.
+
+Previous report bytes preserved; this dated fix report is under 500 words.
+Whitespace/protected legacy-path checks exit 0. No HR-2b fixture content was
+inspected or modified, no real rankings/assembly, inference, network or dependency
+changes. No implementation work is blocked; external reviews/acceptance remain
+coordinator work. No `-o` was supplied; established report destination retained.
