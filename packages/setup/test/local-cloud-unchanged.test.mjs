@@ -158,7 +158,9 @@ test('L06 pre-header Claude option error: ' + lang + ' ' + flags[0], async t => 
   const baseline = await f.run({ args, module: historical.module });
   const disabled = await f.run({ args, disableLocalMode: true });
   const routed = await f.run({ args, disableLocalMode: false });
+  const cloud = await f.run({ args: [...args, '--cloud'], disableLocalMode: false });
   assert.equal(baseline.code, 2); assert.equal(disabled.code, 2); assert.equal(routed.code, 2);
+  assert.equal(cloud.code, 2); assert.equal(cloud.stdout, baseline.stdout);
   assert.equal(routed.stdout, disabled.stdout);
   await t.test('immutable 0.5.3 error output', { skip: historical.skip }, () => assert.equal(routed.stdout, baseline.stdout));
   assert.doesNotMatch(routed.stdout, /Memory setup|記憶設定/u);

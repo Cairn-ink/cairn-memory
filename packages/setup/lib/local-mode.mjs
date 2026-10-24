@@ -124,13 +124,16 @@ function validateLocalOptions(options, selection, descriptor) {
 }
 export async function routeLocalMode(options, selection, context) {
   const [action, ...flags] = selection.argv;
-  if (!['setup', 'status', 'uninstall', ...controls].includes(action)) return { handled: false };
+  if (!['setup', 'status', 'uninstall', ...controls].includes(action)) { context.beforeRouting?.(); return { handled: false }; }
   if (flags.some(flag => !['--dry-run', '--no-browser', '--no-clipboard', '--manual-token', '--reauthorize'].includes(flag)) ||
-      (action !== 'setup' && flags.length)) throw new SetupError('unknown_command', 2);
-  if (!context.supportedNode(context.nodeVersion)) throw new SetupError('node_required');
+      (action !== 'setup' && flags.length)) { context.beforeRouting?.(); throw new SetupError('unknown_command', 2); }
+  if (!context.supportedNode(context.nodeVersion)) { context.beforeRouting?.(); throw new SetupError('node_required'); }
   const { write, t, interactive, prompt } = context;
   const detection = await detectLocalMode(context);
   const { states, descriptor, union } = detection;
+  if (action === 'setup' && (options.local || union === 'local' || (detection.descriptorError && !options.cloud)))
+    validateLocalOptions(options, selection, descriptor);
+  context.beforeRouting?.();
   if (action === 'uninstall' && options.local) {
     validateLocalOptions(options, selection, descriptor);
     return { handled: true, code: await uninstallLocal(options, selection, detection, context) };
@@ -142,7 +145,6 @@ export async function routeLocalMode(options, selection, context) {
     if (union === 'unknown' && Object.values(states).some(state => state.local)) return refusal('mode_unknown', detection, context);
     return { handled: false };
   }
-  if (options.local || union === 'local' || (detection.descriptorError && !options.cloud)) validateLocalOptions(options, selection, descriptor);
   const localOwnership = Object.values(states).some(state => state.local) || Boolean(descriptor?.operation);
   if (union === 'mixed') return refusal('mode_mixed', detection, context);
   if (!descriptor && !detection.descriptorError && (detection.orphanEngine || Object.values(states).some(state => state.entry))) return refusal('local_orphan', detection, context);
@@ -154,7 +156,7 @@ export async function routeLocalMode(options, selection, context) {
   let local = options.local || union === 'local' || (!options.cloud && (localOwnership || Boolean(detection.descriptorError)));
   if (options.local && union === 'cloud') return refusal('mode_conflict_cloud', detection, context);
   if (!Object.values(states).some(state => state.available)) { write(t('clients_missing')); return { handled: true, code: 0 }; }
-  if (union === 'none' && !options.local && !options.cloud) {
+  if (union === 'none' && !detection.descriptorError && !options.local && !options.cloud) {
     if (!interactive) return refusal('mode_required', detection, context);
     write(t('mode_local_description')); write(t('mode_cloud_description'));
     const choice = (await prompt(t('ask_mode'))).trim();
@@ -173,7 +175,11 @@ export async function routeLocalMode(options, selection, context) {
   }
   if ((context.platform ?? process.platform) === 'win32') return refusal('local_windows_unsupported', detection, context);
   if (flags.includes('--dry-run')) {
-    write(t('local_dry_run')); if (descriptor?.operation) writeLocalResume(write, t, 'local_resume_hint');
+    write(t('local_dry_run'));
+    if (detection.descriptorError) {
+      write(t(detection.descriptorError.key)); command(write, shellArgument(join(detection.root, 'installation.json')));
+    }
+    if (descriptor?.operation) writeLocalResume(write, t, 'local_resume_hint');
     return { handled: true, code: 0 };
   }
   if (detection.descriptorError) return refusal(detection.descriptorError.key, detection, context);

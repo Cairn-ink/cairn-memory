@@ -1,6 +1,8 @@
 import runTest from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, readdir, lstat, chmod, chown, symlink, rm, cp } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, lstat, chmod, chown, symlink, rm, cp, copyFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { setTimeout as delay } from 'node:timers/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { join, dirname, delimiter } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -39,7 +41,8 @@ async function files(root) {
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
   return result;
 }
-async function localFixture(t, { claude = true, codex = true, claudeState = {}, codexState = {}, suffix = '', testedPackageRoot = packageRoot } = {}) {
+async function localFixture(t, { claude = true, codex = true, claudeState = {}, codexState = {}, suffix = '', testedPackageRoot = packageRoot,
+  nodeExecutable = process.execPath } = {}) {
   const ws = createTestWorkspace(t, { prefix: 'cairn-local-mode-' }), home = join(ws.path, 'home' + suffix), bin = join(ws.path, 'bin');
   await mkdir(home, { mode: 0o700 }); await mkdir(bin);
   const root = join(home, '.cairn-memory'), codexHome = join(home, '.codex');
@@ -75,10 +78,13 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
     PATH: bin,
     CAIRN_SETUP_NPM_CACHE: process.env.CAIRN_SETUP_NPM_CACHE, CAIRN_SETUP_NPM_OFFLINE: '1' };
   const run = async (args = ['setup', '--local'], options = {}) => {
-    const child = spawn(process.execPath, [harness, ...args], { cwd: ws.path,
+    const child = spawn(nodeExecutable, [harness, ...args], { cwd: ws.path,
       env: { ...env, ...options.env, LOCAL_TEST_OPTIONS: JSON.stringify(options) }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     child.stdout.on('data', bytes => { stdout += bytes; }); child.stderr.on('data', bytes => { stderr += bytes; });
+    // A surviving npm child can still own these pipes after setup is killed.
+    child.on('exit', (_, signal) => { if (signal === 'SIGKILL') { child.stdout.destroy(); child.stderr.destroy(); } });
+    options.onSpawn?.(child);
     const timer = setTimeout(() => child.kill('SIGKILL'), 150000);
     const [code, signal] = await new Promise((resolve, reject) => { child.on('error', reject); child.on('close', (code, signal) => resolve([code, signal])); }); clearTimeout(timer);
     const lines = stdout.trimEnd().split('\n');
@@ -88,7 +94,7 @@ async function localFixture(t, { claude = true, codex = true, claudeState = {}, 
       display: lines.map(line => line.startsWith('{"literal":') ? JSON.parse(line).literal : line.startsWith('{"prompt":') ? JSON.parse(line).prompt : line).join('\n') + '\n' };
   };
   const recordedCalls = async client => (await readFile(calls[client], 'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse);
-  return { ws: ws.path, home, root, bin, codexHome, env, run, paths,
+  return { ws: ws.path, home, root, bin, codexHome, env, run, paths, defer: ws.defer,
     calls: recordedCalls, setState: (client, value) => writeFile(paths[client], JSON.stringify(value)),
     inventory: () => files(home), descriptor: () => readDescriptor(root),
     config: async text => { await mkdir(codexHome, { recursive: true, mode: 0o700 }); await writeFile(join(codexHome, 'config.toml'), text, { mode: 0o600 }); },
@@ -596,6 +602,26 @@ test('L17 invalid options and dry-run precede invalid-descriptor recovery', asyn
   const dry = await f.run(['setup', '--local', '--dry-run']); assert.equal(dry.code, 0, dry.display);
   assert.deepEqual(await f.inventory(), before);
 });
+for (const interactive of [false, true]) test('invalid descriptor without entries requires recovery before mode choice: ' + interactive, async t => {
+  const f = await localFixture(t); await mkdir(f.root, { mode: 0o700 });
+  await writeFile(join(f.root, 'installation.json'), '{bad', { mode: 0o600 });
+  const before = await f.inventory(), result = await f.run(['setup'], { interactive });
+  assert.equal(result.code, 2, result.display); assert.match(result.display, /record cannot be read safely/);
+  assert.equal(result.prompts.length, 0); assert.doesNotMatch(result.display, /Where should memory live|Choose local or cloud/);
+  assert.deepEqual(await f.inventory(), before);
+  const dry = await f.run(['setup', '--dry-run'], { interactive });
+  assert.equal(dry.code, 0, dry.display); assert.match(dry.display, /Preview:/); assert.match(dry.display, /record cannot be read safely/);
+  assert.equal(dry.prompts.length, 0); assert.ok(dry.literals.includes(shellArgument(join(f.root, 'installation.json'))));
+  assert.deepEqual(await f.inventory(), before);
+});
+for (const effective of [false, true]) for (const flags of [['--codex-daily-cap', '1'], ['--codex-capture-exec', 'on']])
+test('local options precede hosted Claude option checks: ' + effective + ' ' + flags[0], async t => {
+  const f = await localFixture(t); if (effective) await seed(f);
+  const before = await f.inventory(), result = await f.run(['setup', ...(effective ? [] : ['--local']), '--client', 'claude', ...flags]);
+  assert.equal(result.code, 2, result.display); assert.match(result.display, /This option is not available for the current local memory setup/);
+  assert.doesNotMatch(result.display, /only for Codex|requires --client codex/);
+  assert.equal(result.prompts.length, 0); assert.deepEqual(await f.inventory(), before);
+});
 for (const mode of [0o500, 0o755]) for (const directory of ['root', 'engine', 'generation', 'app', 'npm-cache', 'data'])
 test('L16 exact owned directory mode: ' + directory + ' ' + mode.toString(8), async t => {
   const f = await localFixture(t); await seed(f);
@@ -719,6 +745,92 @@ test('filesystem failures contain only typed keys and code parameters', async t 
   await assert.rejects(registerCodex({ root: f.root, checkpoint: (await f.descriptor()).operation.checkpoints.codex,
     env: { ...f.env, CODEX_HOME: join(file, 'child') }, write: () => {}, t: translator('en') }),
     error => error.key === 'codex_mcp_unverified' && Object.keys(error.params).join() === 'code');
+});
+test('L10 SIGKILL during npm retains child ownership and quarantines a fresh generation', async t => {
+  const scratch = createTestWorkspace(t, { prefix: 'cairn-blocking-npm-' }), bin = join(scratch.path, 'bin');
+  await mkdir(bin);
+  // S1 puts the running Node directory first on PATH. A private Node copy lets
+  // this test replace only its sibling npm, without changing the real tools.
+  const node = join(bin, 'node'), npm = join(bin, 'npm'), receipt = join(scratch.path, 'npm.json');
+  await copyFile(process.execPath, node, constants.COPYFILE_FICLONE); await chmod(node, 0o755);
+  await writeFile(npm, `#!${node}\nconst{writeFileSync}=require('node:fs');
+    writeFileSync(${JSON.stringify(receipt)},JSON.stringify({pid:process.pid,parent:process.ppid}));
+    setInterval(()=>{},1000);`, { mode: 0o755 });
+  const f = await localFixture(t, { nodeExecutable: node });
+  let setup, npmPid;
+  const alive = pid => { try { process.kill(pid, 0); return true; } catch (error) { if (error.code === 'ESRCH') return false; throw error; } };
+  const stop = pid => { if (pid && alive(pid)) process.kill(pid, 'SIGKILL'); };
+  f.defer(() => { if (setup?.exitCode === null && setup?.signalCode === null) setup.kill('SIGKILL'); stop(npmPid); });
+  async function waitFor(check, description) {
+    const deadline = Date.now() + 15000;
+    while (!await check()) { assert.ok(Date.now() < deadline, description); await delay(20); }
+  }
+  const running = f.run(['setup', '--local'], { onSpawn: child => { setup = child; } });
+  await waitFor(async () => {
+    try {
+      const child = await json(receipt), lock = await json(join(f.root, '.setup.lock'));
+      npmPid = child.pid; return lock.child === npmPid && child.parent === setup.pid;
+    } catch (error) { if (error.code === 'ENOENT' || error instanceof SyntaxError) return false; throw error; }
+  }, 'npm started and its pid was durably recorded');
+  const lock = await json(join(f.root, '.setup.lock'));
+  assert.deepEqual(Object.keys(lock).sort(), ['child', 'pid', 'startedAt']);
+  assert.equal(lock.pid, setup.pid); assert.equal(lock.child, npmPid); assert.ok(alive(npmPid));
+  const generation = join(f.root, 'engine', engineId), marker = join(generation, 'interrupted-npm');
+  await writeFile(marker, 'incomplete generation');
+  setup.kill('SIGKILL'); assert.equal((await running).signal, 'SIGKILL'); assert.ok(alive(npmPid));
+  const before = await f.inventory(), survivor = await f.run(['setup', '--local']);
+  assert.equal(survivor.code, 2, survivor.display); assert.match(survivor.display, /Wait for it to finish/);
+  assert.doesNotMatch(survivor.display, /A stopped setup/); assert.deepEqual(await f.inventory(), before);
+  stop(npmPid); await waitFor(() => !alive(npmPid), 'orphan npm was reaped after SIGKILL');
+  const stale = await f.run(['setup', '--local']);
+  assert.equal(stale.code, 2, stale.display); assert.match(stale.display, /A stopped setup/);
+  assert.deepEqual(await f.inventory(), before);
+  const remove = stale.literals.find(line => line.startsWith('rm -- ')); assert.equal(remove, 'rm -- ' + shellArgument(join(f.root, '.setup.lock')));
+  const removed = spawnSync('/bin/sh', ['-c', remove], { env: { ...f.env, PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(removed.status, 0);
+  const primed = engineCacheComplete(process.env.CAIRN_SETUP_NPM_CACHE);
+  await rm(npm);
+  if (primed) await symlink(join(dirname(process.execPath), 'npm'), npm);
+  else await writeFile(npm, `#!${node}\nprocess.exit(1);`, { mode: 0o755 });
+  const resumed = await f.run(['setup', '--local']);
+  assert.equal(resumed.code, primed ? 0 : 1, resumed.display);
+  const quarantines = (await readdir(join(f.root, 'engine'))).filter(name => name.startsWith(engineId + '.failed-'));
+  assert.ok(quarantines.length > 0);
+  assert.equal((await Promise.all(quarantines.map(async name => {
+    try { return await readFile(join(f.root, 'engine', name, 'interrupted-npm'), 'utf8'); }
+    catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  }))).filter(value => value === 'incomplete generation').length, 1);
+  await t.test('completion with the primed real npm cache', { skip: primed ? false : cacheSkip }, async () => {
+    const current = await f.descriptor(); assert.equal(current.state, 'installed'); assert.equal(current.engine.id, engineId);
+    for (const client of ['claude', 'codex']) assert.equal(current.clients[client].vector.engineId, engineId);
+  });
+});
+test('L10 manifest-digest upgrade installs beside the published generation', async t => {
+  const scratch = createTestWorkspace(t, { prefix: 'cairn-manifest-upgrade-' }), copy = join(scratch.path, 'package');
+  await cp(packageRoot, copy, { recursive: true });
+  const changedBytes = Buffer.from(JSON.stringify(manifest, null, 4) + '\n');
+  assert.notDeepEqual(changedBytes, manifestBytes); assert.deepEqual(JSON.parse(changedBytes), manifest);
+  await writeFile(join(copy, 'runtime/engine/manifest.json'), changedBytes);
+  const nextId = engineIdFor(version, changedBytes); assert.notEqual(nextId, engineId);
+  const copyVersion = JSON.parse(await readFile(join(copy, 'package.json'))).version; assert.equal(copyVersion, version);
+  await t.test('both registrations move to the changed manifest generation', {
+    skip: engineCacheComplete(process.env.CAIRN_SETUP_NPM_CACHE) ? false : cacheSkip,
+  }, async () => {
+    // Switch the package bytes while preserving the same fixture and client homes.
+    const f = await localFixture(t); const first = await f.run(); assert.equal(first.code, 0, first.display);
+    const old = await f.descriptor(), oldTree = await files(join(f.root, 'engine', old.engine.id));
+    const harness = join(f.ws, 'harness.mjs'), original = await readFile(harness, 'utf8');
+    await writeFile(harness, original.split(pathToFileURL(join(packageRoot, 'lib')).href).join(pathToFileURL(join(copy, 'lib')).href));
+    const result = await f.run(['setup']); assert.equal(result.code, 0, result.display);
+    const current = await f.descriptor(); assert.equal(current.installerVersion, version); assert.equal(current.engine.id, nextId);
+    assert.equal(current.ownerId, old.ownerId); assert.deepEqual(await files(join(f.root, 'engine', old.engine.id)), oldTree);
+    const generations = await readdir(join(f.root, 'engine')); assert.ok(generations.includes(old.engine.id)); assert.ok(generations.includes(nextId));
+    for (const client of ['claude', 'codex']) assert.equal(current.clients[client].vector.engineId, nextId);
+    const { readClaudeServers } = await fromPackage('local-claude'), { inspectCodexServers } = await fromPackage('codex');
+    assert.equal((await readClaudeServers(f.home))['cairn-local'].args[0], executableFor(f.root, nextId));
+    const entries = await inspectCodexServers({ home: f.codexHome, env: f.env });
+    assert.equal(entries.find(entry => entry.name === 'cairn-local').args[0], executableFor(f.root, nextId));
+  });
 });
 test('L10 installer-version upgrade installs beside the published generation', async t => {
   if (!needCache(t)) return;

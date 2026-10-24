@@ -219,16 +219,18 @@ export async function main(argv, {
     t.locale = translate.locale;
     if (forceReauthorize && !options.argv.includes('--reauthorize')) options.argv.push('--reauthorize');
     const selection = parseClient(options.argv, SetupError);
-    if (options.captureExec !== undefined && selection.client === 'claude') throw new SetupError('invalid_exec_setting', 2);
-    if (options.dailyCap !== undefined && selection.client === 'claude') throw new SetupError('cap_option_scope', 2);
-    if (!coordinated && ['setup', 'status'].includes(selection.argv[0]))
-      write(t(selection.argv[0] === 'status' ? 'status_header' : 'installer_version', { version: installerVersion }));
+    const beforeRouting = () => {
+      if (options.captureExec !== undefined && selection.client === 'claude') throw new SetupError('invalid_exec_setting', 2);
+      if (options.dailyCap !== undefined && selection.client === 'claude') throw new SetupError('cap_option_scope', 2);
+      if (!coordinated && ['setup', 'status'].includes(selection.argv[0]))
+        write(t(selection.argv[0] === 'status' ? 'status_header' : 'installer_version', { version: installerVersion }));
+    };
     if (!coordinated && !disableLocalMode) {
       const routed = await routeLocalMode(options, selection, { write, prompt, interactive, env, t, verbose,
-        runClaude: run, nodeVersion, supportedNode, installerVersion: localInstallerVersion, platform, progress });
+        runClaude: run, nodeVersion, supportedNode, installerVersion: localInstallerVersion, platform, progress, beforeRouting });
       localDetection = routed.detection; localStatusCode = routed.statusCode ?? 0;
       if (routed.handled) return routed.code;
-    }
+    } else beforeRouting();
     if (!coordinated && !selection.client && ['setup', 'status'].includes(selection.argv[0])) {
       return Math.max(localStatusCode, await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
         authOptions, env, locale, t, endpointOverride, dailyCap:options.dailyCap, captureExec:options.captureExec, verbose, progress,
