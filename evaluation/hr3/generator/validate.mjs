@@ -83,11 +83,40 @@ export function validateAnswer(answer, gold = false) {
 export function validateInventory(inv) {
   const ids = new Set(), banks = new Set(), aliases = new Set();
   assert(inv.lineages.length===310,'lineage_total');
+  assert(Array.isArray(inv.retired_lineages),'retired_lineage_registry');
+  const ancestryRows = [...inv.lineages,...inv.retired_lineages], byId = new Map();
+  for (const l of ancestryRows) {
+    assert(!byId.has(l.lineage_id),'lineage_overlap'); byId.set(l.lineage_id,l);
+    assert(Object.hasOwn(SPLITS,l.split) && l.lineage_id.startsWith(l.split+'-'),'lineage_split');
+  }
+  for (const l of ancestryRows) {
+    const a=l.ancestry;
+    assert(a.aliases.length===0,'alias_overlap');
+    assert(a.parent===null ? a.relation==='root' : a.relation==='revision','ancestry_relation');
+    const visited=new Set([l.lineage_id]); let node=l;
+    while (node.ancestry.parent!==null) {
+      const parent=byId.get(node.ancestry.parent);
+      assert(parent,'ancestry_parent');
+      assert(parent.split===l.split,'ancestry_crossing');
+      assert(!visited.has(parent.lineage_id),'ancestry_cycle');visited.add(parent.lineage_id);node=parent;
+    }
+    if (a.parent!==null) assert(byId.get(a.parent).ancestry.derivatives.includes(l.lineage_id),'ancestry_revision_link');
+    for(const childId of a.derivatives) {
+      const child=byId.get(childId);assert(child,'ancestry_parent');
+      assert(child.split===l.split,'ancestry_crossing');
+      assert(child.ancestry.parent===l.lineage_id,'ancestry_revision_link');
+    }
+    assert(!banks.has(a.bank_id),'bank_overlap');banks.add(a.bank_id);
+    for(const value of [l.bank.subjectZh,l.bank.subjectEn,...l.bank.routes,...l.bank.reasons.flatMap(x=>[x.zh,x.en])]) {
+      assert(!aliases.has(value),'alias_overlap',value);aliases.add(value);
+    }
+  }
   for (const l of inv.lineages) {
     assert(!ids.has(l.lineage_id),'lineage_overlap'); ids.add(l.lineage_id);
-    assert(!banks.has(l.ancestry.bank_id),'bank_overlap'); banks.add(l.ancestry.bank_id);
-    assert(l.ancestry.parent===null && l.ancestry.derivatives.length===0 && l.ancestry.aliases.length===0,'ancestry_crossing');
-    for (const value of [l.bank.subjectZh,l.bank.subjectEn,...l.bank.routes,...l.bank.reasons.flatMap(x => [x.zh,x.en])]) { assert(!aliases.has(value),'alias_overlap',value); aliases.add(value); }
+    if(l.lineage_id.endsWith('-R3')) {
+      assert(l.ancestry.parent===l.lineage_id.replace('-R3','') && byId.get(l.ancestry.parent)?.status==='retired','revision_provenance');
+      assert(l.freshness===(['engineering','pilot'].includes(l.split)?'archived_fixture_revision':'provisional_revision_fresh_bank_pending'),'revision_freshness');
+    }
     assert(l.members.length===l.multiplicity && l.members.length===SPLITS[l.split].multiplicity,'lineage_multiplicity');
     assert(l.multi_hop === (CAUSES.indexOf(l.causal_class)>=2),'multi_hop');
   }
@@ -100,7 +129,7 @@ export function validateInventory(inv) {
     for (const type of TYPES) for (let c=0;c<CAUSES.length;c++) assert(lineages.filter(l=>l.type===type && l.causal_class===CAUSES[c]).length===spec.causalLineages[c],'causal_allocation');
   }
   assert(inv.lineages.reduce((sum,l)=>sum+l.rendered_world_audit_members.length,0)===690,'rendered_audit_allocation');
-  return {lineages:ids.size,banks:banks.size,lexicalAliases:aliases.size};
+  return {lineages:ids.size,retiredLineages:inv.retired_lineages.length,banks:banks.size,lexicalAliases:aliases.size};
 }
 
 function checkSpan(span, turns, maxBatch = 4) {

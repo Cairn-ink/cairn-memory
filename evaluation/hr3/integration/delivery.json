@@ -2,7 +2,7 @@
   "sourceCount": 13,
   "sourceRoutes": [
     "git tracked/untracked nonignored inventory",
-    "independent recursive filesystem discovery + batch ignore filtering"
+    "independent recursive filesystem discovery + ignore filtering"
   ],
   "files": [
     {
@@ -17,8 +17,8 @@
     },
     {
       "path": "REPORT.md",
-      "bytes": 1652,
-      "sha256": "f91b0ac2fe2905b6491e7bb05f13b23bcc7bd8bbb6c8d52b2187fee5aadc4ba2"
+      "bytes": 1505,
+      "sha256": "6b4d7f5cce30abbae51b001f5b49225dc793bc1dad5937890a018db67825d37b"
     },
     {
       "path": "adapters.mjs",
@@ -46,7 +46,7 @@
     {
       "path": "mechanical-results.json",
       "bytes": 112760,
-      "sha256": "ae062532fb589aefd760f448a6d7e5bb0e4c5bba451c8c0e93016dffd8357822"
+      "sha256": "0470b2f4fc635cddffee64b98cce0101120947a6a023030af89f5f8760e07ec8"
     },
     {
       "path": "mechanical.mjs",
@@ -69,12 +69,12 @@
       "sha256": "85ba8baf9c649bf0803ce698fc39b9e03af36fbb62949364dbf6c2cf68580bfc"
     }
   ],
-  "generatedCountIncludingManifest": 3149,
+  "generatedCountIncludingManifest": 3148,
   "generatedManifest": {
-    "path": "artifacts/audit-recheck-r3/artifact-manifest.json",
-    "sha256": "1059598e307cd79702c49ebf38bb7445685086c9ec42871c387e9ee9c19ed6cd"
+    "path": "artifacts/provenance-r4/artifact-manifest.json",
+    "sha256": "97ca96fe4a1d5d227694247d70c3fa398c2df666325ae171016b353c3298beea"
   },
-  "totalFiles": 3162,
+  "totalFiles": 3161,
   "allFilesRoutes": [
     "pathlib.rglob",
     "os.walk"
@@ -88,20 +88,15 @@
       "fail": 0
     },
     {
-      "command": "mechanical CLI --out evaluation/hr3/integration/artifacts/audit-recheck-r3",
+      "command": "node evaluation/hr3/integration/cli.mjs mechanical --out evaluation/hr3/integration/artifacts/provenance-r4",
       "exitCode": 0
     },
     {
-      "command": "zero-judgment gate on current index",
-      "exitCode": 1,
-      "expected": "referral quota failure; judgments pending"
-    },
-    {
-      "command": "independent artifact inventory, source/gold strata, byte readback and whitespace audit",
+      "command": "independent provenance/archive/data and artifact inventory checks",
       "exitCode": 0
     }
   ],
-  "revision": "audit-recheck-r3",
+  "revision": "provenance-r4",
   "preservedArtifacts": {
     "path": "artifacts/previous-ff192c6b/archive-manifest.json",
     "sha256": "24abe8486f8a2e34900800e9d01c764c785429e54d27e7354517d825b25d1163"

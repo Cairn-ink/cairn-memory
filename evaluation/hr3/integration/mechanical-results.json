@@ -22,8 +22,8 @@
     "checks": [
       {
         "name": "generator/README.md",
-        "sha256": "a77d464f6c05cad1f4d359f5c6b34ba703e5e402b4c39aa964b35bf8de62018f",
-        "bytes": 14642
+        "sha256": "881df5d0785e524b8a1e8be00f6f17cd3bd656b7e9b65ec8e41bb428d8876b80",
+        "bytes": 15860
       },
       {
         "name": "generator/answer.schema.json",
@@ -57,8 +57,8 @@
       },
       {
         "name": "generator/deliver.mjs",
-        "sha256": "ab90229d78c21a5fd992a150ffe32f5faa8efce4108eef95b467c278aa9a9edc",
-        "bytes": 6051
+        "sha256": "ca436430794fe3fed24a60082a0921afbde1a347ecedd9e735a7c7c81e0b74d2",
+        "bytes": 6101
       },
       {
         "name": "generator/generate.mjs",
@@ -67,8 +67,8 @@
       },
       {
         "name": "generator/inventory.mjs",
-        "sha256": "2459c06224aacc488c1533fa6be1cef152f7c6449dd2517441d479e78544d692",
-        "bytes": 6471
+        "sha256": "f4f972a3c3ec8ab5016669c525798581102c461bbba3017fabb14accfb866811",
+        "bytes": 8138
       },
       {
         "name": "generator/reason-strata.mjs",
@@ -77,13 +77,13 @@
       },
       {
         "name": "generator/test/generator.test.mjs",
-        "sha256": "54815b0ab71a7a1fd56ecd48e7cc6e1084e44194aae31bb94a6b7d333b457d66",
-        "bytes": 23350
+        "sha256": "82751f09f3a9ded99e633be566e816d52f224213f89ed39c33be475c5eb443e6",
+        "bytes": 26574
       },
       {
         "name": "generator/validate.mjs",
-        "sha256": "46fb155b1803639cbee1aaca7e88f22e9a8e64a66d813e4e7fec31c88e433cca",
-        "bytes": 26662
+        "sha256": "b5750ff19521a6a52aec558561decdb42e3480937bd1ceb11a9b18cba9f68dde",
+        "bytes": 28230
       },
       {
         "name": "generator/artifacts/pilot/families.jsonl",
@@ -97,13 +97,13 @@
       },
       {
         "name": "generator/artifacts/pilot/grammar-and-sentence-bank.json",
-        "sha256": "4aa9dd064287fa141ecb34be5e34d18a4e8e21898bc7e060944aa01171f8fef8",
-        "bytes": 255254
+        "sha256": "772d62e11716ec02a043935b440124947849a7aaa30f4dfa336fbf6cd09a7ebf",
+        "bytes": 255431
       },
       {
         "name": "generator/artifacts/pilot/lineage-inventory.json",
-        "sha256": "7e8323e99415120dde9b7a4b1f96a45a8e38dafaa40293debacc74986e293b31",
-        "bytes": 626852
+        "sha256": "0a1de894e6134ff2e9e442d169b8010dc10bb8399b5c2300cb97625936b22d50",
+        "bytes": 692414
       },
       {
         "name": "generator/artifacts/pilot/rejected-candidates.jsonl",
@@ -122,8 +122,8 @@
       },
       {
         "name": "generator/artifacts/pilot/manifest.json",
-        "sha256": "d896e39771b5b92334ec373d6adc74cb6a520afc4588edbe58985a0e3e0d9db0",
-        "bytes": 2902
+        "sha256": "8ed64660d9623c5309b79d87dad20d44ca0faf6ba5f84bc0c694e4b4e84eee30",
+        "bytes": 4221
       },
       {
         "name": "challenge/source/README.md",

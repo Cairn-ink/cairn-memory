@@ -21,7 +21,7 @@ function choose(type, cause='direct', member=0) {
 }
 const clone=structuredClone;
 
-test('all 310 specifications: exact allocation and independent disjoint bank inventories, no held-out rendering',()=>{
+test('all 310 specifications: exact allocation, disclosed revisions and split-disjoint banks; no held-out rendering',()=>{
   assert.equal(validateInventory(inv).lineages,310);
   assert.equal(inv.lineages.reduce((n,l)=>n+l.rendered_world_audit_members.length,0),690);
   assert(inv.lineages.filter(l=>l.split==='test').every(l=>l.rendered_world_audit_members.length===2 && l.rendered_world_audit_members.every(id=>l.members.slice(0,2).some(m=>m.family_id===id))));
@@ -304,5 +304,54 @@ test('E-2 fixtures cover both authoring paths in every Card branch without ambig
     const declarations=card.actions.filter(a=>a.call==='declareCardCurrentDependencies'&&a.authority==='explicit-user');
     if(card.authoring_path==='confirm_with_dependencies'){assert.ok(confirm.payload.currentDependencies);assert.equal(declarations.length,0);}
     else {assert.equal(confirm.payload.currentDependencies,undefined);assert.equal(declarations.length,1);assert.equal(declarations[0].payload.expectedDependencyRevision,null);}
+  }
+});
+
+
+test('R3 revisions disclose retired same-split parents; held-out freshness remains a post-calibration gate',()=>{
+  const revisions=inv.lineages.filter(l=>l.ancestry.relation==='revision');
+  assert.equal(revisions.length,48);assert.equal(inv.retired_lineages.length,48);
+  for(const l of revisions){
+    const parent=inv.retired_lineages.find(p=>p.lineage_id===l.ancestry.parent);
+    assert.ok(parent);assert.equal(parent.split,l.split);assert.equal(parent.status,'retired');
+    assert.equal(parent.lineage_id,l.lineage_id.replace('-R3',''));
+    assert.deepEqual(parent.ancestry.derivatives,[l.lineage_id]);
+    assert.deepEqual(JSON.parse(JSON.stringify(l.bank).replaceAll('-R3','').replaceAll('R3','')),parent.bank);
+  }
+});
+
+
+test('ancestry validation rejects cross-split parents, cycles and falsely independent R3 roots',()=>{
+  const cross=clone(inv),child=cross.lineages.find(l=>l.split==='engineering'&&l.ancestry.parent);
+  child.ancestry.parent=cross.retired_lineages.find(l=>l.split==='pilot').lineage_id;
+  assert.throws(()=>validateInventory(cross),{code:'ancestry_crossing'});
+  const missing=clone(inv);missing.lineages.find(l=>l.ancestry.parent).ancestry.parent='engineering-missing-parent';
+  assert.throws(()=>validateInventory(missing),{code:'ancestry_parent'});
+  const cycle=clone(inv),c=cycle.lineages.find(l=>l.ancestry.parent),p=cycle.retired_lineages.find(l=>l.lineage_id===c.ancestry.parent);
+  p.ancestry.parent=c.lineage_id;p.ancestry.relation='revision';
+  assert.throws(()=>validateInventory(cycle),{code:'ancestry_cycle'});
+  const root=clone(inv),r=root.lineages.find(l=>l.ancestry.parent);
+  const old=root.retired_lineages.find(l=>l.lineage_id===r.ancestry.parent);old.ancestry.derivatives=[];
+  r.ancestry.parent=null;r.ancestry.relation='root';
+  assert.throws(()=>validateInventory(root),{code:'revision_provenance'});
+});
+
+test('ancestry validation rejects active/retired alias reuse, including cross-split reuse',()=>{
+  const cross=clone(inv);cross.lineages.find(l=>l.split==='engineering').bank.routes[0]=cross.lineages.find(l=>l.split==='pilot').bank.routes[0];
+  assert.throws(()=>validateInventory(cross),{code:'alias_overlap'});
+  for(const sameSplit of [true,false]) {
+    const bad=clone(inv),child=bad.lineages.find(l=>l.split==='engineering'&&l.ancestry.parent);
+    child.bank.routes[0]=bad.retired_lineages.find(l=>sameSplit?l.split==='engineering':l.split==='pilot').bank.routes[0];
+    assert.throws(()=>validateInventory(bad),{code:'alias_overlap'});
+  }
+});
+
+test('8 development and 30 test replacements remain provisional; no fresh banks instantiated',()=>{
+  const gate=inv.preDevelopmentGates.freshAffectedHeldOutBanks;
+  assert.equal(gate.status,'pending');assert.match(gate.after,/calibration v2/);assert.match(gate.before,/development.*held-out generation/);
+  for(const [split,count,multiplicity] of [['development',8,4],['test',30,8]]) {
+    assert.equal(gate.lineages[split].length,count);
+    const rows=inv.lineages.filter(l=>gate.lineages[split].includes(l.lineage_id));
+    assert.equal(rows.length,count);assert.ok(rows.every(l=>l.freshness==='provisional_revision_fresh_bank_pending'&&l.multiplicity===multiplicity&&l.ancestry.parent));
   }
 });

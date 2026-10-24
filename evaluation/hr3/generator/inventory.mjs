@@ -6,7 +6,8 @@ export const SPLITS = {
   development: { lineagesPerType: 10, multiplicity: 4, causalLineages: [2,2,2,2,1,1], languages: [110,60,30], cards: 40, safety: 20 },
   test: { lineagesPerType: 40, multiplicity: 8, causalLineages: [10,10,5,5,5,5], languages: [880,480,240], cards: 160, safety: 160 },
 };
-// Disjoint lexical roots. Shared abstract productions are not paraphrase ancestors.
+// Original split-disjoint lexical roots. R3 revisions disclose their retired
+// same-split parents; renamed strings do not establish independent roots.
 const ROOTS = {
   engineering: { zh: ['石榴','杏仁','木瓜','桂圓','桑葚'], en: ['Garnet','Quartz','Jasper','Beryl','Onyx'], reason: ['感測誤差','封裝破損','取樣不足','讀值漂移','元件缺貨'], reasonEn: ['sensor error','damaged packaging','insufficient samples','reading drift','component shortage'] },
   pilot: { zh: ['青竹','海棠','山茶','銀杏','杜鵑'], en: ['Cedar','Aster','Willow','Maple','Clover'], reason: ['佇列壅塞','容量不足','延遲增加','備援不足','處理超時'], reasonEn: ['queue congestion','insufficient capacity','increased latency','insufficient redundancy','processing timeout'] },
@@ -15,7 +16,7 @@ const ROOTS = {
 };
 export const GRAMMAR = {
   version: VERSION, languages: ['zh-Hant','en','mixed'],
-  ancestryRule: 'Each lineage is an independently instantiated semantic bank root, not a translation, alias or paraphrase of another lineage. Only abstract syntax/causal topology and function words are shared across splits.',
+  ancestryRule: 'Original roots are split-disjoint. R3 banks are disclosed within-split revisions of retired predecessors, not independent roots. Affected development/test banks remain provisional: after calibration v2 and before development/affected held-out generation, instantiate genuinely fresh semantic banks and publish ancestry/allocation. No cross-split ancestry or alias reuse is permitted.',
   productions: {
     family: 'initial + distractors; first_update + cause; intermediate + distractors; final_update + cause',
     assertion: 'named_record + subject + predicate + explicit field assignments + audience + [from,to) + commitment',
@@ -29,8 +30,14 @@ export const GRAMMAR = {
   },
   byteGuards: { batchSourceBytes: 12288, familySourceBytes: 32000, note: 'Local conservative source guards, not provider-body/token certification; §13 serializer/tokenizer and provider framing remain external gates.' },
 };
+function semanticBank(root, t, suffix, id) {
+  return { subjectZh:`${root.zh[t]}${suffix}服務`, subjectEn:`${root.en[t]} ${suffix} service`,
+    predicateZh:'派送設定', predicateEn:'dispatch configuration',
+    routes:['A','B','C'].map(letter => `${root.en[t]}${suffix}-${letter}`),
+    reasons:Array.from({length:4}, (_,i) => ({id:`${id}/reason${i+1}`, zh:`${root.reason[(t+i)%5]}，檢查點 ${suffix}.${i+1}`, en:`${root.reasonEn[(t+i)%5]} at station ${suffix}.${i+1}`})) };
+}
 export function inventory(seed = DEFAULT_SEED) {
-  const lineages = [];
+  const lineages = [], retired_lineages = [];
   for (const [split, spec] of Object.entries(SPLITS)) {
     const count = spec.lineagesPerType * 5 * spec.multiplicity;
     const languages = shuffle(spec.languages.flatMap((n,i) => Array(n).fill(GRAMMAR.languages[i])), `${DEFAULT_SEED}/${split}/languages`);
@@ -53,14 +60,22 @@ export function inventory(seed = DEFAULT_SEED) {
         });
         lineages.push({ lineage_id:id, split, type:TYPES[t], causal_class:CAUSES[c], authored_rationale_topology:CAUSES[c], multi_hop:c >= 2,
           expiry_mode:TYPES[t] !== 'expiry' ? null : CAUSES[c] === 'direct' ? 'deadline' : CAUSES[c] === 'unstated' ? 'unexplained_lapse' : 'conditional_lapse',
-          ancestry: { parent:null, derivatives:[], aliases:[], grammar:VERSION, bank_id:`bank/${id}` },
-          bank: { subjectZh:`${root.zh[t]}${suffix}服務`, subjectEn:`${root.en[t]} ${suffix} service`,
-            predicateZh:'派送設定', predicateEn:'dispatch configuration',
-            routes: ['A','B','C'].map(letter => `${root.en[t]}${suffix}-${letter}`),
-            reasons: Array.from({length:4}, (_,i) => ({ id:`${id}/reason${i+1}`, zh:`${root.reason[(t+i)%5]}，檢查點 ${suffix}.${i+1}`, en:`${root.reasonEn[(t+i)%5]} at station ${suffix}.${i+1}` })) },
+          ancestry: { parent:renewed ? id.replace('-R3','') : null, relation:renewed ? 'revision' : 'root', derivatives:[], aliases:[], grammar:VERSION, bank_id:`bank/${id}` },
+          freshness:renewed ? (['engineering','pilot'].includes(split) ? 'archived_fixture_revision' : 'provisional_revision_fresh_bank_pending') : 'original_root',
+          bank:semanticBank(root,t,suffix,id),
           multiplicity:spec.multiplicity, rendered_world_audit_members:(split==='test'?members.slice(0,2):members).map(m=>m.family_id), members });
+        if (renewed) {
+          const retiredId = id.replace('-R3','');
+          retired_lineages.push({lineage_id:retiredId, split, type:TYPES[t], status:'retired',
+            archived_inventory:'artifacts/previous-ff192c6b/pilot/lineage-inventory.json',
+            ancestry:{parent:null,relation:'root',derivatives:[id],aliases:[],grammar:VERSION,bank_id:`bank/${retiredId}`},
+            bank:semanticBank(root,t,suffix.replace('R3',''),retiredId)});
+        }
       }
     }
   }
-  return { version:VERSION, seed, allocationSeed:DEFAULT_SEED, grammar:GRAMMAR, splits:SPLITS, lineages };
+  return { version:VERSION, seed, allocationSeed:DEFAULT_SEED, grammar:GRAMMAR, splits:SPLITS, lineages, retired_lineages,
+    preDevelopmentGates:{freshAffectedHeldOutBanks:{status:'pending',after:'independent calibration v2 passes',before:'development and affected held-out generation',
+      requirement:'Instantiate genuinely fresh semantic banks for the 8 development and 30 test replacements; preserve every frozen allocation and multiplicity; publish ancestry and allocation before generation. R3 revisions do not satisfy freshness.',
+      lineages:Object.fromEntries(['development','test'].map(split=>[split,lineages.filter(l=>l.split===split && l.freshness==='provisional_revision_fresh_bank_pending').map(l=>l.lineage_id)]))}} };
 }

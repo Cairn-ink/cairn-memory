@@ -1,18 +1,12 @@
-# Audit re-check R3
+# R4 provenance correction
 
-See [REVISION-REPORT.md](REVISION-REPORT.md) for the accepted finding → fix → test
-mapping, explicit fixture rebalancing, changed-file inventory and exit codes.
+See [REVISION-REPORT.md](REVISION-REPORT.md) for truthful R3 revision ancestry,
+the pending post-calibration-v2 fresh held-out bank gate, verification commands
+and the current changed-file inventory. No fresh held-out banks are instantiated
+by this correction. The old R3 freshness claims are superseded.
 
-Current official partial output is
-[reports/a1-r3-stopped-pilot.json](reports/a1-r3-stopped-pilot.json). It comes from
-actual interrupted pilot artifacts and retains complete=false, the stop reason,
-2 attempted observations, 478 unexecuted cases and 3 unsettled reservations.
-The report CLI exits 0 without modifying the stage ledger or manifest. Real
-unknown billing is separated from settled spend; fake actual spend is zero.
-
-The generator's active effective strata now match frozen requirements: pilot
-40 multi-hop and 10 unstated families, engineering 20 and 5, at both checkpoints.
-The new E-2 fixture paths cover direct confirmation and separate declaration
-across all eight branches. External audit, calibration and paid-stage gates are
-still pending. Earlier complete-run reports remain retained as historical
-artifacts; their corpus and certification claims are superseded by R3.
+The bound writer, E-2 authoring paths, policies and prompts are unchanged.
+Both complete and interrupted fake-pilot reporting are rechecked by the focused
+harness suite. Historical partial output remains
+[reports/a1-r3-stopped-pilot.json](reports/a1-r3-stopped-pilot.json); its original
+execution-time hashes are preserved rather than relabeled with current sources.

@@ -135,9 +135,11 @@ inventory and hashes; it does not authorize paid work.
 
 1. **Lexical ancestry granularity.** §9 does not define ancestry for a shared
    abstract grammar. This implementation shares syntax, mandated causal
-   topology and function words, while assigning independent semantic bank
-   roots, disjoint subjects/routes/reason aliases and no derivative/translation
-   parent across splits. Within a lineage, members share a bank but sample
+   topology and function words. Original roots are split-disjoint; R3 banks
+   are revisions of archived predecessors, with explicit same-split ancestry
+   parents. New IDs and sampling keys do not establish independent roots.
+   No derivative/translation parent or alias reuse may cross splits; validators
+   also reject literal alias reuse between active and retired banks. Within a lineage, members share a bank but sample
    numeric values and dates independently. This is a declared authoring choice
    for non-author review, not evidence of generalization to unseen grammars.
 2. **Control totals.** §9 does not specify whether its named-forget/replay/foreign
@@ -169,14 +171,18 @@ inventory and hashes; it does not authorize paid work.
    preannounced clock deadline**. Unstated lapse reports no cause; conditional
    lapse requires the complete authored multi-hop explanation. The occurrence
    time is not a previously stated deadline. Previous assertions have unbounded
-   source-claimed end times in these fresh cases. Questions still ask why the
+   source-claimed end times in these revised cases. Questions still ask why the
    change occurred; source intervals and C/O gold are rebuilt consistently.
    We do not reject a supported clock trigger or change the frozen question.
 
-   These are explicit fixture changes: all five non-direct expiry lineages in
-   each split receive fresh `-R3` IDs and fresh semantic-bank aliases. No old
-   held-out lineage is reused for affected generation. Held-out conversations
-   and gold remain unrendered. The rendered change affects **30 checkpoints in 15 families**:
+   These are explicit within-split revisions, not 48 fresh independent roots.
+   All five affected engineering and five pilot lineages have ancestry parents
+   naming their retired predecessors in `retired_lineages`; the retired records
+   identify their archived inventory and reciprocal revision links. Fifteen
+   rendered families derive from those ten predecessor lineages. The 8
+   development and 30 test R3 entries are also disclosed as derived provisional
+   specifications, with freshness pending; their renamed bank strings do not
+   satisfy §9. No held-out conversations or gold have been rendered. The rendered change affects **30 checkpoints in 15 families**:
    engineering L02–L06/W1 (10 checkpoints), pilot L02–L06/W1–W2 (20).
    Old-to-new IDs append `-R3` to the lineage before `-Wn`, e.g.
    `pilot-expiry-L02-W1` → `pilot-expiry-L02-R3-W1`; batches remain 2 and 4.
@@ -191,7 +197,17 @@ inventory and hashes; it does not authorize paid work.
    the original per-type class counts and 60/200/1,600 family totals unchanged.
    Overall lineage weights stay 1/30, 1/50, 1/200; within-type 1/6, 1/10, 1/40;
    multi-hop guard 1/20, 1/30, 1/100. Power assumptions/allocations are unchanged;
-   fresh affected held-out IDs are published before later gated rendering.
+   IDs alone do not certify fresh held-out banks.
+
+   **Explicit pre-development gate — pending, not implemented now.** After
+   independent calibration v2 passes, and before development or any affected
+   held-out generation, instantiate genuinely fresh semantic banks for the
+   **8 development and 30 test** replacement lineages, preserving every frozen
+   allocation and multiplicity. Publish their ancestry and allocation before
+   generation. Current provisional R3 specifications must be replaced at that
+   gate. This correction only records truthful provenance and the pending gate;
+   it does not instantiate those banks or certify §9 freshness. The pending
+   requirement is also published in `preDevelopmentGates` and run manifests.
    An explicit elapsed deadline cannot inhabit an unstated or multi-hop stratum.
 6. **Card confirmation/declaration — E-2 implemented.** Every fixture explicitly
    chooses `confirm_with_dependencies` (no later standalone null declaration)
