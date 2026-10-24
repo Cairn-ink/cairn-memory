@@ -137,5 +137,5 @@ export function createMethodBindingStorage({db,binding,packageRow,packageRef,tar
     }).filter(Boolean);
     return page(ns,expected,input,entries,events=>({events}));
   }
-  return {transition,resolve,list,events,decode,pinVersion,adoption};
+  return {transition,resolve,list,events,decode,pinVersion,adoption,stateFor};
 }

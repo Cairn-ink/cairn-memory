@@ -1,3 +1,4 @@
+import { assertNoRoleProfiles } from '../../core/role-profile-schema.mjs';
 import { assertNoAssets } from '../../core/asset-schema.mjs';
 import { validateExistingStore } from '../../core/existing-store.mjs';
 import { isAbsolute, resolve } from 'node:path';
@@ -77,11 +78,12 @@ export async function preflight(config) {
     await checkedPath(config.usage.root, { directory: true });
     const before = await checkedPath(config.databasePath);
     db = new DatabaseSync(config.databasePath, { readOnly: true });
+    if (db.prepare('PRAGMA user_version').get().user_version < 32) assertNoRoleProfiles(db);
     if (db.prepare('PRAGMA user_version').get().user_version < 31) assertNoAssets(db);
     if (db.prepare('PRAGMA user_version').get().user_version >= 30) validateExistingStore(db, { storeId: config.authority.storeId });
     const after = await checkedPath(config.databasePath);
     if (before.dev !== after.dev || before.ino !== after.ino) invalid();
-    if (db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 || ![29,30,31].includes(db.prepare('PRAGMA user_version').get().user_version) ||
+    if (db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 || ![29,30,31,32].includes(db.prepare('PRAGMA user_version').get().user_version) ||
         db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== config.authority.storeId ||
         db.prepare('SELECT 1 FROM raw_owner_usage WHERE owner_id=? AND cap_bytes!=?').get(config.authority.namespace.ownerId, config.raw.capBytes)) invalid();
   } catch { invalid(); }

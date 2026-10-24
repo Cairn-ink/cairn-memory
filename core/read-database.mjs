@@ -1,3 +1,4 @@
+import { assertNoRoleProfiles } from './role-profile-schema.mjs';
 import { assertNoAssets } from './asset-schema.mjs';
 import { validateExistingStore } from './existing-store.mjs';
 import { lstatSync } from 'node:fs';
@@ -27,6 +28,7 @@ export function openReadDatabase(path, { contextRead = false, preflight } = {}) 
     const validate = () => {
     if (db.prepare('PRAGMA application_id').get().application_id !== APPLICATION_ID ||
         !(contextRead ? CONTEXT_READ_SCHEMA_VERSIONS : READ_SCHEMA_VERSIONS).includes(db.prepare('PRAGMA user_version').get().user_version)) fail('unsupported_database');
+    if (db.prepare('PRAGMA user_version').get().user_version < 32) assertNoRoleProfiles(db);
     if (db.prepare('PRAGMA user_version').get().user_version < 31) assertNoAssets(db);
     if (db.prepare('PRAGMA user_version').get().user_version >= 30) validateExistingStore(db, {
       storeId: db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id });

@@ -71,3 +71,6 @@ export function openMemoryStore(input) {
 
   return Object.freeze({ scope: bindScope, close: runtime.close });
 }
+
+export { profileRef as roleProfileRef, releaseRef as roleProfileReleaseRef } from './role-profile-input.mjs';
+export { roleTaskMeteredText, roleTaskToolResponse } from './role-context-wire.mjs';

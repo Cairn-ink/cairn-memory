@@ -258,6 +258,8 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
       const reason = reasonRefs.length === 0 ? 'not-recorded' : reasonRefs.some(ref => ref.status === 'available') ? 'available' : 'recorded-unavailable';
       const entries = [...changes.map(value => ({ type: 'diff', value })), ...items.map(value => ({ type: 'item', value })),
         ...reasonRefs.map(value => ({ type: 'reason', value }))];
+      // Role assembly meters the complete bounded projection in its own call.
+      if (input.roleProjection === true) return { from: methodVersionRef(input.from), to: methodVersionRef(input.to), status:'available', reason, changes, items, reasonRefs, nextCursor:null };
       return page(ns,expected,input,entries,selected => ({ from: methodVersionRef(input.from), to: methodVersionRef(input.to),
         status: 'available', reason, changes: selected.filter(e => e.type === 'diff').map(e => e.value),
         items: selected.filter(e => e.type === 'item').map(e => e.value), reasonRefs: selected.filter(e => e.type === 'reason').map(e => e.value) }));
@@ -303,6 +305,10 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
         packageRevision:found.pkg.revision,versionRevision:found.row.revision})};
   }
   return Object.freeze({
+    // Internal synchronous seam: caller owns the one shared read transaction.
+    roleRead: Object.freeze({ stateFor: bindings.stateFor, adoption: bindings.adoption,
+      packageRow, targetMetadata, targetLifecycle, verifyFile, reasonAvailable,
+      readInside: (method,ns,input,access) => read(method,ns,input,1,access,null) }),
     payloadBinding: value => binding('method-action-v1',value),
     prepareMixed:(ns,input)=>attachments.prepare(ns,input),
     call(method,ns,input,payloadBinding,isRead,{ accessGeneration,access,binaryAccessGeneration },prepared) {
