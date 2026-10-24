@@ -532,3 +532,6 @@
   表達 2–4 事實；「W2 對 placement 盲」→ W2 的 view 有 body／span-only 但無先後 receipt 位置與文字；重現段的 checkout 要含結果與補檔的
   commit）照建議逐字修正：**`8d9a51f5`**。**HR-2b 完成、結果 commit 送主控**（連同 v1.1 凍結 `d3a6e24f`、fixture 凍結 `3251b8ca`、
   排名凍結 `98e88b01`、結果 `2acb5b1c`）。結論 Keep；未授權任何 §15 修訂；不碰 core／adapters／packaging／contract。
+- **主控接受 Keep**（抽查 report.md 確認行數字相符），已記入 charter §5／§6／§8 引用 `8d9a51f5`。`experiment/hr2-assembly` 推上 origin
+  （pull --rebase 無變動、push 0、遠端 `8d9a51f5` 與本地相同）。移除 `cairn-memory-review-hr2` 審查 worktree（CI worktree 先前已移除）。
+  主控目前沒有新的研究包：HR-3 需使用者付費預算、WAL 評估是 store 層決策，皆未指派。U5b 協調者的 HR-2b 工作到此結束。
