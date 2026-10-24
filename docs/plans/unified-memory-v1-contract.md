@@ -2009,156 +2009,263 @@ Measurements are observations: `findCandidates` p50/p95 at 10³ and 10⁴ Memori
 
 **Non-claims:** retrieval-quality improvement from either source; two-hop typed relation expansion; MOC summary freshness/A14; role profiles; invalidation. No HR evidence selects these sources as defaults; both remain off by default.
 
-## 18. U5c-1: role profiles, role/task read and task receipts (v0.12 draft)
+## 18. U5c-1: role profiles, role/task read and task receipts (v0.12.1, audit round 1 applied)
 
-**Status:** contract draft; implementation, acceptance and measurements remain outstanding. Anchors refer to `6151fcb6`. This packet depends on U2/U5b and does not depend on §17.
+**Status:** contract draft. Applies all eight findings from the audit of `3eedb920`, with the primary’s compact-receipt/file-continuation decisions. Implementation and acceptance remain outstanding; §18.7 reports serialization probes only. This packet depends on U2/U5b, independently of §17.
 
-### 18.1 Representation, opt-in and authority
+### 18.1 Representation and authority
 
-Role profiles become immutable versioned canonical records, structurally parallel to U2 method versions. This supersedes the Memory/Card representation in §2.2 and §10 (`docs/plans/unified-memory-v1-contract.md:100`, `:406`). The private product draft proposed a logical profile on Memory/Card; Card confirmation requires `explicit-user` authority (`core/private-card-facade.mjs:33`), while Memory correction overwrites content in place (`core/runtime.mjs:270`). Neither supports agent-enacted releases plus exact historical profile reads. Related Memories/Cards remain ordinary canonical content referenced by typed ref. Work narratives stay there; the registry holds short duties and output requirements.
+Profiles are immutable versioned canonical records, parallel to U2 versions. This supersedes the Memory/Card representation in §2.2/§10: Card confirmation requires `explicit-user` authority (`core/private-card-facade.mjs:33`), while Memory correction overwrites content (`core/runtime.mjs:270`). Neither supplies direct agent enactment with historical profile reads. Related Memory/Card content remains canonical; narratives stay there. Profiles hold short structured duties and outputs.
 
 - Core opt-in: `roleProfiles:{version:'role-profiles-local-v1',storage:'local-plain-v1',authority,attribution:{actorId,agentId}}`.
-- Host flag: `--role-profiles local-v1`. MCP additionally requires the existing method/context opt-ins with identical authorized read sets. Mismatches refuse configuration; grants are never unioned.
-- Namespace, read set and attribution come from the host. Tool arguments cannot supply or replace them. A role name grants no data access, tool permission or execution authority.
-- Agents may publish and enact profiles directly. Publishing makes the release current immediately; no confirmation or terminal review occurs.
-- Reuse §2.3’s synchronous `{authorize,isCurrent}` protocol, complete payload binding and explicit method allowlists. Reads use `read`; profile mutations introduce `write`, subject to the objection below. Mutation authority covers the exact namespace; referenced namespaces require separate read grants.
-- Capture consent, profile text, method text and receipts confer no authority.
-- Without the role opt-in, existing tools/list, DTOs, defaults and supported-store opener behavior remain byte-identical; no U5c migration occurs. Already-upgraded v32 stores still receive complete validation, independent of selected capabilities.
+- MCP flag: `--role-profiles local-v1`, requiring existing method/context opt-ins with identical authorized read sets. Never union grants.
+- Agents publish directly; publication immediately makes the release current. No confirmation/TTY step exists.
+- Namespace, read set and attribution are host-supplied. Role names, profiles, methods and receipts grant no access or execution authority.
+- Reuse §2.3’s synchronous `{authorize,isCurrent}` protocol. Exactly the three profile mutations use new `write` grants; the role read uses `read`. Existing U2 classes remain unchanged. `correct_memory` has no authority-port class (`adapters/mcp/server.mjs:495`).
+- The complete pre-redaction mutation commitment binds both head expectations, all input and frozen host attribution. Supplemental namespace grants use `read`, `actionId:null`, `targetId:null`, `expectedRevision:null`, and the same commitment.
+- Without the flag, existing tools/list, DTOs, defaults and supported-store behavior remain byte-identical; no U5c migration occurs. Validation of an already-upgraded v32 store is capability-independent.
 
-### 18.2 Fields, identity and limits
+### 18.2 Types and limits
 
-- Key: `(namespace, roleKey)`, with one current release pointer. `roleKey` uses U2’s ASCII grammar, without `*` or null (`core/method-package-input.mjs:87`).
-- Required fields: `duties` and `requiredOutputs`.
-- Optional fields: `methods` containing **MethodPackageRefs**, related Memory/Card refs, `appliesTo`, and `changeReason:{text,reasonRefs?}`. Profiles never select or pin method versions.
-- Each release records immutable host attribution, core creation time, ordinal, predecessor and a store-keyed content identity. Attribution identifies the publishing host actor/agent; it does not attest authorship quality.
-- Text must be valid Unicode, nonblank and NUL-free. Enforce limits before and after existing best-effort redaction; identities cover persisted bytes.
-- Related refs are exact typed refs, never copied bodies. They cannot expand the reader’s authorized scope.
+All schemas below are closed; omitted optional fields alone are accepted. `N` means positive safe integer, `Z` nonnegative safe integer, `Id` the existing identifier grammar, and `MAC` exactly 43 base64url characters. Namespaces, MethodPackageRefs, MethodVersionRefs, Memory/Card refs and U2 reason refs retain their existing closed schemas.
+
+```text
+ProfileRef = {type:'role-profile',namespace,profileId:Id,roleKey}
+ReleaseRef = {type:'role-profile-release',profile:ProfileRef,
+              releaseId:Id,contentIdentity:MAC}
+
+FieldsInput = {duties:[Text],requiredOutputs:[Text],
+               methods?:[MethodPackageRef],related?:[MemoryRef|CardRef],
+               appliesTo?:Text}
+ReasonInput = {text:Text,reasonRefs?:[U2ReasonRef]}
+
+Registry = {namespace,roleKey,ref:ProfileRef|null,
+            state:'absent'|'active'|'disabled',
+            currentRelease:ReleaseRef|null,revision:N|null}
+```
+
+Normalized `Fields` always contains all five fields; optional lists default to `[]`, `appliesTo` to null. Absent registries have null ref/current/revision. Existing disabled barriers may have null current release and a **positive** revision.
 
 | Limit | Value |
 | --- | --- |
-| `roleKey`, host actor/agent identifiers | 1–200 UTF-16 units each |
+| Role key | 1–200 ASCII units, U2 grammar without `*`/null |
+| Host actor/agent identifiers | Each 1–200 UTF-16 units |
 | Duties / required outputs | Each 1–8 entries; each entry ≤300 UTF-16 units |
-| Method packages | ≤16 distinct refs |
-| Related Memory/Card refs | ≤16 distinct refs |
-| `appliesTo` | ≤500 UTF-16 units; descriptive, never an access rule |
-| Change reason | ≤500 UTF-16 units; ≤16 U2 reason refs |
-| Complete release input / retained payload | Each ≤32,768 UTF-8 bytes |
+| Methods / related refs | Each ≤16 distinct refs |
+| `appliesTo` / reason text | Each ≤500 UTF-16 units |
+| Reason refs | ≤16; obey §2.3 reason-namespace rules |
+| Release input / retained payload | Each ≤32,768 UTF-8 bytes |
 | Profiles per namespace / releases per profile | 256 / 128, including tombstones |
-| Retained profile payload per owner | 50,000,000 UTF-8 bytes |
-| History page | ≤20 releases, additionally bounded by delivery budget |
+| Retained payload per owner | 50,000,000 UTF-8 bytes |
+| History page | ≤20 releases, additionally budget-bounded |
 
-These are proposed bounds: U2 already permits 256 packages, 128 versions, 16 reasons and 20-item pages (`core/method-package-input.mjs:13`). Profile text is substantially smaller than method content. Quota reservation and release are atomic; accounting excludes indexes, ledgers, SQLite overhead and backups.
+Text is nonblank, valid Unicode and NUL-free. Enforce pre/post-redaction bounds; identities cover persisted bytes. Methods name packages, never versions. Related refs never expand scope or copy bodies. Limits follow U2’s counts (`core/method-package-input.mjs:13`); storage capacity does not guarantee deliverability.
 
-### 18.3 Canonical v32 and migration
+### 18.3 Writes, CAS and resolution
 
-Allocate **v32** exclusively for this packet’s canonical layout. No task-receipt table is added.
+Let `W` be the closed common input:
 
-DDL, in prose:
+```text
+W = {namespace,roleKey,actionId:Id,
+     expectedCurrentRelease:ReleaseRef|null,
+     expectedRegistryRevision:N|null}
+```
 
-- `role_profiles`: opaque primary key; unique namespace/role key; active/disabled state; current release identity or null; positive registry revision and next ordinal; timestamps. Namespace CHECKs use personal/empty-project or project/nonempty-project storage spelling.
-- `role_profile_releases`: opaque primary key; parent profile FK; unique `(profile_id,ordinal)` and composite release identity; predecessor ref; available/deleted lifecycle with revision 1/2; structured payload, attribution, timestamp and byte count. Composite FKs prevent a head or predecessor from naming another profile.
-- `role_profile_changes`: unique destination release, explicit from/to refs, optional reason text and bounded reason refs. Reasons belong only to that recorded edge.
-- `role_profile_operations`: namespace/action primary key, method, payload commitment and content-free mutation outcome. This is the §7 replay ledger, not task-receipt retention.
-- `role_profile_events`, `role_profile_epochs` and `role_profile_owner_usage`: content-free ordered transitions, namespace generations and atomic retained-byte accounting. Index history by profile/ordinal and events by namespace/ordinal.
-- All tables are STRICT. CHECKs/guards enforce state shapes, positive revisions, bounded structured fields, immutable keys and monotonic transitions. Canonical validation also verifies ref shapes and namespace relationships.
-- Available release content cannot change. Only the prescribed terminal purge is allowed; tombstones cannot update, disappear or return to available. History/change rows are immutable except required purge.
-- BEFORE INSERT guards cover **every** declared unique key and hidden rowid, including operation/event conflicts. UPDATE/DELETE guards alone are insufficient for `INSERT OR REPLACE` with `recursive_triggers=0` (`core/asset-schema.mjs:194`).
-- Deleting a release purges duties, outputs, scope note, reference lists, attribution labels and affected change prose. Retain only opaque identities/refs, lifecycle revisions, ordinals, timestamps and numeric counts, following §6. A deleted current target remains an unavailable barrier.
-- Related-source correction, forget, deletion or revocation is checked canonically on delivery. A receipt, cached result or comparison cannot reconstruct unavailable source text. Source-derived copies are unsupported here.
-
-Migration follows §12.1 exactly:
-
-- Only the explicitly selected ordinary writable opener migrates: prerequisites → v30 → v31 → v32, inside its existing single rollback-safe transaction (`core/method-package-migration.mjs:13`; `core/database.mjs:398`, `:671`).
-- Install prerequisites without enabling their capabilities, capture or grants. Validate each seam; commit `user_version=32` only with complete definitions. Failure rolls back schema, data, identity and version.
-- Support fresh stores and U2’s supported populated layouts; v19 remains refused. Acceptance includes populated v29–v31.
-- Read-only and managed-existing openers validate only. Add `schema32-existing-v1`; retain older option semantics. Every v32 opener validates complete prerequisite, v30, v31 and v32 layouts, including when roles are disabled.
-- Reject premature role artifacts below v32 and incomplete, altered or unexpected v32 definitions without repair.
-- Update ordinary/managed/read allowlists, asset-selected managed checks, local preflight/setup/permission checks and setup wording (`core/database.mjs:37`, `:367`; `core/existing-store.mjs:12`, `:83`; `core/read-database.mjs:29`; `adapters/local/configuration.mjs:80`; `integrations/client/raw/local-setup.mjs:62`; `local-host-permission.mjs:28`; `local-setup-cli.mjs:15`).
-- Preserve asset validation’s exact trigger-set comparison (`core/asset-schema.mjs:314`). Prefer triggers on new role tables only. Any added trigger on U2/U4 tables requires an explicit version-aware complete expected set; never relax validation to name-only checks.
-- Freeze the pre-change installed v31 closure. Old binaries refuse v32; stop mixed-version writers before upgrading.
-
-### 18.4 Writes and profile resolution
-
-All writes require `actionId`. Authorization precedes replay lookup; exact replay precedes mutable existence checks. Changed payloads under the same ID return `action_conflict`. CAS, quotas, release creation, head transition, events and mutation outcome commit atomically (§7).
-
-| Core method / MCP tool | Required behavior |
+| Core method / MCP tool | Closed input; success value |
 | --- | --- |
-| `publishRoleProfileRelease` / `publish_role_profile_release` | Require complete fields, `expectedCurrentRelease` and `expectedRegistryRevision`; both null only for an absent registry row. Append an immutable release and make it current atomically |
-| `disableRoleProfile` / `disable_role_profile` | Explicit withdrawal; CAS the same head expectations. May create a disabled barrier for an absent key |
-| `deleteRoleProfileRelease` / `delete_role_profile_release` | Require exact release identity and expected lifecycle revision; apply §6 purge/tombstone rules without requiring readable payload |
+| `publishRoleProfileRelease` / `publish_role_profile_release` | `W + {fields:FieldsInput,changeReason?:ReasonInput}` → `{registry:Registry,release:ReleaseRef,ordinal:N,createdAt:UTC}` |
+| `disableRoleProfile` / `disable_role_profile` | `W` → `{registry:Registry}` |
+| `deleteRoleProfileRelease` / `delete_role_profile_release` | `W + {release:ReleaseRef,expectedRevision:N}` → `{registry:Registry,release:ReleaseRef,state:'deleted',revision:2,purgedBytes:Z,eventCount:1}` |
 
-- Publishing after withdrawal is explicit re-enablement. Restoring earlier content publishes a **new** release with fresh attribution/time; old releases never become mutable.
-- Project precedes personal for the same role key inside the authorized read set. The first existing state decides. Disabled and deleted-target project states block fallback, matching U2 (`core/method-binding-storage.mjs:46`; contract §4).
-- No wildcard profile, time-based winner or semantic role inference exists.
-- Absence returns `no-profile`; conflicting canonical selections return `unresolved`. Disabled/unavailable barriers are explicit and provide no applicable guidance.
-- Resolve each referenced package using unchanged U2 precedence. Importing a method version never adopts it; unresolved packages remain explicit entries.
+Refs must match the input namespace/role/profile. A null expected registry revision means absence and requires null expected current. Existing disabled/no-release barriers use their exposed positive revision plus null current.
 
-### 18.5 Common read and authenticated task receipt
+Grant bindings:
 
-One opt-in core method, `readRoleTaskContext(input,authority)`, and one MCP read tool, `read_role_task_context`, expose these modes:
+| Operation | `targetId` | Grant `expectedRevision` |
+| --- | --- | --- |
+| Publish / disable | Input `roleKey` | `expectedRegistryRevision` |
+| Delete | `release.releaseId` | Release `expectedRevision` |
+| Role read, including file | null | null |
 
-| Mode | Behavior |
+Both head expectations remain bound in the complete input regardless of the scalar grant field (`core/private-card-facade.mjs:7`).
+
+- Authorization precedes replay lookup; exact replay precedes mutable existence checks. Changed payload under one action ID gives `action_conflict`.
+- Every committed publish, disable **or release deletion** increments the registry revision and namespace generation once and records its transition atomically. Exact replay changes neither events nor quota.
+- Publication appends immutable content with host actor/agent attribution and core timestamp. Restore publishes a new release with earlier content. Disable is explicit withdrawal and may create a barrier without a release.
+- Deleting any release advances registry CAS, even for a historical release. Deleting current retains its pointer as an unavailable barrier, paralleling package revision changes (`core/method-package-storage.mjs:169`).
+- Project precedes personal for the same role key; first existing state decides. Disabled/deleted-target states block fallback (`core/method-binding-storage.mjs:46`).
+- `no-profile` means all authorized levels are absent. `unresolved` is reserved for a future explicit conflict representation and cannot occur in valid v32 stores. Malformed canonical state fails validation.
+- Each referenced package uses unchanged U2 resolution. Import never adopts; no upload-time winner or wildcard profile exists.
+
+### 18.4 Canonical v32 and migration
+
+Allocate v32; no task-receipt table exists.
+
+- `role_profiles`: opaque PK, unique namespace/role, active/disabled head, positive revision/next ordinal, timestamps and composite current-release FK.
+- `role_profile_releases`: opaque PK, parent FK, unique profile/ordinal and composite release identity, predecessor ref, available/deleted lifecycle revision 1/2, canonical payload and byte charge. Composite/deferred FKs preserve profile membership and atomic first publication.
+- `role_profile_changes`: unique destination, exact from/to refs, canonical reason payload and charge; reasons belong only to their recorded edge.
+- `role_profile_operations`: namespace/action PK, method, commitment and content-free mutation outcome. This §7 ledger cannot recover task receipts.
+- `role_profile_events`, `role_profile_epochs`, `role_profile_owner_usage`: content-free ordered transitions, generations and atomic quota. Index profile history and namespace events by ordinal.
+- All tables are STRICT. CHECKs/guards enforce namespace/state shapes, bounds, immutable keys and monotonic revisions. Available content is immutable; only terminal purge is permitted.
+- BEFORE INSERT guards cover every unique key and hidden rowid, including ledger/events, alongside UPDATE/DELETE guards. Test `INSERT OR REPLACE` with `recursive_triggers=0` (`core/asset-schema.mjs:194`).
+- Charge UTF-8 bytes of canonical persisted release payload `{fields,actorId,agentId,createdAt}` and each separate reason payload `{text,reasonRefs}` **once**. Exclude identity/index/ledger/SQLite overhead. Deletion decrements exactly the purged charges atomically.
+- Purge duties, outputs, scope note, reference lists, attribution labels and change prose at **either** deleted endpoint. Tombstones retain only opaque identities/refs, revisions, ordinals, timestamps and counts. They cannot disappear or resurrect.
+- Related-source eligibility, revisions and forget/exclusion fences are checked on delivery. Source-derived copies are unsupported; receipts/comparisons cannot reconstruct purged content.
+
+Follow §12.1: explicit ordinary-writer migration, prerequisites → v30 → v31 → v32, in one rollback-safe transaction (`core/method-package-migration.mjs:13`; `core/database.mjs:398`, `:671`). Install schemas without granting capabilities/capture. Support fresh and supported populated v18/v20–v31 stores; refuse v19. Roll back data, identity, DDL and `user_version` on failure.
+
+Readers/managed openers validate only. Add `schema32-existing-v1`, preserving older option semantics. Validate complete prerequisites/v30/v31/v32 irrespective of flags; reject premature role artifacts and partial/altered layouts without repair.
+
+Update ordinary/managed/read gates, asset-selected managed checks, local preflight/setup/permission and setup wording (`core/database.mjs:37`, `:367`; `core/existing-store.mjs:12`, `:83`; `core/read-database.mjs:29`; `adapters/local/configuration.mjs:80`; `integrations/client/raw/local-setup.mjs:62`; `local-host-permission.mjs:28`; `local-setup-cli.mjs:15`). Preserve exact asset-trigger validation (`core/asset-schema.mjs:314`); added triggers on U2/U4 tables require explicit version-aware expected sets. Freeze the old installed closure and stop mixed-version writers before upgrade.
+
+### 18.5 Closed read contract and applicability
+
+`readRoleTaskContext(input,authority)` / `read_role_task_context` is the single read interface. Common core fields are `readSet`, optional `budget:{maxTokens?,maxItems?}` and `deadlineMs?`. MCP injects readSet and rejects authority/configuration overrides.
+
+| Mode | Additional closed fields |
 | --- | --- |
-| `now` | Resolve the current profile and every referenced package through U2 current resolution; issue a receipt for the delivered selection |
-| `then` | Verify a supplied receipt and read its exact releases/versions/evidence refs; never resolve replacement content |
-| `refresh` | Verify the old receipt, then resolve the entire profile/method/evidence set anew and issue a replacement receipt |
-| `compare` | Compare two available versions connected by the stored predecessor edge, of one method package or one profile |
+| `now` | `{mode:'now',roleKey,task?,history?}` |
+| `then` | `{mode:'then',receipt,history?}` |
+| `refresh` | `{mode:'refresh',receipt,task?}` |
+| `compare` | `{mode:'compare',roleKey,from:ReleaseRef|MethodVersionRef,to:same-family-ref,cursor?}` |
+| `file` | `{mode:'file',receipt,package:MethodPackageRef,path,range?:{start:Z,end:Z}}` |
 
-- Common controls: trusted `readSet`, explicit role, budget and deadline; optional `task` query for now/refresh. MCP fixes the read set and rejects supplied authority/configuration fields.
-- Optional `history:{limit,cursor}` projects profile release history through this same interface, including while disabled. Exact retained releases remain labelled historical and consume the same budget. Cursors bind the profile, request and generations; unavailable releases expose tombstones only.
-- Method comparison reuses U2’s mechanical comparison and exact-edge reasons (`core/method-package-storage.mjs:246`). Profile comparison reports field/list changes mechanically. Missing reasons display **“reason not recorded”**; unavailable recorded sources remain unavailable. No reason is generated.
+`task` follows U5b’s ≤4,000-unit query grammar; semantic search remains disabled by default. `history={profile:ProfileRef,limit?:N≤20,cursor?}` is allowed on now/then, including disabled registries. Cursors are ≤8,192 units and bind request/profile/generations.
 
-**Receipt format:** `task-receipt-v1`, a bounded reference-only JSON object with a full HMAC-SHA-256.
+Core success is `{ok:true,value:{metered,diagnostics}}`. Diagnostics reuse §15.8.4, with candidate diagnostics null when no search occurs. The metered object always contains:
 
-- Reuse the existing store-bound key mechanism: `keyed(cursorSecret,'task-receipt-v1',[storeId,canonicalPayload])` (`core/private-card-input.mjs:90`; `core/method-package-storage.mjs:18`). Canonical keys sort recursively; arrays preserve specified order. Verify strictly bounded shapes and the complete MAC with constant-time comparison.
-- Include profile release refs and consulted head states/absence; canonical scope/read set and role; consulted U2 binding states **including absence**; resolved immutable method refs and lifecycle observations; exact evidence refs and full item fences; and canonical source refs for source units actually delivered, including aliases.
-- Include one ordinary U2 `method-pin-v1` for the resolved method set, generated from that same preparation (`core/method-binding-storage.mjs:75`, `:81`). Callers pass its pinned version and snapshot to existing method reads. Historical continuation uses `intent:'history'`; current intent retains U2’s freshness checks.
-- Bodies and attachments are absent. Manifest summaries contain format, file counts and text/binary byte totals. File bodies use existing version-pinned U2/U3 reads; binary delivery additionally requires U4 authority.
-- Receipt authentication is separate from current freshness. Adoption or profile publication does not invalidate historical identity. `then` reassesses applicability and reports `newer-version-available`, `withdrawn` or `unavailable`; withdrawn content is historical guidance only. Deleted targets or revoked access cannot deliver content (`core/method-binding-storage.mjs:99`).
-- There is no individual receipt revocation registry. Fresh host authorization and canonical target fences decide availability.
-- The caller receives and retains the receipt. **A lost receipt cannot be recovered**; release history cannot reconstruct the original task selection.
+```text
+{framing,mode,registries:[Registry],profile:{applicability,release:Release|null},
+ methods:[MethodView],evidence:[§15.8-v2-item],history:History|null,
+ comparison:Comparison|null,file:File|null,receipt:string|null}
 
-### 18.6 One deadline, budget and final read
+Release = {ref:ReleaseRef,ordinal:N,basedOn:ReleaseRef|null,
+ state:'available'|'deleted',revision:1|2,createdAt:UTC,
+ actorId:Id|null,agentId:Id|null,fields:Fields|null,changeReason:Reason|null}
 
-- One outward call, one complete payload authorization and one cooperative deadline cover all phases. Default 1,000 ms; maximum 5,000 ms. Recheck grants after every await and immediately before final reading.
-- Use U5b’s internal search/preparation/assembly seams, not independently budgeted public calls (`core/context-read-facade.mjs:274`, `:465`; `core/context-read-assembly.mjs:23`). All canonical final reads share one connection and transaction.
-- Reserve complete duties, required outputs, applicable scope note, profile/method identities, package statuses, manifest summaries and receipt first. Never omit a referenced package silently.
-- If the mandatory payload cannot fit, return `budget_insufficient`, explicitly partial, with no applicable guidance or new receipt. Report the measured requirement.
-- Admit optional history/evidence only within the remaining budget. Combine explicit related refs with at most one task-driven frozen horizon; deduplicate and cap the combined evidence universe at 24 items and 16 sources per item. Report caps, omissions, unavailable refs and unknown remainder.
-- Retain §15.8 representations, source prerequisites and policies. Counter calls remain bounded by `2 + 2U + R` for attempted optional units, with mandatory initial/final counts included.
-- Token bounds remain 64–4,000, default 1,500. The exact synchronous host counter measures the **complete serialized tool text**, never summed fragments. Missing/invalid counters refuse.
-- The role tool places its receipt in its single metered text block, so receipt references and MAC bytes count too. Rebuild the prospective receipt before measuring each admission trial. Diagnostics alone use the tested `_meta` convention; existing context tools remain unchanged.
-- Independently enforce receipt ≤32,768 UTF-8 bytes, complete core envelope ≤65,536 bytes and transport ≤262,144 bytes. Byte limits participate in admission.
-- Freeze the complete response before final validation. In one deferred, query-only transaction, revalidate profile selection/absence, release identities/lifecycles, every method binding/absence and target, current status observations, evidence revisions/eligibility and full fences.
-- An in-call difference refuses `snapshot_stale`; revocation returns `scope_changed`; storage errors retain their codes. No automatic retry or repeated embedding occurs.
-- **No counter, host callback or await follows the final read**, as required by §15 (`docs/plans/unified-memory-v1-contract.md:1335`, `:1588`; `core/context-read-facade.mjs:509`). Between calls, historical receipts preserve identities; ordinary current-generation changes do not retarget them.
+MethodView = {package:MethodPackageRef,status:U2ResolutionStatus,
+ version:MethodVersionRef|null,adoptionStatus:U2AdoptionStatus|null,
+ manifest:{format:'text-v30'|'mixed-v1',fileCount:N,textBytes:Z,binaryBytes:Z}|null}
 
-### 18.7 Ownership
+History = {profile:ProfileRef,rows:[Release],nextCursor:string|null}
+Reason = {status:'not-recorded'|'available'|'recorded-unavailable',
+ text:Text|null,refs:[{ref:U2ReasonRef,status:'available'|'unavailable'}]}
+Comparison = {kind:'profile'|'method',from,to,status:'available'|'unavailable',
+ changes:[{key,status:'added'|'removed'|'changed'|'unchanged'}],
+ items:[{summary,paths}],reason:Reason|null,nextCursor:string|null}
+File = {version:MethodVersionRef,path,kind:'text'|'binary',mediaType,
+ contentIdentity:MAC,totalBytes:Z,totalUnits:Z|null,
+ parts:[{start:Z,end:Z,text}],nextRange:{start:Z,end:Z}|null}
+```
 
-- Worker-owned new modules: `core/role-profile-*.mjs`, `core/role-context-*.mjs`, `core/task-receipt.mjs`, `adapters/mcp/role-profile-*.mjs`, and packet-owned tests/fixtures.
-- Coordinator-owned paths and allowed edits:
-  - `core/{database,existing-store,read-database,index,contract}.mjs`: migration, validation, options and exports.
-  - `adapters/local/configuration.mjs`, `integrations/client/raw/local-{setup,setup-cli,host-permission}.mjs`: v32 validation and wording only.
-  - `adapters/mcp/{cli,server}.mjs`: opt-in parsing, attribution, registration and transport.
-  - `packaging/artifact-files.json`, `CHANGELOG.md`, `docs/*`: closure, contract, usage and limitations.
-  - Additional necessary seams: `core/runtime.mjs`, `core/method-{package,binding}-storage.mjs`, `core/context-read-{facade,assembly}.mjs`; `core/asset-schema.mjs` only if version-aware validation changes are needed. Preserve existing public behavior.
-- CLI-reachable registration/configuration modules stay SQLite-free at link time. SQLite-reaching work stays behind function-time imports. Do not hide dependencies with `createRequire` or edit another owner’s tests.
+Method comparisons retain U2 item/reason bounds and semantics; profile keys are the five Fields names. Comparisons require a stored predecessor edge. Missing reasons display “reason not recorded”; none are inferred. Deleted releases have null fields/attribution/reason; unavailable file/comparison projections deliver no content.
 
-### 18.8 Acceptance
+- `now` resolves current content; `refresh` re-resolves the **whole** set and issues a new receipt ID. `then` preserves original identities. Then/file return the original receipt unchanged; it describes original issuance, not later optional projections.
+- Profile applicability is separate: `current` for the available winning release, `newer-release-available` for a different available winner, `withdrawn` for a disabled winner, `unavailable` for unavailable selection/target. Absence is `no-profile`; `unresolved` remains reserved. Historical bytes are never presented as applicable current guidance.
+- Each method independently retains U2’s adoption statuses. Receipt role/read-set context is always supplied; then/file cannot silently return `unassessed` (`core/method-binding-storage.mjs:99`).
+- File mode selects only the receipt’s exact package/version. Internally reuse U2 history verification with that context, without calling separately budgeted public reads. It may omit profile body and unrelated method views.
+- Text ranges are half-open, code-point aligned and ≤4,000 UTF-16 units; default is the first U2-sized page. Explicit out-of-bounds ranges refuse; `nextRange` advances within the same immutable version.
+- Binary file mode returns metadata, empty parts and null nextRange; it additionally requires configured U4 read authority bound to this file request. No binary bytes are inlined.
+- Direct U2/U3 reads remain available independently; embedded pins and the former pin/snapshot continuation recipe are removed.
 
-Run synthetic fixtures through real child processes and installed tgz entry points on **Node 22.16.0 and 24.15.0**, under the machine-wide queue.
+Failures use `{ok:false,error:{code,retryable,details?}}`, existing §7/U5b codes plus `invalid_receipt` and `budget_insufficient`; only `storage_busy` is retryable. Budget details are closed `{partial:true,maxTokens,requiredTokens,requiredBytes:{receipt,core,transport}}`. Other failures omit details.
+
+### 18.6 Normative receipt grammar
+
+The receipt is a **canonical JSON string**, not base64 or a U2 pin:
+
+```text
+receipt = C({v:'task-receipt-v1',p:Payload,mac:MAC})
+Payload = {id:Id,readSet:[Namespace],roleKey,
+           profiles:[P],heads:[H],methods:[M],evidence:[E]}
+P = [namespaceIndex,profileId,releaseId,contentIdentity,lifecycleRevision]
+H = [namespaceIndex,profileId|null,registryRevision|null,
+     'active'|'disabled'|null,profileReleaseIndex|null]
+M = [namespaceIndex,packageId,U2ResolutionStatus,
+     [versionId,manifestIdentity]|null,winningLevel|null,[B],L]
+B = [level,bindingRevision|null,'active'|'disabled'|null]
+L = [packageRevision,'available'|'deleted',
+     versionRevision|null,'available'|'deleted'|null]
+E = [EvidenceRefTuple,itemFence:MAC,[S]]
+EvidenceRefTuple = [namespaceIndex,0,memoryId,revision]
+                 | [namespaceIndex,1,cardId,revision,bodyRevision]
+S = [canonicalSourceIndex,receiptId,contentIdentity,
+     null|'body'|[earlierItemIndex,earlierSourceIndex]]
+```
+
+- `C` recursively sorts object keys by UTF-8 bytes, preserves array order and uses compact `JSON.stringify`; encoding is UTF-8 without BOM. MAC excludes `mac` and covers the canonical payload through `keyed(secret,'task-receipt-v1',[storeId,canonicalPayload])` (`core/private-card-input.mjs:90`).
+- Parse receipt bytes ≤32,768 before JSON parsing; use nonrecursive lexical preflight to reject duplicates, excessive depth/nodes, then closed-shape validation before canonical recursion. Bounds: depth 12, nodes 8,192, decoded scalar strings ≤200 UTF-16 units; integers are safe, nonnegative, with positive revisions.
+- Read set has one/two canonical §15.8 namespaces. Profiles are distinct, ≤21: primary first, then delivered history order. Heads are the consulted project→personal prefix, ≤2; absence has four null fields.
+- Methods are distinct, ≤16, in profile method order. Compact refs expand using their package namespace/IDs. Levels 0–3 mean project-role, project-wildcard, personal-role, personal-wildcard. B is the exact applicable consulted prefix, ≤4; logical binding identity derives from level/package/role. Absence has null revision/state; winner is the first existing level, or null.
+- Status, target and lifecycle must agree. Current requires an available target; disabled/no-active have null target. Unavailable may retain the exact unavailable target identity.
+- Evidence is delivered order, ≤24. Sources are actually delivered canonical receipt refs, ≤16 per Memory, ordered by canonical source index 0–15; Cards have none. Parent Memory supplies namespace/id/revision/completeness. Alias targets must be earlier concrete sources; no chains or body-alias targets.
+- Full fences reuse canonical item fencing, not 48-bit compact prefixes. Authenticate with constant-time full-MAC comparison, validate canonical encoding and all index/ref agreements. Foreign/malformed/tampered receipts refuse before canonical lookup. Scope mismatch refuses authority.
+- Fresh authorization is mandatory. No obsolete issuance generation must match across calls; between-call changes affect applicability/availability, not identity. Lost receipts cannot be recovered; no lookup/revocation table exists.
+
+### 18.7 Budget, measurements and final validation
+
+One outward call, one authorization commitment and one cooperative deadline cover preparation, counting and delivery: default 1,000 ms, maximum 5,000 ms. Recheck grants after awaits and before final reading.
+
+Reserve framing, complete required profile fields, scope note, identities, every package/status/manifest summary and receipt first. Then admit optional history/evidence through U5b internals, one task horizon, ≤24 evidence items and 16 sources/item. Never compose independently budgeted public calls.
+
+The exact counter measures `C({ok:true,value:metered,evidenceTrust:'untrusted-data-not-instructions'})`, including the escaped receipt string. Rebuild receipt per trial. Token range is 64–4,000; **role default is 4,000**. Mandatory overflow returns measured `budget_insufficient`, no guidance/new receipt, never omitted packages. File ranges must fit whole. Independently enforce 32,768 receipt bytes, 65,536 core bytes and 262,144 transport bytes.
+
+`2+2U+R` counts all optional units, including history/comparison; `R≤U`. Context/history U≤428; comparison U≤560; maximum 1,682 counter calls. Counters run outside transactions.
+
+Real `o200k_base` wire probes on Node 22.16.0 and 24.15.0 agreed; both exited **0**:
+
+| Packages | Receipt bytes | Tokens of `C({receipt})` | Receipt token delta¹ | Mandatory tokens² |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 763 | 378 | 373 | 1,950 |
+| 4 | 1,456 | 726 | 721 | 3,033 |
+| 16 | 4,228 | 2,132 | 2,127 | 7,395 |
+
+¹ Complete-text difference replacing receipt null with the string.  
+² Eight 300-unit duties plus eight 300-unit outputs, no optional evidence.
+
+Reproduction recipe, using the schemas above:
+
+- `H(n)=SHA256(String(n)).base64url`; `I(n)` uses its hex digest `h`: `h[0:8]-h[8:12]-4h[13:16]-8h[17:20]-h[20:32]`.
+- Namespaces: owner `"owner"`, personal then project `"project"`; role `"finance"`. Profile/release IDs I(1)/I(2), release identity H(2), receipt ID I(3).
+- Package i=0…n−1: package I(10+i), version I(100+i), identity H(100+i), personal wildcard winner 3; B=`[[0,null,null],[1,null,null],[2,null,null],[3,1,'active']]`; L=`[2,'available',1,'available']`.
+- P=`[0,I(1),I(2),H(2),1]`; heads=`[[1,null,null,null,null],[0,I(1),1,'active',0]]`; evidence empty. MAC secret is `"0".repeat(64)`, store ID `"store"`.
+- Field text j=0…15 is `("Item "+j+": "+"Review records and report decisions with source references. ".repeat(8)).slice(0,300)`. First eight are duties; remainder outputs. Related is empty; appliesTo null.
+- Release ordinal/revision 1, predecessor/reason null, actor/agent `"actor"`/`"agent"`, creation `2026-10-24T00:00:00.000Z`. Registries reflect those heads; method views are current with manifest `{format:'text-v30',fileCount:1,textBytes:1,binaryBytes:0}`. Mode now; history/comparison/file null; framing is §15’s fixed sentence.
+
+**Objection to unconditional maximum-field fit:** unchanged UTF-16 limits (`docs/plans/unified-memory-v1-contract.md:2040`) cannot guarantee a tokenizer bound. Replacing each probe text with `"\uE000".repeat(300)` gives **11,865 tokens** for four packages. Thus 4,000 fits the frozen maximum-length English fixture, not every legal Unicode payload. Sixteen-package and Unicode overflows must refuse as measured.
+
+Freeze the complete result before one authoritative deferred/query-only transaction. Revalidate selection/absence, releases/lifecycles, bindings/targets/status observations, evidence/fences, **all history rows, comparison endpoints, exact change edges and reason availability/exclusions**. File mode additionally revalidates exact version lifecycle, manifest/file identity and selected bytes; binary metadata checks ownership/identity.
+
+Any preparation-to-final difference gives `snapshot_stale`; revoked grants give `scope_changed`. No automatic retry/repeated embedding. No counter, callback or await follows final reading (§15.5/§15.8; `core/context-read-facade.mjs:509`).
+
+### 18.8 Ownership and acceptance
+
+Worker-owned: `core/role-profile-*.mjs`, `core/role-context-*.mjs`, `core/task-receipt.mjs`, `adapters/mcp/role-profile-*.mjs`, packet tests/fixtures.
+
+Coordinator-owned, with minimal integration edits:
+
+- `core/{database,existing-store,read-database,index,contract}.mjs`: options, migration, validation, exports.
+- `adapters/local/configuration.mjs`, `integrations/client/raw/local-{setup,setup-cli,host-permission}.mjs`: v32 checks/wording.
+- `adapters/mcp/{cli,server}.mjs`: flag, attribution, registration, transport.
+- `packaging/artifact-files.json`, `CHANGELOG.md`, `docs/*`: closure/documentation.
+- `core/runtime.mjs`, `core/method-{package,binding}-storage.mjs`, `core/context-read-{facade,assembly}.mjs`: internal shared-read seams. `core/asset-schema.mjs` and `adapters/mcp/asset-access.mjs` only for required validation/metadata grants.
+
+Keep CLI links SQLite-free; imports reaching SQLite occur inside functions. No `createRequire` concealment or edits to other owners’ tests.
+
+Acceptance uses synthetic fixtures, real child processes and installed tgz entries on **Node 22.16.0/24.15.0**, under the machine-wide queue.
 
 | ID | Observable |
 | --- | --- |
-| C01 | Agent-published COO, CTO and finance profiles survive restart with exact fields and host attribution. Concurrent publishes have exactly one CAS winner. Restore creates a new release; disable blocks fallback; history remains readable. Role names confer no additional access |
-| C02 | Offline three-role workflow covers product-draft §6.2 steps 1, 4, 5, 6, 7: unadopted finance v2 leaves v1 current; adoption/restart makes now return v2; old-receipt then returns v1 labelled newer-version-available; project-v1/default-v2 coexist; COO/CTO remain unchanged. A second-process adoption switch never mixes version content/attachments. Refresh replaces the whole receipt. Deletion makes subsequent then unavailable. Missing reasons remain unrecorded |
-| C03 | Independently reconstruct serialization and recount total tokens/bytes. Mandatory overflow gives budget_insufficient. Malformed, foreign and tampered receipts refuse; revoked authority refuses. Test receipt substitution, changed evidence, withdrawal, scope barriers and no receipt recovery |
-| C04 | Populated v29/v30/v31 → v32 plus supported prerequisite/fresh cases; injected failures roll back rows, DDL and user_version. Every opener rejects partial/altered states. UPDATE, DELETE and INSERT OR REPLACE attacks cannot mutate releases or resurrect tombstones |
-| C05 | Legacy bytes without the flag, including tools/list, DTOs, errors and database version/content; read-only/managed paths perform no migration. Final-read instrumentation proves whole-selection revalidation and no subsequent callback/count/await |
-| C06 | Installed tgz closure includes every runtime dependency and shipped document. Derive the manifest/import closure mechanically, independently enumerate archive contents, diff the sets and print counts. Cross-check changed-file inventories by git diff and independent tree comparison; report actual build/test exit codes |
+| C01 | COO/CTO/finance direct publication survives restart with exact fields/attribution. CAS exposes disabled/no-release revisions. Restore, barriers and history work; foreign owner/project fixtures confer no access |
+| C02 | Offline §6.2 steps 1/4/5/6/7: unadopted finance v2 leaves v1; adoption/restart yields v2; then retains v1 with labels; project-v1/default-v2 coexist; COO/CTO unchanged; refresh replaces the whole receipt. Sourced comparisons and missing reasons are correct |
+| C03 | Independent serialization/token/byte recount, byte-exact MAC fixtures, parser boundaries, alias/index substitution, foreign/tampered/revoked receipts and measured overflow; no receipt recovery |
+| C04 | v29–v31/prerequisite/fresh migration and rollback; partial-state rejection. Publish/disable/delete/current-delete and owner-quota races. Exact replay after deletion preserves quota/events; changed input conflicts. Every unique-key/rowid replacement attack runs with recursive_triggers=0 |
+| C05 | Legacy flag-off bytes; validation-only readers; frozen old installed binary rejects v32. Feature-off writers preserve guards/source fences. Race every final-validation phase, including reasons/history/comparison; prove no subsequent callback/count/await |
+| C06 | Mechanically derive manifest/import closure and independently enumerate tgz contents; diff, print counts. Cross-check changed paths by git diff and independent tree comparison. Report actual process/build/test exit codes |
+| C07 | Receipt file continuation preserves exact text/manifest/attachment bytes and independent hashes across adoption, withdrawal, restart, deletion and revocation. Binary bytes are checked through authorized U4 reads of the returned exact version. A second-process switch between then/file never mixes versions |
 
-Measure now/then p50/p95 with the real counter, receipt sizes, counter calls and event-loop delay. These are observations, not latency or quality gates. Apply §16’s paced contention rules; label unpaced stress separately.
+Observe now/then p50/p95, receipt sizes, counter calls and event-loop delay; use §16 paced contention gates, labelled unpaced stress.
 
-**Non-claims:** U5c-3 current-dependent Card/representation invalidation; U5c-2 relations/MOC; live model sessions or cross-agent live smoke; profile-authoring UI; engine-side receipt lookup; answer, workflow or professional quality.
+**Non-claims:** U5c-3 current-dependent Card/representation invalidation; U5c-2 relations/MOC; live sessions/cross-agent smoke; authoring UI; engine receipt lookup; any quality claim.
 
-**Primary note (author objection accepted):** existing agent-writable MCP tools such as `correct_memory` call core directly and have no authority-port action class (`adapters/mcp/server.mjs:495`). §18 therefore introduces role-specific `write` grants on the §2.3 authority port; agent publication stays direct, with no user confirmation (product decision, 2026-10-24).
+**Primary note (author objection accepted):** existing agent-writable MCP tools such as `correct_memory` call core directly and have no authority-port action class (`adapters/mcp/server.mjs:495`). §18 therefore introduces role-specific `write` grants on the §2.3 authority port; agent publication stays direct, with no user confirmation (product decision, 2026-10-24). The 4,000-token role default fits the maximum-length English fixture with four packages; larger or non-Latin payloads refuse with measured `budget_insufficient` (§18.7).
