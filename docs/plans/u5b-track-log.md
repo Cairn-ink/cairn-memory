@@ -356,3 +356,6 @@
   HR-1 的 toy fixture）、`arms-runner`／`arms-security`（CLI 不再寫出 artifact）、`assembly-output-paths`（2 個正向 scratch 案例
   被新守衛誤拒）。乾淨凍結 commit 上同檔全過 → 確認是回歸。派 fix1（最小修正、HR-2b 行為放在既有 gate 之後、這輪必跑全部
   28 個研究測試檔）。
+- **hr2b_tools fix1 完成**：19 個回歸全修（選擇 gate 回到讀 fixture 之前；無版本的舊 fixture 投影恢復；scratch 管線恢復），worker
+  跑完 28 檔（沙箱內 15 個 loopback EPERM 屬沙箱）。協調者沙箱外全目錄兩版本 **386 過、0 敗、1 skip（opt-in 模型煙霧）**，
+  含 240／120 兩個回歸。**提交 `c7ee6f9e`**（33 檔），已推送；審查 worktree 移到 `c7ee6f9e`，派 Spec／Standards 雙審查。
