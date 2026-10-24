@@ -25,8 +25,10 @@
     "demo:longmemeval-public": "node evaluation/longmemeval/public-demo.mjs",
     "demo:longmemeval-mixed": "node evaluation/longmemeval/mixed-demo.mjs",
     "test:mixed-native-local": "node tools/testing/run.mjs evaluation/longmemeval/testing/mixed-native.test.mjs",
+    "fixtures:method-packages": "node tools/testing/run.mjs --script core/testing/generate-method-package-history.mjs",
     "test:core": "node tools/testing/run.mjs core/test/*.test.mjs",
     "demo:session-context": "node examples/session-context.mjs",
+    "demo:method-packages": "node examples/method-packages.mjs",
     "demo:private-cards": "node examples/private-cards.mjs",
     "demo:episodes": "node examples/session-episodes.mjs",
     "demo:store": "node examples/local-store.mjs",
@@ -65,6 +67,10 @@
     "test:codex": "node integrations/client/testing/run.mjs --isolated-host integrations/codex/test/*.test.mjs integrations/client/test/runtime-*.test.mjs integrations/client/test/automatic-policy.test.mjs",
     "test:client": "node integrations/client/testing/run.mjs integrations/client/test/parity.test.mjs integrations/client/test/fixture-generator.test.mjs",
     "test:raw-producer": "node integrations/client/testing/run.mjs integrations/client/test/raw-*.test.mjs",
-    "test:pairing:golden": "node integrations/client/testing/run.mjs --script integrations/client/testing/golden-cli.mjs --verify"
+    "test:pairing:golden": "node integrations/client/testing/run.mjs --script integrations/client/testing/golden-cli.mjs --verify",
+    "measure:method-packages": "node tools/testing/run.mjs --script tools/testing/measure-method-packages.mjs",
+    "measure:assets": "node tools/testing/run.mjs --script tools/testing/measure-assets.mjs",
+    "measure:role-profiles": "node tools/testing/run.mjs --script tools/testing/measure-role-profiles.mjs",
+    "measure:card-current-dependencies": "node tools/testing/run.mjs --script tools/testing/measure-card-current-dependencies.mjs"
   }
 }

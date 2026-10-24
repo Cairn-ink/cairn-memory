@@ -172,6 +172,8 @@ jobs:
       - run: npm ci --prefix adapters/mcp
       - run: npm ci --prefix adapters/openai
       - run: npm run test:mcp
+      - name: Required role receipt measurements with installed tokenizer
+        run: CAIRN_REQUIRE_ROLE_TOKENIZER=1 node tools/testing/run.mjs core/test/task-receipt-measurement.test.mjs core/test/role-observations.test.mjs core/test/role-context.test.mjs
       - run: node tools/testing/run.mjs --script packaging/verify-clean-cache.mjs
       - run: node tools/testing/run.mjs --script packaging/prepare-cache.mjs
       - run: npm run test:artifact

@@ -1,4 +1,18 @@
+import { cardCurrentHostConfiguration } from './card-current-configuration.mjs';
 import { pathToFileURL } from 'node:url';
+import { assetCommand } from './asset-command.mjs';
+import { methodCommand } from './method-package-command.mjs';
+import { MethodStdioServerTransport } from './method-package-transport.mjs';
+import { contextCommand } from './context-read-command.mjs';
+// U5c-2 source startup wiring (SQLite-free).
+import { CONTEXT_SOURCE_FLAG, contextSourcesConfiguration, contextSourcesPreset } from './context-read-sources-configuration.mjs';
+import { CONTEXT_FLAGS, contextHostConfiguration } from './context-read-configuration.mjs';
+import { createContextEmbedding } from './context-read-provider.mjs';
+import { ContextStdioServerTransport } from './context-read-transport.mjs';
+// U5c-1 host boundary: SQLite-free static modules.
+import { roleProfileHostConfiguration, roleProfileCheckConfiguration } from './role-profile-configuration.mjs';
+import { RoleProfileStdioServerTransport } from './role-profile-transport.mjs';
+import { createContextCounter } from '../openai/context-counter.mjs';
 import { identifier } from '../../core/validation.mjs';
 import { DEFAULT_MODEL } from '../openai/profiles.mjs';
 import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profile.mjs';
@@ -6,6 +20,15 @@ import { assertRetainedRuntime, retainedProfilePath } from './retained-raw-profi
 const help = `Cairn Memory — local stdio MCP developer preview
 
 Usage:
+  cairn-memory --db ABS --owner ID [--project ID] --context-read context-read-v1 [--context-read-personal]
+    [--context-read-sources relations-one-hop-v1,moc-v1]
+    [--context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X]
+  cairn-memory context refresh --db ABS --owner ID [--project ID] --types memory,card --intent current|history --max-items N --max-ms T
+    --context-embedder openai --context-embed-model MODEL --context-embed-dimensions N --context-embed-max-requests N --context-embed-max-usd X [--check-config]
+  cairn-memory assets import|derive|delete|export [see docs/assets-local.md]
+  cairn-memory --db ABS --owner ID [--project ID] --assets local-v1
+  cairn-memory methods import|adopt|disable [method command arguments; see docs/method-packages-local.md]
+  cairn-memory --db PATH --owner ID [--project ID] --method-packages local-v1 [--method-read-personal]
   cairn-memory --help
   cairn-memory [--check-config] --retained-raw-profile ABS
   cairn-memory review-card --retained-raw-profile ABS --card ID --revision N [--applicability current|historical|conflict|unknown]
@@ -123,17 +146,37 @@ from a separately configured producer may persist until invalidation/deletion.
 (default cairn-local-mcp / explicit-tool). --read-client KEY restricts range
 reads and episode-ID tools to one exact client; per-call client can only narrow.
 Session-start context reads cross-client groups in the exact namespace.
+--method-packages local-v1 adds nine keyless method read tools only. Method text is
+untrusted data, never instructions or execution permission. A project server reads
+personal methods only with --method-read-personal. Mutations require the separate
+methods command and real controlling-terminal approval. Core results are bounded
+to 65,536 bytes; MCP framing is bounded separately to 262,144 encoded bytes.
+--assets local-v1 adds five metadata/derivative read tools in the exact startup namespace.
+No MCP asset bytes or mutations. Startup upgrades the store one-way to v31.
 --check-config checks syntax only: no database access or provider requests.
 It cannot verify database permissions, credentials or model availability.
+--context-read context-read-v1 adds find_memory_candidates and
+fetch_memory_candidate_evidence only. Read sets are fixed at startup; personal
+reads require project scope and --context-read-personal. Semantic defaults to false.
+Only explicit context refresh embeds documents. All five provider options are
+required together; a key alone never constructs an embedder. Hosted uses rrf-k10.
+Context --check-config performs no key lookup, database opening or provider creation.
+Sensitive sidecars invalidate logically, without secure physical erasure. Frozen
+T1 intentionally misses an embedded single Han: 中 does not match 中文.
+See docs/context-read-local.md for budgets, degraded states and non-claims.
 `;
 
 export function parseConfiguration(args) {
   const allowed = new Set(['--db', '--owner', '--project', '--capture-qualification', '--capture-rationale',
     '--capture-evidence', '--capture-evidence-access', '--source-snapshot', '--recall-context',
     '--classification-recovery', '--capture-deadline-ms', '--session-episodes-access',
-    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile']);
+    '--session-episodes', '--session-episodes-draft-batches', '--client', '--session', '--read-client', '--private-cards', '--retained-raw-profile', '--method-packages', '--assets', '--role-profiles', '--private-card-current-dependencies', ...CONTEXT_FLAGS, CONTEXT_SOURCE_FLAG]);
   const values = new Map();
   for (let i = 0; i < args.length; i += 2) {
+    if(args[i]==='--method-read-personal'||args[i]==='--context-read-personal'){
+      if(values.has(args[i]))throw Error('invalid_mcp_configuration');
+      values.set(args[i],true);i--;continue;
+    }
     if (!allowed.has(args[i]) || values.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) {
       throw new Error('invalid_mcp_configuration');
     }
@@ -147,6 +190,13 @@ export function parseConfiguration(args) {
   identifier(values.get('--owner'));
   if (values.has('--project')) identifier(values.get('--project'));
   if (!values.get('--db').trim() || values.get('--db').includes('\0')) throw new Error('invalid_mcp_configuration');
+  if(values.has('--method-packages')&&values.get('--method-packages')!=='local-v1'||values.has('--method-read-personal')&&(!values.has('--method-packages')||!values.has('--project')))throw Error('invalid_mcp_configuration');
+  if(values.has('--assets')&&values.get('--assets')!=='local-v1')throw Error('invalid_mcp_configuration');
+  const context = { ...contextHostConfiguration(values), ...contextSourcesConfiguration(values) };
+  // U5c-1: never union independently configured read grants.
+  if (values.has('--role-profiles')) roleProfileHostConfiguration({ roleProfiles: values.get('--role-profiles'),
+    methodPackages: values.get('--method-packages'), methodReadPersonal: values.has('--method-read-personal'), ...context });
+  if (values.has('--private-card-current-dependencies')) cardCurrentHostConfiguration({ privateCardCurrentDependencies: values.get('--private-card-current-dependencies'), privateCards: values.get('--private-cards'), methodPackages: values.get('--method-packages') });
   if (values.has('--private-cards') && values.get('--private-cards') !== 'local-v1') throw new Error('invalid_mcp_configuration');
   if (values.has('--capture-qualification')
     && !['source-bound-v1', 'source-bound-v2'].includes(values.get('--capture-qualification'))) {
@@ -194,6 +244,12 @@ export function parseConfiguration(args) {
   }
   return { path: values.get('--db'), namespace: { ownerId: values.get('--owner'),
     scope: values.has('--project') ? 'project' : 'personal', projectId: values.get('--project') ?? null },
+    ...context,
+    ...(values.has('--private-card-current-dependencies') ? { privateCardCurrentDependencies: values.get('--private-card-current-dependencies') } : {}),
+    ...(values.has('--role-profiles') ? { roleProfiles: values.get('--role-profiles') } : {}),
+    ...(values.has('--assets')?{assets:'local-v1'}:{}),
+    ...(values.has('--method-packages')?{methodPackages:'local-v1'}:{}),
+    ...(values.has('--method-read-personal')?{methodReadPersonal:true}:{}),
     ...(values.has('--private-cards') ? { privateCards: 'local-v1' } : {}),
     ...(values.has('--client') ? { client: values.get('--client') } : {}),
     ...(values.has('--session') ? { sessionId: values.get('--session') } : {}),
@@ -213,6 +269,10 @@ export function parseConfiguration(args) {
 
 export async function start(args = process.argv.slice(2), env = process.env) {
   if (args.length === 1 && args[0] === '--help') { console.log(help); return; }
+  if(args[0]==='assets')return assetCommand(args.slice(1));
+  if(args[0]==='methods')return methodCommand(args.slice(1));
+  if(args[0]==='context')return contextCommand(args.slice(1),env);
+  if(args[0]==='--check-config'&&args[1]==='context')return contextCommand([...args.slice(2),'--check-config'],env);
   if (args[0] === 'review-card') {
     if (args.includes('--retained-raw-profile')) {
       const { reviewRetainedRawCard } = await import('./retained-raw.mjs');
@@ -239,6 +299,23 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     const stdio = await import('@modelcontextprotocol/server/stdio');
     return startStdio(factory, stdio);
   }
+  if (check && config.privateCardCurrentDependencies && !config.contextRead) {
+    console.log(JSON.stringify({ ok: true, mode: 'configuration-check', privateCards: config.privateCards,
+      methodPackages: config.methodPackages, privateCardCurrentDependencies: config.privateCardCurrentDependencies,
+      cardDependencyApproval: 'separate-local-tty-required', scope: config.namespace.scope,
+      modelKeyInspected: false, databaseOpened: false, providerContacted: false, automaticCapture: false }));
+    return;
+  }
+  if (check && config.contextRead) {
+    console.log(JSON.stringify({ ok: true, mode: 'configuration-check', contextRead: config.contextRead,
+      contextReadPersonal: config.contextReadPersonal ?? false,
+      ...(config.privateCardCurrentDependencies ? { privateCardCurrentDependencies: config.privateCardCurrentDependencies, cardDependencyApproval: 'separate-local-tty-required' } : {}),
+      ...(config.roleProfiles ? roleProfileCheckConfiguration(config) : {}), scope: config.namespace.scope,
+      provider: config.contextProvider ?? null, preset: contextSourcesPreset(config.contextReadSources, Boolean(config.contextProvider)),
+      ...(config.contextReadSources ? { sources: config.contextReadSources } : {}),
+      modelKeyInspected: false, databaseOpened: false, providerContacted: false, automaticCapture: false }));
+    return;
+  }
   const key = env.OPENAI_API_KEY;
   if (key && (typeof key !== 'string' || !key.trim() || /[\r\n]/.test(key))) {
     throw new Error('invalid_mcp_configuration');
@@ -249,6 +326,8 @@ export async function start(args = process.argv.slice(2), env = process.env) {
       recallModel: key ? DEFAULT_MODEL : null,
       recall: key ? 'configured-not-verified' : 'model_not_configured',
       cloudProcessing: Boolean(key), automaticCapture: false,
+      ...(config.assets?{assets:config.assets,assetMutations:'separate-local-tty-required',assetBytes:'separate-local-export-only'}:{}),
+      ...(config.methodPackages?{methodPackages:config.methodPackages,methodReadPersonal:config.methodReadPersonal??false,methodMutations:'separate-local-tty-required'}:{}),
       ...(config.privateCards ? { privateCards: 'local-v1', cardConfirmation: 'separate-local-tty-required',
         cardSourcePolicy: 'retained-receipts-v1' } : {}),
       ...(config.sessionEpisodesAccess || config.sessionEpisodes ? { sessionEpisodesAccess: 'episode-v1',
@@ -276,6 +355,15 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     }, null, 2));
     return;
   }
+  // Context's local tokenizer is independent of the legacy model and check mode.
+  let contextCounter;
+  if (config.contextRead) {
+    try { contextCounter = await createContextCounter(); }
+    catch {
+      console.error('cairn_context_tokenizer_unavailable: check the documented tiktoken runtime dependency');
+      throw Error('context_tokenizer_unavailable');
+    }
+  }
   const { serveStdio, StdioServerTransport } = await import('@modelcontextprotocol/server/stdio');
   const { createCairnServer } = await import('./server.mjs');
   let model;
@@ -286,10 +374,14 @@ export async function start(args = process.argv.slice(2), env = process.env) {
     const { countOpenAITokens } = await import('../openai/index.mjs');
     model = { countTokens: countOpenAITokens };
   }
-  return startStdio(() => createCairnServer({ ...config, model }), { serveStdio, StdioServerTransport });
+  const { contextProvider, ...serverConfiguration } = config;
+  const contextEmbedding = createContextEmbedding(contextProvider,env);
+  const Transport=config.roleProfiles?RoleProfileStdioServerTransport:config.contextRead?ContextStdioServerTransport:(config.methodPackages||config.assets)?MethodStdioServerTransport:StdioServerTransport;
+  return startStdio(() => createCairnServer({ ...serverConfiguration, model, ...(contextCounter ? { contextCounter } : {}), ...(contextEmbedding?{contextEmbedding}:{}) }),
+    { serveStdio, StdioServerTransport:Transport },config.methodPackages||config.assets||config.contextRead?262144:65536);
 }
 
-function startStdio(factory, { serveStdio, StdioServerTransport }) {
+function startStdio(factory, { serveStdio, StdioServerTransport },maxBufferSize=65536) {
   let handle;
   let closing = false;
   const stop = () => {
@@ -299,7 +391,7 @@ function startStdio(factory, { serveStdio, StdioServerTransport }) {
       .finally(() => { process.stdin.destroy(); });
   };
   handle = serveStdio(factory, {
-    transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 65536 }),
+    transport: new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize }),
     onerror: () => { console.error('cairn_mcp_transport_error'); queueMicrotask(stop); },
   });
   process.once('SIGTERM', stop);

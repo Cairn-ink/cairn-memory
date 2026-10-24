@@ -1,10 +1,16 @@
+import { roleProfileOptions } from './role-profile-input.mjs';
+import { createRoleProfileStorage } from './role-profile-storage.mjs';
+import { assetOptions } from './asset-input.mjs';
+import { createAssetStorage } from './asset-storage.mjs';
+import { methodPackageOptions } from './method-package-input.mjs';
+import { createMethodPackageStorage } from './method-package-storage.mjs';
 import { decisionReviewOption, createConfirmationStorage, createHeldReviewResolver, dropHeldWork, recordHeldRetirement } from './confirmation-storage.mjs';
 import { createSessionContextStorage } from './session-context.mjs';
 import { createEpisodeReads } from './episode-reads.mjs';
 import { createEpisodeStorage, episodeOptions } from './episode-storage.mjs';
 import { createProceduralStorage } from './procedural-storage.mjs';
 import { createHash, randomUUID } from "node:crypto";
-import { openDatabase, transaction } from "./database.mjs";
+import { openDatabase, transaction, isConnectionDiscarded } from "./database.mjs";
 import { createMocStorage } from "./moc-storage.mjs";
 import { createAdmissionStorage } from "./admission-storage.mjs";
 import { createClassificationJournalStorage } from './classification-journal-storage.mjs';
@@ -30,12 +36,16 @@ const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
-  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "existingStore"]);
+  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence"]);
   const privateCards = privateCardOptions(input.privateCards);
+  const methodPackages = methodPackageOptions(input.methodPackages);
+  if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
+  const assets = assetOptions(input.assets);
+  const roleProfiles = roleProfileOptions(input.roleProfiles);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
-  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), rawCapture: Boolean(internal?.rawCapture),
-    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore });
+  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
+    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence });
   try {
   const rawLineage = createRawLineageStorage(db);
   const sourceRoots = createRawSourceRoots(db);
@@ -47,11 +57,17 @@ export function createMemoryRuntime(input, internal) {
   if (!identity) fail("unsupported_database");
   let closed = false;
   let mocStorage;
-  const ready = () => { if (closed) fail("store_closed"); };
+  const ready = () => { if (closed || !db.isOpen || isConnectionDiscarded(db)) fail("store_closed"); };
   const internalNamespace = ns => ({ ...ns, projectId: ns.projectId ?? '' });
   const cardStorage = privateCards ? createPrivateCardStorage({ db, identity, ready, rawSources: Boolean(internal?.rawSources),
     memoryMapInside: (ns, request) => mocStorage.mapRowsInside(internalNamespace(ns), request),
     memoryTopicInside: (ns, ref) => mocStorage.topicInside(internalNamespace(ns), ref) }) : undefined;
+
+  const methodStorage = methodPackages || roleProfiles ? createMethodPackageStorage({ db, identity, ready,
+    cardDetailInside: createPrivateCardStorage({ db,identity,ready,rawSources: true }).cardDetailInside }) : undefined;
+
+  const roleStorage = roleProfiles ? createRoleProfileStorage({db,identity,ready,methods:methodStorage.roleRead}) : undefined;
+  const assetStorage = assets ? createAssetStorage({ db, identity, ready }) : undefined;
 
   function activeRow(ns, id) {
     return db.prepare(`SELECT * FROM memories WHERE ${where} AND id = ? AND deleted = 0`)
@@ -659,7 +675,10 @@ export function createMemoryRuntime(input, internal) {
     closeEpisodeNextStep(ns, input) { ready(); return episodes.closeNextStep(ns, input); },
     sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
-    privateCards: cardStorage,
+    privateCards: privateCards ? cardStorage : undefined,
+    methodPackages: methodStorage,
+    roleProfiles: roleStorage,
+    assets: assetStorage,
     rawSourceReader: internal?.rawSources ? rawCapture?.sourceReader : undefined,
     previewDeleteConversation(input) { ready(); return deletion.preview(input); },
     deleteConversation(input) { ready(); return deletion.remove(input); },
@@ -723,7 +742,7 @@ export function createMemoryRuntime(input, internal) {
     },
     assertEpoch(ns, index) { ready(); return mocStorage.assertEpoch(ns, index); },
     epoch(ns) { ready(); return epoch(ns); },
-    close() { if (!closed) { db.close(); closed = true; } },
+    close() { if (!closed) { if (db.isOpen) db.close(); closed = true; } },
   });
   } catch (error) {
     try { db.close(); } catch { /* Preserve the construction failure. */ }

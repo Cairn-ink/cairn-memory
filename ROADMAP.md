@@ -16,6 +16,15 @@ service must use the same public core, not separate engines.
 
 ## Current developer preview
 
+- The opt-in unified-memory C04/K13 contention gates now check labelled paced
+  and unpaced writers against continuous readers. The paced gate requires at
+  least 100 committed transitions, 200 pages overlapping actual writer calls,
+  zero busy outcomes and writer p95 at most 250 ms; idle pacing cannot satisfy
+  overlap. Unpaced writing is a bounded stress observation: readers retry busy
+  pages and verify eventual byte-exact completion.
+  Outside-sandbox dual-runtime acceptance remains required. See the
+  [measurement limitations](docs/limitations.md).
+
 - The opt-in [integrated local engine preview](docs/private-engine-v1-local.md)
   combines submitted notes/retained receipt excerpts, Memories and private Cards
   in the same core. It provides reviewed-current exact-namespace common reads,

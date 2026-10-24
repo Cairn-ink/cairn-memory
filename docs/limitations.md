@@ -1,5 +1,178 @@
 # Known limitations
 
+## Local role profiles (U5c-1)
+
+[Role profiles](role-profiles-local.md) require explicit matching method/context
+read scopes and migrate ordinary writers to v32. Direct agent publication uses
+role-specific write grants; attribution labels and retained instructions grant
+no execution authority. Caller-held receipts preserve identities across adoption
+changes, while every read rechecks scope, availability and applicability. A lost
+receipt cannot be recovered. Deletion and source fences prevent recovery of
+purged content, without erasing backups or caller copies.
+
+The exact single text budget includes the escaped receipt, defaults to 4000
+local tokens and may reject legal maximum Unicode or many-package profiles.
+Diagnostics require client handling of namespaced `_meta`. No live cross-agent,
+answer-quality, authoring-UI, relations/MOC, receipt-lookup or current-dependent
+Card invalidation claim is made. Stop older writers before v32 migration.
+
+## Budgeted context assembly (U5b)
+
+The [assembly tool](context-read-local.md#budgeted-context-assembly-u5b) bounds
+its exact single text block in the local `tiktoken-o200k_base` counter, not
+total model-request spend. Both success diagnostics and candidate diagnostics
+on assembly errors are confined to namespaced `_meta`; error text preserves
+its code, retryability and trust framing without candidate telemetry. These
+diagnostics require an explicit client contract that excludes them from model
+input; no invisibility is claimed for arbitrary clients. Separate core/transport byte bounds remain.
+Whole units may be omitted; no body or source is silently shortened.
+
+The experimental preview.2 assembly shape uses `representation-v2`; the snapshot
+is host-only `_meta` beside diagnostics. Compact refs are scoped to the host's
+immutable startup read set. A filed-to-filed MOC parent move leaves compact-ref
+fetch succeeding with byte-identical evidence while snapshot fetch refuses
+`snapshot_stale` through the namespace generation. Compact refs check exact
+revisions, intent eligibility and item fences; full refs retain their prior semantics.
+
+The mandatory 8-character `f` is a stable keyed fingerprint, exposing item
+equality/change information across calls, not plaintext or key material. The
+store-local HMAC prefix cannot be inverted or extended. Assuming pseudorandom
+HMAC output, a changed item escapes detection with probability 2⁻⁴⁸ per comparison,
+with union bound `M/2⁴⁸` over `M` comparisons. This is bounded accidental-change
+detection, not adversarial integrity or authority. A client forwarding `_meta`
+to a model receives no metadata-isolation guarantee.
+
+HR-2 has run on the frozen HR-1 fixture: coverage-first did not beat
+rank-first whole units (−2.5 points, 95% CI [−6.6, +1.5] at the preregistered
+cell), so the rank-first default stands; it is versioned and swappable. That
+research design addresses short, single-fact items with evidence often in
+receipts and provides no external validity for long items. U5b makes no claim
+about answer quality or correctness, generated summaries, prefix/window
+degradation, Card source units, role profiles, relations, MOC (U5c), total
+model-request spend or any budget number being a recommendation.
+
+## Context retrieval host (U5a part 3)
+
+The [context host](context-read-local.md) adds two explicit MCP read tools and a
+separate bounded document-refresh command. Startup fixes provider, preset and
+read set. Tool arguments cannot select authority, configuration or another
+namespace; returned source text remains untrusted data. Semantic query embedding
+is off by default; a key alone does not construct an embedder. Known coverage
+gaps send no query request. Hosted configuration uses frozen `rrf-k10`.
+
+The OpenAI adapter uses reviewed frozen accounting inputs, not live price quotes
+or billing attestation. Reported-token settlement releases unused reservations
+only at actual completion; unknown usage keeps the full conservative charge.
+Caps and concurrency share process totals by embedder identity, including
+configuration changes; they are not durable or account-wide spending limits.
+Inputs/transport bytes and cooperative deadlines are bounded without a latency
+guarantee. No hidden retry occurs. A paid smoke script exists but is unrun by
+default and never executes in offline tests. Actual fake HTTP and installed
+process tests use synthetic sources, not paid calls or native-product evidence.
+Sidecars remain sensitive, invalidation is logical rather than secure physical
+erasure, and the intentional `中` versus `中文` miss is unchanged. Assembly,
+complete semantic recall, answer correctness and 100,000-Memory latency remain
+non-claims. See the separate core limitations below.
+
+## Opt-in core candidate retrieval (U5a parts 1–2)
+
+Candidate retrieval requires explicit `contextRead` configuration and method-specific
+host authority. Flag-off behaviour stays unchanged. This packet provides core
+lookup, refresh and canonical evidence refetch; MCP, CLI and hosted adapter wiring
+remain deferred. Candidate ranks do not assemble context or establish answer quality.
+
+The local `<store>.context-read-v1.sqlite` sidecar is sensitive: lexical terms,
+postings, projection statistics, identities and optional embedding vectors can
+reveal private information. It is a protected plaintext-derived cache, not an
+encryption boundary. Canonical revisions and eligibility changes cause logical
+invalidation. Removing entries or the sidecar is not secure physical erasure of
+SQLite pages, journals, filesystem blocks or backups. Read-only handles refuse
+unsupported auxiliary files and never repair or maintain the sidecar.
+
+Frozen T1 tokenization intentionally misses an embedded single-Han query: `中`
+does not match `中文`. Exact-term and CJK fixture results describe these frozen
+mechanics, not general semantic recall. Measurements use synthetic data only and
+are observational. Reported timings vary with runtime, workload and filesystem;
+they are not production-latency guarantees or evidence of answer correctness.
+Paid API smoke remains unrun by default, and no 100,000-Memory latency guarantee
+is made.
+
+## Text-only local method packages and host workflow (U2/U3)
+
+[Method packages](method-packages-local.md) are default-off text-only mechanics
+with separate real-terminal import/adopt/disable and read-only MCP opt-ins. They
+never execute package text or turn it into permission. U2b adds explicit binding CAS,
+four-level resolution, authenticated pins and content-free events on the same
+frozen v30 layout. Every read set requires fresh host authorization; pins grant
+no access. Disabled/deleted targets remain barriers. Historical pins preserve
+identity and access checks, without asserting current adoption. Deletion changes
+lifecycle revisions and its deletion effect only; binding generations advance
+only on binding transitions. U3 adds descriptor-capability confinement on
+supported Linux/WSL environments and method-specific frozen-payload approval;
+U4 owns binary assets; U5 owns dependency fences
+for source-derived copies and generated summaries. Hosts must not import fenced
+or forgotten source output. Best-effort redaction is not a secret-removal
+guarantee; logical purge is not secure physical erasure. Limits are 256 files,
+400,000 units/file and 4,000,000 units/version; the owner cap remains 50 MB.
+Importer depth, entry, raw-byte and change-file bounds are published in the guide.
+The whole-version write-lock contention found in U3 is resolved by U2c:
+method reads use deferred, consistent SQLite snapshots with `query_only`
+enabled. File pages verify lifecycle and manifest metadata, then hash and check
+only the requested file's text and byte count. Out-of-band text corruption in
+file A refuses A while file B remains readable; version metadata, manifest
+listing and comparison still verify the whole version. Resolution verifies
+metadata; file content is checked when read. These semantics do not detect
+unread text corruption through resolution alone. SQLite contention can still
+return retryable `storage_busy`; byte ceilings do not guarantee latency.
+The opt-in C04 gate runs a continuous maximum-version reader and at least 100
+independent binding transitions in separate processes, with finite deadlines.
+It runs separate labelled paced and unpaced scenarios. The paced gate uses a
+fixed writer pause derived from an uncontended reader baseline and requires a
+complete contended read, at least 100 commits, and at least 200 distinct reader
+pages overlapping actual synchronous writer-call intervals. Writer sleeps and
+report publication do not count as active overlap. Any busy outcome fails this
+gate, including retried outcomes; writer p95 must be at most 250 ms on the
+reference machine. Rollback-journal readers can queue behind pending commits
+even when neither side returns busy. Reader page p50, p95 and maximum during
+active calls and across the writer's whole lifetime are reported separately
+from the whole run; reader overlap p95 and maximum have no threshold.
+Both child exit codes are checked.
+
+A process that writes continuously, without pauses, can starve readers under
+rollback-journal locking. Readers then receive retryable `storage_busy`.
+Normal capture and imports are sporadic and meet the paced gates. The unpaced
+scenario is a bounded stress observation: the writer stops when the reader
+finishes or its duration bound expires, and the reader retries the same page
+and cursor with bounded backoff within the overall deadline. Reports include
+pages, busy outcomes, SQLite waits, retry delays, maximum page latency and
+whether an exact-byte read eventually completed. Busy reader outcomes and
+reader latency do not fail this observation; corruption, byte mismatches,
+writer errors and deadline breaches do. WAL mode is a separate store-wide
+follow-up decision, affecting every V1 opener and the terminal-review store
+fence, which currently requires rollback-journal mode.
+Method command review supports rollback-journal stores only. It refuses WAL
+headers and existing journal/WAL/SHM companions before SQLite inspection, pins
+filesystem and SQLite identities, and uses a noncreating fenced opener after
+approval. Participants must keep rollback-journal mode throughout review. A
+refusal guarantees no application data or schema writes; SQLite crash recovery
+may cause filesystem effects after approval. Approval reviews metadata
+and commits frozen bytes, rather than reviewing every file's prose. Pinned
+directories can remain usable after ancestor relocation; continuous pathname
+ancestry and atomic directory snapshots are not promised. Unsupported flag or
+`/proc` semantics refuse, with no pathname fallback. Native arm64, macOS and
+Windows importing are unverified/unsupported; tests exercise Linux x64. Namespace usage excludes metadata, ledgers, effects,
+SQLite overhead, WAL and backups; owner-wide totals are not exposed by U2.
+Synthetic migration tests consume frozen historical fixtures in shallow CI;
+maintainers verify their provenance through the opt-in full-history recipe in the
+[guide](method-packages-local.md#synthetic-verification-and-historical-fixtures).
+Process-race tests establish local SQLite serialization, not cross-host coordination.
+Schema v30 upgrade is explicit and writable-ordinary-only; stop mixed-version
+writers first. Core SQLite tests establish database mechanics; separate real-process/PTY
+installed tests exercise confinement and approval, including same-filesystem
+bind mounts in an unprivileged user+mount namespace on this host. These do not
+establish hosted safety, remote-human authentication, semantic quality, safe
+code execution or product readiness.
+
 ## Explicit local foreground setup preview
 
 The [operator path](raw-local-journal.md#explicit-standalone-foreground-setup-preview)
@@ -11,7 +184,7 @@ trusted test-only HTTP interception and synthetic Codex ancestry. A Codex comman
 outside a qualified actual host is expected to refuse. Qualification proves
 schema/format evidence, not native hook execution or model meaning.
 
-Setup requires an existing private schema 29 store. Separate new-store-only init
+Setup requires an existing private schema 29 or upgraded schema 30 store. Separate new-store-only init
 refuses every existing path; failure can leave its owned incomplete new file.
 Init does not persist an owner cap or fake event: first actual capture persists
 the setup-selected cap. Both clients must share the private usage descriptor,
@@ -2467,3 +2640,91 @@ fixes did not relax runtime validation. Logs are retained under
 `/tmp/cairn-raw-p3c-evidence.n7PShP/worker-*.log`. Final frozen-source gates and
 independent reviews are recorded separately in the plan/PR; earlier green runs
 are not final-source evidence or measured semantic quality.
+
+## Standalone binary asset preview
+
+`assets-local-v1` is an explicit embedded opt-in using v31 SQLite BLOB chunks.
+It matches only the contract's bounded leading signatures and does not parse,
+decode, render, execute, scan for malware or call models. Asset mutations use separate real-TTY commands. MCP exposes metadata and supplied
+derivative text only, with no binary delivery or mutations. Embedded derivative creation accepts only
+explicitly supplied text with `method:{kind:'user-provided'}`; it performs no
+OCR, ASR, captioning or media understanding. Optional ordered audio/video
+intervals are `user-supplied-unverified`, with no text-span alignment claim.
+Derivative history compares the exact source ordinal with the greatest imported
+ordinal; it does not infer a current source or inherit text into later versions.
+Embedded mixed-method import requires both capabilities and separate grants.
+Attachments are exclusive copies, charged independently, with no deduplication.
+Method-only processes can inspect mixed metadata and purge attachments, including
+corrupt bytes, but cannot deliver binary content without asset grants. Current
+attachment cursors stale on adoption transitions; history remains on the exact
+requested version with fresh authorization. CLI attachment import is explicit via `--attachments local-v1`; there is no MCP
+attachment import or byte export. Local asset export uses a pinned operator-owned
+parent, private source name and create-only link publication. A post-publication
+fsync/cleanup failure reports `published-but-durability-uncertain`; termination can
+leave private partials. Recovery never overwrites/removes the final, and cleanup
+never adopts stale names. Same-UID processes remain inside the Unix owner trust
+boundary. See [the host and recovery guide](assets-local.md#local-host-commands). The opt-in K13 measurement asserts both 32-MiB standalone
+and 64-MiB mixed-import transaction/RSS thresholds, including byte preparation.
+Every binary read verifies metadata and only the selected chunk; corruption in
+another chunk is detected when it is selected. Authenticated totals prevent
+truncated completion. Logical purge does not erase freed pages, journals/WAL or
+backups, and the binary quota excludes that physical overhead. Deferred reads
+avoid the previous write-lock contention mechanism, but rollback-journal readers
+can still queue behind commits; overlap reader latency is reported without a
+latency threshold. A continuously writing process can starve readers, producing
+retryable `storage_busy`. The paced K13 gate requires at least 200 pages
+overlapping actual writer calls, excluding pacing sleeps. The unpaced scenario
+observes bounded stress with reader retries and eventual exact-byte verification;
+normal sporadic capture/imports meet the paced gates. WAL mode remains a separate
+store-wide follow-up decision. The unreleased
+v31 guards reject replacement of retained tombstones and immutable payload keys,
+including method tombstones and stale binding revisions. Every opener rejects
+unexpected triggers on owned tables and ASCII-case-varied premature artifacts;
+this is schema validation, not protection against a party able to rewrite the
+database and remove its guards. Selecting assets performs a one-way v31 upgrade; older v30
+binaries refuse the upgraded store.
+
+
+<!-- U5c-2 optional source integration. -->
+## Optional context sources
+
+Relations and MOC title ranking require explicit host opt-in; calls can only
+narrow that availability. Neither source is selected as a default by research.
+Relations traverse one hop in four existing families, seed only four direct
+candidates, and add at most two per seed/eight total. Relation existence remains
+proposed/unassessed. There is no two-hop expansion, supersession/qualification
+traversal, Raw/receipt candidate endpoint, episode or operational lineage.
+
+MOC ranks valid authorized titles, not compiled summaries. Its full title
+statistics and member ranking must complete within the shared deadline,
+50,000-work and 8-MiB accounting bounds or its contribution is discarded.
+With the default caps, broad queries over filed corpora typically degrade
+around 10,000 Memories: the balanced synthetic 10⁴ probe reports
+`degraded`/`work_limit` and contributes zero MOC candidates. The cutoff varies
+with titles, memberships and projection state, and can come earlier or later.
+Other enabled channels continue under the configured preset without weight
+renormalization. Membership never filters lexical/semantic discovery. A history request still
+uses current MOC members. Active Memory projection unavailability is not
+bypassed; absent optional Card organization storage degrades MOC explicitly.
+`summaryFreshness` is always unavailable pending E1. No retrieval-quality,
+production-latency or 100,000-Memory guarantee follows from synthetic timing.
+
+Source scan accounting is conservative application accounting, not a process
+memory limit; SQLite calls remain synchronous/non-preemptible. Relations can
+return a validated prefix with an unknown remainder. At most 32 candidates
+reach assembly, while at most 24 bodies/refs are delivered. The 16-MiB aggregate
+retained-source budget can evict rankings before the 128-ranking count limit;
+continuations then return `cursor_stale`. New source state is never persisted.
+
+Source fences include consulted, undelivered dependencies and are checked
+inside final delivery transactions. Discovery changes can stale a page or
+assembly even if its eventual evidence subset is unchanged. Independent full,
+compact and snapshot fetches retain their prior evidence semantics; they do
+not provide durable proofs of the discovery path. MCP source diagnostics stay
+in host `_meta`, with the existing client-contract caveat: clients forwarding
+metadata to models do not get a metadata invisibility guarantee.
+<!-- End U5c-2 integration. -->
+
+### Current-dependent Cards
+
+Explicit Card dependency review is opt-in for authoring and always enforced for existing declarations. Stale current evidence is excluded; eligible retained authored history is qualified. Review does not judge semantic accuracy, rewrite content, archive overwritten revisions or restore purged sources/methods. Complete declaration context requires separate authorization; restricted readers receive minimal `access_revoked` metadata. Memory dependencies and generated-summary freshness remain unsupported. Schema v33 requires stopping older binaries before upgrade. Dependency contention/latency gates run only in the opt-in measurement script. See [the local guide](card-current-dependencies-local.md).

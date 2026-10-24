@@ -1,5 +1,188 @@
 # Changelog
 
+## Unreleased — local role profiles (U5c-1)
+
+- Add explicit current-method dependency review for private Cards, canonical v33 guards, and read-time invalidation across evidence, retrieval, organization and role guidance.
+
+- Add opt-in direct agent role publication with dual CAS and v32 guards, matching
+  method/context scopes, and one budgeted MCP role/task read with caller-held
+  receipts, historical labels and exact-version file continuation. See the
+  [role guide](docs/role-profiles-local.md) for configuration and limitations.
+
+## Unreleased — optional context sources (U5c-2)
+
+- Add independently opt-in one-hop typed relations and MOC title ranking, fixed
+  caps and source fences; MCP permits per-call narrowing and keeps source
+  diagnostics in host metadata. Source-disabled wire behavior stays unchanged.
+
+## Unreleased — context representation v2 (U5b-2)
+
+- Replace the experimental preview.2 assembly shape with `representation-v2`:
+  compact refs with verified fence prefixes, string bodies, lossless default
+  omission and `sameAsBody` receipts; full refs and unit counts stay in diagnostics.
+- Keep the snapshot only in namespaced host `_meta`, beside diagnostics, and
+  add the non-default first-source policy. Parent-only MOC moves preserve compact
+  refetch evidence but stale the snapshot path. See the
+  [context guide](docs/context-read-local.md) and [limitations](docs/limitations.md).
+
+## Unreleased — budgeted context assembly (U5b)
+
+- Add opt-in `read_memory_context` with whole canonical evidence units, strict
+  budgets and versioned rank-first/coverage-first policies. Context-enabled
+  startup supplies a keyless local `o200k_base` counter independently of models.
+- Emit the exact core-metered text as the single MCP text block; diagnostics
+  use namespaced `_meta` under an explicit client contract. The guarantee covers
+  that text alone, with separate core/transport byte bounds. See the
+  [context guide](docs/context-read-local.md) and [limitations](docs/limitations.md).
+
+## Unreleased — asset schema review fixes
+
+- Harden unreleased v31 against replacement-insert/update tombstone resurrection and
+  stale payload/binding restoration, without changing the v30 installer.
+- Reject unexpected triggers on method/asset tables and case-varied premature
+  asset artifacts through every opener. Match snapshot prototype rules to
+  canonical binary identity encoding before authority callbacks.
+- Keep C04/K13 contention gates on the paced scenario, with reader overlap
+  counted against actual writer calls. Report unpaced rollback-journal reader
+  starvation as bounded stress data, retrying the same page through busy waits
+  and verifying eventual byte-exact completion.
+
+## Unreleased — local asset host (U4b)
+
+- Add terminal-approved asset import, supplied derivatives and CAS deletion,
+  using confined descriptors, frozen payloads and the noncreating v31 store fence.
+- Add pure-Node create-only export with protected source names, readback
+  verification, link publication and explicit uncertain-durability receipts.
+- Add `methods import --attachments local-v1`, including exclusive binary
+  attachment review and SVG text, and five opt-in metadata/derivative MCP reads.
+  Default tools remain unchanged; MCP exposes neither bytes nor asset mutations.
+- Ship the complete host closure and real-process, PTY, publication fault and
+  installed-artifact acceptance. See [the asset guide](docs/assets-local.md).
+
+## Unreleased — context retrieval host (U5a part 3)
+
+- Renormalize OpenAI provider vectors in the adapter before strict float32 validation.
+- Add explicit context MCP startup options and two read tools, fixed host read
+  sets, strict reference-preserving grammars and separate core/transport bounds.
+- Add bounded `context refresh`, syntax-only context configuration checks and
+  the budgeted OpenAI embedding port. Hosted configuration selects frozen
+  `rrf-k10`; default construction and legacy tools remain unchanged.
+- Use fake HTTP and actual installed-process acceptance; paid smoke remains a
+  separate unrun opt-in. Accounting rates are frozen inputs, not live billing
+  attestation. See [the context guide](docs/context-read-local.md).
+
+## Unreleased — opt-in core candidate retrieval (U5a parts 1–2)
+
+- Add the explicit `contextRead` core opt-in, read-only `openContextReader`,
+  candidate lookup, bounded index refresh and canonical evidence refetch. Existing
+  flag-off behaviour is unchanged; MCP, CLI and hosted adapter wiring are deferred.
+- Keep lexical postings, statistics and optional vectors in a sensitive local
+  sidecar. Canonical changes invalidate retrieval logically; deleting or
+  invalidating entries does not provide secure physical erasure.
+- Freeze T1 tokenization and BM25/RRF presets, including the intentional embedded
+  single-Han miss: `中` does not match `中文`. Measurements use synthetic data and
+  are observational, not semantic-quality or production-latency guarantees.
+
+## Unreleased — derivatives and method attachments (U4a-2)
+
+- Add immutable, explicitly supplied asset derivatives with exact source
+  provenance, formatting-preserving redaction, bounded unverified intervals,
+  paged text, replay and trigger-driven purge accounting.
+- Add explicit `mixed-v1` method manifests and exclusively owned binary
+  attachments. Imports and byte delivery require separate method and asset
+  grants; metadata and purge remain available to method-only processes.
+  Current attachment reads respect adoption pins and never switch versions.
+- Preserve text-only action/manifest bindings and the frozen v31 schema.
+  Extend `measure:assets` with asserted 64-MiB mixed-import lock/RSS gates.
+
+## Unreleased — standalone assets (U4a-1)
+
+- Add the opt-in assets-local-v1 embedded facade with immutable binary versions,
+  signature matching, authenticated 32-KiB chunk reads, CAS/replay, namespace
+  usage, content-free effects and trigger-driven purge accounting.
+- Install the complete canonical v31 layout only when assets are selected,
+  including reserved derivative and mixed-manifest tables. Validate it at every
+  opener; retain shallow-safe actual v30 install/store fixtures.
+- Gate 32-MiB import lock duration, preparation-inclusive RSS growth and sustained
+  independent byte-reader/binding-writer contention in `measure:assets`.
+
+## Unreleased — method host review fixes
+
+- Treat line terminators as ordinary path characters in exclusion globs, and
+  preserve explicit bind-mount preflight infrastructure failures as failures.
+- Bound exclusion glob matching with a two-row dynamic program and preserve
+  Unicode, separator, class and directory-pruning semantics.
+- Separate bind-mount prerequisite skips from mandatory importer-child success;
+  strengthen installed terminal-control approval and injection tests.
+- Pace the C04 writer from a reader baseline, require 200 overlapping pages,
+  and report overlap reader latency separately, including commit queueing.
+
+## Unreleased — method read concurrency (U2c)
+
+- Run method and binding reads in deferred, query-only snapshots; restore the
+  connection state on refusal and discard connections whose cleanup fails.
+- Verify manifest metadata plus the requested file on file pages and metadata
+  during resolution. Version metadata, manifest lists and comparison retain
+  whole-version verification. Out-of-band text corruption affects that file's
+  reads while other files remain readable.
+- Gate the opt-in two-process maximum-reader/binding-writer measurement on
+  100 commits, zero busy outcomes and writer p95 ≤250 ms, with finite deadlines.
+
+## Unreleased — installed method packages (U3)
+
+- Keep the CLI static graph SQLite-free while preserving installed eager-module
+  observations. Fence terminal review to one rollback-journal store identity;
+  use a noncreating ordinary opener and check identities before migration.
+  Bound the observational measurement by a shared deadline and retry limit.
+
+- Keep installed eager import closure consistent without method flags. Never
+  create a store from a method command; review and approve an older store's
+  one-way v30 upgrade before opening the core. Count and retry reader/writer
+  busy outcomes in the opt-in contention measurement.
+
+- Add Linux/WSL descriptor-confined directory importing and separate real-TTY
+  import/adopt/disable approval of frozen payloads. Check mount IDs before data
+  access, reject links/special files, and bound traversal, reads and review.
+- Add nine read-only MCP method tools behind `--method-packages local-v1`;
+  personal reads from a project require `--method-read-personal`. Enforce core
+  and separately encoded transport byte bounds, preserving opaque refs and pins.
+- Raise file/version limits and derived snapshot budgets together to 256 files,
+  400,000 units/file and 4,000,000 units/version. Add read-authorized availability-
+  only `checkMethodReasonRefs`; keep v30 and the 50 MB owner cap unchanged.
+- Add actual installed, process-race and real-PTY H01–H07 coverage and an opt-in
+  synthetic maximum-read/writer-contention measurement. No package execution,
+  model authority, automatic approval or binary assets are introduced.
+
+## Unreleased — local method bindings and pins (U2b)
+
+- Add explicit adoption/disable CAS, four-level resolution with disabled and
+  unavailable barriers, authenticated current/history pins and binding-event reads.
+- Reauthorize every read-set namespace, retain exact cross-scope package identity,
+  and advance binding generations only on transitions. The frozen v30 layout is
+  unchanged; deletion uses canonical lifecycle fences without binding fanout.
+- Extend the synthetic method example with adopt → resolve → pin → disable.
+  U3 adds the separately opted-in installed host workflow above.
+
+## Unreleased — opt-in local method packages (U2a)
+
+- Keep historical migration and compatibility tests shallow-safe with immutable
+  synthetic fixtures and an opt-in full-history regeneration/verification target.
+- Refuse same-named weakened v30 schema definitions, including CHECK constraints
+  and namespace trigger bodies; cover competing-process quota and lifecycle races.
+
+- Add text-only immutable method imports, context-free history, exact-edge
+  comparison, atomic owner quota, purging deletion and content-free durable replay
+  and effects in the existing SQLite core.
+- Allocate the complete schema v30, including initially empty binding, binding-
+  generation and content-free binding-event storage, through a transactional
+  schema-only prerequisite migrator; unselected construction stays unchanged. Existing upgraded stores reopen through
+  ordinary, read-only, managed and local setup/preflight paths.
+- Require method-specific host authority. At the U2a checkpoint, bindings, contexts,
+  snapshots and current intent were deferred; U2b adds them on the frozen
+  v30 layout; deletion advances lifecycle revisions and emits only its deletion
+  effect, without enumerating bindings or advancing binding generations. See
+  [the local guide](docs/method-packages-local.md).
+
 ## Unreleased — explicit local foreground setup preview
 
 - Add default-off `local init/setup/status/activate/disable` and bounded quiet

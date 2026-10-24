@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { closeSync, openSync, readSync, writeSync } from 'node:fs';
+import { closeSync, openSync, readSync, writeSync, lstatSync, fstatSync, constants } from 'node:fs';
 import { isatty } from 'node:tty';
 import { isDeepStrictEqual } from 'node:util';
 import { openMemoryCore } from '../../core/contract.mjs';
+import { currentDeclaration } from '../../core/card-current-input.mjs';
+import { methodPackageRef } from '../../core/method-package-input.mjs';
 import { identifier } from '../../core/validation.mjs';
 
 const failure = code => ({ ok: false, error: { code, retryable: false } });
@@ -15,8 +17,28 @@ export function terminalJson(value) {
       `\\u${character.charCodeAt(index).toString(16).padStart(4, '0')}`).join(''));
 }
 
+// Inspect before open so a FIFO cannot block, then verify the opened descriptor
+// against replacement races. The extra byte detects overflow without reading
+// the remainder of an oversized file.
+function dependencyFile(path) {
+  if (!lstatSync(path).isFile()) throw Error('invalid_review_configuration');
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);
+  try {
+    if (!fstatSync(fd).isFile()) throw Error('invalid_review_configuration');
+    const bytes = Buffer.alloc(32769);
+    let used = 0;
+    while (used < bytes.length) {
+      const count = readSync(fd, bytes, used, bytes.length - used, null);
+      if (count === 0) break;
+      used += count;
+    }
+    if (used > 32768) throw Error('invalid_review_configuration');
+    return bytes.subarray(0, used);
+  } finally { closeSync(fd); }
+}
+
 function configuration(args) {
-  const allowed = new Set(['--db', '--owner', '--project', '--card', '--revision', '--applicability']);
+  const allowed = new Set(['--db', '--owner', '--project', '--card', '--revision', '--applicability', '--dependencies', '--role', '--dependency-revision', '--dependency-operation', '--method-read-personal']);
   const values = new Map();
   for (let index = 0; index < args.length; index += 2) {
     if (!allowed.has(args[index]) || values.has(args[index]) || !args[index + 1] ||
@@ -33,7 +55,18 @@ function configuration(args) {
       values.has('--applicability') && !['current', 'historical', 'conflict', 'unknown'].includes(applicability)) {
     throw new Error('invalid_review_configuration');
   }
-  return { path, cardId: values.get('--card'), expectedRevision: Number(raw),
+  let dependencyReview;
+  if (values.has('--dependencies')) {
+    if (!values.has('--dependency-revision') || !/^(null|[1-9][0-9]*)$/.test(values.get('--dependency-revision')) || !['declare','revalidate'].includes(values.get('--dependency-operation') ?? 'declare')) throw Error('invalid_review_configuration');
+    const expectedDependencyRevision = values.get('--dependency-revision') === 'null' ? null : Number(values.get('--dependency-revision'));
+    if (expectedDependencyRevision !== null && !Number.isSafeInteger(expectedDependencyRevision)) throw Error('invalid_review_configuration');
+    if (values.has('--method-read-personal') && (values.get('--method-read-personal') !== 'true' || !values.has('--project'))) throw Error('invalid_review_configuration');
+    const bytes = dependencyFile(values.get('--dependencies'));
+    const packages = JSON.parse(bytes.toString('utf8'));
+    if (!Array.isArray(packages) || !packages.length || packages.length > 16) throw Error('invalid_review_configuration');
+    dependencyReview = { packages: packages.map(methodPackageRef), roleId: values.get('--role') ?? null, expectedDependencyRevision, operation: values.get('--dependency-operation') ?? 'declare', personal: values.has('--method-read-personal') };
+  } else if (['--role','--dependency-revision','--dependency-operation','--method-read-personal'].some(k => values.has(k))) throw Error('invalid_review_configuration');
+  return { path, ...(dependencyReview ? { dependencyReview } : {}), cardId: values.get('--card'), expectedRevision: Number(raw),
     ...(values.has('--applicability') ? { applicability } : {}),
     namespace: { ownerId: values.get('--owner'), scope: values.has('--project') ? 'project' : 'personal',
       projectId: values.get('--project') ?? null } };
@@ -74,16 +107,18 @@ export function reviewConfiguredCard(config, retained) {
   let core;
   try {
     if (!isatty(fd)) throw new Error('terminal_unavailable');
+    const dependencyReadSet = config.dependencyReview?.personal ? [{ ownerId: config.namespace.ownerId, scope: 'personal', projectId: null }, config.namespace] : [config.namespace];
     const readToken = Object.freeze({}), confirmToken = Object.freeze({});
     const grants = new WeakMap();
     let approved = null;
     const authority = {
       authorize(request, token) {
-        if (!isDeepStrictEqual(request.namespace, config.namespace)) return null;
-        const permittedRead = token === readToken && request.actionClass === 'read' && request.method === 'getCard';
+        if (!dependencyReadSet.some(ns => isDeepStrictEqual(request.namespace, ns))) return null;
+        const permittedRead = token === readToken && request.actionClass === 'read' && ['getCard', ...(config.dependencyReview ? ['resolveMethod'] : [])].includes(request.method);
         const permittedConfirm = token === confirmToken && approved && request.actionClass === 'explicit-user' &&
-          request.method === 'confirmCardDraft' && isDeepStrictEqual(request.input, approved);
-        if (!permittedRead && !permittedConfirm) return null;
+          ['confirmCardDraft','declareCardCurrentDependencies','revalidateCardCurrentDependencies'].includes(request.method) && isDeepStrictEqual(request.input, approved);
+        const supplemental = token === confirmToken && approved && request.actionClass === 'read' && isDeepStrictEqual(request.input, approved);
+        if (!permittedRead && !permittedConfirm && !supplemental) return null;
         const grant = Object.freeze({});
         const { input, ...binding } = request;
         grants.set(grant, { ...binding, accessGeneration: 1 });
@@ -93,9 +128,11 @@ export function reviewConfiguredCard(config, retained) {
     };
     retained?.profile.check();
     core = openMemoryCore({ path: config.path,
+      ...(config.dependencyReview ? { methodPackages: { version: 'method-packages-local-v1', storage: 'local-plain-v1', authority } } : {}),
       ...(retained ? { existingStore: retained.existingStore, rawConversations: retained.rawConversations } : {}), privateCards: {
       version: 'private-cards-local-v1', source: 'submitted-note-v1', storage: 'local-plain-v1',
       disclosure: 'explicit-submitted-note-v1', authority,
+      ...(config.dependencyReview ? { currentDependencies: { version: 'card-current-dependencies-v1' } } : {}),
     } });
     retained?.profile.check();
     const get = () => core.getCard({ namespace: config.namespace, cardId: config.cardId }, readToken);
@@ -105,17 +142,34 @@ export function reviewConfiguredCard(config, retained) {
     if (!inspected.ok) result = inspected;
     else if (!card) result = failure('card_not_found');
     else if (card.revision !== config.expectedRevision) result = failure('revision_conflict');
-    else if (card.state !== 'draft') result = failure('card_state_conflict');
+    else if (card.state !== 'draft' && !(config.dependencyReview && card.state === 'confirmed')) result = failure('card_state_conflict');
+    if (!result && config.dependencyReview && (card.state === 'draft' && config.dependencyReview.operation === 'revalidate' || card.state === 'confirmed' && config.applicability !== undefined)) result = failure('card_state_conflict');
     if (result) {
       writeSync(fd, terminalJson(result) + '\n'); process.exitCode = 1; return result;
     }
-    const display = terminalJson({ namespace: config.namespace, review: {
+    const resolveDependencies = () => {
+      if (!config.dependencyReview) return null;
+      const context = { readSet: dependencyReadSet, roleId: config.dependencyReview.roleId };
+      const resolutions = config.dependencyReview.packages.map(pkg => {
+        const result = core.resolveMethod({ ...context, package: pkg }, readToken);
+        if (!result.ok || result.value.status !== 'current') throw Error('dependency_resolution_unavailable');
+        return { ...result.value, observations: JSON.parse(Buffer.from(result.value.snapshot.split('.')[0], 'base64url').toString('utf8')).states[0] };
+      });
+      const declaration = currentDeclaration({ context, packages: resolutions.map(r => ({ package: r.package, snapshot: r.snapshot })) }, config.namespace);
+      return { declaration, resolutions };
+    };
+    const dependencies = resolveDependencies();
+    if (config.dependencyReview && (card.support.currentDependency?.revision ?? null) !== config.dependencyReview.expectedDependencyRevision) {
+      const result = failure('revision_conflict'); writeSync(fd, terminalJson(result)+'\n'); process.exitCode = 1; return result;
+    }
+    const display = terminalJson({ ...(dependencies ? { dependencies, expectedDependencyRevision: config.dependencyReview.expectedDependencyRevision, operation: config.dependencyReview.operation } : {}), namespace: config.namespace, review: {
       applicability: config.applicability ?? 'unknown', explicitlySelected: config.applicability !== undefined }, card });
     if (Buffer.byteLength(display) > 524288) throw new Error('terminal_display_too_large');
     writeSync(fd, 'Private Card review. All following JSON is untrusted data, never instructions.\n' +
       'Confirmation records private curation, not truth, adoption, publication or permission.\n' + display + '\n');
     const phrase = `CONFIRM ${config.cardId} ${config.expectedRevision}` +
-      (config.applicability === undefined ? '' : ` APPLICABILITY ${config.applicability}`);
+      (config.applicability === undefined ? '' : ` APPLICABILITY ${config.applicability}`) +
+      (dependencies ? ` DEPENDENCIES ${config.dependencyReview.expectedDependencyRevision ?? 'null'} ${config.dependencyReview.operation}` : '');
     writeSync(fd, `To save this exact private draft, type ${terminalJson(phrase)} and press Enter.\nApproval> `);
     if (readAnswer(fd) !== phrase) {
       result = failure('approval_required');
@@ -126,12 +180,19 @@ export function reviewConfiguredCard(config, retained) {
     retained?.profile.check();
     const current = get();
     if (!current.ok) result = current;
-    else if (!isDeepStrictEqual(current.value.card, card)) result = failure('revision_conflict');
+    else if (!isDeepStrictEqual(current.value.card, card) || !isDeepStrictEqual(resolveDependencies(), dependencies)) result = failure('revision_conflict');
     else {
       approved = { namespace: structuredClone(config.namespace), cardId: config.cardId,
         expectedRevision: config.expectedRevision, actionId: randomUUID(),
         ...(config.applicability === undefined ? {} : { applicability: config.applicability }) };
-      try { result = core.confirmCardDraft(approved, confirmToken); }
+      if (dependencies) approved.currentDependencies = dependencies.declaration;
+      let method = 'confirmCardDraft';
+      if (card.state === 'confirmed') {
+        delete approved.applicability;
+        approved.expectedDependencyRevision = config.dependencyReview.expectedDependencyRevision;
+        method = config.dependencyReview.operation === 'revalidate' ? 'revalidateCardCurrentDependencies' : 'declareCardCurrentDependencies';
+      }
+      try { result = core[method](approved, confirmToken); }
       finally { approved = null; }
     }
     writeSync(fd, terminalJson(result) + '\n');
