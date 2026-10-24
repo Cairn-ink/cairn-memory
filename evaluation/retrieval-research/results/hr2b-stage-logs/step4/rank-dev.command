@@ -1,0 +1,1 @@
+~/.local/bin/cairn-heavy node evaluation/retrieval-research/run.mjs --fixture-dir evaluation/retrieval-research/fixtures-hr2b --fixture-version hr2b-fixture-v1 --split dev --scale S1000 --arms A1,A3 --models bge-m3 --isolation-variant with-foreign --out evaluation/retrieval-research/results/hr2b-rankings/dev

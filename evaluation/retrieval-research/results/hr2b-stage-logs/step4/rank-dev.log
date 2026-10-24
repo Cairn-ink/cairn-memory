@@ -1,0 +1,6 @@
+[cairn-heavy] 18:05:27 waiting for lock ~/.cache/cairn-heavy-tests.lock (pid 25591)
+[cairn-heavy] 18:05:27 lock acquired
+(node:25598) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+~/cairn-memory-u5b-hr2/evaluation/retrieval-research/results/hr2b-rankings/dev/A1.json
+~/cairn-memory-u5b-hr2/evaluation/retrieval-research/results/hr2b-rankings/dev/A3--bge-m3.json

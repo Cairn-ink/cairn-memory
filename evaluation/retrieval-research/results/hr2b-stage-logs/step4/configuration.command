@@ -1,0 +1,1 @@
+node evaluation/retrieval-research/tools/hr2b-configuration.mjs --fixture evaluation/retrieval-research/fixtures-hr2b --out evaluation/retrieval-research/results/hr2b-stage-logs/step4/configuration.json

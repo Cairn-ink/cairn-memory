@@ -1,0 +1,42 @@
+{
+  "format": "hr2b-ranking-configuration-v1",
+  "fixtureVersion": "hr2b-fixture-v1",
+  "arms": [
+    "A1",
+    "A3--bge-m3"
+  ],
+  "fusion": {
+    "method": "rrf",
+    "k": 60,
+    "depth": 12,
+    "weights": [
+      0.45,
+      0.45
+    ]
+  },
+  "lexical": "A1",
+  "horizon": 24,
+  "scale": "S1000",
+  "namespaces": [
+    "target",
+    "foreign"
+  ],
+  "isolationVariant": "with-foreign",
+  "documents": "body",
+  "dense": {
+    "repository": "Xenova/bge-m3",
+    "revision": "4de13258303883538bd53b696b452bf8099f0858",
+    "pooling": "cls",
+    "normalization": "L2",
+    "maxLength": 8192
+  },
+  "fixtureHashes": {
+    "hr1-corpus.json": "9355038de4d5ea721ec9634cd873fc322bb04396cfd9989977e1d6c5a4c798c0",
+    "hr1-facts-view.json": "91f156bfaeb999beff86a981486ee6c1a4b8e3994ba105020d2b34568e92313d",
+    "hr1-facts.json": "4602686881a3f10fec714ba1fcf8e25fb11e97509dc649a31df3083bc9ee329d",
+    "hr1-label-audit.json": "a37d9beec8b9e62102cd259345885e9b10623d8f341d1b4a5bc15aa871b2bb48",
+    "hr1-labels.json": "a504f72a467d9f650019ff97682a90c587073db2fad50520eb191eedc43e377d",
+    "hr1-queries.json": "d790686145082ac0a69933a498afc419d7ddb02401caea4bf18fd3933f0fb8e2",
+    "hr1-split.json": "21e7f63a9bcabdb5cc260f334c48e41b35b3a49f10d9632a4f9a36709be4b3b9"
+  }
+}
