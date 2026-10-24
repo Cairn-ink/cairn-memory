@@ -6,6 +6,27 @@ import { fixture } from './fixtures/pack.mjs';
 import { parseManifest, verifyPack, checkFence } from '../pack.mjs';
 import { canonical, sha256, strictJSON } from '../common.mjs';
 const verify = f => verifyPack(f.root, { catalog: f.catalog });
+test('L03 fixture runtime descriptor follows the running Node version and platform/architecture', async t => {
+  const f = await fixture(t);
+  assert.equal(f.manifest.runtime.nodeRange, process.versions.node);
+  assert.deepEqual(f.catalog[0].nodeVersions, [process.versions.node]);
+  assert.equal(f.manifest.runtime.nativeTargets[0].os, process.platform);
+  assert.equal(f.manifest.runtime.nativeTargets[0].arch, process.arch);
+  assert.equal((await verify(f)).runtimeStatus, 'not-loaded');
+});
+test('L03 fixture runtime descriptor follows an injected floating-CI Node patch and target', async t => {
+  const nodeVersion = '24.21.0', platform = 'darwin', arch = 'arm64';
+  const f = await fixture(t, { nodeVersion, platform, arch });
+  assert.equal(f.manifest.runtime.nodeRange, nodeVersion);
+  assert.deepEqual(f.catalog[0].nodeVersions, [nodeVersion]);
+  assert.equal(f.manifest.runtime.nativeTargets[0].os, platform);
+  assert.equal(f.manifest.runtime.nativeTargets[0].arch, arch);
+  const catalog = await f.publish();
+  assert.deepEqual(catalog[0].nodeVersions, [nodeVersion], 'republishing must retain the injected runtime');
+  const options = { catalog, nodeVersion, platform, arch };
+  assert.equal((await verifyPack(f.root, options)).runtimeStatus, 'not-loaded');
+  await assert.rejects(verifyPack(f.root, { ...options, nodeVersion: '24.21.1' }), { code: 'model_runtime_unavailable' });
+});
 test('L03 canonical approved manifest precedes all hashing and runtime selection; production catalog fails closed', async t => {
   const f = await fixture(t), stages = [];
   const p = await verifyPack(f.root, { catalog: f.catalog, onStage: (...args) => stages.push(args) });

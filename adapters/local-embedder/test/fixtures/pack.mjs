@@ -2,7 +2,9 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { canonical, MODEL, sha256 } from '../../common.mjs';
-export async function fixture(t, { salt = '', extra = {}, platform = process.platform, arch = process.arch } = {}) {
+// Synthetic packs describe their test runner, including floating CI patches;
+// these versions are not the production catalog's qualification policy.
+export async function fixture(t, { salt = '', extra = {}, platform = process.platform, arch = process.arch, nodeVersion = process.versions.node } = {}) {
   const parent = await mkdtemp(join(tmpdir(), 'cairn-bge-fixture-'));
   t?.after(() => rm(parent, { recursive: true, force: true }));
   const root = join(parent, 'pack'), contents = new Map();
@@ -32,14 +34,14 @@ export async function fixture(t, { salt = '', extra = {}, platform = process.pla
     evidencePaths: ['provenance/model-card.md', 'provenance/model-license.txt'], noticePaths: ['licenses/THIRD_PARTY_NOTICES.md'], sourceOfferPaths: [] }].sort((a, b) => a.component + '\0' + a.version < b.component + '\0' + b.version ? -1 : 1);
   const files = [...contents].map(([path, f]) => ({ path, bytes: f.bytes.length, sha256: sha256(f.bytes), role: f.role })).sort((a, b) => a.path < b.path ? -1 : 1);
   const manifest = { format: 'cairn-model-pack-v1', packId: 'bge-m3', packVersion: 'fixture-1', protocolVersion: 'cairn-local-embed-v1', model: { ...MODEL }, runtime: {
-    nodeRange: '22.16.0 || 24.15.0', transformersVersion: '3.7.6', ortVersion: '1.21.0', device: 'cpu', interOpThreads: 1, executionMode: 'sequential', lockPath: 'runtime/package-lock.json', packages,
+    nodeRange: nodeVersion, transformersVersion: '3.7.6', ortVersion: '1.21.0', device: 'cpu', interOpThreads: 1, executionMode: 'sequential', lockPath: 'runtime/package-lock.json', packages,
     nativeTargets: [{ os: platform, arch, libc: null, minOs: null, nodeAbi: null, entry: 'runtime/node_modules/onnxruntime-node/fixture.node', files: ['runtime/node_modules/onnxruntime-node/fixture.node', 'runtime/node_modules/sharp/fixture.node'] }] }, licenses, files };
   async function publish() {
     await mkdir(root, { recursive: true, mode: 0o700 });
     for (const [path, f] of contents) { await mkdir(dirname(join(root, path)), { recursive: true }); await writeFile(join(root, path), f.bytes); }
     const manifestBytes = canonical(manifest), manifestHash = sha256(manifestBytes);
     await writeFile(join(root, 'manifest.json'), manifestBytes);
-    const descriptor = { packId: 'bge-m3', packVersion: manifest.packVersion, manifestHash, manifestBytes, nodeVersions: ['22.16.0', '24.15.0'], downloads: files.map((f, i) => ({ url: 'https://example.invalid/pinned/' + MODEL.revision + '/' + i, sha256: f.sha256, bytes: f.bytes, format: 'file', files: [f.path], maxExpandedBytes: f.bytes })) };
+    const descriptor = { packId: 'bge-m3', packVersion: manifest.packVersion, manifestHash, manifestBytes, nodeVersions: [nodeVersion], downloads: files.map((f, i) => ({ url: 'https://example.invalid/pinned/' + MODEL.revision + '/' + i, sha256: f.sha256, bytes: f.bytes, format: 'file', files: [f.path], maxExpandedBytes: f.bytes })) };
     return [descriptor];
   }
   const catalog = await publish();
