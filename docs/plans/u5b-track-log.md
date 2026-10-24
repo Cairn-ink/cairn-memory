@@ -520,3 +520,11 @@
   主要發現：P-top-s1 在 16 格全落後且**預算越大輸越多**（與 HR-2 短項目相反）；coverage-first 輸 10–50 點；P-top+tail≈P-top；
   瓶頸是 body-only ranking 看不到 receipt（天花板 0.74），建議下一步研究 receipt-aware ranking 而非再加 assembly arm。
   派非作者轉錄檢查（resume Spec 審查者，read-only，xhigh＋fast）。
+- **轉錄檢查：16 項**（exit 0）。重要一項：`FROZEN.md` 列的空檔 `build/candidate0-v11-identity/check.stderr.log` 被 `.gitignore *.log`
+  擋在 git 外（31 個 manifest 成員只有 30 個在 git），乾淨 clone 會過不了 fixture 認證 → `git add -f` 補上（內容空、雜湊
+  e3b0c442 不變，FROZEN.md 不動）。其餘：overhead 懲罰 2.2–8.1（非 3–10）；不可達群以 occurrence 計 A1 42/131、bge-m3 34/131
+  （0.708／0.742 是類別 macro）；四捨五入 −9.8、−13.2；P-cover-s1 拒絕範圍 79–94；P-top+tail −3.1 的格；審後需 receipt 層的題目
+  137/140（q-110 覆寫把一群轉 body）；「≥40% 下限」是協調者給 W2 的指示非協定；校準誤差單 item 最差 −17（每筆約 4–5 token），
+  −34 是兩個 item；刪掉「真實預算更緊」「結論不依賴題組」兩句推論；建議 4「瓶頸在 ranking」被數字反駁（組裝損失 37.5 點 >
+  排名損失 25.8 點）改成兩者皆綁、不下因果結論；「每階段都經 cairn-heavy」改為只有 run／score／report；重現段補 commit／
+  detached／絕對路徑也會不同；limitations「2–4 事實」限定目標與干擾記憶（foreign 一事實）。全部核實後修正提交，派轉錄複查。
