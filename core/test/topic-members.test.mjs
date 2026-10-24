@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { openMemoryReader } from '../index.mjs';
 import { memberFixture, collectMembers, overview, namespace, expected, ok, kinds, sorted } from '../testing/topic-members-fixture.mjs';
+import { memberOpeningModel, memberProgressReader } from '../testing/topic-members-progress.mjs';
 
 const base = { namespace, selection: { type: 'unfiled' }, accessRevision: 'grant-1' };
 const error = (code) => ({ ok: false, error: { code } });
@@ -196,14 +197,32 @@ test('E1M-06 a real maximum-identifier ref too large for 4096 bytes refuses with
   f.db.prepare('UPDATE memories SET id=? WHERE id=?').run(memoryId,row.id);
   f.db.prepare('UPDATE mocs SET id=? WHERE id=?').run(mocId,node.id);
   f.db.prepare('UPDATE moc_memory_refs SET moc_id=?,memory_id=? WHERE memory_id=?').run(mocId,memoryId,row.id);
-  const reader=f.reader(longNamespace),input={namespace:longNamespace,selection:{type:'moc',mocId,revision:node.revision,level:'L1'},accessRevision:'權'.repeat(200),maxBytes:4096,workLimit:16};
-  let cursor,refused;
-  for(let i=0;i<30;i++){
+  const input={namespace:longNamespace,selection:{type:'moc',mocId,revision:node.revision,level:'L1'},accessRevision:'權'.repeat(200),maxBytes:4096,workLimit:16};
+  const model=memberOpeningModel(f.db,input.workLimit),observed=memberProgressReader(t,f,longNamespace),{reader}=observed;
+  const pages=[];let cursor,refused,previous=0,openingUnits=0;
+  // Allow one call per remaining metadata/candidate operation, independently
+  // of how full each call is. Every successful partial must advance below.
+  for(let i=0;i<model.refusalPageBound;i++){
     const request={...input,...(cursor?{cursor}:{})},result=await reader.readTopicMembers(request);
-    if(!result.ok){assert.deepEqual(result,error('context_item_too_large'));assert.ok(cursor);refused=request;break;}
+    const trace=await observed.report(),position=model.rank(trace.after);
+    assert.ok(trace.used<=input.workLimit);assert.equal(model.rank(trace.before),previous);
+    openingUnits+=trace.steps.filter(step=>!step.before.opening.done).reduce((sum,step)=>sum+step.cost,0);
+    pages.push({page:i+1,used:trace.used,position,opening:trace.after?.opening,member:trace.after?.member,
+      ...(result.ok?{}:{error:result.error.code,tentativePosition:model.rank(trace.tentative)})});
+    if(!result.ok){
+      assert.deepEqual(result,error('context_item_too_large'));assert.ok(cursor);
+      assert.equal(position,previous,'the refused call must preserve its acknowledged checkpoint');
+      refused=request;break;
+    }
+    assert.equal(result.value.status,'partial');assert.equal(result.value.coverage.reason,'work_limit');
+    assert.ok(position>previous,JSON.stringify(pages.at(-1)));assert.ok(result.value.nextCursor);
+    previous=position;
     cursor=result.value.nextCursor;
   }
-  assert.ok(refused);assert.deepEqual(await reader.readTopicMembers(refused),error('context_item_too_large'));
+  t.diagnostic(JSON.stringify({model:{...model,rank:undefined},pages}));
+  assert.ok(refused);assert.equal(openingUnits,model.openingUnits,'opening is charged once across all continuations');
+  assert.deepEqual(await reader.readTopicMembers(refused),error('context_item_too_large'));
+  const replay=await observed.report();assert.equal(model.rank(replay.after),previous);
   const page=ok(await reader.readTopicMembers({...input,maxBytes:262144,workLimit:5000}));
   assert.equal(page.items.length,1);assert.equal(page.items[0].id,memoryId);
 });
