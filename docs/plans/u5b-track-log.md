@@ -269,3 +269,8 @@
   的案例與 trap 錯誤文字不外洩）。MCP 43／43 兩版本；協調者沙箱外六個測試檔兩版本全 exit 0、whitespace 0。
 - **提交 `42627f60`（fix）＋`7a3ad58e`（常數檔記 commit）＝新候選 `7a3ad58e`**，已推送。審查／CI worktree 移到 `7a3ad58e`；
   Spec／Standards 第二次複查（resume）；完整矩陣以 `cairn-heavy` 排隊。派出時負載 1.6。
+- **`7a3ad58e` 第二次複查：Spec yes、Standards yes**，無新 P0／P1。兩位都透過真實 SDK 在兩個 Node 版本重現全部案例：
+  非 enumerable hybrid→`invalid_input` 零 core 呼叫；throwing `has`／`get`／`ownKeys` trap→乾淨 `invalid_input` 無錯誤文字
+  外洩；get-enables-has Proxy 與 `type` getter 定義 `memoryId` 的舊輸入接受行為與 core 輸入位元不變；精簡 ref 全非
+  enumerable 欄位仍正確展開並帶 fences。記錄在案的偏差（原本崩潰的 throwing trap 改為乾淨拒絕）兩軸都接受。
+  已回報主控（含歷程、常數、共用檔案清單），並問 worker 報告檔要由我移除還是合併時由主控丟棄。矩陣仍在跑。
