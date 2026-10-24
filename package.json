@@ -74,6 +74,7 @@
     "measure:card-current-dependencies": "node tools/testing/run.mjs --script tools/testing/measure-card-current-dependencies.mjs",
     "measure:topic-members": "node tools/testing/run.mjs --script tools/testing/measure-topic-members.mjs",
     "measure:local-embedder": "node tools/testing/run.mjs --script tools/testing/measure-local-embedder.mjs",
-    "test:local-embedder": "node tools/testing/run.mjs adapters/local-embedder/test/*.test.mjs"
+    "test:local-embedder": "node tools/testing/run.mjs adapters/local-embedder/test/*.test.mjs",
+    "measure:topic-overview-contention": "node tools/testing/run.mjs --script tools/testing/measure-topic-overview-contention.mjs"
   }
 }
