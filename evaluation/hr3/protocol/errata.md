@@ -87,3 +87,34 @@ All non-adjudication preflight requirements remain binding.
 - **Why.** Independent engineering stress fixtures, built without held-out generation, raised the worst valid outputs to **1,867** tokens for the reader and **3,751** for extraction. At 2,048/4,096 the headroom is 8.84%/8.42%, which fails the required 10%. Fixtures are not shortened to fit.
 - **Revised caps.** Reader `max_output_tokens` becomes **2,176** and extraction **4,352**, giving about 14.2%/13.8% headroom. Everything else in A-2 is unchanged.
 - **Pilot check.** The conservative pilot total, including the entire shared embedding allowance, must stay below US$24. If it does not, paid work does not start, and a further amendment is required.
+
+## A-3 (2026-10-25): extraction validation granularity and quote anchoring, after the first engineering pilot (primary amendment; needs non-author confirmation)
+
+**Finding.** The first paid engineering pilot (run `pilot-cf24810f`, harness `cf24810f`, actual spend US$0.84) produced mechanically scorable outputs, but **239 of 240 extraction calls were rejected whole** by the harness validator. The rejection reasons were:
+
+| Reason | Calls |
+|---|---:|
+| `invalid_extraction_quote` | 164 |
+| `dangling_reason` | 32 |
+| `invalid_field_mask` | 22 |
+| `invalid_extraction_provenance` | 15 |
+| `invalid_extraction_interval` | 6 |
+
+Of 612 returned source quotes, 608 had model-computed UTF-16 offsets that did not match, yet **605 of those quote strings occur verbatim in the cited turn**. Because a single defect discards the whole batch, every arm received little or no evidence. Pilot scores therefore measure the validator, not the memory policies or the product. Two further defects: the frozen extraction and reader prompts still carry the withdrawn draft-E-1 wording ("deadlines are triggers, not an unstated rationale"; "a deadline alone is not rationale"), which contradicts revised E-1.
+
+**Amendment.** This applies identically to the shared extraction stage, so every arm receives the same extraction.
+- **Quote anchoring.** The model supplies `turn_id`, the verbatim `quote` and a one-based `occurrence`.
+  - The harness computes the UTF-16 offsets deterministically by locating that occurrence of the exact quote in the cited turn.
+  - Model-supplied offsets, if present, are ignored for validity.
+  - A quote that does not occur verbatim, or whose occurrence does not exist, is invalid.
+  - No fuzzy matching, normalization, or gold-assisted repair is applied.
+- **Event-level validity.**
+  - Each extracted event is validated independently against the existing rules: provenance, scope, interval, field mask, reasons and quotes.
+  - An invalid event is excluded, together with any reason edge that depends on an invalid quote. Its rejection reason is recorded.
+  - The remaining valid events are kept.
+  - A batch with zero valid events is an empty extraction, not a transport failure.
+  - Schema-invalid or unparseable output still fails the whole batch.
+  - Rejected events are counted per batch, per reason and per arm-independent extraction, and reported as a pipeline-stage diagnostic.
+- **Prompt alignment with revised E-1.** The extraction and reader system prompts replace the withdrawn wording with the revised E-1 rule: an explicitly stated deadline that caused a decision to stop applying is a supported cause of the change, while a bare deadline citation without stating it as the cause earns no reason credit. No other prompt text changes.
+- **Pilot rerun.** The engineering pilot is re-run once, as a fresh run under A-3. The first run is retained and reported as an engineering finding, and it is not pooled. The pilot cap (US$24) covers both runs.
+- **Unchanged.** Development and test materials are untouched. Pilot use stays restricted by A-1. Caps, models, schemas (except the quote-anchor fields), arms, scorer and decision rules are unchanged.

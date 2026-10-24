@@ -4,6 +4,7 @@ import { atomicJSON, canonical, fail } from './common.mjs';
 import { verifiedInputs, scorerGold } from './inputs.mjs';
 import { Ledger } from './ledger.mjs';
 import { GuardedTransport, FakeTransport, createEmbedder } from './transport.mjs';
+import { extractionDiagnostics } from './extraction-diagnostics.mjs';
 import { extract } from './extraction.mjs';
 import { materialize, literalQuery, retrieve } from './research.mjs';
 import { responseRequest } from './requests.mjs';
@@ -30,7 +31,7 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
   for(const directory of ['extractions','states','deliveries','answers','scores'])mkdirSync(join(root,directory),{mode:0o700});
   const observations=[],extractionSummary=[],written=['ledger.jsonl'];let stopped=null;
   const persist=(path,value)=>{atomicJSON(path,value);written.push(path.slice(root.length+1));};
-  persist(join(root,'run.json'),{stage,offline:transport instanceof FakeTransport,transport:transport.constructor.name,protocol:'v0.3.4+E-1+E-2+A-1',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
+  persist(join(root,'run.json'),{stage,offline:transport instanceof FakeTransport,transport:transport.constructor.name,protocol:'v0.3.4+E-1+E-2+A-1+A-2+A-3',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
   try {
     for(const family of families) {
       const researchEmbedder=createEmbedder(guarded,{prefix:family.family_id+'/research-embedding'}),productEmbedder=createEmbedder(guarded,{channel:'product',prefix:family.family_id+'/product-embedding'});
@@ -39,7 +40,7 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
         for(const batch of family.batches) {
           const extraction=await extract({family,batch:batch.ordinal,transport:guarded,cache:join(root,'extractions')});
           written.push('extractions/'+extraction.key+'.json');
-          extractionSummary.push({family:family.family_id,batch:batch.ordinal,key:extraction.key,error:extraction.error});
+          extractionSummary.push({family:family.family_id,batch:batch.ordinal,key:extraction.key,error:extraction.error,diagnostics:extraction.diagnostics});
           const next=(extraction.value?.events??[]).map((e,ordinal)=>({...e,batch:batch.ordinal,ordinal}));events.push(...next);
           await product.ingest(next,batch.observed_at);await product.controls(family.controls,batch.ordinal);
           if(ledger.snapshot().stopped)fail(ledger.snapshot().stopped);
@@ -68,7 +69,7 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
   } finally {
     persist(join(root,'extraction-summary.json'),extractionSummary);
     written.push('scored.jsonl');writeFileSync(join(root,'scored.jsonl'),observations.map(canonical).join('\n')+(observations.length?'\n':''),{mode:0o600});
-    persist(join(root,'summary.json'),{stage,complete:!stopped,attempted:observations.length,arms:Object.fromEntries(['U','T','O','P'].map(arm=>[arm,{attempted:observations.filter(o=>o.arm===arm).length,valid:observations.filter(o=>o.arm===arm&&o.valid).length}])),ledger:ledger.snapshot(),fakeAccuracyClaim:false});
+    persist(join(root,'summary.json'),{stage,complete:!stopped,attempted:observations.length,pipelineStageDiagnostics:extractionDiagnostics(extractionSummary),arms:Object.fromEntries(['U','T','O','P'].map(arm=>[arm,{attempted:observations.filter(o=>o.arm===arm).length,valid:observations.filter(o=>o.arm===arm&&o.valid).length}])),ledger:ledger.snapshot(),fakeAccuracyClaim:false});
     artifactManifest(root,written);
     if(ownedCounter)counter.close();
   }

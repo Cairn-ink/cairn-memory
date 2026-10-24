@@ -10,6 +10,17 @@
     "limitUSD": 24,
     "marginUSD": 3.9296
   },
+  "a3PilotRerun": {
+    "priorRun": "pilot-cf24810f",
+    "priorReportedSpendUSD": 0.84,
+    "source": "A-3 finding; reported first-pilot spend, not a new settlement",
+    "freshRunConservativeUSD": 20.0704,
+    "combinedConservativeUSD": 20.9104,
+    "limitUSD": 24,
+    "pass": true,
+    "pooled": false,
+    "paidAuthorization": false
+  },
   "theoreticalEnvelope": {
     "covered": false,
     "totalUSD": 614.74816,
@@ -25,7 +36,7 @@
     "allStageLimitsRequired": true,
     "projectionInputSchema": {
       "path": "evaluation/hr3/harness/reports/pre-development-projection.schema.json",
-      "sha256": "5e59da5a5d222599ae0c10a7d54557fa94defe0fff29e217dabec6d8ba53dc91"
+      "sha256": "7a857dca3bbd1e3e40139163a47ccaf3205353c9daa6d99a0af9f99598e79d88"
     },
     "completeTestRequired": true,
     "budgetExhaustionOutcome": "Inconclusive"
@@ -33,12 +44,12 @@
   "paidReadiness": false,
   "sources": {
     "evaluation/hr3/protocol/protocol-v0.3.4.md": "639c55edb6633186580af434ee2fe3ed39bffc2bf36a9292dac03b7a1b20b3cc",
-    "evaluation/hr3/protocol/errata.md": "4e21a70061b9c797eb7d8597e365a61053c6173b443d945644f14bc9768115a6",
-    "evaluation/hr3/harness/budget-a2.mjs": "d6386c96a6fea43da0e9907154746e38f7edd81f698267d963c309be38eefe1a",
-    "evaluation/hr3/harness/requests.mjs": "fff461822b3d4ee5907fd40e6a680afb95d998c86ef93b9f6700de774796a06d",
+    "evaluation/hr3/protocol/errata.md": "7fc82c0c0973495403de8ab231f1ca8aaa212c74a1961820f6389cf4e7913ff7",
+    "evaluation/hr3/harness/budget-a2.mjs": "898665fe53f9582a26a629a243087ebb2be439cc84101cc033da79cea019fbf8",
+    "evaluation/hr3/harness/requests.mjs": "120f81547fa8d51990e69df1f28f79b3676d32d01a94f5cdb1a722e9b9dcad46",
     "evaluation/hr3/harness/ledger.mjs": "e0e1257be2460ea2465d1d2763ad04fc65fe2cb150139b4d33360d2283b5d322",
     "evaluation/hr3/harness/projection-schema.mjs": "6d1c9e0f24674d74f96221086dffdb19cc9e20f959cfe2129e49c9428d6372cc",
-    "evaluation/hr3/harness/reports/pre-development-projection.schema.json": "5e59da5a5d222599ae0c10a7d54557fa94defe0fff29e217dabec6d8ba53dc91"
+    "evaluation/hr3/harness/reports/pre-development-projection.schema.json": "7a857dca3bbd1e3e40139163a47ccaf3205353c9daa6d99a0af9f99598e79d88"
   },
   "prices": {
     "units": "USD per 1M input/output tokens",

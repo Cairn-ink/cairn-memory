@@ -2,6 +2,8 @@
 
 **Binding pre-pilot budget gate: PASS.** Pilot responses $17.510400 + the entire shared embedding allowance $2.560000 = **$20.070400**, below $24 by $3.929600. This is budget fit only; certification and other scientific/resource gates remain separate.
 
+**A-3 combined pilot ceiling:** first-run reported spend $0.840000 + fresh-run conservative ceiling $20.070400 = $20.910400, below the shared $24 pilot cap. The source is A-3's reported first-run spending, not a new ledger settlement. The runs are separate and are never pooled. This calculation does not authorize a paid rerun.
+
 | Stage | Calls extraction / reader | Planned cost | Theoretical all-maximum-plus-retry envelope | Existing stage limit |
 |---|---:|---:|---:|---:|
 | pilot | 240 / 480 | $5.262336 | $17.510400 | $24.000000 |

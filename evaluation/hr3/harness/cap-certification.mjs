@@ -43,7 +43,14 @@ export function serializeOutput(schema, value) {
   return JSON.stringify(order(schema, value));
 }
 
-const cleanSpan = ({ turn_id, start, end, quote }) => ({ turn_id, start, end, quote });
+function cleanSpan({turn_id,start,quote},input) {
+  const text=input.turns.find(t=>t.turn_id===turn_id)?.text;
+  assert.equal(text?.slice(start,start+quote.length),quote);
+  let at=-1,occurrence=0;
+  do {at=text.indexOf(quote,at+1);occurrence++;}while(at>=0&&at<start);
+  assert.equal(at,start);
+  return {turn_id,quote,occurrence};
+}
 
 export function extractionReference(family, ordinal) {
   const input = extractionInput(family, ordinal);
@@ -52,13 +59,16 @@ export function extractionReference(family, ordinal) {
     // Whitelist the schema fields: omit AST-only metadata, never emit gold IDs.
     const e = Object.fromEntries(Object.keys(extractionSchema.properties.events.items.properties).map(k => [k, structuredClone(event[k])]));
     e.event_id = `e${i + 1}`;
-    e.source_quotes = e.source_quotes.map(cleanSpan);
+    e.source_quotes = e.source_quotes.map(q=>cleanSpan(q,input));
     e.reason_edges = event.reason_edges.map(({ from, to, support }) => ({
-      from, to, source_quotes: [...new Map(support.flat().map(q => [canonical(cleanSpan(q)), cleanSpan(q)])).values()],
+      from, to, source_quotes: [...new Map(support.flat().map(q => [canonical(cleanSpan(q,input)), cleanSpan(q,input)])).values()],
     }));
     return e;
   });
-  return validateExtraction({ events }, input);
+  const validated=validateExtraction({events},input);
+  assert.equal(validated.diagnostics.rejectedEvents,0,'Reference events must all remain valid');
+  // Certificate serializes model output, not computed offsets or diagnostics.
+  return {events};
 }
 
 // A reference delivery, not a simulated P/T/U/O retrieval result. Each observed

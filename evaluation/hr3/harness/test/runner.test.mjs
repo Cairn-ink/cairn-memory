@@ -21,12 +21,14 @@ test('full offline fake pilot: frozen inputs, 240 extractions, 480 stateless sco
  const journal=readFileSync(join(root,'ledger.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(journal.filter(e=>e.type==='reserve'&&e.operation==='extraction').length,240);assert.equal(journal.filter(e=>e.type==='reserve'&&e.operation==='reader').length,480);
  const manifest=JSON.parse(readFileSync(join(root,'manifest.json')));assert.equal(manifest.count,2225);assert.equal(Object.keys(manifest.files).length,2225);
  const extractions=readdirSync(join(root,'extractions'));assert.equal(extractions.length,240);
- for(const file of extractions){const e=JSON.parse(readFileSync(join(root,'extractions',file)));assert.equal(e.error,null);const input=JSON.parse(e.body.input[1].content);validateExtraction(e.value,input);assert.deepEqual(Object.keys(input).sort(),['observed_at','public_header','turns']);}
+ for(const file of extractions){const e=JSON.parse(readFileSync(join(root,'extractions',file)));assert.equal(e.error,null);const input=JSON.parse(e.body.input[1].content);validateExtraction({events:e.value.events},input);assert.deepEqual(Object.keys(input).sort(),['observed_at','public_header','turns']);}
  for(const file of readdirSync(join(root,'answers'))){const a=JSON.parse(readFileSync(join(root,'answers',file)));assert.deepEqual(validate(answerSchema,a.answer),[]);assert.equal(a.body.input.length,2);assert.equal(a.body.max_output_tokens,2176);assert.equal(a.body.store,false);assert.equal(a.body.tools,undefined);assert.equal(a.body.previous_response_id,undefined);}
  const readerCounts=new Map();for(const e of journal.filter(e=>e.type==='reserve'&&e.operation==='reader'))readerCounts.set(e.logicalId,(readerCounts.get(e.logicalId)??0)+1);assert.ok([...readerCounts.values()].every(n=>n===1));
  const reportDir=mkdtempSync(join(tmpdir(),'hr3-pilot-bounds-'));t.after(()=>rmSync(reportDir,{recursive:true,force:true}));
  const reportInputs=join(reportDir,'inputs');await emit({split:'pilot',out:reportInputs});
  const report=writeBoundReport({stageDirectory:root,inputs:reportInputs,out:join(reportDir,'bounds.json')});
+ assert.equal(report.pipelineStageDiagnostics.table.length,240);assert.equal(report.pipelineStageDiagnostics.totals.batchFailures,0);assert.equal(report.pipelineStageDiagnostics.totals.rejectedEvents,0);assert.equal(report.pipelineStageDiagnostics.armIndependent,true);
+ assert.deepEqual(report.pipelineStageDiagnostics,summary.pipelineStageDiagnostics);
  assert.equal(report.label,LABEL);assert.equal(report.tables.length,48);assert.equal(report.perFamily.length,480);
  assert.deepEqual(report.denominators,{planned:480,attempted:480,validCompletion:480,failedAttempt:0,unexecuted:0,plannedFamilies:60,plannedLineages:30,representedFamilies:60,representedLineages:30});
  assert.equal(report.metadata.actualSpendUSD,0);assert.equal(report.metadata.scorer,'hr3-scorer-v1');

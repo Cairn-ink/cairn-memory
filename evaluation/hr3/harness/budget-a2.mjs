@@ -73,6 +73,7 @@ export function budgetA2() {
     version: 'hr3-budget-a2-audited-v2', status: stages[0].worstNanodollars + embeddingNanodollars < 24e9 ? 'PASS_PILOT_BUDGET' : 'FAIL_PILOT_BUDGET',
     bindingPrePilotCriterion:'pilotFit',
     pilotFit:{pass:stages[0].worstNanodollars + embeddingNanodollars < 24e9,responsesUSD:usd(stages[0].worstNanodollars),sharedEmbeddingsUSD:usd(embeddingNanodollars),conservativeTotalUSD:usd(stages[0].worstNanodollars + embeddingNanodollars),limitUSD:24,marginUSD:usd(24e9-stages[0].worstNanodollars-embeddingNanodollars)},
+    a3PilotRerun:{priorRun:'pilot-cf24810f',priorReportedSpendUSD:0.84,source:'A-3 finding; reported first-pilot spend, not a new settlement',freshRunConservativeUSD:usd(stages[0].worstNanodollars+embeddingNanodollars),combinedConservativeUSD:usd(stages[0].worstNanodollars+embeddingNanodollars+840000000),limitUSD:24,pass:stages[0].worstNanodollars+embeddingNanodollars+840000000<24e9,pooled:false,paidAuthorization:false},
     theoreticalEnvelope:{covered:worstNanodollars<=450e9,totalUSD:usd(worstNanodollars),operationalStopUSD:450,blockingBeforePilot:false,interpretation:'Informational all-maximum-plus-retry envelope, superseded as a feasibility gate by revised A-2. It is not spending authorization.'},
     laterStageFeasibility:{status:'pending_paid_pilot_projection',computed:false,bindingBeforeDevelopment:true,completionCeilingUSD:400,allStageLimitsRequired:true,projectionInputSchema:{path:'evaluation/hr3/harness/reports/pre-development-projection.schema.json',sha256:hash(readFileSync(new URL('./reports/pre-development-projection.schema.json',import.meta.url)))},completeTestRequired:true,budgetExhaustionOutcome:'Inconclusive'},
     paidReadiness: false,
@@ -114,6 +115,8 @@ export function markdownSummary(report) {
   return `# A-2 budget after non-author audit (offline)
 
 **Binding pre-pilot budget gate: ${report.pilotFit.pass?'PASS':'FAIL'}.** Pilot responses ${money(report.pilotFit.responsesUSD)} + the entire shared embedding allowance ${money(report.pilotFit.sharedEmbeddingsUSD)} = **${money(report.pilotFit.conservativeTotalUSD)}**, below $24 by ${money(report.pilotFit.marginUSD)}. This is budget fit only; certification and other scientific/resource gates remain separate.
+
+**A-3 combined pilot ceiling:** first-run reported spend ${money(report.a3PilotRerun.priorReportedSpendUSD)} + fresh-run conservative ceiling ${money(report.a3PilotRerun.freshRunConservativeUSD)} = ${money(report.a3PilotRerun.combinedConservativeUSD)}, below the shared $24 pilot cap. The source is A-3's reported first-run spending, not a new ledger settlement. The runs are separate and are never pooled. This calculation does not authorize a paid rerun.
 
 | Stage | Calls extraction / reader | Planned cost | Theoretical all-maximum-plus-retry envelope | Existing stage limit |
 |---|---:|---:|---:|---:|

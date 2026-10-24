@@ -230,3 +230,62 @@ The first paid pilot attempt (run `pilot-15b8f1a7`) stopped at its first request
 `providerSchema()` now adds the JSON type implied by a `const` value to such nodes. This changes only the provider-facing schema encoding. The answer and extraction schemas, validators, prompts, caps and scorer are unchanged.
 
 Two out-of-ledger diagnostic probes confirmed that both schemas are accepted. They used `max_output_tokens: 16` and cost about US$0.0007 in total, which is recorded here and counted toward the HR-3 authorization.
+
+## A-3 extraction amendment (offline implementation)
+
+Extraction quotes now use `{turn_id, quote, occurrence}`. Occurrences are
+one-based exact matches, including overlapping matches. JavaScript string search
+computes UTF-16 offsets for internal source maps. Supplied offsets are ignored;
+there is no normalization, fuzzy matching, or gold-assisted repair. Missing or
+ill-typed anchor fields are schema failures. A nonexistent occurrence or
+non-verbatim quote excludes its event and its dependent reason edges.
+
+Schema-invalid or unparseable output fails the batch. Otherwise every event is
+checked independently; valid events survive, and zero survivors is a successful
+empty extraction. Duplicate event IDs exclude all events sharing that ID.
+Cached records and `extraction-summary.json` retain event indices/IDs, all
+rejection reasons, and indices of edges with invalid quotes. `summary.json` and
+the bound report include `pipelineStageDiagnostics`: one row per shared batch,
+with valid/rejected event counts, overlapping reason counts, empty batches and
+batch failures. These are pipeline diagnostics, never arm accuracy estimates.
+Older runs without these diagnostics are marked unavailable, not zero.
+Provider-format quote fixtures are constructed only in extraction tests; the
+shared internal offset fixtures and their frozen research-state expectations
+are unchanged.
+
+`test/fixtures/pilot-cf24810f.jsonl` contains only the 240 original cached bodies
+and replies plus their request keys. `replay-a3.mjs` produces
+`reports/a3-offline-replay.json`, including every batch's retained-event count
+and exclusions. Legacy quotes lack occurrence; this diagnostic explicitly
+assigns occurrence 1. Live validation never supplies that default. The first
+pilot stays a separate engineering finding; no replay result tunes the system
+or enters pooled scores. No paid rerun is performed by this offline task.
+
+Run the attended sequence from the repository root:
+
+```sh
+node evaluation/hr3/harness/verify-a3.mjs
+```
+
+Each invocation creates a fresh `artifacts/a3-verification-*` destination.
+The sequence checks both
+provider schemas and replays the fixtures, then regenerates the inspected
+exclusion manifest, projection schema, certificate and budget in the order
+specified above. It then runs all generator tests, all integration tests, and
+all harness tests, in that order. The harness suite includes its own full fake
+pilot. After the suites pass, the sequence generates only pilot inputs, runs
+a separate full fake CLI pilot, and writes a bound report.
+`freeze-a3.mjs` runs last, preserving the prior freeze in
+`reports/freeze-pre-a3.json`. The first failed verification is retained as
+`reports/a3-verification-first-failure.json`. Every child exit code and log hash
+is recorded;
+the sequence stops at its first failure. The generator test's existing temporary
+directory is redirected into harness artifacts without changing sibling files.
+This command is attended and supplies no unattended agent supervision.
+
+Only the two withdrawn E-1 prompt clauses change. Models, caps, policies,
+scorer, arms, and development/test materials retain their frozen definitions.
+`strict-schema.mjs` checks every schema node's type, closed concrete objects,
+required properties, references and `anyOf` offline; it makes no provider call.
+The A-3 combined pilot budget uses the first run's reported $0.84 separately
+from the fresh-run conservative ceiling; it is not a settlement or paid approval.

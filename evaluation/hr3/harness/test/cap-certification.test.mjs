@@ -37,13 +37,13 @@ test('offline cap report is reproducible over the complete frozen allocation', {
   assert.equal(historical.status, 'FAIL_AMENDMENT_REQUIRED');
   for (const old of historical.structures.filter(s=>s.worst.split==='pilot')) {
     const updated = actual.structures.find(s => s.structure === old.structure);
-    assert.equal(updated.worst.serialization, old.worst.serialization);
-    assert.equal(updated.worst.tokens, old.worst.tokens);
+    if(old.worst.operation==='reader'){assert.equal(updated.worst.serialization,old.worst.serialization);assert.equal(updated.worst.tokens,old.worst.tokens);}
+    else assert.deepEqual(updated.worst.dimensions,old.worst.dimensions);
     assert.equal(updated.cases, old.cases);
   }
   const before=JSON.parse(readFileSync(new URL('../reports/cap-certification-a2-pre-cap-revision.json',import.meta.url),'utf8'));
   assert.equal(before.status,'FAIL_AMENDMENT_REQUIRED');
-  for(const old of before.structures){const updated=actual.structures.find(s=>s.structure===old.structure);assert.equal(updated.worst.serialization,old.worst.serialization);assert.equal(updated.worst.tokens,old.worst.tokens);assert.equal(updated.cases,old.cases);}
+  for(const old of before.structures){const updated=actual.structures.find(s=>s.structure===old.structure);if(old.worst.operation==='reader'){assert.equal(updated.worst.serialization,old.worst.serialization);assert.equal(updated.worst.tokens,old.worst.tokens);}else assert.deepEqual(updated.worst.dimensions,old.worst.dimensions);assert.equal(updated.cases,old.cases);}
   assert.equal(meetsMargin(1958, 2176), true);
   assert.equal(meetsMargin(1959, 2176), false);
   assert.equal(meetsMargin(3916, 4352), true);

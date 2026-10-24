@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { extractionDiagnostics } from './extraction-diagnostics.mjs';
 import { canonical, hash, fail } from './common.mjs';
 
 export const LABEL = 'Uncalibrated engineering pilot — mechanical score bounds; no adjudication.';
@@ -123,6 +124,7 @@ export function buildBoundReport({ families, observations, metadata }) {
     samplingConfidenceIntervals:'deferred under A-1', use:'Descriptive engineering pilot only; cannot produce an Advance/Keep decision or enter development/test estimates.',
     aggregation:'J endpoints are products within each family/arm/checkpoint, then frozen-weight lineage means. Aggregate component rates are never multiplied. Failed attempts stay scored; unexecuted cases are listed and excluded from observed denominators.',
     referralCounting:'Outstanding pass applications are counted independently of score uncertainty. propagatedApplications = applications - uniqueKeys within the reported group; unique keys are deduplicated again globally, never summed across tables.',
+    pipelineStageDiagnostics:metadata?.pipelineStageDiagnostics??{stage:'extraction',armIndependent:true,available:false,table:[],totals:null},
     metadata, denominators:{planned:480, attempted:perFamily.length, validCompletion:perFamily.filter(r => r.validCompletion).length,
       failedAttempt:perFamily.filter(r => !r.validCompletion).length, unexecuted:480-perFamily.length,
       plannedFamilies:60, plannedLineages:30, representedFamilies:unique(perFamily.map(r => r.family)).length, representedLineages:unique(perFamily.map(r => r.lineage)).length},
@@ -160,7 +162,7 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
   const failure = Object.hasOwn(manifest.files,'failure.json') ? readJSON(join(stageDirectory,'failure.json')) : null;
   const stageStatus = {complete:summary.complete, stopReason:billing.stopped ?? failure?.reason ?? null,
     observedCohort:summary.complete && observations.length === 480 ? 'completed-pilot cohort' : 'partial observed cohort; not completed-pilot bounds'};
-  const metadata = { protocol:'v0.3.4', errata:'revised E-1 and A-1 (2026-10-25); E-2', scorer:'hr3-scorer-v1',
+  const metadata = { protocol:'v0.3.4', errata:run.protocol?.includes('A-3')?'revised E-1; E-2/A-1/A-2/A-3 (2026-10-25)':'revised E-1 and A-1 (2026-10-25); E-2', scorer:'hr3-scorer-v1',
     offline:run.offline, stageStatus,
     actualSpendUSD:run.offline ? 0 : billing.unsettled.length ? null : billing.settled / 1e9,
     actualSpendKnown:run.offline || billing.unsettled.length === 0,
@@ -171,6 +173,15 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
     ledgerChargeInterpretation:run.offline ? 'simulated fake usage/reservations; actual spend is zero' : 'settled charges plus outstanding reservation ceilings; unknown final billing is not actual spend',
     frozenArtifacts:run.frozenArtifacts, completedStageManifestSHA256:hash(manifestBytes),
     reportModuleSHA256:hash(readFileSync(new URL('./bounds.mjs', import.meta.url))) };
+  if(run.protocol?.includes('A-3'))check(Object.hasOwn(manifest.files,'extraction-summary.json'),'missing_extraction_diagnostics');
+  const extractionRows=Object.hasOwn(manifest.files,'extraction-summary.json')?readJSON(join(stageDirectory,'extraction-summary.json')):null;
+  if(extractionRows){
+    metadata.pipelineStageDiagnostics=extractionDiagnostics(extractionRows);
+    if(run.protocol?.includes('A-3')){
+      check(metadata.pipelineStageDiagnostics.available,'missing_extraction_diagnostics');
+      check(canonical(metadata.pipelineStageDiagnostics)===canonical(summary.pipelineStageDiagnostics),'extraction_diagnostics_mismatch');
+    }
+  }
   const report = buildBoundReport({families, observations, metadata});
   writeFileSync(out, canonical(report) + '\n', {flag:'wx', mode:0o600});
   return report;

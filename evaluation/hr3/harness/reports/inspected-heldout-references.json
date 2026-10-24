@@ -1,6 +1,6 @@
 {
   "version": "hr3-inspected-heldout-references-v1",
-  "errataSHA256": "4e21a70061b9c797eb7d8597e365a61053c6173b443d945644f14bc9768115a6",
+  "errataSHA256": "7fc82c0c0973495403de8ab231f1ca8aaa212c74a1961820f6389cf4e7913ff7",
   "sourceReport": {
     "commit": "aa3b0a14732776ae1ea472b73de4ed0e7f0cbc11",
     "path": "evaluation/hr3/harness/reports/cap-certification.json",
