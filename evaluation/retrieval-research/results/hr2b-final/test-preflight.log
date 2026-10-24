@@ -1,0 +1,4 @@
+checkoutCommit=98e88b01df36e39993b2f0faa18f3df00ff75293 checkoutStatus= protocolCommit=d3a6e24f node=v22.16.0
+ccef1982a7d8a73f5837a267a7ec597f6d1bc8dc88b98cb841896fa5418e318d  evaluation/retrieval-research/fixtures-hr2b/FROZEN.md
+8de0d1d670c35bfc30a18df2e4ecaa35799b79df52f0b640f70ac307b3ac97d5  evaluation/retrieval-research/results/hr2b-rankings/FROZEN.md
+5eba1bd4448b17ce51598d1d561ff66280740573830c7ddc55a9b3271c79422b  evaluation/retrieval-research/assembly/overhead-host-v2.json

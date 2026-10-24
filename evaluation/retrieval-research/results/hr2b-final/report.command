@@ -1,0 +1,1 @@
+~/.local/bin/cairn-heavy node evaluation/retrieval-research/assembly/report.mjs --scores evaluation/retrieval-research/assembly/.hr2-hr2b-coordinator-aVQPFo/scores.json --out evaluation/retrieval-research/assembly/.hr2-hr2b-coordinator-aVQPFo/report.json --markdown evaluation/retrieval-research/assembly/.hr2-hr2b-coordinator-aVQPFo/report.md
