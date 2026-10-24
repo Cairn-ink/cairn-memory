@@ -286,6 +286,40 @@ test('npm exit 1 quarantines all partial files, captures diagnostics, and prints
     pid: Number(readFileSync(join(root, 'engine', failed[0], 'app/npm-pid'), 'utf8')) }]);
 });
 
+for (const lateCompletion of ['resolve', 'reject']) {
+  test(`pending ownership hook times out after child closure; late ${lateCompletion} is ignored`, async t => {
+    const directory = workspace(t), root = rootAt(directory);
+    const fake = fakeNpm(directory, 'setInterval(() => {}, 1000);');
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const deadline = 100;
+    let hookResolve, hookReject, started;
+    const ownership = new Promise((resolve, reject) => { hookResolve = resolve; hookReject = reject; });
+    const childStarted = new Promise(resolve => { started = resolve; });
+    const operation = installEngine({ root, engineId: id, node: fake.node, references: [],
+      env: { PATH: fake.PATH, CAIRN_SETUP_NPM_OFFLINE: '1' }, timeoutMs: deadline,
+      onChild: child => { started(child); return ownership; } });
+    const rejected = assert.rejects(operation, error => {
+      assert.equal(error.key, 'local_engine_install_failed'); assert.equal(error.code, 1);
+      assert.equal(error.params.timedOut, true);
+      assert.equal(error.params.signal, 'SIGKILL');
+      return true;
+    });
+    const child = await childStarted;
+    assert.equal(child.kind, 'npm');
+    assert.equal(process.kill(child.pid, 0), true);
+    t.mock.timers.tick(deadline);
+    await rejected;
+    assert.throws(() => process.kill(child.pid, 0), { code: 'ESRCH' });
+    const retained = readdirSync(join(root, 'engine')).filter(name => name.startsWith(id + '.failed-'));
+    assert.equal(retained.length, 1);
+    assert.equal(existsSync(join(root, 'engine', id)), false);
+    if (lateCompletion === 'resolve') hookResolve();
+    else hookReject(new Error('synthetic-late-hook-failure'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(readdirSync(join(root, 'engine')).filter(name => name.startsWith(id + '.failed-')), retained);
+  });
+}
+
 function extractedApp(app) {
   mkdirSync(app, { recursive: true, mode: 0o700 });
   const modules = join(app, 'node_modules'); mkdirSync(modules, { recursive: true });

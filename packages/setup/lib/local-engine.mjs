@@ -121,17 +121,47 @@ async function childEnvironment(root, node, env) {
 
 // Capture child diagnostics for the coordinator's verbose path only. Never
 // interpolate child text into a translated error or send it to the writer.
-function run(executable, args, cwd, env, kind, onChild) {
+function run(executable, args, cwd, env, kind, onChild, timeoutMs) {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true });
-    let ownership, hookFailed = false;
+    let stdout = '', stderr = '', spawnError, timedOut = false, overflow = false;
+    let childClosed = false, hookSettled = false, hookFailed = false, settled = false;
+    let exitCode, signal;
+    const stop = () => child.kill('SIGKILL');
+    const finish = () => {
+      // Closure is mandatory before quarantine. Once the deadline expires,
+      // a pending ownership hook can no longer block completion.
+      if (settled || !childClosed || (!timedOut && !hookSettled)) return;
+      settled = true;
+      clearTimeout(timer);
+      const params = { exitCode, stdout, stderr, signal, timedOut, overflow, spawnError };
+      if (hookFailed && !timedOut) {
+        reject(failure('local_engine_install_failed', { code: 'child_hook_failed' }));
+      } else if (timedOut || exitCode !== 0 || spawnError || overflow) {
+        reject(failure('local_engine_install_failed', params));
+      } else resolve(params);
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      if (!childClosed) stop();
+      finish();
+    }, timeoutMs);
+    let ownership;
     try { ownership = Promise.resolve(child.pid === undefined ? undefined : onChild?.({ kind, pid: child.pid })); }
     catch { ownership = Promise.reject(); }
-    ownership = ownership.catch(() => { hookFailed = true; child.kill('SIGKILL'); });
-    let stdout = '', stderr = '', spawnError, timedOut = false, overflow = false;
-    const stop = () => child.kill('SIGKILL');
-    const timer = setTimeout(() => { timedOut = true; stop(); }, 120000);
+    ownership.then(() => {
+      if (settled || timedOut) return;
+      hookSettled = true;
+      finish();
+    }, () => {
+      // Consume late rejections without changing an already timed-out run or
+      // signalling a PID that may have been reused after child closure.
+      if (settled || timedOut) return;
+      hookSettled = true; hookFailed = true;
+      if (!childClosed) stop();
+      finish();
+    });
     const collect = key => bytes => {
       if (key === 'stdout') stdout += bytes.toString(); else stderr += bytes.toString();
       if (stdout.length + stderr.length > 4 * 1024 * 1024) { overflow = true; stop(); }
@@ -139,14 +169,9 @@ function run(executable, args, cwd, env, kind, onChild) {
     child.stdout.on('data', collect('stdout'));
     child.stderr.on('data', collect('stderr'));
     child.on('error', error => { spawnError = error.code; });
-    child.on('close', async (exitCode, signal) => {
-      await ownership;
-      clearTimeout(timer);
-      if (hookFailed) { reject(failure('local_engine_install_failed', { code: 'child_hook_failed' })); return; }
-      const params = { exitCode, stdout, stderr, signal, timedOut, overflow, spawnError };
-      if (exitCode !== 0 || spawnError || timedOut || overflow) {
-        reject(failure('local_engine_install_failed', params));
-      } else resolve(params);
+    child.on('close', (code, terminationSignal) => {
+      childClosed = true; exitCode = code; signal = terminationSignal;
+      finish();
     });
   });
 }
@@ -164,11 +189,15 @@ async function ownedDirectory(directory, { generation = false } = {}) {
 // The caller holds the setup lock and supplies a canonical, private root. The
 // optional identity arguments let the coordinator check the registration vector;
 // defaults are safe for the non-opening configuration check in standalone use.
-async function install({ root, engineId, node, references, onChild, env = process.env, write = () => {},
+async function install({ root, engineId, node, references, onChild, timeoutMs = 120000,
+  env = process.env, write = () => {},
   t = key => key, databasePath = join(root, 'data', 'memory.sqlite'),
   ownerId = 'local-setup-check', projectId = null }) {
   if (!(references instanceof Set) && !Array.isArray(references)) {
     throw failure('local_engine_install_failed');
+  }
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2147483647) {
+    throw failure('local_engine_install_failed', { code: 'invalid_timeout' });
   }
   const published = new Set(references);
   let manifest, archive;
@@ -214,7 +243,8 @@ async function install({ root, engineId, node, references, onChild, env = proces
     if (!(await lstat(directory)).isDirectory()) throw failure('local_engine_verification_failed');
     await verifyInstalledTree(app, manifest);
     const checked = await run(node, [executable, '--check-config', '--db', databasePath,
-      '--owner', ownerId, ...(projectId === null ? [] : ['--project', projectId])], app, childEnv, 'check', onChild);
+      '--owner', ownerId, ...(projectId === null ? [] : ['--project', projectId])],
+    app, childEnv, 'check', onChild, timeoutMs);
     let report;
     try { report = JSON.parse(checked.stdout); } catch { /* invalid check output */ }
     if (report?.ok !== true || report.databaseOpened !== false || report.providerContacted !== false ||
@@ -253,7 +283,8 @@ async function install({ root, engineId, node, references, onChild, env = proces
       }
       write(t('local_engine_installing'));
       await run('npm', ['install', '--prefix', app, '--ignore-scripts', '--no-audit', '--no-fund',
-        ...(env.CAIRN_SETUP_NPM_OFFLINE === '1' ? ['--offline'] : []), archive], app, childEnv, 'npm', onChild);
+        ...(env.CAIRN_SETUP_NPM_OFFLINE === '1' ? ['--offline'] : []), archive],
+      app, childEnv, 'npm', onChild, timeoutMs);
       await verify(directory, app, executable);
       return result;
     } catch (error) {
