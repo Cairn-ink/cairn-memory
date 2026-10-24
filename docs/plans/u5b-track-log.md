@@ -426,3 +426,5 @@
   狀態行改凍結：**HR-2b 協定 v1.1 凍結 `d3a6e24f`**。並行派出：W1 重建（resume W1 執行緒，workspace-write，high＋fast，只改
   `fixtures-hr2b/`，同 seed 1924440465 重渲染、四格 receipt 分布、機械身分檢查）、`hr2b_tools` v1.1 修訂（resume，high＋fast，
   四格直方圖、新配額、pooled bootstrap、描述表、pin `d3a6e24f`）、稽核者凍結確認（read-only，xhigh＋fast）。凍結 commit 送主控。
+- 稽核者**凍結確認 yes**（`d3a6e24f`，1 檔變更、§§3–7 除該句外無變動）。凍結 commit 已送主控（含四條件的落實與 §9 從 candidate 0
+  重啟的說明）。W1 重建與 `hr2b_tools` v1.1 修訂仍在跑。
