@@ -329,3 +329,10 @@
   **results v1.1 最終 commit `8ed4dadb`**，已推送。
 - **B 包完成並交接**：results v1.1 `8ed4dadb` 連同歷程、結論摘要與章程 §6 建議句送給主控；審查／CI worktree 保留待主控
   驗證後移除。U5b-2 A、B 兩包在協調者這邊全部結束。
+- **主控新派工：HR-2b**（長項目 fixture，決定 `rank-first-first-source-v1` 是否在 host-v2 下成為預設；離線、合成、只動研究
+  分支、不付費）。主控已接受 HR-2 v1.1 並更新章程（`6de7dd46`）；三個審查／CI worktree 已移除。**HR-2b 協定 v0.1 草稿提交
+  `9b3095cb`**（`experiment/hr2-assembly`）：新 fixture `hr2b-fixture-v1`（沿用 HR-1 schema；本文 120–400 token、2–4 事實、1–6 筆
+  receipt 各 40–200 token；證據位置 body／第一筆／之後 45／25／30；作者撰寫的無事實同領域填充句取代被否決的 §6.1 外部
+  namespace 填充；160 目標＋320 干擾＋60 foreign；W1／W2／W3 獨立）；排名只用免費的 A1 與本機 bge-m3＋A3；預註冊規則：
+  P-top-s1 − P-top 在 bge-m3＋A3／1,500／host-v2 ≥ +3 且 CI 下界 > 0、且 later-receipt 層 CI 下界 ≥ −5 才 Adopt。
+  派非作者稽核 `hr2b_protocol_audit`。
