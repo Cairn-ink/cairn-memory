@@ -14,6 +14,7 @@ import { registerRoleProfileTools } from '../role-profile-tools.mjs';
 import { createContextCounter } from '../../openai/context-counter.mjs';
 import { openMemoryCore } from '../../../core/contract.mjs';
 import { DatabaseSync } from 'node:sqlite';
+import { removeReviewedRoleHelpAdditions } from './fixtures/role-profile-help-compat.mjs';
 
 const ns = { ownerId: 'owner', scope: 'personal', projectId: null };
 const base = ['--db', '/synthetic/role.sqlite', '--owner', 'owner'];
@@ -158,5 +159,6 @@ test('C05 pinned 4aa9327b flag-off tools/list, DTOs, errors, CLI bytes and suppo
   const fixture=JSON.parse(readFileSync(new URL('./fixtures/role-profile-pre-u5c1.json',import.meta.url)));
   assert.equal(fixture.base,'4aa9327b');const workspace=createTestWorkspace(t,{prefix:'role-legacy-'});
   const actual=await roleLegacyProbe(new URL('../../../',import.meta.url).pathname,workspace.path);
+  actual.cli.stdout[0]=removeReviewedRoleHelpAdditions(actual.cli.stdout[0]);
   assert.deepEqual(actual,fixture.value);
 });
