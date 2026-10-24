@@ -1,25 +1,10 @@
 # Changelog
 
-## Unreleased — v1-preview.3 integration guide
+## Unreleased — v1-preview.4 integration guide
 
-- Document integration `b18dabe0`: stabilize representation-v2 assembly and
-  compact-ref fetch, replacing experimental `.2` output. Cover host-only snapshots,
-  fence/parent-move guarantees, the first-source policy and frozen-probe measurements;
-  rankings, policy quality and token constants remain unfrozen.
-
-## Unreleased — v1-preview.2 integration guide
-
-- Document integration `0a38a991` (preview HEAD `6ef5bc2a`): experimental U5b
-  assembly, exact metered text, namespaced diagnostics, versioned policies and
-  small-store representation overhead. Candidate/evidence interfaces stay stable;
-  representation-v2 is planned and the private package version is unchanged.
-
-## Unreleased — v1-preview.1 integration guide
-
-- Document the `ce472f25` preview cut: experimental U4b CLI/MCP, v31 review
-  guards, combined assets/context handles, path-free export receipts and the
-  §16 continuous-writer limitation. Stable preview interfaces and the private
-  `0.0.0-preview.1` package version remain unchanged; no npm publication.
+- Document integration `ef38da4a`: experimental U5c roles/receipts, optional
+  relation/MOC sources and Card current dependencies, one-way v32/v33 upgrades
+  and rollback; `.3` stable interfaces stay unchanged.
 
 ## Unreleased — local role profiles (U5c-1)
 

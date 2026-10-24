@@ -1,9 +1,10 @@
 # V1 preview: product integration
 
-`v1-preview.3` is an opt-in cut from `release/v1-preview`, integration
-`b18dabe0` (preview HEAD `75793f64`). It stacks on the unmerged local V1
-chain (#453–#469, `feat/local-v1-closeout`). Default behaviour stays unchanged
-unless the feature options below are selected. This is not an npm release.
+`v1-preview.4` is an opt-in cut from `release/v1-preview`, integration
+`ef38da4a` (preview HEAD `7fbbe838`). It stacks on the unmerged local V1
+chain (#453–#469, `feat/local-v1-closeout`). Default behaviour on stores without
+dependency declarations stays unchanged unless the feature options below are
+selected. This is not an npm release.
 
 ## Install the preview build
 
@@ -25,12 +26,52 @@ npm install --prefix . --ignore-scripts --no-audit --no-fund /absolute/path/cair
 
 The builder stages files, then runs `npm pack --offline --ignore-scripts --json`.
 Private metadata stays `cairn-memory-local-preview@0.0.0-preview.1`;
-`v1-preview.3` identifies the source cut. Installation can contact npm.
+`v1-preview.4` identifies the source cut. Installation can contact npm.
 Keep the database outside the installation in an existing private directory.
-Sources: `package.json:47`, `packaging/build.mjs:80`, `packaging/build.mjs:102`.
+Sources: `package.json:47`, `packaging/build.mjs:11`, `packaging/build.mjs:102`,
+`packaging/build.mjs:119`.
 Use that executable below.
 
+## Upgrade and rollback
+
+Stop all writers and keep a consistent pre-upgrade backup before enabling U5c
+storage features. Ordinary writable opening with role profiles performs a
+**one-way schema v32 migration** (including method v30 and asset v31
+prerequisites). Card current dependencies perform a **one-way schema v33
+migration**, including v32 even without enabling role tools. These happen on
+opening, before any profile publication or dependency declaration.
+Read-only and managed-existing openers validate without migrating.
+Sources: `core/database.mjs:362`, `core/database.mjs:402`,
+`core/database.mjs:677`, `core/test/role-migration.test.mjs:20`,
+`core/test/card-current-schema.test.mjs:22`.
+
+**A store opened with these storage flags cannot go back to a `.3` binary:**
+older binaries refuse v32/v33 stores. Removing flags does not downgrade the
+schema or remove existing Card dependency enforcement. To roll back the binary,
+stop writers and restore the pre-upgrade store backup; changes made after the
+backup are not carried back. Never lower `PRAGMA user_version` by hand.
+Optional context sources alone add no canonical schema migration.
+See [role migration details](role-profiles-local.md),
+[Card dependency migration details](card-current-dependencies-local.md) and
+[optional sources](context-read-local.md#optional-relation-and-moc-sources).
+Sources: `core/database.mjs:413`, `core/database.mjs:683`,
+`core/card-current-storage.mjs:34`, `docs/role-profiles-local.md:18`,
+`docs/card-current-dependencies-local.md:5`.
+
 ## Stable preview interfaces
+
+The `.3` interfaces remain **stable and unchanged**: `find_memory_candidates`,
+evidence fetch (including compact refs), `read_memory_context` with
+`representation-v2`, and method packages. With all U5c flags off and no Card
+dependency declarations, their default schemas, wire behaviour and presets
+remain unchanged. HEAD includes frozen flag-off tool/DTO/schema fixtures,
+source-disabled wire fixtures and no-declaration assembly/deadline regressions.
+Existing declarations are always enforced, even with authoring disabled.
+Sources: `adapters/mcp/test/role-profile.test.mjs:156`,
+`adapters/mcp/test/context-read-sources.test.mjs:16`,
+`adapters/mcp/context-read-sources-tools.mjs:7`,
+`adapters/mcp/test/card-current-legacy-deadline.test.mjs:7`,
+`core/card-current-storage.mjs:15`.
 
 Core exports: `cairn-memory-local-preview/core/index.mjs`. Data calls take
 `(input,token)`, returning `{ok:true,value}` or `{ok:false,error:{code,retryable}}`;
@@ -53,8 +94,8 @@ retryable, including starvation under continuous writes (contract §16 below).
 Shared failures include `invalid_input`, `authority_required`,
 `scope_changed`, `revision_conflict`, `invalid_cursor`, `cursor_stale`,
 `context_item_too_large`, `storage_error` and `store_closed`.
-Sources: `adapters/mcp/server.mjs:227`, `adapters/mcp/context-read-transport.mjs:4`,
-`core/private-card-facade.mjs:16`.
+Sources: `adapters/mcp/server.mjs:255`, `adapters/mcp/context-read-transport.mjs:4`,
+`core/private-card-facade.mjs:18`.
 
 ### Context retrieval (`context-read-v1`)
 
@@ -91,7 +132,7 @@ Defaults: `semantic:false`, 12 items, 1,000 ms. Maximums: 24 items,
 Pages partition one frozen top-24 ranking without reranking/embedding; at most
 128 rankings per handle, expiring after five minutes. Cursor/snapshot bounds
 are 8,192/16,384 characters. Changed semantics or generations require restarting.
-Sources: `core/context-read-input.mjs:8`, `core/context-read-facade.mjs:528`,
+Sources: `core/context-read-input.mjs:26`, `core/context-read-facade.mjs:454`,
 `core/private-evidence-storage.mjs:54`.
 
 ```sh
@@ -146,7 +187,7 @@ nor account-wide. SDK configuration adds
 `embedder` and `policy:{family:'hosted',maxRequests,maxUsd,maxConcurrent,estimateUsd}`
 to contextRead; `estimateUsd(texts)` is trusted synchronous policy.
 Sources: `adapters/mcp/context-read-configuration.mjs:4`,
-`adapters/mcp/context-read-provider.mjs:4`, `core/context-read-input.mjs:33`.
+`adapters/mcp/context-read-provider.mjs:4`, `core/context-read-input.mjs:42`.
 
 Frozen RRF presets (`core/context-read-fusion.mjs:3`):
 
@@ -163,7 +204,7 @@ Known vector gaps or scan/cache bounds send zero query requests. Unusable lexica
 `index_unavailable`, never successful no-matches. Additional errors:
 `invalid_read_set`, `evidence_unavailable`, `invalid_snapshot`, `snapshot_stale`;
 errors may carry `details:{channels,coverage,trace}`.
-Source: `core/context-read-facade.mjs:26`.
+Source: `core/context-read-facade.mjs:29`.
 
 ### Method packages (`method-packages-local-v1`)
 
@@ -212,7 +253,7 @@ accept repeated `--reason-ref REF_JSON`; expected revision is `null` for creatio
 otherwise positive. Commands require an existing rollback-journal store,
 frozen-payload controlling-terminal approval; no `--yes` or pipes.
 Import requires supported Linux/WSL semantics.
-Source: `adapters/mcp/method-package-command.mjs:12`.
+Source: `adapters/mcp/method-package-command.mjs:14`.
 
 MCP startup: `--method-packages local-v1`; add zero-value
 `--method-read-personal` only with `--project`. Nine keyless read tools:
@@ -257,13 +298,13 @@ selector. Candidate lookup and existing full-ref/evidence outputs remain stable.
 Enable with `--context-read context-read-v1`; no additional flag is needed.
 CLI startup awaits the keyless local `o200k_base` counter (`tiktoken-o200k_base`),
 independently of model/provider configuration.
-Sources: `adapters/mcp/cli.mjs:335`, `adapters/openai/context-counter.mjs:11`.
+Sources: `adapters/mcp/cli.mjs:359`, `adapters/openai/context-counter.mjs:11`.
 
 | MCP input | Requirement/default |
 | --- | --- |
 | `query` | Required nonblank valid Unicode; ≤4,000 UTF-16 units |
 | `types` | Required nonempty unique subset of supported `memory,card` |
-| `intent` | Required `current|history` |
+| `intent` | Required `current` or `history` |
 | `semantic` | Optional boolean; false by default; existing embedding opt-in applies |
 | `maxTokens` | Optional integer 64–4,000; default 1,500 |
 | `maxItems` | Optional integer 1–24 admitted bodies; default 12 |
@@ -278,8 +319,8 @@ Missing counter returns `invalid_input`; failed counting returns `token_count_un
 Programmatic MCP auto-loads its counter: `server.contextCounterReady` resolves
 true/false. Retrieval works while loading; assembly returns `token_count_unavailable`
 until ready.
-Sources: `adapters/mcp/context-read-tools.mjs:74`, `core/context-read-input.mjs:96`,
-`core/context-read-facade.mjs:446`, `adapters/mcp/server.mjs:132`.
+Sources: `adapters/mcp/context-read-tools.mjs:74`, `core/context-read-input.mjs:141`,
+`core/context-read-facade.mjs:529`, `adapters/mcp/server.mjs:147`.
 
 Core success is `{ok:true,value:{metered,snapshot,diagnostics}}`, where
 `metered` is only `{framing,items}`. MCP success has `isError:false` and exactly
@@ -297,7 +338,7 @@ An excerpt equal to its own body becomes `{index,role,sameAsBody:true}`:
 reconstruct its excerpt from `body`. Other sources carry `{index,role,excerpt}`
 or backward `{index,sameAs:{item,source}}` aliases to concrete sources.
 Sources remain distinct receipt positions and require an admitted body.
-Sources: `core/context-read-input.mjs:11`, `core/context-read-assembly.mjs:36`.
+Sources: `core/context-read-input.mjs:19`, `core/context-read-assembly.mjs:36`.
 
 Snapshot: `_meta['ink.cairn/context-read-snapshot']` (null for no items), never
 metered text or `structuredContent`. Diagnostics:
@@ -319,7 +360,7 @@ into `fetch_memory_candidate_evidence({refs,intent})`; a fence mismatch returns
 The prefix provides bounded accidental-change detection, not adversarial integrity
 or authority, and exposes equality/change information across calls.
 Sources: `adapters/mcp/context-read-tools.mjs:17`, `adapters/mcp/context-read-tools.mjs:48`,
-`core/context-read-facade.mjs:548`.
+`core/context-read-facade.mjs:648`.
 
 | Fetch path | Guarantee |
 | --- | --- |
@@ -333,7 +374,7 @@ Other mutations retain eligibility/revision error precedence. Core callers use
 full refs, optionally with a parallel `fences` array (8-character prefixes or null);
 MCP callers cannot supply that vector. See [fetch limitations](limitations.md#budgeted-context-assembly-u5b)
 and [contract §15.8](plans/unified-memory-v1-contract.md#158-amendment-v0104-representation-v2-host-only-snapshot-first-source-policy-u5b-2).
-Sources: `core/context-read-input.mjs:103`, `core/context-read-facade.mjs:548`.
+Sources: `core/context-read-input.mjs:123`, `core/context-read-facade.mjs:648`.
 
 Bodies/sources fit whole or are omitted. Rank-first visits body then sources
 per item; coverage-first visits all bodies first. Non-default
@@ -354,6 +395,210 @@ as `diagnostics.omitted.oversized`; an empty envelope that cannot fit returns
 Sources: `evaluation/retrieval-research/assembly/overhead-host-v2.json:11`,
 `docs/plans/unified-memory-v1-contract.md:1450`, `core/context-read-assembly.mjs:69`.
 
+## Experimental: role profiles and task receipts (U5c-1)
+
+**Experimental in `.4`: names and shapes may change before becoming stable.**
+Contract §18 v0.12.2 (`docs/plans/unified-memory-v1-contract.md:2012`);
+see the [role guide](role-profiles-local.md) for full DTOs,
+authority and retention rules. Enable all three flags:
+
+```sh
+cairn-memory --db /absolute/private/memory.sqlite --owner OWNER \
+  --method-packages local-v1 --context-read context-read-v1 --role-profiles local-v1
+```
+
+Programmatic MCP: `createCairnServer({path,namespace,methodPackages:'local-v1',
+contextRead:'context-read-v1',roleProfiles:'local-v1',
+roleProfileAttribution:{actorId,agentId}})`. Attribution is optional here;
+CLI defaults are actor `cairn-local-mcp`, agent `--client` or `cairn-local-mcp`.
+For project+personal reads, both `methodReadPersonal` and `contextReadPersonal`
+must be true (CLI: both zero-value personal flags); mismatches refuse.
+Core hosts add `roleProfiles:{version:'role-profiles-local-v1',
+storage:'local-plain-v1',authority,attribution:{actorId,agentId}}` to
+`openMemoryCore`, alongside method packages and `contextRead` with its counter.
+Sources: `adapters/mcp/role-profile-configuration.mjs:4`,
+`adapters/mcp/server.mjs:142`, `core/role-profile-input.mjs:9`,
+`core/role-context-facade.mjs:24`.
+
+Four tools, confined to host scopes and attribution:
+
+| MCP tool / core method | Key inputs | Success value |
+| --- | --- | --- |
+| `publish_role_profile_release` / `publishRoleProfileRelease` | `roleKey,actionId,expectedCurrentRelease,expectedRegistryRevision,fields,changeReason?` | `{registry,release,ordinal,createdAt}` |
+| `disable_role_profile` / `disableRoleProfile` | Same head guards, without fields/reason | `{registry}` |
+| `delete_role_profile_release` / `deleteRoleProfileRelease` | Same head guards plus `release,expectedRevision` | `{registry,release,state,revision,purgedBytes,eventCount}` |
+| `read_role_task_context` / `readRoleTaskContext` | `mode`, mode-specific fields, `budget?,deadlineMs?` | Core `{metered,diagnostics}`; MCP emits the metered value as one text block |
+
+Core mutations additionally take `namespace`; the read takes `readSet`.
+**Agents publish directly, without confirmation**; a new immutable release is
+immediately current. All mutations require both inspected CAS expectations;
+null/null is only for an absent registry. Stale heads return `revision_conflict`;
+changed input under a reused action ID returns `action_conflict`.
+`fields.duties` and `fields.requiredOutputs` are mandatory arrays of 1–8
+nonblank strings, at most 300 UTF-16 units each. `methods` and `related` refs
+are optional, each at most 16; `appliesTo` is optional.
+Sources: `adapters/mcp/role-profile-tools.mjs:30`,
+`core/role-profile-storage.mjs:46`, `core/role-profile-input.mjs:31`.
+
+| Read mode | Mode-specific inputs | Selection |
+| --- | --- | --- |
+| `now` | `roleKey,task?,history?` | Resolve current profile/methods; issue receipt |
+| `then` | `receipt,history?` | Retain original identities, label present applicability |
+| `refresh` | `receipt,task?` | Resolve the whole selection again; issue a new receipt ID |
+| `compare` | `roleKey,from,to,cursor?` | Compare same-family releases or method versions |
+| `file` | `receipt,package,path,range?` | Continue the exact receipted method version |
+
+The metered value carries `framing,mode,registries,profile,methods,evidence,
+history,comparison,file,receipt`. Compact `task-receipt-v1` strings are
+**caller-held**: the host or agent must store the complete string verbatim.
+There is no engine receipt lookup or recovery. `then` and `file` return the
+original receipt; each call still needs fresh authorization. Historical content
+is labelled separately from current guidance. File ranges are at most 4,000
+UTF-16 units; binary continuation is metadata-only with separate asset authority.
+Sources: `adapters/mcp/role-profile-tools.mjs:43`,
+`core/role-context-facade.mjs:153`, `core/role-context-facade.mjs:198`,
+`core/task-receipt.mjs:6`, `docs/role-profiles-local.md:69`.
+
+Default/max budget: **4,000 tokens**, including the escaped receipt and complete
+success text; default 12 evidence items (max 24), deadline 1,000 ms (max 5,000,
+cooperative). Mandatory guidance and receipt must fit together or return
+`budget_insufficient`; receipt/core/transport ceilings are 32,768/65,536/262,144
+bytes. Diagnostics stay in host `_meta['ink.cairn/context-read-diagnostics']`.
+No semantic/provider calls, execution authority, receipt recovery or answer-quality
+guarantee. Profiles are local plaintext; caller copies survive logical deletion.
+Sources: `core/role-context-input.mjs:25`, `core/role-context-facade.mjs:211`,
+`core/role-context-wire.mjs:4`, `docs/role-profiles-local.md:89`.
+
+## Experimental: optional context sources (U5c-2)
+
+**Experimental in `.4`: names and shapes may change before becoming stable.**
+Contract §17 v0.11.1 (`docs/plans/unified-memory-v1-contract.md:1862`);
+see [optional relation and MOC sources](context-read-local.md#optional-relation-and-moc-sources)
+and [source limitations](limitations.md#optional-context-sources).
+
+```sh
+cairn-memory --db /absolute/private/memory.sqlite --owner OWNER \
+  --context-read context-read-v1 --context-read-sources relations-one-hop-v1,moc-v1
+```
+
+Enable either ID or both. Programmatic MCP adds
+`contextReadSources:['relations-one-hop-v1','moc-v1']`; core adds
+`sources:['relations-one-hop-v1','moc-v1']` inside `contextRead` for either opener.
+No new tools: opted-in `find_memory_candidates`/`findCandidates` and
+`read_memory_context`/`contextRead` accept optional `sources`. Omission selects
+all configured sources, `[]` disables them per call, and other selections must
+be distinct subsets of the host configuration. Fetch inputs are unchanged.
+Sources: `adapters/mcp/context-read-sources-configuration.mjs:9`,
+`adapters/mcp/server.mjs:78`, `core/context-read-input.mjs:30`,
+`core/context-read-input.mjs:106`, `adapters/mcp/context-read-sources-tools.mjs:7`.
+
+`relations-one-hop-v1` expands current evidence one hop: **4 seeds / 2 additions
+per seed / 8 additions total**, validating endpoints and source support. Families:
+`supports-decision`, `challenges-premise`, `contradicts`, Card→Memory bindings.
+Additions follow their direct seeds with revision-bound `via`; additions never
+seed another hop. History reports `unsupported_intent` for this source.
+`moc-v1` ranks authorized topic **titles**, using T1 BM25 and current eligible
+members, including on history requests. It fixes `rrf-k60-d12-moc-v1`:
+k=60, depth=12, lexical/semantic/MOC weights 0.45/0.45/0.10, without
+renormalization when a channel is disabled or unavailable.
+Sources: `core/context-read-input.mjs:10`, `core/context-read-relations.mjs:277`,
+`core/context-read-moc.mjs:24`, `core/context-read-fusion.mjs:3`.
+
+Candidate results can add `via` and `channels.moc`; core source diagnostics are
+in `trace.sources`. MCP keeps source diagnostics in host
+`_meta['ink.cairn/context-read-diagnostics']`; assembly retains representation-v2
+and the existing snapshot/diagnostics metadata keys. The frozen horizon can
+reach 32 candidates, but pages, delivered bodies and fetch refs remain capped
+at 24. Source fences can stale continuations when consulted, undelivered
+dependencies change; refetch still proves the existing evidence semantics.
+Sources: `adapters/mcp/context-read-sources-tools.mjs:14`,
+`core/context-read-facade.mjs:255`, `docs/context-read-local.md:330`.
+
+**Known limitation:** with default caps, broad MOC queries degrade around
+**10,000 Memories** (`degraded`/`work_limit`, **zero MOC candidates**). The exact
+cutoff depends on titles, memberships and projection state. Each source has
+50,000 work units and 8 MiB accounted state; retained source state shares
+16 MiB per handle. Incomplete MOC statistics/ranking are discarded; relations
+may retain a validated prefix. The deadline is cooperative and SQLite steps
+cannot be preempted. This adds no model calls or persisted source data and
+promises neither retrieval-quality improvement nor MOC summary freshness.
+Sources: `core/context-read-input.mjs:10`, `core/context-read-relations.mjs:32`,
+`docs/context-read-local.md:346`, `docs/limitations.md:2698`.
+
+## Experimental: Card current dependencies (U5c-3)
+
+**Experimental in `.4`: names and shapes may change before becoming stable.**
+Contract §19 v0.13.2 (`docs/plans/unified-memory-v1-contract.md:2274`);
+see the [Card dependency guide](card-current-dependencies-local.md)
+for review and retention details. Enable authoring with:
+
+```sh
+cairn-memory --db /absolute/private/memory.sqlite --owner OWNER \
+  --private-cards local-v1 --method-packages local-v1 \
+  --private-card-current-dependencies local-v1
+```
+
+Programmatic MCP adds `privateCards:'local-v1',methodPackages:'local-v1',
+privateCardCurrentDependencies:'local-v1'`. Core adds
+`currentDependencies:{version:'card-current-dependencies-v1'}` inside the existing
+`privateCards` configuration, alongside configured method packages.
+Sources: `adapters/mcp/card-current-configuration.mjs:2`,
+`core/private-card-input.mjs:21`, `core/contract.mjs:224`.
+
+Two MCP tools, `declare_private_card_current_dependencies` and
+`revalidate_private_card_current_dependencies`, accept
+`actionId,cardId,expectedRevision,expectedDependencyRevision,roleId,packages`
+(1–16 package refs) and **always refuse `approval_required`** for valid inputs.
+Approval happens in an independent terminal:
+
+```sh
+cairn-memory review-card --db /absolute/private/memory.sqlite --owner OWNER \
+  --card CARD --revision 2 --dependencies PACKAGES.json --role finance \
+  --dependency-revision null --dependency-operation declare
+```
+
+`PACKAGES.json` is the complete package-ref array. For revalidation, use
+`--dependency-operation revalidate` and the inspected positive dependency
+revision. Project+personal review adds `--project PROJECT --method-read-personal true`.
+The terminal displays the Card, complete resolutions and both CAS expectations,
+requires the displayed phrase, then re-reads; tool input cannot approve it.
+Sources: `adapters/mcp/card-current-tools.mjs:4`,
+`adapters/mcp/review-card.mjs:40`, `adapters/mcp/review-card.mjs:162`.
+
+Core `confirmCardDraft` accepts optional `currentDependencies`; standalone
+`declareCardCurrentDependencies` / `revalidateCardCurrentDependencies` take
+`namespace,cardId,actionId,expectedRevision,expectedDependencyRevision,currentDependencies`.
+The declaration is `{context:{readSet,roleId},packages:[{package,snapshot}]}`;
+obtain each current resolution snapshot with `resolveMethod` under that exact
+context and fresh authorization. Initial dependency expectation is null;
+replacement/revalidation uses the inspected positive revision. Revalidation
+keeps the same context and complete package set. Standalone success is
+`{id,revision,bodyRevision,dependencyRevision,state:'confirmed',effectCount:0}`;
+it advances the dependency revision without changing the Card's text/revisions.
+Sources: `core/private-card-input.mjs:152`, `core/private-card-facade.mjs:37`,
+`core/card-current-input.mjs:7`, `core/card-current-storage.mjs:64`.
+
+Reads **always compare with canonical current resolution**, even when authoring
+is off. Changed consulted bindings (including same-version re-adoption),
+withdrawal/deletion or Card revisions produce effective `needs-review`, not a
+new lifecycle state. `support.currentDependency` reports dependency revision,
+context, status, reasons and described/current versions. Reason codes:
+`binding_changed`, `binding_absent_now`, `binding_disabled`, `version_deleted`,
+`access_revoked`. An unauthorized complete context returns only revision,
+`needs-review` and `access_revoked`, without denied-scope/package disclosure.
+Sources: `core/card-current-storage.mjs:34`, `core/private-evidence-storage.mjs:54`.
+
+Stale Cards are excluded from **current evidence, candidates, assembly,
+relations, MOC members/title sources and current role guidance**. Retained
+authored history remains qualified by dependency status and source availability.
+With no declarations, behaviour stays byte-identical, including assembly at
+deadline expiry. Dependencies do not judge semantic accuracy, rewrite Cards,
+recover purged content, support Memory dependencies or establish summary freshness.
+Sources: `core/test/card-current.test.mjs:11`, `core/test/card-current-sources.test.mjs:14`,
+`core/test/card-current.test.mjs:76`,
+`adapters/mcp/test/card-current-legacy-deadline.test.mjs:7`,
+`docs/card-current-dependencies-local.md:36`.
+
 ## Experimental: assets
 
 `assets-local-v1` remains **experimental, outside the versioning promise**.
@@ -361,7 +606,7 @@ U4b adds CLI/MCP; core opt-in:
 `assets:{version:'assets-local-v1',storage:'sqlite-blob-v1',authority}`; selecting
 assets upgrades supported stores one-way to v31. The assets/contextRead constructor
 issue is fixed; regression coverage enumerates all eight asset/context/method
-combinations (`core/contract.mjs:45`,
+combinations (`core/contract.mjs:269`,
 `core/test/assets-context-options.test.mjs:7`).
 
 Asset commands require an existing store and
@@ -414,8 +659,10 @@ when cutting `v1-preview.0`; it passed after the adapter began renormalizing
 provider vectors, whose L2 norms are only approximately 1. None of this
 establishes complete semantic recall, answer correctness,
 production/100,000-Memory latency or native-product activation. The smoke stays
-outside the test suites. Role profiles,
-relations, MOC retrieval, Raw search and local-model adapters remain unsupported.
+outside the test suites. Role profiles/task receipts, relation/MOC retrieval and
+Card current dependencies are experimental opt-ins in `.4`; Raw search and
+local-model adapters remain unsupported. MOC can contribute zero candidates
+around 10,000 Memories under default caps, as described above.
 
 The small synthetic host-v2 probe measured an envelope of ≈43 tokens, a first-item
 increment of ≈83 and subsequent increments of ≈82 (488→126 tokens for one item).
@@ -428,7 +675,7 @@ Continuous rollback-journal writers can starve readers: retryable `storage_busy`
 Paced workloads meet C04/K13 gates; unpaced runs are stress observations.
 WAL requires a later store-wide decision, including review/store-fence changes.
 Sources: [contract §16](plans/unified-memory-v1-contract.md#16-amendment-contention-gates-under-rollback-journal-mode-v072-primary-2026-10-24),
-`core/database.mjs:30`, `core/private-card-facade.mjs:16`.
+`core/database.mjs:32`, `core/private-card-facade.mjs:18`.
 
 Storage and `.context-read-v1.sqlite` are sensitive local plaintext. Logical deletion
 does not physically erase pages/journals/backups. Method text grants no execution
@@ -444,19 +691,30 @@ Stable names and DTO shapes persist across `v1-preview.*`, including
 `read_memory_context` with `representation-v2` and compact-ref inputs to
 `fetch_memory_candidate_evidence` from `.3`. Algorithm improvements land behind
 them. Rankings, policies' quality and measured token constants are not frozen.
-Experimental assets, attachments and derivatives remain excluded. This promise
-does not retain `.2`'s experimental `representation-v1` output.
+All three U5c features (role profiles/task receipts, optional context sources and
+Card current dependencies) are **experimental in `.4`**, as are assets,
+attachments and derivatives. Their names and shapes may change before becoming
+stable and are excluded from this promise. This promise does not retain `.2`'s
+experimental `representation-v1` output. Storage upgrades are one-way even for
+experimental features; see [upgrade and rollback](#upgrade-and-rollback).
 
-## Release notes for GitHub pre-release: v1-preview.3
+## Release notes for GitHub pre-release: v1-preview.4
 
-Changes since `v1-preview.2`; integration `b18dabe0`, preview HEAD `75793f64`:
+Changes since `v1-preview.3`; integration `ef38da4a`, preview HEAD `7fbbe838`:
 
-- **Breaking change to experimental `.2` output:** representation-v1 is removed.
-  V2 meters only `{framing,items}`; snapshot and version/policy/counter metadata
-  move to host `_meta`. Default metadata is omitted; matching receipts use `sameAsBody`.
-- Stabilize `read_memory_context`/representation-v2 and compact-ref fetch inputs.
-  Document fence guarantees, refetch recovery and the parent-move path difference.
-- Add non-default `rank-first-first-source-v1`; rank-first whole remains default.
-- Publish small-store host-v2 measurements: 43-token envelope, +83/+82 item
-  increments, one-item probe 488→126. Token constants and policy quality are not frozen.
-  Assets remain experimental; private package version stays `0.0.0-preview.1`.
+- Add experimental role profiles/task receipts: four tools, direct agent
+  publication with dual CAS, five read modes and caller-held `task-receipt-v1`
+  receipts; default budget 4,000 tokens.
+- Add experimental opt-in one-hop relations (4/2/8 caps) and MOC title ranking
+  with fixed `rrf-k60-d12-moc-v1` and per-call narrowing. Default-cap MOC queries
+  can degrade around 10,000 Memories with `work_limit` and zero MOC candidates.
+- Add experimental Card current dependencies, separately approved through
+  `review-card --dependencies`. Canonical read-time comparison excludes stale
+  Cards from current guidance and reports effective `needs-review` reasons.
+- **Upgrade warning:** role/dependency opt-ins migrate stores one-way to v32/v33.
+  `.3` binaries refuse those stores; binary rollback requires a pre-upgrade backup.
+- Keep `.3` candidate/evidence (including compact refs), representation-v2
+  assembly and method-package interfaces stable, with unchanged U5c-off defaults
+  on stores without declarations. All three U5c features may change names/shapes
+  before stabilizing. Assets remain experimental; the private package stays
+  `0.0.0-preview.1`; no npm publication.
