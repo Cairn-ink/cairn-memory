@@ -468,3 +468,8 @@
 - **W1 第二次前進**（high＋fast，exit 0）：候選 2（seed 依凍結序列）stage 1 失敗（重複正規化本文，0/0/1，紀錄保留）；**候選 3、
   seed 3023009795** 0/0/0 通過。協調者重跑 `--candidate 3 --check`／`check-world --candidate 3`／facts view 皆 0，提交候選 3。
   派 W2 第二次修題（resume，high＋fast；同規則，span-only 份額 ≥60% 且各類別盡量分散家族）。
+- **`hr2b_tools` fix1 完成**（high＋fast，exit 0；3 檔）：`safeSum`／`add` 讓所有總和、家族歸約、逐抽累加在非安全整數時拒絕
+  （`unsafe_pooled_aggregate`）；`ceilingGroups` 改成在 rounded±1 候選中找到 `Object.is(value/groupCount, ceiling)` 精確重現者、
+  0 與 1 精確端點；`evaluatePooledDraw`／`bootstrapPooledDraws` 抽出逐抽評估，零／非有限／不安全抽樣→null→`invalid_bootstrap_draw`
+  不重抽；worker 自報兩版 Node 54/54、回歸 240/240、120/120、手算例與參考區間不變。協調者提交後派 Standards 複查（xhigh＋fast），
+  並自行以 `cairn-heavy` 重跑四個測試檔。
