@@ -2667,3 +2667,39 @@ unexpected triggers on owned tables and ASCII-case-varied premature artifacts;
 this is schema validation, not protection against a party able to rewrite the
 database and remove its guards. Selecting assets performs a one-way v31 upgrade; older v30
 binaries refuse the upgraded store.
+
+
+<!-- U5c-2 optional source integration. -->
+## Optional context sources
+
+Relations and MOC title ranking require explicit host opt-in; calls can only
+narrow that availability. Neither source is selected as a default by research.
+Relations traverse one hop in four existing families, seed only four direct
+candidates, and add at most two per seed/eight total. Relation existence remains
+proposed/unassessed. There is no two-hop expansion, supersession/qualification
+traversal, Raw/receipt candidate endpoint, episode or operational lineage.
+
+MOC ranks valid authorized titles, not compiled summaries. Its full title
+statistics and member ranking must complete within the shared deadline,
+50,000-work and 8-MiB accounting bounds or its contribution is discarded.
+Membership never filters lexical/semantic discovery. A history request still
+uses current MOC members. Active Memory projection unavailability is not
+bypassed; absent optional Card organization storage degrades MOC explicitly.
+`summaryFreshness` is always unavailable pending E1. No retrieval-quality,
+production-latency or 100,000-Memory guarantee follows from synthetic timing.
+
+Source scan accounting is conservative application accounting, not a process
+memory limit; SQLite calls remain synchronous/non-preemptible. Relations can
+return a validated prefix with an unknown remainder. At most 32 candidates
+reach assembly, while at most 24 bodies/refs are delivered. The 16-MiB aggregate
+retained-source budget can evict rankings before the 128-ranking count limit;
+continuations then return `cursor_stale`. New source state is never persisted.
+
+Source fences include consulted, undelivered dependencies and are checked
+inside final delivery transactions. Discovery changes can stale a page or
+assembly even if its eventual evidence subset is unchanged. Independent full,
+compact and snapshot fetches retain their prior evidence semantics; they do
+not provide durable proofs of the discovery path. MCP source diagnostics stay
+in host `_meta`, with the existing client-contract caveat: clients forwarding
+metadata to models do not get a metadata invisibility guarantee.
+<!-- End U5c-2 integration. -->
