@@ -103,7 +103,7 @@ transport-failure replies, and `replies[bodyHash]` supplies explicit canned repl
 
 `requests.mjs` freezes the prompts and strict Responses bodies. Primary calls
 use temperature 0; alternative extraction uses reasoning none and no temperature.
-A-2 output caps are 4,096 extraction / 2,048 reader, `store:false`, no tools/prior state.
+A-2 output caps are 4,352 extraction / 2,176 reader, `store:false`, no tools/prior state.
 The scorer's Answer schema is preserved semantically, converting `oneOf` to
 provider-supported `anyOf` for disjoint tagged variants and pruning unreachable
 schema definitions. Extraction outputs contain exactly the §2 fields, with
@@ -172,13 +172,48 @@ monitor/notification service. No paid-stage readiness, adjudication calibration,
 continuation gate, or research accuracy
 claim follows from these offline tests.
 
-A-2's output-cap certificate is in `reports/cap-certification-a2.json`; the
+A-2's current certificate is `reports/cap-certification-a2.json`. It reads the
+frozen pilot and independently authored engineering fixtures only; generator
+entry-point imports are blocked by a fresh-process guard test. No development or
+test worlds are generated. The engineering cases reach 1,867 reader / 3,751
+extraction tokens: both pass the required 10% margin at the revised caps
+(14.20% reader / 13.81% extraction). The
 original failing certificate remains in `reports/cap-certification.json`.
-`reports/budget-a2.json` and `reports/budget-a2.md` show that the complete
-all-retries plan exceeds $450; no feasible stage-limit redistribution exists.
-Recompute them with `node evaluation/hr3/harness/cap-certification.mjs` and
-`node evaluation/hr3/harness/budget-a2.mjs` respectively. The budget command exits
-1 for the infeasible plan; the stage and global hard limits remain unchanged.
+
+`reports/inspected-heldout-references.json` records the 504 published reference
+cases from `aa3b0a14`: 77 families and 33 development + 33 test lineages. They and
+their declared derivatives are excluded from calibration and tuning by identifier
+or serialization hash; unretained rendered worlds are not claimed to be fresh.
+The existing calibration/fresh-bank/allocation gates remain binding. After those
+gates, render and recertify replacement banks before any paid held-out call.
+
+Revised A-2 separates three budget findings in `reports/budget-a2.json` and
+`reports/budget-a2.md`. Pilot budget fit is the binding pre-pilot criterion:
+$17.510400 responses + the entire $2.56 shared embedding allowance = $20.070400,
+below $24. The $614.748160 theoretical all-maximum-plus-retry envelope is not
+covered, but this informational finding no longer blocks pilot budget fit or
+decides later-stage feasibility. Later-stage feasibility is pending real paid
+pilot settlement, not inferred from the forecast or fake transport.
+
+Before development, freeze the exact inputs described by
+`reports/pre-development-projection.schema.json`. Its integer arithmetic covers
+all settled experiment spend, full outstanding reservations, every remaining
+stage, research/P embeddings, alternative extraction and contingency. Require
+projected completion <= $400 and every stage limit. Any rederived stage limits
+must fit within $450 and be disclosed/frozen before development. Dynamic stage
+and $450 hard stops, $500 authorization, complete-test requirements and
+Inconclusive-on-exhaustion remain unchanged. Projection does not guarantee
+completion and is not computed in this offline task.
+
+Regenerate the exclusion manifest, projection schema, certificate and budget
+with `inspected-references.mjs`, `projection-schema.mjs`, `cap-certification.mjs`
+and `budget-a2.mjs` in this directory, in that order. The certificate and budget
+commands both exit 0: the revised caps meet the headroom requirement and the
+conservative pilot total is below $24. The prior engineering failure is retained
+in `reports/cap-certification-a2-pre-cap-revision.json`.
+After the full harness tests, `freeze-a2.mjs` regenerates the applicable manifests
+against the current errata hash, preserving the prior harness freeze as history.
+
 
 
 ## Audit re-check R3 records

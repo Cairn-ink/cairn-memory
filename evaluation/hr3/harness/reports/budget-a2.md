@@ -1,20 +1,18 @@
-# A-2 budget recomputation (offline)
+# A-2 budget after non-author audit (offline)
 
-The output caps pass certification separately. The complete protocol reservation plan does **not** fit the unchanged operational budget.
+**Binding pre-pilot budget gate: PASS.** Pilot responses $17.510400 + the entire shared embedding allowance $2.560000 = **$20.070400**, below $24 by $3.929600. This is budget fit only; certification and other scientific/resource gates remain separate.
 
-| Stage | Extraction / reader calls | Attempts at ceiling | Expected planned cost | Worst reservation | Existing limit | Covered |
-|---|---:|---:|---:|---:|---:|---|
-| pilot | 240 / 480 | 480 / 960 | $5.065728 | $17.117184 | $24.000000 | Yes |
-| development | 800 / 1600 | 1600 / 3200 | $16.885760 | $57.057280 | $46.000000 | No |
-| test | 6400 / 12800 | 12800 / 25600 | $135.086080 | $456.458240 | $345.000000 | No |
-| alternative | 800 / 800 | 1600 / 1600 | $24.087040 | $67.194880 | $45.000000 | No |
-| Shared research + P embeddings | — | Within shared unit allowances | $2.560000 | $2.560000 | Shared | — |
-| Total | | | $183.684608 | $600.387584 | $450.000000 | No |
+| Stage | Calls extraction / reader | Planned cost | Theoretical all-maximum-plus-retry envelope | Existing stage limit |
+|---|---:|---:|---:|---:|
+| pilot | 240 / 480 | $5.262336 | $17.510400 | $24.000000 |
+| development | 800 / 1600 | $17.541120 | $58.368000 | $46.000000 |
+| test | 6400 / 12800 | $140.328960 | $466.944000 | $345.000000 |
+| alternative | 800 / 800 | $25.172480 | $69.365760 | $45.000000 |
+| Shared embeddings | 64M research + 64M P units | $2.560000 | $2.560000 | Charged to active stage |
+| Total | | $190.864896 | $614.748160 | $450 operational stop |
 
-Reservations per attempt are: primary extraction $0.0131072, primary reader $0.0112768, alternative extraction $0.0307200. Each stage reserves twice its logical call counts. Embeddings add (64M + 64M) × $0.02/M = $2.56 once. They also consume the active stage's limit, rather than providing an extra stage allowance.
+**Theoretical-envelope coverage: NO.** 17.510400 + 58.368000 + 466.944000 + 69.365760 + 2.560000 = 614.748160, above $450 by $164.748160. Revised A-2 explicitly supersedes this envelope as the feasibility gate. It is not spending authorization and does not block pilot budget fit. The planning forecast is $190.864896 + 25% ($47.716224) = $238.581120; this estimate does not guarantee completion.
 
-17.117184 + 57.057280 + 456.458240 + 67.194880 + 2.560000 = 600.387584 > 450.000000. The $450 shortfall is $150.387584. Even the gross $500 authorization is short by $100.387584, before preserving its unavailable $50 headroom. No valid stage-limit allocation within $450 exists; no limit changes were applied.
+**Later-stage feasibility: PENDING, not computed from fake usage.** Before development, use real settled pilot usage and the frozen input schema in `reports/pre-development-projection.schema.json`. It covers all experiment spending, full outstanding reservations, every remaining stage, shared embeddings, alternative extraction and contingency. Require projected completion <= $400 and compliance with every stage limit. Freeze exact inputs, ledger/configuration/schema/implementation hashes and per-stage arithmetic before development. Any rederived stage limits must fit within $450 and be disclosed first.
 
-The forecast uses the unchanged §14 input assumptions (8,000 extraction / 6,000 reader), the new full output caps, one attempt per call, and the full embedding allowance. It is $183.684608 + 25% ($45.921152) = **$229.605760**. This is a planning assumption, not measured model usage. Rates are the primary-supplied 2026-10-25 verification; no network or API was used.
-
-The original ceiling reproduces exactly at $440.905728; A-2 increases it by $159.481856. Further primary amendment of the workload/reservation design is required before the complete paid plan is feasible. The operational stop remains $450 and authorization remains $500.
+Dynamic stage/$450 hard stops and the $500 authorization with $50 unavailable headroom remain unchanged. The complete test is still required; budget exhaustion makes the result Inconclusive. No stage-limit changes or continuation approval were made here. Verified rates and unchanged token/call assumptions are recorded in the JSON; no network, API or credentials were used.

@@ -70,3 +70,20 @@ All non-adjudication preflight requirements remain binding.
   - **Development and later stages.** Feasibility is decided by the §13 pilot-continuation projection: projected completion from the pilot's actual settled usage must fit within US$400. It is not decided by the theoretical envelope.
   - **Hard limits.** The ledger's dynamic hard stops remain the binding protection: spent plus outstanding reservations never exceed a stage limit or the US$450 stop, and the US$500 authorization is never exceeded. The stage limits stay unchanged until the continuation projection. Any re-derivation stays within US$450 and is disclosed before development.
 - **Pilot evidence.** Pilot answers that end with `incomplete` status remain scored as failures and are reported. No quality retries.
+
+### A-2 clarifications after non-author audit (2026-10-25)
+
+- **Certification scope.** Pre-pilot certification uses pilot references and separate engineering stress fixtures that cover every maximal required structure. It must not invoke development or test generation before the existing freshness gate.
+- **Already-rendered held-out references.** The first certification run (`aa3b0a14`) rendered and published development and test reference serializations, covering 33 development and 33 test lineages, including provisional R3 lineages. These are recorded as **inspected**: their identifiers and hashes are retained, and they are excluded from calibration and tuning. After calibration v2 and publication of fresh replacement banks and allocation, references are rendered and recertified before any paid development or test call.
+- **Budget.** A-2 supersedes §14's previous numerical envelope and its feasibility assessment.
+  - **Reporting.** Pilot budget fit, coverage by the theoretical envelope, and later-stage feasibility are reported separately.
+  - **Before development.** Freeze a reproducible projection that covers total experiment spending, outstanding reservations, the remaining stages, embeddings, alternative extraction and contingency. Projected completion must be ≤ US$400, and every stage limit must be met.
+  - **Unchanged.** The complete-test requirement still holds, and budget exhaustion still makes the result Inconclusive.
+- **Pilot ceiling.** The pilot response ceiling is US$17.117184. Including the entire shared embedding allowance, the conservative total is US$19.677184, below US$24.
+- **Regeneration.** Certificates and the applicable freeze manifests are regenerated against the final text of this amendment.
+
+### A-2 cap revision after the engineering stress certificate (2026-10-25)
+
+- **Why.** Independent engineering stress fixtures, built without held-out generation, raised the worst valid outputs to **1,867** tokens for the reader and **3,751** for extraction. At 2,048/4,096 the headroom is 8.84%/8.42%, which fails the required 10%. Fixtures are not shortened to fit.
+- **Revised caps.** Reader `max_output_tokens` becomes **2,176** and extraction **4,352**, giving about 14.2%/13.8% headroom. Everything else in A-2 is unchanged.
+- **Pilot check.** The conservative pilot total, including the entire shared embedding allowance, must stay below US$24. If it does not, paid work does not start, and a further amendment is required.

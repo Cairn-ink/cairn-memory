@@ -14,34 +14,44 @@ test('complete all-retries ceiling and single-attempt forecast match independent
   const report = budgetA2();
   // Hand-derived dollar arithmetic from the four §14 call-count rows, not
   // from the report's totals or its per-attempt helper.
-  const perAttempt = { primaryExtraction: (16384 * .40 + 4096 * 1.60) / 1e6,
-    primaryReader: (20000 * .40 + 2048 * 1.60) / 1e6,
-    alternativeExtraction: (16384 * .75 + 4096 * 4.50) / 1e6 };
-  const rows = [[240,480,17.117184,5.065728], [800,1600,57.057280,16.885760],
-    [6400,12800,456.458240,135.086080], [800,800,67.194880,24.087040]];
+  const perAttempt = { primaryExtraction: (16384 * .40 + 4352 * 1.60) / 1e6,
+    primaryReader: (20000 * .40 + 2176 * 1.60) / 1e6,
+    alternativeExtraction: (16384 * .75 + 4352 * 4.50) / 1e6 };
+  const rows = [[240,480,17.510400,5.262336], [800,1600,58.368000,17.541120],
+    [6400,12800,466.944000,140.328960], [800,800,69.365760,25.172480]];
   rows.forEach(([extraction,reader,worst,expected],i) => {
     const ceiling = 2 * extraction * (i === 3 ? perAttempt.alternativeExtraction : perAttempt.primaryExtraction) + 2 * reader * perAttempt.primaryReader;
     assert.ok(Math.abs(ceiling - worst) < 1e-10);
     assert.equal(report.stages[i].worstNanodollars, Math.round(worst * 1e9));
     assert.equal(report.stages[i].expectedNanodollars, Math.round(expected * 1e9));
   });
-  assert.equal(report.totals.worstNanodollars, 600387584000);
-  assert.equal(report.totals.expectedNanodollars, 183684608000);
-  assert.equal(report.totals.forecastWithContingencyUSD, 229.605760);
+  assert.equal(report.totals.worstNanodollars, 614748160000);
+  assert.equal(report.totals.expectedNanodollars, 190864896000);
+  assert.equal(report.totals.forecastWithContingencyUSD, 238.581120);
   assert.equal(report.totals.historicalWorstUSD, 440.905728);
   assert.equal(report.embeddings.totalNanodollars, 2560000000);
 });
 
-test('a forecast below $450 cannot approve an infeasible complete reservation plan', () => {
-  const report = budgetA2();
-  assert.ok(report.totals.forecastWithContingencyUSD < 450);
-  assert.ok(report.stages.find(s => s.stage === 'test').worstUSD > 450);
-  assert.equal(report.totals.operationalCovered, false);
-  assert.equal(report.totals.grossAuthorizationCovered, false);
-  assert.equal(report.totals.shortfallUSD, 150.387584);
-  assert.equal(report.stageLimitProposal.feasible, false);
-  assert.equal(report.stageLimitProposal.proposedLimits, null);
-  assert.equal(report.stageLimitProposal.applied, false);
-  assert.equal(report.paidReadiness, false);
-  assert.deepEqual(['pilot','development','test','alternative'].map(s => CAPS[s]), [24,46,345,45]);
+test('revised A-2 binds pilot fit while envelope coverage and later-stage feasibility stay separate',()=>{
+ const r=budgetA2();
+ assert.equal(r.status,'PASS_PILOT_BUDGET');assert.equal(r.bindingPrePilotCriterion,'pilotFit');
+ assert.equal(r.pilotFit.conservativeTotalUSD,20.070400);assert.equal(r.pilotFit.pass,true);assert.equal(r.pilotFit.marginUSD,3.929600);
+ assert.equal(r.theoreticalEnvelope.covered,false);assert.equal(r.theoreticalEnvelope.blockingBeforePilot,false);
+ assert.equal(r.laterStageFeasibility.status,'pending_paid_pilot_projection');assert.equal(r.laterStageFeasibility.computed,false);
+ assert.equal(r.laterStageFeasibility.completionCeilingUSD,400);assert.equal(r.laterStageFeasibility.allStageLimitsRequired,true);
+ assert.equal(r.stageLimitProposal.status,'deferred_to_continuation_projection');assert.equal(r.stageLimitProposal.applied,false);
+ assert.equal(r.laterStageFeasibility.completeTestRequired,true);assert.equal(r.laterStageFeasibility.budgetExhaustionOutcome,'Inconclusive');
+ assert.equal(r.paidReadiness,false);assert.deepEqual(['pilot','development','test','alternative'].map(s=>CAPS[s]),[24,46,345,45]);
+});
+
+test('pre-development projection input contract freezes paid usage, all spending, outstanding, remaining stages, embeddings and contingency',async()=>{
+ const {projectionInputSchema}=await import('../projection-schema.mjs');const schema=projectionInputSchema();
+ assert.deepEqual(schema,JSON.parse(readFileSync(new URL('../reports/pre-development-projection.schema.json',import.meta.url),'utf8')));
+ const p=schema.properties;assert.equal(p.source.const,'paid_pilot_settled_ledger');assert.equal(p.pilot.properties.complete.const,true);
+ assert.deepEqual(p.remainingStages.required,['development','test','alternative']);
+ assert.equal(p.remainingStages.properties.test.properties.extractionCalls.const,6400);assert.equal(p.remainingStages.properties.test.properties.readerCalls.const,12800);
+ assert.ok(p.ledger.required.includes('outstandingReservations'));assert.ok(p.ledger.required.includes('settledNanodollarsByStage'));
+ assert.ok(p.ledger.required.includes('embeddingReservedUnits'));assert.ok(schema.required.includes('remainingEmbeddingUnitAllocation'));
+ assert.equal(p.policy.properties.projectionCeilingNanodollars.const,400000000000);assert.equal(p.policy.properties.contingencyDenominator.const,4);
+ assert.equal(p.policy.properties.authorizationNanodollars.const,500000000000);assert.ok(schema['x-calculation'].acceptance.includes('each stage'));
 });

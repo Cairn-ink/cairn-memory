@@ -5,8 +5,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { relative, resolve } from 'node:path';
-import { inventory, SPLITS, GRAMMAR } from '../generator/inventory.mjs';
-import { generateSplit, SOURCE_NAMES } from '../generator/deliver.mjs';
+import { engineeringStressFixtures, STRESS_SPEC } from './cap-stress-fixtures.mjs';
 import { DEFAULT_SEED, canonical, sha256 } from '../generator/common.mjs';
 import { answerSchema, extractionSchema, providerSchema, validateExtraction } from './schema.mjs';
 import { validate } from '../scorer/schema.mjs';
@@ -21,7 +20,10 @@ const requireTokenizer = createRequire(local('adapters/openai/package.json'));
 export const CAPS = OUTPUT_CAPS;
 export const MINIMUM_MARGIN_PERCENT = 10;
 export const meetsMargin = (tokens, cap) => tokens * 100 <= cap * (100 - MINIMUM_MARGIN_PERCENT);
-const splits = ['pilot', 'development', 'test'];
+export function pilotReferenceBundles() {
+  const data = verifiedInputs(fileURLToPath(local('evaluation/hr3/generator/artifacts/pilot/')));
+  return data.families.map(family => ({family,gold:data.gold.find(r=>r.family_id===family.family_id),support:data.support.find(r=>r.family_id===family.family_id)}));
+}
 
 // Strict output schemas specify property order. Count the compact output JSON
 // itself, without a request schema, API response envelope, fence, or newline.
@@ -144,11 +146,12 @@ function dimensions(operation, value) {
 
 function provenance() {
   const freeze = readJSON(local('evaluation/hr3/generator/freeze.json'));
+  const SOURCE_NAMES = Object.keys(freeze.hashes).filter(name => !name.startsWith('artifacts/'));
   for (const name of SOURCE_NAMES) assert.equal(sha256(readFileSync(local(`evaluation/hr3/generator/${name}`))), freeze.hashes[name].sha256, `Generator freeze mismatch: ${name}`);
   const names = [
     'evaluation/hr3/protocol/protocol-v0.3.4.md', 'evaluation/hr3/protocol/errata.md',
     'evaluation/hr3/generator/freeze.json', ...SOURCE_NAMES.map(n => `evaluation/hr3/generator/${n}`),
-    ...['schema.mjs', 'requests.mjs', 'inputs.mjs', 'extraction.mjs', 'cap-certification.mjs'].map(n => `evaluation/hr3/harness/${n}`),
+    ...['schema.mjs', 'requests.mjs', 'inputs.mjs', 'extraction.mjs', 'cap-certification.mjs', 'cap-stress-fixtures.mjs', 'reports/inspected-heldout-references.json', 'reports/cap-certification-a2-pre-cap-revision.json'].map(n => `evaluation/hr3/harness/${n}`),
     ...['schema.mjs', 'canonical.mjs', 'citations.mjs', 'scorer.mjs'].map(n => `evaluation/hr3/scorer/${n}`),
   ];
   assert.equal(sha256(readFileSync(local(names[0]))), freeze.protocol_sha256);
@@ -156,8 +159,10 @@ function provenance() {
   const amendment = errata.indexOf('## A-2 (2026-10-25):');
   assert.ok(amendment > 0, 'A-2 amendment missing');
   assert.equal(sha256(errata.slice(0, amendment).trimEnd() + '\n'), freeze.errata_sha256, 'Pre-A-2 errata changed');
-  assert.match(errata.slice(amendment), /2,048/);
-  assert.match(errata.slice(amendment), /4,096/);
+  const revision=errata.indexOf('### A-2 cap revision after the engineering stress certificate');
+  assert.ok(revision>amendment,'Engineering-stress cap revision missing');
+  assert.match(errata.slice(revision), /2,176/);
+  assert.match(errata.slice(revision), /4,352/);
   assert.match(errata.slice(amendment), /10%/);
   return Object.fromEntries(names.map(name => [name, sha256(readFileSync(local(name)))]));
 }
@@ -168,8 +173,9 @@ export function certify({ progress = () => {} } = {}) {
   const tokenizerPackage = readJSON(local('adapters/openai/node_modules/tiktoken/package.json'));
   const { get_encoding } = requireTokenizer('tiktoken');
   const encoding = get_encoding('o200k_base');
-  const frozenPilot = verifiedInputs(fileURLToPath(local('evaluation/hr3/generator/artifacts/pilot/')));
-  const inv = inventory();
+  const cohorts = [{split:'pilot',bundles:pilotReferenceBundles()},{split:STRESS_SPEC.split,bundles:engineeringStressFixtures()}];
+  const inspected = readJSON(new URL('./reports/inspected-heldout-references.json',import.meta.url));
+  assert.equal(inspected.errataSHA256,sources['evaluation/hr3/protocol/errata.md']);
   const groups = new Map(), counts = [], pilotReferences = [], summary = [];
   const maxima = { reader: {}, extraction: {} };
   let firstFailure = null;
@@ -189,19 +195,12 @@ export function certify({ progress = () => {} } = {}) {
     return row;
   }
   try {
-    for (const split of splits) {
-      progress(`Enumerating ${split}: ${SPLITS[split].lineagesPerType * 5 * SPLITS[split].multiplicity} allocated families`);
-      const result = generateSplit(split);
-      assert.equal(result.rejections.length, 0);
-      const allocated = inv.lineages.filter(l => l.split === split).flatMap(l => l.members.map(m => m.family_id)).sort();
-      assert.deepEqual(result.bundles.map(b => b.family.family_id).sort(), allocated);
-      counts.push({ split, lineages: inv.lineages.filter(l => l.split === split).length, families: result.bundles.length, checkpoints: result.bundles.length * 2, extractionBatches: result.bundles.length * 4 });
-      let completed = 0;
-      for (const bundle of result.bundles) {
-        const { family, gold, support } = bundle;
-        if (split === 'pilot') for (const [field, rows] of [['family', frozenPilot.families], ['gold', frozenPilot.gold], ['support', frozenPilot.support]]) {
-          assert.equal(canonical(bundle[field]), canonical(rows.find(r => r.family_id === family.family_id)), `Frozen pilot ${field} differs`);
-        }
+    for (const {split,bundles} of cohorts) {
+      progress(`Certifying ${split}: ${bundles.length} references; no held-out generation`);
+      counts.push({split,lineages:new Set(bundles.map(b=>b.family.lineage_id)).size,families:bundles.length,checkpoints:bundles.length*2,extractionBatches:bundles.length*4});
+      let completed=0;
+      for (const bundle of bundles) {
+        const {family,gold,support}=bundle;
         const metadata = { split, familyId: family.family_id, language: family.language, changeType: family.change_type, causalClass: family.causal_class };
         for (const checkpoint of family.checkpoints) {
           const full = measure('reader', readerReference(bundle, checkpoint.batch), { ...metadata, batch: checkpoint.batch, variant: 'supported_union' });
@@ -212,7 +211,7 @@ export function certify({ progress = () => {} } = {}) {
           for (let i = 0; i < Math.max(1, graphs.length); i++) measure('reader', readerReference(bundle, checkpoint.batch, { graph: i, assertionCitations: false }), { ...metadata, batch: checkpoint.batch, variant: `required_graph_${i + 1}` });
         }
         for (const batch of family.batches) measure('extraction', extractionReference(family, batch.ordinal), { ...metadata, batch: batch.ordinal, variant: 'all_explicit_events' });
-        if (++completed % 200 === 0) progress(`${split}: validated/tokenized ${completed}/${result.bundles.length} families`);
+        if (++completed % 200 === 0) progress(`${split}: validated/tokenized ${completed}/${bundles.length} families`);
       }
       for (const operation of ['reader', 'extraction']) for (const variant of operation === 'reader' ? ['supported_union', 'required_graph'] : ['all_explicit_events']) {
         const relevant = [...groups.values()].filter(g => g.worst.split === split && g.worst.operation === operation && g.worst.variant.startsWith(variant));
@@ -227,21 +226,27 @@ export function certify({ progress = () => {} } = {}) {
       const worst = rows.map(g => g.worst).sort((a, b) => b.tokens - a.tokens)[0];
       return [operation, { pass: rows.every(r => !r.failures), cap: CAPS[operation], worstTokens: worst.tokens, margin: worst.margin, marginPercent: worst.marginPercent, worstStructure: rows.find(g => g.worst === worst).structure, familyId: worst.familyId }];
     }));
+    const historicalDominance=Object.fromEntries(['reader','extraction'].map(operation=>{
+      const stressWorst=Math.max(...structures.filter(g=>g.worst.operation===operation&&g.worst.split===STRESS_SPEC.split).map(g=>g.worst.tokens));
+      assert.ok(stressWorst>=inspected.previousWorstTokens[operation],`Engineering ${operation} must dominate the historical bound`);
+      return [operation,{previousWorstTokens:inspected.previousWorstTokens[operation],engineeringWorstTokens:stressWorst,dominates:true}];
+    }));
     return {
-      version: 'hr3-cap-certification-a2', protocol: 'v0.3.4 + E-1/E-2/A-1/A-2', seed: DEFAULT_SEED,
+      version: 'hr3-cap-certification-a2-audited', protocol: 'v0.3.4 + E-1/E-2/A-1/A-2', seed: DEFAULT_SEED,
       status: Object.values(gates).every(g => g.pass) ? 'PASS' : 'FAIL_AMENDMENT_REQUIRED',
-      minimumMarginPercent: MINIMUM_MARGIN_PERCENT,
+      minimumMarginPercent: MINIMUM_MARGIN_PERCENT, historicalDominance, stressSpec:STRESS_SPEC,
+      inspectedHeldOutManifest:{path:'evaluation/hr3/harness/reports/inspected-heldout-references.json',sha256:sources['evaluation/hr3/harness/reports/inspected-heldout-references.json']},
       historicalReport: { path: 'evaluation/hr3/harness/reports/cap-certification.json', sha256: sha256(readFileSync(new URL('./reports/cap-certification.json', import.meta.url))) },
       paidWorkAllowedByThisGate: Object.values(gates).every(g => g.pass), firstFailure, gates,
       method: {
-        scope: 'Exhaustive frozen-default-seed pilot/development/test allocation, not an unbounded-schema or future-bank certificate.',
+        scope: 'Frozen pilot references plus independent engineering stress fixtures. No development/test rendering or generation imports; no unbounded-schema or future-bank claim.',
         serialization: 'Compact JSON in strict provider schema property order, literal Unicode, no trailing newline or envelope; count output text only.',
         tokenizer: { encoding: 'o200k_base', package: 'tiktoken', version: tokenizerPackage.version, installation: 'adapters/openai/node_modules/tiktoken', entrySHA256: sha256(readFileSync(requireTokenizer.resolve('tiktoken'))), wasmSHA256: sha256(readFileSync(local('adapters/openai/node_modules/tiktoken/tiktoken_bg.wasm'))) },
         requiredGraph: 'Every accepted graph separately, incident nodes only, required directed-edge source citations, no optional current/old citations. Unstated retains its exact empty gold structure.',
         supportedUnion: 'All gold current claims, requested old records, qualifiers and reason nodes; union of all supported accepted graphs, exact edge citations and assertion citations. Refinement cites both inherited fields and amendment.',
         extraction: 'Every explicit focal/distractor AST event per independent batch; schema field whitelist; local event IDs; all reason nodes/edges and frozen verbatim source quotes. No control actions: controls are outside extractionInput.',
-        validation: 'Frozen source hashes; regenerated pilot family/gold/support equality; all generated families pass generator validators; every output passes provider schema and extraction provenance/quote validator; exact C/O gold preservation; citation addresses/occurrences derived from observed source receipts.',
-        allocationCrossCheck: { routes: ['inventory lineage members', 'generateSplit validated bundles'], families: counts.reduce((n, c) => n + c.families, 0) },
+        validation: 'Frozen pilot/source hashes; independently constructed engineering fixtures respect grammar cardinalities and source byte guards; every output passes provider schema and extraction provenance/quote validator; exact C/O gold preservation; citation addresses/occurrences derived from observed source receipts.',
+        allocationCrossCheck: { routes: ['verified frozen pilot rows + explicit stress Cartesian product', 'cohort family/lineage identifiers and reference counts'], families: counts.reduce((n, c) => n + c.families, 0) },
         limits: [
           'Schemas have no maxItems/maxLength: no finite maximum over all schema-valid spellings, redundant citations, equivalent scope partitions, identifiers, or whitespace. These are grammar-derived reference structures, without artificial padding.',
           'Development/test R3 expiry banks are provisional; fresh semantic banks are still required by the existing pre-development gate. Changed banks/allocation/schemas require recertification.',
@@ -250,8 +255,8 @@ export function certify({ progress = () => {} } = {}) {
         ],
       },
       derivation: {
-        authority: ['protocol §2/§6/§7/§9/§10/§13', 'errata E-1/E-2/A-1/A-2', 'generator inventory.mjs GRAMMAR/SPLITS', 'generator generate.mjs emit/assignments/checkpoint construction', 'harness extractionSchema; scorer answerSchema'],
-        sourceBounds: { batchesPerFamily: 4, checkpoints: [2, 4], audienceCells: 12, initialCap: [100, 899], amendedCap: [120, 939], baseDay: [1, 15], byteGuards: GRAMMAR.byteGuards },
+        authority: ['protocol §2/§6/§7/§9/§10/§13', 'errata E-1/E-2/A-1/A-2', 'generator inventory.mjs GRAMMAR/SPLITS', 'generator generate.mjs frozen source bounds (hashed only, never imported)', 'harness extractionSchema; scorer answerSchema'],
+        sourceBounds: { batchesPerFamily: 4, checkpoints: [2, 4], audienceCells: 12, initialCap: [100, 899], amendedCap: [120, 939], baseDay: [1, 15], byteGuards: {batchSourceBytes:STRESS_SPEC.bounds.batchSourceBytes,familySourceBytes:STRESS_SPEC.bounds.familySourceBytes} },
         reasoning: [
           'Scope change has two current groups and at checkpoint four requests A and B: two historical records. Other changes request one predecessor; expiry has zero current claims.',
           'Correction uses route+approval; other full records use route+approval+cap. Refinement patches cap only and inherits route+approval; answers preserve two qualifiers.',

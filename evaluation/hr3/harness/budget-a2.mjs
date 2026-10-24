@@ -33,7 +33,7 @@ export function budgetA2() {
     assert.equal(bound.outputRate, rate.output);
     assert.equal(bound.output, OUTPUT_CAPS[operation]);
   }
-  assert.deepEqual(OUTPUT_CAPS, { reader: 2048, extraction: 4096 });
+  assert.deepEqual(OUTPUT_CAPS, { reader: 2176, extraction: 4352 });
   assert.equal(validateRequest({operation:'research-embedding',body:embeddingRequest(['offline'])}).inputRate, RATES.embedding.input);
   const unitReservations = Object.fromEntries(['primary', 'alternative'].map(model => [model,
     Object.fromEntries((model === 'alternative' ? ['extraction'] : ['extraction', 'reader']).map(operation => [operation, {
@@ -70,11 +70,15 @@ export function budgetA2() {
     + 2 * s.readerCalls * charge(inputCeilings.reader, 768, RATES.primary), 0) + embeddingNanodollars;
   assert.equal(historicalNanodollars, 440905728000);
   return {
-    version: 'hr3-budget-a2-v1', status: worstNanodollars <= 450e9 ? 'PASS' : 'FAIL_NO_FEASIBLE_STAGE_LIMITS_WITHIN_450',
+    version: 'hr3-budget-a2-audited-v2', status: stages[0].worstNanodollars + embeddingNanodollars < 24e9 ? 'PASS_PILOT_BUDGET' : 'FAIL_PILOT_BUDGET',
+    bindingPrePilotCriterion:'pilotFit',
+    pilotFit:{pass:stages[0].worstNanodollars + embeddingNanodollars < 24e9,responsesUSD:usd(stages[0].worstNanodollars),sharedEmbeddingsUSD:usd(embeddingNanodollars),conservativeTotalUSD:usd(stages[0].worstNanodollars + embeddingNanodollars),limitUSD:24,marginUSD:usd(24e9-stages[0].worstNanodollars-embeddingNanodollars)},
+    theoreticalEnvelope:{covered:worstNanodollars<=450e9,totalUSD:usd(worstNanodollars),operationalStopUSD:450,blockingBeforePilot:false,interpretation:'Informational all-maximum-plus-retry envelope, superseded as a feasibility gate by revised A-2. It is not spending authorization.'},
+    laterStageFeasibility:{status:'pending_paid_pilot_projection',computed:false,bindingBeforeDevelopment:true,completionCeilingUSD:400,allStageLimitsRequired:true,projectionInputSchema:{path:'evaluation/hr3/harness/reports/pre-development-projection.schema.json',sha256:hash(readFileSync(new URL('./reports/pre-development-projection.schema.json',import.meta.url)))},completeTestRequired:true,budgetExhaustionOutcome:'Inconclusive'},
     paidReadiness: false,
     sources: Object.fromEntries([
       ['evaluation/hr3/protocol/protocol-v0.3.4.md', protocol], ['evaluation/hr3/protocol/errata.md', errata],
-      ...['budget-a2.mjs', 'requests.mjs', 'ledger.mjs'].map(name => ['evaluation/hr3/harness/' + name, new URL(name, import.meta.url)]),
+      ...['budget-a2.mjs', 'requests.mjs', 'ledger.mjs', 'projection-schema.mjs', 'reports/pre-development-projection.schema.json'].map(name => ['evaluation/hr3/harness/' + name, new URL(name, import.meta.url)]),
     ].map(([name, url]) => [name, hash(readFileSync(url))])),
     prices: { units: 'USD per 1M input/output tokens', primary: [0.40, 1.60], alternative: [0.75, 4.50], embeddingInput: 0.02,
       provenance: 'Primary-supplied verification of the OpenAI pricing page on 2026-10-25; no network verification in this offline run.', integerNanodollarsPerToken: RATES },
@@ -97,33 +101,31 @@ export function budgetA2() {
       authorizationUSD: 500, unavailableHeadroomUSD: 50, effectiveSpendCeilingUSD: 450,
       grossAuthorizationCovered: worstNanodollars <= 500e9, grossAuthorizationShortfallUSD: usd(Math.max(0, worstNanodollars - 500e9)),
     },
-    stageLimitProposal: { feasible: false, proposedLimits: null, applied: false,
-      arithmetic: stages.map(s => s.worstUSD.toFixed(6)).join(' + ') + ' + 2.560000 = ' + usd(worstNanodollars).toFixed(6) + ' > 450.000000',
-      reason: 'No stage redistribution within $450 can cover the unchanged complete all-retries plan. The test response ceiling alone exceeds $450. Stage limits and $450/$500 hard stops remain unchanged and fail closed.',
-      requiredNextStep: 'Primary amendment of the workload/reservation design is required. Do not silently reduce calls, retries, evidence, or input/output caps; do not raise the $450 stop or $500 authorization.',
+    stageLimitProposal: {status:'deferred_to_continuation_projection',proposedLimits:null,applied:false,
+      arithmetic:stages.map(s=>s.worstUSD.toFixed(6)).join(' + ')+' + 2.560000 = '+usd(worstNanodollars).toFixed(6),
+      reason:'Existing stage limits remain unchanged until the paid-pilot continuation projection. The uncovered theoretical envelope does not block pilot budget fit or decide later-stage feasibility.',
+      requiredNextStep:'After paid pilot settlement, freeze a reproducible total-completion projection <= $400 and verify every stage limit. Disclose any stage-limit rederivation within $450 before development; retain $500 authorization and full-test/Inconclusive rules.',
     },
   };
 }
 
 export function markdownSummary(report) {
   const money = x => '$' + x.toFixed(6);
-  return `# A-2 budget recomputation (offline)
+  return `# A-2 budget after non-author audit (offline)
 
-The output caps pass certification separately. The complete protocol reservation plan does **not** fit the unchanged operational budget.
+**Binding pre-pilot budget gate: ${report.pilotFit.pass?'PASS':'FAIL'}.** Pilot responses ${money(report.pilotFit.responsesUSD)} + the entire shared embedding allowance ${money(report.pilotFit.sharedEmbeddingsUSD)} = **${money(report.pilotFit.conservativeTotalUSD)}**, below $24 by ${money(report.pilotFit.marginUSD)}. This is budget fit only; certification and other scientific/resource gates remain separate.
 
-| Stage | Extraction / reader calls | Attempts at ceiling | Expected planned cost | Worst reservation | Existing limit | Covered |
-|---|---:|---:|---:|---:|---:|---|
-${report.stages.map(s => `| ${s.stage} | ${s.extractionCalls} / ${s.readerCalls} | ${s.extractionAttempts} / ${s.readerAttempts} | ${money(s.expectedUSD)} | ${money(s.worstUSD)} | ${money(s.existingLimitUSD)} | ${s.responsesCovered ? 'Yes' : 'No'} |`).join('\n')}
-| Shared research + P embeddings | — | Within shared unit allowances | $2.560000 | $2.560000 | Shared | — |
-| Total | | | ${money(report.totals.expectedUSD)} | ${money(report.totals.worstUSD)} | $450.000000 | No |
+| Stage | Calls extraction / reader | Planned cost | Theoretical all-maximum-plus-retry envelope | Existing stage limit |
+|---|---:|---:|---:|---:|
+${report.stages.map(s=>`| ${s.stage} | ${s.extractionCalls} / ${s.readerCalls} | ${money(s.expectedUSD)} | ${money(s.worstUSD)} | ${money(s.existingLimitUSD)} |`).join('\n')}
+| Shared embeddings | 64M research + 64M P units | $2.560000 | $2.560000 | Charged to active stage |
+| Total | | ${money(report.totals.expectedUSD)} | ${money(report.totals.worstUSD)} | $450 operational stop |
 
-Reservations per attempt are: primary extraction $0.0131072, primary reader $0.0112768, alternative extraction $0.0307200. Each stage reserves twice its logical call counts. Embeddings add (64M + 64M) × $0.02/M = $2.56 once. They also consume the active stage's limit, rather than providing an extra stage allowance.
+**Theoretical-envelope coverage: NO.** ${report.stageLimitProposal.arithmetic}, above $450 by ${money(report.totals.shortfallUSD)}. Revised A-2 explicitly supersedes this envelope as the feasibility gate. It is not spending authorization and does not block pilot budget fit. The planning forecast is ${money(report.totals.expectedUSD)} + 25% (${money(report.totals.contingencyUSD)}) = ${money(report.totals.forecastWithContingencyUSD)}; this estimate does not guarantee completion.
 
-${report.stageLimitProposal.arithmetic}. The $450 shortfall is ${money(report.totals.shortfallUSD)}. Even the gross $500 authorization is short by ${money(report.totals.grossAuthorizationShortfallUSD)}, before preserving its unavailable $50 headroom. No valid stage-limit allocation within $450 exists; no limit changes were applied.
+**Later-stage feasibility: PENDING, not computed from fake usage.** Before development, use real settled pilot usage and the frozen input schema in \`reports/pre-development-projection.schema.json\`. It covers all experiment spending, full outstanding reservations, every remaining stage, shared embeddings, alternative extraction and contingency. Require projected completion <= $400 and compliance with every stage limit. Freeze exact inputs, ledger/configuration/schema/implementation hashes and per-stage arithmetic before development. Any rederived stage limits must fit within $450 and be disclosed first.
 
-The forecast uses the unchanged §14 input assumptions (8,000 extraction / 6,000 reader), the new full output caps, one attempt per call, and the full embedding allowance. It is ${money(report.totals.expectedUSD)} + 25% (${money(report.totals.contingencyUSD)}) = **${money(report.totals.forecastWithContingencyUSD)}**. This is a planning assumption, not measured model usage. Rates are the primary-supplied 2026-10-25 verification; no network or API was used.
-
-The original ceiling reproduces exactly at $440.905728; A-2 increases it by ${money(report.totals.increaseUSD)}. Further primary amendment of the workload/reservation design is required before the complete paid plan is feasible. The operational stop remains $450 and authorization remains $500.
+Dynamic stage/$450 hard stops and the $500 authorization with $50 unavailable headroom remain unchanged. The complete test is still required; budget exhaustion makes the result Inconclusive. No stage-limit changes or continuation approval were made here. Verified rates and unchanged token/call assumptions are recorded in the JSON; no network, API or credentials were used.
 `;
 }
 
@@ -135,5 +137,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   writeFileSync(new URL('./reports/budget-a2.md', import.meta.url), markdownSummary(report));
   assert.deepEqual(JSON.parse(readFileSync(output, 'utf8')), report);
   process.stdout.write(JSON.stringify({ status: report.status, totals: report.totals, stageLimitProposal: report.stageLimitProposal }, null, 2) + '\n');
-  process.exitCode = report.status === 'PASS' ? 0 : 1;
+  process.exitCode = report.pilotFit.pass ? 0 : 1;
 }

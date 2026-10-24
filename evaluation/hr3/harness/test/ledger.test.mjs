@@ -30,7 +30,7 @@ test('one transport retry, cumulative third failure stops, no quality retries',a
 });
 test('model mismatch, unexplained usage, duplicate provider IDs and unknown contract failures stop',async t=>{
  for(const mode of ['model-mismatch','overusage','provider-id','unknown']){
-  const {ledger}=fixture(t),fake=new FakeTransport(),guard=new GuardedTransport({async send(r){if(mode==='unknown')throw Error('unknown');const reply=await fake.send(r);if(mode==='model-mismatch')reply.model='different';if(mode==='overusage')reply.usage.outputTokens=4097;if(mode==='provider-id')reply.requestId='same';return reply;}},ledger);
+  const {ledger}=fixture(t),fake=new FakeTransport(),guard=new GuardedTransport({async send(r){if(mode==='unknown')throw Error('unknown');const reply=await fake.send(r);if(mode==='model-mismatch')reply.model='different';if(mode==='overusage')reply.usage.outputTokens=4353;if(mode==='provider-id')reply.requestId='same';return reply;}},ledger);
   if(mode==='provider-id'){await guard.send(request('a'));await assert.rejects(guard.send(request('b')),/unexplained_usage/);}else await assert.rejects(guard.send(request()));assert.ok(ledger.snapshot().stopped);
  }
 });
@@ -39,8 +39,8 @@ test('five-minute lack of progress and dispatch timeout are supervised',async t=
  const other=fixture(t),hung=new GuardedTransport({send:()=>new Promise(()=>{})},other.ledger,{timeoutMs:5});assert.equal((await hung.send(request())).status,'transport_exhausted');assert.equal(other.ledger.snapshot().unsettled.length,2);
 });
 test('strict body models, no tools/prior state, caps and byte/embed bounds',()=>{
- for(const change of [{tools:[]},{previous_response_id:'x'},{store:true},{temperature:1},{max_output_tokens:4097}])assert.throws(()=>validateRequest({...request(),body:{...request().body,...change}}),/request_shape/);
- const alt=responseRequest('extraction',{}, {alternative:true});assert.equal(alt.temperature,undefined);assert.deepEqual(alt.reasoning,{effort:'none'});assert.equal(alt.max_output_tokens,4096);
+ for(const change of [{tools:[]},{previous_response_id:'x'},{store:true},{temperature:1},{max_output_tokens:4353}])assert.throws(()=>validateRequest({...request(),body:{...request().body,...change}}),/request_shape/);
+ const alt=responseRequest('extraction',{}, {alternative:true});assert.equal(alt.temperature,undefined);assert.deepEqual(alt.reasoning,{effort:'none'});assert.equal(alt.max_output_tokens,4352);
  assert.throws(()=>validateRequest({operation:'reader',body:responseRequest('reader',{text:'x'.repeat(20000)})}),/byte_bound/);
  for(const input of [Array(65).fill('x'),['x'.repeat(8192)],Array(64).fill('x'.repeat(5000))])assert.throws(()=>validateRequest({operation:'product-embedding',body:embeddingRequest(input)}),/embedding_bound/);
 });
@@ -56,7 +56,7 @@ test('stage transitions share one operational ledger and preserve stage totals',
 });
 test('A-2 reserves and settles the exact new output ceiling at unchanged input bounds and prices',t=>{
  const {ledger}=fixture(t);
- for(const [operation,alternative,output,inputCeiling,inputRate,outputRate] of [['reader',false,2048,20000,400,1600],['extraction',false,4096,16384,400,1600],['extraction',true,4096,16384,750,4500]]){
+ for(const [operation,alternative,output,inputCeiling,inputRate,outputRate] of [['reader',false,2176,20000,400,1600],['extraction',false,4352,16384,400,1600],['extraction',true,4352,16384,750,4500]]){
   const body=responseRequest(operation,{}, {alternative}),id=operation+'-'+alternative;
   const reservation=ledger.reserve({id,operation,body});
   assert.equal(reservation.bound.output,output);assert.ok(reservation.bound.input<=inputCeiling);
