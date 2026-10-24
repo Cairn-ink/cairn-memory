@@ -2,8 +2,9 @@ import { parseOptions, selectEndpoint, validEndpoint } from './options.mjs';
 export { validEndpoint } from './options.mjs';
 import { detectLanguage, translator } from './messages.mjs';
 import { dispatchClient, parseClient } from './codex.mjs';
-import { terminalWriter, technical, wrapLine } from './output.mjs';
+import { terminalWriter, technical, wrapLine, shellArgument } from './output.mjs';
 import { DEFAULT_ENDPOINT, PRIVACY_URL } from './constants.mjs';
+import { routeLocalMode, localStatus, writeLocalResume } from './local-mode.mjs';
 import { setupDetected } from './clients.mjs';
 import { spawn } from 'node:child_process';
 import { writeSync, readFileSync } from 'node:fs';
@@ -178,14 +179,14 @@ export async function main(argv, {
   browse = openBrowser, nodeVersion = process.versions.node, authOptions = {},
   env = process.env, locale = Intl.DateTimeFormat().resolvedOptions().locale,
   coordinated = false, pairingConsent, claudeDeclined, inspectCodex, identityPlan, endpointChoice,
-  forceReauthorize = false, expectedCodex, hostsStopped, progress = {},
+  forceReauthorize = false, expectedCodex, hostsStopped, progress = {}, disableLocalMode = false, platform = process.platform,
 } = {}) {
   const rawWrite = write;
   const rawPrompt = prompt;
   prompt = (question, options) => rawPrompt(wrapLine(String(question)).join("\n"), options);
   write = terminalWriter(rawWrite);
   let t = translator(detectLanguage(env, locale));
-  let verbose = false;
+  let verbose = false, localDetection, localStatusCode = 0;
   const launchBrowser = (write, url, signal) => browse(write, url, signal, t);
   const controller = new AbortController();
   const interrupt = () => controller.abort();
@@ -217,23 +218,29 @@ export async function main(argv, {
     t.locale = translate.locale;
     if (forceReauthorize && !options.argv.includes('--reauthorize')) options.argv.push('--reauthorize');
     const selection = parseClient(options.argv, SetupError);
-    if (options.captureExec !== undefined && selection.client === 'claude') throw new SetupError('invalid_exec_setting', 2);
-    if (options.dailyCap !== undefined && selection.client === 'claude') throw new SetupError('cap_option_scope', 2);
     if (!coordinated && ['setup', 'status'].includes(selection.argv[0]))
       write(t(selection.argv[0] === 'status' ? 'status_header' : 'installer_version', { version: installerVersion }));
+    if (!coordinated && !disableLocalMode) {
+      const routed = await routeLocalMode(options, selection, { write, prompt, interactive, env, t, verbose,
+        runClaude: run, nodeVersion, supportedNode, installerVersion, platform, progress });
+      localDetection = routed.detection; localStatusCode = routed.statusCode ?? 0;
+      if (routed.handled) return routed.code;
+    }
+    if (options.captureExec !== undefined && selection.client === 'claude') throw new SetupError('invalid_exec_setting', 2);
+    if (options.dailyCap !== undefined && selection.client === 'claude') throw new SetupError('cap_option_scope', 2);
     if (!coordinated && !selection.client && ['setup', 'status'].includes(selection.argv[0])) {
-      return await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
+      return Math.max(localStatusCode, await setupDetected(selection.argv, { write, prompt, interactive, browse, nodeVersion,
         authOptions, env, locale, t, endpointOverride, dailyCap:options.dailyCap, captureExec:options.captureExec, verbose, progress,
         signal, supportedNode, SetupError, validEndpoint, inspectCodex,
         inspectClaude: async () => (await installed(run)).length ? configuration(run) : undefined,
         runClient: (args, overrides) => main(args, { write, prompt, interactive, browse, nodeVersion,
-          authOptions, env, locale, progress, coordinated: true, ...overrides }) });
+          authOptions, env, locale, progress, coordinated: true, ...overrides }) }));
     }
     const dispatch = await dispatchClient(options.argv, { write, prompt, interactive, browse: launchBrowser,
       nodeVersion, supportedNode, SetupError, validEndpoint, t, endpointOverride, dailyCap:options.dailyCap,
       captureExec:options.captureExec, verbose, authOptions, signal, pairingConsent,
       identityPlan, endpointChoice, expectedCodex, hostsStopped, coordinated, claudeDeclined, progress });
-    if (dispatch.handled) return dispatch.code;
+    if (dispatch.handled) return Math.max(localStatusCode, dispatch.code);
     argv = dispatch.argv;
     const [action, ...flags] = argv;
     if (action === '--help' || action === '-h' || action === undefined) {
@@ -282,7 +289,7 @@ export async function main(argv, {
       if (await oldMCP(run)) write(t('legacy_present'));
       write(t('claude_status_tip'));
       if (!coordinated) {write('');write(t('status_unverified'));}
-      return 0;
+      return localStatusCode;
     }
 
     if (flags.includes('--dry-run')) {
@@ -419,6 +426,23 @@ export async function main(argv, {
     if (signal.aborted) error = new AuthError('interrupted');
     write(error instanceof SetupError ? t(error.key, {...error.params,
       client:error.params.client === 'claude'?'Claude Code':error.params.client === 'codex'?'Codex':error.params.client}) : t('setup_failed'));
+    if (progress.localOperation || (error instanceof SetupError && (/^(?:local_|claude_mcp_|codex_mcp_|lock_retry$)/u.test(error.key) || error.params.local))) {
+      const params = error.params ?? {};
+      for (const stage of ['local_engine', 'local_claude', 'local_codex']) if (progress[stage]) write(t('progress_' + stage));
+      if (error.key === 'codex_lock') write(t('lock_retry'));
+      if (params.path) write.literal(shellArgument(params.path));
+      if (error.key === 'local_lock_stale') write.literal('rm -- ' + shellArgument(params.path));
+      if (error.key === 'local_recovery_required') write.literal('npx @cairn-ink/memory uninstall --local --purge-config');
+      const recoveryOnly = ['local_lock_stale', 'lock_retry', 'codex_lock', 'local_recovery_required', 'local_root_invalid', 'local_option_invalid'];
+      if (progress.localAction === 'uninstall') {
+        write(t('local_data_kept')); write.literal(progress.localUninstallCommand);
+      } else if (/mcp_/u.test(error.key ?? '') || (progress.localOperation && !recoveryOnly.includes(error.key))) writeLocalResume(write, t);
+      if (verbose && /^local_engine_/u.test(error.key ?? '')) {
+        write(t('phase_details', { phase: 'local engine', code: params.exitCode ?? params.spawnError ?? 'unknown' }));
+        for (const stream of ['stdout', 'stderr']) if (params[stream]) write.literal(params[stream].trimEnd());
+      }
+      return Math.max(localStatusCode, error instanceof SetupError ? error.code : 1);
+    }
     if (!error.presented) {
       const changes = ['runtime','credential','config','install','hooks'].filter(key=>progress[key]).map(key=>t('progress_'+key));
       if (changes.length) write(t('progress_codex', { changes: changes.join(t('list_joiner')) }));
@@ -433,6 +457,12 @@ export async function main(argv, {
       if (verbose && error.params?.phase) write(t('phase_details',error.params));
       if (verbose && error.key==='command_failed') write(t('command_details',error.params));
     }
-    return error instanceof SetupError ? error.code : 1;
-  } finally { process.off('SIGINT', interrupt); }
+    return Math.max(localStatusCode, error instanceof SetupError ? error.code : 1);
+  } finally {
+    if (localDetection) {
+      try { await localStatus(localDetection, { write, t, verbose }); }
+      catch { write(t('local_status_unverified')); }
+    }
+    process.off('SIGINT', interrupt);
+  }
 }

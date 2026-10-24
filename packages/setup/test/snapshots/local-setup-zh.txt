@@ -1,0 +1,15 @@
+Cairn.ink Memory 安裝程式 <version>
+1. 本機：資料留在這台電腦，免費、可離線使用，無法跨電腦同步。
+2. 雲端：記憶可跨電腦和工具共用，需要登入 cairn.ink。
+? 記憶要存在哪裡？(1/2)
+記憶留在這台電腦的 ~/.cairn-memory，安裝程式不會傳送你的資料。
+本機記憶透過 MCP 工具使用，不會自動記下對話或回想。
+語意回想需要模型金鑰；若工具環境已有 OPENAI_API_KEY，
+引擎會用它回想，並把選取的文字傳給該模型供應商。
+? 連接 Claude Code？ (Y/n)
+? 連接 Codex？ (y/N)
+正在安裝本機記憶引擎……
+✓ Claude Code 已連接本機記憶（cairn-local）
+✓ Codex 已連接本機記憶（cairn-local）
+✓ 本機記憶設定完成。
+接下來：重新開啟 Claude Code 和 Codex。

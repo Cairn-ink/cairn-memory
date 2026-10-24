@@ -36,7 +36,7 @@ for (const lang of ['zh', 'en']) test(`shared endpoint refusal is localized (${l
     assert.match(text, lang === 'zh' ? /不同的 Cairn/ : /different Cairn/); return true;
   });
 });
-test('round 3: documentation states approval direction and prohibits importing Claude secrets', async () => {
+test('round 3: documentation states approval direction and prohibits importing Claude secrets', { skip: process.env.CAIRN_SETUP_TEST_PACKAGE ? 'Source-only documentation gate; packed runtime is checked separately.' : false }, async () => {
   const packageRoot = process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(process.env.CAIRN_SETUP_TEST_PACKAGE + '/') : new URL('../', import.meta.url);
   const root = new URL('../../', packageRoot);
   for (const [url, pattern] of [

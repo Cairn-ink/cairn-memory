@@ -27,8 +27,8 @@ import { fileURLToPath } from 'node:url';
 
 const mcpSecret = 'synthetic-MCP-PAT-different-from-hook-token';
 const session = '11111111-1111-4111-8111-111111111111';
-const mainURL = new URL('../lib/setup.mjs',import.meta.url).href;
-const transportURL = new URL('../lib/transport.mjs',import.meta.url).href;
+const mainURL = process.env.CAIRN_SETUP_TEST_MODULE || (process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'lib/setup.mjs')).href : new URL('../lib/setup.mjs',import.meta.url).href);
+const transportURL = new URL('./transport.mjs',mainURL).href;
 const wireURL = new URL('./http-wire.mjs',import.meta.url).href;
 
 async function fixture(t,{answers=[''],args,config='',hooks,paired=false,claudePolicy=true,
@@ -82,7 +82,7 @@ async function fixture(t,{answers=[''],args,config='',hooks,paired=false,claudeP
     import{requestJSON}from${JSON.stringify(transportURL)};
     import{installChildWire}from${JSON.stringify(wireURL)};
     const disconnect=installChildWire();let clock=0;const answers=${JSON.stringify(answers)};
-    process.exitCode=await main(process.argv.slice(2),{interactive:true,prompt:async(_q,o)=>{
+    process.exitCode=await main(process.argv.slice(2),{disableLocalMode:true,interactive:true,prompt:async(_q,o)=>{
       process.stdout.write(JSON.stringify({prompt:true,secret:Boolean(o?.secret)})+'\\n');return answers.shift()??(/Are both closed/.test(_q)?'yes':'');},
       browse:async()=>{},authOptions:{now:()=>clock,sleep:async ms=>{clock+=ms;},
         request:(url,options)=>requestJSON(url,{...options,env:{}}),copy:async()=>false,progress:()=>()=>{}}});disconnect();`);
@@ -116,7 +116,7 @@ test('CX-5 browser credential is saved before ACK; OAuth MCP, private stable run
   const f=await fixture(t,{config:'# preserved\nmodel = "synthetic"\n',hooks:unrelated});
   assert.equal(f.code,0,f.stdout);assert.equal(f.server.grant.state,'delivered');
   assert.equal(f.installed.enabled,true);
-  assert.match(f.installed.runtime,/custom-codex\/cairn\/runtime\/0\.5\.3-/);
+  assert.ok(f.installed.runtime.includes('/cairn/runtime/' + JSON.parse(await readFile(process.env.CAIRN_SETUP_TEST_PACKAGE ? join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'package.json') : new URL('../package.json', import.meta.url))).version + '-'));
   const config=await readFile(join(f.codexHome,'config.toml'),'utf8');
   assert.match(config,/^# preserved/);assert.match(config,/\[mcp_servers.cairn\]/);assert.ok(!config.includes(secret));
   assert.ok(!config.includes('Authorization'));assert.match(f.stdout,/codex mcp login cairn/);

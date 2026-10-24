@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { scryptSync } from 'node:crypto';
 import { appendFileSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 
@@ -13,6 +15,7 @@ const args = process.argv.slice(2);
 const input = readFileSync(0, 'utf8');
 const values = input ? JSON.parse(input) : {};
 appendFileSync(process.env.FAKE_CALLS, `${JSON.stringify({ args, env: process.env, keys: Object.keys(values), endpoint: values.api_endpoint, pairingRecord: values.pairing_record, tokenDigest: values.api_token ? tokenDigest(values.api_token) : undefined })}\n`);
+if (process.env.FAKE_GLOBAL_CALLS) appendFileSync(process.env.FAKE_GLOBAL_CALLS, JSON.stringify({ client: 'claude', args, keys: Object.keys(values), endpoint: values.api_endpoint, pairingRecord: values.pairing_record }) + '\n');
 const state = JSON.parse(readFileSync(process.env.FAKE_STATE, 'utf8'));
 const scopeIndex = args.indexOf('--scope');
 const command = (scopeIndex < 0 ? args : args.filter((_, index) => index !== scopeIndex && index !== scopeIndex + 1)).join(' ');
@@ -24,7 +27,8 @@ if (state.fail === command || (state.failPairing && values.pairing_record)) {
 }
 if (command === '--version') console.log('2.1.289 (Claude Code)');
 else if (args.at(-1) === '--help') {
-  if (state.noInstall && command.includes(' install ')) console.log('Usage: claude');
+  if (args[0] === 'mcp') console.log(state.noMcp ? 'Usage: claude' : '--transport --scope');
+  else if (state.noInstall && command.includes(' install ')) console.log('Usage: claude');
   else if (state.noConfigure && command.includes(' configure ')) {
     console.log('Usage: claude'); process.exitCode = 1;
   } else console.log(`Usage: claude ${args.slice(0, -1).join(' ')} [options]\n--json --values-stdin`);
@@ -61,6 +65,28 @@ else if (command === 'plugin list --json') {
   if (values.api_token !== undefined) state.configured = !state.incompleteSave;
   // A noisy or broken child must never cause the installer to reveal the PAT.
   console.log(values.api_token); console.error(values.api_token);
+} else if (args[0] === 'mcp' && (args.includes('cairn-local') || args[1] === 'add' || (scopeIndex >= 0 && args[1] === 'remove'))) {
+  const path = join(process.env.HOME, '.claude.json');
+  const config = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
+  config.mcpServers ??= {};
+  const scope = scopeIndex >= 0 ? args[scopeIndex + 1] : 'user';
+  const name = args[1] === 'add' ? args[args.indexOf('--') - 1] : args.find(arg => ['cairn', 'cairn-local'].includes(arg));
+  state.mcpScopes ??= {}; state.mcpScopes.user = config.mcpServers;
+  const entries = state.mcpScopes[scope] ??= {};
+  if (args[1] === 'add') {
+    if (Object.hasOwn(entries, name)) { console.error(`MCP server ${name} already exists in ${scope} config`); process.exit(1); }
+    const vector = args.slice(args.indexOf('--') + 1);
+    entries[name] = { type: 'stdio', command: vector[0], args: vector.slice(1) };
+  } else if (args[1] === 'remove') {
+    if (!Object.hasOwn(entries, name)) { console.error(`No MCP server named "${name}" in ${scope} scope`); process.exit(1); }
+    delete entries[name];
+  } else if (args[1] === 'get') {
+    const chosen = ['local', 'project', 'user'].find(key => state.mcpScopes[key]?.[name]);
+    if (!chosen) { console.error(`No MCP server named "${name}". Configured servers: `); process.exit(1); }
+    const entry = state.mcpScopes[chosen][name];
+    console.log(`${name}:\n  Scope: ${chosen} config\n  Status: connected\n  Type: stdio\n  Command: ${entry.command}\n  Args: ${entry.args.join(' ')}`);
+  }
+  if (['add', 'remove'].includes(args[1])) writeFileSync(path, JSON.stringify(config), { mode: 0o600 });
 } else if (command === 'mcp get cairn') {
   if (state.mcp) console.log('Scope: User config\nAuthorization: ' + state.token);
   else { console.error('No MCP server named "cairn". Run `claude mcp add` to add one.'); process.exitCode = 1; }

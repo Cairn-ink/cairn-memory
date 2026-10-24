@@ -1,9 +1,10 @@
-import test from 'node:test';
+import runTest from 'node:test';
+const test = process.env.CAIRN_SETUP_TEST_GROUP ? () => {} : runTest;
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir, readdir, chmod } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { fakeAuthServer, secret } from './fake-auth-server.mjs';
 import { wireChild } from './http-wire.mjs';
@@ -22,7 +23,8 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
     originalId = await opaqueProjectId(profileRoot, '/synthetic/project', { home });
   }
   const claudeState = join(ws.path, 'claude.json'), codexState = join(ws.path, 'codex.json');
-  const claudeCalls = join(ws.path, 'claude.jsonl'), codexCalls = join(ws.path, 'codex.jsonl');
+  const claudeCalls = join(ws.path, 'claude.jsonl'), codexCalls = join(ws.path, 'codex.jsonl'), allCalls = join(ws.path, 'all-calls.jsonl');
+  await writeFile(allCalls, '');
   await writeFile(claudeState, '{}'); await writeFile(claudeCalls, ''); await writeFile(codexCalls, '');
   await writeFile(codexState, JSON.stringify({ version: '0.160.1',
     formatEvidence: fileURLToPath(new URL('../../../integrations/codex/test/fixtures/', import.meta.url)) }));
@@ -38,16 +40,23 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
   }
   if (claude) await addClaude(); if (codex) await addCodex();
   const server = await fakeAuthServer(t, auth);
+  const targetModule = process.env.CAIRN_SETUP_TEST_MODULE || (process.env.CAIRN_SETUP_TEST_PACKAGE ? pathToFileURL(join(process.env.CAIRN_SETUP_TEST_PACKAGE, 'lib/setup.mjs')).href : new URL('../lib/setup.mjs', import.meta.url).href);
   const harness = join(ws.path, 'harness.mjs');
-  await writeFile(harness, `import{writeSync,writeFileSync}from'node:fs';import{main}from${JSON.stringify(process.env.CAIRN_SETUP_TEST_MODULE || new URL('../lib/setup.mjs', import.meta.url).href)};
-    import{SetupError}from${JSON.stringify(new URL('../lib/errors.mjs', import.meta.url).href)};
-    import{requestJSON}from${JSON.stringify(new URL('../lib/transport.mjs', import.meta.url).href)};
+  await writeFile(harness, `import{writeSync,writeFileSync}from'node:fs';import{main}from${JSON.stringify(targetModule)};
+    import{SetupError}from${JSON.stringify(new URL('./errors.mjs', targetModule).href)};
+    import{requestJSON}from${JSON.stringify(new URL('./transport.mjs', targetModule).href)};
     import{installChildWire}from${JSON.stringify(new URL('./http-wire.mjs', import.meta.url).href)};
     const disconnect=installChildWire();let clock=0;const choices=JSON.parse(process.env.TEST_CHOICES);
-    process.exitCode=await main(process.argv.slice(2),{interactive:process.env.TEST_TTY==='true',
+    if(process.env.TEST_FIXED_NOW){const{default:crypto}=await import('node:crypto');const{syncBuiltinESMExports}=await import('node:module');let uuid=0;
+      crypto.randomUUID=()=> '00000000-0000-4000-8000-'+(++uuid).toString(16).padStart(12,'0');syncBuiltinESMExports();
+      const OriginalDate=Date,stamp=Number(process.env.TEST_FIXED_NOW);
+      globalThis.Date=class extends OriginalDate{constructor(...args){super(...(args.length?args:[stamp]));}static now(){return stamp;}};}
+
+    process.exitCode=await main(process.argv.slice(2),{disableLocalMode:process.env.TEST_HOSTED_BASELINE==='true',interactive:process.env.TEST_TTY==='true',
       ...(choices.inspectionError ? {inspectCodex:async()=>{throw new SetupError(choices.inspectionError,1,{client:'codex',args:'mcp get cairn --json',code:7});}} : {}),
       ...(choices.windows ? {inspectCodex:async()=>({qualified:false,reason:'codex_windows'})} : {}),
       prompt:async(q,o)=>{writeSync(1, JSON.stringify({prompt:q,secret:Boolean(o?.secret)})+'\\n');
+        if(q.includes('Where should memory live?')||q.includes('記憶要存在哪裡'))return choices.mode??'2';
         if(q.includes('Connect Claude Code?')||q.includes('連接 Claude Code？'))return choices.claude??'';
         if(q.includes('Connect Codex')||q.includes('連接 Codex')||q.includes('Add the Cairn')||q.includes('加入 Cairn'))return choices.codex??'yes';
         if(q.includes('Are both closed')||q.includes('都關好了嗎')){if(choices.changeConfig)writeFileSync(process.env.CODEX_HOME+'/config.toml','model = \"changed\"\\n');if(choices.stopCancel)throw new SetupError('input_cancelled',130);return choices.stopped?.shift()??'yes';}
@@ -64,13 +73,13 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
       authOptions:{now:()=>clock,sleep:async ms=>{clock+=ms;},request:(url,options)=>requestJSON(url,{...options,env:{}}),copy:async()=>false,progress:()=>()=>{}}});disconnect();`);
   const installation = join(codexHome, 'cairn/installation.json');
   const lines = async path => (await readFile(path, 'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse);
-  async function run({ args = ['setup'], choices = {}, interactive = true, tmpdir } = {}) {
+  async function run({ args = ['setup'], choices = {}, interactive = true, tmpdir, disableLocalMode = true, fixedNow } = {}) {
     const configured=JSON.parse(await readFile(claudeState,'utf8')).configured;
     const installed=await readInstallation(installation).then(()=>true,()=>false);
-    if(args[0]==='setup'&&!configured&&!installed&&!args.includes('--endpoint'))args=[...args,'--endpoint',server.endpoint];
+    if(args[0]==='setup'&&!args.includes('--local')&&!configured&&!installed&&!args.includes('--endpoint'))args=[...args,'--endpoint',server.endpoint];
     const child = spawn(process.execPath, [harness, ...args], { cwd: ws.path,
       env: { HOME: home, CODEX_HOME: codexHome, PATH: bin, LANG: 'en_US.UTF-8', TMPDIR: tmpdir ?? process.env.TMPDIR,
-        TEST_CHOICES: JSON.stringify(choices), TEST_TTY: String(interactive) }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+        FAKE_GLOBAL_CALLS: allCalls, TEST_CHOICES: JSON.stringify(choices), TEST_TTY: String(interactive), TEST_HOSTED_BASELINE: String(disableLocalMode), TEST_FIXED_NOW: fixedNow === undefined ? '' : String(fixedNow), CAIRN_MEMORY_HOME: join(home, 'local-memory') }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
     wireChild(child, server.server);
     let stdout = '', stderr = '';
     child.stdout.on('data', data => { stdout += data; }); child.stderr.on('data', data => { stderr += data; });
@@ -93,6 +102,7 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
     setClaudeState: value => writeFile(claudeState, JSON.stringify(value)),
     setCodexState: async value => writeFile(codexState, JSON.stringify({ ...JSON.parse(await readFile(codexState, 'utf8')), ...value })),
     claudeState: () => readFile(claudeState, 'utf8').then(JSON.parse),
+    orderedCalls: () => lines(allCalls),
     calls: async () => ({ claude: await lines(claudeCalls), codex: await lines(codexCalls) }) };
 }
 
