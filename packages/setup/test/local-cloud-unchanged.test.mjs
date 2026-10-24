@@ -46,7 +46,7 @@ function assertProbeDelta(baseline, current, client, home) {
     // The old hosted schema probe creates a fresh private scratch directory on
     // every invocation. Its generated output pathname is not a client mutation.
     return call.args.length === 4 && call.args.slice(0, 3).join(' ') === 'app-server generate-json-schema --out' ?
-      [...call.args.slice(0, 3), '<schema-output>'] : call.args;
+      [...call.args.slice(0, 3), '<schema-output>'] : call.args.map(normalizeRuntime);
   };
   let index = 0;
   for (const call of current) {
@@ -57,19 +57,85 @@ function assertProbeDelta(baseline, current, client, home) {
   }
   assert.equal(index, baseline.length, 'Existing native calls must remain in order');
 }
-async function inventory(root) {
+// v0.10 permits only installer versions and hosted runtime directory names.
+// Runtime payloads stay raw: normalizing source contents would hide regressions.
+const normalizeRuntime = text => text.replace(/(?<=\/runtime\/)\d+\.\d+\.\d+(?:-[\w.]+)?-[a-f0-9]{12}(?=\/|[\s'"\\]|$)/gu, '<version>-<digest>');
+const normalizeFile = (name, bytes) => {
+  let text = bytes.toString();
+  if (name === '.codex/hooks.json') {
+    text = text.replace(/("command"\s*:\s*)("(?:[^"\\]|\\.)*")/gu,
+      (_match, field, command) => field + normalizeRuntime(command));
+  } else if (name === '.codex/cairn/installation.json') {
+    text = text.replace(/("runtime"\s*:\s*)("(?:[^"\\]|\\.)*")/gu,
+      (_match, field, runtime) => field + normalizeRuntime(runtime))
+      .replace(/("installerVersion"\s*:\s*")\d+\.\d+\.\d+(?:-[\w.]+)?"/gu, '$1<version>"');
+  } else return bytes;
+  return Buffer.from(text);
+};
+const normalizedCall = call => ({ ...call, args: call.args.map(normalizeRuntime) });
+function fileInventory(entries, normalize) {
   const result = {};
-  try {
-    for (const entry of await readdir(root, { withFileTypes: true })) {
-      const path = join(root, entry.name);
-      if (entry.isDirectory()) Object.assign(result, Object.fromEntries(Object.entries(await inventory(path)).map(([name, value]) => [entry.name + '/' + name, value])));
-      else result[entry.name] = createHash('sha256').update(await readFile(path)).digest('hex');
-    }
-  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  for (const [name, bytes] of entries) {
+    const key = normalize ? normalizeRuntime('/' + name).slice(1) : name;
+    const hash = createHash('sha256').update(normalize ? normalizeFile(name, bytes) : bytes).digest('hex');
+    // Two version-derived names can collapse after an upgrade, but every copy
+    // must contain identical bytes; a second generation cannot hide drift.
+    if (Object.hasOwn(result, key)) assert.equal(result[key], hash, name);
+    result[key] = hash;
+  }
   return result;
 }
-const normalized = text => text.replace(/(Cairn\.ink Memory(?: setup| status| 安裝程式)? )\d+\.\d+\.\d+/gu, '$1<version>')
-  .replace(/\/runtime\/\d+\.\d+\.\d+-[a-f0-9]{12}/gu, '/runtime/<version>-<digest>');
+async function inventory(root, normalize = false) {
+  async function entries(directory, prefix = '') {
+    const result = [];
+    try {
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name), name = prefix + entry.name;
+        if (entry.isDirectory()) result.push(...await entries(path, name + '/'));
+        else result.push([name, await readFile(path)]);
+      }
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    return result;
+  }
+  return fileInventory(await entries(root), normalize);
+}
+const normalized = text => normalizeRuntime(text.replace(/(Cairn\.ink Memory(?: setup| status| 安裝程式)? )\d+\.\d+\.\d+(?:-[\w.]+)?/gu, '$1<version>'));
+test('L06 version normalization preserves unrelated bytes and runtime payloads', () => {
+  const oldRuntime = '/synthetic/.codex/cairn/runtime/0.5.3-0123456789ab';
+  const newRuntime = '/synthetic/.codex/cairn/runtime/0.6.0-abcdef012345';
+  const before = Buffer.from(`{ "installerVersion": "0.5.3", "runtime": "${oldRuntime}", "dailyCap": 200 }\n`);
+  const after = Buffer.from(`{ "installerVersion": "0.6.0", "runtime": "${newRuntime}", "dailyCap": 200 }\n`);
+  const name = '.codex/cairn/installation.json';
+  assert.deepEqual(normalizeFile(name, before), normalizeFile(name, after));
+  for (const changed of [after.toString().replace('200', '201'), after.toString().replace('{ ', '{  ')]) {
+    assert.throws(() => assert.deepEqual(normalizeFile(name, before), normalizeFile(name, Buffer.from(changed))));
+  }
+  const hooks = runtime => Buffer.from(`{"hooks":{"Stop":[{"command":"node ${runtime}/entry.mjs"}]}}`);
+  assert.deepEqual(normalizeFile('.codex/hooks.json', hooks(oldRuntime)), normalizeFile('.codex/hooks.json', hooks(newRuntime)));
+  assert.throws(() => assert.deepEqual(normalizeFile('.codex/hooks.json', hooks(oldRuntime)),
+    normalizeFile('.codex/hooks.json', Buffer.from(hooks(newRuntime).toString().replace('Stop', 'Start')))));
+  for (const path of ['.codex/config.toml', '.codex/cairn/runtime/0.6.0-abcdef012345/entry.mjs']) {
+    assert.deepEqual(normalizeFile(path, after), after, 'Other files, including runtime sources, are byte-identical');
+    assert.throws(() => assert.deepEqual(normalizeFile(path, before), normalizeFile(path, after)));
+  }
+  const payload = Buffer.from('runtime payload 0.5.3 stays literal');
+  const oldName = '.codex/cairn/runtime/0.5.3-0123456789ab/entry.mjs';
+  const newName = '.codex/cairn/runtime/0.6.0-abcdef012345/entry.mjs';
+  assert.deepEqual(fileInventory([[oldName, payload]], true), fileInventory([[newName, payload]], true));
+  assert.throws(() => fileInventory([[oldName, payload], [newName, Buffer.from('changed source')]], true));
+  assert.throws(() => assert.deepEqual(fileInventory([[oldName, payload]], true),
+    fileInventory([[newName, payload], [newName.replace('entry.mjs', 'extra.mjs'), payload]], true)));
+  for (const path of ['.codex/hooks.json', name]) {
+    const oldExtra = Buffer.from(`{"unrelated":"${oldRuntime}"}`);
+    const newExtra = Buffer.from(`{"unrelated":"${newRuntime}"}`);
+    assert.throws(() => assert.deepEqual(normalizeFile(path, oldExtra), normalizeFile(path, newExtra)));
+  }
+  assert.equal(normalizeRuntime(oldRuntime + '/entry.mjs'), normalizeRuntime(newRuntime + '/entry.mjs'));
+  assert.deepEqual(normalizedCall({ args: ['configure', oldRuntime + '/entry.mjs'], keys: ['0.5.3'] }),
+    { args: ['configure', normalizeRuntime(newRuntime + '/entry.mjs')], keys: ['0.5.3'] });
+  assert.notEqual(normalized('Cairn.ink Memory setup 0.6.0\nunrelated 0.6.0'),
+    normalized('Cairn.ink Memory setup 0.5.3\nunrelated 0.5.3'));
+});
 for (const lang of ['zh', 'en']) test(`L02 fresh cloud choice preserves hosted flow (${lang})`, async t => {
   const baselineFixture = await fixture(t), routedFixture = await fixture(t);
   const args = ['setup', '--lang', lang];
@@ -112,11 +178,11 @@ for (const scenario of scenarios) for (const args of actions) test(`L06 hosted b
   const beforeCalls = await f.calls(), beforeOrdered = (await f.orderedCalls()).length;
   const historical = await historicalInstaller();
   const baseline = await f.run({ args, choices, fixedNow, disableLocalMode: true, module: historical.module });
-  const baselineFiles = await inventory(f.home), baselineCalls = await f.calls();
+  const baselineFiles = await inventory(f.home, true), baselineCalls = await f.calls();
   const mutating = (all, start) => Object.fromEntries(['claude', 'codex'].map(client => [client,
-    all[client].slice(start[client].length).filter(callsThatMutate).map(call => ({ args: call.args, keys: call.keys, endpoint: call.endpoint, pairingRecord: call.pairingRecord }))]));
+    all[client].slice(start[client].length).filter(callsThatMutate).map(call => ({ args: call.args.map(normalizeRuntime), keys: call.keys, endpoint: call.endpoint, pairingRecord: call.pairingRecord }))]));
   const mutations = mutating(baselineCalls, beforeCalls);
-  const orderedMutations = (await f.orderedCalls()).slice(beforeOrdered).filter(callsThatMutate);
+  const orderedMutations = (await f.orderedCalls()).slice(beforeOrdered).filter(callsThatMutate).map(normalizedCall);
   const restore = async () => {
     await rm(f.home, { recursive: true }); await cp(saved, f.home, { recursive: true });
     await writeFile(join(f.scratch, 'claude.json'), nativeState); await writeFile(join(f.scratch, 'codex.json'), codexState);
@@ -130,8 +196,8 @@ for (const scenario of scenarios) for (const args of actions) test(`L06 hosted b
     const disabledCalls = await f.calls();
     assert.deepEqual(mutating(disabledCalls, start), mutations);
     for (const client of ['claude', 'codex']) assertProbeDelta(baselineCalls[client].slice(beforeCalls[client].length), disabledCalls[client].slice(start[client].length), client, f.codexHome);
-    assert.deepEqual((await f.orderedCalls()).slice(orderedStart).filter(callsThatMutate), orderedMutations);
-    assert.deepEqual(await inventory(f.home), baselineFiles);
+    assert.deepEqual((await f.orderedCalls()).slice(orderedStart).filter(callsThatMutate).map(normalizedCall), orderedMutations);
+    assert.deepEqual(await inventory(f.home, true), baselineFiles);
     await assert.rejects(readdir(join(f.home, 'local-memory')), { code: 'ENOENT' });
   });
   await restore();
@@ -141,8 +207,8 @@ for (const scenario of scenarios) for (const args of actions) test(`L06 hosted b
   assert.equal(normalized(routed.stdout), normalized(baseline.stdout));
   assert.deepEqual(routed.prompts, baseline.prompts);
   assert.deepEqual(mutating(await f.calls(), beforeRouted), mutations);
-  assert.deepEqual((await f.orderedCalls()).slice(routedOrdered).filter(callsThatMutate), orderedMutations);
-  assert.deepEqual(await inventory(f.home), baselineFiles);
+  assert.deepEqual((await f.orderedCalls()).slice(routedOrdered).filter(callsThatMutate).map(normalizedCall), orderedMutations);
+  assert.deepEqual(await inventory(f.home, true), baselineFiles);
   await assert.rejects(readdir(join(f.home, 'local-memory')), { code: 'ENOENT' });
   const routedCalls = await f.calls();
   for (const client of ['claude', 'codex']) assertProbeDelta(baselineCalls[client].slice(beforeCalls[client].length),

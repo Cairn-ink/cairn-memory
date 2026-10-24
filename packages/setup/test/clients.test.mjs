@@ -47,8 +47,14 @@ export async function fixture(t, { claude = true, codex = true, qualified = true
     import{requestJSON}from${JSON.stringify(new URL('./transport.mjs', targetModule).href)};
     import{installChildWire}from${JSON.stringify(new URL('./http-wire.mjs', import.meta.url).href)};
     const disconnect=installChildWire();let clock=0;const choices=JSON.parse(process.env.TEST_CHOICES);
-    if(process.env.TEST_FIXED_NOW){const{default:crypto}=await import('node:crypto');const{syncBuiltinESMExports}=await import('node:module');let uuid=0;
-      crypto.randomUUID=()=> '00000000-0000-4000-8000-'+(++uuid).toString(16).padStart(12,'0');syncBuiltinESMExports();
+    if(process.env.TEST_FIXED_NOW){const{default:crypto}=await import('node:crypto');const{syncBuiltinESMExports}=await import('node:module');const uuids=new Map();
+      // New versioned runtime copies need extra temporary UUIDs. Keep each
+      // caller's deterministic sequence independent, without normalizing any
+      // persisted control/identity data in the L06 comparison.
+      crypto.randomUUID=()=>{const caller=new Error().stack.split('\\n')[2].trim().split(' ')[1];
+        const next=(uuids.get(caller)??0)+1;uuids.set(caller,next);
+        const hex=crypto.createHash('sha256').update(caller+':'+next).digest('hex');
+        return hex.slice(0,8)+'-'+hex.slice(8,12)+'-4'+hex.slice(13,16)+'-8'+hex.slice(17,20)+'-'+hex.slice(20,32);};syncBuiltinESMExports();
       const OriginalDate=Date,stamp=Number(process.env.TEST_FIXED_NOW);
       globalThis.Date=class extends OriginalDate{constructor(...args){super(...(args.length?args:[stamp]));}static now(){return stamp;}};}
 

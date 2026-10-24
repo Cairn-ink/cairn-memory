@@ -86,4 +86,14 @@ Cairn 提供工具，讓你把這些偏好或決定存成記憶，下次可以�
   資料處理方式；Codex 文件描述的是明確呼叫記憶工具，自動保存整合仍在開發。
 - [本機資料與刪除範圍](README.md#local-privacy-and-control) · [隱私說明](docs/privacy.md)
 
+## 安裝
+
+```sh
+npx @cairn-ink/memory setup
+```
+
+這份原始碼準備 installer 0.6.0，發布後可用上方指令；第一次安裝會問要用本機
+MCP 工具，或登入 cairn.ink 使用雲端自動記憶，也可用 `setup --local`／
+`setup --cloud` 直接選擇，本機模式目前不會自動保存或回想。
+
 更多安裝、開發與技術文件，請看 [English README](README.md)。

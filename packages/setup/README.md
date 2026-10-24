@@ -1,8 +1,8 @@
 # @cairn-ink/memory
 
-Set up Cairn automatic memory for Claude Code and qualified Codex hosts.
-Requires Node ≥22.16 and the selected CLI on PATH; no runtime dependencies.
-This checkout prepares **installer 0.5.3**. The Claude plugin stays **0.3.2**.
+Set up Cairn memory for Claude Code and Codex: local MCP tools or cloud automatic memory.
+Requires Node ≥22.16 and the selected CLI on PATH; the installer itself has no runtime dependencies.
+This checkout prepares **installer 0.6.0**. The Claude plugin stays **0.3.2**.
 The release must be published before `npx` can use these new flows.
 
 ## Setup / 安裝
@@ -12,6 +12,128 @@ npx @cairn-ink/memory setup
 # Use this checkout before publication / 發布前執行這份原始碼
 node packages/setup/bin/memory.mjs setup
 ```
+
+On a fresh interactive install, setup asks once where memory should live:
+**1. Local** keeps data on this computer, free and usable offline after installation,
+without sync across computers; **2. Cloud** shares memory across computers and tools
+with cairn.ink sign-in. Existing cloud users keep their flow without a new question.
+Use `setup --local` or `setup --cloud` to choose directly. A fresh non-interactive
+run without either flag writes nothing and prints both rerun commands.
+
+第一次互動安裝會先問一次記憶要存在哪裡：**1. 本機**把資料留在這台電腦，
+免費、安裝後可離線使用，無法跨電腦同步；**2. 雲端**透過 cairn.ink 登入，
+跨電腦和工具共用記憶。既有雲端使用者維持原流程，不會多問一次。
+也可以用 `setup --local` 或 `setup --cloud` 直接選擇；第一次在非互動終端機
+執行時，若沒選模式，不會寫入設定，會顯示兩個重跑指令。
+
+## Local mode / 本機模式
+
+```sh
+npx @cairn-ink/memory setup --local
+npx @cairn-ink/memory status
+npx @cairn-ink/memory status --verbose
+npx @cairn-ink/memory uninstall --local
+# Non-interactive confirmation / 非互動確認
+npx @cairn-ink/memory uninstall --local --yes
+```
+
+No Cairn account or sign-in is needed. Local mode uses one private root, `~/.cairn-memory`, or an absolute
+`CAIRN_MEMORY_HOME`. It keeps the installation record in `installation.json`,
+engine generations and the npm cache in `engine/`, and memory in
+`data/memory.sqlite` (created on first engine use). Initial engine dependency
+installation needs npm registry access unless its cache is already populated.
+Setup registers a `cairn-local` stdio MCP server through each client's own CLI:
+user scope for Claude Code, and `$CODEX_HOME/config.toml` (default `~/.codex`)
+for Codex. Both use the same database and owner, with an absolute Node path.
+Restart the tools after setup. If Node moves, rerun `setup --local`.
+
+本機模式不需要 Cairn 帳號或登入，共用一個私有目錄，預設為 `~/.cairn-memory`，也可用絕對路徑的
+`CAIRN_MEMORY_HOME` 指定。`installation.json` 保存安裝紀錄，`engine/` 放引擎
+版本與 npm 快取，`data/memory.sqlite` 保存記憶，第一次使用引擎時才建立資料庫。
+第一次安裝引擎相依套件需要連到 npm registry，除非快取已備妥。
+安裝器透過各工具的 CLI 註冊 `cairn-local` stdio MCP server：Claude Code
+使用 user scope，Codex 使用 `$CODEX_HOME/config.toml`，預設在 `~/.codex`。
+兩個工具共用資料庫與 owner，並使用 Node 的絕對路徑。安裝後請重開工具；
+Node 路徑變動時，重跑 `setup --local`。
+
+**0.6.0 local mode has no automatic capture or automatic recall.** Use the five
+explicit MCP tools: `remember_memory`, `recall_memory`, `inspect_memory`,
+`correct_memory`, `forget_memory`. Saving, inspecting, correcting and forgetting
+need no model key. Semantic recall needs a model key; without one it reports
+`model_not_configured`. If `OPENAI_API_KEY` is in the tool's environment, the
+engine will use it for recall and send selected text to that provider.
+Local storage does not mean all processing is offline. Setup sends no user data;
+it reads the Claude registration configuration file `~/.claude.json` with a
+4 MiB bound and extracts only `type`/`command`/`args` from the named `cairn` and
+`cairn-local` MCP registrations. It does not access credential stores or use
+authentication fields. Unrelated entries and file contents are never printed.
+
+**0.6.0 本機模式不會自動記下對話，也不會自動回想。** 請明確呼叫上面五個
+MCP 工具。保存、查看、更正與遺忘不需要模型金鑰；語意回想需要模型金鑰，
+沒有時回報 `model_not_configured`。若工具的環境已有 `OPENAI_API_KEY`，
+引擎會用它回想，並把選取的文字傳給該模型供應商，本機儲存不代表所有處理
+都離線。安裝器不會傳送你的資料；它會讀取上限 4 MiB 的 Claude 註冊設定檔
+`~/.claude.json`，只取出 `cairn`、`cairn-local` MCP 項目的
+`type`／`command`／`args`，不存取憑證儲存區，也不使用驗證欄位。
+無關項目與檔案內容不會印出。
+
+When both tools share the database, `storage_busy` is a retryable transient
+result: retry the operation; it does not mean memory is empty. `status` reports
+registration, engine and Node state without starting the local engine or testing
+a live connection. `--verbose` adds private paths, owner, engine ID and retained
+failed installations. Uninstall detaches selected registrations and removes
+`engine/` only when all clients are proven detached; **memory data is kept**.
+`--client claude|codex` limits registration or detachment, not conflict detection.
+`uninstall --local --purge-config` also removes the descriptor and `.npmrc`,
+never data; it cannot be combined with `--client`. An interrupted setup resumes
+with `setup --local`; a pending setup must be uninstalled without `--client`.
+
+兩個工具共用資料庫時，`storage_busy` 是暫時忙碌，請重試該操作，不能當成
+沒有記憶。`status` 顯示註冊、引擎與 Node 狀態，不啟動本機引擎或測試實際
+連線；`--verbose` 會多顯示私有路徑、owner、引擎 ID 與保留的失敗安裝。
+解除安裝會移除所選工具的連接，確認全部解除後才移除 `engine/`，**記憶資料
+會保留**。`--client claude|codex` 只限制註冊或解除的工具，衝突仍檢查兩邊。
+`uninstall --local --purge-config` 會加刪安裝紀錄與 `.npmrc`，不刪資料，
+不能搭配 `--client`。安裝中斷後可重跑 `setup --local` 接續；尚未完成的安裝
+若要移除，不能只選單一工具。
+
+Local and cloud cannot be mixed across these clients. A conflict or unreadable
+configuration refuses setup without writes. To switch from cloud, follow the
+printed commands in order, only for entries that exist:
+
+1. Codex: `npx @cairn-ink/memory uninstall --client codex`, then
+   `codex mcp remove cairn` (hosted uninstall keeps the MCP table).
+2. Claude Code: `claude plugin uninstall cairn-memory@cairn-memory --scope user`
+   for user scope; repeat with each scope printed by setup. If the legacy
+   user-scope server exists, run `claude mcp remove --scope user cairn`.
+3. Run `npx @cairn-ink/memory setup --local`.
+
+To switch to cloud, run `npx @cairn-ink/memory uninstall --local`, then
+`npx @cairn-ink/memory setup --cloud`. There is no data migration between modes.
+If Claude shows two `cairn-local` servers, check `claude mcp list`: project/local
+scope can shadow user scope, which setup does not detect. Linux/WSL are tested;
+macOS uses the same path but is untested; native Windows local setup is refused
+(use WSL). Engine opt-in features are not enabled by setup.
+
+這兩個工具之間不能混用本機與雲端；遇到衝突或讀不到設定時，安裝器不改動設定。
+從雲端切換時，依畫面指令順序操作，只移除實際存在的項目：
+
+1. Codex：先執行 `npx @cairn-ink/memory uninstall --client codex`，
+   再執行 `codex mcp remove cairn`，因為雲端解除安裝會保留 MCP 項目。
+2. Claude Code：user scope 使用
+   `claude plugin uninstall cairn-memory@cairn-memory --scope user`，
+   其他 scope 依安裝器列出的指令逐一移除；有舊 user-scope MCP server 時，
+   再執行 `claude mcp remove --scope user cairn`。
+3. 執行 `npx @cairn-ink/memory setup --local`。
+
+切回雲端則先執行 `npx @cairn-ink/memory uninstall --local`，再執行
+`npx @cairn-ink/memory setup --cloud`，兩種模式不會搬移資料。
+Claude 若出現兩個 `cairn-local`，請用 `claude mcp list` 檢查；project／local
+scope 可能蓋過 user scope，安裝器不會偵測這種情況。Linux／WSL 已測試，
+macOS 走相同程式但尚未測試；Windows 原生環境會拒絕本機安裝，請用 WSL。
+安裝器不會開啟引擎的選用功能。
+
+## Cloud mode / 雲端模式
 
 Setup finds both tools, asks about new connections, and updates tools already
 connected. Claude defaults to yes; Codex requires yes. When sharing memory,
@@ -59,7 +181,7 @@ Use `prompt-recall-on --client codex` to enable it again. This does not change M
 `npx @cairn-ink/memory prompt-recall-off --client codex`。
 用 `prompt-recall-on --client codex` 重新開啟；MCP 不受影響。
 
-## Privacy / 隱私
+## Cloud privacy / 雲端隱私
 
 Conversations are saved after best-effort local masking. Each prompt sends a
 masked, length-limited copy for recall. Claude plugin usage stats are on by
@@ -70,7 +192,7 @@ only by its owner. Details and controls: [privacy](https://cairn.ink/memory/priv
 副本來找相關記憶。Claude 外掛預設傳送使用統計，可以關閉；Codex 登入存於
 未加密、僅使用者可讀的檔案。詳情與控制方式見上方隱私頁。
 
-## Commands / 指令
+## Cloud commands / 雲端指令
 
 ```sh
 npx @cairn-ink/memory setup --client claude
