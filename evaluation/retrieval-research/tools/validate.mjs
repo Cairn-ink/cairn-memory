@@ -4,7 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { openMemoryCore } from '../../../core/contract.mjs';
-import { HR2B_VERSION, fixtureProfile, CATEGORIES, unique, eligibleMemory, armDocuments, loadFixture, readJson, cliMain, requiredOption } from '../lib/fixture.mjs';
+import { VERSION, HR2B_VERSION, FIXTURE_PROFILES, fixtureProfile, CATEGORIES, unique, eligibleMemory, armDocuments, loadFixture, readJson, cliMain, requiredOption } from '../lib/fixture.mjs';
 import { factsView } from './facts-view.mjs';
 import { buildLabels, loadTokenizers } from './labels.mjs';
 import { applyAudit } from './apply-audit.mjs';
@@ -13,8 +13,8 @@ import { splitSummary, splitViolations } from './split.mjs';
 // "About" and "matched" have no numerical tolerance in the frozen protocol.
 // These visible validation conventions use 10% count / 5 percentage-point
 // distribution bands. Fixed protocol limits (15%, 35–45%, 50%) are exact.
-export const DISTRIBUTION_POLICY = Object.freeze({ countTolerance: 0.1, distributionTolerance: 0.05,
-  languages: { zh: 0.55, en: 0.30, mixed: 0.15 }, counts: { S300: 300, extras: 700, foreign: 100 } });
+export const DISTRIBUTION_POLICY = Object.freeze({ countTolerance: FIXTURE_PROFILES[VERSION].countTolerance, distributionTolerance: FIXTURE_PROFILES[VERSION].distributionTolerance,
+  languages: FIXTURE_PROFILES[VERSION].languages, counts: FIXTURE_PROFILES[VERSION].counts });
 const DOMAINS = ['engineering', 'work-preferences', 'operations', 'finance', 'product', 'everyday'];
 const KINDS = ['fact', 'preference', 'decision', 'instruction', 'context', 'reason', 'event'];
 const LANGS = ['zh', 'en', 'mixed'];
@@ -60,8 +60,10 @@ export function validateFixture(fixture, tokenizers, options) {
 
 function validate(fixture, tokenizers, { policy, view } = {}) {
   const profile = fixtureProfile(fixture), hr2b = profile.version === HR2B_VERSION;
-  policy ??= hr2b ? { ...DISTRIBUTION_POLICY, counts: profile.counts } : DISTRIBUTION_POLICY;
+  policy ??= hr2b ? { countTolerance: profile.countTolerance, distributionTolerance: profile.distributionTolerance,
+    languages: profile.languages, counts: profile.counts } : DISTRIBUTION_POLICY;
   const errors = [], statistics = {};
+  const spanCounts = Array.from({ length: profile.maxSpans - profile.minSpans + 1 }, (_, i) => i + profile.minSpans);
   const check = (condition, code, detail) => { if (!condition) errors.push({ code, ...(detail === undefined ? {} : { detail }) }); };
   const array = (value, code) => { check(Array.isArray(value), code); return Array.isArray(value) ? value : []; };
   const nonempty = value => typeof value === 'string' && value.trim().length > 0;
@@ -87,7 +89,7 @@ function validate(fixture, tokenizers, { policy, view } = {}) {
   const queryMap = ids(queries, 'query'), labelMap = ids(labels, 'label');
   const allSpans = new Set();
   if (view !== undefined) check(isDeepStrictEqual(view, factsView(fixture)), 'facts_view:generated_mismatch');
-  check(families.filter(family => family.role === 'target').length >= 40, 'families:target_minimum_40');
+  check(families.filter(family => family.role === 'target').length >= profile.minimumTargetFamilies, `families:target_minimum_${profile.minimumTargetFamilies}`);
   for (const family of families) {
     check(['target', 'distractor', 'foreign'].includes(family.role), 'family:role', family.id);
     check(DOMAINS.includes(family.domain) && nonempty(family.summary), 'family:metadata', family.id);
@@ -122,13 +124,13 @@ function validate(fixture, tokenizers, { policy, view } = {}) {
       (memory.namespace === 'foreign') === (memory.scale === 'foreign'), 'memory:namespace_scale', memory.id);
     check(LANGS.includes(memory.lang) && KINDS.slice(0, 5).includes(memory.kind) && ['current', 'historical'].includes(memory.state), 'memory:enums', memory.id);
     check(DOMAINS.includes(memory.domain) && ['hand', 'template'].includes(memory.authoring) && time(memory.eventTime), 'memory:metadata', memory.id);
-    check(nonempty(memory.content) && memory.content.length <= 4000, 'memory:content', memory.id);
+    check(nonempty(memory.content) && memory.content.length <= profile.maxBodyUTF16, 'memory:content', memory.id);
     const spans = array(memory.spans, `memory:${memory.id}:spans`), expressions = array(memory.expresses, `memory:${memory.id}:expresses`);
-    check(spans.length >= 1 && spans.length <= profile.maxSpans, 'memory:span_count', memory.id);
+    check(spans.length >= profile.minSpans && spans.length <= profile.maxSpans, 'memory:span_count', memory.id);
     spans.forEach((span, i) => {
       check(span.id === `${memory.id}#s${i + 1}` && !allSpans.has(span.id), 'span:id', span.id);
       allSpans.add(span.id);
-      check(['user', 'assistant', 'system', 'tool'].includes(span.role) && time(span.eventTime) && nonempty(span.text) && span.text.length <= 800, 'span:metadata', span.id);
+      check(['user', 'assistant', 'system', 'tool'].includes(span.role) && time(span.eventTime) && nonempty(span.text) && span.text.length <= profile.maxSpanUTF16, 'span:metadata', span.id);
     });
     const seen = new Set();
     for (const expression of expressions) {
@@ -211,18 +213,18 @@ function validate(fixture, tokenizers, { policy, view } = {}) {
     const languages = distribution(bucket, memory => memory.lang, LANGS);
     statistics.corpus[name] = { count: bucket.length, languages, domains: distribution(bucket, memory => memory.domain, DOMAINS),
       bodyMeanLength: mean(bucket.map(memory => memory.content?.length ?? 0)), spanMeanLength: mean(bucket.flatMap(memory => (memory.spans ?? []).map(span => span.text?.length ?? 0))),
-      spans: distribution(bucket, memory => memory.spans?.length, [1, 2, 3]) };
+      spans: distribution(bucket, memory => memory.spans?.length, spanCounts) };
     check(near(bucket.length, policy.counts[name], policy.counts[name] * policy.countTolerance), 'corpus:count', name);
     for (const lang of LANGS) check(near(languages[lang], policy.languages[lang], policy.distributionTolerance), 'corpus:language_distribution', { name, lang });
   }
   statistics.byNamespaceScale = Object.fromEntries(['S300', 'S1000'].flatMap(scale => ['target', 'foreign'].map(namespace => {
     const bucket = memories.filter(memory => memory.namespace === namespace && (namespace === 'foreign' || memory.scale === 'S300' || scale === 'S1000'));
     return [`${namespace}:${scale}`, { count: bucket.length, languages: distribution(bucket, memory => memory.lang, LANGS),
-      bodyMeanLength: mean(bucket.map(memory => memory.content?.length ?? 0)), spans: distribution(bucket, memory => memory.spans?.length, [1, 2, 3]) }];
+      bodyMeanLength: mean(bucket.map(memory => memory.content?.length ?? 0)), spans: distribution(bucket, memory => memory.spans?.length, spanCounts) }];
   })));
   for (const field of ['bodyMeanLength', 'spanMeanLength']) {
     const base = statistics.corpus.S300[field], extra = statistics.corpus.extras[field];
-    check(base > 0 && near(extra, base, base * 0.15), 'extras:length_match', field);
+    check(base > 0 && near(extra, base, base * profile.meanTolerance), 'extras:length_match', field);
   }
   for (const field of ['languages', 'domains']) for (const key of Object.keys(statistics.corpus.S300[field])) {
     check(near(statistics.corpus.S300[field][key], statistics.corpus.extras[field][key], policy.distributionTolerance), 'extras:distribution_match', { field, key });
@@ -232,11 +234,11 @@ function validate(fixture, tokenizers, { policy, view } = {}) {
   const scored = active.filter(label => CATEGORIES.includes(label.category));
   const groups = scored.flatMap(label => label.groups ?? []).map(group => group.members.filter(member => member.scale === 'S300' && member.namespace === 'target'));
   statistics.spanOnlyGroupShare = groups.length ? groups.filter(members => members.length && members.every(member => member.where === 'span')).length / groups.length : null;
-  if (!hr2b) check(statistics.spanOnlyGroupShare >= 0.35 && statistics.spanOnlyGroupShare <= 0.45, 'groups:span_only_band');
+  if (!hr2b) check(statistics.spanOnlyGroupShare >= profile.spanOnlyGroupBand[0] && statistics.spanOnlyGroupShare <= profile.spanOnlyGroupBand[1], 'groups:span_only_band');
   const supportingIds = new Set(groups.flat().map(member => member.memory));
   const targets = buckets.S300.filter(memory => supportingIds.has(memory.id)), distractors = buckets.S300.filter(memory => !supportingIds.has(memory.id));
-  statistics.spanCountMatch = { targets: distribution(targets, memory => memory.spans.length, [1, 2, 3]), distractors: distribution(distractors, memory => memory.spans.length, [1, 2, 3]) };
-  if (!hr2b) for (const count of [1, 2, 3]) check(near(statistics.spanCountMatch.targets[count], statistics.spanCountMatch.distractors[count], policy.distributionTolerance), 'spans:distribution_match', count);
+  statistics.spanCountMatch = { targets: distribution(targets, memory => memory.spans.length, spanCounts), distractors: distribution(distractors, memory => memory.spans.length, spanCounts) };
+  if (!hr2b) for (const count of spanCounts) check(near(statistics.spanCountMatch.targets[count], statistics.spanCountMatch.distractors[count], policy.distributionTolerance), 'spans:distribution_match', count);
   const ordinary = activeQueries.filter(query => CATEGORIES.includes(query.category) && !['C2', 'C4'].includes(query.category));
   statistics.queryLanguages = distribution(ordinary, query => query.lang, LANGS);
   for (const lang of LANGS) check(near(statistics.queryLanguages[lang], policy.languages[lang], policy.distributionTolerance), 'queries:language_distribution', lang);

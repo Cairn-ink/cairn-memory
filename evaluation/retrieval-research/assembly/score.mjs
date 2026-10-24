@@ -1,11 +1,13 @@
+import { auditedHR2bQueries } from '../lib/hr2b-queries.mjs';
 import { HR2B, isHR2b, profileForDirectory, authenticateHR2bFixture, authenticateHR2bRanking } from './hr2b-profile.mjs';
 import { validateHR2bRun } from './hr2b-provenance.mjs';
 import { placementOf, PLACEMENTS } from '../lib/placement.mjs';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CATEGORIES, compareIds, loadFixture, labelEntries, cliMain, requiredOption } from '../lib/fixture.mjs';
-import { average, scoreGroups } from '../lib/metrics.mjs';
-import { percentile } from '../lib/stats.mjs';
+import { metrics, summarize } from './scoring-metrics.mjs';
+export { summarize } from './scoring-metrics.mjs';
+import { deriveHR2bEvidence } from './hr2b-evidence.mjs';
 import { ARMS, assemble } from './arms.mjs';
 import { BUDGETS } from './grid.mjs';
 import { implementationIdentity, validateImplementation } from './identity.mjs';
@@ -17,28 +19,6 @@ import { PROTOCOL, PROTOCOL_COMMIT, RANKINGS, authenticateFixture, authenticateR
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 let SCORER_IMPLEMENTATION = isStageCli(import.meta.url) ? null : await implementationIdentity();
-function metrics(groups, have, ranked) {
-  if (!groups.length) fail('empty_required_groups');
-  const covered = groups.filter(group => group.members.some(member => member.where === 'body'
-    ? have.has(`${member.memory}#body`) : member.spans.some(id => have.has(id)))).length;
-  const coverage = covered / groups.length, ceiling = scoreGroups(groups, ranked).recall24;
-  return { groupCount: groups.length, coveredGroups: covered, coverage, allRequired: covered === groups.length, ceiling, assemblyLoss: ceiling - coverage };
-}
-
-export function summarize(rows, { requireAllCategories = false } = {}) {
-  const categories = Object.fromEntries(CATEGORIES.map(category => {
-    const selected = rows.filter(row => row.category === category);
-    return [category, { queries: selected.length, groups: selected.reduce((sum, row) => sum + row.groupCount, 0),
-      coverage: average(selected.map(row => row.coverage)), allRequired: average(selected.map(row => Number(row.allRequired))),
-      ceiling: average(selected.map(row => row.ceiling)), assemblyLoss: average(selected.map(row => row.assemblyLoss)) }];
-  }));
-  const representedCategories = CATEGORIES.filter(category => categories[category].queries);
-  const macro = field => requireAllCategories && representedCategories.length !== 7 ? null : average(representedCategories.map(category => categories[category][field]));
-  const use = rows.map(row => row.tokenUse).sort((a, b) => a - b);
-  return { queryCount: rows.length, groupCount: rows.reduce((sum, row) => sum + row.groupCount, 0), representedCategories,
-    complete: representedCategories.length === 7, categories, macroCoverage: macro('coverage'), macroAllRequired: macro('allRequired'),
-    macroCeiling: macro('ceiling'), macroAssemblyLoss: macro('assemblyLoss'), tokenUse: { p50: percentile(use, 0.5), p95: percentile(use, 0.95) } };
-}
 
 export function scoreCell(fixture, cell) {
   const run = cell?.run;
@@ -56,7 +36,8 @@ export function scoreCell(fixture, cell) {
       Object.entries(fixture.hashes).some(([name, hash]) => run.fixtureHashes[name] !== hash)) fail('cell_fixture_hash_mismatch');
   validateImplementation(run.implementation?.assembly);
   if (run.commit !== run.implementation.assembly.commit) fail('cell_implementation_commit');
-  const expected = selectedQueries(fixture, run.split).map(query => query.id);
+  const selected = hr2b ? auditedHR2bQueries(fixture, { split: run.split, scored: true }) : selectedQueries(fixture, run.split);
+  const expected = selected.map(query => query.id);
   if (!Array.isArray(cell.queries) || !same(cell.queries.map(row => row.id).sort(compareIds), expected)) fail('cell_query_set');
   const labels = new Map(labelEntries(fixture.labels).filter(label => !label.dropped && label.split === run.split && CATEGORIES.includes(label.category)).map(label => [label.id, label]));
   if (!same([...labels.keys()].sort(compareIds), expected)) fail('label_query_set');
@@ -65,7 +46,7 @@ export function scoreCell(fixture, cell) {
     ...(hr2b ? Object.fromEntries(PLACEMENTS.map(value => [`placement:${value}`, []])) : {}) };
   const queries = cell.queries.map(row => {
     const label = labels.get(row.id);
-    const query = fixture.queries.queries.find(query => query.id === row.id);
+    const query = (hr2b ? selected : fixture.queries.queries).find(query => query.id === row.id);
     if (label.family !== query.family || label.category !== query.category || label.intent !== query.intent || label.lang !== query.lang) fail(`label_query_metadata:${row.id}`);
     if (!Array.isArray(row.ranked) || row.ranked.length > 24 || new Set(row.ranked).size !== row.ranked.length) fail('invalid_cell_ranking');
     const unitItems = new Map();
@@ -110,9 +91,10 @@ export function scoreCell(fixture, cell) {
   const rankedIds = new Set(cell.queries.flatMap(row => row.ranked));
   return { format: 'hr2-scored-cell-v1', ok: true, run: { ...run, implementation: { ...run.implementation, scorer: SCORER_IMPLEMENTATION }, expectedQueryIds: expected,
     ...(host ? { overheadModelDigest: run.overheadModel.sha256 } : {}) }, queries,
-    summary: summarize(queries, { requireAllCategories: true }),
-    strata: Object.fromEntries(Object.entries(strataRows).map(([key, rows]) => [key, { ...summarize(rows), ...(hr2b ? { families: new Set(rows.map(row => row.family)).size,
-      familyCounts: Object.fromEntries(CATEGORIES.map(category => [category, new Set(rows.filter(row => row.category === category).map(row => row.family)).size])) } : {}), queries: rows }])),
+    ...(hr2b ? deriveHR2bEvidence(fixture, cell.queries, run) : {
+      summary: summarize(queries, { requireAllCategories: true }),
+      strata: Object.fromEntries(Object.entries(strataRows).map(([key, rows]) => [key, { ...summarize(rows), queries: rows }])),
+    }),
     ...(host || hr2b ? { assemblyItems: [...items.values()].filter(item => rankedIds.has(item.id)),
       bodyEqualSpanCount: queries.reduce((sum, row) => sum + row.bodyEqualSpanCount, 0),
       rankedBodyEqualSpanCount: queries.reduce((sum, row) => sum + row.ranked.reduce((n, id) => n + items.get(id).spans.filter(span => span.text === items.get(id).body.text).length, 0), 0),

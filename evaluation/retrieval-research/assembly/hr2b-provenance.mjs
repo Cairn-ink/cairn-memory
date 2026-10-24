@@ -1,3 +1,4 @@
+import { deriveHR2bEvidence } from './hr2b-evidence.mjs';
 import { HR2B, validateHR2bSnapshot } from './hr2b-profile.mjs';
 import { prepareItems } from './units.mjs';
 import { ARMS, assemble } from './arms.mjs';
@@ -28,15 +29,19 @@ export function validateHR2bScoredCell(cell, replay) {
   if (!Array.isArray(run.expectedQueryIds) || !run.expectedQueryIds.length || !Array.isArray(cell.queries) ||
       new Set(cell.queries.map(row => row.id)).size !== cell.queries.length ||
       !equal(cell.queries.map(row => row.id).sort(compareIds), [...run.expectedQueryIds].sort(compareIds))) fail('incomplete_comparison_queries');
+  const items = prepareItems(authenticated.corpus.memories);
+  const rankedIds = new Set(cell.queries.flatMap(row => row.ranked));
+  if (!equal(cell.assemblyItems, items.filter(item => rankedIds.has(item.id)))) fail('hr2b_corpus_items_mismatch');
   if (run.overhead === 'host-v2') replay(cell, authenticateHostRun(run, { scored: true }));
   else {
-    const items = prepareItems(authenticated.corpus.memories);
     for (const row of cell.queries) {
       const expected = assemble(items, row.ranked, { arm: run.arm, budget: run.budget, overhead: 0, diagnostics: true });
       if (expected.used !== row.used || !equal(expected.admitted, row.admitted) || expected.budgetRejected !== row.budgetRejected || expected.bodyEqualSpanCount !== row.bodyEqualSpanCount) fail('hr2b_scalar_replay_mismatch');
     }
     if (cell.budgetRejectedQueryCount !== cell.queries.filter(row => row.budgetRejected).length) fail('invalid_hr2b_pressure_diagnostics');
   }
+  const expectedEvidence = deriveHR2bEvidence(authenticated, cell.queries, run);
+  if (!equal(cell.queries, expectedEvidence.queries) || !equal(cell.summary, expectedEvidence.summary) || !equal(cell.strata, expectedEvidence.strata)) fail('hr2b_evidence_mismatch');
   const categories = run.protocolProfile.placement.guardCategories;
   if (!categories.length || categories.some(category => !CATEGORIES.includes(category))) fail('hr2b_guard_categories');
   for (const placement of ['body', 'first-receipt', 'later-receipt']) {

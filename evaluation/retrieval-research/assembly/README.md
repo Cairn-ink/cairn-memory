@@ -277,7 +277,7 @@ Structural conventions where §3 leaves encoding/tolerances unspecified:
   The reused field schema retains its 4000/800 UTF-16 body/receipt caps;
   W1 must meet token bands and these caps together. Body sentence counts use `. ! ? 。！？` terminators and one or two paragraphs.
   Target families have exactly seven rendered facts plus one absent fact.
-- `facts.forbiddenLexicon` maps every rendered fact id to a nonempty array of
+- `facts.forbiddenLexicon` maps every canonical fact id, including absent facts, to a nonempty array of
   forbidden terms. W1 supplies entity/alias/translation/numeric/date and
   distinctive forms; tools cannot infer semantic completeness of that list.
   `corpus.filler.sentences` holds `{id,text}` sentence-bank entries;
@@ -401,3 +401,23 @@ mv "$hr2b_stage_root" "$hr2b_final"
 # Require cells=expectedCells=80. Retain failed stages, commands, actual exits,
 # provenance and archives. Force-add .log artifacts when the coordinator commits.
 ```
+
+
+### HR-2b audit and provenance checks
+
+HR-2b authentication and scoring use the active, audited query identities and
+categories. Original query records stay intact; dropped queries do not enter
+rankings or scoring. Paired recategorizations retain W3's checked categories.
+Placement rows, required-group denominators and metrics are re-derived from
+frozen labels and admissions at report validation. Every scored item's text
+and token counts must equal the authenticated corpus projection, for both
+scalar and host-v2 cells.
+
+The generation checker scans lexicons for every canonical fact, including C8's
+absent facts. First-receipt-only support cannot also occur in a later receipt;
+post-audit group classification separately retains body → first → later
+precedence. Receipt order compares parsed instants, then ids; offset and
+fractional-second spellings are accepted when chronologically ordered.
+`lib/fixture-profiles.mjs` owns fixture counts, receipt limits/distributions and
+placement quotas. Authoritative constants are deeply frozen; returned
+configuration and protocol profiles are independent snapshots.

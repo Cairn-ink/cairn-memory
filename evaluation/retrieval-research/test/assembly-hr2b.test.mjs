@@ -157,3 +157,109 @@ test('HR-2b reports scalar budget pressure while the legacy scalar return stays 
     assert.deepEqual(current.admitted, legacy.admitted); assert.equal(current.used, legacy.used);
   }
 });
+
+for (const mode of ['drop', 'recategorize']) test(`audited authoring pipeline reaches ranking authentication, scoring and report: ${mode}`, async t => {
+  const { auditedPipelineToy } = await import('./fixtures-tooling/hr2b.mjs');
+  const { auditedHR2bQueries } = await import('../lib/hr2b-queries.mjs');
+  const workspace = createTestWorkspace(t, { prefix: `hr2b-audited-${mode}-` });
+  const { fixture, dir, rankingsDir, originalQueries, beforePlacement, generated, auditIds } = await auditedPipelineToy(workspace, mode);
+  assert.deepEqual(fixture.queries, originalQueries, 'W2 authoring records remain intact');
+  for (const id of auditIds) assert.equal(fixture.split[originalQueries.queries.find(query => query.id === id).family], 'dev', 'audit changes must exercise the executed dev split');
+  assert.equal(fixture.labels.placement.ok, true, JSON.stringify(fixture.labels.placement));
+  if (mode === 'recategorize') {
+    assert.deepEqual(fixture.labels.placement, beforePlacement, 'paired swap preserves structural quotas and category/family counts');
+    const totals = entries => ['C1', 'C3'].map(category => entries.filter(query => query.category === category).length);
+    assert.deepEqual(totals(auditedHR2bQueries(fixture)), totals(originalQueries.queries));
+  }
+  for (const label of fixture.labels.queries.filter(label => !label.dropped)) assert.equal(label.checks[label.category].pass, true, label.id);
+  const authenticated = await authenticateHR2bFixture(dir);
+  for (const output of generated.outputs) {
+    assert.equal(output.run.status, 'complete');
+    const selection = output.run.arm === 'A1' ? 'A1' : 'A3--bge-m3';
+    const queries = authenticateHR2bRanking(authenticated, output, { selection, split: 'dev', scale: 'S1000' });
+    assert.deepEqual(queries.map(query => query.id), auditedHR2bQueries(fixture, { split: 'dev', scored: true }).map(query => query.id));
+    if (mode === 'drop') {
+      assert.equal(Object.hasOwn(output.queries, auditIds[0]), false);
+      const { authenticateRanking } = await import('../assembly/auth.mjs');
+      assert.throws(() => authenticateRanking(authenticated, output, { selection, split: 'dev', scale: 'S1000' }), /rankings_query_set/, 'legacy selector reproduces the original HR-2b bug');
+    }
+  }
+  const out = join(workspace.path, 'cells');
+  await runAssembly({ 'fixture-dir': dir, rankings: rankingsDir, split: 'dev', scale: 'S1000', arms: 'P-top,P-top-s1', 'rankings-select': 'A1', budgets: '1500', out });
+  const scores = await scoreDirectory(dir, out);
+  scores.cells.forEach(validateScoredCell);
+  const report = buildReport(scores);
+  assert.equal(report.ok, true, report.error);
+  if (mode === 'drop') assert.ok(scores.cells.every(cell => cell.queries.every(query => query.id !== auditIds[0])));
+  else for (const cell of scores.cells) for (const id of auditIds) assert.notEqual(cell.queries.find(row => row.id === id).category, originalQueries.queries.find(query => query.id === id).category);
+  for (const cell of scores.cells) for (const row of cell.queries) assert.equal(row.category, fixture.labels.queries.find(label => label.id === row.id).category);
+});
+
+test('placement evidence refuses omissions, additions, changed group denominators and metrics in either model', async t => {
+  const { summarize } = await import('../assembly/score.mjs');
+  const workspace = createTestWorkspace(t, { prefix: 'hr2b-evidence-auth-' }), { dir, rankingsDir } = await hr2bToy(workspace);
+  const out = join(workspace.path, 'cells');
+  await runAssembly({ 'fixture-dir': dir, rankings: rankingsDir, split: 'dev', scale: 'S1000', arms: 'P-top,P-top-s1', 'rankings-select': 'A1', budgets: '1500', out });
+  const scores = await scoreDirectory(dir, out);
+  const refresh = stratum => {
+    const rows = stratum.queries;
+    Object.assign(stratum, summarize(rows), { families: new Set(rows.map(row => row.family)).size,
+      familyCounts: Object.fromEntries(['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7'].map(category => [category, new Set(rows.filter(row => row.category === category).map(row => row.family)).size])) });
+  };
+  for (const overhead of [0, 'host-v2']) {
+    const pair = scores.cells.filter(cell => cell.run.overhead === overhead);
+    pair.forEach(validateScoredCell);
+    for (const placement of ['body', 'first-receipt', 'later-receipt']) for (const change of ['omit', 'add', 'denominator', 'coverage', 'ceiling', 'summary']) {
+      const bad = structuredClone(pair);
+      for (const cell of bad) {
+        const stratum = cell.strata[`placement:${placement}`];
+        if (change === 'omit') stratum.queries = stratum.queries.slice(0, -2);
+        if (change === 'add') stratum.queries.push({ ...structuredClone(stratum.queries[0]), id: 'not-a-frozen-query', family: 'extra-family' });
+        if (change === 'denominator') stratum.queries[0].groupCount++;
+        if (change === 'coverage') { stratum.queries[0].coverage = .5; stratum.queries[0].allRequired = false; }
+        if (change === 'ceiling') stratum.queries[0].ceiling = .25;
+        refresh(stratum);
+        if (change === 'summary') stratum.families++;
+        assert.throws(() => validateScoredCell(cell), /hr2b_evidence_mismatch/, `${overhead}/${placement}/${change}`);
+      }
+      assert.equal(buildReport({ ...scores, cells: bad }).ok, false);
+    }
+  }
+});
+
+for (const change of ['body', 'receipt', 'tokens']) test(`host replay binds ${change} to authenticated corpus bytes`, async t => {
+  const { assemble } = await import('../assembly/arms.mjs');
+  const { hostV2Cost } = await import('../assembly/cost.mjs');
+  const workspace = createTestWorkspace(t, { prefix: 'hr2b-corpus-auth-' }), { dir, rankingsDir } = await hr2bToy(workspace);
+  const out = join(workspace.path, 'cells');
+  await runAssembly({ 'fixture-dir': dir, rankings: rankingsDir, split: 'dev', scale: 'S1000', arms: 'P-top', 'rankings-select': 'A1', budgets: '1500', 'overhead-model': 'host-v2', out });
+  const scores = await scoreDirectory(dir, out), bad = structuredClone(scores.cells[0]);
+  validateScoredCell(bad);
+  const item = bad.assemblyItems[0], unit = change === 'receipt' ? item.spans[0] : item.body;
+  if (change === 'tokens') unit.tokens++;
+  else { unit.text = 'substituted synthetic text'; unit.tokens = countTokens(unit.text); }
+  const cost = hostV2Cost(authenticateHostV2());
+  for (const row of bad.queries) Object.assign(row, assemble(bad.assemblyItems, row.ranked, { arm: bad.run.arm, budget: bad.run.budget, cost }));
+  assert.throws(() => validateScoredCell(bad), /hr2b_corpus_items_mismatch/);
+});
+
+test('fixed configuration and protocol snapshots cannot mutate later authentication', async t => {
+  const { HR2B_FIXED, hr2bConfiguration, checkHR2bConfiguration } = await import('../lib/hr2b-configuration.mjs');
+  const { FIXTURE_PROFILES, HR2B_VERSION } = await import('../lib/fixture.mjs');
+  const { profileForDirectory } = await import('../assembly/hr2b-profile.mjs');
+  const hashes = { toy: 'original' }, configuration = hr2bConfiguration(hashes);
+  configuration.fusion.depth = 99; configuration.fixtureHashes.toy = 'changed';
+  assert.equal(hashes.toy, 'original');
+  assert.throws(() => checkHR2bConfiguration(configuration, hashes), /fixed_configuration_mismatch/);
+  assert.equal(hr2bConfiguration(hashes).fusion.depth, 12);
+  assert.throws(() => { HR2B_FIXED.fusion.depth = 99; }, TypeError);
+  assert.throws(() => { FIXTURE_PROFILES[HR2B_VERSION].quotas.groups = 1; }, TypeError);
+  assert.throws(() => { HR2B.primary.budget = 1; }, TypeError);
+  assert.deepEqual(HR2B.quotas, FIXTURE_PROFILES[HR2B_VERSION].quotas);
+  const workspace = createTestWorkspace(t, { prefix: 'hr2b-profile-snapshot-' }), { dir } = await hr2bToy(workspace);
+  const first = await authenticateHR2bFixture(dir); first.profile.primary.budget = 1; first.profile.quotas.groups = 1;
+  const returned = await profileForDirectory(dir); returned.budgets[0] = 1;
+  assert.equal((await authenticateHR2bFixture(dir)).profile.primary.budget, 1500);
+  assert.equal((await authenticateHR2bFixture(dir)).profile.quotas.groups, 30);
+  assert.deepEqual((await profileForDirectory(dir)).budgets, [1000, 1500, 2000, 4000]);
+});

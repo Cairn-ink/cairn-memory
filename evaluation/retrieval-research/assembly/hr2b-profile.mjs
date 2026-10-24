@@ -1,18 +1,20 @@
+import { deepFreeze } from '../lib/immutable.mjs';
+import { auditedHR2bQueries, auditedHR2bFixture } from '../lib/hr2b-queries.mjs';
 import { placementQuotas } from '../lib/placement.mjs';
 import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
-import { HR2B_VERSION } from '../lib/fixture.mjs';
+import { HR2B_VERSION, FIXTURE_PROFILES } from '../lib/fixture.mjs';
 import { checkHR2bConfiguration, equal } from '../lib/hr2b-configuration.mjs';
-import { FILES, authenticateRanking, selectedQueries, sha256, fail } from './auth.mjs';
+import { FILES, authenticateRanking, sha256, fail } from './auth.mjs';
 
-export const HR2B = Object.freeze({ version: HR2B_VERSION, protocol: 'HR-2b v1', protocolCommit: 'c546bfc1',
+export const HR2B = deepFreeze({ version: HR2B_VERSION, protocol: 'HR-2b v1', protocolCommit: 'c546bfc1',
   budgets: [1000, 1500, 2000, 4000], seed: 'hr2b-bootstrap-v1', rankings: ['A1', 'A3--bge-m3'],
   strata: ['fidelity', 'language', 'category', 'placement'],
   primary: { split: 'test', scale: 'S1000', ranking: 'A3--bge-m3', overhead: 'host-v2', budget: 1500 },
   decision: { baseline: 'P-top', candidate: 'P-top-s1', guard: 'later-receipt', adoptGain: 3, guardLoss: -5,
     resamples: 10000, minimumFamilies: 10, confidence: .95 },
-  quotas: { groups: 30, families: 12, guardTestFamilies: 10, guardDevFamilies: 4 } });
+  quotas: FIXTURE_PROFILES[HR2B_VERSION].quotas });
 export const isHR2b = value => value?.protocol === HR2B.protocol || value?.fixtureVersion === HR2B_VERSION;
 export function parseManifest(markdown, required = []) {
   const entries = [...markdown.matchAll(/\| `([^`]+)` \| `([a-f0-9]{64})` \|/g)].map(match => [match[1], match[2]]);
@@ -35,12 +37,12 @@ export async function authenticateHR2bFixture(dir) {
   const labels = JSON.parse(bytes['hr1-labels.json']);
   if (!labels.placement || !equal(labels.placement, placementQuotas(labels)) || !Array.isArray(labels.placement.guardCategories)) fail('hr2b_placement_metadata');
   return { hashes, corpus: JSON.parse(bytes['hr1-corpus.json']), queries: JSON.parse(bytes['hr1-queries.json']),
-    split: JSON.parse(bytes['hr1-split.json']), profile: { ...HR2B, fixtureManifest: manifest, placement: labels.placement,
+    split: JSON.parse(bytes['hr1-split.json']), labels, profile: { ...structuredClone(HR2B), fixtureManifest: manifest, placement: labels.placement,
       fixtureFreezeHash: sha256(markdown) } };
 }
 export async function profileForDirectory(dir) {
   const corpus = JSON.parse(await readFile(join(dir, 'hr1-corpus.json'), 'utf8'));
-  if (corpus.version === HR2B_VERSION) return HR2B;
+  if (corpus.version === HR2B_VERSION) return structuredClone(HR2B);
   if (corpus.version !== undefined && corpus.version !== 'hr1-fixture-v2') fail('unsupported_fixture_version');
   return null;
 }
@@ -62,7 +64,7 @@ export async function loadHR2bRankings(dir, fixture) {
 export function authenticateHR2bRanking(fixture, ranking, options) {
   if (!HR2B.rankings.includes(options.selection) || ranking.run?.fixtureVersion !== HR2B_VERSION || ranking.run?.isolationVariant !== 'with-foreign') fail('hr2b_ranking_profile');
   checkHR2bConfiguration(ranking.run.configuration, fixture.hashes);
-  return authenticateRanking(fixture, ranking, options);
+  return authenticateRanking(auditedHR2bFixture(fixture), ranking, options);
 }
 // Snapshot metadata is authenticated afresh against the paths recorded at the
 // producing stage, including dev rankings. No archived HR-2 path enters here.
@@ -90,6 +92,6 @@ export function validateHR2bSnapshot(run) {
   const corpus = JSON.parse(readFileSync(join(run.fixturePath, 'hr1-corpus.json'), 'utf8'));
   const queries = JSON.parse(readFileSync(join(run.fixturePath, 'hr1-queries.json'), 'utf8'));
   const split = JSON.parse(readFileSync(join(run.fixturePath, 'hr1-split.json'), 'utf8'));
-  authenticateHR2bRanking({ hashes: run.fixtureHashes, corpus, queries, split }, ranking, { selection: run.ranking, split: run.split, scale: run.scale });
-  return { profile, corpus, expectedQueryIds: selectedQueries({ queries, split }, run.split).map(query => query.id), ranking };
+  authenticateHR2bRanking({ hashes: run.fixtureHashes, corpus, queries, split, labels }, ranking, { selection: run.ranking, split: run.split, scale: run.scale });
+  return { profile, corpus, queries, split, labels, expectedQueryIds: auditedHR2bQueries({ queries, split, labels }, { split: run.split, scored: true }).map(query => query.id), ranking };
 }

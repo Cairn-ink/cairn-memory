@@ -1,12 +1,14 @@
 import { countTokens } from '../assembly/counter.mjs';
-import { compareIds } from './fixture.mjs';
+import { compareIds, FIXTURE_PROFILES, HR2B_VERSION } from './fixture.mjs';
 
-export const BODY_BANDS = Object.freeze([[120, 180, .30], [180, 260, .40], [260, 400, .30]]);
-export const RECEIPT_BANDS = Object.freeze([[40, 70, .35], [70, 130, .40], [130, 200, .25]]);
-export const RECEIPT_HISTOGRAM = Object.freeze([.20, .25, .25, .15, .10, .05]);
+const PROFILE = FIXTURE_PROFILES[HR2B_VERSION];
+export const BODY_BANDS = PROFILE.bodyBands;
+export const RECEIPT_BANDS = PROFILE.receiptBands;
+export const RECEIPT_HISTOGRAM = PROFILE.receiptHistogram;
+export const compareReceipts = (a, b) => Date.parse(a.eventTime) - Date.parse(b.eventTime) || compareIds(a.id, b.id);
 const normalize = text => text.normalize('NFKC').toLowerCase().replace(/\s+/gu, ' ').trim();
 const mean = values => values.reduce((sum, n) => sum + n, 0) / values.length;
-const near = (a, b, tolerance = .05) => Number.isFinite(a) && Math.abs(a - b) <= tolerance + 1e-12;
+const near = (a, b, tolerance = PROFILE.distributionTolerance) => Number.isFinite(a) && Math.abs(a - b) <= tolerance + 1e-12;
 
 // W1 may call this before queries/labels exist. Ranges are UTF-16 [start,end),
 // naming a disclosed sentence. Every long unit must disclose its filler.
@@ -16,7 +18,7 @@ export function checkHR2bWorld(fixture) {
   const { memories } = fixture.corpus, { facts, families } = fixture.facts;
   const familyMap = new Map(families.map(family => [family.id, family]));
   const factMap = new Map(facts.map(fact => [fact.id, fact]));
-  const counts = { S300: 160, 'S1000-extra': 320, foreign: 60 };
+  const counts = Object.fromEntries(Object.entries(PROFILE.counts).map(([scale, count]) => [scale === 'extras' ? 'S1000-extra' : scale, count]));
   const bands = (lengths, ranges, label) => {
     check(lengths.length > 0 && lengths.every(n => n >= ranges[0][0] && n <= ranges.at(-1)[1]), 'hr2b:length_range', label);
     return ranges.map(([low, high, share], i) => {
@@ -27,7 +29,7 @@ export function checkHR2bWorld(fixture) {
   };
   for (const [scale, count] of Object.entries(counts)) {
     const rows = memories.filter(memory => memory.scale === scale);
-    check(Math.abs(rows.length - count) <= count * .10 + 1e-12, 'hr2b:count', scale);
+    check(Math.abs(rows.length - count) <= count * PROFILE.countTolerance + 1e-12, 'hr2b:count', scale);
     if (scale === 'foreign') continue;
     const bodies = rows.map(memory => countTokens(memory.content)), receipts = rows.flatMap(memory => memory.spans.map(span => countTokens(span.text)));
     const histogram = RECEIPT_HISTOGRAM.map((share, i) => {
@@ -39,23 +41,24 @@ export function checkHR2bWorld(fixture) {
       bodyBands: bands(bodies, BODY_BANDS, `${scale}:body`), receiptBands: bands(receipts, RECEIPT_BANDS, `${scale}:receipt`) };
     for (const memory of rows) {
       const expressed = [...new Set(memory.expresses.map(expression => expression.fact))];
-      check(expressed.length >= 2 && expressed.length <= 4 && new Set(expressed.map(id => factMap.get(id)?.family)).size === 1, 'hr2b:memory_facts', memory.id);
+      check(expressed.length >= PROFILE.memoryFactBand[0] && expressed.length <= PROFILE.memoryFactBand[1] && new Set(expressed.map(id => factMap.get(id)?.family)).size === 1, 'hr2b:memory_facts', memory.id);
       const sentences = memory.content.match(/[^.!?。！？]+[.!?。！？]+(?:["'”’」』])?/gu) ?? [];
-      check(sentences.length >= 3 && sentences.length <= 8 && memory.content.trim().split(/\n\s*\n/u).length <= 2, 'hr2b:body_sentences', memory.id);
+      check(sentences.length >= PROFILE.bodySentenceBand[0] && sentences.length <= PROFILE.bodySentenceBand[1] && memory.content.trim().split(/\n\s*\n/u).length <= PROFILE.maxParagraphs, 'hr2b:body_sentences', memory.id);
     }
   }
-  for (const field of ['bodyMean', 'receiptMean']) check(near(statistics['S1000-extra'][field], statistics.S300[field], statistics.S300[field] * .15), 'hr2b:mean_match', field);
+  for (const field of ['bodyMean', 'receiptMean']) check(near(statistics['S1000-extra'][field], statistics.S300[field], statistics.S300[field] * PROFILE.meanTolerance), 'hr2b:mean_match', field);
   RECEIPT_HISTOGRAM.forEach((_, i) => check(near(statistics.S300.histogram[i], statistics['S1000-extra'].histogram[i]), 'hr2b:histogram_match', i + 1));
   for (const memory of memories) {
-    check(memory.spans.length >= 1 && memory.spans.length <= 6, 'hr2b:receipt_count', memory.id);
-    const sorted = [...memory.spans].sort((a, b) => compareIds(a.eventTime, b.eventTime) || compareIds(a.id, b.id));
+    check(memory.spans.length >= PROFILE.minSpans && memory.spans.length <= PROFILE.maxSpans, 'hr2b:receipt_count', memory.id);
+    check(memory.spans.every(span => typeof span.eventTime === 'string' && Number.isFinite(Date.parse(span.eventTime))), 'hr2b:receipt_time', memory.id);
+    const sorted = [...memory.spans].sort(compareReceipts);
     check(memory.spans.every((span, i) => span === sorted[i] && span.id === `${memory.id}#s${i + 1}`), 'hr2b:receipt_order', memory.id);
   }
   const targetFamilies = families.filter(family => family.role === 'target');
-  check(targetFamilies.length >= 40, 'hr2b:target_families');
+  check(targetFamilies.length >= PROFILE.minimumTargetFamilies, 'hr2b:target_families');
   for (const family of targetFamilies) {
     const rows = facts.filter(fact => fact.family === family.id);
-    check(rows.filter(fact => fact.rendered).length === 7 && rows.filter(fact => !fact.rendered).length === 1, 'hr2b:family_facts', family.id);
+    check(rows.filter(fact => fact.rendered).length === PROFILE.renderedFactsPerFamily && rows.filter(fact => !fact.rendered).length === PROFILE.absentFactsPerFamily, 'hr2b:family_facts', family.id);
   }
   statistics.placement = {};
   for (const role of ['target', 'distractor']) {
@@ -67,12 +70,18 @@ export function checkHR2bWorld(fixture) {
         if (expressions.some(expression => expression.where === 'body')) return ['body'];
         const positions = expressions.map(expression => memory.spans.findIndex(span => span.id === expression.span));
         check(positions.every(position => position >= 0 && (position === 0 || memory.spans.length >= 2)), 'hr2b:later_receipt', fact.id);
+        // Builder placement is exclusive. Audited group precedence is a
+        // separate rule in placementOf(), and intentionally remains unchanged.
+        if (positions.includes(0) && positions.some(position => position > 0)) {
+          check(false, 'hr2b:mixed_receipt_placement', { fact: fact.id, memory: memory.id });
+          return [null];
+        }
         return [positions.includes(0) ? 'first-receipt' : 'later-receipt'];
       });
       check(locations.length > 0 && new Set(locations).size === 1, 'hr2b:inconsistent_fact_placement', fact.id);
       return locations[0];
     });
-    statistics.placement[role] = Object.fromEntries(Object.entries({ body: .45, 'first-receipt': .25, 'later-receipt': .30 }).map(([placement, share]) => {
+    statistics.placement[role] = Object.fromEntries(Object.entries(PROFILE.placementShares).map(([placement, share]) => {
       const actual = placements.filter(value => value === placement).length / rendered.length;
       check(near(actual, share), 'hr2b:placement_share', { role, placement, actual });
       return [placement, actual];
@@ -81,7 +90,7 @@ export function checkHR2bWorld(fixture) {
   const lexicon = fixture.facts.forbiddenLexicon;
   check(lexicon && typeof lexicon === 'object' && !Array.isArray(lexicon), 'hr2b:lexicon_required');
   const terms = [];
-  for (const fact of facts.filter(fact => fact.rendered)) {
+  for (const fact of facts) {
     const values = lexicon?.[fact.id];
     check(Array.isArray(values) && values.length > 0 && values.every(value => typeof value === 'string' && normalize(value)), 'hr2b:fact_lexicon', fact.id);
     for (const term of values ?? []) terms.push([fact.id, normalize(term)]);

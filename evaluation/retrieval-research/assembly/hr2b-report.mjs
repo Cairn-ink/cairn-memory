@@ -41,7 +41,7 @@ export function compareHR2bCells(baseline, candidate, stratum) {
     return { status: bootstrap.status, bootstrap, mcnemar };
   } catch (error) {
     return { status: 'inconclusive', bootstrap: { status: 'inconclusive', reason: 'invalid_inputs', error: error.message,
-      seed: HR2B.seed, requested: 10000, confidence: .95, endpoints: [.025, .975], exploratory: true, minimumFamilies: 10,
+      seed: HR2B.seed, requested: HR2B.decision.resamples, confidence: HR2B.decision.confidence, endpoints: [.025, .975], exploratory: true, minimumFamilies: HR2B.decision.minimumFamilies,
       accepted: 0, rejected: 0, point: null, ci: null }, mcnemar: null };
   }
 }

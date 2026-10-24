@@ -3,12 +3,8 @@ import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const VERSION = 'hr1-fixture-v2';
-export const HR2B_VERSION = 'hr2b-fixture-v1';
-export const FIXTURE_PROFILES = Object.freeze({
-  [VERSION]: Object.freeze({ version: VERSION, counts: { S300: 300, extras: 700, foreign: 100 }, maxSpans: 3 }),
-  [HR2B_VERSION]: Object.freeze({ version: HR2B_VERSION, counts: { S300: 160, extras: 320, foreign: 60 }, maxSpans: 6 }),
-});
+import { VERSION, HR2B_VERSION, FIXTURE_PROFILES } from './fixture-profiles.mjs';
+export { VERSION, HR2B_VERSION, FIXTURE_PROFILES } from './fixture-profiles.mjs';
 // A version is authenticated across every present version-bearing product.
 // HR-1 split/audit roots historically carry no version; preserve those bytes.
 export function fixtureProfile(fixture) {
@@ -19,7 +15,7 @@ export function fixtureProfile(fixture) {
     if (value && (['facts', 'corpus', 'queries', 'labels', 'view'].includes(key) || value.version !== undefined) && value.version !== version)
       throw new Error(`mixed_fixture_profiles:${key}`);
   }
-  return FIXTURE_PROFILES[version];
+  return structuredClone(FIXTURE_PROFILES[version]);
 }
 export const CATEGORIES = Object.freeze(['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7']);
 export const compareIds = (a, b) => a < b ? -1 : a > b ? 1 : 0;

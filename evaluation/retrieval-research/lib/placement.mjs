@@ -1,4 +1,4 @@
-import { CATEGORIES, HR2B_VERSION, fixtureProfile, eligibleMemory, unique } from './fixture.mjs';
+import { CATEGORIES, HR2B_VERSION, FIXTURE_PROFILES, fixtureProfile, eligibleMemory, unique } from './fixture.mjs';
 
 export const PLACEMENTS = Object.freeze(['body', 'first-receipt', 'later-receipt']);
 export function placementOf(fixture, members, intent) {
@@ -14,6 +14,7 @@ export function placementOf(fixture, members, intent) {
 }
 
 export function placementQuotas(labels) {
+  const quotas = FIXTURE_PROFILES[HR2B_VERSION].quotas;
   const active = labels.queries.filter(label => !label.dropped && CATEGORIES.includes(label.category));
   const guardCategories = unique(active.filter(label => label.groups.some(group => group.placement === 'later-receipt')).map(label => label.category));
   const errors = [], splits = {};
@@ -27,10 +28,10 @@ export function placementQuotas(labels) {
       const categories = Object.fromEntries(guardCategories.map(category => [category,
         new Set(selected.filter(label => label.category === category).map(label => label.family)).size]));
       splits[split][placement] = { groups, families, categories };
-      if (groups < 30) errors.push(`${split}:${placement}:groups_minimum_30`);
-      if (families < 12) errors.push(`${split}:${placement}:families_minimum_12`);
+      if (groups < quotas.groups) errors.push(`${split}:${placement}:groups_minimum_${quotas.groups}`);
+      if (families < quotas.families) errors.push(`${split}:${placement}:families_minimum_${quotas.families}`);
       if (placement === 'later-receipt') for (const category of guardCategories)
-        if (categories[category] < (split === 'test' ? 10 : 4)) errors.push(`${split}:guard:${category}:family_minimum`);
+        if (categories[category] < (split === 'test' ? quotas.guardTestFamilies : quotas.guardDevFamilies)) errors.push(`${split}:guard:${category}:family_minimum`);
     }
   }
   return { ok: !errors.length, errors, guardCategories, splits };

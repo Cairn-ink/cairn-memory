@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 import { HR2B_VERSION, fixtureProfile, loadFixture } from '../lib/fixture.mjs';
-import { checkHR2bWorld, RECEIPT_HISTOGRAM } from '../lib/hr2b-world.mjs';
+import { checkHR2bWorld, compareReceipts, RECEIPT_HISTOGRAM } from '../lib/hr2b-world.mjs';
 import { placementOf, placementQuotas } from '../lib/placement.mjs';
 import { probeText } from '../assembly/calibrate-host-v2.mjs';
 import { factsView } from '../tools/facts-view.mjs';
@@ -65,7 +65,7 @@ function world() {
       for (let j = 0; j < (role === 'foreign' ? 6 : 8); j++) {
         const id = `${family}-${j}`, rendered = role === 'foreign' || j < 7;
         facts.push({ id, family, rendered });
-        if (rendered) forbiddenLexicon[id] = [`entity-${id}`];
+        forbiddenLexicon[id] = [`entity-${id}`];
       }
     }
     for (let i = 0; i < count; i++) {
@@ -234,4 +234,52 @@ test('legacy versionless fixture loading preserves its exact projection and hash
   await writeFile(join(workspace.path, 'hr1-facts-view.json'), view);
   hashes['hr1-facts-view.json'] = sha256(view);
   assert.deepEqual(await loadFixture(workspace.path), { hashes, facts, corpus, queries, split: null, labels: null, audit: null });
+});
+
+
+for (const mode of ['missing', 'present-in-filler']) test(`absent canonical facts require scanned lexicons: ${mode}`, () => {
+  const fixture = world(), absent = fixture.facts.facts.find(fact => !fact.rendered);
+  if (mode === 'missing') delete fixture.facts.forbiddenLexicon[absent.id];
+  else fixture.facts.forbiddenLexicon[absent.id].push('maple');
+  const result = checkHR2bWorld(fixture);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some(error => error.code === (mode === 'missing' ? 'hr2b:fact_lexicon' : 'hr2b:forbidden_lexicon_hit') &&
+    (mode === 'missing' ? error.detail === absent.id : error.detail.fact === absent.id)));
+});
+for (const original of ['first', 'later']) test(`exclusive builder placement refuses ${original} receipt plus the other position`, () => {
+  const fixture = world();
+  const memory = fixture.corpus.memories.find(memory => memory.spans.length >= 2 && memory.expresses.some(expression => expression.where === 'span' &&
+    expression.span === memory.spans[original === 'first' ? 0 : 1].id));
+  const expression = memory.expresses.find(expression => expression.where === 'span' && expression.span === memory.spans[original === 'first' ? 0 : 1].id);
+  memory.expresses.push({ ...expression, span: memory.spans[original === 'first' ? 1 : 0].id });
+  assert.ok(checkHR2bWorld(fixture).errors.some(error => error.code === 'hr2b:mixed_receipt_placement' && error.detail.fact === expression.fact));
+  // The audited classifier still uses its preregistered first-before-later rule.
+  assert.equal(placementOf(fixture, [{ memory: memory.id, where: 'span', spans: [memory.spans[0].id, memory.spans[1].id] }], 'current'), 'first-receipt');
+});
+
+test('receipt order uses parsed instants, subsecond precision and id ties', () => {
+  const fixture = world(), memory = fixture.corpus.memories.find(memory => memory.spans.length === 2);
+  const times = (first, second) => { memory.spans[0].eventTime = first; memory.spans[1].eventTime = second; };
+  times('2026-08-14T09:00:00+08:00', '2026-08-14T02:00:00Z');
+  assert.equal(checkHR2bWorld(fixture).ok, true);
+  times('2026-08-14T02:00:00Z', '2026-08-14T09:00:00+08:00');
+  assert.ok(checkHR2bWorld(fixture).errors.some(error => error.code === 'hr2b:receipt_order'));
+  times('2026-08-14T01:00:00.100Z', '2026-08-14T01:00:00.20Z');
+  assert.equal(checkHR2bWorld(fixture).ok, true);
+  times('2026-08-14T01:00:00.20Z', '2026-08-14T01:00:00.100Z');
+  assert.ok(checkHR2bWorld(fixture).errors.some(error => error.code === 'hr2b:receipt_order'));
+  times('2026-08-14T09:00:00+08:00', '2026-08-14T01:00:00.000Z');
+  assert.equal(checkHR2bWorld(fixture).ok, true);
+  assert.ok(compareReceipts(memory.spans[0], memory.spans[1]) < 0);
+  memory.spans.reverse();
+  assert.ok(checkHR2bWorld(fixture).errors.some(error => error.code === 'hr2b:receipt_order'));
+  memory.spans[0].eventTime = 'invalid';
+  assert.ok(checkHR2bWorld(fixture).errors.some(error => error.code === 'hr2b:receipt_time'));
+});
+
+test('fixture constraints have one immutable authority and returned profiles are independent', () => {
+  const first = fixtureProfile({ facts: { version: HR2B_VERSION } }), second = fixtureProfile({ facts: { version: HR2B_VERSION } });
+  first.counts.S300 = 1; first.quotas.groups = 1; first.receiptHistogram[0] = 1;
+  assert.equal(second.counts.S300, 160); assert.equal(second.quotas.groups, 30); assert.equal(second.receiptHistogram[0], .2);
+  assert.notEqual(first.counts, second.counts);
 });
