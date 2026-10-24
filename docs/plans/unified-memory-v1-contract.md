@@ -2009,7 +2009,7 @@ Measurements are observations: `findCandidates` p50/p95 at 10³ and 10⁴ Memori
 
 **Non-claims:** retrieval-quality improvement from either source; two-hop typed relation expansion; MOC summary freshness/A14; role profiles; invalidation. No HR evidence selects these sources as defaults; both remain off by default.
 
-## 18. U5c-1: role profiles, role/task read and task receipts (v0.12.2, audit round 2 applied)
+## 18. U5c-1: role profiles, role/task read and task receipts (v0.12.2, audited and confirmed)
 
 **Status:** contract draft. Applies all eight findings from the audit of `3eedb920`, with the primary’s compact-receipt/file-continuation decisions. Implementation and acceptance remain outstanding; §18.7 reports serialization probes only. This packet depends on U2/U5b, independently of §17.
 
