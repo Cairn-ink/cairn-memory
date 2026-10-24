@@ -2,12 +2,17 @@
 
 These clarifications resolve ambiguities that the builders reported, where the frozen text cannot be executed literally or admits two readings. They are clarifications, not semantic amendments. Each is recorded here before any paid stage, and goes to non-author review together with the harness.
 
-## E-1 (2026-10-25): expiry families with an unstated reason (§9, generator README item 5)
+## E-1 (2026-10-25, revised after non-author audit): expiry explanations (§9, generator README item 5)
 
-- **The trigger.** In an expiry family, the explicit boundary (the deadline or end date) is the *trigger*: it explains why the decision stopped applying at that time. The current/old status and the C/O scoring use the trigger.
-- **The reason.** The *reason* component (R) asks for the rationale behind the time-limited decision, that is, why the boundary was set or why the decision was not renewed.
-- **Unstated families.** In unstated-reason expiry families, that rationale is absent from every source, so the gold reason is `not_stated`. Citing the deadline alone does not earn reason credit, consistent with §7's rule that citation alone is not explanation.
-- **Effect.** This adopts the generator's candidate interpretation. The six affected engineering/pilot checkpoint answers are accepted under E-1.
+**Superseded draft.** The first draft of E-1 scored R for expiry against the rationale for setting the deadline. The auditor found that this changes the frozen question ("explain why that change occurred", §1; `generator/bank.mjs:15`), so that draft is withdrawn.
+
+**Revised clarification.** The frozen question is kept: R asks why the change occurred.
+- For an expiry, a **supported trigger explanation** is a valid complete reason graph. For example: the explicitly stated deadline passed, so the decision stopped applying.
+- `not_stated` is the gold only when no supported cause of the change exists in the sources.
+- Citing the deadline alone, without stating it as the cause of the change, still earns no reason credit (§7).
+- Gold and scorer expectations for the affected expiry checkpoints, including the six engineering/pilot answers the generator reported, are corrected to accept the supported trigger graph.
+
+**Scope.** This aligns gold with the frozen question rather than changing the question.
 
 ## E-2 (2026-10-25): Card confirmation versus separate declaration (§5, generator README item 6)
 
@@ -15,24 +20,35 @@ These clarifications resolve ambiguities that the builders reported, where the f
 
 **The clarification.** The "declare separately" branch confirms the Card **without** `currentDependencies` and then calls the standalone declaration with a null expectation. The branch that confirms with dependencies stays a distinct branch and never re-declares with null. Any later revalidation or replacement uses the inspected positive dependency revision. This keeps §5's intent (two distinct authoring paths) on public product operations, and adds or removes no capability.
 
-## A-1 (2026-10-25): stage sequencing. The engineering pilot runs before adjudication calibration (primary amendment; needs non-author confirmation)
+## A-1 (2026-10-25, revised after non-author audit): stage sequencing for the engineering pilot
 
-**Problem.**
-- The integration stage found that the frozen calibration challenge set cannot certify genuine referrals: only 36/72 strata meet quota, with C/O shortages. Filling them needs a fresh calibration version.
-- The integration report also notes that genuine-referral certification depends on referrals actually observed from the frozen pipeline.
-- Adjudicating the full blinded set means 3,140 fresh model sessions, an unpaid workload whose size is only knowable once the real referral rate is observed.
+**Scope.** A-1 explicitly supersedes two rules, and only for the fixed 60-family, US$24 engineering pilot:
+- the §8 prohibition on paid work before calibration;
+- the §13 ordering of calibration before the pilot.
 
-**Amendment.**
-- **Pilot first.** The 60-family **engineering pilot** (§13; cap US$24) may run **before** the §8 calibration gate passes, with **mechanical scoring only**:
-  - Referred components are neither credited nor penalised. They are reported as `unresolved`.
-  - Every pilot score is published as a **[lower, upper] bound pair**: unresolved counted as wrong, and counted as right.
-  - The number and share of unresolved items are reported per arm and component.
-  - No adjudication is applied to pilot answers.
-- **What the pilot is used for.** Pilot outputs may be used only for:
-  - the engineering continuation checks of §13;
-  - measuring the real referral rate and its strata composition, to design calibration v2 and size the adjudication workload;
-  - a clearly labelled preliminary description of arm P, with bounds.
+All non-adjudication preflight requirements remain binding.
 
-  They may not select a policy or a model, change T/U/O or the decision rules, or enter any confirmatory analysis. This is unchanged from §13.
-- **Gate before development.** The §8 calibration gate, including a fresh calibration v2 authored independently and fill-in referral strata, must pass **before** the development stage and before any adjudicated score is reported.
-- **No other changes.** Caps, models, prompts, arms, scorer, gold and all other gates are unchanged.
+**Background.** Calibration v1 contains 3,140 distinct pass inputs, which means 6,280 initial fresh adjudicator sessions plus up to 3,140 independent resolver sessions: 6,280–9,420 in total, excluding benchmarks. Calibration v1 also cannot certify the required referral quotas (36/72 strata). Calibration v2 is independently enumerated and budgeted; pilot research-arm referral rates do not determine its required workload.
+
+**After the pilot.**
+- Engineering checks may be evaluated provisionally.
+- Development remains blocked until every original continuation requirement passes, including an independent calibration v2, calibrated adjudication and measured resource capacity.
+- Only aggregate referral counts and prespecified stratum composition may inform calibration workload and coverage.
+- Do not transfer pilot answers, gold, adjudicated mappings or case-specific error fixes into calibration v2.
+- The frozen models, prompts, policies, scorer and decision rules stay as they are; any necessary change follows the applicable amendment requirements.
+- Pilot bounds are descriptive only. They cannot produce an Advance/Keep decision or enter development or test estimates. The development baseline remains the first substantive calibrated baseline.
+- Calibration must pass before any adjudicated research-arm accuracy is reported. Calibration judgments, errors and failed-gate diagnostics remain reportable.
+
+**Score bounds.**
+- **Components.** For each attempted family, arm and checkpoint, a mechanically determined component is `[0,0]` or `[1,1]`, and an unresolved component score is `[0,1]`. An outstanding pass referral does not reopen a score that is already logically determined.
+- **Joint score.** Joint bounds are computed per family as L_J = L_C·L_O·L_R and U_J = U_C·U_O·U_R. A determined zero forces J to `[0,0]`, all determined ones give `[1,1]`, and otherwise J is unresolved.
+- **Aggregation.** Family bounds are aggregated with the frozen weights. Aggregate component rates are never multiplied.
+- **Interpretation.** These are conservative score bounds conditional on the frozen mechanical decisions. They are not certified factual-accuracy bounds, not confidence intervals, and their endpoints are not necessarily jointly attainable.
+- **Confidence intervals.** Pilot sampling CIs are deferred, which explicitly excepts these score bounds from §11's CI requirement. If sampling uncertainty is reported, it needs a separately specified conservative envelope.
+
+**Every bound report includes:**
+- C/O/R/J bounds per arm, overall and by change type, with intermediate and final checkpoints reported separately;
+- counts of determined-correct, determined-incorrect and unresolved scores, and separately the outstanding correctness/support referrals, unique keys and propagated applications;
+- the planned, attempted and valid-completion denominators, the families and lineages represented, and the weights applied. Failed attempts remain scored; unexecuted cases are identified separately and never dropped or treated as observed failures;
+- the share of J that is unresolved, reported separately from the share having any referred component;
+- frozen artifact hashes, scorer and errata versions, actual spend, and the label **"Uncalibrated engineering pilot — mechanical score bounds; no adjudication."**

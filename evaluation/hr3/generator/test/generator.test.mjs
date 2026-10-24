@@ -247,3 +247,30 @@ test('inventory validator rejects cross-lineage aliases and missing causal alloc
   const counts=clone(inv); const l=counts.lineages.find(l=>l.split==='test' && l.causal_class==='direct'); l.causal_class='unstated';
   assert.throws(()=>validateInventory(counts),{code:'causal_allocation'});
 });
+
+
+test('E-1: every expiry accepts a deadline trigger; not_stated is only for unsupported causes',()=>{
+  let checkpoints=0, formerlyUnstated=0;
+  for (const {family,gold,support} of [...engineering.bundles,...pilot.bundles]) {
+    for (const cp of gold.checkpoints) {
+      if (family.change_type !== 'expiry') {
+        assert.equal(cp.G_correct.reason.status,family.causal_class==='unstated'?'not_stated':'stated');
+        continue;
+      }
+      checkpoints++;
+      if (family.causal_class==='unstated') formerlyUnstated++;
+      assert.equal(cp.G_correct.reason.status,'stated');
+      const trigger=cp.G_correct.acceptedGraphs.at(-1);
+      assert.deepEqual(trigger,{edges:[{from:'deadline',to:'decision'}]});
+      assert.equal(cp.G_correct.acceptedGraphs.length,(family.causal_class==='unstated'?0:family.causal_class==='alternative_mediated'?2:1)+1);
+      const node=cp.G_correct.reason.nodes.find(n=>n.id==='deadline');
+      const parent=family.ast.events.find(e=>e.record_name===(cp.batch===2?'A':'C'));
+      assert.deepEqual(node.claim.value,{type:'Instant',iso:parent.effective_interval.to});
+      const span=support.checkpoints.find(c=>c.batch===cp.batch).acceptedGraphs.at(-1).edges[0].support[0][0];
+      assert.ok(span.quote.includes(node.claim.value.iso));
+      assert.match(span.quote,/It expires|到期失效/);
+      assert.ok(!family.batches[cp.batch-1].turns[0].text.includes('No reason for this change was stated'));
+    }
+  }
+  assert.equal(checkpoints,36);assert.equal(formerlyUnstated,6);
+});

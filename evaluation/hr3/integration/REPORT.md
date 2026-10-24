@@ -1,6 +1,6 @@
 # HR-3 reconciliation and mechanical calibration
 
-**Completed offline at `5cee8a8f2fb92a6d445969664bc148a5d9fbce25`, Node v22.16.0.**
+**Re-checked offline against revised E-1/A-1 at base `983d239d6315c1d4f36434acc73c367e8f5416f6`, Node v22.16.0.**
 The scorer schema is the authority. All 120 pilot checkpoints validate and
 self-score C=O=R=J=1; every one of the 1,984 challenge bundles scored without
 adapter, validator or execution failure. Pooled mechanics have zero false
@@ -8,14 +8,14 @@ accepts and zero false rejects. **Genuine-referral calibration cannot pass with
 this frozen challenge version: 36/72 required style strata meet quota.**
 No adjudicator, API, network operation, credential/env-file read, paid workload,
 held-out generation, broad/sibling test suite, product mutation or commit ran.
-All repository writes are under `evaluation/hr3/integration/`.
+This re-check updates integration records; coordinated generator/harness work is recorded in their own directories.
 
 ## Reconciliation and defects
 
 `mechanical-results.json` records the frozen scorer/integration/protocol/errata
 hashes, source checks, all confusion cells, selected referral IDs and counts.
-`reconciliation-fields.json` enumerates **790 observed leaf-pattern mappings**
-with counts and dispositions: **1,561,948 source leaves** across **2,104 adapted
+`reconciliation-fields.json` enumerates **792 observed leaf-pattern mappings**
+with counts and dispositions: **1,563,796 source leaves** across **2,104 adapted
 checkpoints**, including repeated full private authoring contexts. These are
 leaf occurrences, not independent cases. Every audit envelope restores its
 exact original inputs, verified for all 2,104 records. Source shapes/semantics
@@ -78,13 +78,15 @@ It does not submit the generator's empty `reason.edges` gold placeholder as an
 answer, claim that uncited causal answers earn credit, or claim these are actual
 research-arm deliveries. Raw source offsets are checked before any mapping.
 
-E-1 resolves expiry-trigger versus policy-rationale semantics: all four pilot
-unstated-expiry checkpoints retain `not_stated`. E-2 concerns product control
-execution, which this task does not run. The frozen generator README/manifest
-still mention both old ambiguities; this report applies the errata without
-editing or rehashing those frozen sibling artifacts. Proposed sibling follow-up:
-update their gate descriptions only in a coordinated new freeze, and implement
-the E-2 control branch in the product harness.
+Revised E-1 (2026-10-25) is applied in the regenerated generator artifacts.
+All 24 pilot expiry checkpoints accept the supported deadline-trigger graph;
+the four formerly `not_stated` expiry checkpoints now have stated causes.
+Trigger-only witnesses score C=O=R=J=1. Deadline mentions without an edge,
+uncited trigger edges, bare deadline fragments and `not_stated` answers receive
+R=0, verified by the focused integration tests. The scorer is unchanged and no
+scorer defect blocks the revised gold. The generator README discloses all 36
+engineering/pilot expiry checkpoints, including the six previously reported.
+E-2 product controls remain outside this mechanical re-check.
 
 ## Mechanical observations
 
@@ -240,7 +242,7 @@ version. **No complete §8 calibration pass is claimed.**
 
 ## Adjudication handoff and gate
 
-`artifacts/frozen-v1/judge-input/` contains the 3,140 real blinded pass files.
+`artifacts/revised-e1-final/judge-input/` contains the 3,140 real blinded pass files.
 The primary must distribute exactly one file per fresh isolated session;
 `README.md` specifies the judgment interchange and provenance attestations.
 No arm identity, other answer, label, mechanical score, threshold, consequence,
@@ -273,17 +275,17 @@ judgment is written into the real artifacts.
 
 | Command/check | Actual exit code | Result |
 | --- | ---: | --- |
-| `node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs` | 0 | 17 tests, 17 pass, 0 fail |
-| `node evaluation/hr3/integration/cli.mjs mechanical --out evaluation/hr3/integration/artifacts/frozen-v1` | 0 | 120 gold checkpoints + 1,984 challenges; no execution/validation failures |
+| `node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs` | 0 | 18 tests, 18 pass, 0 fail |
+| `node evaluation/hr3/integration/cli.mjs mechanical --out evaluation/hr3/integration/artifacts/revised-e1-final` | 0 | 120 gold checkpoints + 1,984 challenges; no execution/validation failures |
 | Actual generator CLI, `--split pilot --out <TEMP>/pilot` | 0 | 60 families; all eight emitted pilot files match freeze hashes |
 | Actual copied challenge CLI, `node <TEMP>/challenge/generate.mjs` | 0 | All 13 artifacts match challenge manifest hashes |
-| `node evaluation/hr3/integration/cli.mjs gate --index evaluation/hr3/integration/artifacts/frozen-v1/private-index.json --judgments /tmp/hr3-integration-empty-judgments.jsonl --out evaluation/hr3/integration/artifacts/frozen-v1/gate-no-judgments.json` | 1 | Expected quota failure; missing judgments remain pending |
+| `node evaluation/hr3/integration/cli.mjs gate --index evaluation/hr3/integration/artifacts/revised-e1-final/private-index.json --judgments evaluation/hr3/integration/artifacts/empty-judgments.jsonl --out evaluation/hr3/integration/artifacts/revised-e1-final/gate-no-judgments.json` | 1 | Expected quota failure; missing judgments remain pending |
 
 No exit status was inferred from stdout tails or pipelines. Child processes use
 explicit log file descriptors and captured status; no task remains unattended.
 43 frozen source/output/protocol byte/hash checks passed, plus recorded scorer,
 integration and errata hashes. Detailed test TAP is retained at
-`/tmp/hr3-integration-tests-final2.tap`. Regeneration command logs use `<TEMP>`
+`tests.log` (local ignored log). Regeneration command logs use `<TEMP>`
 in canonical records so temporary path names do not change emitted results.
 
 Protocol coverage: §2 exact typed claims/scopes/intervals and explicit
@@ -340,12 +342,11 @@ evaluation/hr3/integration/reproduce.mjs
 evaluation/hr3/integration/test/integration.test.mjs
 ```
 
-`artifacts/frozen-v1/artifact-manifest.json` includes the full generated list;
+`artifacts/revised-e1-final/artifact-manifest.json` includes the full generated list;
 large regenerated files are ignored by the integration-local `.gitignore`.
 `mechanical-results.json` and `reconciliation-fields.json` retain the compact
 observations and field-by-field report independently of ignored data.
 
 Scoped `git diff --check` and explicit untracked UTF-8/newline/trailing-whitespace
-inspection exited **0**. Sibling harness changes were visible in `git status`
-and were not edited, tested or included in this delivery. No task remains
+inspection exited **0**. The revised generator, integration and harness were tested within the authorized three-directory scope. No task remains
 running and no continuing monitor is claimed.

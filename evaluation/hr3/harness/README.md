@@ -8,8 +8,8 @@ an injected transport and a durable reservation journal.
 Regenerate the frozen pilot into a fresh directory, then run the fake CLI:
 
 ```sh
-node evaluation/hr3/generator/cli.mjs --split pilot --out /tmp/hr3-inputs
-node evaluation/hr3/harness/cli.mjs --stage pilot --inputs /tmp/hr3-inputs --out /tmp/hr3-pilot
+node evaluation/hr3/generator/cli.mjs --split pilot --out <TEMP>/hr3-inputs
+node evaluation/hr3/harness/cli.mjs --stage pilot --inputs <TEMP>/hr3-inputs --out <TEMP>/hr3-pilot
 ```
 
 `--stage smoke` uses the first two frozen pilot families. The CLI always uses
@@ -19,8 +19,8 @@ journal, and aggregate JSONL/summary files. The scorer is called directly throug
 its exported `score` interface. Referrals remain pending; no adjudicator runs.
 
 If this checkout has no installed product dependencies, point at **existing**
-installations using `--mcp-dependencies /path/to/adapters/mcp/node_modules` and
-`--tokenizer-dependencies /path/to/adapters/openai/node_modules`. This only changes
+installations using `--mcp-dependencies <deps-worktree>/adapters/mcp/node_modules` and
+`--tokenizer-dependencies <deps-worktree>/adapters/openai/node_modules`. This only changes
 module resolution; it does not copy/install packages or contact a registry.
 The actual `o200k_base` encoding is used; there is no production token-counter
 fallback. The runtime verifies 195 product files against the P pin.
@@ -33,8 +33,42 @@ node evaluation/hr3/harness/test.mjs
 
 The same dependency-path flags work here. Tests include a complete fake pilot
 and two independent smoke runs. To validate an already completed CLI pilot
-instead of repeating it, add `--pilot-artifacts /tmp/hr3-pilot`. Unit tests and
+instead of repeating it, add `--pilot-artifacts <TEMP>/hr3-pilot`. Unit tests and
 smoke determinism still execute. No sibling or broad product suite is run.
+
+## Revised A-1 bound report
+
+After a completed fake or authorized engineering pilot, run:
+
+```sh
+node evaluation/hr3/harness/cli.mjs --bound-report PILOT_OUTPUT --inputs GENERATED_PILOT --out NEW_BOUND_REPORT.json
+```
+
+This flag reads and verifies completed artifacts; it does not execute a stage or
+load product/tokenizer dependencies. Output is a JSON report with the exact label
+“Uncalibrated engineering pilot — mechanical score bounds; no adjudication.”
+It contains 48 aggregate table rows: four arms × two separate checkpoints ×
+(overall + five change types), plus per-family C/O/R/J bounds. Each table includes
+score-state counts, pass-specific outstanding referral applications, unique keys
+and repeat/propagated applications, planned/attempted/valid-completion and failed/
+unexecuted denominators, represented family/lineage IDs, applied weights, and
+separate unresolved-J and any-referral shares (counts and weighted shares).
+
+`bounds.mjs` maps scores 0/1/null to [0,0]/[1,1]/[0,1] without reopening a
+mechanical score because a pass is outstanding. It multiplies C/O/R endpoints
+within a family, then averages lineage means using frozen 1/30 overall or 1/6
+within-type weights. Failed attempts remain scored. Missing cases are listed;
+partial groups explicitly condition on represented lineages and normalize their
+frozen weights. No observations means null rates, never observed failures.
+
+`run.json` captures execution-time protocol/errata, generator and scorer/harness
+hashes. Reports retain those hashes, verify the completed stage manifest and
+input bytes, and include actual spend (zero for fake transport), separately from
+simulated ledger charges. Old stages without execution-time hashes must be
+rerun; the report never substitutes current hashes for historical provenance.
+The writer requires a completed pilot and a new output file. Sampling confidence
+intervals are deferred. These descriptive bounds cannot produce an Advance/Keep
+decision, enter development/test estimates, or certify factual accuracy.
 
 ## Injected transport contract
 

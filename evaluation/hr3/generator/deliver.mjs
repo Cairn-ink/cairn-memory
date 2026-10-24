@@ -61,7 +61,7 @@ export async function emit({split,out,seed=DEFAULT_SEED}) {
       safetyFamilies:result.bundles.filter(x=>x.family.controls.some(c=>c.kind==='named_forget_replay_foreign')).length,
       multiHopFamilies:result.bundles.filter(x=>x.family.multi_hop).length},
     hashes:Object.fromEntries(Object.entries(files).map(([name,body])=>[name,{sha256:sha256(body),bytes:Buffer.byteLength(body),rows:name.endsWith('.jsonl')?(body.match(/\n/g)??[]).length:1}])),
-    gates:{complete:result.rejections.length===0,nonAuthorSemanticAudit:'pending',serializerTokenCap:'pending',goldFreezeApproval:'pending',unresolvedProtocolAmbiguities:['expiry_unstated_rationale','card_confirm_then_declare_null_revision'],paidStageAuthorized:false},
+    gates:{complete:result.rejections.length===0,nonAuthorSemanticAudit:'pending',serializerTokenCap:'pending',goldFreezeApproval:'pending',errata:['E-1 revised 2026-10-25'],unresolvedProtocolAmbiguities:['card_confirm_then_declare_null_revision'],paidStageAuthorized:false},
   };
   // Second route: hash bytes read back from disk and compare to the pre-write manifest.
   for (const [name,entry] of Object.entries(manifest.hashes)) assert(sha256(await readFile(path.join(out,name)))===entry.sha256,'disk_hash_mismatch',name);

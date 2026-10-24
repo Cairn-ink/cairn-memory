@@ -236,12 +236,19 @@ export function validateFamily(bundle, lineage) {
     const expected=canonicalGold({...semanticTruth(f,cp),reason:{nodes:[]}},lineage);
     assert(answer.current.status===expected.current.status && canonical(normalizeClaims(answer.current.claims))===canonical(normalizeClaims(expected.current.claims)),'semantic_current');
     assert(canonical(answer.old)===canonical(expected.old),'semantic_history');
-    assert(canonical(acceptedGraphs)===canonical(topology(f.causal_class)),'causal_topology');
+    const expectedGraphs = topology(f.causal_class);
+    if (f.change_type === 'expiry') expectedGraphs.push({edges:[{from:'deadline',to:'decision'}]});
+    assert(canonical(acceptedGraphs)===canonical(expectedGraphs),'causal_topology');
     assert(canonical(s.acceptedGraphs.map(g=>({edges:g.edges.map(({from,to})=>({from,to}))})))===canonical(acceptedGraphs),'graph_projection');
     assert(answer.reason.status===(acceptedGraphs.length?'stated':'not_stated'),'semantic_reason');
     if (!acceptedGraphs.length) assert(/No reason for this change was stated|這次變更沒有說明原因/.test(turns.get(cp.focal_turn).text),'unstated_source');
     assert(canonical(answer.reason.nodes)===canonical(canonicalGold({current:{claims:[]},old:{records:[]},reason:{nodes:focal.reason_nodes}},lineage).reason.nodes),'reason_nodes');
     for (const node of focal.reason_nodes) {
+      if (node.id === 'deadline') {
+        const parent = f.ast.events.find(e => e.source_turns.includes(cp.requested_predecessor_turns[0]));
+        assert(f.change_type === 'expiry' && node.claim.predicate === 'expiry_deadline_passed' && node.claim.value.type === 'Instant' && node.claim.value.iso === parent.effective_interval.to && Date.parse(node.claim.value.iso) <= Date.parse(cp.at),'expiry_trigger_node');
+        continue;
+      }
       const expected=node.id==='decision'?`${focal.change_type}_change`:lineage.bank.reasons[['a','b','c','d'].indexOf(node.id)]?.en;
       assert(node.claim.value.type==='Text' && node.claim.value.text===expected,'reason_node_meaning');
     }
@@ -252,6 +259,11 @@ export function validateFamily(bundle, lineage) {
       for (const conjunction of edge.support) for (const span of conjunction) {
         checkSpan(span,turns,cp.batch);
         assert(span.turn_id===cp.focal_turn,'distractor_entailment');
+        if (edge.from === 'deadline') {
+          const deadline = focal.reason_nodes.find(n => n.id === 'deadline').claim.value.iso;
+          assert(edge.to === 'decision' && span.start === 0 && span.quote.includes(deadline) && /reaches its explicit deadline|已到明確期限/.test(span.quote) && /It expires|到期失效/.test(span.quote),'expiry_trigger_support');
+          continue;
+        }
         assert(/caused|因為|才會造成/.test(span.quote) && !/unsupported|猜測/.test(span.quote),'causal_support');
         const sourceTerm=id=>id==='decision'?(f.language==='zh-Hant'?(f.change_type==='expiry'?'這次到期政策變更':'這次決定變更'):(f.change_type==='expiry'?'this expiry-policy change':'this decision change')):lineage.bank.reasons[['a','b','c','d'].indexOf(id)]?.[f.language==='zh-Hant'?'zh':'en'];
         const from=sourceTerm(edge.from), to=sourceTerm(edge.to);

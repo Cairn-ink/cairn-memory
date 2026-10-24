@@ -180,3 +180,26 @@ test('gate thresholds detect false acceptance, support failures and style error 
   const g = calibrationGate(index, judgments);
   assert.equal(g.gates.pooledMechanics, 'fail'); assert.equal(g.gates.evidenceFinalR, 'fail'); assert.equal(g.gates.evidenceSupportPanel, 'fail'); assert.equal(g.gates.matchedStyles, 'fail');
 });
+
+
+test('revised E-1: trigger-only answers earn R=1; deadline mentions, uncited edges and not_stated do not',()=>{
+  let n=0;
+  for (const b of pilot.filter(b=>b.family.change_type==='expiry')) for (const cp of b.family.checkpoints) {
+    const {gold}=adaptGenerator(b.family,b.gold,b.support,cp.batch);
+    const trigger=clone(gold);trigger.reason.acceptedGraphs=[gold.reason.acceptedGraphs.at(-1)];
+    const submission=goldWitness(trigger);
+    submission.answer.reason.nodes=submission.answer.reason.nodes.filter(n=>['deadline','decision'].includes(n.id));
+    assert.deepEqual(score(gold,submission).scores,{C:1,O:1,R:1,J:1});
+    const bare=clone(submission);bare.answer.reason.edges=[];
+    assert.equal(score(gold,bare).scores.R,0);
+    const uncited=clone(submission);uncited.answer.reason.edges[0].citations=[];
+    assert.equal(score(gold,uncited).scores.R,0);
+    const unstated=clone(submission);unstated.answer.reason={status:'not_stated',nodes:[],edges:[]};
+    assert.equal(score(gold,unstated).scores.R,0);
+    // A deadline fragment cannot support the submitted causal edge.
+    const fragment=clone(submission);
+    fragment.answer.reason.edges[0].citations[0].quote=submission.answer.reason.nodes.find(n=>n.id==='deadline').claim.value.iso;
+    assert.equal(score(gold,fragment).scores.R,0);n++;
+  }
+  assert.equal(n,24);
+});

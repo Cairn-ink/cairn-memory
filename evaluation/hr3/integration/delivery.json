@@ -17,8 +17,8 @@
     },
     {
       "path": "REPORT.md",
-      "bytes": 21180,
-      "sha256": "ded49bf10253bca94385650d53c605dee104e3f275e10dff521df3b87f1c233d"
+      "bytes": 21460,
+      "sha256": "24466cd36d6d60c435616be62486a28c99b22a5b21a210f7fd3a3fc408bdcea8"
     },
     {
       "path": "adapters.mjs",
@@ -46,7 +46,7 @@
     {
       "path": "mechanical-results.json",
       "bytes": 112589,
-      "sha256": "122c0d64855a3f3df4dbd8a01cd64542f93b017deecfa7bcaed77ffe795783fa"
+      "sha256": "1d513adc2347d277f2522c70a0187a3cb2d5d2d3ac50d4d3ad28b30e41e955ad"
     },
     {
       "path": "mechanical.mjs",
@@ -55,24 +55,24 @@
     },
     {
       "path": "reconciliation-fields.json",
-      "bytes": 173164,
-      "sha256": "57e13e1011014bd0aa584f157fe6dcf445e3ed0c3f3745f67fa4796ff230430e"
+      "bytes": 173593,
+      "sha256": "2fc25d0c3f811bfdf9c3e1204f2d0098aeda141057ffde5c91a331659b44ac33"
     },
     {
       "path": "reproduce.mjs",
-      "bytes": 4062,
-      "sha256": "92f12be323bc28c42c136cb3c8674b63d3bc1e53bb2bbbc857f0a09f5cfbb72b"
+      "bytes": 4098,
+      "sha256": "fb813634ccb7e5051ca86ad026c0b8c26408f0f549830c1509f3dbd7f43761f9"
     },
     {
       "path": "test/integration.test.mjs",
-      "bytes": 14030,
-      "sha256": "86971f3d43929c675a9ad358eaf75b2ce1d279c0791e904dad1f7bf3f58b082c"
+      "bytes": 15375,
+      "sha256": "5ab10f4be8a217c560494337c62db5335a1b4064593d8600029669296bf27526"
     }
   ],
   "generatedCountIncludingManifest": 3149,
   "generatedManifest": {
-    "path": "artifacts/frozen-v1/artifact-manifest.json",
-    "sha256": "f41bfa5241c051133fe7fc9392d34e4aa7553203dbc1b6918257566bd6511177"
+    "path": "artifacts/revised-e1-final/artifact-manifest.json",
+    "sha256": "889b1659f374d11342feb7c3b5120f10f0a1aee7da5419c1c025a5a303808fde"
   },
   "totalFiles": 3162,
   "allFilesRoutes": [
@@ -81,24 +81,25 @@
   ],
   "commands": [
     {
-      "command": "focused integration node:test",
+      "command": "node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs",
       "exitCode": 0,
-      "tests": 17,
-      "pass": 17,
+      "tests": 18,
+      "pass": 18,
       "fail": 0
     },
     {
-      "command": "mechanical CLI + frozen generator/challenge CLI hash checks",
+      "command": "mechanical CLI final + generator/challenge frozen hash checks",
       "exitCode": 0
     },
     {
-      "command": "gate CLI, zero adjudications",
+      "command": "gate CLI with zero judgments",
       "exitCode": 1,
-      "expected": "genuine referral quotas fail, judgments pending"
+      "expected": "referral quotas fail; judgments pending"
     },
     {
-      "command": "independent payload/key, determinism, file inventory, hash and whitespace audit",
+      "command": "independent payload hashes/keys, deterministic repeat, file inventory and whitespace audit",
       "exitCode": 0
     }
-  ]
+  ],
+  "revision": "revised E-1/A-1 2026-10-25"
 }

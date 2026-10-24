@@ -153,13 +153,41 @@ inventory and hashes; it does not authorize paid work.
    notation does not prescribe JSON tags; `type` is frozen here. `G_correct`
    retains the Claim shape with empty citations and adds accepted graph
    structure. The separate support file is never projected into correctness.
-5. **Expiry / unstated reasons — unresolved.** §9 requires unstated-reason
-   expiry worlds, while an explicit deadline also explains the temporal trigger.
-   The current candidate gold treats the deadline as a trigger and causal
-   reason as the policy rationale. This interpretation needs protocol-owner or
-   non-author clarification before these six engineering/pilot checkpoint
-   answers can be accepted as frozen experimental gold. The ambiguity is not
-   silently treated as resolved or as a passed audit gate.
+5. **Expiry — revised E-1 (2026-10-25).** R retains the frozen question:
+   why the change occurred. Every expiry source states that the explicit
+   deadline was reached and the decision expired. A complete supported
+   `deadline → decision` trigger graph is accepted alongside the existing
+   rationale graphs. A deadline mention without a causal edge earns no credit.
+   `not_stated` is retained only for changes with no supported cause; the expiry
+   sources no longer append the contradictory “no reason” sentence. The frozen
+   causal-class allocation still describes the authored rationale topology;
+   expiry's trigger is an additional accepted alternative, including in the
+   `unstated` rationale class. Questions and non-expiry gold are unchanged.
+
+   All **36 affected rendered checkpoints** (12 engineering, 24 pilot) are
+   disclosed below. The previously reported six are the two checkpoints of
+   the three L02 families, marked Yes. Held-out worlds remain unrendered.
+
+   | Family ID | Checkpoint batches | Previously reported six |
+   | --- | --- | --- |
+   | `engineering-expiry-L01-W1` | 2, 4 | No |
+   | `engineering-expiry-L02-W1` | 2, 4 | Yes |
+   | `engineering-expiry-L03-W1` | 2, 4 | No |
+   | `engineering-expiry-L04-W1` | 2, 4 | No |
+   | `engineering-expiry-L05-W1` | 2, 4 | No |
+   | `engineering-expiry-L06-W1` | 2, 4 | No |
+   | `pilot-expiry-L01-W1` | 2, 4 | No |
+   | `pilot-expiry-L01-W2` | 2, 4 | No |
+   | `pilot-expiry-L02-W1` | 2, 4 | Yes |
+   | `pilot-expiry-L02-W2` | 2, 4 | Yes |
+   | `pilot-expiry-L03-W1` | 2, 4 | No |
+   | `pilot-expiry-L03-W2` | 2, 4 | No |
+   | `pilot-expiry-L04-W1` | 2, 4 | No |
+   | `pilot-expiry-L04-W2` | 2, 4 | No |
+   | `pilot-expiry-L05-W1` | 2, 4 | No |
+   | `pilot-expiry-L05-W2` | 2, 4 | No |
+   | `pilot-expiry-L06-W1` | 2, 4 | No |
+   | `pilot-expiry-L06-W2` | 2, 4 | No |
 6. **Card confirmation/declaration — unresolved.** The literal §5 table confirms
    with `currentDependencies`, then declares separately with a null dependency
    expectation. In pinned product `core/private-card-storage.mjs:211`, that

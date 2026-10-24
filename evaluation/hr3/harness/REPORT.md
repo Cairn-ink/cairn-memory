@@ -1,6 +1,21 @@
+# Revised E-1/A-1 verification (2026-10-25)
+
+The final revision results and changed-file inventory are in
+[REVISION-REPORT.md](REVISION-REPORT.md). The completed fake stage is retained
+locally in `artifacts/revised-a1-pilot/`; the reviewable A-1 output is
+[reports/a1-fake-pilot.json](reports/a1-fake-pilot.json).
+
+The fake pilot exited 0 with 480 scored observations, 2,798 settled reservations,
+no unsettled reservations, no failures and no stop. Its simulated charge is
+$0.705520540; actual spend is $0. The report CLI exited 0 with 48 aggregate rows,
+480 per-family records and the exact A-1 label. Execution-time frozen hashes are
+retained rather than replaced by report-time source hashes. Earlier records
+below describe the original delivery; the revised report supersedes their test
+counts, accounting totals, artifact locations and errata interpretation.
+
 # HR-3 harness implementation report
 
-All writes are inside `evaluation/hr3/harness/` or disposable `/tmp` outputs.
+All writes are inside `evaluation/hr3/harness/` or disposable `<TEMP>` outputs.
 No credentials/environment files, network, API or model calls were used. No new
 dependencies were installed. No sibling tests, broad suites, or commits were run.
 Node was **22.16.0**; repository HEAD was **5cee8a8f2fb92a6d445969664bc148a5d9fbce25**.
@@ -35,19 +50,19 @@ progress checked. No process is left running after delivery.
 | Command/check | Exit | Result |
 | --- | ---: | --- |
 | `git diff --exit-code b2513501 -- core adapters/mcp` | 0 | Product source matches P's pin. |
-| `node evaluation/hr3/generator/cli.mjs --split pilot --out /tmp/hr3-harness-pilot-inputs` | 0 | 60 families; seven generated payload hashes match both `freeze.json` and the generator manifest. Frozen generator source hashes also match. |
-| `node /tmp/hr3-harness-challenge/challenge/generate.mjs` | 0 | Copied unchanged challenge sources into `/tmp` first; 1,984 bundles / 736 worlds regenerated. All five JSONL byte/hash entries match the authoritative challenge manifest; independently enumerated directory list matches. |
+| `node evaluation/hr3/generator/cli.mjs --split pilot --out <TEMP>/hr3-harness-pilot-inputs` | 0 | 60 families; seven generated payload hashes match both `freeze.json` and the generator manifest. Frozen generator source hashes also match. |
+| `node <TEMP>/hr3-harness-challenge/challenge/generate.mjs` | 0 | Copied unchanged challenge sources into `<TEMP>` first; 1,984 bundles / 736 worlds regenerated. All five JSONL byte/hash entries match the authoritative challenge manifest; independently enumerated directory list matches. |
 | `node --test --experimental-test-isolation=none evaluation/hr3/harness/test/ledger.test.mjs evaluation/hr3/harness/test/research.test.mjs evaluation/hr3/harness/test/extraction.test.mjs` | 0 | Focused accounting, reducer, serialization, request and cache tests. |
-| `node evaluation/hr3/harness/cli.mjs --stage pilot --inputs /tmp/hr3-harness-pilot-inputs --out /tmp/hr3-harness-final-pilot-v2 --mcp-dependencies <deps-worktree>/adapters/mcp/node_modules --tokenizer-dependencies <deps-worktree>/adapters/openai/node_modules` | 0 | Complete fake pilot: 240 cached extractions, 480 scored observations, 120 valid answers per arm. |
-| `node evaluation/hr3/harness/test.mjs --mcp-dependencies <deps-worktree>/adapters/mcp/node_modules --tokenizer-dependencies <deps-worktree>/adapters/openai/node_modules --pilot-artifacts /tmp/hr3-harness-final-pilot-v2` | 0 | 35/35 tests; includes full-pilot artifact validation, two independently executed smoke stages, P public-import checks, eight Card branches, transport stops, partial-completion preservation and restart accounting. |
+| `node evaluation/hr3/harness/cli.mjs --stage pilot --inputs <TEMP>/hr3-harness-pilot-inputs --out <TEMP>/hr3-harness-final-pilot-v2 --mcp-dependencies <deps-worktree>/adapters/mcp/node_modules --tokenizer-dependencies <deps-worktree>/adapters/openai/node_modules` | 0 | Complete fake pilot: 240 cached extractions, 480 scored observations, 120 valid answers per arm. |
+| `node evaluation/hr3/harness/test.mjs --mcp-dependencies <deps-worktree>/adapters/mcp/node_modules --tokenizer-dependencies <deps-worktree>/adapters/openai/node_modules --pilot-artifacts <TEMP>/hr3-harness-final-pilot-v2` | 0 | 35/35 tests; includes full-pilot artifact validation, two independently executed smoke stages, P public-import checks, eight Card branches, transport stops, partial-completion preservation and restart accounting. |
 | Independent pilot manifest/recursive SHA-256 readback | 0 | 2,225 payload files plus manifest; all byte lengths and hashes match. |
 | Git file-list / independent filesystem walk; whitespace/newline checks | 0 | 27 delivered files; lists match. Pin's git-derived inventory independently matches 195 filesystem paths. |
 
 The dependency paths above are existing installations, read through the explicit
 module-resolution option. They are not copied into the repository. Test output is
-retained at `/tmp/hr3-harness-tests.tap`; the final CLI log is
-`/tmp/hr3-harness-final-pilot-v2.log`. The CLI's `summary.json`, `manifest.json`,
-`ledger.jsonl`, and `scored.jsonl` are in `/tmp/hr3-harness-final-pilot-v2/`.
+retained at `<TEMP>/hr3-harness-tests.tap`; the final CLI log is
+`<TEMP>/hr3-harness-final-pilot-v2.log`. The CLI's `summary.json`, `manifest.json`,
+`ledger.jsonl`, and `scored.jsonl` are in `<TEMP>/hr3-harness-final-pilot-v2/`.
 
 Earlier diagnostic attempts exited 1: reader requests that exceeded the byte
 bound were denied before dispatch; an incorrect control-tool name, empty Card
@@ -56,7 +71,7 @@ The initial complete-test attempt stopped at the byte guard after 252 scored
 observations. The final reader framing avoids nested JSON-string escaping while
 preserving the exact labeled evidence blocks. A redundant older prototype pilot
 was intentionally interrupted (exit 130) during the accounting performance fix;
-its completed artifacts were retained in `/tmp`. These attempts are not counted
+its completed artifacts were retained in `<TEMP>`. These attempts are not counted
 as completed pilots. The successful final runs above supersede them.
 
 The final fake journal contains **2,798 settled reservations**, no unsettled

@@ -42,7 +42,7 @@ function addReasons(turn, event, lineage, language) {
     turn.text += ` ${fragment}`;
     return sourceSpan(turn,start,turn.text.length);
   };
-  if (!graphs.length) append('unstated');
+  if (!graphs.length && event.change_type !== 'expiry') append('unstated');
   for (const node of nodes.filter(x => x !== 'decision')) append('fact',{fact:facts[node]});
   if (lineage.causal_class === 'conjunctive_mediated') {
     const s = append('joint',{a:facts.a,b:facts.b,c:facts.c});
@@ -82,7 +82,21 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
     const event = eventBase(`${family.family_id}/e${batchNo}`,turn,batch,{record_name:record,change_type:changeType,subject,predicate,claims:fields,scope:audience,effective_interval:interval(from,to),
       predecessor_anchors:predecessors.map(e => ({source_turn:e.source_turns[0],record_name:e.record_name,subject:e.subject,predicate:e.predicate})),
       replacement_extent:['refinement','scope_change'].includes(changeType)?'partial':'entire_predecessor',field_mask:fields.map(x => x.field)});
-    if (changeType !== 'initial') accepted.push({event_id:event.event_id,graphs:addReasons(turn,event,lineage,language)});
+    if (changeType !== 'initial') {
+      // E-1: the existing expiry source explicitly connects the passed deadline
+      // to expiry. Preserve rationale paths as alternatives to this trigger.
+      const triggerSpan = changeType === 'expiry' ? sourceSpan(turn) : null;
+      const graphs = addReasons(turn,event,lineage,language);
+      if (triggerSpan) {
+        const node = (id,pred,value) => ({id,claim:{subject:event.subject,predicate:pred,value,scope:event.scope,valid:event.effective_interval,qualifiers:[],citations:[]}});
+        if (!event.reason_nodes.some(n => n.id === 'decision')) event.reason_nodes.push(node('decision','causal_condition',text('expiry_change')));
+        event.reason_nodes.push(node('deadline','expiry_deadline_passed',{type:'Instant',iso:from}));
+        const edge = {from:'deadline',to:'decision',support:[[triggerSpan]]};
+        event.reason_edges.push(edge);
+        graphs.push({edges:[edge]});
+      }
+      accepted.push({event_id:event.event_id,graphs});
+    }
     event.source_quotes = [sourceSpan(turn)];
     batch.turns.push(turn); events.push(event);
     return event;

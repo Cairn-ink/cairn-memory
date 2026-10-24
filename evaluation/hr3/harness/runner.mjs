@@ -9,6 +9,7 @@ import { materialize, literalQuery, retrieve } from './research.mjs';
 import { responseRequest } from './requests.mjs';
 import { verifyProductPin } from './pin.mjs';
 import { artifactManifest } from './artifacts.mjs';
+import { frozenArtifacts } from './bounds.mjs';
 import { tokenCounter } from './dependencies.mjs';
 import { validate, answerSchema } from '../scorer/schema.mjs';
 import { score } from '../scorer/scorer.mjs';
@@ -29,7 +30,7 @@ export async function run({stage='smoke',inputs,out,transport=new FakeTransport(
   for(const directory of ['extractions','states','deliveries','answers','scores'])mkdirSync(join(root,directory),{mode:0o700});
   const observations=[],extractionSummary=[],written=['ledger.jsonl'];let stopped=null;
   const persist=(path,value)=>{atomicJSON(path,value);written.push(path.slice(root.length+1));};
-  persist(join(root,'run.json'),{stage,offline:transport instanceof FakeTransport,transport:transport.constructor.name,protocol:'v0.3.4+E-1+E-2+A-1',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
+  persist(join(root,'run.json'),{stage,offline:transport instanceof FakeTransport,transport:transport.constructor.name,protocol:'v0.3.4+E-1+E-2+A-1',productPin:'b2513501a6747a163ab1cefb7d37a16744c9621a',families:families.map(f=>f.family_id),inputVerification:data.verification,frozenArtifacts:frozenArtifacts(inputs),productVerification,tokenizer:counter.id,readiness:transport instanceof FakeTransport?'offline exercise only; paid gates pending':'paid engineering pilot under A-1: mechanical scoring only, referrals unresolved'});
   try {
     for(const family of families) {
       const researchEmbedder=createEmbedder(guarded,{prefix:family.family_id+'/research-embedding'}),productEmbedder=createEmbedder(guarded,{channel:'product',prefix:family.family_id+'/product-embedding'});

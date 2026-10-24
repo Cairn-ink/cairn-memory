@@ -70,12 +70,12 @@
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_edges": {
-    "count": 3064,
+    "count": 3056,
     "destination": "audit.source/family/ast/events/*/reason_edges",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes": {
-    "count": 3064,
+    "count": 3056,
     "destination": "audit.source/family/ast/events/*/reason_nodes",
     "disposition": "defect:no-scorer-metadata-slot"
   },
@@ -165,87 +165,87 @@
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_edges/*/from": {
-    "count": 520,
+    "count": 568,
     "destination": "audit.source/family/ast/events/*/reason_edges/*/from",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_edges/*/support/*/*/end": {
-    "count": 520,
+    "count": 568,
     "destination": "audit.source/family/ast/events/*/reason_edges/*/support/*/*/end",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_edges/*/support/*/*/offset_unit": {
-    "count": 520,
+    "count": 568,
     "destination": "audit.source/family/ast/events/*/reason_edges/*/support/*/*/offset_unit",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_edges/*/support/*/*/quote": {
-    "count": 520,
+    "count": 568,
     "destination": "audit.source/family/ast/events/*/reason_edges/*/support/*/*/quote",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_edges/*/support/*/*/start": {
-    "count": 520,
+    "count": 568,
     "destination": "audit.source/family/ast/events/*/reason_edges/*/support/*/*/start",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_edges/*/support/*/*/turn_id": {
-    "count": 520,
+    "count": 568,
     "destination": "audit.source/family/ast/events/*/reason_edges/*/support/*/*/turn_id",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_edges/*/to": {
-    "count": 520,
+    "count": 568,
     "destination": "audit.source/family/ast/events/*/reason_edges/*/to",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes/*/claim/citations": {
-    "count": 720,
+    "count": 776,
     "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/citations",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes/*/claim/predicate": {
-    "count": 720,
+    "count": 776,
     "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/predicate",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes/*/claim/qualifiers": {
-    "count": 720,
+    "count": 776,
     "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/qualifiers",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes/*/claim/scope/any/*/all": {
-    "count": 576,
+    "count": 632,
     "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/scope/any/*/all",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes/*/claim/subject": {
-    "count": 720,
+    "count": 776,
     "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/subject",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes/*/claim/valid/from": {
-    "count": 720,
+    "count": 776,
     "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/valid/from",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes/*/claim/valid/to": {
-    "count": 720,
+    "count": 776,
     "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/valid/to",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes/*/claim/value/text": {
-    "count": 720,
+    "count": 728,
     "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/value/text",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes/*/claim/value/type": {
-    "count": 720,
+    "count": 776,
     "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/value/type",
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/family/ast/events/*/reason_nodes/*/id": {
-    "count": 720,
+    "count": 776,
     "destination": "audit.source/family/ast/events/*/reason_nodes/*/id",
     "disposition": "defect:no-scorer-metadata-slot"
   },
@@ -425,12 +425,12 @@
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/acceptedGraphs/*/edges/*/from": {
-    "count": 520,
+    "count": 568,
     "destination": "gold.reason.acceptedGraphs topology cross-checked against support",
     "disposition": "mapped"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/acceptedGraphs/*/edges/*/to": {
-    "count": 520,
+    "count": 568,
     "destination": "gold.reason.acceptedGraphs topology cross-checked against support",
     "disposition": "mapped"
   },
@@ -565,52 +565,52 @@
     "disposition": "mapped:redundant-checked"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/citations": {
-    "count": 720,
+    "count": 776,
     "destination": "audit.source + reversible empty constant",
     "disposition": "mapped:empty-gold-placeholder-checked"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/predicate": {
-    "count": 720,
+    "count": 776,
     "destination": "gold/reason/nodes/*/claim/predicate",
     "disposition": "mapped:identity"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/qualifiers": {
-    "count": 720,
+    "count": 776,
     "destination": "gold/reason/nodes/*/claim/qualifiers",
     "disposition": "mapped:identity"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/scope/any/*/all": {
-    "count": 576,
+    "count": 632,
     "destination": "gold/reason/nodes/*/claim/scope/any/*/all",
     "disposition": "mapped:identity"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/subject": {
-    "count": 720,
+    "count": 776,
     "destination": "gold/reason/nodes/*/claim/subject",
     "disposition": "mapped:identity"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/valid/from": {
-    "count": 720,
+    "count": 776,
     "destination": "gold/reason/nodes/*/claim/valid/from",
     "disposition": "mapped:identity"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/valid/to": {
-    "count": 720,
+    "count": 776,
     "destination": "gold/reason/nodes/*/claim/valid/to",
     "disposition": "mapped:identity"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/value/text": {
-    "count": 720,
+    "count": 728,
     "destination": "gold/reason/nodes/*/claim/value/text",
     "disposition": "mapped:identity"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/value/type": {
-    "count": 720,
+    "count": 776,
     "destination": "gold/reason/nodes/*/claim/value/type",
     "disposition": "mapped:identity"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/id": {
-    "count": 720,
+    "count": 776,
     "destination": "gold/reason/nodes/*/id",
     "disposition": "mapped:identity"
   },
@@ -635,37 +635,37 @@
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/from": {
-    "count": 520,
+    "count": 568,
     "destination": "gold.reason.acceptedGraphs/*/edges/*/from",
     "disposition": "mapped:verified-source-span-interning"
   },
   "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/support/*/*/end": {
-    "count": 520,
+    "count": 568,
     "destination": "gold.reason.acceptedGraphs/*/edges/*/support/*/* -> gold.supportSpans/end",
     "disposition": "mapped:verified-source-span-interning"
   },
   "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/support/*/*/offset_unit": {
-    "count": 520,
+    "count": 568,
     "destination": "gold.reason.acceptedGraphs/*/edges/*/support/*/* -> gold.supportSpans/offset_unit",
     "disposition": "mapped:verified-source-span-interning"
   },
   "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/support/*/*/quote": {
-    "count": 520,
+    "count": 568,
     "destination": "gold.reason.acceptedGraphs/*/edges/*/support/*/* -> gold.supportSpans/quote",
     "disposition": "mapped:verified-source-span-interning"
   },
   "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/support/*/*/start": {
-    "count": 520,
+    "count": 568,
     "destination": "gold.reason.acceptedGraphs/*/edges/*/support/*/* -> gold.supportSpans/start",
     "disposition": "mapped:verified-source-span-interning"
   },
   "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/support/*/*/turn_id": {
-    "count": 520,
+    "count": 568,
     "destination": "gold.reason.acceptedGraphs/*/edges/*/support/*/* -> gold.supportSpans/turn_id",
     "disposition": "mapped:verified-source-span-interning"
   },
   "generator:$/supportRow/checkpoints/*/acceptedGraphs/*/edges/*/to": {
-    "count": 520,
+    "count": 568,
     "destination": "gold.reason.acceptedGraphs/*/edges/*/to",
     "disposition": "mapped:verified-source-span-interning"
   },
@@ -965,17 +965,17 @@
     "disposition": "defect:no-scorer-metadata-slot"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/acceptedGraphs": {
-    "count": 40,
+    "count": 32,
     "destination": "gold/acceptedGraphs",
     "disposition": "mapped:identity"
   },
   "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes": {
-    "count": 40,
+    "count": 32,
     "destination": "gold/reason/nodes",
     "disposition": "mapped:identity"
   },
   "generator:$/supportRow/checkpoints/*/acceptedGraphs": {
-    "count": 40,
+    "count": 32,
     "destination": "audit.source/supportRow/checkpoints/*/acceptedGraphs",
     "disposition": "defect:no-scorer-metadata-slot"
   },
@@ -1214,9 +1214,19 @@
     "destination": "audit.source/family/ast/events/*/field_mask",
     "disposition": "defect:no-scorer-metadata-slot"
   },
+  "generator:$/family/ast/events/*/reason_nodes/*/claim/value/iso": {
+    "count": 48,
+    "destination": "audit.source/family/ast/events/*/reason_nodes/*/claim/value/iso",
+    "disposition": "defect:no-scorer-metadata-slot"
+  },
   "generator:$/goldRow/checkpoints/*/G_correct/current/claims": {
     "count": 48,
     "destination": "gold/current/claims",
+    "disposition": "mapped:identity"
+  },
+  "generator:$/goldRow/checkpoints/*/G_correct/reason/nodes/*/claim/value/iso": {
+    "count": 48,
+    "destination": "gold/reason/nodes/*/claim/value/iso",
     "disposition": "mapped:identity"
   },
   "challenge:$/row/candidate/current/claims/*/citations/*/intent": {

@@ -22,8 +22,8 @@
     "checks": [
       {
         "name": "generator/README.md",
-        "sha256": "9ad4b9c209300677348adfdedeae7881a6821a81d05363966c822d57ead68224",
-        "bytes": 12149
+        "sha256": "d41c014c87c81fc60b1a30c33110012bd25e8a1d267aad28edd413df3583d4e3",
+        "bytes": 13483
       },
       {
         "name": "generator/answer.schema.json",
@@ -57,13 +57,13 @@
       },
       {
         "name": "generator/deliver.mjs",
-        "sha256": "53aa6ce3452ef48b3fc1419ad8cd3680388416c4276b0391a9126fcd9aceeb13",
-        "bytes": 5658
+        "sha256": "9d59a0597d25e3e4cd47cc0678c18b3a524b49da7e902f685abac2737380f551",
+        "bytes": 5664
       },
       {
         "name": "generator/generate.mjs",
-        "sha256": "c9dd7bd17d6804a1f08c82c33841331b6a3837237530262cca0d8de8d89a60f0",
-        "bytes": 14413
+        "sha256": "3b3b6212f72ebcd67de626ecf76ce0fa79d9d670531eb35ff32f31bd179dc051",
+        "bytes": 15331
       },
       {
         "name": "generator/inventory.mjs",
@@ -72,23 +72,23 @@
       },
       {
         "name": "generator/test/generator.test.mjs",
-        "sha256": "4c1d33129dc03806e98fda1ed5610bdb81a1e53de389a68cbfb53898a3221438",
-        "bytes": 19821
+        "sha256": "0723fa74e678b51eae61d5e9dcaa66e2a09c3e770bc7df07090c104788bb9fe5",
+        "bytes": 21348
       },
       {
         "name": "generator/validate.mjs",
-        "sha256": "d485489270a5dfc958b76d076cc99869796f8a615f67b646aa7015c641d8fb83",
-        "bytes": 24246
+        "sha256": "c93ba2eb3a50579fe39acf35dc16cd5b5249b76a800320b5b3d6349a390709e2",
+        "bytes": 25231
       },
       {
         "name": "generator/artifacts/pilot/families.jsonl",
-        "sha256": "f7633dd926dfc8ec00810758d9fad82b31965eee108de4c266669030ee46736f",
-        "bytes": 2749701
+        "sha256": "06b89366cb148a6ea017e7d34d4c350559171f75850d3df5594ce6c601d5a49a",
+        "bytes": 2766691
       },
       {
         "name": "generator/artifacts/pilot/gold.jsonl",
-        "sha256": "7ba3721aed9c956f2b61bf0a483d57370e732351dccb1ddff45909d27150a713",
-        "bytes": 228648
+        "sha256": "04e8802cfe889f16eb5df5ee9df8e17dc5b3d437b8853d345266e5f1bfaa8a07",
+        "bytes": 237260
       },
       {
         "name": "generator/artifacts/pilot/grammar-and-sentence-bank.json",
@@ -107,8 +107,8 @@
       },
       {
         "name": "generator/artifacts/pilot/support.jsonl",
-        "sha256": "03ebf86486f69f55324945670de61743435e0df6cd772532f28247d86244f193",
-        "bytes": 267239
+        "sha256": "a528ce04bbd0a883a15f98111c1a1189808b3dd34e305664be4c456401931c9c",
+        "bytes": 277145
       },
       {
         "name": "generator/artifacts/pilot/validation-audit.jsonl",
@@ -117,8 +117,8 @@
       },
       {
         "name": "generator/artifacts/pilot/manifest.json",
-        "sha256": "4ccf37b5b1d7abf77cd359e0aff3ae9e97b3040367a0cfa09fa485cf2d1fd8e1",
-        "bytes": 2689
+        "sha256": "725ceb155af787e2b81d70e0424c6b4f0efe019bd87ccb59616780f4f7ab1f5c",
+        "bytes": 2697
       },
       {
         "name": "challenge/source/README.md",
@@ -285,7 +285,7 @@
       },
       {
         "path": "reproduce.mjs",
-        "sha256": "92f12be323bc28c42c136cb3c8674b63d3bc1e53bb2bbbc857f0a09f5cfbb72b"
+        "sha256": "fb813634ccb7e5051ca86ad026c0b8c26408f0f549830c1509f3dbd7f43761f9"
       },
       {
         "path": "gate.mjs",
@@ -296,7 +296,7 @@
         "sha256": "fa258ac86e4c5a674de17f2ff75940ad2270332b708757e71b69da3ed7d63e96"
       }
     ],
-    "errata": "a26c5f1e60cc26890fc18d95e71412b9bdcc0076e185e480b40225a96b5a9a1f"
+    "errata": "2b62742aea207c5ca638e54740bfb9e65f54eefafc22354f7db07e79fba0e79b"
   },
   "pilot": {
     "families": 60,
@@ -3685,8 +3685,8 @@
   },
   "reconciliation": {
     "adaptedCheckpoints": 2104,
-    "sourceLeafPatterns": 790,
-    "sourceLeavesAudited": 1561948,
+    "sourceLeafPatterns": 792,
+    "sourceLeavesAudited": 1563796,
     "losslessSidecarRoundTrips": 2104,
     "defectCounts": {
       "generator/NON_SCORER_METADATA": 120,

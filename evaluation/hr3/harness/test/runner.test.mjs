@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { emit } from '../../generator/deliver.mjs';
 import { run } from '../runner.mjs';
 import { FakeTransport } from '../transport.mjs';
+import { writeBoundReport, LABEL } from '../bounds.mjs';
 import { verifiedInputs } from '../inputs.mjs';
 import { validateExtraction } from '../schema.mjs';
 import { canonical } from '../common.mjs';
@@ -22,6 +23,13 @@ test('full offline fake pilot: frozen inputs, 240 extractions, 480 stateless sco
  for(const file of extractions){const e=JSON.parse(readFileSync(join(root,'extractions',file)));assert.equal(e.error,null);const input=JSON.parse(e.body.input[1].content);validateExtraction(e.value,input);assert.deepEqual(Object.keys(input).sort(),['observed_at','public_header','turns']);}
  for(const file of readdirSync(join(root,'answers'))){const a=JSON.parse(readFileSync(join(root,'answers',file)));assert.deepEqual(validate(answerSchema,a.answer),[]);assert.equal(a.body.input.length,2);assert.equal(a.body.max_output_tokens,768);assert.equal(a.body.store,false);assert.equal(a.body.tools,undefined);assert.equal(a.body.previous_response_id,undefined);}
  const readerCounts=new Map();for(const e of journal.filter(e=>e.type==='reserve'&&e.operation==='reader'))readerCounts.set(e.logicalId,(readerCounts.get(e.logicalId)??0)+1);assert.ok([...readerCounts.values()].every(n=>n===1));
+ const reportDir=mkdtempSync(join(tmpdir(),'hr3-pilot-bounds-'));t.after(()=>rmSync(reportDir,{recursive:true,force:true}));
+ const reportInputs=join(reportDir,'inputs');await emit({split:'pilot',out:reportInputs});
+ const report=writeBoundReport({stageDirectory:root,inputs:reportInputs,out:join(reportDir,'bounds.json')});
+ assert.equal(report.label,LABEL);assert.equal(report.tables.length,48);assert.equal(report.perFamily.length,480);
+ assert.deepEqual(report.denominators,{planned:480,attempted:480,validCompletion:480,failedAttempt:0,unexecuted:0,plannedFamilies:60,plannedLineages:30,representedFamilies:60,representedLineages:30});
+ assert.equal(report.metadata.actualSpendUSD,0);assert.equal(report.metadata.scorer,'hr3-scorer-v1');
+ for(const row of report.tables){assert.equal(row.denominators.attempted,row.denominators.planned);assert.equal(row.denominators.unexecuted,0);for(const c of ['C','O','R','J'])assert.equal(Object.values(row.rates[c].counts).reduce((a,b)=>a+b,0),row.denominators.attempted);}
  t.diagnostic(`pilot verified: 60 families, 240 extractions, 480 scored observations, ${summary.ledger.reservations} reservations`);
 });
 test('independent fake smoke runs have identical research artifacts and all-arm scores',async t=>{

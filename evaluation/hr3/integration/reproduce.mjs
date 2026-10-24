@@ -13,7 +13,7 @@ export async function regenerate() {
   async function run(args, logName) {
     const log = join(temp, logName), fd = openSync(log, 'wx');
     let result; try { result = spawnSync(process.execPath, args, { stdio: ['ignore', fd, fd] }); } finally { closeSync(fd); }
-    commands.push({ command: ['node', ...args].join(' ').replaceAll(temp, '<TEMP>'), exitCode: result.status, signal: result.signal, error: result.error?.message ?? null, log: log.replaceAll(temp, '<TEMP>') });
+    commands.push({ command: ['node', ...args].join(' ').replaceAll(temp, '<TEMP>').replaceAll(root, 'evaluation/hr3/'), exitCode: result.status, signal: result.signal, error: result.error?.message ?? null, log: log.replaceAll(temp, '<TEMP>') });
     if (result.status !== 0) throw new Error(`Regeneration failed: ${JSON.stringify(commands.at(-1))}`);
   }
   async function check(path, expected, name) {
