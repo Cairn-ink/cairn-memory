@@ -359,3 +359,9 @@
 - **hr2b_tools fix1 完成**：19 個回歸全修（選擇 gate 回到讀 fixture 之前；無版本的舊 fixture 投影恢復；scratch 管線恢復），worker
   跑完 28 檔（沙箱內 15 個 loopback EPERM 屬沙箱）。協調者沙箱外全目錄兩版本 **386 過、0 敗、1 skip（opt-in 模型煙霧）**，
   含 240／120 兩個回歸。**提交 `c7ee6f9e`**（33 檔），已推送；審查 worktree 移到 `c7ee6f9e`，派 Spec／Standards 雙審查。
+- **`c7ee6f9e` 雙審查：Spec no（1 P0、2 P1）、Standards no（3 P1、2 P2）**。Spec P0：W3 的 drop／recategorize 覆寫走不完
+  HR-2b 管線（排名認證用原始題目集、runner 排除 dropped 題目→`rankings_query_set`；評分要求標籤類別等於題目類別→配對
+  recategorize 被 `label_query_metadata` 拒）。Spec P1：absent 事實未納入禁用詞典掃描；「只在第一筆」允許後面 receipt 也支持。
+  Standards P1：guard 層成員未經標籤認證（可修剪家族）；host 重播信任 cell 自帶的 `assemblyItems` 文字；receipt 排序比字串
+  非時間點（時區偏移）。P2：固定配置淺凍結可被改、profile 常數多處重複。其餘（HR-1 位元不變、序列化 32 個 probe 與
+  `b18dabe0` 一致、兩個回歸、選擇 gate）確認。派 fix2（八項，重跑 28 檔）。
