@@ -482,3 +482,11 @@
   八個 placement 配額全部通過**（test first 56／25、later 49／22；dev first 19／9、later 30／11；test later 逐類別 7/6/7/5/7/7/6），
   剩 `audit:overrides`（預期）與 10 個 `category:check_failed`（C1×1、C2×9）交 W3；W2 另自報 q-208（C2）的支持記憶語言元資料為 en／mixed
   需驗證。提交題目／split／labels（候選 3，審前、未凍結），派 W3 全面複審（xhigh＋fast）。
+- **W3 全面複審完成**（候選 3，xhigh＋fast，exit 0）：11 個覆寫（10 recategorize：C1 缺逐字詞 1、C2 缺詞 7、C2 詞未嵌入 2；
+  1 add-member：q-110 的 foreign body 時間蘊涵，使該 dev 群從 later 變 body）；q-208 確認有效 C2；**填充與非支持單元 0 洩漏**
+  （1,080 句、3,683 範圍、945 非支持單元、18,297 詞 0 命中）；所有 later-receipt 群確認無 body／first 支持；receipt 全部 ≤4。
+  審後 193 計分群／265 行、計分群 placement 40/75/78；placement 配額通過（test first 56／25、later 49／22；dev 19／9、29／10）。
+  W3 另給每題「留在原類別的最小修法」（多為換 keyTerm）。提交稽核檔（未套用）`f9e8f14c`；試跑 apply-audit（0，11 覆寫）＋驗證器：
+  placement OK，剩 `queries:category_total`（C1/C2/C3/C4/C7 非 20 題）、split 配額（C1/C2/C4/C7）、C2 家族下限、
+  **`queries:language_distribution` zh**（99/160＝61.9%，上限 60%；mixed 9.4% 偏低）；試跑後還原 labels。
+  派 W2 修補（resume，high＋fast）：套用 10 個修法、約 9–10 題 zh 改 mixed。之後 labels → W3 增量複審 → apply → validate → 凍結。
