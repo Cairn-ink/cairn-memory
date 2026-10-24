@@ -94,6 +94,7 @@
 | 2026-10-24 | **Codex 派工設定**（使用者）：實作用 `model_reasoning_effort="high"`＋`service_tier="fast"`；審查／稽核維持 xhigh＋fast。已在 rollout 確認 fast＝`priority` |
 | 2026-10-24 | **U5c 產品決定**（使用者）：(1) agent 可**直接建立並生效**角色說明，不需使用者確認；保留不可覆寫版本、建立者紀錄、CAS 防並行覆寫、可撤回，角色名稱不給任何權限；(2) 任務快照是**回傳給呼叫端的收據**，由 agent／host 保存，Cairn 不存；(3) 必填欄位是**職責與應交付成果**，方法與相關記憶選填，必填項放不進預算時回 `budget_insufficient`。主控決定：角色說明存成 schema v32 的不可覆寫版本紀錄（類似方法版本），不放在 Memory／Card 本文，因為 Card 確認需要使用者授權，而 Memory 修正會原地覆寫，無法支援「當時」讀取。U5c 分三包：U5c-1 角色與任務讀取、U5c-2 一跳關聯與 MOC 通路、U5c-3 採用切換的失效傳遞。MOC 摘要新鮮度（A14）要等 E1 的接點，先回報 unavailable |
 | 2026-10-24 | **HR-2b 協議 v1.1 核可**（主控）：凍結前修兩個結構性缺陷：guard 改成合併各類別的 pooled 對比（測試集每層 ≥30 組、≥12 族），每篇記憶的來源數上限改為 4（`core.admit` 單次最多 4 筆）。門檻與判定規則不變；要寫明修訂時看過哪些數字，各類別差值只做描述性報告 |
+| 2026-10-24 | **HR-2b 結果：Keep**（`experiment/hr2-assembly` `8d9a51f5`）。長項目（本文 120–400 tokens、每篇 ≤4 筆來源）下，「只帶第一筆來源」反而比「依名次整筆」差：確認性結果 −11.5 分，CI [−23.8, −0.15]；後段來源的 guard −38.8 分。`rank-first-whole-v1` 維持 §15 預設，`rank-first-first-source-v1` 維持可選、非預設，不開 §15 修訂。主控抽查報告第 157 列，數字相符 |
 
 ## 6. 研究問題與順序
 
@@ -101,6 +102,7 @@
 | --- | --- | --- |
 | HR-1 | 向量加中文字面融合，能否比強中文字面檢索找回更多必要證據，且精確詞不倒退？另附 A5 原文片段對照 | **已完成**（[結果](hybrid-retrieval-hr1-results.md)）：本機 bge-m3＋A3 +18.9（CI 11.6–26.6）、產品端 openai-3-small＋F-RRF10 +16.9（CI 10.2–23.5），兩者都判「繼續」，可列為預設開啟的候選；A5 未達門檻；現行 `selectEvidence` 在 S1000 只有 0.03 |
 | HR-2 | 在固定 token 預算下，「分層表示＋先覆蓋再加深」能否比 top-k 全文放進更多必要證據？不需要模型 | **已完成**（協議 v1.1 `c863e9d6`；[結果](https://github.com/Cairn-ink/cairn-memory/blob/experiment/hr2-assembly/docs/plans/budgeted-assembly-hr2-results.md)，`experiment/hr2-assembly` `14ff5dc7`）：主要比較 P-cover − P-top（bge-m3＋A3、512 tokens、O=0）＝ **−2.5 分，CI [−6.6, +1.5]**，29 個題組 → **依名次放整筆仍是 U5b 的初始預設**。探索性結果：預算 128–384 時，先覆蓋落後 16–29 分；只加深第一筆來源（P-top-s1）從沒輸過，128 時 +3–4。只適用於短的單一事實項目。**v1.1 探索性補充**（`8ed4dadb`，§7）：在已出貨的 representation-v2 開銷下，反對先覆蓋的證據更強，而且延伸到 192–1,536 tokens 全段（先覆蓋 − 依名次：192–512 落後 4–15 分，768–1,536 落後 12–27 分，768 以上每個 CI 都不含零）；只加深第一筆來源從沒變差（+0.3 到 +2.3，bge-m3＠256 為 +1.7 [+0.3, +3.4]）。預算低於完整 24 筆的成本（約 1,800 tokens）時一定會卡住；1,500 tokens 約放得下 15–20 則短記憶各帶一筆來源。下一步研究仍是長項目 fixture |
+| HR-2b | 長項目（本文 120–400 tokens、2–4 個事實、≤4 筆來源）下，「只帶第一筆來源」是否該改成預設？ | **已完成，Keep**（協議 v1.1 `d3a6e24f`；結果 `8d9a51f5`，`experiment/hr2-assembly`）：主要比較 P-top-s1 − P-top（bge-m3＋A3、host-v2、1,500 tokens）＝ **−11.5 分，CI [−23.8, −0.15]**，28 個題組；後段來源 guard −38.8 分。16 格探索性結果全落後（−5 到 −25），預算越大差距越大，和 HR-2 短項目相反。限制：140 題中 137 題有本文以外的必要群組；每篇 ≤4 筆來源；host-v2 是加法近似 |
 | HR-3 | 分類型更新政策能否提高「目前決定、舊決定、改變原因」的正確率？需要真模型抽取，付費 | 候選，需另批預算 |
 | 之後 | 一跳 typed 關聯、MOC 通路的名次定義、LLM 或 cross-encoder rerank | 未排 |
 
@@ -182,9 +184,10 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 
   每一包都經雙審查判 Yes。
 - **已發布**（都是 GitHub pre-release，附 tgz 與 sha256，不上 npm）：`v1-preview.0`（`80daca28`）、`v1-preview.1`（`924d7658`，素材）、`v1-preview.2`（`4e53d1dc`，`read_memory_context` 實驗性）、**`v1-preview.3`**（`7197d800`，`read_memory_context` v2 列為穩定；每筆開銷約 250 → 82 tokens）。
-- **研究**：HR-1 完成；HR-2 v1.0 與 v1.1（host-v2 探索性補充，`8ed4dadb`）完成，見 §6。
+- **研究**：HR-1、HR-2（v1.0、v1.1）、HR-2b（Keep，`8d9a51f5`）都已完成，見 §6。組裝預設維持 `rank-first-whole-v1`。
+- **工程進行中（U5c）**：§17（U5c-2）與 §18（U5c-1）都已凍結，在 `integration/unified-memory-v1-u5c`；U5c-2 實作 `1f29ec00` 審查中；U5c-1 part 1 `61db8b33` 與 part 2 修正中。U5c-3（採用切換時的失效傳遞）排在 U5c-1 之後。
 - **下一步候選**：
-  1. 長項目 fixture，用來決定 `rank-first-first-source-v1` 要不要變成預設。
+  1. U5c 完成並整合，之後出 `v1-preview.4`。
   2. WAL 模式評估（§16，全庫決策）。
   3. HR-3（分類型更新政策），需付費，要另外批預算。
 - **等使用者決定**：
