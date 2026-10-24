@@ -412,3 +412,12 @@
 - 派 `hr2b_protocol_audit` 第三次複查（resume，read-only，xhigh＋fast；rollout 確認 `service_tier:priority`、`xhigh`），審查
   worktree `cairn-memory-review-hr2` 移到 `9d34f911`。凍結後並行派：`hr2b_tools` 修訂（high＋fast，改 `lib/`、`assembly/`、`test/`）
   與 W1 重建（high＋fast，只改 `fixtures-hr2b/`，不跑任何測試、不讀 W2／W3 產物）；派工單範本已寫好待填凍結哈希。
+- **稽核第三次複查（`9d34f911`）：無 P0，P1×4、P2×2，不能凍結。** P1：(1) 「產品無法儲存 >4 receipt」說過頭——`admit` 只是每次呼叫
+  上限 4，runtime 會把後續 receipt 附加到既有記憶，應改成「驗證器單次 admission 播種程序無法建立」；(2) provenance 混用審前／審後
+  數字（審後 later-receipt test 家族 4/7/8/10/6/8/6、dev 2/1/0/4/2/5/4；81 筆＝24 目標＋48 干擾＋9 foreign）、pooled 權重是群出現數
+  不是家族數（審後 C6 13 群 vs C3 9）、要連結完整報告、v1 宣告要標歷史；(3) 「結構上不可行」說過頭——家族可跨類別重複，70 是
+  category-family 出現數，應改寫成「候選未達原配額」；(4) bootstrap 機制要寫完整（N 個貢獻家族均勻重抽、行帶重複度、分子分母逐抽
+  重算、10,000 次有效抽樣、2.5/97.5 插值百分位、ceiling 與逐類別 Δ 同分母）。P2：§5 平均 receipt 2.65 → 約 12,900；§8 改成「不以
+  結果選擇或修改規則」。§9 從 candidate 0 重啟判定合法。協調者逐項核實（`core/contract.mjs` admit 上限、`runtime.mjs` attach；
+  從 labels＋audit 重算審後群數 4/7/9/10/8/13/6；81 筆拆分）後全部套用，並把兩份驗證器輸出（去掉 Node 警告行）保留到
+  `fixtures-hr2b/build/candidate0-v1-validation/`：**`4343f3a7`**。派第四次複查（xhigh＋fast）。W1 範本加上不得讀該目錄。
