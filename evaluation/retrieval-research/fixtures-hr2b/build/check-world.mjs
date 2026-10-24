@@ -1,5 +1,5 @@
 // W1 stage 1 only. Never loads queries, split, labels, rankings or assembly.
-import { readFileSync, writeFileSync, readdirSync, lstatSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, lstatSync, openSync, closeSync, unlinkSync, fstatSync, readSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve, relative, join } from 'node:path';
@@ -8,11 +8,21 @@ import { buildWorld as hr1PatternWorld } from '../../fixtures/build/build-world.
 import { VERSION, CANDIDATE_SEEDS, DOMAINS, LANGS, BODY_BANDS, RECEIPT_BANDS, RECEIPT_COUNTS,
   PLACEMENTS, LANGUAGE_SHARES } from './config.mjs';
 import { fillerSentences } from './filler.mjs';
-import { OWNED_FILES, PREFIX, gitText, headBytes, checkIdentity, identityOutput } from './check-identity.mjs';
+// Only file-list/Git utilities are imported; the retained identity gate is not run.
+import { OWNED_FILES, PREFIX, gitText, headBytes } from './check-identity.mjs';
 
 const ROOT = fileURLToPath(fixtureRoot);
 const PROTOCOL = {revision:'v1.1',freezeCommit:'d3a6e24f'};
 const V1_REJECTION = '16 placement-quota errors: dev:first-receipt:groups_minimum_30, dev:first-receipt:families_minimum_12, dev:later-receipt:groups_minimum_30, dev:later-receipt:families_minimum_12, dev:guard:{C1,C2,C3,C4,C5,C7}:family_minimum, test:guard:{C1,C2,C4,C5,C6,C7}:family_minimum (later-receipt test families per category C1–C7 6/7/11/8/7/8/3); 81 memories with 5–6 receipts refused by the public-admission preflight (core admit cap 4)';
+const V11_RESOLUTION = {
+  exitCode:1,validationRecord:'build/candidate0-v11-identity/',
+  placement_allocation_identical:false,fact_to_memory_plan_identical:false,
+  fact_to_memory_plan_changed_from_memory_index:160,facts_view_bytes_identical:false,
+  facts_view_difference:'facts view carries distractor coverage',
+  facts_identical:true,families_identical:true,lexicon_identical:true,target_coverage_identical:true,
+  provenance:'Coordinator resolution supplied in the seed-advance task; retained record was not opened.',
+};
+const GENERATOR_FILES = ['build/build-world.mjs','build/config.mjs','build/targets.mjs','build/distractors.mjs','build/foreign.mjs','build/filler.mjs','build/source.mjs'];
 const count = values => Object.fromEntries([...new Set(values)].sort().map(key => [key, values.filter(value => value === key).length]));
 const mean = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 const rounded = value => Math.round(value * 10000) / 10000;
@@ -262,7 +272,7 @@ function inventory() {
   function visit(dir = '') {
     for (const name of readdirSync(join(ROOT,dir)).sort()) {
       const path = join(dir,name);
-      if ((!dir && prohibited.has(name)) || path === 'build/candidate0-v1-validation') continue;
+      if ((!dir && prohibited.has(name)) || ['build/candidate0-v1-validation','build/candidate0-v11-identity'].includes(path)) continue;
       const stat = lstatSync(join(ROOT,path));
       if (stat.isSymbolicLink()) throw new Error('inventory_symlink');
       if (stat.isDirectory()) visit(path); else if (stat.isFile()) filesystem.push(path); else throw new Error('inventory_special_file');
@@ -284,45 +294,45 @@ function inventory() {
 
 function report(result, exits, files) {
   const s = result.statistics, scales = s.scales;
-  const rows = Object.entries(scales).map(([scale,v]) => `| ${scale} | ${v.count} | ${v.languages.zh}/${v.languages.en}/${v.languages.mixed} | ${v.receiptRoles.user}/${v.receiptRoles.assistant} | ${Object.values(v.receiptCountHistogram).join('/')} | ${Object.values(v.bodyTokens.bands).join('/')} | ${Object.values(v.receiptTokens.bands).join('/')} | ${v.bodyTokens.mean}/${v.receiptTokens.mean} |`).join('\n');
+  const roles = {S300:'target','S1000-extra':'distractor',foreign:'foreign'};
+  const rows = Object.entries(scales).map(([scale,v]) => `| ${scale} | ${v.count} | ${v.languages.zh}/${v.languages.en}/${v.languages.mixed} | ${Object.values(v.receiptCountHistogram).join('/')} | ${Object.values(s.placement[roles[scale]].counts).join('/')} | ${Object.values(v.bodyTokens.bands).join('/')} | ${Object.values(v.receiptTokens.bands).join('/')} | ${v.bodyTokens.mean}/${v.receiptTokens.mean} |`).join('\n');
   const domainRows = DOMAINS.map(domain=>`| ${domain} | ${scales.S300.domain[domain] ?? 0} | ${scales['S1000-extra'].domain[domain] ?? 0} | ${scales.foreign.domain[domain] ?? 0} |`).join('\n');
-  return `# HR-2b v1.1 W1 rebuild report
+  const attempted = result.candidateHistory.filter(row=>row.protocolRevision===PROTOCOL.revision&&row.candidateIndex>=1);
+  const attemptedRows = attempted.map(row=> {
+    const exit = row.actualExitCodes ?? {}, diagnostics = row.stage1Errors.length ? row.stage1Errors.map(error=>`${error.code}:${typeof error.detail==='string'?error.detail:'see retained diagnostics'}`).join('; ') : 'none';
+    return `| ${row.candidateIndex} | ${row.seed} | ${exit.build ?? 'not-run'}/${exit.buildCheck ?? 'not-run'}/${exit.checkWorld ?? 'not-run'} | ${row.stage1} | ${diagnostics} |`;
+  }).join('\n');
+  return `# HR-2b v1.1 W1 seed-advance report
 
-Protocol v1.1, frozen at d3a6e24f; restart candidate ${result.candidateIndex}, seed ${result.seed}, mulberry32. ${result.identity.ok ? 'Identity passed; stage 2 and W3 re-audit remain pending.' : 'STOP: the required identity check failed; no seed was advanced and the generator was not changed further.'} No tests, prohibited products, retained validator contents, retrieval/assembly runs, network or commits were used.
+Protocol v1.1, frozen at d3a6e24f. Candidate in use: **${result.candidateIndex}**, seed **${result.seed}**, mulberry32; structural stage 1 **${result.ok?'pass':'fail'}**. New-candidate identity comparisons are inapplicable and were not run. No W2/W3 products, retained validator contents, tests, retrieval/assembly runs, network or commits were used.
 
-Actual exits: build-world.mjs **${exits.build}**; build-world.mjs --check **${exits.buildCheck}**; check-world.mjs **${result.ok ? 0 : 1}**. Structural checks: ${result.structuralOk ? 'pass' : 'fail'}; identity: ${result.identity.ok ? 'pass' : 'fail'}.
+Actual exits for every candidate attempted in this advance round, ordered as build-world.mjs / build-world.mjs --check / check-world.mjs:
 
-Structural diagnostics: ${result.structuralErrors.length ? result.structuralErrors.map(error=>`${error.code} (${error.detail})`).join('; ') : 'none'}. The failed structural result cannot be recorded as a stage-1 pass.
+| Candidate | Seed | Exits | Stage 1 | Diagnostics |
+| --- | ---: | --- | --- | --- |
+${attemptedRows}
 
-Identity helper output (also printed by the checker):
+The frozen sequence was followed from candidate 1 and stopped at its first stage-1 pass. Later candidates are unattempted. The selected command exits are ${exits.build}/${exits.buildCheck}/${result.ok?0:1}.
 
-\`\`\`json
-${JSON.stringify(identityOutput(result.identity))}
-\`\`\`
+There are ${s.families.total} families (40 target/40 distractor/10 foreign), ${s.facts.total} facts and ${Object.values(scales).reduce((sum,v)=>sum+v.count,0)} memories. Target facts: 280 rendered/40 absent; distractors: 600 rendered/40 absent; foreign: 60 rendered, including 20 near-duplicates. All 540 bodies are assistant notes; receipt roles are ${s.receiptRoles.user} user/${s.receiptRoles.assistant} assistant.
 
-Fact categories mean kind/state metadata; no query categories were read. The helper also checks every fact field, the lexicon, fact-to-memory plan, six unchanged generator sources and config excluding RECEIPT_COUNTS against HEAD.
-
-There are ${s.families.total} families (${s.families.byRole.target} target, ${s.families.byRole.distractor} distractor, ${s.families.byRole.foreign} foreign), ${s.facts.total} facts and ${Object.values(scales).reduce((sum,value)=>sum+value.count,0)} memories. Target facts: 280 rendered plus 40 absent; distractors: 600 rendered plus 40 absent; foreign: 60 rendered, including ${s.foreignNearDuplicates} near-duplicates and ${s.foreignAnchorFamilies} unique custody anchors. All bodies are assistant notes. Receipt roles total user ${s.receiptRoles.user}, assistant ${s.receiptRoles.assistant}.
-
-| Scale | Memories | zh/en/mixed | Receipt user/assistant | Receipts 1/2/3/4 | Body bands | Receipt bands | Mean body/receipt tokens |
+| Scale | Memories | zh/en/mixed | Receipts 1/2/3/4 | Placement body/first/later | Body bands | Receipt bands | Mean body/receipt tokens |
 | --- | ---: | --- | --- | --- | --- | --- | --- |
 ${rows}
 
-Receipt-count shares per scale are ${Object.entries(scales).map(([name,value])=>`${name}: ${RECEIPT_COUNTS.map(([n])=>100*(value.receiptCountHistogram[n] ?? 0)/value.count).join('/')}%`).join('; ')}, against **20/25/25/30%**. Body bands: [120,180), [180,260), [260,400]; receipt bands: [40,70), [70,130), [130,200]. Counter: tiktoken@${s.counter.version}, o200k_base. Overall languages: ${s.memoryLanguages.zh}/${s.memoryLanguages.en}/${s.memoryLanguages.mixed}. Distractors: ${scales['S1000-extra'].authoring.hand} hand/${scales['S1000-extra'].authoring.template} template.
+Every scale realizes receipt-count shares **20/25/25/30%** and distinct-fact placement shares **45/25/30%**, exactly matching their targets. Language shares per scale are 55/30/15%; overall counts ${s.memoryLanguages.zh}/${s.memoryLanguages.en}/${s.memoryLanguages.mixed}. Body bands: [120,180), [180,260), [260,400]; receipt bands: [40,70), [70,130), [130,200]. Counter: tiktoken@${s.counter.version}, o200k_base. Distractors remain 160 hand/160 template.
 
 | Domain | Target memories | Distractors | Foreign |
 | --- | ---: | ---: | ---: |
 ${domainRows}
 
-Distinct-fact placements (body/first/later): targets ${Object.values(s.placement.target.counts).join('/')} (${JSON.stringify(s.placement.target.shares)}); distractors ${Object.values(s.placement.distractor.counts).join('/')} (${JSON.stringify(s.placement.distractor.shares)}). Full allocations, exact measurements and evidence ranges are retained in build/world-stats.json.
+Filler disclosure: ${s.filler.bankSentences} complete bank sentences, ${s.filler.disclosedRanges} UTF-16 ranges across ${s.filler.disclosedUnits} units; ${s.filler.lexiconTerms} per-fact terms scanned with ${s.filler.lexiconHits} hits. Exact HR-1 statement overlaps and unannotated exact facts: ${s.hr1ExactStatementOverlap}/${s.unannotatedExactFactOccurrences}. Independent annotation totals: ${s.annotationsCrossChecked.forward}/${s.annotationsCrossChecked.reverse}. Full measurements, evidence ranges and per-attempt diagnostics remain in build/world-stats.json.
 
-Filler disclosure: ${s.filler.bankSentences} complete bank sentences, ${s.filler.disclosedRanges} UTF-16 ranges across ${s.filler.disclosedUnits} units; ${s.filler.lexiconTerms} per-fact terms scanned, ${s.filler.lexiconHits} hits. HR-1 exact-statement overlaps: ${s.hr1ExactStatementOverlap}; exact unannotated facts: ${s.unannotatedExactFactOccurrences}. Annotation totals independently agree (${s.annotationsCrossChecked.forward} forward/${s.annotationsCrossChecked.reverse} reverse).
+Declared decisions: the seven generator files, including four-bin config, are byte-identical to HEAD; only the authorized candidate index changed. Families, factual sources, filler, lexicon, seed sequence and band logic were not edited. Facts-view coverage and placement can differ for a new candidate. Four target episodes express three facts each across body/receipts; decision/reason and primary/nearby assignments stay separated. Body-only support uses span:null; topical anchors remain separately disclosed.
 
-Declared decisions: only RECEIPT_COUNTS changed in the generator. Families, factual sources, filler banks, seed sequence and band logic were preserved. Four target episodes still express three facts each across body/receipts, with separate decision/reason and primary/nearby assignment notes. Body-only support uses span:null; entity-bearing topical anchors remain separately disclosed. All earlier development diagnostics were preserved.
+Preserved history: v1 candidate 0 stage-2 rejection (quota failures and admission cap); v1.1 candidate 0 duplicate normalized body m-9e1321fab528a943, identity failure and coordinator rejection. References point to build/candidate0-v1-validation/ and build/candidate0-v11-identity/; neither directory was traversed or modified. Earlier development diagnostics are retained.
 
-History in build/world-stats.json records v1 candidate 0 as stage2 rejected, pointing at build/candidate0-v1-validation/ and preserving the supplied coordinator diagnostics verbatim; v1.1 restarts candidate 0 with structural stage1 ${result.structuralOk ? 'pass' : 'fail'}, stage2 pending-coordinator and the identity result. The retained directory was never traversed or modified.
-
-${result.identity.ok ? 'No W1 rebuild item remains incomplete. Stage-2 quotas and semantic re-audit belong to the coordinator/W3.' : 'Could not deliver all three exits as zero or certify unchanged placement: fewer target receipt draws shift the shared random stream before distractor/foreign placement allocation. No corrective generator edit or seed advance was attempted. Coordinator resolution is required.'}
+${result.ok?'W1 stage 1 is complete. Stage-2 quotas and W3 semantic re-audit remain pending with their owners.':'No candidate is accepted; the recorded failure requires the next frozen seed, without generator edits.'}
 
 Owned inventory: ${files.count} files, filesystem/Git diff empty. Changed files: **${files.changed.count}**, independently derived from Git diff plus untracked paths and filesystem bytes versus HEAD blobs; diff ${JSON.stringify(files.changed.diff)}; Git exits 0. Whitespace checks cover all owned files, including untracked files.
 
@@ -330,21 +340,63 @@ ${files.changed.files.map(path=>`- \`${path}\``).join('\n')}
 `;
 }
 
+function frozenGenerator() {
+  const files = Object.fromEntries(GENERATOR_FILES.map(name=> {
+    const before = headBytes(name), after = readFileSync(join(ROOT,name),'utf8');
+    if (before !== after) throw new Error(`generator_changed:${name}`);
+    return [name,sha256(after)];
+  }));
+  return {ok:true,headCommit:gitText(['rev-parse','HEAD']).trim(),files};
+}
+
+function runBuild(candidate, extra) {
+  const script = fileURLToPath(new URL('./build-world.mjs',import.meta.url));
+  const args = [script,'--candidate',String(candidate),...extra];
+  const scratch = join(ROOT,'build/.w1-build.tmp'), fd = openSync(scratch,'wx+');
+  unlinkSync(scratch);
+  try {
+    const child = spawnSync(process.execPath,args,{stdio:['ignore',fd,fd]});
+    const bytes = Buffer.alloc(fstatSync(fd).size);
+    for (let offset=0;offset<bytes.length;) {
+      const length = readSync(fd,bytes,offset,bytes.length-offset,offset);
+      if (!length) throw new Error('build_capture_short_read');
+      offset += length;
+    }
+    const output = bytes.toString('utf8');process.stdout.write(output);
+    return {command:[process.execPath,...args],exitCode:child.error?null:child.status,
+      signal:child.signal,error:child.error?.message ?? null,output};
+  } finally {closeSync(fd);}
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   try {
     const args = process.argv.slice(2), option = (name, fallback) => args.includes(name) ? args[args.indexOf(name)+1] : fallback;
     const candidate = Number(option('--candidate','0')), record = args.includes('--record'), output = option('-o',null), verify = args.includes('--verify-builds'), reportOnly = args.includes('--report-only');
     if (reportOnly && verify) throw new Error('report_only_cannot_rebuild');
-    const exits = { build: null, buildCheck: null };
-    if (verify) {
-      for (const [key, extra] of [['build',[]],['buildCheck',['--check']]]) {
-        const child = spawnSync(process.execPath,[fileURLToPath(new URL('./build-world.mjs',import.meta.url)),'--candidate',String(candidate),...extra],{stdio:'inherit'});
-        exits[key] = child.error ? null : child.status;
-        console.log(JSON.stringify({ command:key,actualExitCode:child.status,signal:child.signal,error:child.error?.message }));
-        if (child.error || child.status !== 0) throw new Error(`build_subprocess_failed:${key}:${child.status}:${child.error?.message ?? child.signal}`);
+    const statsPath = join(ROOT,'build/world-stats.json');
+    let previousRecord = null;
+    try {previousRecord = JSON.parse(readFileSync(statsPath,'utf8'));} catch(error) {if(error.code!=='ENOENT') throw error;}
+    let history = previousRecord?.candidateHistory ?? [];
+    if (!reportOnly) {
+      if (!Number.isInteger(candidate) || candidate<1 || candidate>=CANDIDATE_SEEDS.length) throw new Error('seed_advance_requires_candidate_1_through_15');
+      for(let prior=1;prior<candidate;prior++) {
+        const row = history.find(row=>row.protocolRevision===PROTOCOL.revision&&row.candidateIndex===prior);
+        if (!row || (row.stage1!=='fail'&&row.stage2!=='rejected')) throw new Error(`candidate_sequence_not_ready:${prior}`);
       }
     }
-    const result = reportOnly ? JSON.parse(readFileSync(join(ROOT,'build/world-stats.json'),'utf8')) : checkWorld(candidate);
+    const exits = { build: null, buildCheck: null };
+    const commands = [], generatorIntegrity = reportOnly ? previousRecord?.generatorIntegrity : frozenGenerator();
+    let buildFailure = null;
+    if (verify) {
+      for (const [key, extra] of [['build',[]],['buildCheck',['--check']]]) {
+        const child = runBuild(candidate,extra);commands.push({...child,key});exits[key]=child.exitCode;
+        console.log(JSON.stringify({command:key,actualExitCode:child.exitCode,signal:child.signal,error:child.error}));
+        if (child.error || child.exitCode!==0) {buildFailure={code:'candidate:build_failed',detail:child};break;}
+      }
+    }
+    const result = reportOnly ? previousRecord : buildFailure ? {
+      ok:false,version:VERSION,candidateIndex:candidate,seed:CANDIDATE_SEEDS[candidate],errors:[buildFailure],hashes:{},statistics:null,generation:null,
+    } : checkWorld(candidate);
     if (reportOnly) {
       if (result.candidateIndex !== candidate) throw new Error('report_candidate_mismatch');
       Object.assign(exits,result.actualExitCodes);
@@ -352,28 +404,36 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
       result.protocol = PROTOCOL;
       result.structuralOk = result.ok;
       result.structuralErrors = [...result.errors];
-      result.identity = checkIdentity(result.generation.placementAllocation);
-      console.log(JSON.stringify({identityCheck:identityOutput(result.identity)}));
-      if (!result.identity.ok) result.errors.push({code:'identity:changed_fields',detail:result.identity.differingFields});
-      result.ok = result.structuralOk && result.identity.ok;
+      result.identity = {status:'not-applicable',reason:'New candidate authorized after candidate 0 rejection; no candidate-0 identity gate was run.'};
+      result.generatorIntegrity = generatorIntegrity;
     }
-    let history = [], previousRecord = null;
-    const statsPath = join(ROOT,'build/world-stats.json');
     if (record && !reportOnly) {
-      try { previousRecord = JSON.parse(readFileSync(statsPath,'utf8'));history = previousRecord.candidateHistory ?? []; } catch(error) { if(error.code !== 'ENOENT') throw error; }
       const legacy = history.find(row=>row.candidateIndex === 0 && (row.protocolRevision ?? 'v1') === 'v1');
       const rejectedV1 = {...legacy,protocolRevision:'v1',protocolCommit:'c546bfc1',candidateIndex:0,seed:CANDIDATE_SEEDS[0],stage2:'rejected',validationRecord:'build/candidate0-v1-validation/',coordinatorDiagnostics:V1_REJECTION};
+      const zero = history.find(row=>row.candidateIndex===0&&row.protocolRevision===PROTOCOL.revision);
+      const rejectedV11 = {...zero,protocolRevision:PROTOCOL.revision,protocolCommit:PROTOCOL.freezeCommit,candidateIndex:0,seed:CANDIDATE_SEEDS[0],stage1:'fail',identity:'fail',stage2:'rejected',
+        validationRecord:V11_RESOLUTION.validationRecord,coordinatorResolution:V11_RESOLUTION};
+      if (previousRecord?.candidateIndex===0&&previousRecord.protocol?.revision===PROTOCOL.revision) {
+        rejectedV11.identityDiagnostics ??= previousRecord.identity;
+        rejectedV11.statistics ??= previousRecord.statistics;
+        rejectedV11.hashes ??= previousRecord.hashes;
+        rejectedV11.actualExitCodes ??= previousRecord.actualExitCodes;
+      }
       const old = history.find(row=>row.candidateIndex === candidate && row.protocolRevision === PROTOCOL.revision);
-      const attempt = {stage1:result.structuralOk?'pass':'fail',errors:result.structuralErrors,hashes:result.hashes,identity:result.identity.ok?'pass':'fail'};
+      const actualExitCodes = {...exits,checkWorld:result.ok?0:1};
+      const attempt = {stage1:result.structuralOk?'pass':'fail',errors:result.structuralErrors,hashes:result.hashes,identity:'not-applicable',actualExitCodes,commands};
       const attempts = old?.stage1Attempts ?? [];
       if (!same(attempts.at(-1),attempt)) attempts.push(attempt);
-      const row = {...old,protocolRevision:PROTOCOL.revision,protocolCommit:PROTOCOL.freezeCommit,candidateIndex:candidate,seed:CANDIDATE_SEEDS[candidate],stage1:attempt.stage1,stage1Errors:result.structuralErrors,stage1Attempts:attempts,identity:attempt.identity,stage2:old?.stage2 ?? 'pending-coordinator'};
-      history = [...history.filter(row=>!(row.candidateIndex === 0 && (row.protocolRevision ?? 'v1') === 'v1') && !(row.candidateIndex === candidate && row.protocolRevision === PROTOCOL.revision)),rejectedV1,row]
+      const row = {...old,protocolRevision:PROTOCOL.revision,protocolCommit:PROTOCOL.freezeCommit,candidateIndex:candidate,seed:CANDIDATE_SEEDS[candidate],stage1:attempt.stage1,stage1Errors:result.structuralErrors,stage1Attempts:attempts,identity:attempt.identity,
+        stage2:result.ok?'pending-coordinator':'not-run-stage1-rejected',actualExitCodes,statistics:result.statistics,hashes:result.hashes,generatorIntegrity};
+      history = [...history.filter(row=>row.candidateIndex!==0 && !(row.candidateIndex === candidate && row.protocolRevision === PROTOCOL.revision)),rejectedV1,rejectedV11,row]
         .sort((a,b)=>(a.protocolRevision ?? 'v1').localeCompare(b.protocolRevision ?? 'v1','en') || a.candidateIndex-b.candidateIndex);
       result.candidateHistory = history; result.rejectedCandidates = history.filter(row=>row.stage1 === 'fail' || row.stage2 === 'rejected');
-      result.actualExitCodes = { ...exits,checkWorld:result.ok?0:1 }; result.stage2 = 'pending coordinator quota validation after W3';
+      result.actualExitCodes = actualExitCodes;result.stage2 = row.stage2;
+      result.chosenCandidate = result.ok?{candidateIndex:candidate,seed:result.seed,stage1:'pass',stage2:'pending-coordinator'}:null;
       result.developmentDiagnostics = JSON.parse(readFileSync(join(ROOT,'build/development-diagnostics.json'),'utf8'));
       writeFileSync(statsPath,serialize(result));
+      console.log(JSON.stringify({candidateAttempt:{candidateIndex:candidate,seed:result.seed,stage1:row.stage1,actualExitCodes,errors:row.stage1Errors}}));
     }
     if (output) {
       if (!record || (!verify && !reportOnly)) throw new Error('report_requires_record_and_verify_builds_or_saved_results');
@@ -383,7 +443,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
       result.inventory = inventory();
       writeFileSync(statsPath,serialize(result));
       const reportText = report(result,exits,result.inventory), words = reportText.trim().split(/\s+/u).length;
-      if (words > 700) throw new Error(`report_word_limit:${words}`);
+      if (words > 600) throw new Error(`report_word_limit:${words}`);
       writeFileSync(path,reportText);
       const whitespaceErrors = [];
       for (const filename of result.inventory.files) {
@@ -391,7 +451,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
         if (/[\t ]+$/mu.test(bytes) || bytes.includes('\r') || !bytes.endsWith('\n')) whitespaceErrors.push(filename);
       }
       if (whitespaceErrors.length) throw new Error(`delivery_whitespace:${whitespaceErrors.join(',')}`);
-      result.deliveryVerification = {reportWords:words,reportMaximumWords:700,whitespaceFilesChecked:result.inventory.count,whitespaceErrors};
+      result.deliveryVerification = {reportWords:words,reportMaximumWords:600,whitespaceFilesChecked:result.inventory.count,whitespaceErrors};
       // Re-enumerate after delivery writes; both independent lists must agree.
       const finalInventory = inventory();
       if (!same(finalInventory,result.inventory)) throw new Error('delivery_inventory_changed');
