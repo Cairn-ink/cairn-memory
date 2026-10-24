@@ -1,4 +1,4 @@
-# HR-2: budgeted assembly, offline protocol (v1.2: v1.1 frozen + §11 exploratory extension)
+# HR-2: budgeted assembly, offline protocol (v1.2.1: v1.1 frozen + §11 exploratory extension)
 
 Status: **v1, frozen before any HR-2 test-coverage run.** v0.1 was written
 2026-10-23 by the U5b coordinator after two mechanical findings on the frozen
@@ -13,7 +13,9 @@ confirmed v1 (`2d7b7fe6`); v1.1 applies its four remaining editorial and
 factual corrections without changing any rule.
 v1.2 (2026-10-24, after the test run and after U5b-2 packet A shipped) adds **§11 only**: an
 exploratory extension that re-runs the §6 grid under the measured host representation
-overhead. Nothing in §§1–10 changes; the §4 confirmatory decision is not re-opened.
+overhead. Nothing in §§1–10 changes; the §4 confirmatory decision is not re-opened. The
+§11 draft (`2f69c7a5`) was audited by an independent, non-author, read-only Codex
+(`hr2_ext_audit`, gpt-6.1-sol/xhigh): no P0, four P1, two P2; v1.2.1 applies all six.
 
 **Pre-freeze inspection declaration.** This protocol is dev-informed and
 preregistered before any HR-2 test-coverage scoring. Pre-freeze inspection
@@ -329,8 +331,8 @@ and reports discordant counts; it is underpowered by design. §8 is frozen with
 
 ## 11. Exploratory extension (v1.2): the `host-v2` overhead model
 
-Status: **draft, awaiting non-author audit; frozen before any host-v2 cell is
-scored.** Motivation: contract §15.8.1 measured that the shipped v1
+Status: **v1.2.1, audited (no P0; the P1/P2 findings are applied); frozen before any
+host-v2 cell is scored.** Motivation: contract §15.8.1 measured that the shipped v1
 representation cost about 250 tokens per item on top of a 15-token body, so
 the `O = 0` curves of the results document do not describe the host. U5b-2
 packet A (`representation-v2`, integration `b18dabe0`, `v1-preview.3`)
@@ -360,10 +362,17 @@ set is still built by the §6 arms with whole-unit skip-and-continue over the
 same schedules; only the cost of a unit changes, and it is defined so that
 admission stays greedy and deterministic:
 
-- `cost(empty context) = E`. If `E > B` the cell records every query as an
-  empty fit with zero admissions (the product's `context_item_too_large`).
+- `cost(empty context) = E`. A budget `B < E` is rejected with
+  `context_item_too_large` before any cell is constructed (the product's
+  empty-fit refusal); the §11.3 grid never reaches that case. Otherwise every
+  query's assembly starts with `used = E`.
 - A **body unit** costs `tokens(body) + h1` when no body has been admitted
-  yet for this query, otherwise `tokens(body) + hN`.
+  yet in this query's assembly, across all passes of the arm, otherwise
+  `tokens(body) + hN`. "Admitted" means committed: a rejected trial changes
+  no state, so the next body trial is still "first". P-top+tail evaluates each
+  bundle tentatively under these rules and commits it atomically; its first
+  bundle that does not fit starts the body-only tail at that item, and bundle
+  admission never resumes.
 - A **span unit** costs `(C − bodyTokens) + tokens(span)` when its text
   differs from its item's body (a concrete receipt), and `A` when its text
   equals its item's body byte for byte (a `sameAsBody` alias; the text is not
@@ -372,9 +381,16 @@ admission stays greedy and deterministic:
 - `used = E + Σ admitted unit costs ≤ B` always holds; P-top+tail's bundle
   cost is the sum of its units' costs under the same rules.
 
-This is the contract's approximate model (§15.8.8): it ignores UUID and text
-tokenization variance and treats the `o200k` count of the real serialized
-envelope as additive. It is labelled so in every artifact.
+This fixed additive approximation follows contract §15.8.8. Its calibration
+is the default-Memory probe of A13, whose body-only strings already contain
+`rank` and `sourcesComplete:false`: do not charge those again. `C` and `A`
+include the first-receipt completeness transition (the probe's single
+receipt removes `sourcesComplete:false`); repeating that net delta for every
+later receipt is approximate (the auditor measured a two-concrete-receipt
+item at 164 tokens against the model's 160). Later completeness transitions,
+backward `sameAs` deduplication across items, non-default metadata or
+`sourceAccess`, Card items, and UUID/text tokenization variation are **not**
+modelled faithfully. Every artifact labels these limitations.
 
 ### 11.3 Cells, identity and exclusion
 
@@ -382,40 +398,74 @@ envelope as additive. It is labelled so in every artifact.
   `{128, 192, 256, 384, 512, 768, 1024, 1536}` × the single cost model
   `host-v2`; test split, S1000: **120 cells**.
 - A host-v2 cell carries `run.overhead = 'host-v2'` (a string, never a
-  number) and `run.overheadModel = {id:'host-v2', implementationCommit,
-  sha256, constants}`; file names use `--Ohost-v2--`. Because §4's primary
-  cell and the report's confirmatory selector require the **numeric**
-  `overhead === 0`, host-v2 cells can never enter the confirmatory
-  comparison; the report refuses a host-v2 cell paired with an `O = 0` or
-  `O = 8` cell (`invalid_comparison_cells`).
-- Scoring replays each host-v2 cell's admissions from the constants and
-  refuses a cell whose admissions, costs or total differ; the §7 metrics and
-  the §8 statistics apply unchanged within the host-v2 model, all labelled
-  exploratory.
+  number) and `run.overheadModel = {id:'host-v2', implementationCommit:
+  '42627f60', sha256, constants, bodyTokens}`; file names contain
+  `--Ohost-v2@42627f60--`. The cell also records the §11 freeze commit
+  (`run.extensionCommit`) separately from the frozen base protocol commit
+  (`run.protocolCommit`, unchanged).
+- **Two validation branches, both strict.** The numeric `O ∈ {0, 8}` branch
+  of `score.mjs` and `provenance.mjs` (frozen protocol identity, scalar cost
+  check `cost = tokens + O`, replay) stays **unchanged**. A separate
+  exact-string `host-v2` branch authenticates `overheadModel` against the
+  pinned constants file (implementation commit, sha256, every constant and
+  `bodyTokens`), rejects unknown model ids and inconsistent payloads, and
+  replays each query's admissions, costs and total from the constants,
+  refusing any difference. The report's comparison identity includes the
+  authenticated model digest, so a host-v2 cell can be compared only with a
+  host-v2 cell of the same digest; the confirmatory selector keeps its
+  **numeric** `overhead === 0` and a mixed-model pair refuses
+  `invalid_comparison_cells`. Tests cover malformed model identities, altered
+  constants, scalar cost tampering in the legacy branch, and confirmatory
+  exclusion.
+- The §7 metrics and the §8 statistics apply unchanged within the host-v2
+  model, all labelled exploratory.
 
 ### 11.4 Outputs
 
 - Results document v1.1 (`docs/plans/budgeted-assembly-hr2-results.md`): a new
   section "host-v2 overhead" with the §2-style macro coverage table for the
-  120 cells beside the `O = 0` rows, the exploratory 95% family-bootstrap CIs
-  for P-cover − P-top and P-top-s1 − P-top at each budget on each ranking,
-  the body-equal span count, and a statement of where the budget binds under
-  the host model (the smallest budget at which every arm reaches its
-  ranking's ceiling). The §1 confirmatory outcome is restated unchanged.
+  120 cells beside the `O = 0` rows; the **48 paired contrasts** P-cover −
+  P-top and P-top-s1 − P-top for each ranking × budget, with §8's unchanged
+  bootstrap settings, reported as pointwise, unadjusted, exploratory 95% CIs;
+  the body-equal span count; **budget saturation** per ranking, defined as the
+  smallest tested budget at which every query in every arm has zero assembly
+  loss at that budget and at every larger tested budget, otherwise "not
+  reached through 1,536"; and, separately, the count of queries with at least
+  one budget-rejected scheduled unit per cell. Whole-unit skip-and-continue
+  need not give monotone coverage, and reaching the evidence ceiling does not
+  mean every candidate unit fits; the document says both. The §1 confirmatory
+  outcome is restated unchanged; no host-v2 result changes the frozen
+  decision.
 - Artifacts under `evaluation/retrieval-research/results/hr2-host-v2/` with
   the same provenance discipline as `hr2-final/` (compressed cells, scores,
   report, `SHA256SUMS.uncompressed`, stage logs).
-- `docs/limitations.md` HR-2 entry gains one sentence: the host-v2 curves are
-  an approximate replay, not a measurement of the shipped host.
+- `docs/limitations.md` HR-2 entry gains one sentence: "The host-v2 curves
+  replay a fixed additive default-Memory calibration; they do not measure
+  shipped-host token counts or establish behaviour for non-default metadata,
+  Cards or general receipt serialization."
 
 ### 11.5 Procedure
 
 Same as §9: non-author audit of this section → freeze (commit on
 `experiment/hr2-assembly`) → one Codex worker adds `--overhead-model host-v2`
-to `run.mjs`, the cost model to `arms.mjs`, replay validation to `score.mjs`
-and the exclusion plus exploratory tables to `report.mjs`, with tests on the
-toy fixture; the existing `O ∈ {0, 8}` paths and every committed `hr2-final`
-artifact stay byte-identical and re-score identically → two non-author reviews
-→ the coordinator runs the 120 cells, scoring and report through
-`cairn-heavy` from a clean checkout, then writes results v1.1. Non-claims as in
-§10, plus: the host-v2 numbers are not the shipped host's token counts.
+to `run.mjs`, the cost model to `arms.mjs`, the strict `host-v2` branch to
+`score.mjs` and `provenance.mjs`, and the exclusion plus exploratory tables to
+`report.mjs`, with tests on the toy fixture; the worker may change the owned
+`assembly/**` helpers, provenance validation and `test/assembly-*.test.mjs`,
+nothing else → two non-author reviews (Spec, Standards) on a clean detached
+worktree of the exact commit, then the owned-runner acceptance on both Node
+versions through `cairn-heavy` → the coordinator runs the 120 cells, scoring
+and report through `cairn-heavy` from a clean checkout, then writes results
+v1.1. **Legacy regression, asserted before the run:** every committed
+`hr2-final/` artifact stays byte-identical (never overwritten); all 240
+archived cells are re-scored with the new harness into a scratch directory,
+and after removing only each scored cell's `run.implementation.scorer` the
+scored JSON must be byte-identical to the archived scores (admissions, costs,
+totals, metrics, summaries, strata); the regenerated legacy report's
+statistics and confirmatory outcome must equal the archived report exactly,
+while the current stage identities are recorded separately and never copied
+from old outputs. **Provenance for `results/hr2-host-v2/`:** stage commands,
+exit codes, retained failures, the authenticated model digest, uncompressed
+hashes, and checkout cleanliness recorded before any output exists.
+Non-claims as in §10, plus: the host-v2 numbers are not the shipped host's
+token counts.
