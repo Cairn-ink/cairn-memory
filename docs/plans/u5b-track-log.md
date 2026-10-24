@@ -274,3 +274,9 @@
   外洩；get-enables-has Proxy 與 `type` getter 定義 `memoryId` 的舊輸入接受行為與 core 輸入位元不變；精簡 ref 全非
   enumerable 欄位仍正確展開並帶 fences。記錄在案的偏差（原本崩潰的 throwing trap 改為乾淨拒絕）兩軸都接受。
   已回報主控（含歷程、常數、共用檔案清單），並問 worker 報告檔要由我移除還是合併時由主控丟棄。矩陣仍在跑。
+- **`7a3ad58e` 完整矩陣：100 工作全部 exit 0**（`cairn-heavy`，乾淨 detached worktree，Node 22.16.0／24.15.0 各 50，前後
+  dirty=0，記錄最高負載 6.46，plugin-validation N/A 同前），無 flake。依主控要求移除根目錄的 worker 報告檔（內容保存在
+  `.research-private/dispatch/u5b2_impl/report-final.txt`）：**A 包最終 commit `b18dabe0`**（＝`7a3ad58e` − 報告檔，
+  `git diff --check` 0），已推送並交給主控；主控合併前會在最終 commit 跑 validate／test:artifact／import guards／diff --check。
+- **A 包成果**：單筆 15-token 記憶的計量文字 488→126 token；每筆開銷約 250→82；U5a 測試零修改全過；契約 §15.8 v0.10.4。
+  B 包（HR-2 `host-v2` 重跑、P-top-s1 已在 A 包以非預設政策落地）待主控合併後開始，只動研究分支。
