@@ -304,3 +304,8 @@
   測試檔）。worker 自測 55／55＋舊結果回歸 240／240 兩版本；協調者沙箱外全套 `test/assembly-*.test.mjs` **183／183 兩版本
   exit 0**、whitespace 0，dev split host-v2 煙霧 run→score→report 全 exit 0（45 cells、18 對比、outcome inconclusive 如預期）。
   **提交 `5d0a344b`**（已推送）；審查 worktree 移到 `5d0a344b`，派 Spec／Standards 雙審查（read-only）。
+- **`5d0a344b` 雙審查：Spec yes（零發現，審查者手算 toy case 每個 arm 的 admission 與 used 皆符）；Standards no（1 P1）**：
+  三個 stage 的輸出路徑未受保護——`score.mjs --out` 可覆寫常數檔、`report.mjs --markdown` 可覆寫 `results/hr2-final/report.md`；
+  README 前段仍留著指向凍結結果的可執行舊指令。其餘（2,003 個受保護檔不變、常數 hash 一致、舊數值分支未放寬、回歸測試
+  方法正確、測試品質）皆確認。派 fix1：共用輸出路徑守衛（realpath、拒常數檔／`hr2-final`／`test-final`／fixtures／既有檔）、
+  README 舊指令標為歷史紀錄、每類拒絕測試含位元不變斷言。
