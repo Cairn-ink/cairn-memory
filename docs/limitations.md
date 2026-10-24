@@ -1542,3 +1542,102 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Role-stratified extraction remains an unproven evaluation candidate
+
+The [role-stratified extraction experiment](plans/role-stratified-extraction.md)
+is evaluation-only and changes no production default. Its grouped policy changes
+both role-specific prompt guidance and slot allocation, so a paired difference
+cannot isolate the effect of numeric quotas. Up to three user-group and two
+assistant-group items share the unchanged five-item total, with no borrowing;
+this allocation may lose useful assistant information. A role citation checks
+source membership, not truth, correct attribution, adoption or currentness.
+
+The 24 authored synthetic cases are a development diagnostic. Explicit
+recordkeeping reminders often cue the distinction under test; all four unknown
+cases are short, and assistant-only and late-evidence controls concentrate in
+one family. These features limit generalization to natural conversations.
+Scripted mechanics and exact-quote conservation do not measure semantic recall
+or establish that generated claims preserve their sources' meaning.
+
+The completed fresh v2 comparison failed the unchanged advancement gate; see
+[the result report](plans/role-stratified-v2-results.md) and the current result
+limitations below. The bounded write-to-answer comparison uses an all-admitted
+source read rather than ordinary production recall. It establishes no
+long-history retrieval result, MOC/vector improvement, installed Hermes
+reliability, full three-role architecture quality or competitive parity.
+
+## Role-stratified first live run: no paired score
+
+The first 24-case role-stratified diagnostic at runtime
+`9b1293cbad986c0d463a8aa87fb75e9507c5bd5a` stopped after the first baseline
+extraction and classification, before any answer or candidate execution.
+Ordinary new-topic filing correctly advanced memory revisions, but the
+evaluation runner incorrectly checked them against the earlier admission
+revisions. An offline retained-output replay and one-memory reduction reproduced
+the defect; source receipts and cold reopening were unchanged. This is an
+evaluation integration defect, not a measured algorithm-quality result.
+All 24 rows and the original failed operation are retained and closed.
+Four requests are fully accounted (US$0.020 conservatively reserved); a
+generation-only US$0.002060 estimate is not total billed cost. The same revision
+assumption in the scorer also requires correction. See the correction acceptance
+in [the experiment plan](plans/role-stratified-extraction.md); no quality gate or
+production default is relaxed.
+
+The separately authored fresh v2 cohort has passed pre-output source/rubric
+fairness review and full-wire input preflight. It is still only 24 English
+synthetic cases: twelve longer dialogues, four short unknowns, and concentrated
+assistant-information/late-source controls. These checks establish no answer
+gain. Fixing the revision-binding defect does not establish that role-stratified
+extraction improves retention, fidelity or supported answers.
+
+## Role-stratified v2: perfect source-only answers do not establish memory fidelity
+
+The separately authored fresh v2 operation completed at runtime
+`9f21697bfc1c43b7b7f23782b46771c866db47b2` with actual execution exit 0.
+All 24 pairs and 48 first answers remain in the denominator. Two independent
+masked agent ratings and a separate masked adjudication were fixed before
+unmasking; the public [result report](plans/role-stratified-v2-results.md) links
+the complete synthetic report projection and exact original judgment bytes for
+offline replay through the unchanged scorer. The earlier failed v1 operation
+above is still closed and was not retried or counted as a paired score.
+
+Both arms produced 24/24 supported-correct answers, including 4/4 unknowns,
+and retained and packed all 38/38 positive minimum claims/quotes. This baseline
+ceiling provides no answer or necessary-source improvement opportunity on this
+cohort. The common answer policy reads the union of retained source receipts,
+not generated memory prose: correct answers can coexist with unsupported stored
+statements. Mechanical quote conservation is not semantic recall.
+
+The baseline had 86 supported statements out of 111, versus 76/95 for the
+candidate; unsupported statement counts fell from 25 to 19. Unsupported
+semantic issue propositions fell from 31 to 26, but the candidate introduced
+23 new unsupported memory propositions, including one new severe/stale issue.
+These are different counting units: statement verdicts are not atomic-fact rates,
+and a lower total does not cancel new errors. In the puppet case, candidate
+memory-1 says wind below 20 permits rod puppets even though its own updated
+receipt also requires a latched gate. Candidate memory-2 preserves that gate
+condition, and both source-only answers preserve both requirements; the issue
+is the stale sufficient condition in memory-1, not absence from the whole bank.
+
+There were 18 pre-adjudication memory-support flag disagreements across 13
+pairs and no required-answer-claim flag disagreements. Independent adjudication
+also corrected two agreed memory verdicts. No unresolved judgment, answer issue,
+lost supported decision, assistant-information loss or completion loss remained.
+This is same-family agent review, not human calibration or demonstrated blindness.
+
+All 288 HTTP requests were accounted (144 counts and 144 generations), with
+US$1.44 conservatively reserved. The US$0.104164 generation-only estimate is
+separate from unknown count-route billing and the unknown actual invoice.
+Elapsed 1,111,772.585455 ms includes local accounting overhead. Agent review
+costs are not exposed by that ledger. The public resource observations do not
+replay private accounting or authenticate an invoice; no budget reset, refund
+or future paid authority follows.
+
+The unchanged gate failed on zero net answer gain, zero retained/packed coverage
+gain and new memory issues. Role quotas are not adopted or enabled by default.
+These 24 English synthetic development cases are not an official LongMemEval QA
+score, production recall, natural installed Hermes use, long-history reliability
+or competitor parity. The next step is an explicit representation/opportunity
+review; this result does not authorize a tuned quota rerun, raw retention/search
+or a production change.
