@@ -490,3 +490,8 @@
   placement OK，剩 `queries:category_total`（C1/C2/C3/C4/C7 非 20 題）、split 配額（C1/C2/C4/C7）、C2 家族下限、
   **`queries:language_distribution` zh**（99/160＝61.9%，上限 60%；mixed 9.4% 偏低）；試跑後還原 labels。
   派 W2 修補（resume，high＋fast）：套用 10 個修法、約 9–10 題 zh 改 mixed。之後 labels → W3 增量複審 → apply → validate → 凍結。
+- **W2 修補完成**（high＋fast，exit 0）：10 題照 W3 修法只改 keyTerm（q-192 加「當時」＋intent history）；10 題（q-001、q-002、q-101、
+  q-102、q-122、q-125、q-141、q-151、q-177、q-178）只改 lang／text 為 mixed；語言 89/46/25＝55.6/28.8/15.6%；每類別 20 題不變；
+  span-only 仍 138/140。協調者重跑 labels（0），**無稽核檔的驗證器只剩預期的 `audit:overrides`**（機械類別檢查、split 配額、
+  語言分布、placement 配額全過：test first 56／25、later 49／22；dev 19／9、30／11）；有舊稽核檔則 `labels:join_or_audit_mismatch`
+  （10 個重分類已過時）。提交修補＋labels `864536de`。派 W3 增量複審（xhigh＋fast）：撤 10 個過時覆寫、重審 20 個改動題、保留 q-110。
