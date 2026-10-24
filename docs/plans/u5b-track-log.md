@@ -377,4 +377,4 @@
   約 92；receipt 直方圖 32／40／40／24／16／8（目標）符合 20／25／25／15／10／5%；placement 126／70／84＝45／25／30 精確；填充
   1,080 句、3,840 個範圍、18,297 個禁用詞掃描 0 命中；與 HR-1 語句 0 重疊。協調者重跑 build --check／check-world 皆 0、
   whitespace 0、抽樽文字為合成中文筆記與對話。產生 facts view（無文字、無記憶 id）。**提交 W1 世界 `e3fd8dba`**（未凍結）。
-- 使用者指示：之後 Codex 派工改用 **fast（`service_tier="priority"`）**，effort 不降。自 W2 起套用。派 W2 `hr2b_query_author`。
+- 使用者指示：之後 Codex 派工改用 **fast（`service_tier="fast"`，rollout 顯示 priority）**；worker 改 `high`、審查者維持 `xhigh`。自 W2 起套用。派 W2 `hr2b_query_author`。
