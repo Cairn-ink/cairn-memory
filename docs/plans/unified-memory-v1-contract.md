@@ -2009,7 +2009,7 @@ Measurements are observations: `findCandidates` p50/p95 at 10³ and 10⁴ Memori
 
 **Non-claims:** retrieval-quality improvement from either source; two-hop typed relation expansion; MOC summary freshness/A14; role profiles; invalidation. No HR evidence selects these sources as defaults; both remain off by default.
 
-## 18. U5c-1: role profiles, role/task read and task receipts (v0.12.1, audit round 1 applied)
+## 18. U5c-1: role profiles, role/task read and task receipts (v0.12.2, audit round 2 applied)
 
 **Status:** contract draft. Applies all eight findings from the audit of `3eedb920`, with the primary’s compact-receipt/file-continuation decisions. Implementation and acceptance remain outstanding; §18.7 reports serialization probes only. This packet depends on U2/U5b, independently of §17.
 
@@ -2181,8 +2181,8 @@ Payload = {id:Id,readSet:[Namespace],roleKey,
 P = [namespaceIndex,profileId,releaseId,contentIdentity,lifecycleRevision]
 H = [namespaceIndex,profileId|null,registryRevision|null,
      'active'|'disabled'|null,profileReleaseIndex|null]
-M = [namespaceIndex,packageId,U2ResolutionStatus,
-     [versionId,manifestIdentity]|null,winningLevel|null,[B],L]
+M = [namespaceIndex|Namespace,packageId,U2ResolutionStatus,
+     [versionId,manifestIdentity]|null,winningLevel|null,[B],L|null]
 B = [level,bindingRevision|null,'active'|'disabled'|null]
 L = [packageRevision,'available'|'deleted',
      versionRevision|null,'available'|'deleted'|null]
@@ -2193,7 +2193,8 @@ S = [canonicalSourceIndex,receiptId,contentIdentity,
      null|'body'|[earlierItemIndex,earlierSourceIndex]]
 ```
 
-- `C` recursively sorts object keys by UTF-8 bytes, preserves array order and uses compact `JSON.stringify`; encoding is UTF-8 without BOM. MAC excludes `mac` and covers the canonical payload through `keyed(secret,'task-receipt-v1',[storeId,canonicalPayload])` (`core/private-card-input.mjs:90`).
+- `C` recursively sorts object keys by UTF-8 bytes, preserves array order and uses compact `JSON.stringify`; encoding is UTF-8 without BOM. MAC excludes `mac` and covers the canonical payload through `keyed(secret,'task-receipt-v1',[storeId,canonicalPayload])` (`core/private-card-input.mjs:90`). `secret` is the existing store’s `cursorSecret`. `canonicalPayload` is the recursively key-sorted **object**, not its serialized string; the helper serializes it. Serialize the outer receipt with `C`. Freeze one expected MAC/receipt byte vector in tests.
+- **Inaccessible package (audit round 2, P1).** When unchanged U2 resolution returns `unavailable` for a package whose namespace is outside the authorized read set (for example a project binding to an owner-personal package read by a project-only host; `core/method-binding-storage.mjs:62`), `M` carries that package’s closed `Namespace` object instead of a read-set index, and `L` is null. Preserve the original package identity and return `unavailable` without target lookup. Such reference namespaces never join the authorized read set, and `file` continuation delivers no content for that entry.
 - Parse receipt bytes ≤32,768 before JSON parsing; use nonrecursive lexical preflight to reject duplicates, excessive depth/nodes, then closed-shape validation before canonical recursion. Bounds: depth 12, nodes 8,192, decoded scalar strings ≤200 UTF-16 units; integers are safe, nonnegative, with positive revisions.
 - Read set has one/two canonical §15.8 namespaces. Profiles are distinct, ≤21: primary first, then delivered history order. Heads are the consulted project→personal prefix, ≤2; absence has four null fields.
 - Methods are distinct, ≤16, in profile method order. Compact refs expand using their package namespace/IDs. Levels 0–3 mean project-role, project-wildcard, personal-role, personal-wildcard. B is the exact applicable consulted prefix, ≤4; logical binding identity derives from level/package/role. Absence has null revision/state; winner is the first existing level, or null.
@@ -2220,7 +2221,7 @@ Real `o200k_base` wire probes on Node 22.16.0 and 24.15.0 agreed; both exited **
 | 4 | 1,456 | 726 | 721 | 3,033 |
 | 16 | 4,228 | 2,132 | 2,127 | 7,395 |
 
-¹ Complete-text difference replacing receipt null with the string.  
+¹ Complete-text difference replacing receipt null with the string.
 ² Eight 300-unit duties plus eight 300-unit outputs, no optional evidence.
 
 Reproduction recipe, using the schemas above:
@@ -2262,7 +2263,7 @@ Acceptance uses synthetic fixtures, real child processes and installed tgz entri
 | C04 | v29–v31/prerequisite/fresh migration and rollback; partial-state rejection. Publish/disable/delete/current-delete and owner-quota races. Exact replay after deletion preserves quota/events; changed input conflicts. Every unique-key/rowid replacement attack runs with recursive_triggers=0 |
 | C05 | Legacy flag-off bytes; validation-only readers; frozen old installed binary rejects v32. Feature-off writers preserve guards/source fences. Race every final-validation phase, including reasons/history/comparison; prove no subsequent callback/count/await |
 | C06 | Mechanically derive manifest/import closure and independently enumerate tgz contents; diff, print counts. Cross-check changed paths by git diff and independent tree comparison. Report actual process/build/test exit codes |
-| C07 | Receipt file continuation preserves exact text/manifest/attachment bytes and independent hashes across adoption, withdrawal, restart, deletion and revocation. Binary bytes are checked through authorized U4 reads of the returned exact version. A second-process switch between then/file never mixes versions |
+| C07 | Receipt file continuation preserves exact text/manifest/attachment bytes and independent hashes **while available** across adoption, withdrawal and restart; after deletion or revoked access it delivers no content, including authorized U4 continuation attempts. Binary bytes are checked through authorized U4 reads of the returned exact version. A second-process switch between then/file never mixes versions. A project-only host reading a project profile that references an owner-personal package receives that entry as `unavailable`, with no target lookup and no read-set widening |
 
 Observe now/then p50/p95, receipt sizes, counter calls and event-loop delay; use §16 paced contention gates, labelled unpaced stress.
 
