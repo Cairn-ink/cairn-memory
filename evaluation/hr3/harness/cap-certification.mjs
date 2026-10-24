@@ -12,13 +12,15 @@ import { answerSchema, extractionSchema, providerSchema, validateExtraction } fr
 import { validate } from '../scorer/schema.mjs';
 import { extractionInput } from './extraction.mjs';
 import { verifiedInputs } from './inputs.mjs';
-import { responseRequest } from './requests.mjs';
+import { responseRequest, OUTPUT_CAPS } from './requests.mjs';
 
 const repo = new URL('../../../', import.meta.url);
 const local = name => new URL(name, repo);
 const readJSON = url => JSON.parse(readFileSync(url, 'utf8'));
 const requireTokenizer = createRequire(local('adapters/openai/package.json'));
-export const CAPS = Object.freeze({ reader: 768, extraction: 1024 });
+export const CAPS = OUTPUT_CAPS;
+export const MINIMUM_MARGIN_PERCENT = 10;
+export const meetsMargin = (tokens, cap) => tokens * 100 <= cap * (100 - MINIMUM_MARGIN_PERCENT);
 const splits = ['pilot', 'development', 'test'];
 
 // Strict output schemas specify property order. Count the compact output JSON
@@ -150,7 +152,13 @@ function provenance() {
     ...['schema.mjs', 'canonical.mjs', 'citations.mjs', 'scorer.mjs'].map(n => `evaluation/hr3/scorer/${n}`),
   ];
   assert.equal(sha256(readFileSync(local(names[0]))), freeze.protocol_sha256);
-  assert.equal(sha256(readFileSync(local(names[1]))), freeze.errata_sha256);
+  const errata = readFileSync(local(names[1]), 'utf8');
+  const amendment = errata.indexOf('## A-2 (2026-10-25):');
+  assert.ok(amendment > 0, 'A-2 amendment missing');
+  assert.equal(sha256(errata.slice(0, amendment).trimEnd() + '\n'), freeze.errata_sha256, 'Pre-A-2 errata changed');
+  assert.match(errata.slice(amendment), /2,048/);
+  assert.match(errata.slice(amendment), /4,096/);
+  assert.match(errata.slice(amendment), /10%/);
   return Object.fromEntries(names.map(name => [name, sha256(readFileSync(local(name)))]));
 }
 
@@ -170,13 +178,14 @@ export function certify({ progress = () => {} } = {}) {
     const serialization = serializeOutput(schema, value);
     const tokens = encoding.encode(serialization, [], []).length;
     const row = { ...metadata, operation, tokens, cap: CAPS[operation], margin: CAPS[operation] - tokens,
-      pass: tokens <= CAPS[operation], dimensions: dimensions(operation, value), sha256: sha256(serialization), serialization };
+      withinCap: tokens <= CAPS[operation], marginPercent: (CAPS[operation] - tokens) / CAPS[operation] * 100,
+      pass: meetsMargin(tokens, CAPS[operation]), dimensions: dimensions(operation, value), sha256: sha256(serialization), serialization };
     for (const [k, v] of Object.entries(row.dimensions)) maxima[operation][k] = Math.max(maxima[operation][k] ?? 0, v);
     const key = [metadata.split, operation, metadata.changeType, metadata.causalClass, metadata.batch, metadata.variant].join('/');
     const prev = groups.get(key);
     if (!prev) groups.set(key, { structure: key, cases: 1, failures: Number(!row.pass), worst: row });
     else { prev.cases++; prev.failures += Number(!row.pass); if (tokens > prev.worst.tokens) prev.worst = row; }
-    if (!row.pass && !firstFailure) { firstFailure = { ...metadata, operation, tokens, cap: CAPS[operation], margin: row.margin }; progress(`STOP gate: ${operation} reference exceeds cap (${tokens} > ${CAPS[operation]}). Completing offline failure evidence only.`); }
+    if (!row.pass && !firstFailure) { firstFailure = { ...metadata, operation, tokens, cap: CAPS[operation], margin: row.margin }; progress(`STOP gate: ${operation} reference fails A-2's 10% margin (${tokens} tokens, cap ${CAPS[operation]}). Completing offline failure evidence only.`); }
     return row;
   }
   try {
@@ -208,7 +217,7 @@ export function certify({ progress = () => {} } = {}) {
       for (const operation of ['reader', 'extraction']) for (const variant of operation === 'reader' ? ['supported_union', 'required_graph'] : ['all_explicit_events']) {
         const relevant = [...groups.values()].filter(g => g.worst.split === split && g.worst.operation === operation && g.worst.variant.startsWith(variant));
         const worst = relevant.map(g => g.worst).sort((a, b) => b.tokens - a.tokens)[0];
-        summary.push({ split, operation, variant, cases: relevant.reduce((n, g) => n + g.cases, 0), failures: relevant.reduce((n, g) => n + g.failures, 0), tokens: worst.tokens, cap: worst.cap, margin: worst.margin, pass: relevant.every(g => g.failures === 0), worstStructure: relevant.find(g => g.worst === worst).structure, familyId: worst.familyId });
+        summary.push({ split, operation, variant, cases: relevant.reduce((n, g) => n + g.cases, 0), failures: relevant.reduce((n, g) => n + g.failures, 0), tokens: worst.tokens, cap: worst.cap, margin: worst.margin, marginPercent: worst.marginPercent, pass: relevant.every(g => g.failures === 0), worstStructure: relevant.find(g => g.worst === worst).structure, familyId: worst.familyId });
       }
       progress(`Finished ${split}`);
     }
@@ -216,11 +225,13 @@ export function certify({ progress = () => {} } = {}) {
     const gates = Object.fromEntries(['reader', 'extraction'].map(operation => {
       const rows = structures.filter(g => g.worst.operation === operation);
       const worst = rows.map(g => g.worst).sort((a, b) => b.tokens - a.tokens)[0];
-      return [operation, { pass: rows.every(r => !r.failures), cap: CAPS[operation], worstTokens: worst.tokens, margin: worst.margin, worstStructure: rows.find(g => g.worst === worst).structure, familyId: worst.familyId }];
+      return [operation, { pass: rows.every(r => !r.failures), cap: CAPS[operation], worstTokens: worst.tokens, margin: worst.margin, marginPercent: worst.marginPercent, worstStructure: rows.find(g => g.worst === worst).structure, familyId: worst.familyId }];
     }));
     return {
-      version: 'hr3-cap-certification-v1', protocol: 'v0.3.4 + E-1/E-2/A-1', seed: DEFAULT_SEED,
+      version: 'hr3-cap-certification-a2', protocol: 'v0.3.4 + E-1/E-2/A-1/A-2', seed: DEFAULT_SEED,
       status: Object.values(gates).every(g => g.pass) ? 'PASS' : 'FAIL_AMENDMENT_REQUIRED',
+      minimumMarginPercent: MINIMUM_MARGIN_PERCENT,
+      historicalReport: { path: 'evaluation/hr3/harness/reports/cap-certification.json', sha256: sha256(readFileSync(new URL('./reports/cap-certification.json', import.meta.url))) },
       paidWorkAllowedByThisGate: Object.values(gates).every(g => g.pass), firstFailure, gates,
       method: {
         scope: 'Exhaustive frozen-default-seed pilot/development/test allocation, not an unbounded-schema or future-bank certificate.',
@@ -239,7 +250,7 @@ export function certify({ progress = () => {} } = {}) {
         ],
       },
       derivation: {
-        authority: ['protocol §2/§6/§7/§9/§10/§13', 'errata E-1/E-2/A-1', 'generator inventory.mjs GRAMMAR/SPLITS', 'generator generate.mjs emit/assignments/checkpoint construction', 'harness extractionSchema; scorer answerSchema'],
+        authority: ['protocol §2/§6/§7/§9/§10/§13', 'errata E-1/E-2/A-1/A-2', 'generator inventory.mjs GRAMMAR/SPLITS', 'generator generate.mjs emit/assignments/checkpoint construction', 'harness extractionSchema; scorer answerSchema'],
         sourceBounds: { batchesPerFamily: 4, checkpoints: [2, 4], audienceCells: 12, initialCap: [100, 899], amendedCap: [120, 939], baseDay: [1, 15], byteGuards: GRAMMAR.byteGuards },
         reasoning: [
           'Scope change has two current groups and at checkpoint four requests A and B: two historical records. Other changes request one predecessor; expiry has zero current claims.',
@@ -257,7 +268,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   // Only the fixed harness report is writable through this CLI.
   assert.equal(process.argv.length, 2, 'No CLI arguments supported');
   const report = certify({ progress: message => process.stderr.write(message + '\n') });
-  const output = new URL('./reports/cap-certification.json', import.meta.url);
+  const output = new URL('./reports/cap-certification-a2.json', import.meta.url);
   writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
   assert.deepEqual(readJSON(output), report);
   process.stdout.write(JSON.stringify({ status: report.status, gates: report.gates, summary: report.summary, report: relative(fileURLToPath(repo), fileURLToPath(output)) }, null, 2) + '\n');

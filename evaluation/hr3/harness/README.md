@@ -103,7 +103,7 @@ transport-failure replies, and `replies[bodyHash]` supplies explicit canned repl
 
 `requests.mjs` freezes the prompts and strict Responses bodies. Primary calls
 use temperature 0; alternative extraction uses reasoning none and no temperature.
-Output caps are 1,024 extraction / 768 reader, `store:false`, no tools/prior state.
+A-2 output caps are 4,096 extraction / 2,048 reader, `store:false`, no tools/prior state.
 The scorer's Answer schema is preserved semantically, converting `oneOf` to
 provider-supported `anyOf` for disjoint tagged variants and pruning unreachable
 schema definitions. Extraction outputs contain exactly the §2 fields, with
@@ -168,9 +168,17 @@ request, reply and record hashes and performs no dispatch. The CLI requires a
 fresh output directory; it does not silently resume partially executed P stores.
 
 The CLI is attended and exits after completion. It provides no unattended agent
-monitor/notification service. No paid-stage readiness, maximal-reference 768-token
-certification, adjudication calibration, continuation gate, or research accuracy
+monitor/notification service. No paid-stage readiness, adjudication calibration,
+continuation gate, or research accuracy
 claim follows from these offline tests.
+
+A-2's output-cap certificate is in `reports/cap-certification-a2.json`; the
+original failing certificate remains in `reports/cap-certification.json`.
+`reports/budget-a2.json` and `reports/budget-a2.md` show that the complete
+all-retries plan exceeds $450; no feasible stage-limit redistribution exists.
+Recompute them with `node evaluation/hr3/harness/cap-certification.mjs` and
+`node evaluation/hr3/harness/budget-a2.mjs` respectively. The budget command exits
+1 for the infeasible plan; the stage and global hard limits remain unchanged.
 
 
 ## Audit re-check R3 records

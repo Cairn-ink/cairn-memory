@@ -14,7 +14,7 @@ function fixture(t,modes=[]) {const dir=mkdtempSync(join(tmpdir(),'hr3-extract-'
 test('four source-only independent requests; strict caps, no private family fields or previous state',async t=>{
  const f=fixture(t);f.family.ast={secret:'private'};f.family.gold={secret:'private'};f.family.controls=[{secret:'private'}];
  const input=extractionInput(f.family,1);assert.deepEqual(Object.keys(input),['observed_at','public_header','turns']);const body=responseRequest('extraction',input);assert.equal(JSON.stringify(body).includes('private'),false);
- assert.equal(body.max_output_tokens,1024);assert.equal(body.store,false);assert.equal(body.temperature,0);assert.equal(body.text.format.strict,true);
+ assert.equal(body.max_output_tokens,4096);assert.equal(body.store,false);assert.equal(body.temperature,0);assert.equal(body.text.format.strict,true);
 });
 test('cached valid replies replay with no dispatch; corrupted replay fails closed',async t=>{
  const f=fixture(t);const value={events:[event(1)]};delete value.events[0].batch;delete value.events[0].ordinal;

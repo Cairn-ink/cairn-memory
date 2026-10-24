@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { certify, readerReference, extractionReference, referenceDelivery, serializeOutput } from '../cap-certification.mjs';
+import { certify, readerReference, extractionReference, referenceDelivery, serializeOutput, meetsMargin } from '../cap-certification.mjs';
 import { inventory } from '../../generator/inventory.mjs';
 import { generateFamily } from '../../generator/generate.mjs';
 import { canonical, sha256 } from '../../generator/common.mjs';
@@ -11,7 +11,7 @@ import { scorerGold } from '../inputs.mjs';
 import { score } from '../../scorer/scorer.mjs';
 import { validate } from '../../scorer/schema.mjs';
 
-const reportURL = new URL('../reports/cap-certification.json', import.meta.url);
+const reportURL = new URL('../reports/cap-certification-a2.json', import.meta.url);
 const getReport = () => JSON.parse(readFileSync(reportURL, 'utf8'));
 
 test('offline cap report is reproducible over the complete frozen allocation', { timeout: 600000 }, t => {
@@ -22,16 +22,24 @@ test('offline cap report is reproducible over the complete frozen allocation', {
   assert.equal(actual.method.allocationCrossCheck.families, 1860);
   assert.equal(actual.pilotReferences.length, 120);
   assert.equal(new Set(actual.structures.map(s => s.structure)).size, actual.structures.length);
-  // The failed gate must remain a failure, even when optional assertion
-  // citations and the second alternative causal path are removed.
-  assert.equal(actual.status, 'FAIL_AMENDMENT_REQUIRED');
-  assert.equal(actual.paidWorkAllowedByThisGate, false);
-  assert.equal(actual.gates.reader.pass, false);
-  assert.equal(actual.gates.extraction.pass, false);
-  for (const row of actual.summary.filter(r => r.variant === 'required_graph')) {
-    assert.equal(row.pass, false);
-    assert.ok(row.tokens > row.cap);
+  assert.equal(actual.status, 'PASS');
+  assert.equal(actual.paidWorkAllowedByThisGate, true);
+  assert.equal(actual.minimumMarginPercent, 10);
+  assert.equal(actual.gates.reader.pass, true);
+  assert.equal(actual.gates.extraction.pass, true);
+  assert.ok(actual.structures.every(s => s.failures === 0 && s.worst.marginPercent >= 10));
+  const historical = JSON.parse(readFileSync(new URL('../reports/cap-certification.json', import.meta.url), 'utf8'));
+  assert.equal(historical.status, 'FAIL_AMENDMENT_REQUIRED');
+  for (const old of historical.structures) {
+    const updated = actual.structures.find(s => s.structure === old.structure);
+    assert.equal(updated.worst.serialization, old.worst.serialization);
+    assert.equal(updated.worst.tokens, old.worst.tokens);
+    assert.equal(updated.cases, old.cases);
   }
+  assert.equal(meetsMargin(1843, 2048), true);
+  assert.equal(meetsMargin(1844, 2048), false);
+  assert.equal(meetsMargin(3686, 4096), true);
+  assert.equal(meetsMargin(3687, 4096), false);
 });
 
 test('every published serialization recounts with the installed real tokenizer and strict schema', () => {
@@ -46,7 +54,8 @@ test('every published serialization recounts with the installed real tokenizer a
       assert.equal(encoder.encode(row.serialization, [], []).length, row.tokens);
       assert.equal(sha256(row.serialization), row.sha256);
       assert.equal(row.margin, row.cap - row.tokens);
-      assert.equal(row.pass, row.margin >= 0);
+      assert.equal(row.withinCap, row.margin >= 0);
+      assert.equal(row.pass, meetsMargin(row.tokens, row.cap));
     }
   } finally { encoder.free(); }
 });

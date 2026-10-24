@@ -22,7 +22,7 @@ test('full offline fake pilot: frozen inputs, 240 extractions, 480 stateless sco
  const manifest=JSON.parse(readFileSync(join(root,'manifest.json')));assert.equal(manifest.count,2225);assert.equal(Object.keys(manifest.files).length,2225);
  const extractions=readdirSync(join(root,'extractions'));assert.equal(extractions.length,240);
  for(const file of extractions){const e=JSON.parse(readFileSync(join(root,'extractions',file)));assert.equal(e.error,null);const input=JSON.parse(e.body.input[1].content);validateExtraction(e.value,input);assert.deepEqual(Object.keys(input).sort(),['observed_at','public_header','turns']);}
- for(const file of readdirSync(join(root,'answers'))){const a=JSON.parse(readFileSync(join(root,'answers',file)));assert.deepEqual(validate(answerSchema,a.answer),[]);assert.equal(a.body.input.length,2);assert.equal(a.body.max_output_tokens,768);assert.equal(a.body.store,false);assert.equal(a.body.tools,undefined);assert.equal(a.body.previous_response_id,undefined);}
+ for(const file of readdirSync(join(root,'answers'))){const a=JSON.parse(readFileSync(join(root,'answers',file)));assert.deepEqual(validate(answerSchema,a.answer),[]);assert.equal(a.body.input.length,2);assert.equal(a.body.max_output_tokens,2048);assert.equal(a.body.store,false);assert.equal(a.body.tools,undefined);assert.equal(a.body.previous_response_id,undefined);}
  const readerCounts=new Map();for(const e of journal.filter(e=>e.type==='reserve'&&e.operation==='reader'))readerCounts.set(e.logicalId,(readerCounts.get(e.logicalId)??0)+1);assert.ok([...readerCounts.values()].every(n=>n===1));
  const reportDir=mkdtempSync(join(tmpdir(),'hr3-pilot-bounds-'));t.after(()=>rmSync(reportDir,{recursive:true,force:true}));
  const reportInputs=join(reportDir,'inputs');await emit({split:'pilot',out:reportInputs});
@@ -59,4 +59,21 @@ test('a transport stop preserves and scores completed reader attempts without ze
  assert.equal(readFileSync(join(out,'ledger.jsonl'),'utf8'),beforeLedger);assert.equal(readFileSync(join(out,'manifest.json'),'utf8'),beforeManifest);
  t.diagnostic('official CLI accepted actual interrupted pilot: 2 attempted, 478 unexecuted, 3 outstanding reservations; exit 0');
 
+});
+test('A-2 retains an incomplete reader reply as a scored failure without a quality retry',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'hr3-a2-incomplete-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const input=join(dir,'inputs');await emit({split:'pilot',out:input});
+ class IncompleteReader extends FakeTransport {
+  async send(request){const reply=await super.send(request);if(request.operation==='reader'&&!this.incompleteId){this.incompleteId=request.id;return {...reply,status:'incomplete'};}return reply;}
+ }
+ const transport=new IncompleteReader(),out=join(dir,'smoke');
+ const result=await run({inputs:input,out,transport});
+ assert.equal(result.observations.length,16);
+ const failed=result.observations.filter(o=>!o.valid);assert.equal(failed.length,1);
+ assert.deepEqual(failed[0].scores,{C:0,O:0,R:0,J:0});
+ assert.equal(transport.calls.filter(c=>c.id===transport.incompleteId).length,1);
+ assert.equal(transport.calls.filter(c=>c.id===transport.incompleteId.replace('/attempt-0','/attempt-1')).length,0);
+ const answers=readdirSync(join(out,'answers')).map(name=>JSON.parse(readFileSync(join(out,'answers',name))));
+ const incomplete=answers.filter(a=>a.reply.status==='incomplete');assert.equal(incomplete.length,1);assert.equal(incomplete[0].answer,null);
+ assert.equal(JSON.parse(readFileSync(join(out,'summary.json'))).attempted,16);
 });
