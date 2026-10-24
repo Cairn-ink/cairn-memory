@@ -503,3 +503,8 @@
   FROZEN.md 31 檔（檔案系統清點＝git cached+others，git exit 0）；階段命令／log／exit 在 `results/hr2b-stage-logs/step3`，無 `/home`
   路徑。候選歷程：v1 候選 0（配額＋receipt 上限）→ v1.1 候選 0（身分門＋重複本文）→ 候選 1（test first 20 群）→ 候選 2（重複本文）
   → **候選 3 通過**。接著跑第四階段（configuration → calibrate-host-v2 → A1／bge-m3＋A3 dev／test 排名，`cairn-heavy` → 凍結排名）。
+- **第四階段完成**（全 0）：configuration；calibrate-host-v2 504 探針、模型減實測誤差 −34…0；A1／bge-m3＋A3 dev＋test 排名
+  （`cairn-heavy`，無任何付費呼叫）；freeze-hr2b 6 檔。凍結的排名 JSON 無 `/home` 路徑；rank 階段的 `.command`／`.log` 有
+  （cairn-heavy 展開路徑、鎖檔、run.mjs 印的絕對輸出路徑）→ 階段輔助函式改為寫檔時 `$HOME`→`~`，step3／step4 檔案同樣替換並在
+  `results/hr2b-stage-logs/README.md` 註明。提交排名凍結，啟動第五階段：唯一一次 80 格 test 組裝→score→report→雜湊→壓縮→升格
+  `results/hr2b-final/`。
