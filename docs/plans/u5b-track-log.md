@@ -528,3 +528,7 @@
   −34 是兩個 item；刪掉「真實預算更緊」「結論不依賴題組」兩句推論；建議 4「瓶頸在 ranking」被數字反駁（組裝損失 37.5 點 >
   排名損失 25.8 點）改成兩者皆綁、不下因果結論；「每階段都經 cairn-heavy」改為只有 run／score／report；重現段補 commit／
   detached／絕對路徑也會不同；limitations「2–4 事實」限定目標與干擾記憶（foreign 一事實）。全部核實後修正提交，派轉錄複查。
+- **轉錄複查**：16 項全部 resolved、新數字全部核對相符、31 個 manifest 成員全在 git；另 3 個措辭項（「本文陳述 2–4 事實」→記憶跨單元
+  表達 2–4 事實；「W2 對 placement 盲」→ W2 的 view 有 body／span-only 但無先後 receipt 位置與文字；重現段的 checkout 要含結果與補檔的
+  commit）照建議逐字修正：**`8d9a51f5`**。**HR-2b 完成、結果 commit 送主控**（連同 v1.1 凍結 `d3a6e24f`、fixture 凍結 `3251b8ca`、
+  排名凍結 `98e88b01`、結果 `2acb5b1c`）。結論 Keep；未授權任何 §15 修訂；不碰 core／adapters／packaging／contract。
