@@ -6,6 +6,7 @@ import { readTransaction, isConnectionDiscarded, isStorageBusy } from './databas
 import { ownData } from './local-authority-input.mjs';
 import { deepFreeze } from './private-card-input.mjs';
 import { verifyPrivateGrant } from './private-card-facade.mjs';
+import { cardDependencyFence } from './card-current-storage.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
 import { createPrivateEvidenceStorage } from './private-evidence-storage.mjs';
 import { createCardReceiptSources } from './card-receipt-sources.mjs';
@@ -544,13 +545,21 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       let deadline = performance.now() >= deadlineAt;
       access.check();
       deadline ||= performance.now() >= deadlineAt;
-      const prepared = deadline ? { generations: [], items: [], unavailable: candidates.items.length } : read(() => {
+      const prepared = read(() => {
+        // Inspect the authorized projection in this same transaction. This is
+        // dispatch metadata, never a cached currentness decision.
+        const dependencyAware = input.types.includes('card') && input.readSet.some(ns =>
+          Object.keys(cardDependencyFence(db, ns, input.readSet)).length > 0);
+        if (dependencyAware && performance.now() >= deadlineAt) {
+          deadline = true;
+          return { generations: [], items: [], unavailable: candidates.items.length };
+        }
         const generations = canonicalFence(input.readSet, input.types), items = [];
         if (searched.sourceState) assertSourcesInside(input, searched.sourceState, 'snapshot_stale');
         let unavailable = 0;
-        const witnessBudget = searched.sourceState ? sourceBudget(deadlineAt) : null;
+        const witnessBudget = searched.sourceState ? sourceBudget(dependencyAware ? deadlineAt : Infinity) : null;
         for (const [position, candidate] of candidates.items.entries()) {
-          if (performance.now() >= deadlineAt) {
+          if (dependencyAware && performance.now() >= deadlineAt) {
             deadline = true; unavailable += candidates.items.length - position; break;
           }
           let item;
@@ -560,9 +569,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
               try { witnessInside(input, path, 'evidence_unavailable', witnessBudget); }
               catch (error) { if (error.code === 'evidence_unavailable') { unavailable++; continue; } throw error; }
             }
-            if (performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
-            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt })[0];
-            if (performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
+            if (dependencyAware && performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
+            item = evidence.itemsInside(candidate.ref.namespace, [candidate.ref], input.intent, input.readSet, { deadlineAt: dependencyAware ? deadlineAt : Infinity })[0];
+            if (dependencyAware && performance.now() >= deadlineAt) { deadline = true; unavailable++; continue; }
           }
           catch (error) {
             if (!['evidence_unavailable', 'revision_conflict'].includes(error.code)) throw error;

@@ -8,7 +8,8 @@ import { fail } from './validation.mjs';
 
 export function createMethodAttachmentStorage({db,identity,contentIdentity,enabled}) {
   const mac=createBinaryIdentity(identity);
-  const mixed=id=>enabled&&Boolean(db.prepare('SELECT 1 FROM method_manifest_formats WHERE version_id=?').get(id));
+  const query = (sql, check) => { check?.(); return db.prepare(sql); };
+  const mixed=(id,check)=>enabled&&Boolean(query('SELECT 1 FROM method_manifest_formats WHERE version_id=?',check).get(id));
   const manifestIdentity=(ns,entries)=>mac('method-mixed-manifest-v1',[binaryNamespace(ns),entries.map(entry=>
     [entry.kind,entry.path,entry.mediaType,entry.byteCount,entry.contentIdentity])]);
   function prepare(ns,input) {
@@ -47,8 +48,8 @@ export function createMethodAttachmentStorage({db,identity,contentIdentity,enabl
     }
     validateMixedManifest(db,prepared.versionId);
   }
-  function metadata(ns,row,textRows) {
-    const entries=db.prepare('SELECT version_id,position,kind,path,media_type,content_identity,byte_count,binary_object_id,folded_path FROM method_mixed_entries WHERE version_id=? ORDER BY position').all(row.id);
+  function metadata(ns,row,textRows,check) {
+    const entries=query('SELECT version_id,position,kind,path,media_type,content_identity,byte_count,binary_object_id,folded_path FROM method_mixed_entries WHERE version_id=? ORDER BY position',check).all(row.id);
     const texts=entries.filter(entry=>entry.kind==='text');
     if(!entries.length||entries.length>256||entries.some((entry,i)=>entry.position!==i||entry.folded_path!==entry.path.toLowerCase())||
       !entries.some(entry=>entry.kind==='binary')||texts.length!==textRows.length||texts.reduce((sum,entry)=>sum+entry.byte_count,0)!==row.byte_count||

@@ -6,7 +6,10 @@ import { includesNamespace, methodPackageRef, methodContext } from './method-pac
 import { privateBoundary as boundary, privateWhere as where } from './private-operation-helpers.mjs';
 import { fail } from './validation.mjs';
 
-export const hasCardCurrentDependencies = db => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='card_current_dependencies' AND type='table'").get());
+export const hasCardCurrentDependencies = (db, check) => {
+  check?.();
+  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='card_current_dependencies' AND type='table'").get());
+};
 // Conditional fences preserve every legacy byte when this projection has no declarations.
 // Generations schedule reconciliation only; the comparator below decides currentness.
 export function cardDependencyFence(db, namespace, readSet = [namespace]) {
@@ -15,19 +18,24 @@ export function cardDependencyFence(db, namespace, readSet = [namespace]) {
 }
 export function createCardCurrentStorage({ db, identity }) {
   let reader;
-  const methods = () => reader ??= createMethodPackageStorage({ db, identity, ready() {} }).roleRead;
-  const row = (ns, id) => hasCardCurrentDependencies(db) ? db.prepare(`SELECT * FROM card_current_dependencies WHERE card_id=? AND ${where}`).get(id, ...boundary(ns)) : null;
-  function observation(pkg, context) {
+  const methods = check => { check?.(); return reader ??= createMethodPackageStorage({ db, identity, ready() {} }).roleRead; };
+  const row = (ns, id, check) => {
+    if (!hasCardCurrentDependencies(db, check)) return null;
+    check?.();
+    return db.prepare(`SELECT * FROM card_current_dependencies WHERE card_id=? AND ${where}`).get(id, ...boundary(ns));
+  };
+  function observation(pkg, context, check) {
     pkg = methodPackageRef(pkg); context = methodContext(context);
-    const found = methods().stateFor(pkg, context, []);
+    const found = methods(check).stateFor(pkg, context, [], check);
     const { value, state } = found;
     return { found, entry: { package: pkg, version: value.version, consulted: state.consulted,
       availability: { packageState: state.lifecycle.packageState, versionState: state.lifecycle.versionState, versionRevision: state.lifecycle.versionRevision } } };
   }
   function compare(ns, card, readSet = [ns], { deadlineAt = Infinity } = {}) {
     const withinDeadline = () => { if (deadlineAt !== Infinity && performance.now() >= deadlineAt) fail('evidence_unavailable'); };
-    withinDeadline();
-    const saved = row(ns, card.id); if (!saved) return null;
+    const check = deadlineAt === Infinity ? undefined : withinDeadline;
+    check?.();
+    const saved = row(ns, card.id, check); if (!saved) return null;
     const local = { revision: saved.revision, status: 'needs-review', reasons: ['access_revoked'] };
     const { context, vector } = validateDependencyRecord(saved.context, saved.vector, ns);
     // No target/binding/manifest lookup may precede this complete-context check.
@@ -35,21 +43,21 @@ export function createCardCurrentStorage({ db, identity }) {
     const reasons = new Set(), versions = [];
     if (card.revision !== saved.card_revision || (card.body_revision ?? card.bodyRevision) !== saved.body_revision) reasons.add('binding_changed');
     for (const old of vector) {
-      withinDeadline();
-      const { found, entry } = observation(old.package, context);
-      withinDeadline();
+      check?.();
+      const { found, entry } = observation(old.package, context, check);
+      check?.();
       const status = found.value.status;
       // The winning target already received U2 metadata/ownership verification.
       // A different described target can only add lifecycle diagnostics; it
       // cannot establish currentness and needs no second manifest scan.
-      const describedAvailable = status === 'current' && canonicalJSON(found.value.version) === canonicalJSON(old.version) ? true : methods().targetLifecycle(old.version.namespace, old.version).available;
+      const describedAvailable = status === 'current' && canonicalJSON(found.value.version) === canonicalJSON(old.version) ? true : methods(check).targetLifecycle(old.version.namespace, old.version, check).available;
       if (!describedAvailable || found.state.lifecycle.packageState === 'deleted' || found.state.lifecycle.versionState === 'deleted') reasons.add('version_deleted');
       if (status === 'no-active-version') reasons.add('binding_absent_now');
       if (status === 'disabled') reasons.add('binding_disabled');
       if (canonicalJSON(entry) !== canonicalJSON(old)) reasons.add('binding_changed');
       versions.push({ described: old.version, current: status === 'current' ? found.value.version : null });
     }
-    withinDeadline();
+    check?.();
     return { revision: saved.revision, context, status: reasons.size ? 'needs-review' : 'current',
       reasons: ['binding_changed','binding_absent_now','binding_disabled','version_deleted','access_revoked'].filter(reason => reasons.has(reason)), versions };
   }

@@ -30,30 +30,32 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     db.prepare(`INSERT INTO method_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id)
       DO UPDATE SET generation=generation+1`).run(...boundary(ns));
   }
-  const packageRow = (ns, id) => db.prepare(`SELECT * FROM method_packages WHERE ${where} AND id=?`).get(...boundary(ns), id);
-  const versionRow = (packageId, id) => db.prepare('SELECT * FROM method_versions WHERE package_id=? AND id=?').get(packageId, id);
+  // Internal optional-read guard; ordinary U2 callers pass no check.
+  const query = (sql, check) => { check?.(); return db.prepare(sql); };
+  const packageRow = (ns, id, check) => query(`SELECT * FROM method_packages WHERE ${where} AND id=?`, check).get(...boundary(ns), id);
+  const versionRow = (packageId, id, check) => query('SELECT * FROM method_versions WHERE package_id=? AND id=?', check).get(packageId, id);
   const packageRef = (ns, id) => ({ type: 'method-package', namespace: ns, packageId: id });
   const versionRef = (ns, row) => ({ type: 'method-version', namespace: ns, packageId: row.package_id,
     versionId: row.id, manifestIdentity: row.manifest_identity });
   const fileColumns = 'version_id,position,path,byte_count,content_identity,media_type';
-  const fileRows = id => db.prepare('SELECT '+fileColumns+' FROM method_files WHERE version_id=? ORDER BY position').all(id);
+  const fileRows = (id, check) => query('SELECT '+fileColumns+' FROM method_files WHERE version_id=? ORDER BY position', check).all(id);
   const contentIdentity = (ns, text) => binding('method-file-content-v1', [ns, text]);
   const manifestIdentity = files => binding('method-manifest-v1', files.map(file => [file.path,file.contentIdentity,file.mediaType]));
   const manifest = rows => rows.map(row => ({ path: row.path, byteCount: row.byte_count,
     contentIdentity: row.content_identity, mediaType: row.media_type,...(row.kind?{kind:row.kind}:{}) }));
   const attachments=createMethodAttachmentStorage({db,identity,contentIdentity,enabled:db.prepare('PRAGMA user_version').get().user_version>=31});
-  function targetLifecycle(ns,inputRef) {
-    const ref = methodVersionRef(inputRef), pkg = packageRow(ns, ref.packageId);
-    const row = pkg && versionRow(pkg.id, ref.versionId);
+  function targetLifecycle(ns,inputRef,check) {
+    const ref = methodVersionRef(inputRef), pkg = packageRow(ns, ref.packageId, check);
+    const row = pkg && versionRow(pkg.id, ref.versionId, check);
     if (!sameNamespace(ns, ref.namespace) || !row) fail('method_not_found');
     if (row.manifest_identity !== ref.manifestIdentity) fail('method_version_unavailable');
     return {pkg,row,available:pkg.state==='available'&&row.state==='available'};
   }
-  function targetMetadata(ns, inputRef) {
-    const found=targetLifecycle(ns,inputRef),{pkg,row}=found;
+  function targetMetadata(ns, inputRef, check) {
+    const found=targetLifecycle(ns,inputRef,check),{pkg,row}=found;
     if(!found.available)return found;
-    const files = fileRows(row.id);
-    if(attachments.mixed(row.id))return {...found,files:attachments.metadata(ns,row,files),mixed:true};
+    const files = fileRows(row.id, check);
+    if(attachments.mixed(row.id,check))return {...found,files:attachments.metadata(ns,row,files,check),mixed:true};
     const ref=methodVersionRef(inputRef);
     if (manifestIdentity(manifest(files)) !== ref.manifestIdentity) fail('method_version_unavailable');
     return { pkg, row, files, available: true };
