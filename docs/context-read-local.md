@@ -346,7 +346,9 @@ and `peakBytes` describe the scan ledger; they are not retained occupancy.
 
 Sources share the cooperative deadline. SQLite steps cannot be preempted.
 Relations may keep a validated prefix on exhaustion; incomplete MOC statistics
-or ranking contribute nothing. Source diagnostics enumerate degradation and
+or ranking contribute nothing. With the default caps, expect `moc-v1` to degrade
+with `work_limit` on broad queries around 10,000 Memories (see
+`docs/limitations.md`); it is most useful on smaller or selectively titled stores. Source diagnostics enumerate degradation and
 never claim an unknown remainder is zero. They report no prose or foreign
 counts. Core candidate results carry `trace.sources`; MCP keeps these source
 diagnostics only in `_meta['ink.cairn/context-read-diagnostics']`. Candidate

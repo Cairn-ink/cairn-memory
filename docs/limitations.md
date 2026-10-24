@@ -2682,7 +2682,12 @@ traversal, Raw/receipt candidate endpoint, episode or operational lineage.
 MOC ranks valid authorized titles, not compiled summaries. Its full title
 statistics and member ranking must complete within the shared deadline,
 50,000-work and 8-MiB accounting bounds or its contribution is discarded.
-Membership never filters lexical/semantic discovery. A history request still
+With the default caps, broad queries over filed corpora typically degrade
+around 10,000 Memories: the balanced synthetic 10⁴ probe reports
+`degraded`/`work_limit` and contributes zero MOC candidates. The cutoff varies
+with titles, memberships and projection state, and can come earlier or later.
+Other enabled channels continue under the configured preset without weight
+renormalization. Membership never filters lexical/semantic discovery. A history request still
 uses current MOC members. Active Memory projection unavailability is not
 bypassed; absent optional Card organization storage degrades MOC explicitly.
 `summaryFreshness` is always unavailable pending E1. No retrieval-quality,
