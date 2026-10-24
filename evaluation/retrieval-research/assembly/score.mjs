@@ -8,6 +8,7 @@ import { BUDGETS } from './grid.mjs';
 import { implementationIdentity, validateImplementation } from './identity.mjs';
 import { prepareItems } from './units.mjs';
 import { COUNTER_ID } from './counter.mjs';
+import { authenticateHostRun } from './host-v2.mjs';
 import { PROTOCOL, PROTOCOL_COMMIT, RANKINGS, authenticateFixture, authenticateRanking, selectedQueries, inputManifest, sha256, fail } from './auth.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -37,8 +38,11 @@ export function summarize(rows, { requireAllCategories = false } = {}) {
 
 export function scoreCell(fixture, cell) {
   const run = cell?.run;
+  const host = run?.overhead === 'host-v2';
+  const cost = host ? authenticateHostRun(run) : null;
   if (cell?.format !== 'hr2-cell-v1' || !run || run.status !== 'complete' || run.protocol !== PROTOCOL || run.protocolCommit !== PROTOCOL_COMMIT || run.counter !== COUNTER_ID ||
-      !ARMS.includes(run.arm) || !RANKINGS[run.ranking] || !BUDGETS.includes(run.budget) || ![0, 8].includes(run.overhead) || run.scale !== 'S1000' || !['test', 'dev'].includes(run.split)) fail('invalid_cell_run');
+      !ARMS.includes(run.arm) || !RANKINGS[run.ranking] || !BUDGETS.includes(run.budget) || (!host && ![0, 8].includes(run.overhead)) || run.scale !== 'S1000' || !['test', 'dev'].includes(run.split) ||
+      (!host && ['overheadModel', 'overheadModelDigest', 'extensionCommit'].some(key => Object.hasOwn(run, key)))) fail('invalid_cell_run');
   if (!same(Object.keys(run.fixtureHashes ?? {}).sort(compareIds), Object.keys(fixture.hashes).sort(compareIds)) ||
       Object.entries(fixture.hashes).some(([name, hash]) => run.fixtureHashes[name] !== hash)) fail('cell_fixture_hash_mismatch');
   validateImplementation(run.implementation?.assembly);
@@ -54,26 +58,30 @@ export function scoreCell(fixture, cell) {
     const query = fixture.queries.queries.find(query => query.id === row.id);
     if (label.family !== query.family || label.category !== query.category || label.intent !== query.intent || label.lang !== query.lang) fail(`label_query_metadata:${row.id}`);
     if (!Array.isArray(row.ranked) || row.ranked.length > 24 || new Set(row.ranked).size !== row.ranked.length) fail('invalid_cell_ranking');
+    const unitItems = new Map();
     const units = new Map(row.ranked.flatMap(id => {
       const item = items.get(id);
       if (!item) fail(`cell_unknown_memory:${id}`);
-      return [item.body, ...item.spans].map(unit => [unit.id, unit]);
+      return [item.body, ...item.spans].map(unit => { unitItems.set(unit.id, item); return [unit.id, unit]; });
     }));
     if (!Array.isArray(row.admitted)) fail('cell_admitted_required');
     const have = new Set();
-    let used = 0;
+    let used = host ? cost.initial : 0, bodies = 0;
     for (const admission of row.admitted) {
       const unit = units.get(admission.id);
-      if (!unit || have.has(admission.id) || admission.tokens !== unit.tokens || admission.cost !== unit.tokens + run.overhead) fail('cell_unit_cost_or_id');
+      const item = unitItems.get(admission.id);
+      if (!unit || have.has(admission.id) || admission.tokens !== unit.tokens || admission.cost !== (host ? cost.unit(unit, item, unit === item.body, bodies) : unit.tokens + run.overhead)) fail('cell_unit_cost_or_id');
       have.add(admission.id); used += admission.cost;
+      if (host && unit === item.body) bodies++;
     }
     for (const id of row.ranked) {
       const item = items.get(id);
       if (item.spans.some(span => have.has(span.id)) && !have.has(item.body.id)) fail('cell_detached_span');
     }
     if (used !== row.used || used > run.budget) fail('cell_total_cost');
-    const replay = assemble([...items.values()], row.ranked, { arm: run.arm, budget: run.budget, overhead: run.overhead });
-    if (replay.used !== row.used || !same(replay.admitted, row.admitted)) fail(`cell_assembly_replay_mismatch:${row.id}`);
+    const replay = assemble([...items.values()], row.ranked, { arm: run.arm, budget: run.budget, overhead: run.overhead, ...(host ? { cost } : {}) });
+    if (replay.used !== row.used || !same(replay.admitted, row.admitted) ||
+        (host && (replay.budgetRejected !== row.budgetRejected || replay.bodyEqualSpanCount !== row.bodyEqualSpanCount))) fail(`cell_assembly_replay_mismatch:${row.id}`);
     const groups = label.groups.map(group => {
       const members = group.members.filter(member => member.namespace === 'target' && ['S300', 'S1000-extra'].includes(member.scale));
       if (!members.length || members.some(member => !['body', 'span'].includes(member.where))) fail('invalid_required_group');
@@ -87,9 +95,15 @@ export function scoreCell(fixture, cell) {
     stratum(`language:${label.lang}`, groups); stratum(`category:${label.category}`, groups);
     return result;
   });
-  return { format: 'hr2-scored-cell-v1', ok: true, run: { ...run, implementation: { ...run.implementation, scorer: SCORER_IMPLEMENTATION }, expectedQueryIds: expected }, queries,
+  const rankedIds = new Set(cell.queries.flatMap(row => row.ranked));
+  return { format: 'hr2-scored-cell-v1', ok: true, run: { ...run, implementation: { ...run.implementation, scorer: SCORER_IMPLEMENTATION }, expectedQueryIds: expected,
+    ...(host ? { overheadModelDigest: run.overheadModel.sha256 } : {}) }, queries,
     summary: summarize(queries, { requireAllCategories: true }),
-    strata: Object.fromEntries(Object.entries(strataRows).map(([key, rows]) => [key, { ...summarize(rows), queries: rows }])) };
+    strata: Object.fromEntries(Object.entries(strataRows).map(([key, rows]) => [key, { ...summarize(rows), queries: rows }])),
+    ...(host ? { assemblyItems: [...items.values()].filter(item => rankedIds.has(item.id)),
+      bodyEqualSpanCount: queries.reduce((sum, row) => sum + row.bodyEqualSpanCount, 0),
+      rankedBodyEqualSpanCount: queries.reduce((sum, row) => sum + row.ranked.reduce((n, id) => n + items.get(id).spans.filter(span => span.text === items.get(id).body.text).length, 0), 0),
+      budgetRejectedQueryCount: queries.filter(row => row.budgetRejected).length } : {}) };
 }
 
 export async function scoreDirectory(fixtureDir, dir) {

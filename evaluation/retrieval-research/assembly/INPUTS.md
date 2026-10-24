@@ -24,3 +24,16 @@ Protocol HR-2 v1.1, frozen at `c863e9d6`. Paths are relative to the research dir
 ```
 
 The archive digest records provenance. When consuming an extracted directory, the harness verifies each selected member digest; it does not require the archive beside the extraction. FROZEN.md is independently parsed and all seven fixture files are rehashed on every run and scoring invocation.
+
+## Exploratory host-v2 input (§11 v1.2.1)
+
+Path: `assembly/overhead-host-v2.json` (relative to the research directory).
+SHA-256: `5eba1bd4448b17ce51598d1d561ff66280740573830c7ddc55a9b3271c79422b`.
+Implementation commit: `42627f60`; §11 freeze / `run.extensionCommit`: `4fb90832`.
+The frozen base `run.protocolCommit` remains `c863e9d674f23ccebffaf3ad96ab1c4b34eabc82`.
+Each host-v2 stage hashes the exact pinned file bytes. Its complete constants
+object (including unused probe constants) and `bodyTokens` must match the cell's
+model payload exactly. This is an approximate default-Memory calibration,
+not shipped-host token counts; later completeness transitions, cross-item
+deduplication, non-default metadata, sourceAccess, Cards and UUID/text variation
+are not modelled faithfully.

@@ -7,6 +7,8 @@ import { COUNTER_ID } from './counter.mjs';
 import { prepareItems } from './units.mjs';
 import { implementationIdentity } from './identity.mjs';
 import { BUDGETS, expectedCellCount } from './grid.mjs';
+import { hostV2Cost } from './cost.mjs';
+import { authenticateHostV2, EXTENSION_COMMIT, HOST_V2_LIMITATIONS } from './host-v2.mjs';
 import { PROTOCOL, PROTOCOL_COMMIT, RANKINGS, authenticateFixture, authenticateRanking, readRanking, inputManifest, fail } from './auth.mjs';
 
 export { BUDGETS } from './grid.mjs';
@@ -24,15 +26,20 @@ export async function emptyOutput(dir) {
   if ((await readdir(dir)).length) fail('output_directory_not_empty');
 }
 export async function runAssembly(options) {
-  const allowed = ['_', 'fixture-dir', 'rankings', 'split', 'scale', 'arms', 'rankings-select', 'budgets', 'overheads', 'out'];
+  const model = options['overhead-model'] === 'host-v2' ? authenticateHostV2() : null;
+  if (options['overhead-model'] != null && !model) fail('invalid_overhead_model');
+  if (model && options.overheads != null) fail('mutually_exclusive_overhead_options');
+  const allowed = ['_', 'fixture-dir', 'rankings', 'split', 'scale', 'arms', 'rankings-select', 'budgets', 'overheads', 'overhead-model', 'out'];
   if (Object.keys(options).some(key => !allowed.includes(key)) || options._?.length) fail('unknown_run_option');
   const fixtureDir = requiredOption(options, 'fixture-dir'), dir = requiredOption(options, 'rankings');
   const split = requiredOption(options, 'split'), scale = requiredOption(options, 'scale');
   if (!['dev', 'test'].includes(split) || scale !== 'S1000') fail('invalid_split_or_scale');
   const arms = list(options.arms ?? ARMS.join(','), ARMS, 'arms');
   const selections = list(options['rankings-select'] ?? Object.keys(RANKINGS).join(','), Object.keys(RANKINGS), 'rankings_select');
+  if (model && options.budgets?.split(',').some(value => /^\d+$/.test(value) && Number(value) < model.constants.envelope)) fail('context_item_too_large');
   const budgets = list(options.budgets ?? BUDGETS.join(','), BUDGETS.map(String), 'budgets').map(Number);
-  const overheads = list(options.overheads ?? '0,8', ['0', '8'], 'overheads').map(Number);
+  const overheads = model ? ['host-v2'] : list(options.overheads ?? '0,8', ['0', '8'], 'overheads').map(Number);
+  if (model && budgets.some(budget => budget < model.constants.envelope)) fail('context_item_too_large');
   const out = requiredOption(options, 'out'), fixture = await authenticateFixture(fixtureDir);
   if (split === 'test') {
     const manifest = await inputManifest();
@@ -53,16 +60,18 @@ export async function runAssembly(options) {
   for (const source of sources) for (const arm of arms) for (const overhead of overheads) for (const budget of budgets) {
     const cell = { format: 'hr2-cell-v1', run: { protocol: PROTOCOL, protocolCommit: PROTOCOL_COMMIT, commit, fixtureHashes: fixture.hashes,
       implementation: { assembly }, counter: COUNTER_ID, environment: env, split, scale, arm, ranking: source.selection, rankingPath: resolve(source.path),
-      rankingMember: source.member, rankingHash: source.hash, rankingRun: source.ranking.run, overhead, budget, status: 'complete' },
+      rankingMember: source.member, rankingHash: source.hash, rankingRun: source.ranking.run, overhead, budget, status: 'complete',
+      ...(model ? { overheadModel: model, extensionCommit: EXTENSION_COMMIT, limitations: HOST_V2_LIMITATIONS } : {}) },
     queries: source.queries.map(query => {
       const ranked = source.ranking.queries[query.id].ranked;
-      return { id: query.id, ranked, ...assemble(items, ranked, { arm, budget, overhead }) };
+      return { id: query.id, ranked, ...assemble(items, ranked, { arm, budget, overhead, ...(model ? { cost: hostV2Cost(model) } : {}) }) };
     }) };
-    await writeJson(join(out, `${arm}--${source.selection}--O${overhead}--B${budget}.json`), cell); cells++;
+    await writeJson(join(out, `${arm}--${source.selection}--O${model ? `host-v2@${model.implementationCommit}` : overhead}--B${budget}.json`), cell); cells++;
   }
   const grid = { arms, rankings: selections, overheads, budgets }, expectedCells = expectedCellCount(grid);
   if (cells !== expectedCells) fail('grid_cell_count_mismatch');
-  return { ok: true, split, cells, expectedCells, grid, queriesPerCell: sources[0].queries.length };
+  return { ok: true, split, cells, expectedCells, grid, queriesPerCell: sources[0].queries.length,
+    ...(model ? { overheadModel: model, extensionCommit: EXTENSION_COMMIT, limitations: HOST_V2_LIMITATIONS } : {}) };
 }
 
 await cliMain(import.meta.url, async options => { console.log(JSON.stringify(await runAssembly(options))); });

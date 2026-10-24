@@ -4,6 +4,9 @@ import { clusterBootstrap, exactMcNemar, pairedQueries } from '../lib/stats.mjs'
 import { PROTOCOL, fail } from './auth.mjs';
 import { implementationIdentity, implementationKey } from './identity.mjs';
 import { validateScoredCell } from './provenance.mjs';
+import { ARMS } from './arms.mjs';
+import { BUDGETS } from './grid.mjs';
+import { HOST_V2_LIMITATIONS } from './host-v2.mjs';
 
 const REPORT_IMPLEMENTATION = await implementationIdentity();
 
@@ -15,11 +18,14 @@ export function statisticsRows(queries) {
     return { id: row.id, family: row.family, category: row.category, recall12: row.coverage, allRequired12: row.allRequired };
   });
 }
-const identity = run => JSON.stringify([run.split, run.scale, run.ranking, run.overhead, run.budget]);
+const identity = run => JSON.stringify([run.split, run.scale, run.ranking, run.overhead, run.budget,
+  ...(run.overhead === 'host-v2' ? [run.overheadModelDigest] : [])]);
 const primary = run => run.split === 'test' && run.scale === 'S1000' && run.ranking === 'A3--bge-m3' && run.overhead === 0 && run.budget === 512;
 const cellKey = run => `${identity(run)}:${run.arm}`;
 
 function comparisonRows(baseline, candidate) {
+  if (baseline?.run && candidate?.run && ((baseline.run.overhead === 'host-v2') !== (candidate.run.overhead === 'host-v2') ||
+      (baseline.run.overhead === 'host-v2' && baseline.run.overheadModelDigest !== candidate.run.overheadModelDigest))) fail('invalid_comparison_cells');
   validateScoredCell(baseline); validateScoredCell(candidate);
   if (baseline.run.arm !== 'P-top' || identity(baseline.run) !== identity(candidate.run) ||
       baseline.run.rankingHash !== candidate.run.rankingHash ||
@@ -74,20 +80,53 @@ export function buildReport(scores) {
     if (seen.has(key)) fail('duplicate_report_cell');
     seen.add(key);
   }
-  const comparisons = cells.filter(cell => cell.run.arm !== 'P-top').map(candidate => {
+  const comparisons = cells.filter(cell => cell.run.arm !== 'P-top' &&
+    (cell.run.overhead !== 'host-v2' || ['P-cover', 'P-top-s1'].includes(cell.run.arm))).map(candidate => {
     const baseline = cells.find(cell => cell.run.arm === 'P-top' && identity(cell.run) === identity(candidate.run));
     const statistics = compareCells(baseline, candidate);
     const categoryDeltas = Object.fromEntries(CATEGORIES.map(category => [category,
       baseline?.summary?.categories?.[category]?.coverage == null || candidate.summary?.categories?.[category]?.coverage == null ? null
         : (candidate.summary.categories[category].coverage - baseline.summary.categories[category].coverage) * 100]));
     return { run: candidate.run, baseline: 'P-top', candidate: candidate.run.arm,
-      designation: primary(candidate.run) && candidate.run.arm === 'P-cover' ? 'confirmatory' : 'exploratory', categoryDeltas, ...statistics };
+      designation: primary(candidate.run) && candidate.run.arm === 'P-cover' ? 'confirmatory' : 'exploratory', categoryDeltas, ...statistics,
+      ...(candidate.run.overhead === 'host-v2' ? { intervalLabel: 'pointwise, unadjusted, exploratory 95% CI' } : {}) };
   });
   const confirmatory = comparisons.find(comparison => comparison.designation === 'confirmatory');
   const inputValid = scores.ok === true && cells.every(cell => cell.ok === true);
   return { format: 'hr2-report-v1', protocol: PROTOCOL, implementation: { report: REPORT_IMPLEMENTATION }, ok: inputValid, outcome: inputValid ? decision(confirmatory) : 'inconclusive',
     outcomeReason: !inputValid ? 'invalid_inputs' : !confirmatory ? 'primary_cell_absent' : confirmatory.bootstrap.reason ?? null,
-    comparisons, cells };
+    comparisons, cells, ...(cells.some(cell => cell.run.overhead === 'host-v2') ? { hostV2: hostV2Outputs(cells, comparisons) } : {}) };
+}
+
+export function budgetSaturation(cells) {
+  const budgets = [...new Set(cells.map(cell => cell.run.budget))].sort((a, b) => a - b);
+  const complete = BUDGETS.every(budget => ARMS.every(arm => cells.some(cell => cell.run.budget === budget && cell.run.arm === arm)));
+  if (!complete) return { budget: null, status: 'incomplete_grid', label: 'incomplete grid', testedBudgets: budgets };
+  const budget = budgets.find(value => cells.filter(cell => cell.run.budget >= value).every(cell => cell.queries.every(row => row.assemblyLoss === 0))) ?? null;
+  return { budget, status: budget === null ? 'not_reached' : 'reached',
+    label: budget === null ? 'not reached through 1,536' : String(budget), testedBudgets: budgets };
+}
+
+function hostV2Outputs(cells, comparisons) {
+  const host = cells.filter(cell => cell.run.overhead === 'host-v2'), groups = new Map(), coverage = new Map();
+  for (const cell of cells.filter(cell => cell.run.overhead === 'host-v2' || cell.run.overhead === 0)) {
+    const run = cell.run, modelDigest = run.overheadModelDigest ?? null;
+    const key = JSON.stringify([run.split, run.ranking, run.arm, run.overhead, modelDigest]);
+    if (!coverage.has(key)) coverage.set(key, { split: run.split, ranking: run.ranking, arm: run.arm, overhead: run.overhead, modelDigest, budgets: {} });
+    coverage.get(key).budgets[run.budget] = cell.summary.macroCoverage;
+  }
+  for (const cell of host) {
+    const key = JSON.stringify([cell.run.split, cell.run.ranking, cell.run.overheadModelDigest]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(cell);
+  }
+  return { designation: 'exploratory', intervalLabel: 'pointwise, unadjusted, exploratory 95% CI', limitations: HOST_V2_LIMITATIONS,
+    contrastCount: comparisons.filter(row => row.run.overhead === 'host-v2').length,
+    macroCoverage: [...coverage.values()], saturation: [...groups.values()].map(group => ({ split: group[0].run.split,
+      ranking: group[0].run.ranking, modelDigest: group[0].run.overheadModelDigest, ...budgetSaturation(group) })),
+    cells: host.map(cell => ({ split: cell.run.split, ranking: cell.run.ranking, arm: cell.run.arm, budget: cell.run.budget,
+      modelDigest: cell.run.overheadModelDigest, budgetRejectedQueryCount: cell.budgetRejectedQueryCount,
+      bodyEqualSpanCount: cell.bodyEqualSpanCount, rankedBodyEqualSpanCount: cell.rankedBodyEqualSpanCount })) };
 }
 
 const number = value => value == null ? 'NA' : value.toFixed(4);
@@ -117,6 +156,19 @@ export function reportMarkdown(report) {
     const r = cell.run, s = cell.summary;
     lines.push(`| ${index + 1} | ${r.split} | ${r.ranking} | ${r.arm} | ${r.overhead} | ${r.budget} | ${primary(r) && ['P-top', 'P-cover'].includes(r.arm) ? 'confirmatory' : 'exploratory'} | ${number(s.macroCoverage)} | ${number(s.macroAllRequired)} | ${number(s.macroCeiling)} | ${number(s.macroAssemblyLoss)} | ${number(s.tokenUse.p50)} / ${number(s.tokenUse.p95)} |`);
   });
+  if (report.hostV2) {
+    const host = report.hostV2;
+    lines.push('', '## host-v2 overhead (exploratory)', '', host.limitations, '',
+      `${host.contrastCount} paired contrasts: P-cover − P-top and P-top-s1 − P-top. All intervals are ${host.intervalLabel}. The frozen confirmatory selector remains numeric O=0; host-v2 does not change that decision.`, '',
+      'Whole-unit skip-and-continue need not give monotone coverage. Reaching the evidence ceiling does not mean every candidate unit fits.', '',
+      '| Split | Ranking | Arm | O | ' + BUDGETS.join(' | ') + ' |', '| --- | --- | --- | --- | ' + BUDGETS.map(() => '---:').join(' | ') + ' |');
+    for (const row of host.macroCoverage) lines.push(`| ${row.split} | ${row.ranking} | ${row.arm} | ${row.overhead} | ${BUDGETS.map(budget => number(row.budgets[budget])).join(' | ')} |`);
+    lines.push('', '| Split | Ranking | Model SHA-256 | Saturation |', '| --- | --- | --- | --- |');
+    for (const row of host.saturation) lines.push(`| ${row.split} | ${row.ranking} | ${row.modelDigest} | ${row.label} |`);
+    lines.push('', '| Split | Ranking | Arm | B | Queries with budget-rejected scheduled units | Admitted body-equal spans | Ranked body-equal spans |',
+      '| --- | --- | --- | ---: | ---: | ---: | ---: |');
+    for (const row of host.cells) lines.push(`| ${row.split} | ${row.ranking} | ${row.arm} | ${row.budget} | ${row.budgetRejectedQueryCount} | ${row.bodyEqualSpanCount} | ${row.rankedBodyEqualSpanCount} |`);
+  }
   lines.push('', '## Paired comparisons', '', 'Deltas and CIs are percentage points. Family counts are C1–C7; bootstrap status, accepted/rejected draws and McNemar discordants are explicit.', '',
     '| Cell | Designation | Status | Delta | 95% CI | Families / C1–C7 | Accepted / rejected | Reason | McNemar baseline-only / candidate-only / p |',
     '| ---: | --- | --- | ---: | --- | --- | --- | --- | --- |');
