@@ -347,3 +347,6 @@
   生成器驗收同時要求讀 query 的配額又宣稱不讀 query（改為兩階段：W1 檢查只讀 facts／corpus，協調者配額驗證讀 query 與
   W3 後標籤，凍結候選 seed 序列）、§9 步驟 2 的 dev 檢查順序（改為只用 toy 或舊 dev 輸入）；P2：中點成本應約 13,300。
   **v0.3 提交 `58425923`**，派第二次複查。
+- **HR-2b v0.3 第二次複查：全部 resolved，無新 P0／P1，「can be frozen: yes」。協定 v1 凍結 commit `c546bfc1`**（只改狀態行），
+  已推送。派 §8 工具／harness worker `hr2b_tools`（版本化驗證 profile、排名 harness 接受新 fixture 並寫固定配置、認證的
+  assembly protocol profile 與 §4 決策選擇器、host-v2 校準工具、240＋120 兩個回歸、HR-1 輸出位元不變測試）。
