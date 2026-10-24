@@ -1859,7 +1859,7 @@ Therefore, for §14 C04 and §12.7 K13:
   this starvation, but it touches every V1 opener and the §11.2 store fence,
   whose review currently requires rollback-journal mode.
 
-## 17. U5c-2: one-hop relations and MOC channel (v0.11.1, audit round 1 applied)
+## 17. U5c-2: one-hop relations and MOC channel (v0.11.1, audited and confirmed)
 
 U5c-2 adds two independently selectable candidate sources to §13: `relations-one-hop-v1` and `moc-v1`. Their candidates enter §15 assembly through its existing internal search seam. Assembly policies, canonical evidence, metering and compact refs are unchanged.
 
