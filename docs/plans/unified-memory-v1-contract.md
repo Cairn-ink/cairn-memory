@@ -2270,3 +2270,167 @@ Observe now/then p50/p95, receipt sizes, counter calls and event-loop delay; use
 **Non-claims:** U5c-3 current-dependent Card/representation invalidation; U5c-2 relations/MOC; live sessions/cross-agent smoke; authoring UI; engine receipt lookup; any quality claim.
 
 **Primary note (author objection accepted):** existing agent-writable MCP tools such as `correct_memory` call core directly and have no authority-port action class (`adapters/mcp/server.mjs:495`). §18 therefore introduces role-specific `write` grants on the §2.3 authority port; agent publication stays direct, with no user confirmation (product decision, 2026-10-24). The 4,000-token role default fits the maximum-length English fixture with four packages; larger or non-Latin payloads refuse with measured `budget_insufficient` (§18.7).
+
+## 19. U5c-3: current-dependent invalidation (v0.13 draft)
+
+**Status:** draft for audit against `e526aaef`. No implementation or acceptance results are claimed. §§17/18 remain frozen. The five inventory §5 code anchors were verified against this head.
+
+A confirmed Card may explicitly declare that its authored content describes the current method for a role and authorized read-set context. Changing that adoption makes the Card `needs-review` for current use until explicit revalidation. Its authored body remains subject to existing Card retention rules.
+
+### 19.1 Opt-in and authority
+
+- Core construction gains `privateCards.currentDependencies:{version:'card-current-dependencies-v1'}`. Authoring requires configured method packages. Place this under private Cards because declaration and revalidation follow Card confirmation authority; neither requires role profiles.
+- MCP startup gains `--private-card-current-dependencies local-v1`, requiring existing Card and method opt-ins. Programmatic configuration gains the corresponding option. Host configuration fixes the permitted read set; tool arguments cannot expand it. `--check-config` opens nothing.
+- Without opt-in, no migration, authoring methods, tools or capability fields are added. Preserve legacy bytes, defaults, ordering, errors, prompts and provider-call counts on stores without declarations. Already-recorded dependencies remain canonical fences when authoring is disabled; see Objections.
+- Declaration and revalidation require **`explicit-user`**, following `core/private-card-facade.mjs:33–36`. Authorize every consulted namespace separately, binding the complete operation payload. Role names, method files and saved snapshots grant nothing.
+- The product decision allowing agents to enact role-profile changes directly applies only to §18. It does not authorize Card confirmation, declaration or revalidation.
+
+### 19.2 Declaration and recorded dependency
+
+One Card declares one exact U2 context `{readSet,roleId}` and **1–16 distinct package dependencies**. The Card namespace and every package namespace must belong to that authorized context. Normalize role keys and read sets through U2; never infer them from prose.
+
+Add optional `currentDependencies` to opted-in `confirmCardDraft` calls. It contains the context and package entries with authenticated U2 resolution snapshots inspected during review. Persist the declaration atomically against the resulting confirmed Card revision.
+
+Add two opted-in core operations:
+
+| Method | Input beyond common fields |
+| --- | --- |
+| `declareCardCurrentDependencies` | Context and complete package/snapshot list; creates or explicitly replaces a declaration on a confirmed Card |
+| `revalidateCardCurrentDependencies` | Fresh reviewed snapshots for exactly the declared context/packages |
+
+Common fields are `namespace,cardId,actionId,expectedRevision,expectedDependencyRevision`. The dependency expectation is null only for initial declaration; otherwise it is positive CAS. Unknown fields refuse.
+
+The canonical, reference-only record contains:
+
+- dependency revision;
+- dependent Card revision and body revision;
+- normalized role/read-set context;
+- each package ref;
+- the exact consulted U2 prefix: every level’s logical identity, revision, state and target, **including null revision/state for absence**;
+- the resolved immutable version ref and target availability information needed for validation.
+
+Logical level identity includes binding namespace, package and role/wildcard key. Declaration requires an available U2 `current` winner. Core derives the record from canonical resolution and verifies the reviewed snapshot; caller-supplied resolution claims are insufficient. Bound the complete stored vector to 32,768 UTF-8 bytes.
+
+Store no Card, method, reason or source prose. Generation counters may schedule rescans but do not themselves establish dependency mismatch. In particular, importing unadopted v2 must leave a declaration describing adopted v1 current.
+
+### 19.3 Detection and read-path effect
+
+Every path treating a declared Card as current evidence compares its record with fresh U2 resolution **inside the caller’s existing transaction**. Reuse an internal synchronous seam; do not call a public facade or nest transactions.
+
+Comparison covers Card/body revisions, every consulted binding identity/revision/absence, winning target, immutable version identity and availability. Any difference fails currentness. Same-version re-adoption still changes the binding revision; adopting v2 and later restoring v1 cannot erase the mismatch.
+
+This detects a project binding appearing above a consulted personal binding, changed wildcard precedence, disable, absence, package/version deletion and revoked access. Disabled or unavailable winners remain barriers; no fallback is introduced.
+
+Required integrations are:
+
+- Card detail, support and applicability;
+- exact-namespace evidence selection/fetch/revalidation;
+- §13 candidate eligibility, sidecar reconciliation and candidate-page delivery;
+- §15 preparation, final validation, full-ref/compact-ref/snapshot fetch;
+- §17 relation endpoints, seeds, witnesses and MOC members/title sources;
+- §18 related-Card checks, evidence preparation and final delivery;
+- Card organization/title reads wherever currentness matters.
+
+Existing source support and revision-bound applicability remain separate requirements. A dependency match cannot repair invalid support. Organization’s support-only predicate must not allow a declared stale Card to validate a current title or membership.
+
+For declared Cards, add a bounded `support.currentDependency` projection containing dependency revision, declaration context, `status:'current'|'needs-review'`, reasons, described version and readable current version per dependency. `needs-review` is an effective currentness result, **not a new Card lifecycle state**. Current eligibility fails; history may return qualified authored content. Include this projection in canonical item fences and existing metering.
+
+Reason codes are:
+
+| Code | Meaning |
+| --- | --- |
+| `binding_changed` | Consulted identity/revision, winner, target or dependent Card/body revision differs |
+| `binding_absent_now` | Required resolution now has no binding |
+| `binding_disabled` | Winning binding is disabled |
+| `version_deleted` | Described or required target/package is deleted |
+| `access_revoked` | Required access cannot be established |
+
+Return all applicable authorized reasons deterministically. Expose no denied target metadata or foreign counts. An insufficient authorized read set cannot establish currentness and must not trigger an unauthorized lookup. Revocation during an authorized operation retains existing `scope_changed` precedence.
+
+Pre-preparation ineligibility produces existing omission/unavailability behavior. Preparation-to-final changes produce the existing `snapshot_stale`/`cursor_stale` outcomes; independent fetches preserve §§13/15.8 eligibility and error precedence.
+
+**Correctness never depends on writer callbacks, effect consumption or cleanup.** Feature-off writers need no invalidation hook. Reads do not persist `needs-review`.
+
+### 19.4 Freshness, transactions and bounds
+
+Card epochs alone are insufficient: method adoption does not advance them. Dependency-aware sidecar publication, cached rankings and organization continuations must also observe authorized U2 method/binding/lifecycle fences and dependency revisions. A legacy freshness stamp cannot authenticate a dependency-aware projection.
+
+A changed fence requires bounded canonical comparison before statistics, ranking or publication. Until reconciliation completes, retain existing rebuilding/unavailable behavior; filtering stale Cards only after ranking is insufficient. Rebuild and restart always consult canonical dependencies.
+
+- Per examined Card: one indexed dependency-record lookup, at most 16 U2 resolutions and **64 binding-level probes per comparison pass**.
+- For `C` examined Cards over `P` passes, dependency-record plus binding probes are bounded by `P × C × 65`. Lifecycle, identity, manifest and existing source-support reads are additional, explicitly charged work.
+- Each U2 resolution retains its existing metadata verification, including at most 256 manifest entries and applicable U4 ownership checks. Never read method bodies merely to assess currentness.
+- Memoization is transaction-local. Charge repeated passes, returned metadata bytes and every support/target lookup. Charge optional-source checks under §17’s work/state limits; sidecar work uses §13 maintenance budgets. All work shares the enclosing §13/§15/§18 deadline.
+- Check deadlines between bounded operations; exhaustion cannot produce a positive currentness result or complete-coverage claim. Existing token, envelope, horizon and admitted-item limits remain unchanged.
+
+Read-only and managed paths perform no cleanup or migration. Preserve §14 transaction discipline and existing Card transaction ownership; no host callbacks or awaits occur inside canonical transactions. No counter, callback or await follows authoritative final validation.
+
+### 19.5 Revalidation and history
+
+Revalidation requires explicit review of the exact Card and fresh resolution snapshots. In one write transaction, verify Card CAS, dependency CAS, reviewed resolution, current source fences and confirmed state, then replace the recorded observations and increment dependency revision.
+
+Standalone declaration/revalidation leaves Card revision, body revision and text unchanged, advances the Card epoch and records a content-free operation outcome. Confirmation-time declaration binds the post-confirmation revision. Successful revalidation removes only the dependency gate; existing support/applicability still determines current eligibility.
+
+Edits never silently clear or refresh declarations. To correct the finance Card for v2, explicitly edit/confirm its authored content through existing Card authority, then revalidate that exact revision. A user may also explicitly attest unchanged content after reviewing it; core makes no semantic accuracy judgment.
+
+Apply §7 authorization, replay-before-mutable-checks and `action_conflict` rules. Changed Card, dependency or reviewed resolution refuses atomically with `revision_conflict`.
+
+A stale Card remains readable as qualified history, identifying its described version and readable current version. A historical-fact Card pinned to an old version, with no current declaration, is unaffected by later adoption.
+
+Existing Card edits overwrite authored bodies; this packet adds no body archive. §18 receipts retain their existing identity/fence rules and may omit evidence whose fence changed; they cannot recover an overwritten Card revision. Deleted versions and revoked sources remain unavailable under §§6/18. No dependency, receipt, cache or rebuild reconstructs purged content.
+
+### 19.6 Canonical v33 and migration
+
+Allocate **v33**; do not modify frozen v32 definitions.
+
+Install a STRICT `card_current_dependencies` table keyed by Card ID, with exact namespace, positive dependency/Card/body revisions, normalized context and bounded canonical reference vector. Require a confirmed parent at admission. Index namespace/Card lookup.
+
+CHECKs and guards enforce closed shapes, package/version agreement, distinct dependencies, the 16-package limit and valid consulted prefixes. UPDATE preserves identity and rowid and advances dependency revision exactly once. BEFORE INSERT guards cover **every unique key and hidden rowid**, including `INSERT OR REPLACE` with `recursive_triggers=0`. DELETE is permitted only through terminal Card purge.
+
+Card deletion/cancellation purges dependencies in the same transaction, including feature-off deletion. Preserve existing Card tombstones and source/forget fences; prevent terminal-parent replacement or reactivation from recreating dependencies. Source forget retains confirmed authored bodies where existing rules allow, while revision/support mismatch blocks current use.
+
+Follow §12.1’s explicit ordinary-writer chain: prerequisites → v30 → v31 → frozen v32 → v33, in one rollback-safe transaction. Support fresh and supported populated v18/v20–v32 stores; refuse v19. Install prerequisite schemas without enabling features. Roll back identity, data, DDL and `user_version` together.
+
+Add `schema33-existing-v1`. Readers/managed openers validate only. Validate complete prerequisites and v30–v33 independently of capability flags; reject premature, partial or altered dependency layouts without repair. Update every v32 opener, allowlist, asset-selected managed check, setup/preflight/permission gate and setup wording. Preserve older existing-store option semantics and exact asset-trigger validation.
+
+### 19.7 MCP and ownership
+
+Opted-in MCP exposes declaration/revalidation entries that always refuse `approval_required`, like Card confirmation. Extend the independent local `review-card` terminal workflow to inspect confirmed Cards, display declaration context, old/current resolutions and both expected revisions, and approve the complete operation. Re-read after interaction and verify reviewed resolution during commit. No tool claim, `--yes`, environment switch or protocol stdin supplies approval.
+
+Worker-owned new modules: `core/card-current-{input,schema,storage,facade}.mjs`, `adapters/mcp/card-current-{configuration,tools}.mjs`, plus dedicated tests/fixtures.
+
+Coordinator-owned integration candidates, **38 existing paths**, independently matched through `rg --files` and filesystem enumeration with zero differences:
+
+- `core/{database,existing-store,read-database,runtime,contract,index,context-reader,asset-schema}.mjs`
+- `core/private-card-{input,facade,schema,storage}.mjs`
+- `core/private-evidence-{schema,storage}.mjs`, `core/private-organization-storage.mjs`
+- `core/method-{package,binding}-storage.mjs`
+- `core/role-context-{facade,evidence}.mjs`, `core/context-read-{facade,sidecar}.mjs`
+- `adapters/local/configuration.mjs`, `adapters/mcp/{cli,server,private-card-access,review-card}.mjs`
+- `integrations/client/raw/local-{setup,setup-cli,host-permission}.mjs`
+- `docs/{architecture,context-read-local,install-artifact,limitations,local-store}.md`, this contract
+- `package.json`, `packaging/artifact-files.json`, `CHANGELOG.md`
+
+Keep accepted Card/evidence edits minimal and delimited. Coordinate §17 seams without editing its frozen contract. Preserve SQLite-free CLI linking, explicit shipped closure and other owners’ tests.
+
+### 19.8 Acceptance
+
+Requirements, not executed results. Use synthetic fixtures, real child processes, installed tgz entries and **Node 22.16.0/24.15.0**, under the machine-wide queue.
+
+| ID | Observable |
+| --- | --- |
+| C11 | Finance flow: confirmed “finance monthly report uses v1” declares its dependency. Importing unadopted v2 preserves currentness. Adoption/restart makes it `needs-review` in every listed path; history identifies v1/current v2. Explicit edited-Card confirmation plus revalidation restores current eligibility |
+| C12 | Feature-off writer adoption/disable yields `needs-review` without effect draining. Test a later project binding over consulted personal resolution, same-version re-adoption and v1→v2→v1. Frozen-old-binary adoption requirement remains subject to Objection 1 |
+| C13 | Package/version deletion, required-source correction/forget/exclusion and revocation never deliver stale current evidence or reconstruct unavailable content. Restart, reconciliation and full sidecar rebuild cannot resurrect currentness |
+| C14 | Rendezvoused child-process races: two revalidations against identical expectations produce one winner; binding changes after inspection, Card edits, deletion and dependency replacement refuse stale commits. Exact replay remains content-free and idempotent |
+| C15 | Card deletion purges dependency rows atomically with authoring disabled. Exercise every unique-key/rowid replacement attack, terminal-parent resurrection and rollback with `recursive_triggers=0` |
+| C16 | Migration/opener matrix, failure injection, untouched v32 definitions, complete validation, read-only no-file-creation behavior and unsupported-layout refusals |
+| C17 | Frozen legacy control verifies bytes without opt-in/declarations. MCP approval refusal, terminal review, closed schemas, scope restrictions, reason redaction, historical qualification and unchanged authority classes |
+| C18 | Independently instrument lookup/work/state bounds and recount token/envelope sizes. Race candidate continuations, organization titles, assembly counting and role reads; verify final-validation ordering |
+| C19 | Independently derive import closure/manifest and enumerate tgz entries; diff and print counts. Cross-check changed paths through git diff and tree/blob comparison. Run the primary’s CI-equivalent matrix, including SQLite-free import checks; report actual exit codes |
+
+Put timing/contention gates in `measure:card-current-dependencies`, invoked by CI `extra`, never `test:core`, `test:mcp` or `test:artifact` (TRAPS 12). Follow §16 paced gates and labelled unpaced stress. Observe dependency-count distributions, lookup totals, rescan cost, p50/p95 and event-loop delay; claim no latency improvement.
+
+**Non-claims:** Memory dependencies; generated summaries; E1/MOC summary compilation or freshness; role-profile releases depending on bindings; automatic Card rewriting; semantic accuracy, answer quality or retrieval-quality improvement.
+
+**Primary notes (author objections accepted):** (1) A frozen pre-v33 binary cannot open a v33 store (`core/database.mjs:410`, `core/existing-store.mjs:87`), so "an old binary performs the adoption" is not a reachable case. Acceptance instead proves that the old binary refuses v33, and that a **new-binary feature-off writer** performing the adoption still yields `needs-review`. Mixed-version writers must be stopped before upgrading (§18.4). (2) Byte identity without opt-in holds for stores that contain **no dependency declarations**. When declarations exist, every current read path applies the comparison regardless of the reader's opt-in, because correctness may not depend on configuration.
