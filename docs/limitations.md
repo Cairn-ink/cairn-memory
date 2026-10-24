@@ -1542,3 +1542,32 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Evaluation-only MOC hierarchy candidates
+
+The bounded `generateMocCandidates` experiment navigates existing public
+L2→L1→memory maps and returns candidate references plus observed paths. It does
+not fetch, rank, finalize, answer, replace default recall or implement an
+integrated fallback. Every result declares `finalRetrieval:false`,
+`fallbackRequired:true`, `snapshotGuarantee:'per-call-not-atomic'` and
+`semanticCoverage:'unassessed'`. Namespace epoch checks catch observed drift;
+even matching final root observations cannot reproduce the core's private
+atomic recall finalization. A change after a namespace's last read can race it.
+
+Public root maps mix L1 headers, memory refs, L2 groups, edges and unfiled refs.
+Two fixed root pages can end before any L2 is visible. Two bounded child pages
+can omit a header/edge join; one six-row leaf page can omit required memories.
+Orphan L1, unfiled, cross-topic and unvisited evidence may remain inaccessible.
+Empty candidate sets do not establish absence or complete recall. Titles and
+placement are untrusted navigation hints, not truth, adoption, permission or
+current-state proof.
+
+Offline input-only scripted capture/classification verifies actual filing,
+source receipts, greater-than-36 eligible refs, traversal and bounded failure
+behavior. Disabling group selection is a mechanics red control, not a comparison
+against existing flat recall or evidence of real-model quality. Synthetic token
+counters do not measure actual provider tokens or costs. See the prospective
+[H1–H5 contract and execution record](plans/moc-hierarchy-candidates.md).
+An independently frozen real-model opportunity probe, a shared internal
+candidate-strategy seam with existing finalization and bounded fallback, and
+fresh paired acceptance remain required before any paid quality comparison.
