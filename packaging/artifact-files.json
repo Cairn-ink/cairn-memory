@@ -270,5 +270,8 @@
   "adapters/local-embedder/runtime.mjs",
   "adapters/local-embedder/supervisor.mjs",
   "adapters/local-embedder/publish.mjs",
-  "adapters/local-embedder/publish.c"
+  "adapters/local-embedder/publish.c",
+  "adapters/mcp/model-command.mjs",
+  "core/context-read-local-status.mjs",
+  "docs/local-embedder-bge-m3.md"
 ]

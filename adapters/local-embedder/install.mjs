@@ -5,7 +5,7 @@ import { createReadStream } from 'node:fs';
 import { createGunzip } from 'node:zlib';
 import { RELEASE_CATALOG } from './catalog.mjs';
 import { absolutePath, fail, canonical, HASH, MODEL, refusal, relativePath } from './common.mjs';
-import { PUBLISHER_PATH, publishPackNoReplace } from './publish.mjs';
+import { publisherArtifact, publishPackNoReplace } from './publish.mjs';
 import { parseManifest, verifyPack } from './pack.mjs';
 
 const directoryId = s => canonical({ dev: String(s.dev), ino: String(s.ino) });
@@ -62,7 +62,7 @@ async function transfer(d, path, source, signal, clock) {
 }
 async function writeArtifact(root, path, chunks, expected) {
   await mkdir(dirname(join(root, path)), { recursive: true, mode: 0o700 });
-  const h = await open(join(root, path), 'wx', path === PUBLISHER_PATH && expected.role === 'native' ? 0o700 : 0o600), hash = createHash('sha256'); let bytes = 0;
+  const h = await open(join(root, path), 'wx', publisherArtifact(path, expected.role) ? 0o700 : 0o600), hash = createHash('sha256'); let bytes = 0;
   try {
     for await (const chunk of chunks) { bytes += chunk.length; if (bytes > expected.bytes) fail('model_pack_integrity'); hash.update(chunk); await h.writeFile(chunk); }
     if (bytes !== expected.bytes || hash.digest('hex') !== expected.sha256) fail('model_pack_integrity'); await h.sync();
@@ -101,7 +101,7 @@ async function extract(d, archive, root, manifest) {
         seen.add(name); const bytes = parseInt(sizeText, 8), expected = inventory.get(name);
         if (!Number.isSafeInteger(bytes) || bytes !== expected.bytes) fail('model_pack_integrity');
         if (bytes === 0) { await writeArtifact(root, name, [], expected); continue; }
-        await mkdir(dirname(join(root, name)), { recursive: true, mode: 0o700 }); handle = await open(join(root, name), 'wx', name === PUBLISHER_PATH && expected.role === 'native' ? 0o700 : 0o600);
+        await mkdir(dirname(join(root, name)), { recursive: true, mode: 0o700 }); handle = await open(join(root, name), 'wx', publisherArtifact(name, expected.role) ? 0o700 : 0o600);
         current = { remaining: bytes, expected }; padding = (512 - bytes % 512) % 512; hash = createHash('sha256'); count = 0;
       }
     }

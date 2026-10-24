@@ -9,6 +9,20 @@ permissions:
   contents: read
 
 jobs:
+  local-embedder-offline:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['22.16.0', '24.15.0']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ matrix.node-version }}
+      # Builtins and tiny fixtures only; cc builds the publication utility fixture.
+      # No model, inference package, key, installer or network artifact source.
+      - run: npm run test:local-embedder
+
   windows-preview:
     runs-on: windows-latest
     strategy:

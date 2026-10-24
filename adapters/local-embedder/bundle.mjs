@@ -1,3 +1,6 @@
+// Runners are discoverable at link time; their entry guards perform no work.
+import './supervisor.mjs';
+import './child.mjs';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
@@ -12,9 +15,10 @@ const fatalErrors = new Set(['model_pack_integrity', 'model_runtime_unavailable'
 export async function startBundle(pack, threads, {
   spawn = () => spawnNode(fileURLToPath(new URL('./supervisor.mjs', import.meta.url)), [pack.packPath], { stdio: ['pipe', 'pipe', 'pipe', 'pipe'], threads }),
   now = () => performance.now(), setTimer = setTimeout, clearTimer = clearTimeout, fence = () => checkFence(pack.packPath, pack.fence),
+  onRegistration = () => {},
   terminate = async (child, pid, closed) => { if (!child.stdin.writableEnded) child.stdin.end(); if (pid) await reapGroup(pid, () => true); await closed; }, initializationMs = 120000
 } = {}) {
-  let processHandle, processClosed = false, group, state = Object.freeze({ state: 'unavailable', reason: 'model_runtime_unavailable' }), pending, dead = false, ready = false, closing, registered = false, sequence = 0, checking = false, preparing = false;
+  let processHandle, processClosed = false, group, state = Object.freeze({ state: 'unavailable', reason: 'model_runtime_unavailable' }), pending, dead = false, ready = false, closing, registered = false, sequence = 0, lastTokenCount = null, checking = false, preparing = false;
   const session = randomBytes(16).toString('hex');
   let resolveExit, resolveReady, rejectReady;
   const exited = new Promise(resolve => { resolveExit = resolve; });
@@ -77,7 +81,7 @@ export async function startBundle(pack, threads, {
       if (dead || pending !== current) return;
       if (current.signal?.aborted || now() >= current.deadline) { poison('timeout'); return; }
       pending = null;
-      if (value.op === 'error') current.reject(refusal(value.code)); else current.resolve(value.vectors);
+      if (value.op === 'error') current.reject(refusal(value.code)); else { lastTokenCount = value.tokenCounts[0]; current.resolve(value.vectors); }
     }).catch(() => poison('model_pack_integrity'));
   };
   const decoderOut = decoder(OUTPUT_BYTES, accept, poison);
@@ -85,6 +89,7 @@ export async function startBundle(pack, threads, {
     shape(value, 'registered', ['pid']);
     if (registered || !Number.isSafeInteger(value.pid) || value.pid < 2 || value.pid === process.pid || value.pid === processHandle.pid) fail('protocol_error');
     registered = true; group = value.pid;
+    onRegistration({ supervisorPid: processHandle.pid, inferencePid: group });
     const bytes = frame({ v: VERSION, op: 'init', manifestHash: pack.manifestHash, threads, verificationFence: pack.fence }, INPUT_BYTES);
     processHandle.stdin.write(bytes);
   }, poison);
@@ -149,6 +154,7 @@ export async function startBundle(pack, threads, {
       } else await cleanup();
     },
     // Bounded diagnostic categories only; raw stderr is never exported.
-    diagnostics: () => Object.freeze({ stderrBytes: stderr?.bytes ?? 0, exited: processClosed })
+    whenClosed: () => exited,
+    diagnostics: () => Object.freeze({ stderrBytes: stderr?.bytes ?? 0, exited: processClosed, lastTokenCount })
   };
 }

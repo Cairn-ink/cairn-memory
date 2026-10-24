@@ -1,9 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import { createReadStream } from 'node:fs';
-import { decoder, INPUT_BYTES, OUTPUT_BYTES, shape, writeFrame } from './protocol.mjs';
+import { decoder, INPUT_BYTES, OUTPUT_BYTES, shape, writeFrame, nextRequestId } from './protocol.mjs';
 import { VERSION, fail } from './common.mjs';
 import { checkFence } from './pack.mjs';
 import { loadRuntime, resolutionGuard } from './runtime.mjs';
-const root = process.argv[2];
+export function runInferenceChild(root = process.argv[2]) {
 let pack, runtime, guard, busy = false, initialized = false, dead = false, session = null, previous = 0;
 async function stop() {
   if (dead) return; dead = true; input.stop();
@@ -34,7 +35,7 @@ async function accept(value) {
       await writeFrame(process.stdout, { v: VERSION, op: 'ready', manifestHash: value.manifestHash, dimensions: 1024, normalization: 'l2' }, OUTPUT_BYTES);
     } else {
       shape(value, 'embed', ['session', 'id', 'texts']);
-      if (busy || !/^[a-f0-9]{32}$/.test(value.session) || session !== null && session !== value.session || !Number.isSafeInteger(value.id) || value.id !== previous + 1) fail('protocol_error');
+      if (busy || !/^[a-f0-9]{32}$/.test(value.session) || session !== null && session !== value.session || !nextRequestId(value.id, previous)) fail('protocol_error');
       busy = true; session = value.session; previous = value.id;
       try {
         const result = await runtime.embed(value.texts); guard.assert(); await checkFence(root, pack.fence); guard.assert();
@@ -57,3 +58,6 @@ process.stdin.on('data', chunk => input.push(chunk)); process.stdin.on('end', ()
 // Pre-init supervisor death cannot leave a native process behind. Once native
 // work starts, the registered live parent or independent supervisor kills it.
 const lifeline = createReadStream('', { fd: 3 }); lifeline.on('end', () => stop()); lifeline.on('error', () => stop()); lifeline.resume();
+
+}
+if (process.argv[1] === fileURLToPath(import.meta.url)) runInferenceChild();

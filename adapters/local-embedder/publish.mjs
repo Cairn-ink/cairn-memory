@@ -4,18 +4,24 @@ import { basename, dirname, join } from 'node:path';
 import { checkFence } from './pack.mjs';
 import { childEnvironment } from './process.mjs';
 import { fail } from './common.mjs';
-export const PUBLISHER_PATH = 'runtime/cairn-publish';
+export function publisherPath(target) {
+  const tuple = [target?.os, target?.arch, target?.libc ?? 'none'];
+  if (tuple.some(part => typeof part !== 'string' || !/^[a-z0-9_-]+$/.test(part))) fail('model_pack_unavailable');
+  return 'runtime/publish/' + tuple.join('-') + '/cairn-publish';
+}
+export const publisherArtifact = (path, role) => role === 'native' && /^runtime\/publish\/[a-z0-9_-]+\/cairn-publish$/.test(path);
 // The installer never compiles, searches PATH or runs an arbitrary pack entry.
 // This fixed release-owned helper is part of the approved native inventory.
 export async function publishPackNoReplace(stage, target, verified) {
-  if (!verified || verified.packPath !== stage || !verified.fence.selectedNativeFiles.includes(PUBLISHER_PATH) ||
-      !verified.manifest.files.some(f => f.path === PUBLISHER_PATH && f.role === 'native') ||
+  const selectedPublisher = publisherPath(verified?.fence?.target);
+  if (!verified || verified.packPath !== stage || !verified.fence.selectedNativeFiles.includes(selectedPublisher) ||
+      !verified.manifest.files.some(f => f.path === selectedPublisher && f.role === 'native') ||
       !verified.manifest.licenses.some(l => l.component === 'cairn-publish' && l.version === verified.manifest.packVersion && l.spdx === 'Apache-2.0' && l.evidencePaths.includes('licenses/cairn-publish.c'))) fail('model_pack_unavailable');
   await checkFence(stage, verified.fence);
   const parentPath = dirname(stage);
   if (dirname(target) !== parentPath) fail('model_pack_unavailable');
   const parent = verified.fence.directories.find(d => d.path === parentPath), source = verified.fence.directories.find(d => d.path === stage);
-  const helper = join(stage, PUBLISHER_PATH), s = await lstat(helper);
+  const helper = join(stage, selectedPublisher), s = await lstat(helper);
   if (!parent || !source || (s.mode & 0o111) === 0) fail('model_pack_unavailable');
   let child;
   try {

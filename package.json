@@ -71,6 +71,8 @@
     "measure:method-packages": "node tools/testing/run.mjs --script tools/testing/measure-method-packages.mjs",
     "measure:assets": "node tools/testing/run.mjs --script tools/testing/measure-assets.mjs",
     "measure:role-profiles": "node tools/testing/run.mjs --script tools/testing/measure-role-profiles.mjs",
-    "measure:card-current-dependencies": "node tools/testing/run.mjs --script tools/testing/measure-card-current-dependencies.mjs"
+    "measure:card-current-dependencies": "node tools/testing/run.mjs --script tools/testing/measure-card-current-dependencies.mjs",
+    "measure:local-embedder": "node tools/testing/run.mjs --script tools/testing/measure-local-embedder.mjs",
+    "test:local-embedder": "node tools/testing/run.mjs adapters/local-embedder/test/*.test.mjs"
   }
 }

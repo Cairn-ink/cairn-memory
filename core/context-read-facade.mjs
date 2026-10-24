@@ -1,3 +1,4 @@
+import { sampleLocalStatus } from './context-read-local-status.mjs';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -234,6 +235,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       semantic: semanticUsed ? Math.max(0, preflight.eligible - depth) : null, horizon: Math.max(0, unionSize - 24) };
     return value;
   }
+  function sampleTrace(value) {
+    if (options.localStatus) value.localEmbedder = sampleLocalStatus(options.localStatus);
+  }
   function trace(input) {
     return { requested: input.semantic ? 'hybrid' : 'lexical', effective: 'lexical', ...configuration,
       timings: { maintenanceMs: 0, lexicalMs: 0, semanticPreflightMs: 0, embeddingMs: 0, fusionMs: 0 } };
@@ -285,6 +289,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     fail('context_item_too_large');
   }
   function continuation(input, access) {
+    if (options.localStatus) sampleLocalStatus(options.localStatus);
     const token = decode('cursor', input.cursor, 8192, 'invalid_cursor');
     try {
       ownData(token, ['v', 'r', 'b', 'c', 'a', 'g', 'e', 'p']);
@@ -302,8 +307,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     try {
       const current = lease.storage.state(projection);
       if (!current.ready || stateBinding(current) !== ranking.index) fail('cursor_stale');
+      const finalRanking = options.localStatus ? { ...ranking, trace: { ...ranking.trace, localEmbedder: sampleLocalStatus(options.localStatus) } } : ranking;
       access.check(); lease.storage.assertState(projection, current);
-      return deliverPage(input, ranking, token.p, input.limit);
+      return deliverPage(input, finalRanking, token.p, input.limit);
     } catch (error) { lease.invalidate(error); throw error; }
     finally { lease.release(); }
   }
@@ -312,6 +318,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     try {
       diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(input.semantic ? options.embedder ? 'unavailable' : 'absent' : 'disabled',
         !input.semantic && !options.embedder ? ['disabled', 'absent'] : undefined) }, coverage: unknownCoverage(input), trace: trace(input) };
+      sampleTrace(diagnostics.trace);
       if (options.sources) diagnostics.trace.sources = Object.fromEntries(options.sources.map(id => {
         const reason = !input.sources.includes(id) ? 'disabled' : id === 'relations-one-hop-v1' && input.intent === 'history' ? 'unsupported_intent' : 'index_unavailable';
         return [id, id === 'moc-v1' ? mocDiagnostic(reason) : relationDiagnostic(reason)];
@@ -414,6 +421,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       }
       if (sourceState) diagnostics.coverage.stops.deadline ||= Object.values(diagnostics.trace.sources).some(source => source.reasons.includes('deadline'));
       if (internal) {
+        sampleTrace(diagnostics.trace);
         access.check(); storage.assertState(projection, current);
         const horizon = deepFreeze({ items: candidateItems, ...diagnostics });
         return { ok: true, horizon, ...(sourceState ? { sourceState } : {}), check() {
@@ -425,6 +433,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           finally { resumed.release(); }
         } };
       }
+      sampleTrace(diagnostics.trace);
       const ranking = deepFreeze({ id: randomUUID(), expires: Date.now() + 300000, request: requestBinding(input),
         configuration: rankingConfiguration(diagnostics.trace, sourceState, candidateItems), access: accessBinding(access),
         index: stateBinding(current), items: candidateItems,
@@ -441,6 +450,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       storage.assertState(projection, current);
       return success(deliverPage(input, ranking, 0, input.limit));
     } catch (error) {
+      if (diagnostics && !['scope_changed', 'authority_required', 'store_closed'].includes(error.code)) sampleTrace(diagnostics.trace);
       lease?.invalidate(error);
       if (diagnostics && (error.code === 'index_unavailable' || error.reason === 'timeout')) {
         diagnostics.coverage.maintenance.reason ??= maintenanceReasons.get(error.reason) ?? null;
@@ -469,6 +479,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const { payload, input } = contextInput('refreshContextIndex', original, supportedTypes), access = authorize('refreshContextIndex', input, payload, token);
       diagnostics = { channels: { lexical: channel('unavailable'), semantic: channel(options.embedder ? 'unavailable' : 'absent') },
         coverage: unknownCoverage(input), trace: trace({ semantic: Boolean(options.embedder) }) };
+      sampleTrace(diagnostics.trace);
       if (options.embedder && !dispatch) { diagnostics.channels.semantic = channel('budget_denied'); fail('invalid_input'); }
       deadlineAt = performance.now() + input.budget.maxMs; const projection = selected(input, access);
       lease = acquireSidecar(projection, access); const storage = lease.storage;
@@ -481,8 +492,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       maintenanceCoverage(diagnostics.coverage, maintenance, { deadlineAt, maxItems: input.budget.maxItems });
       if (!current.ready) {
         diagnostics.coverage.maintenance.progress = maintenance.progress;
+        sampleTrace(diagnostics.trace); access.check();
         return success({ status: 'rebuilding', progress: { lexical: maintenance.progress, transformed: maintenance.metrics.transformed,
-          embeddingAttempts: 0, embedded: 0 }, coverage: diagnostics.coverage, channels: diagnostics.channels });
+          embeddingAttempts: 0, embedded: 0 }, coverage: diagnostics.coverage, channels: diagnostics.channels,
+          ...(options.localStatus ? { trace: { localEmbedder: diagnostics.trace.localEmbedder } } : {}) });
       }
       diagnostics.channels.lexical = channel('ready');
       if (options.embedder) {
@@ -503,6 +516,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
           diagnostics.channels.semantic = channel(preflight.state);
         } catch (error) { diagnostics.channels.semantic = degradation(error); }
       }
+      sampleTrace(diagnostics.trace);
       access.check(); current = storage.state(projection);
       if (!current.ready) fail('index_unavailable');
       diagnostics.coverage = coverage(input, current, preflight, 'lexical', 0, 0, maintenance);
@@ -510,8 +524,10 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         budget: maintenance.metrics.transformed + vectorProgress.attempted >= input.budget.maxItems || diagnostics.channels.semantic.causes.includes('budget_denied') };
       return success({ status: !options.embedder || diagnostics.channels.semantic.state === 'ready' ? 'complete' : 'partial',
         progress: { lexical: maintenance.progress, transformed: maintenance.metrics.transformed,
-          embeddingAttempts: vectorProgress.attempted, embedded: vectorProgress.embedded }, coverage: diagnostics.coverage, channels: diagnostics.channels });
+          embeddingAttempts: vectorProgress.attempted, embedded: vectorProgress.embedded }, coverage: diagnostics.coverage, channels: diagnostics.channels,
+          ...(options.localStatus ? { trace: { localEmbedder: diagnostics.trace.localEmbedder } } : {}) });
     } catch (error) {
+      if (diagnostics && !['scope_changed', 'authority_required', 'store_closed'].includes(error.code)) sampleTrace(diagnostics.trace);
       lease?.invalidate(error);
       if (diagnostics && deadlineAt !== undefined) diagnostics.coverage.stops.deadline ||= performance.now() >= deadlineAt;
       if (diagnostics) diagnostics.coverage.maintenance.reason ??= maintenanceReasons.get(error.reason) ?? null;
@@ -614,7 +630,8 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         diagnostics.trace.finalDependencyValidationReserve = { records: declared.length,
           resolutions, bindingProbes: 4 * resolutions, manifestRows: 256 * resolutions };
       }
-      diagnostics.candidates = { count: candidates.items.length, channels: candidates.channels, coverage: candidates.coverage, trace: candidates.trace };
+      const candidateTrace = options.localStatus ? { ...candidates.trace, localEmbedder: sampleLocalStatus(options.localStatus) } : candidates.trace;
+      diagnostics.candidates = { count: candidates.items.length, channels: candidates.channels, coverage: candidates.coverage, trace: candidateTrace };
       diagnostics.stops.deadline ||= deadline;
       access.check();
       diagnostics.stops.deadline ||= performance.now() >= deadlineAt;
@@ -641,8 +658,9 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         return result;
       });
     } catch (error) {
+      const finalTrace = candidates && error.code === 'index_unavailable' && options.localStatus ? { ...candidates.trace, localEmbedder: sampleLocalStatus(options.localStatus) } : candidates?.trace;
       return failure(error, candidates && error.code === 'index_unavailable' ? { candidates: {
-        channels: candidates.channels, coverage: candidates.coverage, trace: candidates.trace } } : undefined);
+        channels: candidates.channels, coverage: candidates.coverage, trace: finalTrace } } : undefined);
     }
   }
   function fetchCandidateEvidence(original, token) {

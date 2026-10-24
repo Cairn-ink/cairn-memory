@@ -2,6 +2,7 @@ import { once } from 'node:events';
 import { strictJSON, fail, VERSION, closed } from './common.mjs';
 export const INPUT_BYTES = 8388608;
 export const OUTPUT_BYTES = 65536;
+export const nextRequestId = (id, previous) => Number.isSafeInteger(id) && id > previous;
 export function frame(value, maximum) {
   const payload = Buffer.from(JSON.stringify(value));
   if (!payload.length || payload.length > maximum) fail('context_item_too_large');

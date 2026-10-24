@@ -1,5 +1,5 @@
 /* Release-build input, Apache-2.0. Never compiled by the installer. The release
- * catalog must bind the resulting runtime/cairn-publish binary and this source.
+ * catalog must bind the resulting runtime/publish/<os>-<arch>-<libc>/cairn-publish binary and this source.
  * Exit 0: published; 2: destination/fence conflict; 3: unavailable. No output. */
 #define _GNU_SOURCE
 #define _DARWIN_C_SOURCE
