@@ -1,3 +1,5 @@
+import { assertNoCardCurrentDependencies } from '../../../core/card-current-schema.mjs';
+import { assertNoRoleProfiles } from '../../../core/role-profile-schema.mjs';
 import { assertNoAssets } from '../../../core/asset-schema.mjs';
 import { validateExistingStore } from '../../../core/existing-store.mjs';
 import { checkedPath } from '../private-state.mjs';
@@ -19,13 +21,15 @@ async function databaseSnapshot(config,inspect) {
     await checkedPath(config.usage.root,{ directory:true });
     const before = await checkedPath(config.databasePath);
     db = new DatabaseSync(config.databasePath,{ readOnly:true });
+    if (db.prepare('PRAGMA user_version').get().user_version < 33) assertNoCardCurrentDependencies(db);
+    if (db.prepare('PRAGMA user_version').get().user_version < 32) assertNoRoleProfiles(db);
     if (db.prepare('PRAGMA user_version').get().user_version < 31) assertNoAssets(db);
     if (db.prepare('PRAGMA user_version').get().user_version >= 30) validateExistingStore(db, { storeId: config.authority.storeId });
     const after = await checkedPath(config.databasePath);
     if (before.dev !== after.dev || before.ino !== after.ino) fail('store_invalid');
     db.exec('BEGIN');
     if (db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
-        ![29,30,31].includes(db.prepare('PRAGMA user_version').get().user_version) ||
+        ![29,30,31,32,33].includes(db.prepare('PRAGMA user_version').get().user_version) ||
         db.prepare('SELECT store_id FROM store_metadata WHERE singleton=1').get()?.store_id !== config.authority.storeId ||
         db.prepare('SELECT 1 FROM raw_owner_usage WHERE owner_id=? AND cap_bytes!=?').get(config.authority.namespace.ownerId,config.raw.capBytes))
       fail('store_invalid');

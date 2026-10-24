@@ -1,3 +1,4 @@
+import { createCardCurrentStorage } from './card-current-storage.mjs';
 import { randomUUID } from 'node:crypto';
 import { createMethodBindingStorage } from './method-binding-storage.mjs';
 import { createMethodAttachmentStorage } from './method-attachment-storage.mjs';
@@ -29,30 +30,32 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
     db.prepare(`INSERT INTO method_epochs VALUES(?,?,?,2) ON CONFLICT(owner_id,scope,project_id)
       DO UPDATE SET generation=generation+1`).run(...boundary(ns));
   }
-  const packageRow = (ns, id) => db.prepare(`SELECT * FROM method_packages WHERE ${where} AND id=?`).get(...boundary(ns), id);
-  const versionRow = (packageId, id) => db.prepare('SELECT * FROM method_versions WHERE package_id=? AND id=?').get(packageId, id);
+  // Internal optional-read guard; ordinary U2 callers pass no check.
+  const query = (sql, check) => { check?.(); return db.prepare(sql); };
+  const packageRow = (ns, id, check) => query(`SELECT * FROM method_packages WHERE ${where} AND id=?`, check).get(...boundary(ns), id);
+  const versionRow = (packageId, id, check) => query('SELECT * FROM method_versions WHERE package_id=? AND id=?', check).get(packageId, id);
   const packageRef = (ns, id) => ({ type: 'method-package', namespace: ns, packageId: id });
   const versionRef = (ns, row) => ({ type: 'method-version', namespace: ns, packageId: row.package_id,
     versionId: row.id, manifestIdentity: row.manifest_identity });
   const fileColumns = 'version_id,position,path,byte_count,content_identity,media_type';
-  const fileRows = id => db.prepare('SELECT '+fileColumns+' FROM method_files WHERE version_id=? ORDER BY position').all(id);
+  const fileRows = (id, check) => query('SELECT '+fileColumns+' FROM method_files WHERE version_id=? ORDER BY position', check).all(id);
   const contentIdentity = (ns, text) => binding('method-file-content-v1', [ns, text]);
   const manifestIdentity = files => binding('method-manifest-v1', files.map(file => [file.path,file.contentIdentity,file.mediaType]));
   const manifest = rows => rows.map(row => ({ path: row.path, byteCount: row.byte_count,
     contentIdentity: row.content_identity, mediaType: row.media_type,...(row.kind?{kind:row.kind}:{}) }));
   const attachments=createMethodAttachmentStorage({db,identity,contentIdentity,enabled:db.prepare('PRAGMA user_version').get().user_version>=31});
-  function targetLifecycle(ns,inputRef) {
-    const ref = methodVersionRef(inputRef), pkg = packageRow(ns, ref.packageId);
-    const row = pkg && versionRow(pkg.id, ref.versionId);
+  function targetLifecycle(ns,inputRef,check) {
+    const ref = methodVersionRef(inputRef), pkg = packageRow(ns, ref.packageId, check);
+    const row = pkg && versionRow(pkg.id, ref.versionId, check);
     if (!sameNamespace(ns, ref.namespace) || !row) fail('method_not_found');
     if (row.manifest_identity !== ref.manifestIdentity) fail('method_version_unavailable');
     return {pkg,row,available:pkg.state==='available'&&row.state==='available'};
   }
-  function targetMetadata(ns, inputRef) {
-    const found=targetLifecycle(ns,inputRef),{pkg,row}=found;
+  function targetMetadata(ns, inputRef, check) {
+    const found=targetLifecycle(ns,inputRef,check),{pkg,row}=found;
     if(!found.available)return found;
-    const files = fileRows(row.id);
-    if(attachments.mixed(row.id))return {...found,files:attachments.metadata(ns,row,files),mixed:true};
+    const files = fileRows(row.id, check);
+    if(attachments.mixed(row.id,check))return {...found,files:attachments.metadata(ns,row,files,check),mixed:true};
     const ref=methodVersionRef(inputRef);
     if (manifestIdentity(manifest(files)) !== ref.manifestIdentity) fail('method_version_unavailable');
     return { pkg, row, files, available: true };
@@ -84,7 +87,7 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
         return Boolean(row && row.revision === ref.revision && !db.prepare('SELECT id FROM receipts WHERE memory_id=?').all(ref.memoryId).some(r => excludedReceipt(r.id)));
       }
       if (ref.type === 'card') {
-        const card = cardDetailInside(ns, ref.cardId);
+        const card = cardDetailInside(ns, ref.cardId, undefined, { historicalReason: true });
         return Boolean(card && card.state === 'confirmed' && card.revision === ref.revision &&
           card.bodyRevision === ref.bodyRevision && card.support.status === 'eligible' &&
           card.bindings.every(item => item.source.type !== 'receipt' || !excludedReceipt(item.source.receiptId)));
@@ -99,6 +102,14 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
         'raw_crypto_unavailable','revision_conflict'].includes(error.code)) return false;
       throw error;
     }
+  }
+  // Intent-specific gate: recorded reasonAvailable keeps its frozen provenance semantics.
+  function currentRoleRelatedAvailable(ns, ref, readSet) {
+    if (!reasonAvailable(ns, ref)) return false;
+    if (ref.type !== 'card') return true;
+    const card = db.prepare(`SELECT id,revision,body_revision FROM private_cards WHERE ${where} AND id=?`).get(...boundary(ns), ref.cardId);
+    const dependency = createCardCurrentStorage({ db, identity }).compare(ns, card, readSet);
+    return !dependency || dependency.status === 'current';
   }
   function metadata(ns, row) {
     return { ref: versionRef(ns,row), ordinal: row.ordinal,
@@ -258,6 +269,8 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
       const reason = reasonRefs.length === 0 ? 'not-recorded' : reasonRefs.some(ref => ref.status === 'available') ? 'available' : 'recorded-unavailable';
       const entries = [...changes.map(value => ({ type: 'diff', value })), ...items.map(value => ({ type: 'item', value })),
         ...reasonRefs.map(value => ({ type: 'reason', value }))];
+      // Role assembly meters the complete bounded projection in its own call.
+      if (input.roleProjection === true) return { from: methodVersionRef(input.from), to: methodVersionRef(input.to), status:'available', reason, changes, items, reasonRefs, nextCursor:null };
       return page(ns,expected,input,entries,selected => ({ from: methodVersionRef(input.from), to: methodVersionRef(input.to),
         status: 'available', reason, changes: selected.filter(e => e.type === 'diff').map(e => e.value),
         items: selected.filter(e => e.type === 'item').map(e => e.value), reasonRefs: selected.filter(e => e.type === 'reason').map(e => e.value) }));
@@ -303,6 +316,11 @@ export function createMethodPackageStorage({ db, identity, ready, cardDetailInsi
         packageRevision:found.pkg.revision,versionRevision:found.row.revision})};
   }
   return Object.freeze({
+    // Internal synchronous seam: caller owns the one shared read transaction.
+    roleRead: Object.freeze({ stateFor: bindings.stateFor, decode: bindings.decode, adoption: bindings.adoption,
+      packageRow, targetMetadata, targetLifecycle, verifyFile, reasonAvailable, currentRoleRelatedAvailable,
+      verifyBinaryMetadata: attachments.verifyBinaryMetadata,
+      readInside: (method,ns,input,access) => read(method,ns,input,1,access,null) }),
     payloadBinding: value => binding('method-action-v1',value),
     prepareMixed:(ns,input)=>attachments.prepare(ns,input),
     call(method,ns,input,payloadBinding,isRead,{ accessGeneration,access,binaryAccessGeneration },prepared) {

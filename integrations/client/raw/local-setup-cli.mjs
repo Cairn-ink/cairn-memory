@@ -12,7 +12,7 @@ const help = `Usage: cairn-memory local setup --request ABSOLUTE_PRIVATE_JSON
        cairn-memory local init --database BRAND_NEW_ABSOLUTE_FILE
 
 Explicit local foreground preview (Linux/WSL, Node >=22.16).
-Setup requires an existing schema29, schema30 or schema31 store, separate provider-processing/plaintext
+Setup requires an existing schema29, schema30, schema31, schema32 or schema33 store, separate provider-processing/plaintext
 Raw consent and foreground-latency consent. Hooks may block up to160seconds.
 No key is needed for setup/status/disable. Daily cap counts model-port invocations,
 not dollars. Disable preserves identity/data; reactivation may require explicit

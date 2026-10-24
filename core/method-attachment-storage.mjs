@@ -8,7 +8,8 @@ import { fail } from './validation.mjs';
 
 export function createMethodAttachmentStorage({db,identity,contentIdentity,enabled}) {
   const mac=createBinaryIdentity(identity);
-  const mixed=id=>enabled&&Boolean(db.prepare('SELECT 1 FROM method_manifest_formats WHERE version_id=?').get(id));
+  const query = (sql, check) => { check?.(); return db.prepare(sql); };
+  const mixed=(id,check)=>enabled&&Boolean(query('SELECT 1 FROM method_manifest_formats WHERE version_id=?',check).get(id));
   const manifestIdentity=(ns,entries)=>mac('method-mixed-manifest-v1',[binaryNamespace(ns),entries.map(entry=>
     [entry.kind,entry.path,entry.mediaType,entry.byteCount,entry.contentIdentity])]);
   function prepare(ns,input) {
@@ -47,8 +48,8 @@ export function createMethodAttachmentStorage({db,identity,contentIdentity,enabl
     }
     validateMixedManifest(db,prepared.versionId);
   }
-  function metadata(ns,row,textRows) {
-    const entries=db.prepare('SELECT version_id,position,kind,path,media_type,content_identity,byte_count,binary_object_id,folded_path FROM method_mixed_entries WHERE version_id=? ORDER BY position').all(row.id);
+  function metadata(ns,row,textRows,check) {
+    const entries=query('SELECT version_id,position,kind,path,media_type,content_identity,byte_count,binary_object_id,folded_path FROM method_mixed_entries WHERE version_id=? ORDER BY position',check).all(row.id);
     const texts=entries.filter(entry=>entry.kind==='text');
     if(!entries.length||entries.length>256||entries.some((entry,i)=>entry.position!==i||entry.folded_path!==entry.path.toLowerCase())||
       !entries.some(entry=>entry.kind==='binary')||texts.length!==textRows.length||texts.reduce((sum,entry)=>sum+entry.byte_count,0)!==row.byte_count||
@@ -57,12 +58,21 @@ export function createMethodAttachmentStorage({db,identity,contentIdentity,enabl
       fail('method_version_unavailable');
     return entries;
   }
-  function chunk(ns,found,file,index) {
+  // Metadata-only verification is synchronous and shared by U4 chunk delivery
+  // and the role reader's preparation/final transactions. It never loads bytes.
+  function verifyBinaryMetadata(ns,found,file) {
+    const entry=db.prepare('SELECT * FROM method_mixed_entries WHERE version_id=? AND position=?').get(found.row.id,file.position);
     const object=db.prepare('SELECT * FROM binary_objects WHERE id=?').get(file.binary_object_id);
-    if(!object||object.method_version_id!==found.row.id||object.position!==file.position||object.asset_version_id!==null||
+    if(file.kind!=='binary'||file.version_id!==found.row.id||!entry||entry.kind!=='binary'||
+      ['version_id','position','path','media_type','content_identity','byte_count','binary_object_id'].some(key=>entry[key]!==file[key])||
+      !object||object.method_version_id!==found.row.id||object.position!==file.position||object.asset_version_id!==null||
       object.owner_id!==ns.ownerId||object.scope!==ns.scope||object.project_id!==(ns.projectId??'')||object.content_identity!==file.content_identity||
       object.media_type!==file.media_type||object.byte_count!==file.byte_count||!Number.isSafeInteger(object.byte_count)||object.byte_count<1||object.byte_count>ASSET_LIMITS.versionBytes)
       fail('method_version_unavailable');
+    return object;
+  }
+  function chunk(ns,found,file,index) {
+    const object=verifyBinaryMetadata(ns,found,file);
     const count=Math.ceil(object.byte_count/32768);
     if(!Number.isSafeInteger(index)||index<0||index>=count)fail('invalid_cursor');
     const row=db.prepare('SELECT chunk_mac,bytes FROM binary_chunks WHERE object_id=? AND chunk_index=?').get(object.id,index),length=Math.min(32768,object.byte_count-index*32768);
@@ -82,6 +92,6 @@ export function createMethodAttachmentStorage({db,identity,contentIdentity,enabl
       ![saved.packageRevision,saved.versionRevision].every(value=>Number.isSafeInteger(value)&&value>0))fail('invalid_cursor');
     return saved;
   }
-  return {mixed,prepare,reserve,insert,metadata,chunk,encode,decode,
+  return {mixed,prepare,reserve,insert,metadata,verifyBinaryMetadata,chunk,encode,decode,
     streamBinding:(input,access)=>mac('method-attachment-stream-v1',[input,access])};
 }

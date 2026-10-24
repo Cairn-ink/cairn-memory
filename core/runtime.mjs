@@ -1,3 +1,5 @@
+import { roleProfileOptions } from './role-profile-input.mjs';
+import { createRoleProfileStorage } from './role-profile-storage.mjs';
 import { assetOptions } from './asset-input.mjs';
 import { createAssetStorage } from './asset-storage.mjs';
 import { methodPackageOptions } from './method-package-input.mjs';
@@ -34,13 +36,15 @@ const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
 export function createMemoryRuntime(input, internal) {
-  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "existingStore", "storeFence"]);
+  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "methodPackages", "assets", "roleProfiles", "existingStore", "storeFence"]);
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
+  if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
   const assets = assetOptions(input.assets);
+  const roleProfiles = roleProfileOptions(input.roleProfiles);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
-  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), methodPackages: Boolean(methodPackages), assets: Boolean(assets), rawCapture: Boolean(internal?.rawCapture),
+  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), currentDependencies: Boolean(privateCards?.currentDependencies), methodPackages: Boolean(methodPackages), assets: Boolean(assets), roleProfiles: Boolean(roleProfiles), rawCapture: Boolean(internal?.rawCapture),
     rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore, storeFence: input.storeFence });
   try {
   const rawLineage = createRawLineageStorage(db);
@@ -59,9 +63,10 @@ export function createMemoryRuntime(input, internal) {
     memoryMapInside: (ns, request) => mocStorage.mapRowsInside(internalNamespace(ns), request),
     memoryTopicInside: (ns, ref) => mocStorage.topicInside(internalNamespace(ns), ref) }) : undefined;
 
-  const methodStorage = methodPackages ? createMethodPackageStorage({ db, identity, ready,
+  const methodStorage = methodPackages || roleProfiles ? createMethodPackageStorage({ db, identity, ready,
     cardDetailInside: createPrivateCardStorage({ db,identity,ready,rawSources: true }).cardDetailInside }) : undefined;
 
+  const roleStorage = roleProfiles ? createRoleProfileStorage({db,identity,ready,methods:methodStorage.roleRead}) : undefined;
   const assetStorage = assets ? createAssetStorage({ db, identity, ready }) : undefined;
 
   function activeRow(ns, id) {
@@ -672,6 +677,7 @@ export function createMemoryRuntime(input, internal) {
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     privateCards: privateCards ? cardStorage : undefined,
     methodPackages: methodStorage,
+    roleProfiles: roleStorage,
     assets: assetStorage,
     rawSourceReader: internal?.rawSources ? rawCapture?.sourceReader : undefined,
     previewDeleteConversation(input) { ready(); return deletion.preview(input); },

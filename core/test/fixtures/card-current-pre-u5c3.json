@@ -1,0 +1,15 @@
+{
+  "base": "84b142f1",
+  "files": {
+    "facade": {
+      "source": "core/context-read-facade.mjs",
+      "fixture": "card-current-pre-u5c3-facade.mjs.txt",
+      "sha256": "bc97522bef3e54cf4260b5b2fce3226f7f91c268fe1688d07dcf9757ba8e922c"
+    },
+    "transport": {
+      "source": "adapters/mcp/context-read-transport.mjs",
+      "fixture": "card-current-pre-u5c3-transport.mjs.txt",
+      "sha256": "6c6bd19feecb79a05c0e2d439a0b675ae24def2b5f6eb81de54f3cceedab0d08"
+    }
+  }
+}

@@ -10,7 +10,7 @@ const organization = new Set(['applyCardPlacement', 'refreshCardTopic', 'propose
 
 // Local process configuration grants only these bounded read/draft/organization operations.
 // This module has no explicit-user grant constructor.
-export function createScopedCardAccess(namespace, { rawSources = false, methodPackages = false } = {}) {
+export function createScopedCardAccess(namespace, { rawSources = false, methodPackages = false, currentDependencies = false, readSet = [namespace] } = {}) {
   const scope = structuredClone(namespace);
   const tokens = new WeakMap(), grants = new WeakMap();
   let closed = false;
@@ -30,9 +30,10 @@ export function createScopedCardAccess(namespace, { rawSources = false, methodPa
     isCurrent(grant) { return closed ? null : grants.get(grant) ?? null; },
   };
   return {
+    ...(currentDependencies ? { currentDependencies: true, dependencyReadSet: Object.freeze(structuredClone(readSet)) } : {}),
     revoke() { closed = true; },
     configuration: { version: 'private-cards-local-v1', source: 'submitted-note-v1',
-      storage: 'local-plain-v1', disclosure: 'explicit-submitted-note-v1', authority },
+      storage: 'local-plain-v1', disclosure: 'explicit-submitted-note-v1', authority, ...(currentDependencies ? { currentDependencies: { version: 'card-current-dependencies-v1' } } : {}) },
     ...(methodPackages ? { methodPackageConfiguration: { version: 'method-packages-local-v1', storage: 'local-plain-v1', authority } } : {}),
     call(core, method, input) {
       const refScoped = ['getMethodVersion','listMethodManifest','readMethodFile','listMethodVersions','compareMethodVersions',

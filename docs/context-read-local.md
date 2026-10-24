@@ -270,10 +270,103 @@ That exception is asserted separately from standalone one-Han, overlapping
 two-Han, supplementary-Han and mixed-width fixtures. Measurements and fake
 embeddings use synthetic data and are observational. They do not establish
 answer correctness, complete semantic recall, native activation, production
-latency or a 100,000-Memory guarantee. Role profiles, relations,
-MOC retrieval, Raw search and local-model adapters remain unsupported.
+latency or a 100,000-Memory guarantee. Role profiles, Raw search and local-model
+adapters remain unsupported. Relations and MOC retrieval require the separate
+source opt-in below.
 
 `node tools/testing/context-embedding-live.mjs` prints an unrun notice without
 looking up a key. Its separate `--run --max-requests N --max-usd X` path is a
 paid opt-in smoke and is never invoked by a test suite. It remains unrun by
 default; fake HTTP tests do not authorize live use.
+
+
+<!-- U5c-2 optional source integration. -->
+## Optional relation and MOC sources
+
+Both sources stay off by default. Enable either ID or both at startup:
+
+```sh
+cairn-memory --db /absolute/store.sqlite --owner OWNER \
+  --context-read context-read-v1 \
+  --context-read-sources relations-one-hop-v1,moc-v1
+```
+
+Programmatic MCP hosts use `contextReadSources:['relations-one-hop-v1','moc-v1']`.
+Core hosts use `contextRead:{version:'context-read-v1',authority,sources:[...]}`;
+the existing counter and provider configuration is independent. Empty entries,
+duplicates, unknown IDs and a source flag without context opt-in are refused.
+`--check-config` reports sources and the preset without opening a database,
+reading keys or constructing counters/providers.
+
+Only these hosts add optional `sources` to candidate-search and assembly inputs.
+Omission selects all configured sources; `[]` disables them for that call; a
+nonempty list must be a distinct subset. Fetch schemas and evidence guarantees
+are unchanged. Source-disabled hosts retain their original strict schemas,
+wire responses, limits and presets.
+
+`relations-one-hop-v1` expands current-intent evidence after direct ranking.
+Only the first four direct candidates seed expansion, with two additions per
+seed and eight per call. Incoming/outgoing `supports-decision` and
+`challenges-premise`, undirected `contradicts`, and Card→Memory bindings are
+supported. Both endpoints, exact revisions, receipt digests, bindings, Card
+support and current applicability are validated. Each addition carries a
+revision-bound `via` seed/family/direction. Additions appear immediately after
+their seeds and never become new seeds. Direct membership, order and scores
+are preserved. History reports `unsupported_intent` for relations.
+
+`moc-v1` scores valid authorized Memory/Card topic titles using frozen T1 BM25,
+including nonmatching valid titles in its statistics. Original title sources,
+Memory projection visibility, member revisions and L2→L1 containment are
+validated; members must be canonically current even in a history search. Card
+title-source validity keeps organization support semantics; member admission
+additionally requires current applicability. A
+member takes its maximum containing-topic score, with twelve ranked members.
+Unfiled or omitted evidence remains directly discoverable. MOC configuration
+fixes `rrf-k60-d12-moc-v1`: k=60, depth=12 and lexical/semantic/MOC weights
+0.45/0.45/0.10. Disabled or unavailable channels contribute zero; weights are
+never renormalized, and this preset always uses RRF.
+
+Opt-in freezes at most 24 direct candidates plus eight relation additions.
+Pages and admitted bodies/fetch refs remain capped at 24; the candidate horizon
+can reach 32, with at most 1,634 assembly counter calls. Each optional source
+has 50,000 work units and 8 MiB accounted state. Indexed single-record seeks and
+bounded support iterators charge visited authorized records, repeated passes,
+endpoint/projection checks and support lookups. Relation admission reserves
+work for subsequent witness validation; a fixed reserve covers fence reads.
+The byte model conservatively charges object/scalar/slot overhead and UTF-16
+string storage before collection growth, with a 64-KiB frame reservation and
+4-MiB scratch reservation during a Card support check; it is not a V8 RSS measurement.
+Optional Card support verification bounds Raw part-cache growth to 128 parts
+per binding; inability to verify within that scratch reports `state_limit`,
+without changing canonical Card eligibility or direct retrieval.
+Corpora and scoring maps are released before ranking retention. Retained
+identities, witnesses, fences and diagnostics share 16 MiB per handle, with
+oldest-ranking eviction and existing `cursor_stale` behavior. Source `stateBytes`
+and `peakBytes` describe the scan ledger; they are not retained occupancy.
+
+Sources share the cooperative deadline. SQLite steps cannot be preempted.
+Relations may keep a validated prefix on exhaustion; incomplete MOC statistics
+or ranking contribute nothing. With the default caps, expect `moc-v1` to degrade
+with `work_limit` on broad queries around 10,000 Memories (see
+`docs/limitations.md`); it is most useful on smaller or selectively titled stores. Source diagnostics enumerate degradation and
+never claim an unknown remainder is zero. They report no prose or foreign
+counts. Core candidate results carry `trace.sources`; MCP keeps these source
+diagnostics only in `_meta['ink.cairn/context-read-diagnostics']`. Candidate
+`via` and MOC rank entries remain ordinary candidate data. Assembly diagnostics
+and snapshots use the existing two metadata keys and add no model text block
+or `structuredContent`.
+
+Source fences include undelivered types, Card organization epochs and distinct
+Memory projection states (live without a state row, unavailable, or a published
+generation). Page delivery checks them in its authoritative read; assembly
+checks them in its final transaction. Changed frozen dependencies refuse
+`cursor_stale` / `snapshot_stale`; revocation remains `scope_changed`.
+Compact refs and snapshots still prove only their existing evidence semantics,
+not a durable discovery path.
+
+These sources add no model calls, persisted source data, sidecar format change
+or canonical DDL. They do not establish retrieval-quality improvement, truth,
+adoption, two-hop traversal, MOC summary freshness, role/task behavior or
+invalidation. Titles report `summaryFreshness:'unavailable'` with
+`summaryFreshnessReason:'e1_seam_unavailable'`.
+<!-- End U5c-2 integration. -->

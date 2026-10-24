@@ -1,3 +1,5 @@
+import { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS } from './card-current-input.mjs';
+import { authorizeCardCurrentDependencies } from './card-current-facade.mjs';
 import { isStorageBusy } from './database.mjs';
 import { MemoryStoreError, fail } from './validation.mjs';
 import { CARD_METHODS, CARD_READS, deepFreeze, snapshot, validateCardCall } from './private-card-input.mjs';
@@ -23,14 +25,15 @@ export function privateFailure(error) {
 export function createPrivateCardFacade(storage, options, ready, rawReader) {
   if (!options) return {};
   const result = {};
-  const methods = [...CARD_METHODS, ...(rawReader ? ['resolveSourceReferences'] : [])];
+  const methods = [...CARD_METHODS, ...(options.currentDependencies ? CARD_CURRENT_METHODS : []), ...(rawReader ? ['resolveSourceReferences'] : [])];
   for (const method of methods) {
     result[method] = (input, authority) => {
       try {
         ready();
-        const payload = snapshot(input);
-        if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 200_000) fail('invalid_input');
-        const ns = validateCardCall(method, payload, Boolean(rawReader)), read = CARD_READS.has(method) || method === 'resolveSourceReferences';
+        const dependencyAuthoring = options.currentDependencies && (CARD_CURRENT_METHODS.includes(method) || method === 'confirmCardDraft');
+        const payload = dependencyAuthoring ? snapshot(input, 0, { nodes: 16384, units: 400_000 }) : snapshot(input);
+        if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > (dependencyAuthoring ? 400_000 : 200_000)) fail('invalid_input');
+        const ns = validateCardCall(method, payload, Boolean(rawReader), Boolean(options.currentDependencies)), read = CARD_READS.has(method) || method === 'resolveSourceReferences';
         const request = deepFreeze({ method, namespace: ns,
           actionClass: read ? 'read' : ORGANIZATION_WRITES.includes(method) ? 'organization' : method === 'createCardDraft' && payload.input.authoredInput !== undefined
             ? 'explicit-user' : ['createCardDraft', 'editCardDraft', 'cancelCardDraft'].includes(method) ? 'draft' : 'explicit-user',
@@ -57,11 +60,13 @@ export function createPrivateCardFacade(storage, options, ready, rawReader) {
             } catch (error) { return privateFailure(error); }
           })();
         }
+        const dependencies = payload.currentDependencies ? authorizeCardCurrentDependencies(options, request, authority) : null;
         let finalGeneration;
         try { finalGeneration = verifyPrivateGrant(options.authority.isCurrent(grant, request), request); }
         catch { fail('scope_changed'); }
         if (generation !== finalGeneration) fail('scope_changed');
-        const value = storage.call(method, ns, payload, request.payloadBinding, read, { accessGeneration: finalGeneration });
+        dependencies?.check();
+        const value = storage.call(method, ns, payload, request.payloadBinding, read, { accessGeneration: finalGeneration, access: dependencies?.access });
         if (Buffer.byteLength(JSON.stringify({ ok: true, value }), 'utf8') > 65536) fail('context_item_too_large');
         return { ok: true, value };
       } catch (error) { return privateFailure(error); }
@@ -83,6 +88,7 @@ export function createPrivateCardFacade(storage, options, ready, rawReader) {
       actionClasses: { applyCardPlacement: 'organization', refreshCardTopic: 'organization', proposeEvidenceMapping: 'organization', reviewEvidenceMapping: 'explicit-user' },
       maxCards: 5, maxParents: 3, maxActiveMappingsPerTopic: 16,
       defaultPageLimit: 20, maxPageLimit: 50, maxCardMapScanRows: 256, implicitSelectionExpansion: false },
+    ...(options.currentDependencies ? { currentDependencies: { version: CARD_CURRENT_VERSION, methods: [...CARD_CURRENT_METHODS], maxPackages: 16, maxVectorBytes: 32768, actionClass: 'explicit-user' } } : {}),
     raw: Boolean(rawReader), modelAssisted: false, publication: false,
   } });
   return result;

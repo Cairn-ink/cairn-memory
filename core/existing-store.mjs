@@ -1,3 +1,5 @@
+import { validateCardCurrentDependencies, assertNoCardCurrentDependencies } from './card-current-schema.mjs';
+import { validateRoleProfiles, assertNoRoleProfiles } from './role-profile-schema.mjs';
 import { validateAssets, assertNoAssets } from './asset-schema.mjs';
 import { validateMethodPackages } from './method-package-schema.mjs';
 import { lstatSync, realpathSync } from 'node:fs';
@@ -9,7 +11,7 @@ import { fail, identifier } from './validation.mjs';
 
 export function existingStoreOption(value) {
   const input = ownData(value, ['version', 'storeId']);
-  if (Object.keys(input).length !== 2 || !['schema29-existing-v1','schema30-existing-v1','schema31-existing-v1'].includes(input.version)) fail('invalid_input');
+  if (Object.keys(input).length !== 2 || !['schema29-existing-v1','schema30-existing-v1','schema31-existing-v1','schema32-existing-v1','schema33-existing-v1'].includes(input.version)) fail('invalid_input');
   try { identifier(input.storeId); } catch { fail('invalid_input'); }
   return Object.freeze({ version: input.version, storeId: input.storeId });
 }
@@ -83,10 +85,14 @@ function indexShape(db, name, columns) {
 export function validateExistingStore(db, option) {
   const version = db.prepare('PRAGMA user_version').get().user_version;
   if (db.prepare('PRAGMA application_id').get().application_id !== 0x43414952 ||
-      ![29,30,31].includes(version) || option.version === 'schema30-existing-v1' && version < 30 ||
-      option.version === 'schema31-existing-v1' && version !== 31) fail('unsupported_database');
+      ![29,30,31,32,33].includes(version) || option.version === 'schema30-existing-v1' && version < 30 ||
+      option.version === 'schema31-existing-v1' && version !== 31 ||
+      option.version === 'schema32-existing-v1' && version !== 32 ||
+      option.version === 'schema33-existing-v1' && version !== 33) fail('unsupported_database');
+  if (version === 33) validateCardCurrentDependencies(db); else assertNoCardCurrentDependencies(db);
+  if (version >= 32) validateRoleProfiles(db); else assertNoRoleProfiles(db);
   if (version >= 30) validateMethodPackages(db);
-  if (version === 31) validateAssets(db); else assertNoAssets(db);
+  if (version >= 31) validateAssets(db); else assertNoAssets(db);
   for (const name of tables) if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
   for (const [table, expected] of Object.entries(layouts)) {
     const info = db.prepare('SELECT * FROM pragma_table_info(?) ORDER BY cid').all(table);

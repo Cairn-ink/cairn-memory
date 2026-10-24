@@ -11,7 +11,8 @@ export function createMethodBindingStorage({db,binding,packageRow,packageRef,tar
   const bindingRef=(ns,pkg,row)=>({type:'method-binding',bindingNamespace:ns,package:pkg,roleKey:row.role_key,revision:row.revision});
   // Reconstruct the identity component of a logical binding reference. This
   // reads no target content or lifecycle; those require the target read grant.
-  function identity(id) {
+  function identity(id, check) {
+    check?.();
     const row=db.prepare('SELECT id,owner_id,scope,project_id FROM method_packages WHERE id=?').get(id);
     if(!row)fail('method_not_found');return packageRef(rowNamespace(row),row.id);
   }
@@ -47,12 +48,13 @@ export function createMethodBindingStorage({db,binding,packageRow,packageRef,tar
     const roles=methodRole(context.roleId)==='*'?['*']:[methodRole(context.roleId),'*'];
     return [...context.readSet].reverse().flatMap(namespace=>roles.map(roleKey=>({namespace,roleKey})));
   }
-  function stateFor(pkg,context,access) {
+  function stateFor(pkg,context,access,check) {
     const consulted=[];let row,winner;
     for(const level of levels(context)) {
+      check?.();
       row=bindingRow(level.namespace,pkg.packageId,level.roleKey);
       if(row) {
-        const canonical=identity(pkg.packageId);
+        const canonical=identity(pkg.packageId,check);
         if(JSON.stringify(canonical)!==JSON.stringify(pkg))fail('method_not_found');
       }
       consulted.push({...level,revision:row?.revision??null,state:row?.state??null,
@@ -60,21 +62,22 @@ export function createMethodBindingStorage({db,binding,packageRow,packageRef,tar
       if(row){winner=level;break;}
     }
     const readable=includesNamespace(context.readSet,pkg.namespace);
-    const canonical=readable?packageRow(pkg.namespace,pkg.packageId):null;
+    const canonical=readable?packageRow(pkg.namespace,pkg.packageId,check):null;
     if(readable && !canonical)fail('method_not_found');
     let status='no-active-version',version=null,lifecycle={packageRevision:canonical?.revision??null,packageState:canonical?.state??null,versionRevision:null,versionState:null};
     if(winner) {
       status=row.state==='disabled'?'disabled':'unavailable';
       if(row.state==='active' && readable) {
-        const candidate=consulted.at(-1).version,found=targetMetadata(pkg.namespace,candidate);
+        const candidate=consulted.at(-1).version,found=targetMetadata(pkg.namespace,candidate,check);
         lifecycle={...lifecycle,versionRevision:found.row.revision,versionState:found.row.state};
         if(found.available){status='current';version=candidate;}
       }
     }
     const value={package:pkg,status,binding:winner?bindingRef(winner.namespace,pkg,row):null,version};
+    const query = sql => { check?.(); return db.prepare(sql); };
     const clocks=context.readSet.map(namespace=>({namespace,
-      generation:db.prepare(`SELECT generation FROM method_binding_generations WHERE ${where} AND package_id=?`).get(...boundary(namespace),pkg.packageId)?.generation??0,
-      event:db.prepare(`SELECT coalesce(max(ordinal),0) n FROM method_binding_events WHERE ${where}`).get(...boundary(namespace)).n}));
+      generation:query(`SELECT generation FROM method_binding_generations WHERE ${where} AND package_id=?`).get(...boundary(namespace),pkg.packageId)?.generation??0,
+      event:query(`SELECT coalesce(max(ordinal),0) n FROM method_binding_events WHERE ${where}`).get(...boundary(namespace)).n}));
     return {value,state:{package:pkg,consulted,lifecycle,clocks,version},context,access};
   }
   const accessFor=(context,access)=>context.readSet.map(namespace=>access.find(grant=>sameNamespace(grant.namespace,namespace)));
@@ -137,5 +140,5 @@ export function createMethodBindingStorage({db,binding,packageRow,packageRef,tar
     }).filter(Boolean);
     return page(ns,expected,input,entries,events=>({events}));
   }
-  return {transition,resolve,list,events,decode,pinVersion,adoption};
+  return {transition,resolve,list,events,decode,pinVersion,adoption,stateFor};
 }

@@ -5,6 +5,14 @@ import { evidenceRef } from './private-evidence-input.mjs';
 import { denseArray, fail } from './validation.mjs';
 import { validateEmbedder } from './context-read-embedder.mjs';
 
+// U5c-2: optional sources are host availability, per-call narrowing only.
+export const CONTEXT_SOURCES = Object.freeze(['relations-one-hop-v1', 'moc-v1']);
+export const SOURCE_LIMITS = Object.freeze({ seeds: 4, perSeed: 2, additions: 8, horizon: 32, work: 50000, stateBytes: 8 * 1024 * 1024, retainedBytes: 16 * 1024 * 1024 });
+export function contextSources(value, enabled = CONTEXT_SOURCES, allowEmpty = false) {
+  const selected = denseArray(contextSnapshot(value), allowEmpty ? 0 : 1, 2);
+  if (new Set(selected).size !== selected.length || selected.some(id => !enabled.includes(id))) fail('invalid_input');
+  return Object.freeze(CONTEXT_SOURCES.filter(id => selected.includes(id)));
+}
 export const CONTEXT_VERSION = 'context-read-v1';
 export const CONTEXT_METHODS = Object.freeze(['findCandidates', 'refreshContextIndex', 'fetchCandidateEvidence', 'contextRead']);
 export const ASSEMBLY_POLICIES = Object.freeze(['rank-first-whole-v1', 'coverage-first-v1', 'rank-first-first-source-v1']);
@@ -20,8 +28,9 @@ export const CONTEXT_LIMITS = Object.freeze({ defaultLimit: 12, horizon: 24, que
   snapshotUnits: 16384, refreshItems: 1024, batchRows: 128, batchTextUnits: 2_000_000,
   vectors: 20000, cacheBytes: 134217728, dimensions: 32768, embedderMetadataUnits: 200, rankings: 128, rankingTtlMs: 300000 });
 export function contextOptions(value) {
-  const options = ownData(value, ['version', 'authority', 'embedder', 'policy', 'counter']);
+  const options = ownData(value, ['version', 'authority', 'embedder', 'policy', 'counter', 'sources']);
   if (options.version !== CONTEXT_VERSION) fail('invalid_input');
+  const sources = Object.hasOwn(options, 'sources') ? contextSources(options.sources) : null;
   const authority = ownData(options.authority, ['authorize', 'isCurrent']);
   if (typeof authority.authorize !== 'function' || typeof authority.isCurrent !== 'function' ||
       [authority.authorize, authority.isCurrent].some(fn => types.isAsyncFunction(fn))) fail('authority_required');
@@ -40,7 +49,8 @@ export function contextOptions(value) {
       types.isAsyncFunction(policy.estimateUsd) || policy.maxConcurrent !== undefined &&
       (!Number.isInteger(policy.maxConcurrent) || policy.maxConcurrent < 1 || policy.maxConcurrent > 1024))) fail('invalid_input');
   return Object.freeze({ authority: Object.freeze(authority), embedder, counter: counter && Object.freeze(counter), family,
-    preset: family === 'hosted' ? 'rrf-k10' : 'rrf-k60-d12',
+    preset: sources?.includes('moc-v1') ? 'rrf-k60-d12-moc-v1' : family === 'hosted' ? 'rrf-k10' : 'rrf-k60-d12',
+    ...(sources ? { sources } : {}),
     policy: Object.freeze({ ...policy, maxConcurrent: policy.maxConcurrent ?? 1 }),
     budgetConfigured: budgeted });
 }
@@ -93,11 +103,11 @@ export function contextRefs(values, readSet, supportedTypes) {
   if (new Set(refs.map(ref => JSON.stringify([namespaceKey(ref.namespace), ref.type, ref.memoryId ?? ref.cardId]))).size !== refs.length) fail('invalid_input');
   return refs;
 }
-export function contextInput(method, value, supportedTypes) {
+export function contextInput(method, value, supportedTypes, enabledSources) {
   const payload = deepFreeze(contextSnapshot(value));
   const selected = ownData(payload, method === 'findCandidates' ?
-    ['readSet', 'query', 'types', 'intent', 'semantic', 'limit', 'deadlineMs', 'cursor'] : method === 'contextRead' ?
-      ['readSet', 'query', 'types', 'intent', 'semantic', 'budget', 'policy', 'deadlineMs'] : method === 'refreshContextIndex' ?
+    ['readSet', 'query', 'types', 'intent', 'semantic', 'limit', 'deadlineMs', 'cursor', ...(enabledSources ? ['sources'] : [])] : method === 'contextRead' ?
+      ['readSet', 'query', 'types', 'intent', 'semantic', 'budget', 'policy', 'deadlineMs', ...(enabledSources ? ['sources'] : [])] : method === 'refreshContextIndex' ?
       ['readSet', 'types', 'intent', 'budget'] : ['readSet', 'refs', 'intent', 'snapshot', 'responseByteLimit', 'fences']);
   const result = { readSet: contextReadSet(selected.readSet) };
   if (method === 'fetchCandidateEvidence') {
@@ -125,6 +135,7 @@ export function contextInput(method, value, supportedTypes) {
     if (method === 'findCandidates' || method === 'contextRead') {
       if (typeof selected.query !== 'string' || !selected.query.trim() || selected.query.length > 4000 ||
           selected.semantic !== undefined && typeof selected.semantic !== 'boolean') fail('invalid_input');
+      if (enabledSources) result.sources = Object.hasOwn(selected, 'sources') ? contextSources(selected.sources, enabledSources, true) : enabledSources;
       result.query = selected.query; result.semantic = selected.semantic ?? false;
       result.deadlineMs = integer(selected.deadlineMs, 1000, 5000);
       if (method === 'contextRead') {

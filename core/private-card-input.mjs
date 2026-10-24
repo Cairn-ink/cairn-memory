@@ -1,3 +1,4 @@
+import { CARD_CURRENT_VERSION, CARD_CURRENT_METHODS, currentCall, currentDeclaration } from './card-current-input.mjs';
 import { createHmac } from 'node:crypto';
 import { redactSecrets } from '../plugins/cairn-memory/lib/redact.mjs';
 import { denseArray, fail, identifier, object, revision } from './validation.mjs';
@@ -19,12 +20,13 @@ export const OWNER_NOTE_CAP = 200_000_000;
 
 export function privateCardOptions(value) {
   if (value === undefined) return undefined;
-  object(value, ['version', 'source', 'storage', 'disclosure', 'authority']);
+  object(value, ['version', 'source', 'storage', 'disclosure', 'authority', 'currentDependencies']);
   if (value.version !== 'private-cards-local-v1' || value.source !== 'submitted-note-v1' ||
       value.storage !== 'local-plain-v1' || value.disclosure !== 'explicit-submitted-note-v1') fail('source_unavailable');
   object(value.authority, ['authorize', 'isCurrent']);
   if (typeof value.authority.authorize !== 'function' || typeof value.authority.isCurrent !== 'function') fail('authority_required');
-  return Object.freeze({ ...value, authority: Object.freeze({ ...value.authority }) });
+  if (value.currentDependencies !== undefined) { object(value.currentDependencies, ['version']); if (value.currentDependencies.version !== CARD_CURRENT_VERSION) fail('invalid_input'); }
+  return Object.freeze({ ...value, ...(value.currentDependencies ? { currentDependencies: Object.freeze({ ...value.currentDependencies }) } : {}), authority: Object.freeze({ ...value.authority }) });
 }
 
 // Snapshot plain serialized data once, rejecting getters, sparse arrays and non-JSON values.
@@ -131,8 +133,9 @@ export function pageLimit(value = 20) {
   if (!Number.isSafeInteger(value) || value < 1 || value > 50) fail('invalid_input');
   return value;
 }
-export function validateCardCall(method, input, raw = false) {
+export function validateCardCall(method, input, raw = false, currentDependencies = false) {
   const ns = cardNamespace(input.namespace);
+  if (currentDependencies && CARD_CURRENT_METHODS.includes(method)) { currentCall(input, ns); return ns; }
   if (method === 'resolveSourceReferences' && raw) {
     object(input, ['namespace','anchors','budgets']); sourceAnchors(input.anchors); sourceBudgets(input.budgets); return ns;
   }
@@ -146,7 +149,7 @@ export function validateCardCall(method, input, raw = false) {
     getCard: ['cardId', 'responseByteLimit'], listCards: ['states', 'limit', 'cursor'],
     editCardDraft: ['cardId', 'expectedRevision', 'actionId', 'title', 'body', 'bindings'],
     editKnowledgeCard: ['cardId', 'expectedRevision', 'actionId', 'title', 'body', 'bindings', 'applicability'],
-    confirmCardDraft: ['cardId', 'expectedRevision', 'actionId', 'applicability'],
+    confirmCardDraft: ['cardId', 'expectedRevision', 'actionId', 'applicability', ...(currentDependencies ? ['currentDependencies'] : [])],
     cancelCardDraft: ['cardId', 'expectedRevision', 'actionId'],
     deleteKnowledgeCard: ['cardId', 'expectedRevision', 'actionId'],
     inspectCardOperation: ['operationActionId'], listCardEffects: ['limit', 'cursor'],
@@ -160,6 +163,7 @@ export function validateCardCall(method, input, raw = false) {
   if (method === 'getCard' && !Object.hasOwn(input, 'cardId')) fail('invalid_input');
   if (method === 'deleteSourceNote') identifier(input.sourceId);
   if (method === 'inspectCardOperation') identifier(input.operationActionId);
+  if (method === 'confirmCardDraft' && input.currentDependencies !== undefined) currentDeclaration(input.currentDependencies, ns);
   if (method === 'confirmCardDraft' && input.applicability !== undefined &&
       !APPLICABILITY.includes(input.applicability)) fail('invalid_input');
   if (Object.hasOwn(input, 'cursor') && (typeof input.cursor !== 'string' || input.cursor.length > 8192)) fail('invalid_cursor');

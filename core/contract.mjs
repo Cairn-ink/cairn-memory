@@ -1,3 +1,5 @@
+import { roleProfileOptions } from './role-profile-input.mjs';
+import { createRoleProfileFacade } from './role-profile-facade.mjs';
 import { assetOptions } from './asset-input.mjs';
 import { createAssetFacade } from './asset-facade.mjs';
 import { methodPackageOptions } from './method-package-input.mjs';
@@ -46,7 +48,7 @@ import {
 // only their own option; all other legal options reach the retained validator.
 const CORE_OPTIONS = Object.freeze(['path','model','captureQualification','captureQualifiedDuplicates','captureSourcePolicy',
   'captureRationale','captureEvidence','captureDeadlineMs','sourceCandidatePolicy','sessionEpisodes',
-  'decisionReview','privateCards','methodPackages','assets','existingStore','storeFence']);
+  'decisionReview','privateCards','methodPackages','assets','roleProfiles','existingStore','storeFence']);
 const OPEN_OPTIONS = Object.freeze([...CORE_OPTIONS, 'rawConversations']);
 
 const keepAdmissionKey = Symbol('keepAdmissionKey');
@@ -180,15 +182,17 @@ function qualifiedDuplicatesOption(input) {
 }
 
 /** Model-free exact-namespace lifecycle and inspection facade. */
-export function openMemoryCore(input) {
+export function openMemoryCore(input) { return openWithRoleContext(input); }
+function openWithRoleContext(input, roleContext) {
+  const buildCore = (value, internal) => createMemoryCore(value, { ...internal, roleContext });
   if (input && typeof input === 'object' && types.isProxy(input)) throw new MemoryStoreError('invalid_input');
   // Strip only this opt-in before applying the retained constructor validation.
   if (input && typeof input === 'object' && 'contextRead' in input) {
     const { contextRead, ...base } = ownData(input, [...OPEN_OPTIONS, 'contextRead']);
-    return openContextCore(base, contextRead, openMemoryCore);
+    return openContextCore(base, contextRead, value => openWithRoleContext(value, contextRead));
   }
   qualifiedDuplicatesOption(input);
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return createMemoryCore(input);
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return buildCore(input);
   if ('existingStore' in input) {
     input = ownData(input, OPEN_OPTIONS);
     input.existingStore = existingStoreOption(input.existingStore);
@@ -201,14 +205,14 @@ export function openMemoryCore(input) {
   let descriptor;
   try { descriptor = Object.getOwnPropertyDescriptor(input, 'rawConversations'); }
   catch { throw new MemoryStoreError('invalid_input'); }
-  if (!descriptor) return createMemoryCore(input);
+  if (!descriptor) return buildCore(input);
   if (!Object.hasOwn(descriptor, 'value')) throw new MemoryStoreError('invalid_input');
   ownData(input, OPEN_OPTIONS);
   const options = rawOptions(descriptor.value);
   const fields = Object.getOwnPropertyDescriptors(input);
   delete fields.rawConversations;
   const coreOptions = Object.create(Object.getPrototypeOf(input), fields);
-  return composeRawCore(createMemoryCore, coreOptions, options, {
+  return composeRawCore(buildCore, coreOptions, options, {
     sources: Boolean(coreOptions.privateCards), lineage: true, deletion: true, localControls: true,
   });
 }
@@ -219,7 +223,9 @@ export function createMemoryCore(input, internal) {
   object(input, CORE_OPTIONS);
   const privateCards = privateCardOptions(input.privateCards);
   const methodPackages = methodPackageOptions(input.methodPackages);
+  if (privateCards?.currentDependencies && !methodPackages) fail('invalid_input');
   const assets = assetOptions(input.assets);
+  const roleProfiles = roleProfileOptions(input.roleProfiles);
   const decisionReview = decisionReviewOption(input);
   const policyDescriptor = Object.getOwnPropertyDescriptor(input, 'captureSourcePolicy');
   const captureSourcePolicy = policyDescriptor?.value;
@@ -265,6 +271,7 @@ export function createMemoryCore(input, internal) {
     ...(input.storeFence ? { storeFence: input.storeFence } : {}),
     ...(methodPackages ? { methodPackages } : {}),
     ...(assets ? { assets } : {}),
+    ...(roleProfiles ? { roleProfiles } : {}),
     ...(privateCards ? { privateCards } : {}), ...(decisionReview ? { decisionReview: 'required-v1' } : {}), ...(sessionEpisodes ? { sessionEpisodes } : {}) });
   try {
   const { storeId, cursorSecret } = runtime.identity;
@@ -1174,6 +1181,7 @@ export function createMemoryCore(input, internal) {
   return Object.freeze({
     ...createMethodPackageFacade(runtime.methodPackages, methodPackages, runtime.ready,assets),
     ...createAssetFacade(runtime.assets, assets, runtime.ready),
+    ...createRoleProfileFacade(runtime.roleProfiles, roleProfiles, { path: input.path, readOnly: Boolean(input.existingStore), context: internal?.roleContext, assets }),
     ...createPrivateCardFacade(runtime.privateCards, privateCards, runtime.ready, internal?.rawSources ? runtime.rawSourceReader : undefined),
     sessionStartContext, closeEpisodeNextStep, listEpisodes, listMemoriesByTime, getEpisode, forgetEpisode, correctEpisode, releaseEpisodeCorrection,
     getCaptureControl, setCapturePaused, setProjectCapture, setProceduralMemory,

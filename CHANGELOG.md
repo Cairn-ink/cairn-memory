@@ -21,6 +21,21 @@
   §16 continuous-writer limitation. Stable preview interfaces and the private
   `0.0.0-preview.1` package version remain unchanged; no npm publication.
 
+## Unreleased — local role profiles (U5c-1)
+
+- Add explicit current-method dependency review for private Cards, canonical v33 guards, and read-time invalidation across evidence, retrieval, organization and role guidance.
+
+- Add opt-in direct agent role publication with dual CAS and v32 guards, matching
+  method/context scopes, and one budgeted MCP role/task read with caller-held
+  receipts, historical labels and exact-version file continuation. See the
+  [role guide](docs/role-profiles-local.md) for configuration and limitations.
+
+## Unreleased — optional context sources (U5c-2)
+
+- Add independently opt-in one-hop typed relations and MOC title ranking, fixed
+  caps and source fences; MCP permits per-call narrowing and keeps source
+  diagnostics in host metadata. Source-disabled wire behavior stays unchanged.
+
 ## Unreleased — context representation v2 (U5b-2)
 
 - Replace the experimental preview.2 assembly shape with `representation-v2`:
