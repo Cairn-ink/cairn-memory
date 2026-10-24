@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { createReadStream } from 'node:fs';
+import { openLifeline } from './process.mjs';
 import { decoder, INPUT_BYTES, OUTPUT_BYTES, shape, writeFrame, nextRequestId } from './protocol.mjs';
 import { VERSION, fail } from './common.mjs';
 import { checkFence } from './pack.mjs';
@@ -57,7 +57,7 @@ const input = decoder(INPUT_BYTES, value => { if (value.op === 'close') { shape(
 process.stdin.on('data', chunk => input.push(chunk)); process.stdin.on('end', () => { input.end(); void stop(); }); process.stdin.on('error', () => stop()); process.stdout.on('error', () => stop());
 // Pre-init supervisor death cannot leave a native process behind. Once native
 // work starts, the registered live parent or independent supervisor kills it.
-const lifeline = createReadStream('', { fd: 3 }); lifeline.on('end', () => stop()); lifeline.on('error', () => stop()); lifeline.resume();
+const lifeline = openLifeline(); lifeline.on('end', () => stop()); lifeline.on('error', () => stop()); lifeline.resume();
 
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) runInferenceChild();

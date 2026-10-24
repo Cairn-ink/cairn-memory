@@ -1,11 +1,13 @@
 import { decoder, INPUT_BYTES, OUTPUT_BYTES, writeFrame } from '../../protocol.mjs';
 import { VERSION } from '../../common.mjs';
 import { checkFence } from '../../pack.mjs';
-import { createReadStream, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
+import { openLifeline } from '../../process.mjs';
 globalThis.fetch = () => { throw new Error('NETWORK_FORBIDDEN'); };
 let fence, busy = false;
 const root = process.argv[2], mode = process.argv[3];
-const lifeline = createReadStream('', { fd: 3 }); lifeline.on('end', () => process.exit(0)); lifeline.resume();
+// Share the production lifeline so crash tests exercise its descriptor behavior.
+const lifeline = openLifeline(); lifeline.on('end', () => process.exit(0)); lifeline.resume();
 if (mode === 'blocked-load' || mode === 'blocked-inference') process.on('SIGTERM', () => {});
 function block() { if (process.argv[4]) writeFileSync(process.argv[4], JSON.stringify({ pid: process.pid, ppid: process.ppid })); process.stderr.write('ENTERED_BLOCK\n'); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0); }
 const input = decoder(INPUT_BYTES, value => {

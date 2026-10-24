@@ -1,6 +1,12 @@
 import { spawn } from 'node:child_process';
+import { Socket } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { refusal } from './common.mjs';
+// Child stdio pipes are stream sockets on the supported POSIX targets. Poll
+// the lifeline through libuv; fs.createReadStream leaves a blocking read in
+// the worker pool, which can prevent process.exit from finishing while the
+// supervisor still holds the writer open and waits for the child's exit.
+export const openLifeline = (fd = 3) => new Socket({ fd, readable: true, writable: false });
 export function childEnvironment(threads = 4) {
   const env = { OMP_NUM_THREADS: String(threads), OPENBLAS_NUM_THREADS: String(threads), MKL_NUM_THREADS: String(threads), HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1', ONNXRUNTIME_NODE_INSTALL_CUDA: 'skip' };
   // Do not forward PATH, NODE_*, DYLD_*, LD_*, HOME, npm or credentials.
