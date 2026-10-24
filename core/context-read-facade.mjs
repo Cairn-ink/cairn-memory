@@ -17,7 +17,7 @@ import { validateVector } from './context-read-embedder.mjs';
 import { contextBudget } from './context-read-budget.mjs';
 import { assembleContext } from './context-read-assembly.mjs';
 import { validateSourceReceipt } from './source-evidence.mjs';
-import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, DEFAULT_ASSEMBLY_POLICY,
+import { CONTEXT_VERSION, CONTEXT_METHODS, CONTEXT_LIMITS, ASSEMBLY_LIMITS, ASSEMBLY_POLICIES, ASSEMBLY_DEFAULTS, DEFAULT_ASSEMBLY_POLICY,
   contextOptions, contextInput, contextRefs, namespaceKey } from './context-read-input.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -480,7 +480,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
                   createHash('sha256').update(JSON.stringify(source)).digest('hex'));
                 return { index, role, excerpt };
               }) : [];
-          items.push({ type, ref, rank: candidate.rank,
+          items.push({ type, ref, ns: input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), rank: candidate.rank,
             metadata: type === 'memory' ? { state, reviewState: item.reviewState, filing: item.filing,
               kind: item.kind, origin, confidence: item.confidence } : { state, support: item.support, origin },
             text: type === 'memory' ? item.content : item.title + '\n' + item.body,
@@ -493,7 +493,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       const scope = bind('snapshot-scope', input.readSet);
       const generationsFor = items => prepared.generations.map(value => ({ memory: value.memory,
         ...(items.some(item => item.type === 'card') ? { card: value.card } : {}) }));
-      const assembled = assembleContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
+      const { selected: delivered, ...assembled } = assembleContext({ prepared: prepared.items, counter: options.counter, policy: input.policy,
         budget: input.budget, deadlineAt, snapshotOf: items => encode('snapshot', { v: 1, scope, intent: input.intent,
           refs: items.map(({ ref }) => [input.readSet.findIndex(ns => namespaceKey(ns) === namespaceKey(ref.namespace)), ref.type,
             ref.memoryId ?? ref.cardId, ref.revision, ...(ref.type === 'card' ? [ref.bodyRevision] : [])]),
@@ -508,7 +508,6 @@ function initializeContextFacade(path, options, { readOnly, database }) {
       if (bytes(result) > CONTEXT_LIMITS.responseBytes) fail('context_item_too_large');
       // No host callback, count or await follows this authoritative read.
       return read(() => {
-        const delivered = prepared.items.filter(item => assembled.metered.items.some(value => same(value.ref, item.ref)));
         if (delivered.length && !same(canonicalFence(input.readSet, [...new Set(delivered.map(item => item.type))]), generationsFor(delivered))) fail('snapshot_stale');
         for (const item of delivered) {
           let current;
@@ -551,6 +550,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
         if (previous && (!same(previous.generations, generations) || !same(previous.access, access.accessGenerations))) fail('snapshot_stale');
         const items = refs.map(ref => evidence.itemsInside(ref.namespace, [ref], intent)[0]);
         const fences = items.map(item => bind('snapshot-item', item));
+        if (input.fences?.some((prefix, i) => prefix !== null && !fences[i].startsWith(prefix))) fail('snapshot_stale');
         if (previous && !same(previous.fences, fences)) fail('snapshot_stale');
         return { items, generations, fences };
       }
@@ -574,7 +574,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
     return success(structuredClone({ version: CONTEXT_VERSION, methods: [...CONTEXT_METHODS], types: [...supportedTypes], intents: ['current', 'history'],
       channels: { lexical: { enabled: true }, semantic: { configured: Boolean(options.embedder), budgetConfigured: Boolean(dispatch) } },
       ...configuration, limits: { ...CONTEXT_LIMITS }, maintenance: !readOnly && !memoryOnly,
-      assembly: { representation: 'representation-v1', policies: [...ASSEMBLY_POLICIES], defaultPolicy: DEFAULT_ASSEMBLY_POLICY,
+      assembly: { representation: 'representation-v2', defaults: ASSEMBLY_DEFAULTS, policies: [...ASSEMBLY_POLICIES], defaultPolicy: DEFAULT_ASSEMBLY_POLICY,
         counter: options.counter ? { id: options.counter.id } : null, limits: { ...ASSEMBLY_LIMITS } },
       unsupported: ['role-profiles', 'relations', 'moc', 'raw-search', 'partial-semantic-search'] }));
   }, findCandidates, refreshContextIndex, fetchCandidateEvidence, contextRead }, close() {

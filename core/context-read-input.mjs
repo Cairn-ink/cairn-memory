@@ -7,7 +7,10 @@ import { validateEmbedder } from './context-read-embedder.mjs';
 
 export const CONTEXT_VERSION = 'context-read-v1';
 export const CONTEXT_METHODS = Object.freeze(['findCandidates', 'refreshContextIndex', 'fetchCandidateEvidence', 'contextRead']);
-export const ASSEMBLY_POLICIES = Object.freeze(['rank-first-whole-v1', 'coverage-first-v1']);
+export const ASSEMBLY_POLICIES = Object.freeze(['rank-first-whole-v1', 'coverage-first-v1', 'rank-first-first-source-v1']);
+export const ASSEMBLY_DEFAULTS = deepFreeze({ metadata: {
+  memory: { state: 'active', reviewState: 'none', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 },
+  card: { state: 'confirmed' } }, sourceAccess: 'available', sourcesComplete: true });
 export const DEFAULT_ASSEMBLY_POLICY = 'rank-first-whole-v1';
 export const ASSEMBLY_LIMITS = Object.freeze({ defaultMaxTokens: 1500, minTokens: 64, maxTokens: 4000,
   defaultMaxItems: 12, maxItems: 24, candidates: 24, sourcesPerItem: 16, responseBytes: 65536,
@@ -95,9 +98,10 @@ export function contextInput(method, value, supportedTypes) {
   const selected = ownData(payload, method === 'findCandidates' ?
     ['readSet', 'query', 'types', 'intent', 'semantic', 'limit', 'deadlineMs', 'cursor'] : method === 'contextRead' ?
       ['readSet', 'query', 'types', 'intent', 'semantic', 'budget', 'policy', 'deadlineMs'] : method === 'refreshContextIndex' ?
-      ['readSet', 'types', 'intent', 'budget'] : ['readSet', 'refs', 'intent', 'snapshot', 'responseByteLimit']);
+      ['readSet', 'types', 'intent', 'budget'] : ['readSet', 'refs', 'intent', 'snapshot', 'responseByteLimit', 'fences']);
   const result = { readSet: contextReadSet(selected.readSet) };
   if (method === 'fetchCandidateEvidence') {
+    if (Object.hasOwn(selected, 'fences') && Object.hasOwn(selected, 'snapshot')) fail('invalid_input');
     result.responseByteLimit = integer(selected.responseByteLimit, 65536, 65536);
     if (Object.hasOwn(selected, 'snapshot')) {
       if (Object.hasOwn(selected, 'refs') || Object.hasOwn(selected, 'intent') ||
@@ -106,6 +110,12 @@ export function contextInput(method, value, supportedTypes) {
     } else {
       if (!['current', 'history'].includes(selected.intent)) fail('invalid_input');
       result.intent = selected.intent; result.refs = contextRefs(selected.refs, result.readSet, supportedTypes);
+      if (Object.hasOwn(selected, 'fences')) {
+        result.fences = denseArray(selected.fences, result.refs.length, result.refs.length).map(prefix => {
+          if (prefix !== null && (typeof prefix !== 'string' || !/^[A-Za-z0-9_-]{8}$/.test(prefix))) fail('invalid_input');
+          return prefix;
+        });
+      }
     }
   } else {
     denseArray(selected.types, 1, 2);

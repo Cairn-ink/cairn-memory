@@ -15,6 +15,7 @@ import { meteredText } from '../../core/context-read-assembly.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const roots = ['core/index.mjs', 'core/contract.mjs', 'adapters/mcp/cli.mjs', 'adapters/local/cli.mjs', 'integrations/client/raw/local-host-cli.mjs'];
 const added = ['adapters/openai/context-counter.mjs', 'core/context-read-assembly.mjs'];
+const snapshotKey = 'ink.cairn/context-read-snapshot';
 const metaKey = 'ink.cairn/context-read-diagnostics';
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 const walk = (path, prefix = '') => readdirSync(path, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ?
@@ -68,13 +69,13 @@ test('A12 installed keyless and keyed CLI expose assembly, inject the counter, p
         maxTokens: 4000, maxItems: 1, ...(policy ? { policy } : {}) } });
       const value = ok(JSON.parse(response.content[0].text));
       assert.deepEqual(response.content, [{ type: 'text', text: meteredText(value) }]);
-      assert.equal(value.counter.id, 'tiktoken-o200k_base');
-      assert.equal(value.policy.id, policy?.id ?? 'rank-first-whole-v1');
-      assert.equal(value.items.length, 1); assert.equal(value.items[0].ref.memoryId, memory.id);
-      assert.equal(value.items[0].body.text, canonical); assert.equal(canonical, 'assembly ABC evidence');
+      assert.equal(response._meta[metaKey].counter.id, 'tiktoken-o200k_base');
+      assert.equal(response._meta[metaKey].policy.id, policy?.id ?? 'rank-first-whole-v1');
+      assert.equal(value.items.length, 1); assert.equal(value.items[0].ref.id, memory.id);
+      assert.equal(value.items[0].body, canonical); assert.equal(canonical, 'assembly ABC evidence');
       assert.equal(response.isError, false); assert.equal(response.content[0].text.includes('diagnostics'), false);
       assert.equal(response.content[0].text.includes('counterCalls'), false);
-      assert.deepEqual(Object.keys(response._meta), [metaKey]);
+      assert.deepEqual(Object.keys(response._meta), [metaKey, snapshotKey]);
       const diagnostics = response._meta[metaKey];
       assert.equal(diagnostics.budget.used, countOpenAITokens(response.content[0].text));
       assert.ok(diagnostics.budget.used <= 4000); assert.equal(diagnostics.budget.maxItems, 1);

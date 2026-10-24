@@ -7,6 +7,7 @@ Status:
 - U5a (§13) v0.6.2 is confirmed by the auditor as ready for implementation.
 - U2c (§14) v0.7.1 is confirmed by the auditor as ready for implementation. It precedes U4a and U5a's wiring.
 - U5b (§15) v0.9.1 is confirmed by the auditor as ready for implementation (`0e92245d`, two re-checks). It builds only on U5a's facade and does not change §13.
+- U5b-2 (§15.8) v0.10.3 is confirmed by the auditor as ready for implementation (`ccc9602a`, one audit and three re-checks). It amends §15 after the preview.2 smoke test: `representation-v2`, host-only snapshot with fence-prefixed compact refs, first-source policy.
 
 History:
 - v0.1 (`81e0f21`) was audited by Codex `umv1_contract_audit` (gpt-6.1-sol/xhigh,
@@ -1412,6 +1413,408 @@ event-loop delay. Label fake-counter timings separately.
 window degradation; Card source units; role profiles, relations and MOC (U5c);
 long-item validity of the default (HR-2 §3); total model-request spend; any
 budget number as a recommendation.
+
+### 15.8 Amendment v0.10.4: `representation-v2`, host-only snapshot, first-source policy (U5b-2)
+
+Authored by the U5b coordinator on 2026-10-24 after the primary's installed
+smoke test of `0a38a991` (charter §5, `ec806085`) and the primary's decision
+(`docs/plans/primary-to-u5b.md` on `experiment/hybrid-retrieval-hr1`). v0.10
+(`fa94af58`) was audited by an independent, non-author, read-only Codex
+(`u5b2_contract_audit`, gpt-6.1-sol/xhigh): three P0, five P1, one P2. v0.10.1
+applies all of them; the consistency finding (P0) is resolved by the
+primary's decision of 2026-10-24: a per-item fence prefix in the compact ref
+(§15.8.3). The re-check of v0.10.1 (`165d7f99`) found three blocking items
+(verification must live in core; the item fence does not cover MOC parent
+moves; the host-v2 cost equation double-counted) and one new P1 (Card
+mutation codes); v0.10.2 applies them with the primary's second decision
+(parent-only moves are a documented path difference; the fence vector on
+core fetch input is approved under three conditions). The second re-check
+(`22a017f5`) resolved all of them and found one P1: A15's blanket
+`snapshot_stale` expectation for the snapshot path ignored the existing
+error precedence when the canonical refetch itself fails; v0.10.3 narrows
+it. The third re-check (`ccc9602a`) found no blocking items. v0.10.4
+changes only the three numeric A13 bounds to the measured values with
+headroom (see A13); no rule changes. Status: **v0.10.3 confirmed by the
+auditor for implementation; v0.10.4 bounds adjustment under review with
+the implementation.** Where this subsection contradicts §§15.1–15.7, including their
+return-value and envelope descriptions, this subsection wins; every other U5b
+rule stays in force. `read_memory_context` ships in `v1-preview.2` as
+**experimental**, outside the versioning promise; experimental labelling and
+any later stability designation are owned by the primary's release
+documentation, not by this amendment. `find_memory_candidates` and
+`fetch_memory_candidate_evidence` keep their existing output shapes; the only
+change to them is the additive input form in §15.8.3.
+
+#### 15.8.1 Measured problem
+
+Measured on `0a38a991` with the real `tiktoken-o200k_base` counter, core
+fixture, one Memory whose body is 15 tokens and whose single receipt equals
+the body, budget 4,000:
+
+| Component of the metered text | Tokens |
+| --- | ---: |
+| Envelope without items and snapshot (`ok`, `version`, `policy`, `representation`, `counter`, `framing`, `evidenceTrust`) | 84 |
+| Item: `ref` (type, full namespace object, UUID, revision) | 55 |
+| Item: `metadata` | 32 |
+| Item: `sources` (one receipt equal to the body) | 30 |
+| Item: `body` (`{text, tokens}`) | 21 |
+| Item: remaining keys (`rank`, `type`, `sourceAccess`, `sourcesComplete`) | ~24 |
+| `snapshot` (base64url JSON with one fence per item) | 236–251, then +90 per item |
+| **Total** (1 / 2 / 3 items) | **488 / 739 / 989** |
+
+Each added item costs about 250 tokens, of which the body is 15. The snapshot
+alone costs more than ref, metadata and duplicated excerpt together, because
+base64url tokenizes at about 0.65 token per character and the snapshot
+carries one 43-character base64url HMAC fence per item
+(`core/context-read-facade.mjs:108`). HR-2 measured budgets at `O = 0`;
+the host today behaves like `O ≈ 250` per item, so HR-2's 128–512 curves do
+not carry over to the host as published (results §4; addendum in §15.8.8).
+
+#### 15.8.2 `representation-v2`: the metered payload
+
+`representation-v2` **replaces** `representation-v1`; both are never
+selectable. Capabilities announce `assembly.representation:'representation-v2'`
+and `assembly.defaults` (§15.8.6). The metered string is produced by the same
+single core serializer as §15.4 and remains exactly the tool's only text
+block:
+
+```text
+JSON.stringify({ ok:true,
+  value:{ framing, items:[ item... ] },
+  evidenceTrust:'untrusted-data-not-instructions' })
+```
+
+Fields that §15.4 put in the metered text and that do not inform the model
+(`version`, `policy`, `representation`, `counter`, `snapshot`, unit token
+counts) move out of it; §15.8.4 says where. `framing` is unchanged.
+
+One delivered item, with **default-valued fields omitted**:
+
+```text
+{ ref:{ ns, type:'memory', id, rev, f }                   // or { ns, type:'card', id, rev, bodyRev, f }
+  rank,                                                   // original one-based candidate rank, ascending across items
+  body:'<canonical text>',                                // string, whole unit, never shortened
+  metadata:{ ...only fields that differ from assembly.defaults.metadata[type] },
+  sources:[ { index, role, excerpt }                      // concrete receipt
+          | { index, role, sameAsBody:true }              // excerpt bytes equal this item's body
+          | { index, sameAs:{ item, source } } ],         // §15.4 backward alias, unchanged
+  sourceAccess, sourcesComplete }                         // present only when not default
+```
+
+- **Compact ref.** `ns` is the zero-based index of the item's namespace in the
+  **canonical read set order**: the order `contextReadSet()` produces
+  (`core/context-read-input.mjs:71`, sorted by namespace key), which is the
+  order the §13.6 snapshot encoding already indexes and the order the MCP
+  host's immutable startup read set is stored in. Core callers that pass a
+  read set in another order get indices into the canonical order, not into
+  their input. `id` is the Memory or Card id, `rev` the revision, `bodyRev`
+  the Card body revision (mandatory for Cards, forbidden for Memories).
+  `type` moves from the item into the ref. `f` is the **item fence prefix**:
+  the first 8 base64url characters (48 bits) of the existing per-item HMAC
+  `bind('snapshot-item', item)` (`core/context-read-facade.mjs:108`),
+  computed over the **untouched canonical evidence DTO** exactly as the
+  snapshot path hashes it, never over the sorted wire projection, with no
+  new key material. It is a detection token only, never an authority: it
+  proves nothing to the host about who holds it. What it reveals: a stable
+  keyed fingerprint of the item and therefore equality/change information
+  across calls, not plaintext and not key material (the HMAC key is
+  store-local and the prefix cannot be inverted or extended). Assuming
+  pseudorandom HMAC output, a changed item escapes detection with
+  probability 2⁻⁴⁸ per comparison, union bound `M/2⁴⁸` over `M` comparisons:
+  bounded accidental-change detection, not adversarial integrity.
+  Full refs with namespace objects stay available in diagnostics (§15.8.4)
+  and are what `fetchCandidateEvidence` returns; the host never rewrites
+  identities.
+- **Normative serialization.** One core serializer builds the metered object
+  and `JSON.stringify` emits it; the byte sequence is fixed by these rules,
+  so two implementations agree byte for byte:
+  - Key order is the displayed order: envelope `ok, value, evidenceTrust`;
+    value `framing, items`; item `ref, rank, body, metadata, sources,
+    sourceAccess, sourcesComplete`; ref `ns, type, id, rev, bodyRev, f`;
+    concrete source `index, role, excerpt`; body alias `index, role,
+    sameAsBody`; backward alias `index, sameAs` with `sameAs` as `item,
+    source`.
+  - Memory metadata keys, when present, keep the order `state, reviewState,
+    filing, kind, origin, confidence`; Card metadata `state, support, origin`.
+    Nested metadata objects (`filing`, `support`) are serialized with their
+    keys sorted by UTF-8 bytes, recursively; arrays keep their order. Default
+    comparison uses the same canonical form.
+  - `rank`, `body` and `sources` are always emitted, `sources` as `[]` when
+    the item has no delivered source unit. `rank` is the original one-based
+    candidate rank, not the delivered position.
+  - `metadata` is omitted exactly when no field differs from the announced
+    default; `sourceAccess` exactly when it is `'available'`;
+    `sourcesComplete` exactly when it is `true`.
+  - Card body is `title + '\n' + body` (§15.3), as a string.
+  - `sameAsBody` is decided before `sameAs`; a `sameAsBody` unit is never
+    the target of a later `sameAs`; a `sameAs` targets the earliest earlier
+    concrete source with equal canonical `(role, excerpt)` bytes.
+- **Body** is the canonical text as a string. The body token count is
+  diagnostics (§15.4 already made unit counts diagnostics only).
+- **Metadata** carries only fields whose canonical value differs from the
+  announced defaults; when nothing differs, the `metadata` key is omitted.
+  Defaults are a frozen constant announced in capabilities:
+  Memory `{state:'active', reviewState:'none', filing:{status:'unfiled'},
+  kind:'fact', origin:'explicit', confidence:1}`; Card `{state:'confirmed'}`
+  (`support` and `origin` are always delivered for Cards). Comparison is
+  canonical JSON equality per field (`filing` compares the whole object).
+  Omission is lossless: full §13.6 metadata for every delivered item stays in
+  diagnostics.
+- **Sources.** Receipt order, the 16 cap, the §15.4 body-before-sources
+  invariant and backward `sameAs` are unchanged. A source whose validated
+  canonical `(role, excerpt)` has excerpt bytes equal to the item's own
+  canonical body bytes is delivered as `{index, role, sameAsBody:true}`; its
+  role is kept so the reader still learns who said it. `sameAsBody` is checked
+  before `sameAs`, so an excerpt equal to the body of an earlier item and to
+  this item's body aliases the body, not the earlier source. Receipts are
+  never dropped: a `sameAsBody` unit still costs its representation, is
+  visited by the policy, counts as represented for `sourcesComplete`, and is
+  counted under `dedup.body` (§15.8.4). Its excerpt is reconstructed by the
+  reader from the item's own body and the delivered `role`; the snapshot and
+  compact-ref fetch return the item's canonical receipt references exactly as
+  §13.6 already does (`core/private-evidence-storage.mjs:78`), and full source
+  prose stays with the separately authorized source reader. Neither
+  diagnostics nor the fetch path carries receipt excerpt text.
+  `source.tokens` moves to diagnostics.
+- **Flags.** `sourceAccess` is delivered only when it is not `'available'`;
+  `sourcesComplete` only when it is `false`. The §15.5 definitions of both are
+  unchanged.
+- **Determinism and metering** are unchanged (§15.4): fit is measured on the
+  complete metered string, per trial, with the same counter-call bound
+  `2 + 2U + R`, the same empty-fit refusal and the same oversized
+  classification. A trial's measured string depends on the per-item fence
+  only through the 8-character `f`, which is known from preparation; no
+  snapshot is encoded per trial.
+- **Final-validation seam.** The facade carries the selected prepared
+  identities (full refs and fences) independently of the wire refs; the
+  existing final validation (`core/context-read-facade.mjs:511`), which
+  matched `metered.items[].ref` against prepared full refs, is rewritten to
+  use those carried identities. Order after admission: derive the snapshot
+  **once** from the accepted final selection using the cached preparatory
+  generations, access generations and full item fences (`null` without any
+  encoding for an empty selection); enforce the 16,384-character bound
+  (`context_item_too_large`); construct and freeze the complete core success
+  envelope `{metered, snapshot, diagnostics}` and apply the 65,536-byte bound
+  to it; then run the single authoritative read that revalidates every
+  selected full identity (generations, eligibility, fence) and refuses
+  `snapshot_stale` on any difference. No host callback, count or await
+  follows that read (A06 unchanged).
+
+Expected cost after this subsection, same probe as §15.8.1: envelope ≈ 30,
+first item ≈ 70–80, each further item ≈ 60–75 (body 15, of which `f` costs
+about 7); a 15-token Memory goes from 3% body share to about 20%. These are
+estimates; A13 measures and publishes the actual constants.
+
+#### 15.8.3 Snapshot: host-only, and the model's refetch path
+
+- **Where it goes.** The core success value becomes
+  `{metered, snapshot, diagnostics}`: `snapshot` is a sibling of `metered`,
+  never inside it. The MCP result carries it only under
+  `_meta['ink.cairn/context-read-snapshot']` (a string, or `null` for an empty
+  selection), beside the existing diagnostics key, under the same explicit,
+  tested client contract (§15.6): a client that forwards `_meta` to the model
+  gets no guarantee from this contract. No second content block and no
+  `structuredContent` are emitted, because many clients forward every content
+  block to the model. The 65,536-byte core envelope, the 262,144-byte
+  transport bound and the 16,384-character snapshot bound are unchanged.
+- **Who uses it.** Today the only flow that needs the model to echo the
+  snapshot is `read_memory_context` → model → `fetch_memory_candidate_evidence({snapshot})`
+  (§15.5). Under this amendment that flow is host-side: a host or UI that kept
+  `_meta` may pass the snapshot to the fetch tool and receives exactly the
+  delivered items with the same `snapshot_stale` linearization (§15.5, A06),
+  unchanged. The **model's** refetch path is `refs`.
+- **Compact refs in `fetch_memory_candidate_evidence`.** The tool accepts, in
+  its existing `refs` array and in addition to the existing full forms, the
+  compact forms `{ns, type:'memory', id, rev, f}` and
+  `{ns, type:'card', id, rev, bodyRev, f}` exactly as delivered in the metered
+  text. `f` is mandatory: a compact ref without `f` is `invalid_input`, so
+  the fence-less path is never reachable by omission. Because the SDK
+  validates the registered input schema before the action runs
+  (`adapters/mcp/server.mjs:226`), the registered `refs` element schema
+  becomes a union whose **legacy arm is the original full-ref schema,
+  unchanged**, and whose compact arm is a strict object validated on the raw
+  descriptor before any normalization: own-data descriptors only, no
+  prototype keys, no hybrid objects mixing compact and full keys; `ns` a safe
+  non-negative integer, `rev`/`bodyRev` safe positive integers, `f` exactly
+  8 base64url characters. Mixed arrays of compact and full refs are allowed.
+  Valid existing inputs produce byte-identical outputs; invalid existing
+  inputs keep the same refusal class (SDK parameter refusal versus tool
+  error) and the same `invalid_input` code, and the worker reports any
+  change in validation message text together with the assertion, if any,
+  that depends on it (no other owner's test is edited).
+  The MCP tool layer (`adapters/mcp/context-read-tools.mjs`, U5b-owned)
+  expands each compact ref purely against the host's **immutable startup
+  read-set mapping** (`adapters/mcp/context-read-access.mjs:8`, never
+  replaced or reordered in a live host; compact refs are scoped to that
+  host's lifetime), then authorizes every expanded namespace through the
+  existing `access.call` grant before any evidence read, so core
+  `fetchCandidateEvidence` and its §13.6 validation are untouched and the
+  existing full-ref parser, foreign-namespace refusals and error bytes are
+  preserved for existing inputs (A01). Malformed or out-of-range compact refs
+  refuse `invalid_input` with zero core calls; a host revoked before the
+  call refuses `authority_required`; revocation during a granted call
+  refuses `scope_changed`, as for every §13 call. The tool description says
+  that refs copied from `read_memory_context` are accepted verbatim and that
+  `snapshot_stale` means "re-run `read_memory_context`". This is the only
+  change to a §13 tool: additive input, output byte-identical for existing
+  inputs.
+- **Which path guarantees what.** Expansion yields the full §13.6 ref, so the
+  existing exact-revision and intent-eligibility semantics apply unchanged
+  (traced at `0a38a991`: a changed revision or filing status refuses
+  `revision_conflict` under both intents; supersession refuses
+  `evidence_unavailable` for `current` and `revision_conflict` for `history`
+  because retirement bumps the revision; forget or deletion refuses
+  `evidence_unavailable`; Card eligibility is checked before revision, so
+  support or applicability loss refuses `evidence_unavailable` and an edit
+  `revision_conflict`; a successful fetch never substitutes another revision;
+  there is no item-level failure, the whole call refuses). Two mutations do
+  not bump a revision and are invisible to full refs: same-revision receipt
+  deletion, and moving an already-filed Memory between MOC parents
+  (`core/moc-storage.mjs:200,292`). The item fence covers the first: the
+  canonical evidence DTO includes the receipt references. It does **not**
+  cover the second: the DTO carries `filing.status` only, never MOC
+  memberships, and a filed→filed parent move advances only the namespace
+  epoch. By the primary's decision of 2026-10-24 this is a **documented
+  difference between the two paths**: a parent-only move leaves the
+  compact-ref fetch succeeding with byte-identical evidence (nothing the
+  model was shown changed, nothing newer or lesser is served), while the
+  snapshot fetch refuses `snapshot_stale` through its generation fence.
+  `docs/limitations.md` records it.
+  **Verification of `f`** lives in core, because `bind`, `read` and the
+  fetch transaction are private facade closures: `fetchCandidateEvidence`
+  input gains an optional `fences` array, aligned index by index with
+  `refs`, each entry an 8-character base64url prefix or `null`. The facade
+  compares every non-null prefix against the full fence it computes over
+  the canonically refetched item, inside **both** `fetchInside` executions
+  (the prepared read and the authoritative final read), after the existing
+  eligibility and revision validation, and refuses the whole call
+  `snapshot_stale` (`retryable:false`, the snapshot path's code and
+  retryability) on any mismatch. There is no partial result and no
+  fence-less fallback. `fences` is part of the authorized input (the
+  authority token binds it like every other field). Calls without `fences`
+  are byte-identical to today. Through MCP, `fences` is reachable **only**
+  by compact-ref expansion: the tool layer fills it from each compact ref's
+  `f` and `null` for full refs; a caller that supplies `fences` itself, or
+  any raw prefix vector beside full refs or a `snapshot`, is refused
+  `invalid_input` before any core call.
+  - **Snapshot fetch** (host-side, from `_meta`) guarantees canonical
+    generations, access generations and full fences over the exact delivered
+    set, in delivered order.
+  - **Compact-ref fetch** (the model's path) guarantees exact revision, intent
+    eligibility and the item fence for each ref, plus re-authorization of
+    `ns` against the immutable startup mapping; it does not check store
+    generations, so namespace-only changes such as a parent move pass. A
+    full ref without `f` keeps today's semantics.
+- **Core hosts** (`contextRead()` callers without MCP) receive the full
+  `snapshot` string in the success value and may pass it to
+  `fetchCandidateEvidence` as before.
+
+#### 15.8.4 Diagnostics
+
+`diagnostics` (unmetered, `_meta['ink.cairn/context-read-diagnostics']` in
+MCP) gains the fields that left the metered text and keeps every §15.5 field:
+
+```text
+{ version:'context-read-v1', policy:{id}, representation:'representation-v2', counter:{id},
+  budget:{maxTokens, maxItems, used}, omitted:{...}, dedup:{sources, body}, stops:{...},
+  items:[{ ref:<full §13.6 ref>, metadata:<full §13.6 metadata>, body:{tokens},
+           sources:[{index, kind:'concrete', tokens} | {index, kind:'sameAs', item, source}
+                   | {index, kind:'sameAsBody', tokens}] }],
+  candidates:{...}, trace:{timings, counterCalls} }
+```
+
+`diagnostics.items[i]` corresponds positionally to `metered.items[i]`, and
+`diagnostics.items[i].sources[j]` to `metered.items[i].sources[j]`: every
+delivered receipt, including aliases, has exactly one entry. Diagnostics
+carry **no receipt or body text**, no paths and no foreign aggregates: only
+the full ref, the full §13.6 metadata, unit token counts and representation
+markers. `dedup.body` counts `sameAsBody` units; `dedup.sources` keeps its
+§15.4 meaning. Omission algebra (§15.5) is unchanged: `sameAsBody` units are
+represented, not omitted. `budget.used` stays the final count of the metered
+string.
+
+#### 15.8.5 Policy `rank-first-first-source-v1` (packet B, non-default)
+
+| Policy id | Visitation order | Status |
+| --- | --- | --- |
+| `rank-first-first-source-v1` | `(rank, body, earliest receipt only)`: each item's body, then only its first source unit in `(created_at, id)` order; later receipts are never visited | Available, not default (HR-2 P-top-s1, results §5.2) |
+
+Unvisited receipts count under `omitted.sources` like any never-visited unit;
+`sourcesComplete` is therefore `false` for any delivered item with more than
+one capped receipt. `maxItems`, deadline, dedup and `sameAsBody` apply as for
+`rank-first-whole-v1`. The default stays `rank-first-whole-v1` until a
+long-item fixture exists (HR-2 results §5.4). Adding this policy is not a
+default change (§15.4).
+
+#### 15.8.6 Host wiring changes
+
+- Capabilities: `assembly.representation:'representation-v2'`,
+  `assembly.policies` gains `'rank-first-first-source-v1'`, and
+  `assembly.defaults:{metadata:{memory:{...}, card:{...}}, sourceAccess:'available', sourcesComplete:true}`
+  announces the omitted defaults verbatim.
+- `read_memory_context`: same arguments; the text block is the v2 metered
+  string; `_meta` carries diagnostics and the snapshot under two keys. Because
+  core capabilities are not an exposed context tool, the **tool description**
+  itself states, verbatim: "`sameAsBody` means this receipt's excerpt equals
+  this item's body verbatim"; that `ref` values are accepted by
+  `fetch_memory_candidate_evidence` as copied, and that `snapshot_stale` from
+  that tool means re-run `read_memory_context`; and the omitted defaults
+  (metadata defaults per type, `sourceAccess:'available'`,
+  `sourcesComplete:true`). The description is bounded and contains no secrets
+  or store identifiers.
+- `docs/context-read-local.md`, `CHANGELOG.md` and `docs/limitations.md`
+  record the representation change, the `_meta` snapshot, the experimental
+  status of the preview.2 shape, and the documented path difference of
+  §15.8.3 (parent-only MOC moves pass the compact-ref fetch and fail the
+  snapshot fetch). Shared-file rules of §15.6 apply.
+- Nothing else in §15.6 changes: counter construction, `--check-config`,
+  allowlist, packaging and SQLite-free linking stay as specified.
+
+#### 15.8.7 Acceptance additions (same conditions as §15.7)
+
+| ID | Observable |
+| --- | --- |
+| A13 | **Known-answer serialization and constants.** A fixed fixture item (Memory and Card, with a concrete receipt, a `sameAsBody` receipt and a `sameAs` alias) serializes to a byte-exact expected v2 string constructed in the test without the production serializer. Constants: the test freezes the exact probe bytes (fixed ids, fixed namespace, fixed `f`, fixed 15-token body, one `sameAsBody` receipt per item) and builds three complete independent expected strings for 0, 1 and 2 items; the real `o200k_base` counter gives `T0`, `T1`, `T2`; the published constants are `envelope = T0`, `firstItem = T1 − T0`, `furtherItem = T2 − T1`, plus separately measured `bodyOnlyItem` (no sources), `concreteSource` (one 15-token concrete receipt delta) and `aliasSource` (one `sameAsBody` delta); bounds `T0 ≤ 48`, `T1 − T0 ≤ 96`, `T2 − T1 ≤ 90` (v0.10.4: the v0.10.3 bounds 40/90/80 were pre-implementation estimates; the worker measured 43/83/82 with the normative serialization and the unchanged framing, and the serialization wins over the estimate, so the bounds are the measured values with about 10% headroom; a later change that exceeds them is a contract change); the constants, the probe strings, the counter id and the implementation commit are written to `evaluation/retrieval-research/assembly/overhead-host-v2.json`, labelled an approximate model (UUID and text tokenization vary), never a guarantee. The test skips with a printed reason when the tokenizer package is absent, and the coordinator runs it where it is present |
+| A14 | **Snapshot out of text.** For every assembly response (success and assembly error), no text block contains the snapshot string or any full fence, and the only fence-derived bytes in text are the 8-character `f` values; `_meta['ink.cairn/context-read-snapshot']` carries the snapshot beside the diagnostics key; the §13 tools' responses are unchanged; a host fetch with that snapshot returns exactly the delivered items in order; after a second-process mutation it refuses `snapshot_stale` (A06 unchanged); an empty selection carries `null` with no encoding call; the 16,384 bound is enforced once on the final snapshot and the 65,536 bound on the complete `{metered, snapshot, diagnostics}` envelope; the core success value carries the same snapshot string |
+| A15 | **Compact refs round-trip with fence verification.** Every `ref` in a delivered v2 text, passed verbatim to `fetch_memory_candidate_evidence`, returns the same item at the same revision with full namespace and canonical receipt references, under both intents, in a one- and a two-namespace read set, for Memories and Cards; mixed compact and full refs in one call succeed; valid existing U5a fetch inputs produce byte-identical outputs, invalid ones the same refusal class and code (§15.8.3); every existing U5a test passes unmodified. **Staleness is visible, never silent**, asserted per mutation kind × intent with the exact codes of §15.8.3, each case pinning the resulting eligibility and revisions in the test: Memory correction and filing-status change → `revision_conflict` (both intents); supersession → `evidence_unavailable` (`current`), `revision_conflict` (`history`); forget and deletion → `evidence_unavailable` (both); Card support or applicability loss → `evidence_unavailable` (`current`), and under `history` `revision_conflict` if a revision changed, otherwise `snapshot_stale` from the fence if the canonical item changed; Card edit → `revision_conflict` under `history`, and under `current` `revision_conflict` while still eligible, otherwise `evidence_unavailable`; same-revision receipt deletion → `snapshot_stale`; in every case the whole call refuses and no text carries post-mutation content. **Snapshot fetch for the same state** (snapshot processing itself unchanged): `snapshot_stale` when the generations differ or a successful canonical refetch yields different full fences; when the canonical refetch itself fails, the existing §13.6 error is preserved (A06 unchanged). Example pinned in the test: same-revision Card support loss with unchanged generations → `current`: `evidence_unavailable` (eligibility fails before the fence comparison, facade:552), `history`: `snapshot_stale`. Mutation fixtures pin generations alongside eligibility and revisions, and the fetch's existing generation comparison between its own two reads is preserved. **Documented path difference:** a filed→filed MOC parent move of a delivered Memory leaves the compact-ref fetch succeeding with byte-identical evidence while the snapshot fetch refuses `snapshot_stale`; A15 asserts exactly that pair. **`f` is mandatory and verified in core:** a one-character change in `f` → `snapshot_stale`; a missing, short, long or non-base64url `f` → `invalid_input`; a caller-supplied `fences` argument, or a prefix vector beside full refs or a `snapshot` → `invalid_input` with zero core calls; a core call with a `fences` entry whose prefix mismatches → `snapshot_stale` from both the prepared and the final read; a full ref without `f` keeps today's semantics. **Authorization is re-derived, never trusted from the index:** expansion uses the immutable startup mapping and authorizes through `access.call` before any evidence read; a core caller passing the read set in reversed order gets canonical indices; out-of-range, negative, non-integer or non-own-data `ns`, hybrid compact/full objects, a Card ref without `bodyRev`, a Memory ref with one → `invalid_input` with zero core evidence reads; a host revoked before the call → `authority_required`; revocation during a granted call → `scope_changed`; a foreign fixture at the indexed position in another host's read set is never returned |
+| A16 | **`sameAsBody` is legible and lossless.** For a receipt equal to the body, the metered text contains `"sameAsBody":true` with the receipt's `role` and does not contain a second copy of the body; the exposed `read_memory_context` tool description contains the sentence "`sameAsBody` means this receipt's excerpt equals this item's body verbatim" (asserted on the listed tool, not on a constant); `diagnostics.items[i].sources[j]` carries `kind:'sameAsBody'` with its token count and no text; the snapshot fetch and the compact-ref fetch return the item's canonical receipt references including that receipt (§13.6 shape, no excerpt text); a receipt that differs from the body by one byte is delivered concretely; a receipt equal to another item's body but not its own is delivered via `sameAs` or concretely, never `sameAsBody`; a `sameAsBody` unit is never a `sameAs` target; `dedup.body` and `sourcesComplete` are exact |
+| A17 | **Default omission is lossless.** Items with every default value carry no `metadata`, `sourceAccess` or `sourcesComplete` key; each non-default value appears in the text: `historical` Memories under `history`, `awaiting` review under `history` (ineligible under `current`), a confirmed review state, a filed status, a non-fact kind, an agent-inferred origin as the store actually records it, confidence < 1, Cards' always-present `support` and `origin`, `sourceAccess` unsupported or unavailable-for-noncurrent, `sourcesComplete:false`; `diagnostics.items[i].metadata` equals the §13.6 metadata for every item; the announced `assembly.defaults` equal the constant the serializer uses. The U5b-owned synthetic fixture's `reviewState:'not-required'` (`core/testing/context-read-assembly-fixture.mjs:50`) is wrong against the store and is corrected to the canonical value in this packet |
+| A18 | **First-source policy.** Visitation order verified against the pinned HR-2 P-top-s1 schedule on the A02 fixture; an item admits at most its earliest capped receipt, and only when it fits; a rejected first receipt never causes the second to be tried; later receipts are counted omitted; `sourcesComplete:false` whenever more than one capped receipt exists; default policy unchanged |
+| A19 | **A01–A12 re-run** against v2. Assertions that may change, each justified in the worker report in one line: v2 serialization shape, admission and empty-fit outcomes that follow from the smaller envelope, dedup `sameAsBody` outcomes, snapshot location, diagnostics shape, the independent A02 oracle's serialization, and the capability block. Assertions that must not change: authority, races and linearization, omission accounting algebra, counter-call and deadline bounds, byte limits, read-only refusals. Files the worker may edit for this: `core/test/context-read-assembly.test.mjs`, `core/test/context-read-assembly-races.test.mjs`, `core/test/context-read-assembly-readonly.test.mjs`, `core/testing/context-read-assembly-*.mjs`, `core/test/fixtures/context-read/u5b-assembly.json`, `adapters/mcp/test/context-read-assembly.test.mjs`, `packaging/test/context-read-assembly.test.mjs`, `docs/context-read-local.md`. The U5a exact-list tests, `assets-host` L01 and every other owner's test are unchanged |
+
+#### 15.8.8 Research addendum (HR-2, packet B, not a contract gate)
+
+After A13 publishes the constants, the HR-2 harness gains
+`--overhead-model host-v2`, read from `overhead-host-v2.json` with its
+commit. The existing scalar `O` (`assembly/arms.mjs:23`, one surcharge per
+unit) cannot express it, so the model is a separate cost function with its
+own cell identity (`O=host-v2@<commit>` in file names and provenance).
+Constants, all from A13's frozen probe with 15-token bodies: `E` = envelope
+(`T0`); `B_n` = tokens of the `n`-item body-only probe minus `E`;
+`h1 = B_1 − 15` (first-item representation without its body text);
+`hN = B_2 − B_1 − 15` (each further item); `C` = delta of one concrete
+15-token receipt; `A` = delta of one `sameAsBody` receipt. For `n > 0`
+delivered items:
+`cost = E + h1 + (n − 1)·hN + Σ_items tokens(body) + Σ_concrete_sources (C − 15 + tokens(excerpt)) + Σ_body_aliases A`,
+and `cost(empty) = E`; a receipt whose excerpt equals its body is charged as
+an alias and its text is never charged twice; every other receipt is charged
+as concrete in this approximate model. The raw `firstItem`/`furtherItem`
+constants stay published solely for the A13 bounds. The harness validates
+`host-v2` cells explicitly: `score.mjs` (which today accepts only overhead
+0/8 and scalar costs, `assembly/score.mjs:40,67,75`) gains a `host-v2`
+replay that recomputes each cell's cost from the constants and refuses a
+cell that does not match. The addendum re-runs the exploratory grid of results §2 on the frozen
+inputs under protocol v1.1 without any model or spend, and publishes
+`docs/plans/budgeted-assembly-hr2-results.md` v1.1 with the host-overhead
+curves beside the `O = 0` curves, as a separately versioned exploratory
+extension. The frozen protocol, the frozen results and `report.mjs`'s
+confirmatory selector (`O = 0`) are untouched: `host-v2` cells are excluded
+from the confirmatory comparison by identity, and the decision of results
+§1 is not re-opened. The constants are an approximate model, labelled so.
+
+**Non-claims added:** that `_meta` is invisible to any particular client;
+answer quality of compact refs; any budget number; the P-top-s1 policy as a
+default.
 
 ## 16. Amendment: contention gates under rollback-journal mode (v0.7.2, primary, 2026-10-24)
 

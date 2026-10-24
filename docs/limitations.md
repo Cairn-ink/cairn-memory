@@ -11,6 +11,21 @@ diagnostics require an explicit client contract that excludes them from model
 input; no invisibility is claimed for arbitrary clients. Separate core/transport byte bounds remain.
 Whole units may be omitted; no body or source is silently shortened.
 
+The experimental preview.2 assembly shape uses `representation-v2`; the snapshot
+is host-only `_meta` beside diagnostics. Compact refs are scoped to the host's
+immutable startup read set. A filed-to-filed MOC parent move leaves compact-ref
+fetch succeeding with byte-identical evidence while snapshot fetch refuses
+`snapshot_stale` through the namespace generation. Compact refs check exact
+revisions, intent eligibility and item fences; full refs retain their prior semantics.
+
+The mandatory 8-character `f` is a stable keyed fingerprint, exposing item
+equality/change information across calls, not plaintext or key material. The
+store-local HMAC prefix cannot be inverted or extended. Assuming pseudorandom
+HMAC output, a changed item escapes detection with probability 2⁻⁴⁸ per comparison,
+with union bound `M/2⁴⁸` over `M` comparisons. This is bounded accidental-change
+detection, not adversarial integrity or authority. A client forwarding `_meta`
+to a model receives no metadata-isolation guarantee.
+
 HR-2 has run on the frozen HR-1 fixture: coverage-first did not beat
 rank-first whole units (−2.5 points, 95% CI [−6.6, +1.5] at the preregistered
 cell), so the rank-first default stands; it is versioned and swappable. That

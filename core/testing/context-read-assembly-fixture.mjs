@@ -46,8 +46,8 @@ export function assemblyFixture(t, options = {}) {
 export function fixedPrepared(order = sample.rankings[0]) {
   return order.map((id, index) => {
     const item = sample.items.find(item => item.id === id);
-    return { ref: { type: 'memory', namespace: ns, memoryId: id, revision: 1 }, type: 'memory', rank: index + 1,
-      metadata: { state: 'active', reviewState: 'not-required', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 },
+    return { ref: { type: 'memory', namespace: ns, memoryId: id, revision: 1 }, type: 'memory', ns: 0, fence: 'abcdefgh' + 'x'.repeat(35), rank: index + 1,
+      metadata: { state: 'active', reviewState: 'none', filing: { status: 'unfiled' }, kind: 'fact', origin: 'explicit', confidence: 1 },
       text: item.text, sources: item.receipts.slice(0, 16).map(({ role, excerpt }, index) => ({ index, role, excerpt })),
       sourceAccess: 'available', sourcesComplete: item.receipts.length <= 16 };
   });

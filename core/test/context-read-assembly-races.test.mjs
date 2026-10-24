@@ -85,7 +85,7 @@ test('A06 preparation omits unavailable candidates outside the prepared universe
     assert.equal(changed, true); assert.equal(actual.diagnostics.candidates.count, 1);
     assert.equal(actual.diagnostics.omitted.unavailable, 1);
     assert.equal(actual.diagnostics.omitted.bodies, 0); assert.equal(actual.diagnostics.omitted.sources, 0);
-    assert.deepEqual(actual.metered.items, []); assert.equal(actual.metered.snapshot, null);
+    assert.deepEqual(actual.metered.items, []); assert.equal(actual.snapshot, null);
   } finally { f.trusted.state.hook = null; }
 });
 
@@ -117,8 +117,8 @@ test('A06 authoritative read follows every host callback and count; a later micr
   finally { DatabaseSync.prototype.prepare = originalPrepare; f.trusted.state.hook = null; }
   assert.equal(lateWrite, true); assert.equal(evidenceReads, 2);
   assert.equal(value.diagnostics.trace.counterCalls, counterCalls);
-  assert.equal(value.metered.items[0].body.text, 'assembly original intact');
-  denied(f.call('fetchCandidateEvidence', { readSet: [ns], snapshot: value.metered.snapshot }), 'snapshot_stale');
+  assert.equal(value.metered.items[0].body, 'assembly original intact');
+  denied(f.call('fetchCandidateEvidence', { readSet: [ns], snapshot: value.snapshot }), 'snapshot_stale');
 });
 
 test('A06/A07 revocation at search-result await, counter callbacks and final check returns scope_changed', async t => {

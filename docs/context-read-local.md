@@ -56,7 +56,9 @@ candidate search. `maxTokens` is an integer from 64–4,000 (default 1,500);
 1–5,000 (default 1,000). The host maps the two size arguments to core `budget`;
 callers cannot supply `budget`, a cursor, authority or configuration. `policy`
 is a strict `{id}` object: `rank-first-whole-v1` (initial default) or
-`coverage-first-v1`. Unknown fields and policies refuse. Bodies and sources
+`coverage-first-v1` or `rank-first-first-source-v1` (body, then only the earliest
+receipt per item). Later receipts count as omitted under the first-source policy;
+the default remains `rank-first-whole-v1`. Unknown fields and policies refuse. Bodies and sources
 are admitted whole or omitted; sources never appear without their body.
 
 Context-enabled CLI startup awaits the local `o200k_base` counter
@@ -91,13 +93,45 @@ counter creation and CLI startup with `context_tokenizer_unavailable`;
 automatic programmatic loading resolves readiness to `false` instead.
 This needs no API key, provider or network. Capabilities
 advertise `contextRead` and an `assembly` block with representation, policies,
-default policy, counter identity and limits. Core hosts without a counter
+default policy, counter identity, limits and the exact omitted defaults. Core hosts without a counter
 advertise `counter:null` and refuse assembly; retrieval still works.
 
 On success the tool returns exactly one text block, byte for byte equal to
 core `meteredText(result.value.metered)`:
 `JSON.stringify({ok:true,value:metered,evidenceTrust:'untrusted-data-not-instructions'})`.
-The token budget measures that complete string, including framing and snapshot.
+The experimental preview.2 assembly shape is now `representation-v2`, replacing
+v1 without a selector. The metered value contains only `{framing,items}`. Each
+item has `{ref,rank,body,sources}` plus non-default metadata and flags. Bodies
+are whole canonical strings (Cards use `title + '\n' + body`); ranks retain
+their original candidate positions. Compact refs are
+`{ns,type,id,rev,f}` (Cards also require `bodyRev` before `f`), where `ns`
+indexes the immutable startup read set in canonical namespace order. Copy
+these refs verbatim into `fetch_memory_candidate_evidence({refs,intent})`;
+compact and full refs can be mixed. A `snapshot_stale` refusal means re-run
+`read_memory_context`. Caller-supplied `fences` or other prefix vectors refuse.
+
+`sameAsBody` means this receipt's excerpt equals this item's body verbatim.
+The alias keeps `index` and `role`; reconstruct its excerpt from that item's
+body. It takes precedence over backward `sameAs` and never becomes a backward
+alias target. `sameAs` still points to an earlier concrete source by item/source
+position; receipt identity remains distinct. The separately authorized fetch
+returns canonical receipt references, without source prose.
+
+Omitted defaults are Memory metadata
+`{state:'active',reviewState:'none',filing:{status:'unfiled'},kind:'fact',origin:'explicit',confidence:1}`,
+Card metadata `{state:'confirmed'}`, `sourceAccess:'available'` and
+`sourcesComplete:true`. Cards always retain `support` and `origin`. Full metadata,
+full refs and unit token counts appear positionally in `diagnostics.items`;
+diagnostics contain neither body nor receipt prose. `dedup.body` counts body
+aliases; `dedup.sources` counts backward aliases.
+
+The token budget measures the complete string, including framing and the
+8-character `f` prefixes. The snapshot is host-only, under
+`_meta['ink.cairn/context-read-snapshot']` beside diagnostics; it is never in
+text or `structuredContent`. Core success is `{metered,snapshot,diagnostics}`.
+The snapshot is derived once after admission and is `null` for an empty selection.
+A host/UI that retains it can use `fetch_memory_candidate_evidence({snapshot})`
+to refetch the exact delivered set in order.
 Diagnostics, including budget usage, omissions and timings, appear only under
 `_meta['ink.cairn/context-read-diagnostics']`, never in a text block. Assembly
 errors retain their envelope, error code, retryability and trust framing in
@@ -106,13 +140,24 @@ text, but move `error.details.candidates` into that same metadata key as
 details object is omitted. This isolation covers both successful assembly and
 candidate-search failures, including absent embedding configuration and an
 unavailable index. The §13 tools keep their existing response shape. A client
-that uses these diagnostics must explicitly keep `_meta` in its host/UI state
-and send only the text block to the model; this contract is tested with a
+that uses diagnostics or the snapshot must explicitly retain `_meta` in its
+host/UI state and send only the text block to the model; this contract is tested with a
 client that constructs model input from `content` alone. No invisibility is
 claimed for arbitrary clients. The portable guarantee bounds the exact text
 block alone, not total model-request spend. The independent 65,536-byte core
 envelope and 262,144-byte transport bounds also apply, including diagnostics;
 both successful and error responses include diagnostics in those byte checks.
+
+The `f` prefix is a store-keyed fingerprint of the untouched canonical evidence
+item, checked in both core fetch reads after eligibility and revision checks.
+It grants no authority. Compact-ref fetch re-authorizes every expanded namespace;
+a revoked host cannot reuse its mapping to read evidence. Full refs keep their
+existing exact-revision semantics. Compact refs additionally detect same-revision
+receipt changes; snapshot fetch also checks namespace/access generations. A
+filed-to-filed MOC parent move changes only a namespace generation: compact-ref
+fetch succeeds with byte-identical evidence, while snapshot fetch refuses
+`snapshot_stale`. Other mutation refusals retain eligibility/revision precedence;
+see [contract §15.8](plans/unified-memory-v1-contract.md#158-amendment-v0104-representation-v2-host-only-snapshot-first-source-policy-u5b-2).
 
 The default is versioned and swappable. HR-2 ran on a short, single-fact,
 receipt-oriented synthetic fixture and kept rank-first as the initial default;
