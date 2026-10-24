@@ -4,12 +4,16 @@ import { decoder, INPUT_BYTES, OUTPUT_BYTES, shape, writeFrame, nextRequestId } 
 import { VERSION, fail } from './common.mjs';
 import { checkFence } from './pack.mjs';
 import { loadRuntime, resolutionGuard } from './runtime.mjs';
-export function runInferenceChild(root = process.argv[2]) {
+// Construction-only rendezvous/observation seams. The executable entry uses
+// all production defaults; no environment or protocol field can replace them.
+export function runInferenceChild(root = process.argv[2], { checkpoint = async () => {}, makeGuard = resolutionGuard, onStopped = async () => {} } = {}) {
 let pack, runtime, guard, busy = false, initialized = false, dead = false, session = null, previous = 0;
+const fenced = async stage => { await checkpoint(stage); return checkFence(root, pack.fence); };
 async function stop() {
   if (dead) return; dead = true; input.stop();
   try { await runtime?.close(); } catch { /* Only sanitized protocol codes escape. */ }
   guard?.close(); process.stdin.destroy(); process.stdout.end(); lifeline.destroy();
+  await onStopped();
 }
 async function fatal(code) {
   if (dead) return;
@@ -24,12 +28,12 @@ async function accept(value) {
       if (busy || !/^[a-f0-9]{64}$/.test(value.manifestHash) || !Number.isInteger(value.threads) || value.threads < 1 || value.threads > 64 || value.verificationFence?.manifestHash !== value.manifestHash) fail('protocol_error');
       busy = true;
       pack = { packPath: root, fence: value.verificationFence };
-      pack.manifest = await checkFence(root, pack.fence); // Before first pack import; bounded manifest read.
-      guard = resolutionGuard(pack);
-      await checkFence(root, pack.fence); // Immediately before model/session load.
-      runtime = await loadRuntime(pack, value.threads, undefined, async () => { guard.assert(); await checkFence(root, pack.fence); });
+      pack.manifest = await fenced('before-import'); // Before first pack import; bounded manifest read.
+      guard = makeGuard(pack);
+      await fenced('before-load'); // Immediately before model/session load.
+      runtime = await loadRuntime(pack, value.threads, undefined, async () => { guard.assert(); await fenced('runtime-imported'); });
       guard.assert(); await runtime.embed(['Cairn local embedder warm-up']); guard.assert();
-      await checkFence(root, pack.fence); guard.assert(); // After loading and warm-up.
+      await fenced('after-warm-up'); guard.assert(); // After loading and warm-up.
       if (dead) return;
       initialized = true; busy = false;
       await writeFrame(process.stdout, { v: VERSION, op: 'ready', manifestHash: value.manifestHash, dimensions: 1024, normalization: 'l2' }, OUTPUT_BYTES);
@@ -38,12 +42,12 @@ async function accept(value) {
       if (busy || !/^[a-f0-9]{32}$/.test(value.session) || session !== null && session !== value.session || !nextRequestId(value.id, previous)) fail('protocol_error');
       busy = true; session = value.session; previous = value.id;
       try {
-        const result = await runtime.embed(value.texts); guard.assert(); await checkFence(root, pack.fence); guard.assert();
+        const result = await runtime.embed(value.texts); guard.assert(); await fenced('after-inference'); guard.assert();
         if (!dead) await writeFrame(process.stdout, { v: VERSION, op: 'result', session, id: value.id, ...result }, OUTPUT_BYTES);
       } catch (e) {
         guard.assert();
         if (['model_pack_integrity', 'model_runtime_unavailable'].includes(e.code)) throw e;
-        await checkFence(root, pack.fence); guard.assert();
+        await fenced('after-inference-error'); guard.assert();
         if (!dead) await writeFrame(process.stdout, { v: VERSION, op: 'error', session, id: value.id, code: ['context_item_too_large', 'dimension_mismatch'].includes(e.code) ? e.code : 'provider_error' }, OUTPUT_BYTES);
       } finally { busy = false; }
     }

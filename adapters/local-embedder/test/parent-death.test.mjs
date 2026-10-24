@@ -28,7 +28,7 @@ async function waitFor(check, name) {
 }
 async function json(path) { try { return JSON.parse(await readFile(path, 'utf8')); } catch { return null; } }
 for (const mode of ['blocked-load', 'blocked-inference']) for (const kill of ['parent-pid', 'caller-group']) {
-  test('L08 ' + mode + ' survives ' + kill + ' long enough to reap native group without gate release', async t => {
+  test('L08 supervisor-survival assertion races successful cleanup: ' + mode + ' / ' + kill, async t => {
     const f = await fixture(), pack = await verifyPack(f.root, { catalog: f.catalog });
     const report = join(f.parent, 'registration.json'), gate = join(f.parent, 'entered.json');
     const stdout = await open(join(f.parent, 'caller.out'), 'wx'), stderr = await open(join(f.parent, 'caller.err'), 'wx');
@@ -57,11 +57,11 @@ for (const mode of ['blocked-load', 'blocked-inference']) for (const kill of ['p
     assert.equal(new Set([callerInfo.group, supervisorInfo.group, inferenceInfo.group, harnessInfo.group]).size, 4);
     assert.notEqual(callerInfo.session, supervisorInfo.session);
     if (kill === 'parent-pid') process.kill(caller.pid, 'SIGKILL'); else signalGroup(caller.pid, 'SIGKILL');
-    // Explicit observation immediately after group kill: the supervisor is
-    // outside that group and the blocked native child is still its responsibility.
-    assert.ok(live(await processInfo(registration.supervisor)), 'supervisor survives caller termination');
     await waitFor(async () => !groupExists(registration.inference), 'inference-group-disappearance');
     await waitFor(async () => !live(await processInfo(registration.supervisor)), 'supervisor-exit');
+    // Assert after cleanup has completed, so descheduling cannot turn prompt
+    // successful cleanup into a failure of an instantaneous liveness check.
+    assert.deepEqual(await json(gate + '.supervisor-eof'), { supervisor: registration.supervisor, inference: registration.inference });
     await waitFor(() => closed, 'caller-reaped');
     assert.equal(await json(report + '.error'), null); // Parent never resumed/finished native work.
   });

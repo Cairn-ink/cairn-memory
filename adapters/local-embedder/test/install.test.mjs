@@ -9,6 +9,8 @@ import { installPack as productionInstall } from '../install.mjs';
 // native publication primitive. Production intentionally has no such fallback.
 const installPack = (path, options) => productionInstall(path, { publishNoReplace: rename, ...options });
 import { sha256 } from '../common.mjs';
+import { createReadStream } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 const absent = async path => assert.rejects(access(path), { code: 'ENOENT' });
 test('L04 pinned file source, bounded chunk transfer, offline verification and identical retry', async t => {
   const f = await fixture(t), target = join(f.parent, 'installed'), options = { catalog: f.catalog, source: f.source };
@@ -88,4 +90,24 @@ test('L04 production refuses publication without an atomic no-replace primitive'
   const f = await fixture(t), target = join(f.parent, 'installed');
   await assert.rejects(productionInstall(target, { catalog: f.catalog, source: f.source }), { code: 'model_pack_unavailable' });
   await absent(target); assert.deepEqual((await readdir(f.parent)).filter(p => p !== 'pack'), []);
+});
+
+test('L04 compressed extraction leaks the archive FD on failure: source closes before failed install settles', async t => {
+  const f = await fixture(t), target = join(f.parent, 'installed');
+  const bytes = gzipSync(archive([...f.contents].map(([p, f]) => [p, f.bytes])));
+  f.catalog[0].downloads = [{ url: 'https://example.invalid/pinned/compressed', sha256: sha256(bytes), bytes: bytes.length,
+    maxExpandedBytes: 1, files: f.manifest.files.map(f => f.path), format: 'tar.gz' }];
+  for (let i = 0; i < 3; i++) {
+    let input, opened = false, closed = false, ended = false;
+    await assert.rejects(installPack(target, { catalog: f.catalog,
+      source: async url => ({ url, status: 200, body: (async function* () { yield bytes; })() }),
+      readArchive(path) {
+        input = createReadStream(path, { highWaterMark: 1 });
+        input.once('open', () => { opened = true; }); input.once('close', () => { closed = true; }); input.once('end', () => { ended = true; });
+        return input;
+      } }), { code: 'model_pack_integrity' });
+    assert.equal(opened, true); assert.equal(ended, false, 'failure must interrupt an active upstream archive');
+    assert.equal(closed, true); assert.equal(input.closed, true); assert.equal(input.fd, null);
+    await absent(target); assert.deepEqual((await readdir(f.parent)).filter(p => p !== 'pack'), []);
+  }
 });

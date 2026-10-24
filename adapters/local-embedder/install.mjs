@@ -3,6 +3,7 @@ import { dirname, basename, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { createGunzip } from 'node:zlib';
+import { pipeline, finished } from 'node:stream/promises';
 import { RELEASE_CATALOG } from './catalog.mjs';
 import { absolutePath, fail, canonical, HASH, MODEL, refusal, relativePath } from './common.mjs';
 import { publisherArtifact, publishPackNoReplace } from './publish.mjs';
@@ -70,10 +71,14 @@ async function writeArtifact(root, path, chunks, expected) {
 }
 // Minimal closed tar reader: ordinary regular-file headers only. No links,
 // devices, PAX, GNU path extensions, absolute paths or metadata side effects.
-async function extract(d, archive, root, manifest) {
+async function extract(d, archive, root, manifest, readArchive) {
   const inventory = new Map(manifest.files.map(f => [f.path, f]));
-  if (d.format === 'file') return writeArtifact(root, d.files[0], createReadStream(archive), inventory.get(d.files[0]));
-  const stream = d.format === 'tar.gz' ? createReadStream(archive).pipe(createGunzip()) : createReadStream(archive);
+  if (d.format === 'file') return writeArtifact(root, d.files[0], readArchive(archive), inventory.get(d.files[0]));
+  const source = readArchive(archive), stream = d.format === 'tar.gz' ? createGunzip() : source;
+  const pumping = stream === source ? null : pipeline(source, stream);
+  // Extraction can reject while the pipeline is still reading. Observe its
+  // rejection immediately, then await full source closure in the finalizer.
+  pumping?.catch(() => {});
   let buffer = Buffer.alloc(0), expanded = 0, ended = false, current, padding = 0, handle, hash, count = 0;
   const seen = new Set();
   try {
@@ -106,7 +111,11 @@ async function extract(d, archive, root, manifest) {
       }
     }
     if (current || padding || buffer.some(Boolean) || !ended || canonical([...seen].sort()) !== canonical([...d.files].sort())) fail('model_pack_integrity');
-  } finally { stream.destroy(); await handle?.close(); }
+  } finally {
+    source.destroy(); stream.destroy();
+    await Promise.allSettled([finished(source, { cleanup: true }), ...(pumping ? [pumping] : [])]);
+    await handle?.close();
+  }
 }
 async function confirmLicense(stage, manifest) {
   const row = manifest.licenses.find(l => l.component === MODEL.repository);
@@ -118,7 +127,7 @@ async function confirmLicense(stage, manifest) {
       !license.includes('Permission is hereby granted, free of charge') ||
       !license.includes('THE SOFTWARE IS PROVIDED "AS IS"')) fail('model_pack_license');
 }
-export async function installPack(packPath, { catalog = RELEASE_CATALOG, source = globalThis.fetch, signal, beforePublish = () => {}, publishNoReplace = publishPackNoReplace, transferClock = { setTimer: setTimeout, clearTimer: clearTimeout }, ...verification } = {}) {
+export async function installPack(packPath, { catalog = RELEASE_CATALOG, source = globalThis.fetch, signal, beforePublish = () => {}, publishNoReplace = publishPackNoReplace, transferClock = { setTimer: setTimeout, clearTimer: clearTimeout }, readArchive = createReadStream, ...verification } = {}) {
   absolutePath(packPath);
   const descriptor = catalog.find(d => d.packId === 'bge-m3'); if (!descriptor?.manifestBytes || !descriptor.downloads?.length) fail('model_pack_manifest_invalid');
   const { manifest, manifestHash } = parseManifest(Buffer.from(descriptor.manifestBytes), catalog);
@@ -139,7 +148,7 @@ export async function installPack(packPath, { catalog = RELEASE_CATALOG, source 
     for (let i = 0; i < descriptor.downloads.length; i++) {
       if (signal?.aborted) fail('model_pack_download_failed');
       const d = descriptor.downloads[i], archive = join(stage, '.download-' + i);
-      await transfer(d, archive, source, signal, transferClock); await extract(d, archive, stage, manifest); await rm(archive);
+      await transfer(d, archive, source, signal, transferClock); await extract(d, archive, stage, manifest, readArchive); await rm(archive);
     }
     await confirmLicense(stage, manifest);
     const h = await open(join(stage, 'manifest.json'), 'wx', 0o600); try { await h.writeFile(descriptor.manifestBytes); await h.sync(); } finally { await h.close(); }

@@ -1,9 +1,64 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { runLocalMeasurement, parseLocalMeasurement } from '../../../tools/testing/measure-local-embedder.mjs';
+import { runLocalMeasurement, parseLocalMeasurement, measureLocalWorkload } from '../../../tools/testing/measure-local-embedder.mjs';
+import { fixture } from './fixtures/pack.mjs';
+import { verifyPack } from '../pack.mjs';
+import { loadRuntime } from '../runtime.mjs';
 import { assertLocalQualificationAdmission } from '../../../tools/testing/local-embedder-admission.mjs';
 const args = ['--pack','/synthetic/pack','--expected-manifest-sha256','a'.repeat(64),'--output','/synthetic/report.json'];
+
+test('L14 qualification cannot complete with a valid runtime: real admission and every workload stage complete offline', async t => {
+  const f = await fixture(t), pack = await verifyPack(f.root, { catalog: f.catalog });
+  const texts = [], models = [], bundles = [];
+  let crashed = 0;
+  const start = async (p, threads, { onRegistration }) => {
+    const runtime = await loadRuntime(p, threads, async () => ({ env: {},
+      AutoTokenizer: { from_pretrained: async () => (text, options) => {
+        assert.equal(options.truncation, false); texts.push(text);
+        const count = text.trim().split(/\s+/u).length + 2;
+        return { input_ids: { dims: [1, count], data: new BigInt64Array(count) } };
+      } },
+      AutoModel: { from_pretrained: async () => async tokens => {
+        const count = tokens.input_ids.data.length; models.push(count);
+        const data = new Float32Array(count * 1024); data[0] = 1;
+        return { last_hidden_state: { dims: [1, count, 1024], data } };
+      } } }));
+    await runtime.embed(['warm-up']);
+    let status = { state: 'ready', reason: null }, lastTokenCount, resolveClosed;
+    const closed = new Promise(resolve => { resolveClosed = resolve; });
+    const bundle = { localStatus: () => status, whenClosed: () => closed,
+      diagnostics: () => ({ lastTokenCount }),
+      async embed(input) {
+        if (status.state !== 'ready') throw Object.assign(Error('child_crash'), { code: 'child_crash' });
+        const value = await runtime.embed(input); lastTokenCount = value.tokenCounts[0]; return value.vectors;
+      },
+      crash() { status = { state: 'unavailable', reason: 'child_crash' }; resolveClosed(); },
+      async close() { status = { state: 'closed', reason: 'closed' }; resolveClosed(); await runtime.close(); } };
+    bundles.push(bundle); onRegistration({ inferencePid: 900000001, supervisorPid: 900000002 }); return bundle;
+  };
+  let written;
+  const result = await runLocalMeasurement(['--pack', f.root, '--expected-manifest-sha256', pack.manifestHash, '--output', f.parent + '/report.json'], {
+    verify: async () => pack,
+    workload: (p, config) => measureLocalWorkload(p, config, { start,
+      monitorRss: () => ({ start() {}, async close() {}, report: () => ({ peakInferenceBytes: 1, peakSupervisorBytes: 1, peakParentBytes: 1 }) }),
+      crash(pid) { assert.equal(pid, 900000001); crashed++; bundles.at(-1).crash(); } }),
+    write: async (_, value) => { written = value; } });
+  assert.equal(result.exitCode, 0, JSON.stringify(written));
+  const report = written.workload;
+  assert.equal(report.warmQuery.samples, 20); assert.equal(report.lookup.samples, 20);
+  assert.equal(report.refresh.short.embedded, 8); assert.equal(report.refresh.short.attempts, 8);
+  assert.equal(report.refresh.nearLimit.embedded, 1); assert.equal(report.refresh.nearLimit.attempts, 1);
+  assert.equal(report.refresh.nearLimit.tokenCount, 8105);
+  const materialized = texts.find(text => text.startsWith('qualification near limit\n'));
+  assert.equal(materialized, 'qualification near limit\n' + 'x '.repeat(8100).trim());
+  assert.equal(texts.filter(text => text === materialized).length, 1);
+  assert.equal(texts.filter(text => text === 'x '.repeat(20000)).length, 1);
+  assert.equal(models.includes(20002), false, 'oversized input never reaches the model');
+  assert.equal(report.tokenRefusal, 'context_item_too_large'); assert.equal(report.explicitReinitialization, 'ready');
+  assert.equal(crashed, 1); assert.equal(bundles.length, 2); assert.equal(report.diskBytes > 0, true);
+  assert.deepEqual(report.failures, []); assert.ok(report.eventLoopDelay); assert.equal(written.ok, true);
+});
 test('L14 exact qualification arguments, fail-nonzero reports, no runtime work before all verification', async () => {
   assert.deepEqual(parseLocalMeasurement(args),{packPath:'/synthetic/pack',expectedHash:'a'.repeat(64),output:'/synthetic/report.json'});
   for(const bad of [[],args.slice(0,-1),[...args,'--download','yes'],[...args,'--pack','/again'],args.map(v=>v==='/synthetic/pack'?'relative':v),args.map(v=>v==='a'.repeat(64)?'A'.repeat(64):v)]) assert.throws(()=>parseLocalMeasurement(bad),{code:'invalid_input'});

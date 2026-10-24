@@ -61,13 +61,14 @@ function rssMonitor() {
   const timer = setInterval(sample, 25);
   return { start(value) { ids = value; sample(); }, async close() { clearInterval(timer); await pending; }, report() { return { peakInferenceBytes, peakSupervisorBytes, peakParentBytes, samplingMs: 25 }; } };
 }
-export async function measureLocalWorkload(pack, config) {
+export async function measureLocalWorkload(pack, config, { start = startBundle, monitorRss = rssMonitor,
+  crash = pid => process.kill(pid, 'SIGKILL') } = {}) {
   const workspace = await mkdtemp(join(tmpdir(), 'cairn-local-qualification-'));
-  const monitor = rssMonitor(), lag = monitorEventLoopDelay({ resolution: 10 }); lag.enable();
+  const monitor = monitorRss(), lag = monitorEventLoopDelay({ resolution: 10 }); lag.enable();
   let owner, core, bundle, ids;
   const report = { cache: 'no embedding cache; fresh synthetic canonical store', threads: 4, warmQuery: null, lookup: null, refresh: {}, failures: [] };
   const create = localEmbeddingFactory({ verify: async () => pack, start: async (p, threads) => {
-    bundle = await startBundle(p, threads, { onRegistration(value) { ids = value; monitor.start(value); } }); return bundle;
+    bundle = await start(p, threads, { onRegistration(value) { ids = value; monitor.start(value); } }); return bundle;
   } });
   const makeOwner = () => create({ packPath: config.packPath, threads: 4, maxRequests: 10000 });
   const namespace = { ownerId: 'local-qualification', scope: 'personal', projectId: null }, token = {}, grants = new WeakMap();
@@ -79,13 +80,15 @@ export async function measureLocalWorkload(pack, config) {
     for (let i = 0; i < 20; i++) { const start = performance.now(); const vectors = await owner.embedder.embed(['qualification smoke query ' + i]); validateVector(vectors[0], owner.embedder); warm.push(performance.now() - start); }
     report.warmQuery = timings(warm);
     const { openMemoryCore } = await import('../../core/contract.mjs');
-    const open = () => openMemoryCore({ path, contextRead: { version: 'context-read-v1', authority, embedder: owner.embedder, policy: owner.policy, localStatus: owner.localStatus } });
+    const open = () => openMemoryCore({ path,
+      privateCards: { version: 'private-cards-local-v1', source: 'submitted-note-v1', storage: 'local-plain-v1', disclosure: 'explicit-submitted-note-v1', authority },
+      contextRead: { version: 'context-read-v1', authority, embedder: owner.embedder, policy: owner.policy, localStatus: owner.localStatus } });
     core = open();
     const admit = text => checked(core.admit({ namespace, memory: { content: text, kind: 'fact' }, receipts: [{ client: 'qualification', sessionId: 'qualification', eventId: randomUUID(), role: 'user', excerpt: text }] }));
     const refresh = async () => {
       const started = performance.now(); let attempts = 0, embedded = 0, coverage;
       for (let i = 0; i < 32; i++) {
-        const value = checked(await core.refreshContextIndex({ readSet: [namespace], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }, token));
+        const value = checked(await core.refreshContextIndex({ readSet: [namespace], types: ['memory', 'card'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }, token));
         attempts += value.progress.embeddingAttempts; embedded += value.progress.embedded; coverage = value.coverage;
         if (value.status === 'complete' && value.channels.semantic.state === 'ready') { const elapsedMs = performance.now() - started; return { elapsedMs, calls: i + 1, attempts, embedded, documentsPerSecond: embedded * 1000 / elapsedMs, coverage }; }
         if (value.progress.embeddingAttempts && !value.progress.embedded) throw refusal(value.channels.semantic.state);
@@ -94,17 +97,24 @@ export async function measureLocalWorkload(pack, config) {
     };
     for (let i = 0; i < 8; i++) admit('qualification short uncached document ' + i);
     report.refresh.short = await refresh();
-    const nearLimit = 'x '.repeat(8190).trim();
-    admit(nearLimit); report.refresh.nearLimit = await refresh();
+    // Card bodies admit up to 20,000 characters; Memories admit only 4,000.
+    // Leave room for title/newline and special tokens in the actual canonical
+    // representation. The successful singleton result supplies its token count.
+    const nearLimit = 'x '.repeat(8100).trim();
+    const draft = checked(core.createCardDraft({ namespace, actionId: 'qualification-near-limit-draft', drafting: 'authored',
+      input: { authoredInput: { text: 'Qualification fixture source', occurredAt: null }, title: 'qualification near limit', body: nearLimit } }, token));
+    checked(core.confirmCardDraft({ namespace, cardId: draft.id, expectedRevision: draft.revision,
+      actionId: 'qualification-near-limit-confirm', applicability: 'current' }, token));
+    report.refresh.nearLimit = await refresh();
     report.refresh.nearLimit.tokenCount = bundle.diagnostics().lastTokenCount;
     if (report.refresh.nearLimit.tokenCount < 8000 || report.refresh.nearLimit.tokenCount > 8192) throw refusal('measurement_failed');
     try { await owner.embedder.embed(['x '.repeat(20000)]); throw refusal('measurement_failed'); }
     catch (e) { if (e.code !== 'context_item_too_large') throw e; report.tokenRefusal = 'context_item_too_large'; }
-    const query = { readSet: [namespace], query: 'qualification', types: ['memory'], intent: 'current', semantic: true, deadlineMs: 5000 };
+    const query = { readSet: [namespace], query: 'qualification', types: ['memory', 'card'], intent: 'current', semantic: true, deadlineMs: 5000 };
     const samples = [];
     for (let i = 0; i < 20; i++) { const start = performance.now(), value = checked(await core.findCandidates(query, token)); if (value.channels.semantic.state !== 'ready' || !value.items.length) throw refusal('measurement_failed'); samples.push(performance.now() - start); }
     report.lookup = timings(samples);
-    process.kill(ids.inferencePid, 'SIGKILL'); await bundle.whenClosed();
+    crash(ids.inferencePid); await bundle.whenClosed();
     const degraded = checked(await core.findCandidates(query, token));
     if (!degraded.items.length || degraded.channels.semantic.state === 'ready') throw refusal('measurement_failed');
     core.close(); core = null; await owner.close(); owner = null;
