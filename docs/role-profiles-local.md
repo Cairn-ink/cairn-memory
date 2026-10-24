@@ -107,6 +107,9 @@ Profiles, methods, related content and receipts confer no access, truth or
 execution permission. Local plaintext, best-effort redaction and logical deletion
 do not promise secure erasure of journals, backups or caller copies. Related-source
 fences suppress guidance after source invalidation without recovering purged prose.
+Related Cards whose current dependencies need review are excluded from current
+role guidance ([Card current dependencies](card-current-dependencies-local.md));
+relation/MOC retrieval is a separate opt-in ([context reads](context-read-local.md)).
 This preview makes no claims about answer quality, live cross-agent sessions,
-authoring UI, relation/MOC retrieval, engine receipt lookup or current-dependent
-Card/representation invalidation. See [limitations](limitations.md).
+authoring UI, engine receipt lookup or representation invalidation. See
+[limitations](limitations.md).
