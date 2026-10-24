@@ -1,0 +1,680 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HR-3 v0.3.4 Gold (scorer interchange v1)",
+  "type": "object",
+  "properties": {
+    "question": {
+      "type": "string"
+    },
+    "current": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "active",
+            "no_active_decision",
+            "unresolved"
+          ]
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GoldClaim"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "status",
+        "claims"
+      ],
+      "additionalProperties": false
+    },
+    "old": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "available",
+            "unavailable",
+            "none"
+          ]
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "previously_adopted",
+                  "erroneous",
+                  "expired"
+                ]
+              },
+              "claims": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/GoldClaim"
+                },
+                "minItems": 0
+              }
+            },
+            "required": [
+              "status",
+              "claims"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "status",
+        "records"
+      ],
+      "additionalProperties": false
+    },
+    "reason": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "stated",
+            "not_stated",
+            "unavailable"
+          ]
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "claim": {
+                "$ref": "#/$defs/GoldClaim"
+              }
+            },
+            "required": [
+              "id",
+              "claim"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "acceptedGraphs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "edges": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "support": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 1
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to",
+                    "support"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "edges"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "status",
+        "nodes",
+        "acceptedGraphs"
+      ],
+      "additionalProperties": false
+    },
+    "supportSpans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "start": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "origin",
+          "start",
+          "end",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "question",
+    "current",
+    "old",
+    "reason",
+    "supportSpans"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Text"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Quantity"
+            },
+            "decimal": {
+              "type": "string",
+              "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+            },
+            "unit": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "decimal",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Instant"
+            },
+            "iso": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "iso"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Range"
+            },
+            "lower": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "upper": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lowerClosed": {
+              "type": "boolean"
+            },
+            "upperClosed": {
+              "type": "boolean"
+            },
+            "unit": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "lower",
+            "upper",
+            "lowerClosed",
+            "upperClosed",
+            "unit"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "any": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "all": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "enum": [
+                        "country",
+                        "plan",
+                        "channel"
+                      ]
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "values"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 0
+              }
+            },
+            "required": [
+              "all"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "any"
+      ],
+      "additionalProperties": false
+    },
+    "Interval": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "Citation": {
+      "type": "object",
+      "properties": {
+        "intent": {
+          "enum": [
+            "current",
+            "history"
+          ]
+        },
+        "item": {
+          "type": "integer"
+        },
+        "unit": {
+          "enum": [
+            "body",
+            "receipt"
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quote": {
+          "type": "string"
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "intent",
+        "item",
+        "unit",
+        "source",
+        "quote",
+        "occurrence"
+      ],
+      "additionalProperties": false
+    },
+    "Claim": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "predicate": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "valid": {
+          "$ref": "#/$defs/Interval"
+        },
+        "qualifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/Value"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "subject",
+        "predicate",
+        "value",
+        "scope",
+        "valid",
+        "qualifiers",
+        "citations"
+      ],
+      "additionalProperties": false
+    },
+    "GoldClaim": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "predicate": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "valid": {
+          "$ref": "#/$defs/Interval"
+        },
+        "qualifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/Value"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "subject",
+        "predicate",
+        "value",
+        "scope",
+        "valid",
+        "qualifiers"
+      ],
+      "additionalProperties": false
+    },
+    "DeliveredUnit": {
+      "type": "object",
+      "properties": {
+        "intent": {
+          "enum": [
+            "current",
+            "history"
+          ]
+        },
+        "item": {
+          "type": "integer"
+        },
+        "unit": {
+          "enum": [
+            "body",
+            "receipt"
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "intent": {
+                "enum": [
+                  "current",
+                  "history"
+                ]
+              },
+              "item": {
+                "type": "integer"
+              },
+              "unit": {
+                "enum": [
+                  "body",
+                  "receipt"
+                ]
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "intent",
+              "item",
+              "unit",
+              "source"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "origin": {
+                "type": "string"
+              },
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "origin",
+              "start",
+              "text"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "normalize": {
+          "type": "boolean"
+        },
+        "truncate": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "intent",
+        "item",
+        "unit",
+        "source",
+        "aliases",
+        "segments",
+        "normalize",
+        "truncate"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

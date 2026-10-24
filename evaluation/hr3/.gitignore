@@ -1,0 +1,6 @@
+# Deterministic, seeded outputs: regenerate with the CLIs and verify against
+# the sha256 manifests (generator/freeze.json, challenge/manifest.json).
+challenge/*.jsonl
+generator/artifacts/**/*.jsonl
+generator/artifacts/**/grammar-and-sentence-bank.json
+generator/artifacts/**/lineage-inventory.json

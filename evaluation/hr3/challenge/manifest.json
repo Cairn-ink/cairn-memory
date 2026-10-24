@@ -1,0 +1,598 @@
+{
+  "version": 1,
+  "seed": "hr3-independent-challenge-v1-2026-10-25",
+  "encoding": "UTF-8, LF, stable sorted JSON keys; one object per line",
+  "protocol": {
+    "path": "../protocol/protocol-v0.3.4.md",
+    "sha256": "639c55edb6633186580af434ee2fe3ed39bffc2bf36a9292dac03b7a1b20b3cc",
+    "sections": [
+      1,
+      2,
+      3,
+      6,
+      7,
+      8,
+      9,
+      16
+    ]
+  },
+  "authorship": {
+    "procedure": "independent authored semantic atoms and explicit mutations; offline Node only",
+    "scorer_inspected": false,
+    "network_calls": 0,
+    "api_calls": 0,
+    "model_calls": 0
+  },
+  "qualification": {
+    "referral_candidates": 960,
+    "certified_genuine_referrals": null,
+    "status": "pending_frozen_mechanical_pipeline",
+    "reason": "Section 8 requires observed referrals by the frozen mechanical pipeline. Independent authorship cannot certify this without invoking that pipeline. No calibration gate is claimed passed."
+  },
+  "candidate_order": "seeded SHA-256 permutation of deterministic pre-order; fixed before judgments",
+  "matched_positive_reuse": "Each of 240 referral worlds has one positive reused across C/O/R strata. Each evidence world has five delivery variants; each representation world has eight style/faithfulness variants. Variants are not independent worlds.",
+  "total": {
+    "bundles": 1984,
+    "independent_worlds": 736,
+    "language": {
+      "en": 728,
+      "zh-Hant": 728,
+      "mixed": 528
+    },
+    "style": {
+      "conversational": 496,
+      "terse": 496,
+      "operational": 496,
+      "formal": 496
+    },
+    "equivalent": {
+      "true": 680,
+      "false": 1304
+    },
+    "component_negative": {
+      "C": 464,
+      "O": 320,
+      "R": 560
+    },
+    "negative_pattern": {
+      "none": 680,
+      "C": 444,
+      "R": 540,
+      "O": 300,
+      "COR": 20
+    },
+    "language_style": {
+      "en/conversational": 182,
+      "en/terse": 182,
+      "zh-Hant/terse": 182,
+      "zh-Hant/operational": 182,
+      "en/operational": 182,
+      "en/formal": 182,
+      "zh-Hant/conversational": 182,
+      "zh-Hant/formal": 182,
+      "mixed/operational": 132,
+      "mixed/terse": 132,
+      "mixed/formal": 132,
+      "mixed/conversational": 132
+    },
+    "scenario": {
+      "retroactive_correction": 44,
+      "expiry": 44,
+      "correction": 46,
+      "unresolved": 44,
+      "scope_change": 344,
+      "refinement": 344,
+      "initial": 44,
+      "multiple_predecessors": 344,
+      "reversal": 730
+    },
+    "causal_class": {
+      "alternative_mediated": 236,
+      "not_stated": 110,
+      "serial_three": 414,
+      "conjunctive_mediated": 414,
+      "serial_two": 392,
+      "direct": 418
+    },
+    "evidence_variant": {
+      "n/a": 1744,
+      "endpoint_only": 48,
+      "removed": 48,
+      "negated": 48,
+      "adequate": 48,
+      "truncated": 48
+    },
+    "distortion_variant": {
+      "n/a": 1600,
+      "commitment_changes/faithful": 48,
+      "commitment_changes/distorted": 48,
+      "wrong_reasons/faithful": 48,
+      "broadened_scopes/distorted": 48,
+      "broadened_scopes/faithful": 48,
+      "dropped_qualifications/faithful": 48,
+      "wrong_reasons/distorted": 48,
+      "dropped_qualifications/distorted": 48
+    },
+    "referral_component_language_style": {
+      "C/mixed/operational/positive": 20,
+      "O/mixed/operational/positive": 20,
+      "R/mixed/operational/positive": 20,
+      "O/zh-Hant/operational/negative": 20,
+      "R/en/terse/negative": 20,
+      "C/mixed/terse/positive": 20,
+      "O/mixed/terse/positive": 20,
+      "R/mixed/terse/positive": 20,
+      "R/zh-Hant/terse/negative": 20,
+      "C/mixed/formal/negative": 20,
+      "R/zh-Hant/operational/negative": 20,
+      "O/mixed/operational/negative": 20,
+      "C/en/conversational/negative": 20,
+      "C/zh-Hant/terse/positive": 20,
+      "O/zh-Hant/terse/positive": 20,
+      "R/zh-Hant/terse/positive": 20,
+      "C/en/conversational/positive": 20,
+      "O/en/conversational/positive": 20,
+      "R/en/conversational/positive": 20,
+      "C/en/terse/negative": 20,
+      "R/mixed/formal/negative": 20,
+      "R/zh-Hant/formal/negative": 20,
+      "O/en/terse/negative": 20,
+      "C/zh-Hant/formal/positive": 20,
+      "O/zh-Hant/formal/positive": 20,
+      "R/zh-Hant/formal/positive": 20,
+      "C/zh-Hant/formal/negative": 20,
+      "O/en/formal/negative": 20,
+      "C/en/formal/negative": 20,
+      "C/zh-Hant/conversational/positive": 20,
+      "O/zh-Hant/conversational/positive": 20,
+      "R/zh-Hant/conversational/positive": 20,
+      "C/zh-Hant/terse/negative": 20,
+      "R/mixed/terse/negative": 20,
+      "O/mixed/terse/negative": 20,
+      "C/mixed/formal/positive": 20,
+      "O/mixed/formal/positive": 20,
+      "R/mixed/formal/positive": 20,
+      "C/en/operational/negative": 20,
+      "C/mixed/terse/negative": 20,
+      "O/en/operational/negative": 20,
+      "C/en/formal/positive": 20,
+      "O/en/formal/positive": 20,
+      "R/en/formal/positive": 20,
+      "O/zh-Hant/conversational/negative": 20,
+      "R/en/formal/negative": 20,
+      "O/mixed/formal/negative": 20,
+      "C/zh-Hant/operational/positive": 20,
+      "O/zh-Hant/operational/positive": 20,
+      "R/zh-Hant/operational/positive": 20,
+      "C/zh-Hant/conversational/negative": 20,
+      "C/en/operational/positive": 20,
+      "O/en/operational/positive": 20,
+      "R/en/operational/positive": 20,
+      "C/mixed/operational/negative": 20,
+      "R/mixed/operational/negative": 20,
+      "C/mixed/conversational/negative": 20,
+      "O/mixed/conversational/negative": 20,
+      "O/zh-Hant/formal/negative": 20,
+      "C/mixed/conversational/positive": 20,
+      "O/mixed/conversational/positive": 20,
+      "R/mixed/conversational/positive": 20,
+      "O/zh-Hant/terse/negative": 20,
+      "C/zh-Hant/operational/negative": 20,
+      "R/mixed/conversational/negative": 20,
+      "R/en/conversational/negative": 20,
+      "C/en/terse/positive": 20,
+      "O/en/terse/positive": 20,
+      "R/en/terse/positive": 20,
+      "R/en/operational/negative": 20,
+      "R/zh-Hant/conversational/negative": 20,
+      "O/en/conversational/negative": 20
+    }
+  },
+  "sets": {
+    "pooled.jsonl": {
+      "bundles": 400,
+      "independent_worlds": 400,
+      "language": {
+        "en": 200,
+        "zh-Hant": 200
+      },
+      "style": {
+        "conversational": 100,
+        "terse": 100,
+        "operational": 100,
+        "formal": 100
+      },
+      "equivalent": {
+        "true": 200,
+        "false": 200
+      },
+      "component_negative": {
+        "C": 80,
+        "O": 80,
+        "R": 80
+      },
+      "negative_pattern": {
+        "none": 200,
+        "C": 60,
+        "R": 60,
+        "O": 60,
+        "COR": 20
+      },
+      "language_style": {
+        "en/conversational": 50,
+        "en/terse": 50,
+        "zh-Hant/terse": 50,
+        "zh-Hant/operational": 50,
+        "en/operational": 50,
+        "en/formal": 50,
+        "zh-Hant/conversational": 50,
+        "zh-Hant/formal": 50
+      },
+      "scenario": {
+        "retroactive_correction": 44,
+        "expiry": 44,
+        "correction": 46,
+        "unresolved": 44,
+        "scope_change": 44,
+        "refinement": 44,
+        "initial": 44,
+        "multiple_predecessors": 44,
+        "reversal": 46
+      },
+      "causal_class": {
+        "alternative_mediated": 44,
+        "not_stated": 110,
+        "serial_three": 66,
+        "conjunctive_mediated": 66,
+        "serial_two": 44,
+        "direct": 70
+      },
+      "evidence_variant": {
+        "n/a": 400
+      },
+      "distortion_variant": {
+        "n/a": 400
+      },
+      "referral_component_language_style": {}
+    },
+    "referral-candidates.jsonl": {
+      "bundles": 960,
+      "independent_worlds": 240,
+      "language": {
+        "mixed": 320,
+        "zh-Hant": 320,
+        "en": 320
+      },
+      "style": {
+        "operational": 240,
+        "terse": 240,
+        "formal": 240,
+        "conversational": 240
+      },
+      "equivalent": {
+        "true": 240,
+        "false": 720
+      },
+      "component_negative": {
+        "C": 240,
+        "O": 240,
+        "R": 240
+      },
+      "negative_pattern": {
+        "none": 240,
+        "O": 240,
+        "R": 240,
+        "C": 240
+      },
+      "language_style": {
+        "mixed/operational": 80,
+        "zh-Hant/operational": 80,
+        "en/terse": 80,
+        "mixed/terse": 80,
+        "zh-Hant/terse": 80,
+        "mixed/formal": 80,
+        "en/conversational": 80,
+        "zh-Hant/formal": 80,
+        "en/formal": 80,
+        "zh-Hant/conversational": 80,
+        "en/operational": 80,
+        "mixed/conversational": 80
+      },
+      "scenario": {
+        "multiple_predecessors": 240,
+        "reversal": 240,
+        "scope_change": 240,
+        "refinement": 240
+      },
+      "causal_class": {
+        "serial_three": 192,
+        "direct": 192,
+        "serial_two": 192,
+        "conjunctive_mediated": 192,
+        "alternative_mediated": 192
+      },
+      "evidence_variant": {
+        "n/a": 960
+      },
+      "distortion_variant": {
+        "n/a": 960
+      },
+      "referral_component_language_style": {
+        "C/mixed/operational/positive": 20,
+        "O/mixed/operational/positive": 20,
+        "R/mixed/operational/positive": 20,
+        "O/zh-Hant/operational/negative": 20,
+        "R/en/terse/negative": 20,
+        "C/mixed/terse/positive": 20,
+        "O/mixed/terse/positive": 20,
+        "R/mixed/terse/positive": 20,
+        "R/zh-Hant/terse/negative": 20,
+        "C/mixed/formal/negative": 20,
+        "R/zh-Hant/operational/negative": 20,
+        "O/mixed/operational/negative": 20,
+        "C/en/conversational/negative": 20,
+        "C/zh-Hant/terse/positive": 20,
+        "O/zh-Hant/terse/positive": 20,
+        "R/zh-Hant/terse/positive": 20,
+        "C/en/conversational/positive": 20,
+        "O/en/conversational/positive": 20,
+        "R/en/conversational/positive": 20,
+        "C/en/terse/negative": 20,
+        "R/mixed/formal/negative": 20,
+        "R/zh-Hant/formal/negative": 20,
+        "O/en/terse/negative": 20,
+        "C/zh-Hant/formal/positive": 20,
+        "O/zh-Hant/formal/positive": 20,
+        "R/zh-Hant/formal/positive": 20,
+        "C/zh-Hant/formal/negative": 20,
+        "O/en/formal/negative": 20,
+        "C/en/formal/negative": 20,
+        "C/zh-Hant/conversational/positive": 20,
+        "O/zh-Hant/conversational/positive": 20,
+        "R/zh-Hant/conversational/positive": 20,
+        "C/zh-Hant/terse/negative": 20,
+        "R/mixed/terse/negative": 20,
+        "O/mixed/terse/negative": 20,
+        "C/mixed/formal/positive": 20,
+        "O/mixed/formal/positive": 20,
+        "R/mixed/formal/positive": 20,
+        "C/en/operational/negative": 20,
+        "C/mixed/terse/negative": 20,
+        "O/en/operational/negative": 20,
+        "C/en/formal/positive": 20,
+        "O/en/formal/positive": 20,
+        "R/en/formal/positive": 20,
+        "O/zh-Hant/conversational/negative": 20,
+        "R/en/formal/negative": 20,
+        "O/mixed/formal/negative": 20,
+        "C/zh-Hant/operational/positive": 20,
+        "O/zh-Hant/operational/positive": 20,
+        "R/zh-Hant/operational/positive": 20,
+        "C/zh-Hant/conversational/negative": 20,
+        "C/en/operational/positive": 20,
+        "O/en/operational/positive": 20,
+        "R/en/operational/positive": 20,
+        "C/mixed/operational/negative": 20,
+        "R/mixed/operational/negative": 20,
+        "C/mixed/conversational/negative": 20,
+        "O/mixed/conversational/negative": 20,
+        "O/zh-Hant/formal/negative": 20,
+        "C/mixed/conversational/positive": 20,
+        "O/mixed/conversational/positive": 20,
+        "R/mixed/conversational/positive": 20,
+        "O/zh-Hant/terse/negative": 20,
+        "C/zh-Hant/operational/negative": 20,
+        "R/mixed/conversational/negative": 20,
+        "R/en/conversational/negative": 20,
+        "C/en/terse/positive": 20,
+        "O/en/terse/positive": 20,
+        "R/en/terse/positive": 20,
+        "R/en/operational/negative": 20,
+        "R/zh-Hant/conversational/negative": 20,
+        "O/en/conversational/negative": 20
+      }
+    },
+    "evidence-contrasts.jsonl": {
+      "bundles": 240,
+      "independent_worlds": 48,
+      "language": {
+        "zh-Hant": 80,
+        "mixed": 80,
+        "en": 80
+      },
+      "style": {
+        "operational": 60,
+        "conversational": 60,
+        "formal": 60,
+        "terse": 60
+      },
+      "equivalent": {
+        "false": 192,
+        "true": 48
+      },
+      "component_negative": {
+        "C": 0,
+        "O": 0,
+        "R": 192
+      },
+      "negative_pattern": {
+        "R": 192,
+        "none": 48
+      },
+      "language_style": {
+        "zh-Hant/operational": 20,
+        "mixed/operational": 20,
+        "zh-Hant/conversational": 20,
+        "en/conversational": 20,
+        "mixed/formal": 20,
+        "zh-Hant/terse": 20,
+        "zh-Hant/formal": 20,
+        "mixed/conversational": 20,
+        "en/terse": 20,
+        "en/formal": 20,
+        "mixed/terse": 20,
+        "en/operational": 20
+      },
+      "scenario": {
+        "multiple_predecessors": 60,
+        "refinement": 60,
+        "scope_change": 60,
+        "reversal": 60
+      },
+      "causal_class": {
+        "conjunctive_mediated": 60,
+        "direct": 60,
+        "serial_three": 60,
+        "serial_two": 60
+      },
+      "evidence_variant": {
+        "endpoint_only": 48,
+        "removed": 48,
+        "negated": 48,
+        "adequate": 48,
+        "truncated": 48
+      },
+      "distortion_variant": {
+        "n/a": 240
+      },
+      "referral_component_language_style": {}
+    },
+    "representation-pairs.jsonl": {
+      "bundles": 384,
+      "independent_worlds": 48,
+      "language": {
+        "en": 128,
+        "mixed": 128,
+        "zh-Hant": 128
+      },
+      "style": {
+        "formal": 96,
+        "operational": 96,
+        "conversational": 96,
+        "terse": 96
+      },
+      "equivalent": {
+        "true": 192,
+        "false": 192
+      },
+      "component_negative": {
+        "C": 144,
+        "O": 0,
+        "R": 48
+      },
+      "negative_pattern": {
+        "none": 192,
+        "C": 144,
+        "R": 48
+      },
+      "language_style": {
+        "en/formal": 32,
+        "mixed/operational": 32,
+        "zh-Hant/conversational": 32,
+        "mixed/formal": 32,
+        "zh-Hant/formal": 32,
+        "en/operational": 32,
+        "en/conversational": 32,
+        "mixed/conversational": 32,
+        "zh-Hant/operational": 32,
+        "mixed/terse": 32,
+        "zh-Hant/terse": 32,
+        "en/terse": 32
+      },
+      "scenario": {
+        "reversal": 384
+      },
+      "causal_class": {
+        "direct": 96,
+        "conjunctive_mediated": 96,
+        "serial_three": 96,
+        "serial_two": 96
+      },
+      "evidence_variant": {
+        "n/a": 384
+      },
+      "distortion_variant": {
+        "commitment_changes/faithful": 48,
+        "commitment_changes/distorted": 48,
+        "wrong_reasons/faithful": 48,
+        "broadened_scopes/distorted": 48,
+        "broadened_scopes/faithful": 48,
+        "dropped_qualifications/faithful": 48,
+        "wrong_reasons/distorted": 48,
+        "dropped_qualifications/distorted": 48
+      },
+      "referral_component_language_style": {}
+    }
+  },
+  "worlds": 736,
+  "artifact_count_excluding_manifest": 13,
+  "artifacts": [
+    {
+      "path": "README.md",
+      "bytes": 14997,
+      "sha256": "e25b0059da3ec35ac9a4d1c515d9e499f8afa582458c2f7035e3cd94df0d8b76"
+    },
+    {
+      "path": "REPORT.md",
+      "bytes": 6789,
+      "sha256": "d306f887107ebd708c0e41343e1e70dc9e72a36132f4ddda1d030437c16f0ddf"
+    },
+    {
+      "path": "answer.schema.json",
+      "bytes": 10564,
+      "sha256": "f76e99f27dcb6b38c22c74401dec9dcd5c2cf6fa396397b6d58b55b4505a04d8"
+    },
+    {
+      "path": "bundles.mjs",
+      "bytes": 401,
+      "sha256": "a9748f5c6f573b7ce12a93b780322fb4e983cfeb6bbd28106e3232e405cb04e1"
+    },
+    {
+      "path": "challenge.test.mjs",
+      "bytes": 12483,
+      "sha256": "128b000444326c49411bfa1f8209739bb6fb17500c83c8d47843cb3f77cffac0"
+    },
+    {
+      "path": "evidence-contrasts.jsonl",
+      "bytes": 2841700,
+      "sha256": "b2bfbccafbad2419993f8544fb85180a0a21e60bb416fcd7e7af34d9c4a687c7"
+    },
+    {
+      "path": "generate.mjs",
+      "bytes": 44463,
+      "sha256": "8b7dcc03d817ebfaed59e5208db54f31bae72e13413919a3676f1e0e17a37477"
+    },
+    {
+      "path": "pooled.jsonl",
+      "bytes": 4393819,
+      "sha256": "a9833fc85d3bb4409bcfda923ca7d66a2e39403458cf49c69dc6c3ad3d102355"
+    },
+    {
+      "path": "referral-candidates.jsonl",
+      "bytes": 14726725,
+      "sha256": "e1ef3d54ad323e88d118666edca8d37263324e59bd6997b5e8aea365218436ee"
+    },
+    {
+      "path": "representation-pairs.jsonl",
+      "bytes": 4839740,
+      "sha256": "1e7c929dba0f530da0037824e9674130909b72a84d314b9f7f84d51205dc3981"
+    },
+    {
+      "path": "schema.mjs",
+      "bytes": 4569,
+      "sha256": "f7cccceb50fd4d58b11c3fffc3927978f11801275de2525cb27a1fba4cadd6c0"
+    },
+    {
+      "path": "validate.mjs",
+      "bytes": 15737,
+      "sha256": "b9437aded3d80382af733ff4aea4f95089157f14cdc34e4154f77665dfaa5ca4"
+    },
+    {
+      "path": "worlds.jsonl",
+      "bytes": 6927828,
+      "sha256": "cd16c7e781587f767afac3459c2d3a27bb9e5ba3b79726566cf59e07ec726ea9"
+    }
+  ],
+  "hash_policy": "All regular artifacts except manifest.json itself; no recursive self-hash.",
+  "acceptance": "Labels and quotas are authoring checks only. No judgments, scorer results, agreement, error rates or §8 pipeline acceptance gates have been observed."
+}

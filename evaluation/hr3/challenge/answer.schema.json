@@ -1,0 +1,464 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hr3:independent-challenge:answer:v1",
+  "$ref": "#/$defs/Answer",
+  "$defs": {
+    "Value": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "Text"
+              ]
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "Boolean"
+              ]
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "Quantity"
+              ]
+            },
+            "decimal": {
+              "type": "string",
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"
+            },
+            "unit": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "decimal",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "Instant"
+              ]
+            },
+            "iso": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "type",
+            "iso"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "Range"
+              ]
+            },
+            "lower": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "upper": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lowerClosed": {
+              "type": "boolean"
+            },
+            "upperClosed": {
+              "type": "boolean"
+            },
+            "unit": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "lower",
+            "upper",
+            "lowerClosed",
+            "upperClosed",
+            "unit"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Scope": {
+      "type": "object",
+      "properties": {
+        "any": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "all": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "enum": [
+                        "country",
+                        "plan",
+                        "channel"
+                      ]
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1,
+                      "uniqueItems": true
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "values"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "all"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "any"
+      ],
+      "additionalProperties": false
+    },
+    "Interval": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "Citation": {
+      "type": "object",
+      "properties": {
+        "intent": {
+          "enum": [
+            "current",
+            "history"
+          ]
+        },
+        "item": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unit": {
+          "enum": [
+            "body",
+            "receipt"
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quote": {
+          "type": "string"
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "intent",
+        "item",
+        "unit",
+        "source",
+        "quote",
+        "occurrence"
+      ],
+      "additionalProperties": false
+    },
+    "Claim": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "predicate": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "valid": {
+          "$ref": "#/$defs/Interval"
+        },
+        "qualifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/Value"
+              }
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Citation"
+          }
+        }
+      },
+      "required": [
+        "subject",
+        "predicate",
+        "value",
+        "scope",
+        "valid",
+        "qualifiers",
+        "citations"
+      ],
+      "additionalProperties": false
+    },
+    "Answer": {
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": [
+                "active",
+                "no_active_decision",
+                "unresolved"
+              ]
+            },
+            "claims": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Claim"
+              }
+            }
+          },
+          "required": [
+            "status",
+            "claims"
+          ],
+          "additionalProperties": false
+        },
+        "old": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": [
+                "available",
+                "unavailable",
+                "none"
+              ]
+            },
+            "records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "previously_adopted",
+                      "erroneous",
+                      "expired"
+                    ]
+                  },
+                  "claims": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Claim"
+                    }
+                  }
+                },
+                "required": [
+                  "status",
+                  "claims"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "status",
+            "records"
+          ],
+          "additionalProperties": false
+        },
+        "reason": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": [
+                "stated",
+                "not_stated",
+                "unavailable"
+              ]
+            },
+            "nodes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "claim": {
+                    "$ref": "#/$defs/Claim"
+                  }
+                },
+                "required": [
+                  "id",
+                  "claim"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "edges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "citations": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Citation"
+                    }
+                  }
+                },
+                "required": [
+                  "from",
+                  "to",
+                  "citations"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "status",
+            "nodes",
+            "edges"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "current",
+        "old",
+        "reason"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
