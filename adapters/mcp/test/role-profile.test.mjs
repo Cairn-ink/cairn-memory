@@ -153,10 +153,10 @@ test('C06 CLI imports every role CLI/transport module statically without linking
   assert.equal(existsSync('/synthetic/role.sqlite'),false);
 });
 
-test('C05 pinned 0416ef3c flag-off tools/list, DTOs, errors, CLI bytes and supported-store schemas remain byte-identical', async t => {
+test('C05 pinned 4aa9327b flag-off tools/list, DTOs, errors, CLI bytes and supported-store schemas remain byte-identical', async t => {
   const {roleLegacyProbe}=await import('./fixtures/role-profile-legacy-probe.mjs');
   const fixture=JSON.parse(readFileSync(new URL('./fixtures/role-profile-pre-u5c1.json',import.meta.url)));
-  assert.equal(fixture.base,'0416ef3c');const workspace=createTestWorkspace(t,{prefix:'role-legacy-'});
+  assert.equal(fixture.base,'4aa9327b');const workspace=createTestWorkspace(t,{prefix:'role-legacy-'});
   const actual=await roleLegacyProbe(new URL('../../../',import.meta.url).pathname,workspace.path);
   assert.deepEqual(actual,fixture.value);
 });
