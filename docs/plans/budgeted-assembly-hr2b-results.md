@@ -17,7 +17,10 @@ Provenance:
   audit: four P1 and two P2 applied, freeze confirmed).
 - Fixture `hr2b-fixture-v1`, **candidate 3, seed `3023009795`**, frozen in
   [FROZEN.md](../../evaluation/retrieval-research/fixtures-hr2b/FROZEN.md)
-  (sha256 `ccef1982…`, 31 files; commit `3251b8ca`). Candidates 0 (under v1:
+  (sha256 `ccef1982…`, 31 files; commit `3251b8ca`; one manifest member, the
+  empty `build/candidate0-v11-identity/check.stderr.log`, was excluded by the
+  repository's `*.log` ignore rule at that commit and is force-added in the
+  results-document commit, hash unchanged). Candidates 0 (under v1:
   guard quota and receipt cap; under v1.1: identity gate and a duplicate
   body), 1 (test first-receipt stratum 20 groups < 30) and 2 (duplicate
   body) were rejected before any ranking; their diagnostics are retained under
@@ -37,8 +40,10 @@ Provenance:
   `5eba1bd4…`, HR-2 §11) and the scalar `O = 0`. Counter `tiktoken@1.0.22`,
   `o200k_base`.
 - Run: clean checkout `98e88b01` (implementation identity `dirty: false` for
-  assembly, scorer and report; source hash `2f218798…`), Node 22.16.0, every
-  stage through `cairn-heavy`; 32 threads, about 39 GB RAM, WSL2. Artifacts:
+  assembly, scorer and report; source hash `2f218798…`), Node 22.16.0; the
+  run, score and report stages through `cairn-heavy`, the hashing, archiving
+  and restore-check stages directly; 32 threads, about 39 GB RAM, WSL2.
+  Artifacts:
   [`results/hr2b-final/`](../../evaluation/retrieval-research/results/hr2b-final/)
   (`preflight.log`, `test-preflight.log`, `*.command`, `*.exit`, `*.log`;
   `report.md`; `cells.tar.xz`, `scores.json.xz`, `report.json.xz` with
@@ -107,9 +112,10 @@ against P-top on the same ranking, cost model and budget.
 
 ### 2.1 Macro group coverage (test split, 94 queries, 131 groups)
 
-Ceilings: A1 0.708, bge-m3 + A3 0.742 (body-only rankings do not see
-receipt-only facts at ranking time; about 26–29% of groups are unreachable
-within the horizon of 24).
+Macro ceilings: A1 0.708, bge-m3 + A3 0.742. By group occurrences, 42 of
+131 groups (32.1%) are unreachable within the horizon of 24 on A1 and 34 of
+131 (26.0%) on bge-m3 + A3: body-only rankings do not see receipt-only facts
+at ranking time.
 
 | Ranking | Cost model | Arm | 1000 | 1500 | 2000 | 4000 |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
@@ -138,8 +144,9 @@ Token use p50 is 0.905–0.995 of the budget in every cell; in every cell 79–9
 of the 94 queries had at least one unit rejected for budget. Saturation
 (protocol HR-2 §11 definition) is **not reached** on any ranking or cost model
 at 4,000 tokens: coverage is still rising towards the ceiling. The `host-v2`
-representation overhead costs P-top 3–10 points against `O = 0` at the same
-budget on bge-m3 + A3 (1000: 0.274 vs 0.313; 4000: 0.647 vs 0.669).
+representation overhead costs P-top 2.2–8.1 points against `O = 0` at the
+same budget on bge-m3 + A3 (1000: 0.274 vs 0.313, 1500: 0.366 vs 0.414,
+2000: 0.444 vs 0.525, 4000: 0.647 vs 0.669).
 
 ### 2.2 The P-top-s1 contrast at every budget, ranking and cost model
 
@@ -150,7 +157,7 @@ Macro Δ (points), P-top-s1 − P-top, with the pooled later-receipt guard Δ:
 | A1 | O = 0 | −10.3 [−18.6, −2.8]; guard −26.5 | −11.2 [−22.9, +0.1]; guard −36.7 | −15.5 [−28.6, −3.4]; guard −46.9 | −20.4 [−33.9, −7.4]; guard −59.2 |
 | A1 | host-v2 | −5.1 [−13.5, +3.3]; guard −20.4 | −12.9 [−22.0, −4.6]; guard −30.6 | −15.1 [−28.0, −3.0]; guard −44.9 | −22.0 [−35.1, −9.9]; guard −59.2 |
 | bge-m3 + A3 | O = 0 | −11.3 [−20.9, −2.6]; guard −30.6 | −12.1 [−25.8, +0.7]; guard −40.8 | −18.6 [−32.1, −6.7]; guard −51.0 | −25.1 [−38.2, −13.0]; guard −65.3 |
-| bge-m3 + A3 | host-v2 | −9.9 [−18.5, −2.2]; guard −24.5 | **−11.5 [−23.8, −0.2]; guard −38.8** (§1) | −13.2 [−26.4, −0.8]; guard −44.9 | −23.3 [−36.5, −11.0]; guard −63.3 |
+| bge-m3 + A3 | host-v2 | −9.8 [−18.5, −2.2]; guard −24.5 | **−11.5 [−23.8, −0.2]; guard −38.8** (§1) | −13.2 [−26.4, −0.8]; guard −44.9 | −23.3 [−36.5, −11.0]; guard −63.3 |
 
 P-top-s1 is behind in all 16 cells; the CI includes zero only at A1 /
 host-v2 / 1000 (+3.3), A1 / O = 0 / 1500 (+0.1) and bge-m3 / O = 0 / 1500
@@ -167,11 +174,13 @@ required groups.
   P-top in every cell (points −10.1 to −50.0, all CIs below zero), with
   pooled guard losses of −20 to −65; their absolute coverage is 0.07–0.29.
   On long items, spreading the budget one unit per item admits mostly bodies
-  that do not state the receipt-only facts the queries need, and the
-  budget-rejected count stays at 85–94 of 94 queries.
-- **P-top+tail** is P-top within −3.1 to 0 points (ties at 4,000 on A1 and
-  within −1.1 on bge-m3 + A3 at 1,500 and above); its guard Δ is 0 or −2.0.
-- **Strata of the primary cell**: span-only (105 groups, 93 queries) Δ −13.3
+  that do not state the receipt-only facts the queries need; the
+  budget-rejected count stays at 85–94 of 94 queries for P-cover and 79–94
+  for P-cover-s1.
+- **P-top+tail** is P-top within −3.1 to 0 points (the −3.1 cells are A1 /
+  O = 0 / 1000 and bge-m3 / O = 0 / 2000; ties at 4,000 on A1 and at
+  bge-m3 / host-v2 / 1500); its guard Δ is 0 or −2.0.
+- **Strata of the primary cell**: span-only (105 groups, 93 queries) Δ −13.2
   [−25.5, −1.8]; body-covered (26 groups, 19 families) +8.3 and
   first-receipt (56 groups, 25 families) +8.2, both Inconclusive under the
   per-category family minimum (body: C3 1, C5 6, C6 12 families;
@@ -184,14 +193,17 @@ required groups.
 40/120/200 tokens, 1–4 receipts, 1–2 items, every delivered prefix length and
 both completeness states) serialized with the normative `representation-v2`
 serializer at `b18dabe0` and counted with `o200k`: modelled minus measured
-tokens is **0 for 153 probes and otherwise negative, down to −10 with one
-receipt, −18 with two, −26 with three and −34 with four**, i.e. the additive
-model undercounts the serialized cost by up to about 8–10 tokens per receipt
-in some prefix and completeness states. The constants were not retuned
-(protocol §5). Direction of the bias: real budgets bind slightly harder than
-modelled, mostly against arms that admit many receipts (P-top, P-top+tail);
-the Keep outcome does not depend on it, since P-top-s1's loss comes from the
-later-receipt stratum it never admits, not from a few tokens of overhead.
+tokens is **0 for 153 probes and otherwise negative**; for one item the
+minimum is −5 with one receipt, −9 with two, −13 with three and −17 with
+four, and for two items twice that (−10 / −18 / −26 / **−34**), i.e. the
+additive model undercounts the serialized cost by up to about 5 tokens for the
+first receipt and 4 tokens for each further receipt in some prefix and
+completeness states. The constants were not retuned (protocol §5). This run
+contains no exact-host comparison, so it does not establish how the shipped
+host's budgets would bind; what the constants cannot change is that P-top-s1
+admits no later receipt, so its loss on the later-receipt stratum is
+structural, while the size of the primary Δ under exact-host costs was not
+measured.
 
 ## 3. Failures retained
 
@@ -208,15 +220,19 @@ runs are the test evidence.
 
 ## 4. Limits of this evidence
 
-- **Receipt-heavy query set.** 138 of 140 scored queries require a fact stated
-  only in a receipt (W2's choice, within the protocol's ≥ 40% floor, to secure
-  the receipt-stratum quotas after a candidate failed them). The test split's
+- **Receipt-heavy query set.** 137 of 140 scored queries have at least one
+  required group outside the body stratum after W3's audit (138 as W2 wrote
+  them; W3's q-110 override moved one group to body). This was W2's choice,
+  made blind to placement, to secure the receipt-stratum quotas after a
+  candidate failed them; the protocol sets placement shares over distinct
+  facts and group/family quotas, not a query-level share (the ≥ 40% figure
+  was the coordinator's brief to W2, not a protocol rule). The test split's
   131 required groups are 26 body / 56 first-receipt / 49 later-receipt. The
   Δ magnitudes are therefore not comparable to a body-mixed query set, and
-  the body stratum is too thin for a per-category interval. The direction of
-  the primary result does not depend on this: P-top-s1 can never cover a
-  later-receipt group, and that stratum alone costs it more than it gains
-  elsewhere.
+  the body stratum is too thin for a per-category interval. One fixed mix was
+  run; P-top-s1 covering no later-receipt group is structural and holds for
+  any mix, but the size and sign of the macro Δ under a body-heavier mix were
+  not measured.
 - **At most four receipts per memory.** core `admit` accepts four receipts per
   call and the validator seeds one admission per memory; memories accumulated
   over repeated admissions are outside this fixture's scope. Nothing here
@@ -249,12 +265,14 @@ runs are the test evidence.
    first-receipt-only, which this fixture's design does not assume.
 3. **Coverage-first is not a candidate on long items either** (−10 to −50
    points); HR-2's Keep for it is reinforced, not reopened.
-4. **The binding constraint on long items is the ranking's view of receipts,
-   not the assembly policy**: ceilings of 0.71–0.74 leave a quarter of the
-   evidence unreachable at horizon 24 because receipts are not indexed. The
-   next research question with product leverage is receipt-aware ranking or
-   indexing, not another assembly arm. Budgets remain numbers HR-2b does not
-   choose.
+4. **Two constraints bind on long items, and this run separates neither
+   causally.** In the primary cell P-top loses 37.5 macro points to the budget
+   (assembly loss, ceiling 0.742 minus coverage 0.366) and 25.8 points to the
+   ranking (34 of 131 groups unreachable at horizon 24 on bge-m3 + A3, 42 on
+   A1); every query had at least one unit rejected for budget. Receipt-aware
+   ranking or indexing is a research question this run motivates but does not
+   test (no receipt-indexing control was run); so is budget pressure on long
+   items. Budgets remain numbers HR-2b does not choose.
 
 ## 6. Reproduce
 
@@ -278,5 +296,6 @@ node $R/assembly/report.mjs --scores /tmp/hr2b-repro/scores2.json --out /tmp/hr2
 
 Output directories must be empty beforehand; `results/hr2b-final/` is a
 protected destination and must not be written. Per-query admissions, costs and
-statistics are deterministic; only the `environment` and identity `dirty`
-fields may differ from the committed files.
+statistics are deterministic; the `environment`, checkout `commit`,
+`detached` and `dirty` identity fields and the recorded absolute input paths
+may differ from the committed files.

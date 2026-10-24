@@ -2507,25 +2507,27 @@ serialization.
 ### HR-2b results (synthetic long items, direction only)
 
 The [HR-2b results](plans/budgeted-assembly-hr2b-results.md) report one frozen
-test-split run on a synthetic long-item fixture (bodies of 120–400 o200k
-tokens with 2–4 facts each, 1–4 receipts of 40–200 tokens, evidence placed in
-the body, the first receipt or a later receipt at 45/25/30 over distinct
-facts). The preregistered contrast (first-receipt-only deepening,
+test-split run on a synthetic long-item fixture (target and distractor
+memories with bodies of 120–400 o200k tokens stating 2–4 facts each, 1–4
+receipts of 40–200 tokens, evidence placed in the body, the first receipt or a
+later receipt at 45/25/30 over distinct facts; foreign memories carry one fact
+each). The preregistered contrast (first-receipt-only deepening,
 `rank-first-first-source-v1`, against rank-first whole units, bge-m3 + A3,
 1,500 tokens, additive `host-v2` cost model) came out −11.5 points with a 95%
 family-bootstrap CI of [−23.8, −0.2], and the pooled later-receipt guard was
 −38.8 points (0 of 49 later-receipt groups reachable by construction), so
 `rank-first-whole-v1` stays the §15 default and `rank-first-first-source-v1`
 stays available and non-default. Coverage-first lost 10–50 points on this
-fixture. Limits: 138 of 140 scored queries require a fact stated only in a
-receipt, so the query set is receipt-heavy and the Δ magnitudes are not
+fixture. Limits: 137 of 140 scored queries have a required group outside the
+body stratum, so the query set is receipt-heavy and the Δ magnitudes are not
 comparable to a body-mixed set; receipts are capped at four per memory by the
 single-admission seeding (core `admit`'s per-call limit), so nothing is claimed
 for memories accumulated over repeated admissions; the pooled guard weighs
 categories by later-receipt group occurrences and does not bound per-category
-loss; the `host-v2` model undercounts the serialized cost by up to about 8
-tokens per receipt beyond the first (0 to −34 tokens over 504 probes) and is
-not a shipped-host measurement; body-only rankings cap coverage at 0.71–0.74;
+loss; the `host-v2` model undercounts the serialized cost by up to about 5
+tokens for the first receipt and 4 for each further receipt (0 to −17 tokens
+per item, −34 for two items, over 504 probes) and is not a shipped-host
+measurement; body-only rankings cap macro coverage at 0.71–0.74;
 coverage is evidence admission, not answer correctness. The protocol was
 amended once (v1.1) after the first candidate fixture's counts were seen and
 before any ranking or assembly, as disclosed in the protocol's provenance
