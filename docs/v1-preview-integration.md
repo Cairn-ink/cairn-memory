@@ -1,7 +1,7 @@
 # V1 preview: product integration
 
-`v1-preview.2` is an opt-in cut from `release/v1-preview`, integration
-`0a38a991` (preview HEAD `6ef5bc2a`). It stacks on the unmerged local V1
+`v1-preview.3` is an opt-in cut from `release/v1-preview`, integration
+`b18dabe0` (preview HEAD `75793f64`). It stacks on the unmerged local V1
 chain (#453–#469, `feat/local-v1-closeout`). Default behaviour stays unchanged
 unless the feature options below are selected. This is not an npm release.
 
@@ -25,7 +25,7 @@ npm install --prefix . --ignore-scripts --no-audit --no-fund /absolute/path/cair
 
 The builder stages files, then runs `npm pack --offline --ignore-scripts --json`.
 Private metadata stays `cairn-memory-local-preview@0.0.0-preview.1`;
-`v1-preview.2` identifies the source cut. Installation can contact npm.
+`v1-preview.3` identifies the source cut. Installation can contact npm.
 Keep the database outside the installation in an existing private directory.
 Sources: `package.json:47`, `packaging/build.mjs:80`, `packaging/build.mjs:102`.
 Use that executable below.
@@ -73,8 +73,9 @@ refresh returns `invalid_input`.
 | Core method | Input | Success value |
 | --- | --- | --- |
 | `findCandidates` | `readSet,query,types,intent,semantic?,limit?,deadlineMs?,cursor?` | `{version,items,channels,coverage,trace,nextCursor}` |
-| `fetchCandidateEvidence` | `readSet`, either `refs,intent` or `snapshot`; `responseByteLimit?` | `{items,snapshot}` |
+| `fetchCandidateEvidence` | `readSet`, either `refs,intent,fences?` or `snapshot`; `responseByteLimit?` | `{items,snapshot}` |
 | `refreshContextIndex` | `readSet,types,intent,budget:{maxItems,maxMs}` | `{status,progress,coverage,channels}` |
+| `contextRead` | `readSet,query,types,intent,semantic?,budget?,policy?,deadlineMs?` | `{metered,snapshot,diagnostics}`; assembly below |
 
 Types: nonempty subset of `memory,card`; intent: `current|history`.
 Candidates are text-free `{ref,rank,fusionScore,channels:{lexical,semantic}}`;
@@ -90,7 +91,7 @@ Defaults: `semantic:false`, 12 items, 1,000 ms. Maximums: 24 items,
 Pages partition one frozen top-24 ranking without reranking/embedding; at most
 128 rankings per handle, expiring after five minutes. Cursor/snapshot bounds
 are 8,192/16,384 characters. Changed semantics or generations require restarting.
-Sources: `core/context-read-input.mjs:8`, `core/context-read-facade.mjs:529`,
+Sources: `core/context-read-input.mjs:8`, `core/context-read-facade.mjs:528`,
 `core/private-evidence-storage.mjs:54`.
 
 ```sh
@@ -99,12 +100,16 @@ cairn-memory --db /absolute/private/memory.sqlite --owner OWNER --project PROJEC
 ```
 
 The zero-value personal flag requires project/context opt-in; otherwise reads
-stay in the startup namespace. Stable tools (experimental assembly is below):
+stay in the startup namespace. Stable tools:
 
 | MCP tool | Caller input |
 | --- | --- |
 | `find_memory_candidates` | `query,types,intent,semantic?,limit?,deadlineMs?,cursor?` |
 | `fetch_memory_candidate_evidence` | either `refs,intent` or `snapshot`; `responseByteLimit?` |
+| `read_memory_context` | `query,types,intent,semantic?,maxTokens?,maxItems?,policy?,deadlineMs?` |
+
+Fetch accepts full refs or the compact refs emitted by assembly, including mixed
+arrays; its canonical evidence output is unchanged. Compact refetch details follow below.
 
 No refresh tool exists. For OpenAI embeddings, append **all five** startup options;
 set `OPENAI_API_KEY` in the environment:
@@ -141,7 +146,7 @@ nor account-wide. SDK configuration adds
 `embedder` and `policy:{family:'hosted',maxRequests,maxUsd,maxConcurrent,estimateUsd}`
 to contextRead; `estimateUsd(texts)` is trusted synchronous policy.
 Sources: `adapters/mcp/context-read-configuration.mjs:4`,
-`adapters/mcp/context-read-provider.mjs:4`, `core/context-read-input.mjs:30`.
+`adapters/mcp/context-read-provider.mjs:4`, `core/context-read-input.mjs:33`.
 
 Frozen RRF presets (`core/context-read-fusion.mjs:3`):
 
@@ -243,10 +248,12 @@ bytes/owner. Paths are relative POSIX, at most 512 units. Cursor/pin bounds:
 stop mixed-version writers before migration.
 Sources: `core/method-package-input.mjs:8`, `adapters/mcp/method-package-tools.mjs:4`.
 
-## Experimental: context assembly (`read_memory_context`)
+### Context assembly (`read_memory_context`, `representation-v2`)
 
-U5b is **experimental and outside the versioning promise**.
-`find_memory_candidates` and `fetch_memory_candidate_evidence` stay stable.
+`read_memory_context` with `representation-v2` and the compact-ref input form of
+`fetch_memory_candidate_evidence` are **stable preview interfaces** from `.3`.
+**Breaking from experimental `.2`: `representation-v1` output is gone**, with no
+selector. Candidate lookup and existing full-ref/evidence outputs remain stable.
 Enable with `--context-read context-read-v1`; no additional flag is needed.
 CLI startup awaits the keyless local `o200k_base` counter (`tiktoken-o200k_base`),
 independently of model/provider configuration.
@@ -260,7 +267,7 @@ Sources: `adapters/mcp/cli.mjs:335`, `adapters/openai/context-counter.mjs:11`.
 | `semantic` | Optional boolean; false by default; existing embedding opt-in applies |
 | `maxTokens` | Optional integer 64–4,000; default 1,500 |
 | `maxItems` | Optional integer 1–24 admitted bodies; default 12 |
-| `policy` | Optional strict `{id:'rank-first-whole-v1'}` (default) or `{id:'coverage-first-v1'}` |
+| `policy` | Optional strict `{id}`: `rank-first-whole-v1` (default), `coverage-first-v1`, or `rank-first-first-source-v1` |
 | `deadlineMs` | Optional integer 1–5,000; default 1,000; cooperative |
 
 The host fixes `readSet`; tool-supplied `budget`, cursor and unknown fields refuse.
@@ -271,39 +278,81 @@ Missing counter returns `invalid_input`; failed counting returns `token_count_un
 Programmatic MCP auto-loads its counter: `server.contextCounterReady` resolves
 true/false. Retrieval works while loading; assembly returns `token_count_unavailable`
 until ready.
-Sources: `adapters/mcp/context-read-tools.mjs:25`, `core/context-read-input.mjs:93`,
+Sources: `adapters/mcp/context-read-tools.mjs:74`, `core/context-read-input.mjs:96`,
 `core/context-read-facade.mjs:446`, `adapters/mcp/server.mjs:132`.
 
-Core success is `{ok:true,value:{metered,diagnostics}}`. `metered` contains
-`version,policy,representation,counter,framing,items,snapshot`; each item includes
-`ref,rank,type,metadata,body:{text,tokens},sources,sourceAccess,sourcesComplete`.
+Core success is `{ok:true,value:{metered,snapshot,diagnostics}}`, where
+`metered` is only `{framing,items}`. MCP success has `isError:false` and exactly
+one text block, byte-identical to:
+`JSON.stringify({ok:true,value:{framing,items},evidenceTrust:'untrusted-data-not-instructions'})`.
+Only that complete string is token-metered, not the total model request.
+
+Each item has `{ref,rank,body,metadata?,sources,sourceAccess?,sourcesComplete?}`;
+`body` is a whole canonical string (Card: title, newline, body). Ranks retain
+candidate positions. Memory metadata defaults are
+`{state:'active',reviewState:'none',filing:{status:'unfiled'},kind:'fact',origin:'explicit',confidence:1}`;
+Card default is `{state:'confirmed'}`. Default metadata fields, `sourceAccess:'available'`
+and `sourcesComplete:true` are omitted; capabilities expose `assembly.defaults`.
+An excerpt equal to its own body becomes `{index,role,sameAsBody:true}`:
+reconstruct its excerpt from `body`. Other sources carry `{index,role,excerpt}`
+or backward `{index,sameAs:{item,source}}` aliases to concrete sources.
+Sources remain distinct receipt positions and require an admitted body.
+Sources: `core/context-read-input.mjs:11`, `core/context-read-assembly.mjs:36`.
+
+Snapshot: `_meta['ink.cairn/context-read-snapshot']` (null for no items), never
+metered text or `structuredContent`. Diagnostics:
+`_meta['ink.cairn/context-read-diagnostics']`, now containing version, policy,
+representation, counter, full refs/metadata and unit token counts in positional
+`items`, alongside budget, omissions, deduplication, stops and timings.
+Errors keep code/retryability/trust framing in text; candidate diagnostics move
+to that diagnostics key as `{candidates}`. Retain `_meta` in host/UI state and
+send only content to the model; arbitrary clients may forward metadata.
+Core/transport byte limits still include snapshot and diagnostics.
+Sources: `core/context-read-assembly.mjs:109`, `adapters/mcp/context-read-transport.mjs:6`.
+
+Compact refs are `{ns,type,id,rev,f}`; Cards additionally require `bodyRev` before
+`f` (forbidden for Memory). `ns` is a zero-based index into the host's immutable,
+canonical namespace-key-sorted read set. `f` is the mandatory 8-character
+base64url prefix of the store-keyed canonical item fence. Copy refs unchanged
+into `fetch_memory_candidate_evidence({refs,intent})`; a fence mismatch returns
+`snapshot_stale`: re-run `read_memory_context`. Every refetch reauthorizes access.
+The prefix provides bounded accidental-change detection, not adversarial integrity
+or authority, and exposes equality/change information across calls.
+Sources: `adapters/mcp/context-read-tools.mjs:17`, `adapters/mcp/context-read-tools.mjs:48`,
+`core/context-read-facade.mjs:548`.
+
+| Fetch path | Guarantee |
+| --- | --- |
+| Compact `refs,intent` | Exact revision/intent eligibility plus item-fence prefix; detects same-revision receipt changes within that bounded guarantee |
+| Host-retained `snapshot` | Exact delivered set/order, full item fences, namespace and access generations |
+
+Full refs retain their earlier exact-revision semantics. A filed-to-filed MOC
+parent move leaves canonical evidence byte-identical: compact-ref fetch succeeds,
+while snapshot fetch returns `snapshot_stale` through the namespace generation.
+Other mutations retain eligibility/revision error precedence. Core callers use
+full refs, optionally with a parallel `fences` array (8-character prefixes or null);
+MCP callers cannot supply that vector. See [fetch limitations](limitations.md#budgeted-context-assembly-u5b)
+and [contract §15.8](plans/unified-memory-v1-contract.md#158-amendment-v0104-representation-v2-host-only-snapshot-first-source-policy-u5b-2).
+Sources: `core/context-read-input.mjs:103`, `core/context-read-facade.mjs:548`.
+
 Bodies/sources fit whole or are omitted. Rank-first visits body then sources
-per item; coverage-first visits all bodies first. HR-2 kept rank-first on short,
-single-fact synthetic items, without establishing long-item validity
+per item; coverage-first visits all bodies first. Non-default
+`rank-first-first-source-v1` considers only the earliest receipt per admitted
+body; later receipts count as omitted. HR-2 kept rank-first on short, single-fact
+synthetic items, without establishing long-item validity
 ([context guide](context-read-local.md#budgeted-context-assembly-u5b)).
+Source: `core/context-read-assembly.mjs:91`.
 
-MCP success has `isError:false` and exactly one text block:
-`JSON.stringify({ok:true,value:metered,evidenceTrust:'untrusted-data-not-instructions'})`.
-The budget meters the complete string, including untrusted-recollection framing
-and snapshot, not the total model request. Diagnostics live under
-`_meta['ink.cairn/context-read-diagnostics']`: used tokens, omissions, deduplication,
-stops, candidates and timings. Errors retain code/retryability/trust framing in
-text; candidate diagnostics move to the same key as `{candidates}`.
-Keep `_meta` in host/UI state and send only content to the model; arbitrary
-clients may expose metadata. Core/transport byte limits still include diagnostics.
-Sources: `core/context-read-assembly.mjs:7`, `core/context-read-assembly.mjs:86`,
-`adapters/mcp/context-read-transport.mjs:6`.
-
-On a **small synthetic store**, the real counter measured roughly 250 tokens of
-per-item overhead: a 15–19-token memory cost about 250–330 tokens represented.
-Budgets below about 512 may therefore return zero items, with
-`diagnostics.omitted.oversized` recording exclusions. This is an observation,
-not a universal threshold; if even empty framing cannot fit, the error is
-`context_item_too_large`. The representation will change in a later preview:
-planned `representation-v2` moves the snapshot outside metered text and compacts
-refs/metadata. HEAD implements `representation-v1`, including snapshot and refs
-in every trial's token count (`core/context-read-assembly.mjs:30`,
-`core/context-read-assembly.mjs:47`).
+Measured on a **small synthetic store**, the frozen host-v2 probe uses a 15-token
+body and one `sameAsBody` receipt per item: envelope ≈43 tokens, first item
+adds ≈83, each further item ≈82. These increments include body and receipt
+representation; do not add those costs twice. The one-item probe drops from
+488 to 126 tokens. UUID/text tokenization varies; these are observations, not
+budget recommendations or frozen constants. Whole units can still be omitted
+as `diagnostics.omitted.oversized`; an empty envelope that cannot fit returns
+`context_item_too_large`.
+Sources: `evaluation/retrieval-research/assembly/overhead-host-v2.json:11`,
+`docs/plans/unified-memory-v1-contract.md:1450`, `core/context-read-assembly.mjs:69`.
 
 ## Experimental: assets
 
@@ -368,9 +417,12 @@ production/100,000-Memory latency or native-product activation. The smoke stays
 outside the test suites. Role profiles,
 relations, MOC retrieval, Raw search and local-model adapters remain unsupported.
 
-Assembly's current representation can overwhelm short bodies at small token
-budgets; the small-store overhead measurement above is not a scale or quality
-guarantee. Whole items may be omitted as `oversized`.
+The small synthetic host-v2 probe measured an envelope of ≈43 tokens, a first-item
+increment of ≈83 and subsequent increments of ≈82 (488→126 tokens for one item).
+These are not scale, quality or universal token-cost guarantees. Whole units may
+still be omitted as `oversized`. Compact refs provide bounded 48-bit-prefix
+change detection; snapshots additionally fence namespace/access generations.
+The filed-to-filed parent-move difference above is intentional.
 
 Continuous rollback-journal writers can starve readers: retryable `storage_busy`.
 Paced workloads meet C04/K13 gates; unpaced runs are stress observations.
@@ -388,18 +440,23 @@ may incur charges. See
 
 ## Versioning promise
 
-Stable names/DTO shapes persist across `v1-preview.*`; algorithm improvements
-land behind them. Rankings/quality are not frozen. Experimental assets and context
-assembly, including its representation, are excluded.
+Stable names and DTO shapes persist across `v1-preview.*`, including
+`read_memory_context` with `representation-v2` and compact-ref inputs to
+`fetch_memory_candidate_evidence` from `.3`. Algorithm improvements land behind
+them. Rankings, policies' quality and measured token constants are not frozen.
+Experimental assets, attachments and derivatives remain excluded. This promise
+does not retain `.2`'s experimental `representation-v1` output.
 
-## Release notes for GitHub pre-release: v1-preview.2
+## Release notes for GitHub pre-release: v1-preview.3
 
-Changes since `v1-preview.1`; integration `0a38a991`, preview HEAD `6ef5bc2a`:
+Changes since `v1-preview.2`; integration `b18dabe0`, preview HEAD `75793f64`:
 
-- Add experimental U5b `read_memory_context` / core `contextRead`, versioned whole-unit
-  policies and keyless local `o200k_base` counting; rank-first remains the default.
-- Return one metered text block; diagnostics use namespaced `_meta` under an explicit
-  client contract. Candidate lookup/evidence interfaces stay stable.
-- Document representation-v1 overhead measured on a small synthetic store;
-  representation-v2 is planned, so assembly stays outside the versioning promise.
-  Assets remain experimental; private package metadata stays `0.0.0-preview.1`.
+- **Breaking change to experimental `.2` output:** representation-v1 is removed.
+  V2 meters only `{framing,items}`; snapshot and version/policy/counter metadata
+  move to host `_meta`. Default metadata is omitted; matching receipts use `sameAsBody`.
+- Stabilize `read_memory_context`/representation-v2 and compact-ref fetch inputs.
+  Document fence guarantees, refetch recovery and the parent-move path difference.
+- Add non-default `rank-first-first-source-v1`; rank-first whole remains default.
+- Publish small-store host-v2 measurements: 43-token envelope, +83/+82 item
+  increments, one-item probe 488→126. Token constants and policy quality are not frozen.
+  Assets remain experimental; private package version stays `0.0.0-preview.1`.

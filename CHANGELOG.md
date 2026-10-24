@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — v1-preview.3 integration guide
+
+- Document integration `b18dabe0`: stabilize representation-v2 assembly and
+  compact-ref fetch, replacing experimental `.2` output. Cover host-only snapshots,
+  fence/parent-move guarantees, the first-source policy and frozen-probe measurements;
+  rankings, policy quality and token constants remain unfrozen.
+
 ## Unreleased — v1-preview.2 integration guide
 
 - Document integration `0a38a991` (preview HEAD `6ef5bc2a`): experimental U5b
