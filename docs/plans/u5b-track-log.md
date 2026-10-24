@@ -280,3 +280,11 @@
   `git diff --check` 0），已推送並交給主控；主控合併前會在最終 commit 跑 validate／test:artifact／import guards／diff --check。
 - **A 包成果**：單筆 15-token 記憶的計量文字 488→126 token；每筆開銷約 250→82；U5a 測試零修改全過；契約 §15.8 v0.10.4。
   B 包（HR-2 `host-v2` 重跑、P-top-s1 已在 A 包以非預設政策落地）待主控合併後開始，只動研究分支。
+- **A 包合併並發布**：主控 fast-forward 整合分支到 `b18dabe0`，`v1-preview.3` 發於 `7197d800`，`read_memory_context`（v2）與
+  精簡 ref fetch 成為穩定的 preview 介面。主控安裝包煙霧測試四項皆符合規格（256 預算放進兩筆用 242 token；`f` 錯一字→
+  `snapshot_stale`；缺 `f`→`invalid_input`；`correct_memory` 後舊 ref→`revision_conflict`、重讀得 revision 2）。
+- **B 包開始**（研究分支 `experiment/hr2-assembly`）：複製 `overhead-host-v2.json`（sha256 `5eba1bd4…` 與 `b18dabe0` 一致）；
+  寫協定 **v1.2 §11「host-v2 exploratory extension」**（只加 §11，§§1–10 不動、§4 不重開；成本模型 `E + Σ(body: tokens +
+  h1／hN) + Σ(span: C−bodyTokens + tokens | alias A)`；120 cells；`run.overhead='host-v2'` 字串使之永遠進不了確認性比較；
+  輸出 results v1.1、`results/hr2-host-v2/`、limitations 一句），草稿提交 **`2f69c7a5`** 已推送。派非作者稽核 `hr2_ext_audit`
+  （read-only，乾淨 worktree `/home/chichieh/cairn-memory-review-hr2`），負載 0.2。
