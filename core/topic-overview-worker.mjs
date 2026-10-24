@@ -58,7 +58,11 @@ function open() {
   if (connection) return;
   const opened = openReadDatabase(workerData.path);
   try { storage = createTopicOverviewStorage(opened.db); openedSchema = configuration(opened.db); connection = opened; }
-  catch (error) { opened.db.close(); throw error; }
+  catch (error) {
+    opened.db.close();
+    if (error?.code === 'ERR_SQLITE_ERROR' && [5, 6].includes(error.errcode & 255)) throw error;
+    fail('unsupported_database');
+  }
 }
 async function readLegacy(request) {
   open();
@@ -139,24 +143,35 @@ async function readOptin(request) {
   if (cursor) {
     if (!traversal) fail('cursor_stale');
     if (binding !== traversal.binding) fail('invalid_cursor');
-    topicSession.transaction(() => fence(traversal));
-    if (cursor === traversal.lastInput) return traversal.lastOutput;
-    if (cursor !== traversal.nextCursor) fail('cursor_stale');
-  } else {
-    const { captured, origin } = topicSession.transaction(() => fence());
-    charge(1);
-    traversal = { binding, snapshot: captured, originToken: tokens.issueOrigin(origin),
-      data: topicSession.overviewCreate(request.namespace, request, captured), offset: 0, nextCursor: null };
+    if (cursor !== traversal.lastInput && cursor !== traversal.nextCursor) fail('cursor_stale');
   }
-  const state = traversal;
-  charge(1);
+  const replay = cursor && cursor === traversal.lastInput;
+  let state;
   try {
-    while (!state.items && used + 5 <= request.workLimit - 4) {
+    topicSession.transaction(() => {
+      const start = performance.now(), before = used;
+      const { captured, origin } = fence(cursor ? traversal : undefined);
+      if (replay) return;
+      if (!cursor) {
+        charge(1);
+        traversal = { binding, snapshot: captured, originToken: tokens.issueOrigin(origin),
+          data: topicSession.overviewCreate(request.namespace, request, captured), offset: 0, nextCursor: null };
+      }
+      state = traversal;
+      while (!state.data.initialization.done && used + state.data.cost() <= request.workLimit - 5 &&
+          used - before + state.data.cost() <= 64 && performance.now() - start < 5) {
+        charge(state.data.cost());
+        state.data.scan.next();
+      }
+    });
+    if (replay) return traversal.lastOutput;
+    charge(1);
+    while (!state.items && used + 4 + state.data.cost() <= request.workLimit - 4) {
       const done = topicSession.transaction(() => {
         fence(state);
         const start = performance.now(); let quantum = 4;
-        while (used < request.workLimit - 4 && quantum < 64 && performance.now() - start < 5) {
-          charge(1); quantum++;
+        while (used + state.data.cost() <= request.workLimit - 4 && quantum + state.data.cost() <= 64 && performance.now() - start < 5) {
+          const cost = state.data.cost(); charge(cost); quantum += cost;
           if (state.data.scan.next().done) return true;
         }
         return false;
@@ -165,7 +180,7 @@ async function readOptin(request) {
       await yieldTurn();
     }
   } catch (error) {
-    if (error.code !== 'state_limit') throw error;
+    if (error.code !== 'state_limit' || !state) throw error;
     topicSession.transaction(() => fence(state)); traversal = undefined;
     return success({ snapshot: publicSnapshot(state, request), items: [], totals: null,
       coverage: { complete: false, countsComplete: false, reason: 'state_limit' }, nextCursor: null });

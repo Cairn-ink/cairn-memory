@@ -247,9 +247,12 @@ Member and opt-in snapshot reads require UTF-8 database encoding and BINARY
 comparison semantics on the consumed namespace and identifier columns. Other
 encodings or comparison collations return `unsupported_database`; legacy
 overview opening is unchanged. Initialization walks schema metadata with a
-bounded keyset checkpoint and validates one seek/column row at a time under
-`workLimit`. A work-only page can therefore represent initialization progress
-before member enumeration begins. It never implies an empty selection.
+bounded keyset checkpoint and checks column declarations through direct result
+metadata, without scanning a table's column inventory. Index metadata uses
+capped batches whose entire row cost is charged before reading, followed by
+bounded in-memory checks under `workLimit`. A work-only page can therefore
+represent initialization progress before member enumeration begins. It never
+implies an empty selection.
 
 Cached member replay must finish its fence and delivery checks within the
 call deadline. A call that cannot advance a checkpoint before its deadline

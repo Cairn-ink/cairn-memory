@@ -53,16 +53,29 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
       inTime();
       prepare({ charge, request, deadlineAt });
       inTime();
-      const initial = transaction(fence);
-      if (cursor && cursor === state.lastInput) { inTime(); return state.lastOutput; }
-      if (!state) {
-        charge(1);
-        const publicSnapshot = request.expectedSnapshot ?? { indexRevision: initial.captured.indexRevision,
-          generation: initial.captured.generation, originToken: tokens.issueOrigin(initial.binding) };
-        state = { binding, captured: initial.captured, publicSnapshot, data: storage.create(),
-          cursorBinding: { binding, captured: initial.captured, originToken: publicSnapshot.originToken,
-            traversal: randomBytes(16).toString('base64url') } };
-      }
+      const cost = () => storage.cost?.(state.data) ?? 1;
+      const advance = () => { charge(cost()); storage.step(state.data, request, state.captured); advanced = true; };
+      const replay = cursor && cursor === state.lastInput;
+      transaction(() => {
+        quantum = 0;
+        const started = now(), initial = fence();
+        if (replay) return;
+        if (!state) {
+          charge(1);
+          const publicSnapshot = request.expectedSnapshot ?? { indexRevision: initial.captured.indexRevision,
+            generation: initial.captured.generation, originToken: tokens.issueOrigin(initial.binding) };
+          state = { binding, captured: initial.captured, publicSnapshot, data: storage.create(),
+            cursorBinding: { binding, captured: initial.captured, originToken: publicSnapshot.originToken,
+              traversal: randomBytes(16).toString('base64url') } };
+        }
+        // Use the already charged initial fence for the first quantum. This
+        // leaves room for a whole bounded metadata batch even at workLimit=16.
+        // Reserve envelope construction as well as the final four-unit fence.
+        while (state.data.initialization && !state.data.initialization.done && used + cost() <= request.workLimit - 5 &&
+            quantum + cost() <= 64 && now() - started < 5 && now() < deadlineAt - 5) advance();
+      });
+      if (replay) { inTime(); return state.lastOutput; }
+      if (Buffer.byteLength(JSON.stringify(state)) > MEMBER_STATE_BYTES) fail('state_limit');
       charge(1);
       const namespace = { ...request.namespace, projectId: request.namespace.scope === 'personal' ? null : request.namespace.projectId };
       const value = { version: 'topic-members-v1', status: 'partial', namespace, selection: request.selection,
@@ -105,14 +118,14 @@ export function createTopicMemberReader({ storage, snapshot, transaction, tokens
           state.data.pending = null; advanced = true;
         }
         if (state.data.done) { reason = null; break; }
-        if (used + 5 > request.workLimit - 4) { reason = 'work_limit'; break; }
+        if (used + 4 + cost() > request.workLimit - 4) { reason = 'work_limit'; break; }
         if (now() >= deadlineAt - 5) { reason = 'deadline'; break; }
         const started = now();
         transaction(() => {
           quantum = 0;
           fence();
-          while (used < request.workLimit - 4 && quantum < 64 && now() - started < 5 && now() < deadlineAt - 5) {
-            charge(1); storage.step(state.data, request, state.captured); advanced = true;
+          while (used + cost() <= request.workLimit - 4 && quantum + cost() <= 64 && now() - started < 5 && now() < deadlineAt - 5) {
+            advance();
             if (state.data.pending || state.data.done) break;
           }
         });

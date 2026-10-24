@@ -31,7 +31,7 @@ export function createTopicSession(path) {
     }
     if (dirty) {
       dispose();
-      if (request.cursor) fail('cursor_stale');
+      if (request.cursor || request.expectedSnapshot) fail('cursor_stale');
     }
     if (connection) return;
     // One bounded native/file setup step; one group of four header validations;
@@ -54,6 +54,7 @@ export function createTopicSession(path) {
       overview = createTopicOverviewStorage(opened.db, { exactComparisons: true });
       const raw = createTopicMembersStorage(opened.db);
       members = { ...raw, create: () => ({ ...raw.create(), initialization: opening.create() }),
+        cost: state => state.initialization.done ? 1 : opening.cost(state.initialization),
         step(state, ...args) {
           if (!state.initialization.done) opening.step(state.initialization);
           else raw.step(state, ...args);
@@ -72,15 +73,18 @@ export function createTopicSession(path) {
   }
   const snapshot = namespace => {
     try { connection.assertFile(); } catch { changed(); }
+    // Check inside the charged transaction, before prepared snapshot statements
+    // can be invalidated by DROP/ALTER and throw an untyped native error.
+    if (!same(configuration(connection.db), schema)) changed();
     return overview.snapshot(namespace);
   };
   const originBinding = (namespace, captured) => {
-    if (!same(configuration(connection.db), schema)) changed();
     const stat = lstatSync(path);
     return { namespace, captured, file: [stat.dev, stat.ino], schema, configuration: 'topic-snapshot-v1/topic-members-v1' };
   };
   return { prepare, transaction, snapshot, originBinding, dispose,
-    storage: { create: () => members.create(), target: (...args) => members.target(...args), step: (...args) => members.step(...args) },
+    storage: { create: () => members.create(), target: (...args) => members.target(...args),
+      cost: state => members.cost(state), step: (...args) => members.step(...args) },
     accept: state => opening.accept(state?.initialization),
     overviewCreate(namespace, bounds, captured) {
       const data = overview.create(namespace, bounds, captured), initialization = opening.create();
@@ -88,6 +92,6 @@ export function createTopicSession(path) {
         while (!initialization.done) { opening.step(initialization); yield; }
         yield* data.scan;
       }
-      return { ...data, initialization, scan: scan() };
+      return { ...data, initialization, cost: () => initialization.done ? 1 : opening.cost(initialization), scan: scan() };
     } };
 }
