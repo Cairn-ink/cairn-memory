@@ -104,6 +104,7 @@
 | 2026-10-25 | **WAL 先擱置**（主控，依盤點 `wal_inventory`）：切換要改 11 個檔裡的 18 處 journal_mode 設定、審查用的 store fence、context sidecar、契約 §11.2／12.6／13／14／16 和十多個測試；換來的只是持續寫入時讀取要重試（§16），目前沒有實際使用者遇到。本機模式上線後如果出現 `storage_busy` 再依盤點的量測協議做（成對 DELETE／WAL、60 秒固定壓力、門檻事先凍結） |
 | 2026-10-25 | **bge-m3 選配設計**（主控，依盤點 `bge_m3_inventory`）：Cairn 自己的**模型包**，用明確指令安裝，鎖定 `Xenova/bge-m3@4de13258…`，每個檔驗 sha256；推論在**子程序**；主套件不加推論相依。FP32（約 3 GB 安裝、2.2 GB RSS）；首發驗證 Linux x64（含 WSL2）與 macOS arm64，其他平台標「未驗證」。身分 `local:bge-m3:dense`＋manifest 雜湊，向量不混用；超過 8,192 tokens 拒絕、不截斷。契約 §20 起草中（`feat/local-embedder-bge-m3`） |
 | 2026-10-25 | **HR-3 修訂方向**（主控）：協議 v0.1（設計 T 分類型 vs U 統一版本，預估 US$110）改成 v0.2，加入**現行產品組 P**（main `b2513501` 的公開介面，`read_memory_context`＋3-small），P 的 C／O／R／J 絕對分數當主要描述結果，回答「現在幾分」；T − U 仍是唯一確認性比較。盤點發現：`correct_memory` 會覆蓋內容並刪除舊來源，修正過的記憶答不出「以前是什麼」，只有 supersede 會保留舊版。開放問題由主控定：被修正的錯誤紀錄在歷史中標「錯誤」保留；過期且無新決定時，現況回 `no_active_decision`，最後已知決定只在歷史中出現 |
+| 2026-10-25 | **更正 WAL 擱置：E1-C／E1-M 優先**（主控）。查產品交接 issue `wsxqaza12/cairn-wiki#453` 發現產品端 10/21–22 已實測：rollback journal 下 `readTopicOverview` 在同檔公開寫入時回 `storage_busy`（WAL 通過），並列 **E1-C（併發契約）與 E1-M（MOC 成員分頁）為重新開放記憶世界的阻擋項**；引擎 10/22 承諾「先 E1-C 再 E1-M」後未執行。主控先前說「沒有使用者遇到」是錯的。新順序：E1-C → E1-M 優先於 bge-m3 實作；HR-3 平行。E1-C 第一步只量測（DELETE 現行／DELETE＋有界等待／WAL），線索是 overview reader 的 `busy_timeout=0`（`core/topic-overview-worker.mjs:26`）；換 journal mode 需使用者另案核可 |
 
 ## 6. 研究問題與順序
 
