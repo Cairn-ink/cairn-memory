@@ -23,7 +23,7 @@ export const GRAMMAR = {
     reversal: 'explicit complete withdrawal, all predecessor fields cleared',
     refinement: 'keep unnamed fields, change only the named field',
     scope_change: 'change only selected audience cells; keep every other cell',
-    expiry: 'explicit deadline; expiry without successor; later explicit adoption is independent',
+    expiry: 'direct: explicit elapsed deadline; other strata: non-clock lapse with no preannounced deadline; no successor or fallback; later adoption independent',
     causality: { direct: [['a','decision']], unstated: [], two_edge_serial: [['a','b'],['b','decision']], three_edge_serial: [['a','b'],['b','c'],['c','decision']], conjunctive_mediated: [['a','c'],['b','c'],['c','decision']], alternative_mediated: [[['a','b'],['b','decision']],[['c','d'],['d','decision']]] },
     distractors: ['proposed','rejected','quoted','subject_collision','scope_collision','date_collision','unsupported_cause'],
   },
@@ -41,15 +41,18 @@ export function inventory(seed = DEFAULT_SEED) {
     for (let t = 0; t < TYPES.length; t++) {
       let ordinal = 0;
       for (let c = 0; c < CAUSES.length; c++) for (let n = 0; n < spec.causalLineages[c]; n++) {
-        const id = `${split}-${TYPES[t]}-L${String(++ordinal).padStart(2,'0')}`;
+        const renewed = TYPES[t] === 'expiry' && CAUSES[c] !== 'direct';
+        const id = `${split}-${TYPES[t]}-L${String(++ordinal).padStart(2,'0')}${renewed ? '-R3' : ''}`;
         const root = ROOTS[split];
-        const suffix = `${t + 1}${String(ordinal).padStart(2,'0')}`;
+        const suffix = `${t + 1}${String(ordinal).padStart(2,'0')}${renewed ? 'R3' : ''}`;
         const members = Array.from({length:spec.multiplicity}, (_,member) => {
           const global = index++;
           return { member, family_id: `${id}-W${member + 1}`, language: languages[global], card: cards.has(global),
+            card_authoring_path:cards.has(global) ? (Math.floor(cardIndex / 8) % 2 === 0 ? 'confirm_with_dependencies' : 'declare_separately') : null,
             card_branch: cards.has(global) ? cardIndex++ % 8 : null, safety: safety.has(global) };
         });
-        lineages.push({ lineage_id:id, split, type:TYPES[t], causal_class:CAUSES[c], multi_hop:c >= 2,
+        lineages.push({ lineage_id:id, split, type:TYPES[t], causal_class:CAUSES[c], authored_rationale_topology:CAUSES[c], multi_hop:c >= 2,
+          expiry_mode:TYPES[t] !== 'expiry' ? null : CAUSES[c] === 'direct' ? 'deadline' : CAUSES[c] === 'unstated' ? 'unexplained_lapse' : 'conditional_lapse',
           ancestry: { parent:null, derivatives:[], aliases:[], grammar:VERSION, bank_id:`bank/${id}` },
           bank: { subjectZh:`${root.zh[t]}${suffix}服務`, subjectEn:`${root.en[t]} ${suffix} service`,
             predicateZh:'派送設定', predicateEn:'dispatch configuration',

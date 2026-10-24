@@ -1,0 +1,197 @@
+TAP version 13
+# Subtest: all 310 specifications: exact allocation and independent disjoint bank inventories, no held-out rendering
+ok 1 - all 310 specifications: exact allocation and independent disjoint bank inventories, no held-out rendering
+  ---
+  duration_ms: 13.73151
+  type: 'test'
+  ...
+# Subtest: 30 engineering worlds validate independently before the pilot; pilot counts are exact
+ok 2 - 30 engineering worlds validate independently before the pilot; pilot counts are exact
+  ---
+  duration_ms: 0.277025
+  type: 'test'
+  ...
+# Subtest: same seed has byte-identical families, gold, support and rejection log; world seeds are independent
+ok 3 - same seed has byte-identical families, gold, support and rejection log; world seeds are independent
+  ---
+  duration_ms: 826.9604
+  type: 'test'
+  ...
+# Subtest: hand-worked typed outcomes: erroneous history, partial field inheritance, scopes and no expiry fallback
+ok 4 - hand-worked typed outcomes: erroneous history, partial field inheritance, scopes and no expiry fallback
+  ---
+  duration_ms: 18.367075
+  type: 'test'
+  ...
+# Subtest: future writes stay pending at both probes; correction can apply retroactively
+ok 5 - future writes stay pending at both probes; correction can apply retroactively
+  ---
+  duration_ms: 10.835789
+  type: 'test'
+  ...
+# Subtest: causal classes encode AND/OR, serial paths, absent reasons, no implicit shortcuts
+ok 6 - causal classes encode AND/OR, serial paths, absent reasons, no implicit shortcuts
+  ---
+  duration_ms: 36.158044
+  type: 'test'
+  ...
+# Subtest: all eight Card branches, authority refusals, separate assertion and forget/foreign isolation
+ok 7 - all eight Card branches, authority refusals, separate assertion and forget/foreign isolation
+  ---
+  duration_ms: 0.452158
+  type: 'test'
+  ...
+# Subtest: normalization, rational units, extensional scopes and equivalent duplicate collapse
+ok 8 - normalization, rational units, extensional scopes and equivalent duplicate collapse
+  ---
+  duration_ms: 8.94533
+  type: 'test'
+  ...
+# Subtest: closed schema accepts all five Value variants and rejects extras, bad ranges and malformed output
+ok 9 - closed schema accepts all five Value variants and rejects extras, bad ranges and malformed output
+  ---
+  duration_ms: 6.391217
+  type: 'test'
+  ...
+# Subtest: validator rejects observed_order
+ok 10 - validator rejects observed_order
+  ---
+  duration_ms: 6.006159
+  type: 'test'
+  ...
+# Subtest: validator rejects anchor_resolution
+ok 11 - validator rejects anchor_resolution
+  ---
+  duration_ms: 5.608463
+  type: 'test'
+  ...
+# Subtest: validator rejects historical_anchor
+ok 12 - validator rejects historical_anchor
+  ---
+  duration_ms: 6.093312
+  type: 'test'
+  ...
+# Subtest: validator rejects empty_scope
+ok 13 - validator rejects empty_scope
+  ---
+  duration_ms: 4.306984
+  type: 'test'
+  ...
+# Subtest: validator rejects span_quote
+ok 14 - validator rejects span_quote
+  ---
+  duration_ms: 10.148576
+  type: 'test'
+  ...
+# Subtest: validator rejects batch_byte_limit
+ok 15 - validator rejects batch_byte_limit
+  ---
+  duration_ms: 5.364678
+  type: 'test'
+  ...
+# Subtest: validator rejects gold_leakage
+ok 16 - validator rejects gold_leakage
+  ---
+  duration_ms: 5.614846
+  type: 'test'
+  ...
+# Subtest: validator rejects semantic_current
+ok 17 - validator rejects semantic_current
+  ---
+  duration_ms: 12.723697
+  type: 'test'
+  ...
+# Subtest: validator rejects semantic_history
+ok 18 - validator rejects semantic_history
+  ---
+  duration_ms: 8.45371
+  type: 'test'
+  ...
+# Subtest: validator rejects causal_topology
+ok 19 - validator rejects causal_topology
+  ---
+  duration_ms: 10.364081
+  type: 'test'
+  ...
+# Subtest: validator rejects empty_edge_support
+ok 20 - validator rejects empty_edge_support
+  ---
+  duration_ms: 9.497373
+  type: 'test'
+  ...
+# Subtest: validator rejects requested_predecessor_set
+ok 21 - validator rejects requested_predecessor_set
+  ---
+  duration_ms: 6.243285
+  type: 'test'
+  ...
+# Subtest: validator rejects source_erroneous
+ok 22 - validator rejects source_erroneous
+  ---
+  duration_ms: 5.794746
+  type: 'test'
+  ...
+# Subtest: rejected-candidate logging is deterministic, retains IDs and does not silently replace failures
+ok 23 - rejected-candidate logging is deterministic, retains IDs and does not silently replace failures
+  ---
+  duration_ms: 1099.776834
+  type: 'test'
+  ...
+# Subtest: CLI writes deterministic complete bytes and disk-verified hashes; rejects overwrite and unknown splits
+ok 24 - CLI writes deterministic complete bytes and disk-verified hashes; rejects overwrite and unknown splits
+  ---
+  duration_ms: 1839.120859
+  type: 'test'
+  ...
+Source manifest cross-check: 13 files (explicit delivery map vs filesystem directories).
+# Subtest: frozen source delivery list cross-checks root and test directory enumeration
+ok 25 - frozen source delivery list cross-checks root and test directory enumeration
+  ---
+  duration_ms: 3.018202
+  type: 'test'
+  ...
+# Subtest: correctness projection never adds support text, offsets, citations or delivery labels
+ok 26 - correctness projection never adds support text, offsets, citations or delivery labels
+  ---
+  duration_ms: 9.081892
+  type: 'test'
+  ...
+# Subtest: semantic validator rejects reversed causal support even when offsets and quotations remain exact
+ok 27 - semantic validator rejects reversed causal support even when offsets and quotations remain exact
+  ---
+  duration_ms: 9.88706
+  type: 'test'
+  ...
+# Subtest: inventory validator rejects cross-lineage aliases and missing causal allocations
+ok 28 - inventory validator rejects cross-lineage aliases and missing causal allocations
+  ---
+  duration_ms: 6.677323
+  type: 'test'
+  ...
+# Subtest: R3 effective reason strata match frozen counts at both checkpoints, including expiry
+ok 29 - R3 effective reason strata match frozen counts at both checkpoints, including expiry
+  ---
+  duration_ms: 0.973058
+  type: 'test'
+  ...
+# Subtest: gold-derived guard rejects a shortcut even when legacy topology says multi-hop
+ok 30 - gold-derived guard rejects a shortcut even when legacy topology says multi-hop
+  ---
+  duration_ms: 6.360376
+  type: 'test'
+  ...
+# Subtest: E-2 fixtures cover both authoring paths in every Card branch without ambiguous null redeclaration
+ok 31 - E-2 fixtures cover both authoring paths in every Card branch without ambiguous null redeclaration
+  ---
+  duration_ms: 0.351287
+  type: 'test'
+  ...
+1..31
+# tests 31
+# suites 0
+# pass 31
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5268.538794

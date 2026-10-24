@@ -1,5 +1,5 @@
 // Symbolic result refs are resolved by the public-operation runner, never by gold.
-export function cardControl(family, branch) {
+export function cardControl(family, branch, authoringPath = 'declare_separately') {
   const N = family.namespace, K = { readSet:[N], roleId:'finance' };
   let step = 0;
   const actions = [];
@@ -19,8 +19,9 @@ export function cardControl(family, branch) {
   add(1,'adoptMethodVersion',{bindingNamespace:N,package:'$M',version:'$V1',readSet:[N],roleId:'finance',expectedRevision:null},['b']);
   add(1,'resolveMethod',{...K,package:'$M'},['s'],'read');
   add(1,'createCardDraft',{namespace:N,drafting:'authored',input:{title,body,authoredInput:{text:body,occurredAt:null}}},['cardId','c']);
-  add(1,'confirmCardDraft',{namespace:N,cardId:'$cardId',expectedRevision:'$c',applicability:'current',currentDependencies:deps('$s')},['c']);
-  add(1,'declareCardCurrentDependencies',{namespace:N,cardId:'$cardId',expectedRevision:'$c',expectedDependencyRevision:null,currentDependencies:deps('$s')},['d']);
+  if (!['confirm_with_dependencies','declare_separately'].includes(authoringPath)) throw new Error('Invalid Card authoring path');
+  add(1,'confirmCardDraft',{namespace:N,cardId:'$cardId',expectedRevision:'$c',applicability:'current',...(authoringPath === 'confirm_with_dependencies' ? {currentDependencies:deps('$s')} : {})},['c']);
+  if (authoringPath === 'declare_separately') add(1,'declareCardCurrentDependencies',{namespace:N,cardId:'$cardId',expectedRevision:'$c',expectedDependencyRevision:null,currentDependencies:deps('$s')},['d']);
   const importV2 = () => add(2,'importMethodVersion',{namespace:N,package:'$M',expectedPackageRevision:'$packageRevision',basedOn:'$V1',title,files:[{path:'invoice.txt',text:'Independent invoice method, version two.',mediaType:'text/plain'}]},['V2','packageRevision']);
   const adopt = (version,batch) => add(batch,'adoptMethodVersion',{bindingNamespace:N,package:'$M',version,readSet:[N],roleId:'finance',expectedRevision:'$b'},['b']);
   const edit = () => add(2,'editKnowledgeCard',{namespace:N,cardId:'$cardId',expectedRevision:'$c',title,body:newer,bindings:[],applicability:'current'},['c']);
@@ -38,7 +39,7 @@ export function cardControl(family, branch) {
     const payload = call === 'confirmCardDraft' ? {namespace:N,cardId:'$cardId',expectedRevision:'$c',applicability:'current',currentDependencies:deps('$s')} : {namespace:N,cardId:'$cardId',expectedRevision:'$c',expectedDependencyRevision:call === 'declareCardCurrentDependencies'?null:'$d',currentDependencies:deps('$s')};
     add(4,call,payload,[],'unauthorized-mcp',{error:'approval_required',mutation:false});
   }
-  return {kind:'card',branch:names[branch],separate_assertion:true,execution_status:'blocked_protocol_clarification',unresolved_protocol:['confirm_with_dependencies_then_null_declaration'],actions,checkpoints:[{batch:2,currentEligible:![1,2,3,4,5,6].includes(branch),historyEligible:true},{batch:4,...final}],scoring:['eligibility','delivery','reader_use'],historyIsCurrent:false};
+  return {kind:'card',branch:names[branch],separate_assertion:true,authoring_path:authoringPath,execution_status:'fixture_clarified_E-2',unresolved_protocol:[],certification:{schemaAndLifecycle:'mechanically_checked',nonAuthorSemanticAudit:'pending',paidReadiness:false},actions,checkpoints:[{batch:2,currentEligible:![1,2,3,4,5,6].includes(branch),historyEligible:true},{batch:4,...final}],scoring:['eligibility','delivery','reader_use'],historyIsCurrent:false};
 }
 export function safetyControl(family) {
   const content = `Synthetic independent seal record ${family.family_id}; never a focal decision.`;

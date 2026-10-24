@@ -9,7 +9,7 @@ import { validateInventory, validateFamily } from './validate.mjs';
 import { UNIT_DICTIONARY } from './canonicalize.mjs';
 
 const root=fileURLToPath(new URL('.',import.meta.url));
-export const SOURCE_NAMES=['bank.mjs','canonicalize.mjs','cli.mjs','common.mjs','controls.mjs','deliver.mjs','generate.mjs','inventory.mjs','validate.mjs','answer.schema.json','README.md','test/generator.test.mjs'];
+export const SOURCE_NAMES=['bank.mjs','canonicalize.mjs','cli.mjs','common.mjs','controls.mjs','deliver.mjs','generate.mjs','inventory.mjs','reason-strata.mjs','validate.mjs','answer.schema.json','README.md','test/generator.test.mjs'];
 export async function sourceHashes() {
   return Object.fromEntries(await Promise.all(SOURCE_NAMES.map(async name=>[name,sha256(await readFile(path.join(root,name)))])));
 }
@@ -53,15 +53,17 @@ export async function emit({split,out,seed=DEFAULT_SEED}) {
   const source_hashes=await sourceHashes();
   const protocol_hash=sha256(await readFile(new URL('../protocol/protocol-v0.3.4.md',import.meta.url)));
   const specs=inv.lineages.filter(l=>l.split===split);
-  const manifest={version:VERSION,protocol:'protocol-v0.3.4',protocol_sha256:protocol_hash,seed,split,
+  const manifest={version:VERSION,revision:'audit-recheck-r3',protocol:'protocol-v0.3.4',protocol_sha256:protocol_hash,seed,split,
     source_hashes,allocation_sha256:sha256(files['lineage-inventory.json']),
     counts:{lineages:specs.length,families:result.bundles.length,expectedFamilies:specs.reduce((sum,l)=>sum+l.multiplicity,0),rejected:result.rejections.length,
       languages:Object.fromEntries(GRAMMAR.languages.map(language=>[language,result.bundles.filter(x=>x.family.language===language).length])),
       cardFamilies:result.bundles.filter(x=>x.family.controls.some(c=>c.kind==='card')).length,
       safetyFamilies:result.bundles.filter(x=>x.family.controls.some(c=>c.kind==='named_forget_replay_foreign')).length,
-      multiHopFamilies:result.bundles.filter(x=>x.family.multi_hop).length},
+      multiHopFamilies:result.bundles.filter(x=>x.family.reason_strata.every(s=>s.multiHop)).length,
+      unstatedFamilies:result.bundles.filter(x=>x.family.reason_strata.every(s=>s.status==='not_stated')).length,
+      cardAuthoringPaths:Object.fromEntries(['confirm_with_dependencies','declare_separately'].map(p=>[p,result.bundles.flatMap(b=>b.family.controls).filter(c=>c.kind==='card' && c.authoring_path===p).length]))},
     hashes:Object.fromEntries(Object.entries(files).map(([name,body])=>[name,{sha256:sha256(body),bytes:Buffer.byteLength(body),rows:name.endsWith('.jsonl')?(body.match(/\n/g)??[]).length:1}])),
-    gates:{complete:result.rejections.length===0,nonAuthorSemanticAudit:'pending',serializerTokenCap:'pending',goldFreezeApproval:'pending',errata:['E-1 revised 2026-10-25'],unresolvedProtocolAmbiguities:['card_confirm_then_declare_null_revision'],paidStageAuthorized:false},
+    gates:{complete:result.rejections.length===0,nonAuthorSemanticAudit:'pending',serializerTokenCap:'pending',goldFreezeApproval:'pending',errata:['E-1 revised 2026-10-25','E-2','A-1 audit recheck R3'],unresolvedProtocolAmbiguities:[],paidStageAuthorized:false},
   };
   // Second route: hash bytes read back from disk and compare to the pre-write manifest.
   for (const [name,entry] of Object.entries(manifest.hashes)) assert(sha256(await readFile(path.join(out,name)))===entry.sha256,'disk_hash_mismatch',name);

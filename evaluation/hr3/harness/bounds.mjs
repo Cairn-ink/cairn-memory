@@ -106,6 +106,7 @@ export function buildBoundReport({ families, observations, metadata }) {
     const missing = planned.filter(f => !seen.has(`${f.family_id}/${arm}/${batch}`)).map(f => f.family_id).sort();
     tables.push({ arm, productQualification:arm === 'P' ? 'P: the pinned product under the frozen public-operation agent and shared research extraction' : null,
       checkpoint:batch === 2 ? 'intermediate' : 'final', batch, changeType:type,
+      cohortLabel:metadata?.stageStatus?.complete === true && rows.length === planned.length ? 'completed-pilot cohort' : 'partial observed cohort; not completed-pilot bounds',
       denominators:{planned:planned.length, attempted:rows.length, validCompletion:rows.filter(r => r.validCompletion).length,
         failedAttempt:rows.filter(r => !r.validCompletion).length, unexecuted:missing.length},
       familiesRepresented:unique(rows.map(r => r.family)), lineagesRepresented:represented, unexecutedFamilies:missing,
@@ -115,7 +116,9 @@ export function buildBoundReport({ families, observations, metadata }) {
       jointUnresolved:share(rows.filter(r => r.bounds.J[0] !== r.bounds.J[1])),
       anyReferredComponent:share(rows.filter(r => r.referrals.length)) });
   }
-  return { version:'hr3-a1-bounds-v1', label:LABEL, stage:'pilot', adjudication:false,
+  return { version:'hr3-a1-bounds-v2', label:LABEL, stage:'pilot', adjudication:false,
+    stageStatus:metadata?.stageStatus ?? {complete:false,stopReason:null},
+    continuationApproval:false,
     interpretation:'Conservative score bounds conditional on frozen mechanical decisions; not certified factual-accuracy bounds, not confidence intervals; endpoints need not be jointly attainable.',
     samplingConfidenceIntervals:'deferred under A-1', use:'Descriptive engineering pilot only; cannot produce an Advance/Keep decision or enter development/test estimates.',
     aggregation:'J endpoints are products within each family/arm/checkpoint, then frozen-weight lineage means. Aggregate component rates are never multiplied. Failed attempts stay scored; unexecuted cases are listed and excluded from observed denominators.',
@@ -128,10 +131,9 @@ export function buildBoundReport({ families, observations, metadata }) {
 
 export function writeBoundReport({ stageDirectory, inputs, out }) {
   const run = readJSON(join(stageDirectory, 'run.json')), summary = readJSON(join(stageDirectory, 'summary.json'));
-  check(run.stage === 'pilot' && summary.stage === 'pilot' && summary.complete === true, 'completed_pilot_required');
-  check(summary.ledger.unsettled.length === 0 && summary.ledger.stopped === null, 'unsettled_or_stopped_stage');
+  check(run.stage === 'pilot' && summary.stage === 'pilot' && typeof summary.complete === 'boolean', 'pilot_stage_required');
   check(run.frozenArtifacts && run.frozenArtifacts['protocol/errata.md'], 'execution_time_hashes_required');
-  // Verify completed artifacts before deriving anything, including the scores.
+  // Verify stopped/incomplete or completed artifacts before deriving anything, including the scores.
   const manifestBytes = readFileSync(join(stageDirectory, 'manifest.json'));
   const manifest = JSON.parse(manifestBytes);
   for (const [name, entry] of Object.entries(manifest.files)) {
@@ -153,12 +155,46 @@ export function writeBoundReport({ stageDirectory, inputs, out }) {
   check(summary.attempted === observations.length, 'summary_denominator_mismatch');
   check(typeof run.offline === 'boolean' && Number.isSafeInteger(summary.ledger.total) && summary.ledger.total >= 0, 'spend_metadata');
   check(observations.every(o => o.version === 'hr3-scorer-v1' && o.protocol === 'v0.3.4'), 'scorer_version');
+  const billing = verifiedBilling(jsonl(join(stageDirectory, 'ledger.jsonl')));
+  check(billing.total === summary.ledger.total && canonical(billing.unsettled) === canonical(summary.ledger.unsettled) && billing.stopped === summary.ledger.stopped, 'ledger_summary_mismatch');
+  const failure = Object.hasOwn(manifest.files,'failure.json') ? readJSON(join(stageDirectory,'failure.json')) : null;
+  const stageStatus = {complete:summary.complete, stopReason:billing.stopped ?? failure?.reason ?? null,
+    observedCohort:summary.complete && observations.length === 480 ? 'completed-pilot cohort' : 'partial observed cohort; not completed-pilot bounds'};
   const metadata = { protocol:'v0.3.4', errata:'revised E-1 and A-1 (2026-10-25); E-2', scorer:'hr3-scorer-v1',
-    offline:run.offline, actualSpendUSD:run.offline ? 0 : summary.ledger.total / 1e9,
-    ledgerChargeUSD:summary.ledger.total / 1e9, ledgerChargeInterpretation:run.offline ? 'simulated fake usage; actual spend is zero' : 'settled billable stage usage',
+    offline:run.offline, stageStatus,
+    actualSpendUSD:run.offline ? 0 : billing.unsettled.length ? null : billing.settled / 1e9,
+    actualSpendKnown:run.offline || billing.unsettled.length === 0,
+    settledSpendUSD:run.offline ? 0 : billing.settled / 1e9,
+    settledLedgerChargeUSD:billing.settled / 1e9,
+    outstandingReservations:{count:billing.unsettled.length, ids:billing.unsettled, reservedUSD:billing.outstanding / 1e9},
+    ledgerChargeUSD:billing.total / 1e9,
+    ledgerChargeInterpretation:run.offline ? 'simulated fake usage/reservations; actual spend is zero' : 'settled charges plus outstanding reservation ceilings; unknown final billing is not actual spend',
     frozenArtifacts:run.frozenArtifacts, completedStageManifestSHA256:hash(manifestBytes),
     reportModuleSHA256:hash(readFileSync(new URL('./bounds.mjs', import.meta.url))) };
   const report = buildBoundReport({families, observations, metadata});
   writeFileSync(out, canonical(report) + '\n', {flag:'wx', mode:0o600});
   return report;
+}
+
+
+export function verifiedBilling(events) {
+  check(events.length > 0 && events[0].type === 'configuration', 'ledger_configuration_required');
+  let prior = '', stopped = null, settled = 0;
+  const reservations = new Map(), settlements = new Set();
+  for (const event of events) {
+    const {digest,...data} = event;
+    check(data.prior === prior && hash(data) === digest, 'ledger_hash_chain'); prior = digest;
+    if (event.type === 'reserve') {
+      check(!reservations.has(event.id) && Number.isSafeInteger(event.reserved) && event.reserved >= 0, 'ledger_reservation');
+      reservations.set(event.id,event.reserved);
+    } else if (event.type === 'settle') {
+      check(reservations.has(event.id) && !settlements.has(event.id) && Number.isSafeInteger(event.charged) && event.charged >= 0 && event.charged <= reservations.get(event.id), 'ledger_settlement');
+      settlements.add(event.id); settled += event.charged;
+    } else if (event.type === 'stop') stopped = event.reason;
+    else check(['configuration','failure'].includes(event.type), 'ledger_event_type');
+  }
+  const unsettled = [...reservations.keys()].filter(id => !settlements.has(id));
+  const outstanding = sum(unsettled.map(id => reservations.get(id)));
+  check(Number.isSafeInteger(settled + outstanding), 'ledger_total_overflow');
+  return {settled, outstanding, total:settled + outstanding, unsettled, stopped};
 }

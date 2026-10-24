@@ -32,10 +32,16 @@ test('future activation and adapter scheduled expiry use public operations witho
 });
 test('isolated file stores and all E-2 Card branches use real public revisions; unauthorized controls refuse',async t=>{
  const a=await fixture(t),b=await fixture(t);assert.notEqual(a.path,b.path);
- for(let branch=0;branch<8;branch++){
-  const p=await fixture(t),f={family_id:'hand-'+branch,lineage_id:'lineage',namespace},control=cardControl(f,branch);
+ for(const authoringPath of ['confirm_with_dependencies','declare_separately']) for(let branch=0;branch<8;branch++){
+  const p=await fixture(t),f={family_id:'hand-'+branch,lineage_id:'lineage',namespace},control=cardControl(f,branch,authoringPath);
   for(let batch=1;batch<=4;batch++)await p.controls([control],batch);
   const failures=p.log.filter(l=>l.surface==='core'&&l.result?.ok===false);assert.deepEqual(failures,[],JSON.stringify(failures));
+  const confirmation=p.log.find(l=>l.surface==='core'&&l.method==='confirmCardDraft');
+  assert.equal(Object.hasOwn(confirmation.input,'currentDependencies'),authoringPath==='confirm_with_dependencies');
+  const declarations=p.log.filter(l=>l.surface==='core'&&l.method==='declareCardCurrentDependencies');
+  assert.equal(declarations.length,authoringPath==='declare_separately'?1:0);
+  if(declarations.length)assert.equal(declarations[0].input.expectedDependencyRevision,null);
+  for(const review of p.log.filter(l=>l.surface==='core'&&l.method==='revalidateCardCurrentDependencies'))assert.ok(review.input.expectedDependencyRevision>0);
   assert.ok(p.symbols.cardId);const detail=p.call('getCard',{namespace,cardId:p.symbols.cardId}).value.card;
   assert.equal(detail.support.currentDependency.status,['adopt_v2','readopt_v1','v1_v2_v1','edit_without_review'].includes(control.branch)?'needs-review':'current');
   if(branch===7){const refusals=p.log.filter(l=>l.surface==='control'&&l.method==='unauthorized');assert.equal(refusals.length,3);assert.ok(refusals.every(r=>r.result.error.code==='approval_required'));}

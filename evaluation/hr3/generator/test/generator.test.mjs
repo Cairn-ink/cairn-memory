@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { openSync, closeSync, readFileSync } from 'node:fs';
 import { DEFAULT_SEED, TYPES, CAUSES, canonical, jsonl, sha256, CELLS, cellsOf, scope, scopeFromCells } from '../common.mjs';
 import { inventory, SPLITS } from '../inventory.mjs';
+import { reasonStratum } from '../reason-strata.mjs';
 import { generateFamily, correctnessOnly, extractionInput } from '../generate.mjs';
 import { generateSplit, SOURCE_NAMES } from '../deliver.mjs';
 import { validateInventory, validateFamily, validateValue, validateAnswer, validateScope } from '../validate.mjs';
@@ -112,7 +113,7 @@ test('all eight Card branches, authority refusals, separate assertion and forget
   const cards=pilot.bundles.flatMap(x=>x.family.controls).filter(c=>c.kind==='card');
   assert.equal(cards.length,40); assert.equal(new Set(cards.map(c=>c.branch)).size,8);
   assert(cards.every(c=>c.separate_assertion));
-  assert(cards.every(c=>c.execution_status==='blocked_protocol_clarification'));
+  assert(cards.every(c=>c.execution_status==='fixture_clarified_E-2'));
   const byName=Object.fromEntries(cards.map(c=>[c.branch,c]));
   for (const name of ['adopt_v2','readopt_v1','v1_v2_v1','edit_without_review']) assert.equal(byName[name].checkpoints[1].currentEligible,false);
   for (const name of ['unadopted_v2','review_unchanged','edit_then_review','unauthorized_mcp']) assert.equal(byName[name].checkpoints[1].currentEligible,true);
@@ -249,28 +250,59 @@ test('inventory validator rejects cross-lineage aliases and missing causal alloc
 });
 
 
-test('E-1: every expiry accepts a deadline trigger; not_stated is only for unsupported causes',()=>{
-  let checkpoints=0, formerlyUnstated=0;
-  for (const {family,gold,support} of [...engineering.bundles,...pilot.bundles]) {
-    for (const cp of gold.checkpoints) {
-      if (family.change_type !== 'expiry') {
-        assert.equal(cp.G_correct.reason.status,family.causal_class==='unstated'?'not_stated':'stated');
-        continue;
+
+test('R3 effective reason strata match frozen counts at both checkpoints, including expiry',()=>{
+  for (const [split,run,multi,unstated] of [['engineering',engineering,20,5],['pilot',pilot,40,10]]) {
+    for (const batch of [2,4]) {
+      const strata=run.bundles.map(b=>reasonStratum(b.gold.checkpoints.find(c=>c.batch===batch).G_correct));
+      assert.equal(strata.filter(s=>s.multiHop).length,multi);
+      assert.equal(strata.filter(s=>s.status==='not_stated').length,unstated);
+    }
+    for(const b of run.bundles) for(const cp of b.gold.checkpoints) {
+      const actual=reasonStratum(cp.G_correct);
+      assert.deepEqual(b.family.reason_strata.find(s=>s.batch===cp.batch),{batch:cp.batch,...actual});
+      assert.equal(b.family.multi_hop,actual.multiHop);
+      if(b.family.change_type!=='expiry')continue;
+      const parent=b.family.ast.events.find(e=>e.record_name===(cp.batch===2?'A':'C'));
+      if(b.family.expiry_mode==='deadline') {
+        assert.deepEqual(cp.G_correct.acceptedGraphs.at(-1),{edges:[{from:'deadline',to:'decision'}]});
+        assert.ok(parent.effective_interval.to);
+      } else {
+        assert.equal(parent.effective_interval.to,null);
+        assert.ok(!cp.G_correct.reason.nodes.some(n=>n.id==='deadline'));
+        assert.match(b.family.lineage_id,/-R3$/);
+        assert.equal(actual.status,b.family.causal_class==='unstated'?'not_stated':'stated');
       }
-      checkpoints++;
-      if (family.causal_class==='unstated') formerlyUnstated++;
-      assert.equal(cp.G_correct.reason.status,'stated');
-      const trigger=cp.G_correct.acceptedGraphs.at(-1);
-      assert.deepEqual(trigger,{edges:[{from:'deadline',to:'decision'}]});
-      assert.equal(cp.G_correct.acceptedGraphs.length,(family.causal_class==='unstated'?0:family.causal_class==='alternative_mediated'?2:1)+1);
-      const node=cp.G_correct.reason.nodes.find(n=>n.id==='deadline');
-      const parent=family.ast.events.find(e=>e.record_name===(cp.batch===2?'A':'C'));
-      assert.deepEqual(node.claim.value,{type:'Instant',iso:parent.effective_interval.to});
-      const span=support.checkpoints.find(c=>c.batch===cp.batch).acceptedGraphs.at(-1).edges[0].support[0][0];
-      assert.ok(span.quote.includes(node.claim.value.iso));
-      assert.match(span.quote,/It expires|到期失效/);
-      assert.ok(!family.batches[cp.batch-1].turns[0].text.includes('No reason for this change was stated'));
     }
   }
-  assert.equal(checkpoints,36);assert.equal(formerlyUnstated,6);
+  // Prospective counts only: no development/test conversations or gold rendered.
+  for(const [split,multi,unstated] of [['development',120,40],['test',800,400]]) {
+    const ls=inv.lineages.filter(l=>l.split===split);
+    assert.equal(ls.filter(l=>l.multi_hop).reduce((n,l)=>n+l.multiplicity,0),multi);
+    assert.equal(ls.filter(l=>l.causal_class==='unstated').reduce((n,l)=>n+l.multiplicity,0),unstated);
+    assert.ok(ls.filter(l=>l.type==='expiry'&&l.causal_class!=='direct').every(l=>l.lineage_id.endsWith('-R3')&&l.expiry_mode!=='deadline'));
+  }
+});
+
+test('gold-derived guard rejects a shortcut even when legacy topology says multi-hop',()=>{
+  const {lineage,bundle}=choose('expiry','two_edge_serial');
+  const cp=bundle.gold.checkpoints[0];
+  cp.G_correct.acceptedGraphs.push({edges:[{from:'b',to:'decision'}]});
+  assert.equal(reasonStratum(cp.G_correct).multiHop,false);
+  assert.throws(()=>validateFamily(bundle,lineage),{code:'causal_topology'});
+});
+
+test('E-2 fixtures cover both authoring paths in every Card branch without ambiguous null redeclaration',()=>{
+  const cards=pilot.bundles.flatMap(b=>b.family.controls).filter(c=>c.kind==='card');
+  for(const branch of new Set(cards.map(c=>c.branch))) {
+    assert.deepEqual([...new Set(cards.filter(c=>c.branch===branch).map(c=>c.authoring_path))].sort(),['confirm_with_dependencies','declare_separately']);
+  }
+  for(const card of cards) {
+    assert.deepEqual(card.unresolved_protocol,[]);
+    assert.equal(card.certification.paidReadiness,false);
+    const confirm=card.actions.find(a=>a.call==='confirmCardDraft'&&a.authority==='explicit-user');
+    const declarations=card.actions.filter(a=>a.call==='declareCardCurrentDependencies'&&a.authority==='explicit-user');
+    if(card.authoring_path==='confirm_with_dependencies'){assert.ok(confirm.payload.currentDependencies);assert.equal(declarations.length,0);}
+    else {assert.equal(confirm.payload.currentDependencies,undefined);assert.equal(declarations.length,1);assert.equal(declarations[0].payload.expectedDependencyRevision,null);}
+  }
 });

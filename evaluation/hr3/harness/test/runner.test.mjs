@@ -1,6 +1,7 @@
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync,readdirSync,mkdtempSync,rmSync } from 'node:fs';
+import { readFileSync,readdirSync,mkdtempSync,rmSync,openSync,closeSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { emit } from '../../generator/deliver.mjs';
@@ -43,6 +44,19 @@ test('independent fake smoke runs have identical research artifacts and all-arm 
 test('a transport stop preserves and scores completed reader attempts without zero-filling unexecuted arms',async t=>{
  const {TransportError}=await import('../transport.mjs');const dir=mkdtempSync(join(tmpdir(),'hr3-stop-test-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const input=join(dir,'inputs');await emit({split:'pilot',out:input});let readers=0;
  class FailureTransport extends FakeTransport {async send(request,options){if(request.operation==='reader'&&++readers>1)throw new TransportError();return super.send(request,options);}}
- const out=join(dir,'out');await assert.rejects(run({inputs:input,out,transport:new FailureTransport()}),/three_transport_failures/);
+ const out=join(dir,'out');await assert.rejects(run({stage:'pilot',inputs:input,out,transport:new FailureTransport()}),/three_transport_failures/);
  const summary=JSON.parse(readFileSync(join(out,'summary.json')));assert.equal(summary.complete,false);assert.equal(summary.attempted,2);assert.equal(summary.arms.U.attempted,1);assert.equal(summary.arms.T.attempted,1);assert.equal(summary.arms.O.attempted,0);assert.equal(summary.arms.P.attempted,0);assert.equal(summary.ledger.unsettled.length,3);assert.ok(readdirSync(join(out,'states')).some(f=>f.endsWith('-P-final.json')));
+ const reportFile=join(dir,'partial.json'),stdoutFile=join(dir,'report.stdout'),stderrFile=join(dir,'report.stderr');
+ const stdout=openSync(stdoutFile,'wx'),stderr=openSync(stderrFile,'wx');let result;
+ const beforeLedger=readFileSync(join(out,'ledger.jsonl'),'utf8'),beforeManifest=readFileSync(join(out,'manifest.json'),'utf8');
+ try {result=spawnSync(process.execPath,['evaluation/hr3/harness/cli.mjs','--bound-report',out,'--inputs',input,'--out',reportFile],{stdio:['ignore',stdout,stderr]});}finally{closeSync(stdout);closeSync(stderr);}
+ assert.equal(result.error,undefined);assert.equal(result.status,0,readFileSync(stderrFile,'utf8'));
+ const partial=JSON.parse(readFileSync(reportFile));assert.equal(partial.stageStatus.complete,false);assert.equal(partial.stageStatus.stopReason,'three_transport_failures');
+ assert.equal(partial.denominators.attempted,2);assert.equal(partial.denominators.unexecuted,478);
+ assert.equal(partial.metadata.outstandingReservations.count,3);assert.equal(partial.metadata.actualSpendUSD,0);
+ assert.ok(partial.tables.every(row=>row.cohortLabel.startsWith('partial observed cohort')));
+ assert.equal(partial.continuationApproval,false);
+ assert.equal(readFileSync(join(out,'ledger.jsonl'),'utf8'),beforeLedger);assert.equal(readFileSync(join(out,'manifest.json'),'utf8'),beforeManifest);
+ t.diagnostic('official CLI accepted actual interrupted pilot: 2 attempted, 478 unexecuted, 3 outstanding reservations; exit 0');
+
 });

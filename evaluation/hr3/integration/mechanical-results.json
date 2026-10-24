@@ -22,8 +22,8 @@
     "checks": [
       {
         "name": "generator/README.md",
-        "sha256": "d41c014c87c81fc60b1a30c33110012bd25e8a1d267aad28edd413df3583d4e3",
-        "bytes": 13483
+        "sha256": "a77d464f6c05cad1f4d359f5c6b34ba703e5e402b4c39aa964b35bf8de62018f",
+        "bytes": 14642
       },
       {
         "name": "generator/answer.schema.json",
@@ -32,8 +32,8 @@
       },
       {
         "name": "generator/bank.mjs",
-        "sha256": "dd93083098b4ea4abc2920358c05e681939bd79a59a73c933af2f1a8136470b5",
-        "bytes": 5895
+        "sha256": "47680b96a4c0abd9f883f67f00741b76bef80668d6b69ddfa5e97d23c44d50da",
+        "bytes": 6380
       },
       {
         "name": "generator/canonicalize.mjs",
@@ -52,53 +52,58 @@
       },
       {
         "name": "generator/controls.mjs",
-        "sha256": "d485b577bddec31833382343aae8618035af1e185cde5e3bcbab96fda88a8b74",
-        "bytes": 5528
+        "sha256": "1f568479cd7741b92037cc447f803f0aa10746b4d6a6ddc34ef4b8d2bfdccc32",
+        "bytes": 5883
       },
       {
         "name": "generator/deliver.mjs",
-        "sha256": "9d59a0597d25e3e4cd47cc0678c18b3a524b49da7e902f685abac2737380f551",
-        "bytes": 5664
+        "sha256": "ab90229d78c21a5fd992a150ffe32f5faa8efce4108eef95b467c278aa9a9edc",
+        "bytes": 6051
       },
       {
         "name": "generator/generate.mjs",
-        "sha256": "3b3b6212f72ebcd67de626ecf76ce0fa79d9d670531eb35ff32f31bd179dc051",
-        "bytes": 15331
+        "sha256": "94609a66255c243ef2e0fe648f2037466a70c39f659c3980edeef1004eaffa8c",
+        "bytes": 15942
       },
       {
         "name": "generator/inventory.mjs",
-        "sha256": "1017c07bd64632d22c99a3a98293b80d79f3571f73eaef47f1f77347bab8e6da",
-        "bytes": 5937
+        "sha256": "2459c06224aacc488c1533fa6be1cef152f7c6449dd2517441d479e78544d692",
+        "bytes": 6471
+      },
+      {
+        "name": "generator/reason-strata.mjs",
+        "sha256": "11e2c8721122005b68e27c0e07ad92efdf77ce3fe212cc97f8f2577027f3f60a",
+        "bytes": 658
       },
       {
         "name": "generator/test/generator.test.mjs",
-        "sha256": "0723fa74e678b51eae61d5e9dcaa66e2a09c3e770bc7df07090c104788bb9fe5",
-        "bytes": 21348
+        "sha256": "54815b0ab71a7a1fd56ecd48e7cc6e1084e44194aae31bb94a6b7d333b457d66",
+        "bytes": 23350
       },
       {
         "name": "generator/validate.mjs",
-        "sha256": "c93ba2eb3a50579fe39acf35dc16cd5b5249b76a800320b5b3d6349a390709e2",
-        "bytes": 25231
+        "sha256": "46fb155b1803639cbee1aaca7e88f22e9a8e64a66d813e4e7fec31c88e433cca",
+        "bytes": 26662
       },
       {
         "name": "generator/artifacts/pilot/families.jsonl",
-        "sha256": "06b89366cb148a6ea017e7d34d4c350559171f75850d3df5594ce6c601d5a49a",
-        "bytes": 2766691
+        "sha256": "27d377df73f024a98e65c563b81e398dfb9640cfa1af10361a9552149bb51925",
+        "bytes": 2759946
       },
       {
         "name": "generator/artifacts/pilot/gold.jsonl",
-        "sha256": "04e8802cfe889f16eb5df5ee9df8e17dc5b3d437b8853d345266e5f1bfaa8a07",
-        "bytes": 237260
+        "sha256": "c980a3323c645ab6b1a1e93ed9de506347a5e7ed08316fa73d584770dfda6db7",
+        "bytes": 229844
       },
       {
         "name": "generator/artifacts/pilot/grammar-and-sentence-bank.json",
-        "sha256": "abab8f1a0e5cdd4234ac0a306da8b3451ee3e5a6c07d194fac4ce90ccca0fc5a",
-        "bytes": 253121
+        "sha256": "4aa9dd064287fa141ecb34be5e34d18a4e8e21898bc7e060944aa01171f8fef8",
+        "bytes": 255254
       },
       {
         "name": "generator/artifacts/pilot/lineage-inventory.json",
-        "sha256": "a23250d23e619d64772e86481d7e791b6e8575aba3f5e0e0f63c1ca1d01b50a5",
-        "bytes": 546379
+        "sha256": "7e8323e99415120dde9b7a4b1f96a45a8e38dafaa40293debacc74986e293b31",
+        "bytes": 626852
       },
       {
         "name": "generator/artifacts/pilot/rejected-candidates.jsonl",
@@ -107,18 +112,18 @@
       },
       {
         "name": "generator/artifacts/pilot/support.jsonl",
-        "sha256": "a528ce04bbd0a883a15f98111c1a1189808b3dd34e305664be4c456401931c9c",
-        "bytes": 277145
+        "sha256": "230d7c1b7369bd5d60fbf800ed69c50769f0cd240d601bbb82fac159c8f1199b",
+        "bytes": 268333
       },
       {
         "name": "generator/artifacts/pilot/validation-audit.jsonl",
-        "sha256": "b9598f665b8b3314e4325ca20fd84c3becc0bdf7ea5526b37bcfebf1ed1273af",
-        "bytes": 8532
+        "sha256": "67bebc096084dc4e0e5e0f31f447d40c650a75e96a27eb6072bc087376a92667",
+        "bytes": 8562
       },
       {
         "name": "generator/artifacts/pilot/manifest.json",
-        "sha256": "725ceb155af787e2b81d70e0424c6b4f0efe019bd87ccb59616780f4f7ab1f5c",
-        "bytes": 2697
+        "sha256": "d896e39771b5b92334ec373d6adc74cb6a520afc4588edbe58985a0e3e0d9db0",
+        "bytes": 2902
       },
       {
         "name": "challenge/source/README.md",
@@ -3685,8 +3690,8 @@
   },
   "reconciliation": {
     "adaptedCheckpoints": 2104,
-    "sourceLeafPatterns": 792,
-    "sourceLeavesAudited": 1563796,
+    "sourceLeafPatterns": 802,
+    "sourceLeavesAudited": 1562700,
     "losslessSidecarRoundTrips": 2104,
     "defectCounts": {
       "generator/NON_SCORER_METADATA": 120,

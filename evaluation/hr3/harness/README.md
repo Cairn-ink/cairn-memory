@@ -38,13 +38,13 @@ smoke determinism still execute. No sibling or broad product suite is run.
 
 ## Revised A-1 bound report
 
-After a completed fake or authorized engineering pilot, run:
+For a completed or interrupted fake/authorized engineering pilot, run:
 
 ```sh
 node evaluation/hr3/harness/cli.mjs --bound-report PILOT_OUTPUT --inputs GENERATED_PILOT --out NEW_BOUND_REPORT.json
 ```
 
-This flag reads and verifies completed artifacts; it does not execute a stage or
+This flag reads and verifies recorded artifacts, including stopped/incomplete runs; it does not execute a stage or
 load product/tokenizer dependencies. Output is a JSON report with the exact label
 “Uncalibrated engineering pilot — mechanical score bounds; no adjudication.”
 It contains 48 aggregate table rows: four arms × two separate checkpoints ×
@@ -62,11 +62,19 @@ partial groups explicitly condition on represented lineages and normalize their
 frozen weights. No observations means null rates, never observed failures.
 
 `run.json` captures execution-time protocol/errata, generator and scorer/harness
-hashes. Reports retain those hashes, verify the completed stage manifest and
+hashes. Reports retain those hashes, verify the recorded stage manifest and
 input bytes, and include actual spend (zero for fake transport), separately from
 simulated ledger charges. Old stages without execution-time hashes must be
 rerun; the report never substitutes current hashes for historical provenance.
-The writer requires a completed pilot and a new output file. Sampling confidence
+The writer requires hash-verified pilot artifacts and a new output file.
+It preserves `complete:false`, stop reasons, attempted scores and all unexecuted
+IDs. Every interrupted aggregate is labeled “partial observed cohort; not
+completed-pilot bounds”. Reporting never resumes execution or approves
+continuation. The journal is read and its hash chain checked without opening a
+ledger writer. Settled charges and outstanding reservation IDs/ceilings are
+separate. With real unsettled billing, `actualSpendUSD` is null and
+`actualSpendKnown` is false; settled spend is still reported. Fake actual spend
+remains zero. A completed run is not required for reporting. Sampling confidence
 intervals are deferred. These descriptive bounds cannot produce an Advance/Keep
 decision, enter development/test estimates, or certify factual accuracy.
 
@@ -122,9 +130,9 @@ snapshots, raw sources and scorer gold never enter it.
 P's scheduled expiry re-inspects identity/revision/currentness/deadline content,
 records before/after results as `adapter-scheduled`, and never creates an answer
 archive. Corrections do not inherit absent deadlines. Named forgetting is checked
-by identity; independent copies remain. E-2 separate declaration confirms without
-dependencies, then declares at null dependency expectation. A supplied confirmation
-with dependencies and no standalone declaration remains a distinct supported path.
+by identity; independent copies remain. E-2 fixtures explicitly distinguish confirmation with dependencies and no later
+null declaration from confirmation without dependencies plus separate declaration.
+The runner executes either supplied path verbatim; reviews use inspected positive revisions.
 Fixture Card edits retain inspected public bindings because the generator's empty
 binding list is refused by the pinned API. This discrepancy needs upstream review.
 
@@ -163,3 +171,11 @@ The CLI is attended and exits after completion. It provides no unattended agent
 monitor/notification service. No paid-stage readiness, maximal-reference 768-token
 certification, adjudication calibration, continuation gate, or research accuracy
 claim follows from these offline tests.
+
+
+## Audit re-check R3 records
+
+`reports/a1-r3-stopped-pilot.json` is the current stopped-run CLI example.
+`reports/a1-fake-pilot.json` and `reports/REVISION-ff192c6b.md` are preserved
+historical artifacts from the preceding implementation. Current finding/fix/test
+mapping and the fixture-rebalancing disclosure are in `REVISION-REPORT.md`.

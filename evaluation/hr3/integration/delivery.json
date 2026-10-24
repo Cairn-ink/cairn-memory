@@ -1,8 +1,8 @@
 {
   "sourceCount": 13,
   "sourceRoutes": [
-    "git ls-files cached + untracked, exclude-standard",
-    "pathlib.rglob excluding artifacts"
+    "git tracked/untracked nonignored inventory",
+    "independent recursive filesystem discovery + batch ignore filtering"
   ],
   "files": [
     {
@@ -17,8 +17,8 @@
     },
     {
       "path": "REPORT.md",
-      "bytes": 21460,
-      "sha256": "24466cd36d6d60c435616be62486a28c99b22a5b21a210f7fd3a3fc408bdcea8"
+      "bytes": 1652,
+      "sha256": "f91b0ac2fe2905b6491e7bb05f13b23bcc7bd8bbb6c8d52b2187fee5aadc4ba2"
     },
     {
       "path": "adapters.mjs",
@@ -45,8 +45,8 @@
     },
     {
       "path": "mechanical-results.json",
-      "bytes": 112589,
-      "sha256": "1d513adc2347d277f2522c70a0187a3cb2d5d2d3ac50d4d3ad28b30e41e955ad"
+      "bytes": 112760,
+      "sha256": "ae062532fb589aefd760f448a6d7e5bb0e4c5bba451c8c0e93016dffd8357822"
     },
     {
       "path": "mechanical.mjs",
@@ -55,8 +55,8 @@
     },
     {
       "path": "reconciliation-fields.json",
-      "bytes": 173593,
-      "sha256": "2fc25d0c3f811bfdf9c3e1204f2d0098aeda141057ffde5c91a331659b44ac33"
+      "bytes": 175604,
+      "sha256": "7c433dc2ce250c08ddff10cc05d5b1e8b168cee090ef5e5e8aa004fa5dfa54fd"
     },
     {
       "path": "reproduce.mjs",
@@ -65,14 +65,14 @@
     },
     {
       "path": "test/integration.test.mjs",
-      "bytes": 15375,
-      "sha256": "5ab10f4be8a217c560494337c62db5335a1b4064593d8600029669296bf27526"
+      "bytes": 16354,
+      "sha256": "85ba8baf9c649bf0803ce698fc39b9e03af36fbb62949364dbf6c2cf68580bfc"
     }
   ],
   "generatedCountIncludingManifest": 3149,
   "generatedManifest": {
-    "path": "artifacts/revised-e1-final/artifact-manifest.json",
-    "sha256": "889b1659f374d11342feb7c3b5120f10f0a1aee7da5419c1c025a5a303808fde"
+    "path": "artifacts/audit-recheck-r3/artifact-manifest.json",
+    "sha256": "1059598e307cd79702c49ebf38bb7445685086c9ec42871c387e9ee9c19ed6cd"
   },
   "totalFiles": 3162,
   "allFilesRoutes": [
@@ -83,23 +83,27 @@
     {
       "command": "node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs",
       "exitCode": 0,
-      "tests": 18,
-      "pass": 18,
+      "tests": 19,
+      "pass": 19,
       "fail": 0
     },
     {
-      "command": "mechanical CLI final + generator/challenge frozen hash checks",
+      "command": "mechanical CLI --out evaluation/hr3/integration/artifacts/audit-recheck-r3",
       "exitCode": 0
     },
     {
-      "command": "gate CLI with zero judgments",
+      "command": "zero-judgment gate on current index",
       "exitCode": 1,
-      "expected": "referral quotas fail; judgments pending"
+      "expected": "referral quota failure; judgments pending"
     },
     {
-      "command": "independent payload hashes/keys, deterministic repeat, file inventory and whitespace audit",
+      "command": "independent artifact inventory, source/gold strata, byte readback and whitespace audit",
       "exitCode": 0
     }
   ],
-  "revision": "revised E-1/A-1 2026-10-25"
+  "revision": "audit-recheck-r3",
+  "preservedArtifacts": {
+    "path": "artifacts/previous-ff192c6b/archive-manifest.json",
+    "sha256": "24abe8486f8a2e34900800e9d01c764c785429e54d27e7354517d825b25d1163"
+  }
 }

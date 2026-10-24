@@ -1,6 +1,7 @@
 import { VERSION, DEFAULT_SEED, rng, text, bool, quantity, scope, scopeFromCells, cellsOf, CELLS, claim, cellKey } from './common.mjs';
 import { sentence, fieldText } from './bank.mjs';
 import { cardControl, safetyControl } from './controls.mjs';
+import { reasonStratum } from './reason-strata.mjs';
 import { canonicalGold } from './canonicalize.mjs';
 
 const interval = (from,to = null) => ({from,to});
@@ -42,7 +43,7 @@ function addReasons(turn, event, lineage, language) {
     turn.text += ` ${fragment}`;
     return sourceSpan(turn,start,turn.text.length);
   };
-  if (!graphs.length && event.change_type !== 'expiry') append('unstated');
+  if (!graphs.length && (event.change_type !== 'expiry' || lineage.expiry_mode !== 'deadline')) append('unstated');
   for (const node of nodes.filter(x => x !== 'decision')) append('fact',{fact:facts[node]});
   if (lineage.causal_class === 'conjunctive_mediated') {
     const s = append('joint',{a:facts.a,b:facts.b,c:facts.c});
@@ -64,7 +65,7 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
   const language = member.language, type = lineage.type;
   const {subject,predicate} = phrases(lineage,language);
   const family = {schema_version:VERSION,family_id:member.family_id,lineage_id:lineage.lineage_id,split:lineage.split,seed,
-    language,change_type:type,causal_class:lineage.causal_class,multi_hop:lineage.multi_hop,namespace:{ownerId:`hr3-${member.family_id}`,scope:'personal',projectId:null},
+    language,change_type:type,causal_class:lineage.causal_class,authored_rationale_topology:lineage.causal_class,multi_hop:false,expiry_mode:lineage.expiry_mode,reason_strata:[],namespace:{ownerId:`hr3-${member.family_id}`,scope:'personal',projectId:null},
     header:{subject,predicate,scope_text:scopeText(scope(),language)},query_scope:scope(),
     batches:Array.from({length:4},(_,i) => ({ordinal:i+1,observed_at:at(i+1,'02'),effective_at:effective(i+1),turns:[]})),
     checkpoints:[],controls:[],ast:{events:[],focal_changes:[],time_zone:'Asia/Taipei',interval_convention:'[from,to)',variant:{future_effective:type === 'reversal' && member.member%2 === 1,retroactive:type === 'correction' && member.member%2 === 1}}};
@@ -77,15 +78,15 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
     const predecessors = predecessorIndices.map(i => events[i]);
     const predNames = predecessors.map(e => e.record_name).join(', ');
     const vars = {record,predecessors:predNames,subject,predicate,fields:fieldText(fields,language),scope:scopeText(audience,language),from,to:to??(language === 'zh-Hant'?'無上限（不含終點）':'unbounded (exclusive endpoint)')};
-    turn.text = sentence(changeType === 'initial'?'initial':changeType,language,vars);
-    if (type === 'expiry' && changeType === 'initial') turn.text += language === 'zh-Hant'?' 這是明確的到期日；到期後不會自動採用接續決定。':' This is an explicit expiry deadline; expiry adopts no successor.';
+    turn.text = sentence(changeType === 'initial'?'initial':changeType === 'expiry' && lineage.expiry_mode !== 'deadline' ? 'expiry_lapse' : changeType,language,vars);
+    if (type === 'expiry' && lineage.expiry_mode === 'deadline' && changeType === 'initial') turn.text += language === 'zh-Hant'?' 這是明確的到期日；到期後不會自動採用接續決定。':' This is an explicit expiry deadline; expiry adopts no successor.';
     const event = eventBase(`${family.family_id}/e${batchNo}`,turn,batch,{record_name:record,change_type:changeType,subject,predicate,claims:fields,scope:audience,effective_interval:interval(from,to),
       predecessor_anchors:predecessors.map(e => ({source_turn:e.source_turns[0],record_name:e.record_name,subject:e.subject,predicate:e.predicate})),
       replacement_extent:['refinement','scope_change'].includes(changeType)?'partial':'entire_predecessor',field_mask:fields.map(x => x.field)});
     if (changeType !== 'initial') {
       // E-1: the existing expiry source explicitly connects the passed deadline
       // to expiry. Preserve rationale paths as alternatives to this trigger.
-      const triggerSpan = changeType === 'expiry' ? sourceSpan(turn) : null;
+      const triggerSpan = changeType === 'expiry' && lineage.expiry_mode === 'deadline' ? sourceSpan(turn) : null;
       const graphs = addReasons(turn,event,lineage,language);
       if (triggerSpan) {
         const node = (id,pred,value) => ({id,claim:{subject:event.subject,predicate:pred,value,scope:event.scope,valid:event.effective_interval,qualifiers:[],citations:[]}});
@@ -101,11 +102,11 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
     batch.turns.push(turn); events.push(event);
     return event;
   }
-  emit(1,'initial',initialFields,scope(),[],effective(1),type === 'expiry'?effective(2):null);
+  emit(1,'initial',initialFields,scope(),[],effective(1),type === 'expiry' && lineage.expiry_mode === 'deadline'?effective(2):null);
   let first, last;
   if (type === 'expiry') {
     first = emit(2,type,[],scope(),[0],effective(2));
-    emit(3,'initial',assignments(lineage.bank.routes[1],cap+20),scope(),[],effective(3),effective(4));
+    emit(3,'initial',assignments(lineage.bank.routes[1],cap+20),scope(),[],effective(3),lineage.expiry_mode === 'deadline'?effective(4):null);
     last = emit(4,type,[],scope(),[2],effective(4));
   } else {
     const firstFields = type === 'refinement'?[{field:'cap',value:quantity(cap+20)}]:assignments(lineage.bank.routes[1],cap+20,type === 'correction');
@@ -140,7 +141,7 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
     const zh = `${subject} ${predicate} ${family.header.scope_text} 決定 修正 變更 原因`;
     family.checkpoints.push({batch,primary:batch===4,at:vars.at,focal_turn:vars.turn,requested_predecessor_turns:event.predecessor_anchors.map(x => x.source_turn),question:sentence('question',languageForQuestion,vars),query:language==='en'?en:language==='zh-Hant'?zh:`${en}\n${zh}`});
   }
-  if (member.card) family.controls.push(cardControl(family,member.card_branch));
+  if (member.card) family.controls.push(cardControl(family,member.card_branch,member.card_authoring_path));
   if (member.safety) family.controls.push(safetyControl(family));
   const gold = {family_id:family.family_id,lineage_id:family.lineage_id,checkpoints:[]};
   const support = {family_id:family.family_id,checkpoints:[]};
@@ -172,6 +173,8 @@ export function generateFamily(lineage, member, seed = DEFAULT_SEED) {
     gold.checkpoints.push({batch:checkpoint.batch,G_correct:canonicalGold({...answer,acceptedGraphs:graph.map(g => ({edges:g.edges.map(({from,to}) => ({from,to}))}))},lineage)});
     support.checkpoints.push({batch:checkpoint.batch,assertion_spans:events.filter(e => Date.parse(e.observed_at)<=Date.parse(checkpoint.at)).map(e => ({event_id:e.event_id,spans:e.source_quotes})),acceptedGraphs:graph});
   }
+  family.reason_strata = gold.checkpoints.map(cp => ({batch:cp.batch,...reasonStratum(cp.G_correct)}));
+  family.multi_hop = family.reason_strata.every(s => s.multiHop);
   return {family,gold,support};
 }
 

@@ -127,10 +127,8 @@ export class ProductAgent {
     if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,this.resolveSymbols(v)]));return value;
   }
   async cardControl(control,batch) {
-    const separate=control.actions.some(a=>a.call==='declareCardCurrentDependencies'&&a.authority!=='unauthorized-mcp');
     for(const action of control.actions.filter(a=>a.batch===batch)) {
       let payload=this.resolveSymbols(action.payload);
-      if(action.call==='confirmCardDraft'&&action.authority!=='unauthorized-mcp'&&separate)delete payload.currentDependencies; // E-2
       if(action.authority==='unauthorized-mcp') {
         const names={confirmCardDraft:'confirm_private_card_draft',declareCardCurrentDependencies:'declare_private_card_current_dependencies',revalidateCardCurrentDependencies:'revalidate_private_card_current_dependencies'};
         const {namespace,currentDependencies,applicability,...args}=payload;

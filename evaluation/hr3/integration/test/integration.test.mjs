@@ -184,7 +184,7 @@ test('gate thresholds detect false acceptance, support failures and style error 
 
 test('revised E-1: trigger-only answers earn R=1; deadline mentions, uncited edges and not_stated do not',()=>{
   let n=0;
-  for (const b of pilot.filter(b=>b.family.change_type==='expiry')) for (const cp of b.family.checkpoints) {
+  for (const b of pilot.filter(b=>b.family.change_type==='expiry' && b.family.expiry_mode==='deadline')) for (const cp of b.family.checkpoints) {
     const {gold}=adaptGenerator(b.family,b.gold,b.support,cp.batch);
     const trigger=clone(gold);trigger.reason.acceptedGraphs=[gold.reason.acceptedGraphs.at(-1)];
     const submission=goldWitness(trigger);
@@ -201,5 +201,22 @@ test('revised E-1: trigger-only answers earn R=1; deadline mentions, uncited edg
     fragment.answer.reason.edges[0].citations[0].quote=submission.answer.reason.nodes.find(n=>n.id==='deadline').claim.value.iso;
     assert.equal(score(gold,fragment).scores.R,0);n++;
   }
-  assert.equal(n,24);
+  assert.equal(n,4);
+});
+
+
+test('R3 expiry effective strata preserve genuine multi-hop and unstated gold without a deadline shortcut',()=>{
+ let multi=0,unstated=0;
+ for(const b of pilot.filter(b=>b.family.change_type==='expiry'&&b.family.expiry_mode!=='deadline')) for(const cp of b.family.checkpoints) {
+  const {gold}=adaptGenerator(b.family,b.gold,b.support,cp.batch);
+  const witness=goldWitness(gold);assert.equal(score(gold,witness).scores.R,1);
+  if(gold.reason.status==='not_stated'){unstated++;assert.equal(gold.reason.acceptedGraphs.length,0);}
+  else {
+   multi++;assert.ok(gold.reason.acceptedGraphs.every(g=>g.edges.length>1));
+   const shortcut=clone(witness);shortcut.answer.reason.edges=shortcut.answer.reason.edges.slice(-1);
+   const result=score(gold,shortcut);assert.notEqual(result.scores.R,1);
+   if(result.scores.R===null)assert.ok(result.referrals.some(r=>r.pass==='correctness'));
+  }
+ }
+ assert.equal(multi,16);assert.equal(unstated,4);
 });

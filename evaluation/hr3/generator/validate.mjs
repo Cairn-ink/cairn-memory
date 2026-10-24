@@ -1,3 +1,4 @@
+import { reasonStratum } from './reason-strata.mjs';
 import { assert, canonical, CELLS, DOMAIN, cellsOf, scopeFromCells, claim, TYPES, CAUSES } from './common.mjs';
 import { SPLITS, GRAMMAR } from './inventory.mjs';
 import { canonicalGold } from './canonicalize.mjs';
@@ -213,7 +214,7 @@ export function validateFamily(bundle, lineage) {
       assert(parent.commitment==='adopted' && !parent.distractor,'historical_anchor');
       const earlierUpdates=seen.filter(e=>e.predecessor_anchors.some(a=>a.source_turn===anchor.source_turn));
       assert(event.change_type==='expiry' || !earlierUpdates.some(e=>['correction','reversal','expiry'].includes(e.change_type) && e.replacement_extent==='entire_predecessor'),'historical_anchor');
-      if (event.change_type==='expiry') assert(parent.effective_interval.to===event.effective_interval.from,'expiry_deadline');
+      if (event.change_type==='expiry') assert(f.expiry_mode === 'deadline' ? parent.effective_interval.to===event.effective_interval.from : parent.effective_interval.to===null,'expiry_deadline');
     }
     const sourceOrder = event.predecessor_anchors.map(a=>[...turns.keys()].indexOf(a.source_turn));
     assert(sourceOrder.every((v,i)=>i===0 || v>sourceOrder[i-1]),'predecessor_order');
@@ -237,16 +238,20 @@ export function validateFamily(bundle, lineage) {
     assert(answer.current.status===expected.current.status && canonical(normalizeClaims(answer.current.claims))===canonical(normalizeClaims(expected.current.claims)),'semantic_current');
     assert(canonical(answer.old)===canonical(expected.old),'semantic_history');
     const expectedGraphs = topology(f.causal_class);
-    if (f.change_type === 'expiry') expectedGraphs.push({edges:[{from:'deadline',to:'decision'}]});
+    if (f.change_type === 'expiry' && f.expiry_mode === 'deadline') expectedGraphs.push({edges:[{from:'deadline',to:'decision'}]});
     assert(canonical(acceptedGraphs)===canonical(expectedGraphs),'causal_topology');
     assert(canonical(s.acceptedGraphs.map(g=>({edges:g.edges.map(({from,to})=>({from,to}))})))===canonical(acceptedGraphs),'graph_projection');
     assert(answer.reason.status===(acceptedGraphs.length?'stated':'not_stated'),'semantic_reason');
+    const effective = reasonStratum(g.G_correct);
+    assert(canonical(f.reason_strata.find(s => s.batch === cp.batch)) === canonical({batch:cp.batch,...effective}),'effective_reason_stratum');
+    assert(effective.multiHop === lineage.multi_hop && (effective.status === 'not_stated') === (lineage.causal_class === 'unstated'),'effective_reason_allocation');
+    assert(f.multi_hop === effective.multiHop && f.authored_rationale_topology === lineage.causal_class,'effective_guard_membership');
     if (!acceptedGraphs.length) assert(/No reason for this change was stated|這次變更沒有說明原因/.test(turns.get(cp.focal_turn).text),'unstated_source');
     assert(canonical(answer.reason.nodes)===canonical(canonicalGold({current:{claims:[]},old:{records:[]},reason:{nodes:focal.reason_nodes}},lineage).reason.nodes),'reason_nodes');
     for (const node of focal.reason_nodes) {
       if (node.id === 'deadline') {
         const parent = f.ast.events.find(e => e.source_turns.includes(cp.requested_predecessor_turns[0]));
-        assert(f.change_type === 'expiry' && node.claim.predicate === 'expiry_deadline_passed' && node.claim.value.type === 'Instant' && node.claim.value.iso === parent.effective_interval.to && Date.parse(node.claim.value.iso) <= Date.parse(cp.at),'expiry_trigger_node');
+        assert(f.change_type === 'expiry' && f.expiry_mode === 'deadline' && node.claim.predicate === 'expiry_deadline_passed' && node.claim.value.type === 'Instant' && node.claim.value.iso === parent.effective_interval.to && Date.parse(node.claim.value.iso) <= Date.parse(cp.at),'expiry_trigger_node');
         continue;
       }
       const expected=node.id==='decision'?`${focal.change_type}_change`:lineage.bank.reasons[['a','b','c','d'].indexOf(node.id)]?.en;
@@ -283,6 +288,10 @@ export function validateFamily(bundle, lineage) {
     assert(new Set(actions.map(a=>a.payload.actionId)).size===actions.length,'action_id');
     assert(!control.actions.some(a=>canonical(a.payload).includes(f.header.subject)),'card_focal_leakage');
     assert(control.separate_assertion && !control.historyIsCurrent,'card_isolation');
+    const confirm = control.actions.find(a => a.call === 'confirmCardDraft' && a.authority !== 'unauthorized-mcp');
+    const declarations = control.actions.filter(a => a.call === 'declareCardCurrentDependencies' && a.authority !== 'unauthorized-mcp');
+    assert(control.execution_status === 'fixture_clarified_E-2' && control.unresolved_protocol.length === 0,'card_certification_metadata');
+    assert(control.authoring_path === 'confirm_with_dependencies' ? !!confirm.payload.currentDependencies && declarations.length === 0 : control.authoring_path === 'declare_separately' && !Object.hasOwn(confirm.payload,'currentDependencies') && declarations.length === 1 && declarations[0].payload.expectedDependencyRevision === null,'card_authoring_path');
     for (const a of actions.filter(a=>a.authority==='unauthorized-mcp')) assert(a.expected.error==='approval_required' && a.expected.mutation===false,'unauthorized_control');
   } else {
     assert(canonical(control.foreignNamespace)!==canonical(f.namespace) && canonical(control.readSet)===canonical([f.namespace]),'foreign_namespace');

@@ -1,130 +1,165 @@
-# Revised HR-3 E-1 / A-1 implementation
+# HR-3 audit re-check R3
 
-Base: `983d239d6315c1d4f36434acc73c367e8f5416f6`, branch
-`experiment/hr3-update-policy`. Authority: revised 2026-10-25
-[errata](../protocol/errata.md) and protocol v0.3.4. No commit, network, API,
-model call or credential read. The existing protocol/errata.md modification
-predated this task and was left untouched. Implementation writes are confined
-to generator, integration and harness.
+Base: `ff192c6b346bc1e265c7eff85eb056a6cd5109bf`, branch
+`experiment/hr3-update-policy`; clean worktree at entry. Authority: protocol
+v0.3.4, errata rev2 and the accepted non-author re-check. No commits, network,
+API/model calls or credential reads. Writes are confined to generator,
+integration and harness. Protocol, scorer and challenge bytes are unchanged.
 
-## Results
+## Finding → fix → test
 
-E-1 now accepts an explicitly supported deadline-passed → expiry graph as a
-complete explanation, alongside the authored rationale alternatives. Only
-changes with no supported cause retain `not_stated`. Bare deadline mentions,
-deadline fragments without the causal statement, missing edges/citations and
-incorrect `not_stated` answers receive R=0 in the integration regression tests.
-The scorer is unchanged; no blocking scorer defect was found.
+| Accepted finding | Fix | Verification |
+| --- | --- | --- |
+| P1: supported expiry triggers destroy effective unstated/multi-hop allocation | Chose the auditor's **fixture-rebalancing** alternative. Retain valid clock triggers in direct expiry. Replace non-direct expiry with fresh unscheduled-lapse fixtures that have no preannounced deadline. Derive effective status/minimum accepted edge count from gold; keep authored topology separate. Restore original allocation definitions, guard membership, weights and power allocation. | Gold-derived validation at both probes: engineering 20 multi-hop / 5 unstated, pilot 40 / 10. All six per-type graph allocations remain exact. Prospective development 120 / 40 and test 800 / 400 are preserved without rendering held-out conversations/gold. A deliberately added one-edge shortcut is rejected even if the authored label says multi-hop. All 120 pilot gold self-scores give C=O=R=J=1. |
+| P1: official writer rejects interrupted stages | Accept hash-verified incomplete/stopped pilot artifacts. Preserve completion flag, stop reason and unexecuted IDs; label aggregates as partial observed cohorts. Verify the journal read-only; distinguish settled spend from outstanding reservation ceilings and unknown final billing. Never resume or approve continuation. | CLI on actual interrupted artifacts exits 0: complete=false, three_transport_failures, 2 attempted (1 valid, 1 failed), 478 unexecuted, 3 outstanding reservations. Unit coverage includes cap_exceeded, settled and unknown real billing, fake zero spend, all 27 states, weights/referral distinctions, hash verification and overwrite rejection. Runner test compares ledger/manifest bytes before and after reporting. |
+| P2: E-2 authoring-path coverage and metadata incomplete | Fixtures explicitly choose confirm_with_dependencies with no standalone declaration, or confirm without dependencies then declare against null. Runner executes the supplied path without removing dependencies. Clear active blocked/unresolved E-2 flags; external certification gates stay explicit. | Pilot: 24 direct confirmations, 16 separate declarations; both paths in all eight branches. Public product tests execute all 16 path×branch combinations, inspect null declaration expectations / positive review revisions, and require no authorized-call failures. Unauthorized controls still refuse mutation. |
 
-The generator README lists every affected family/checkpoint: **36 rendered
-expiry checkpoints**, comprising six engineering families × two checkpoints
-and twelve pilot families × two checkpoints. The previously reported six are
-`engineering-expiry-L02-W1`, `pilot-expiry-L02-W1` and
-`pilot-expiry-L02-W2`, each at batches **2 and 4**. The full list is in
-[generator interpretation item 5](../generator/README.md). Both engineering
-and pilot were regenerated; their stored family/gold/support bytes match a
-fresh independent generation. All 31 generator inventory files and 30 hashed
-payloads match the refreshed freeze. Held-out worlds remain unrendered.
+## Explicit fixture changes and preserved artifacts
 
-The integration re-check validates and self-scores **120/120 pilot checkpoints
-C=O=R=J=1** and scores all **1,984** challenge cases without execution or
-validation failures. Results and hashes are recorded in
-[mechanical-results.json](../integration/mechanical-results.json). The field
-ledger now contains 792 leaf patterns and 1,563,796 audited source leaves.
-All 3,140 pass-payload hashes, contextual keys and pass-specific allowlists were
-independently rederived in Python. The scorer/challenge tracked bytes match HEAD.
+The protocol's allocation definitions are unchanged; we did not redefine
+“multi-hop” to mean an authored topology that has a one-edge alternative.
+`reason-strata.mjs` derives status and the minimum edge count across accepted
+complete gold graphs. Every rendered family publishes `reason_strata`, separately
+from `authored_rationale_topology`; its `multi_hop` guard membership is derived.
 
-A-1 is implemented by [bounds.mjs](bounds.mjs) and `--bound-report` in the CLI.
-The JSON report has 48 arm/checkpoint/type table rows and per-family component
-and joint bounds. It records score-state counts, separate outstanding pass
-applications/unique keys/propagations, all completion denominators, represented
-families/lineages, frozen/applied weights, and separate unresolved-J/any-referral
-shares. It retains execution-time artifact/scorer/errata hashes and actual spend.
-The complete fake report is [reports/a1-fake-pilot.json](reports/a1-fake-pilot.json).
-Its exact label is:
+Only direct expiry carries a preannounced clock deadline. A non-clock lapse
+reports expiry without a successor or fallback. In unstated cases no cause is
+supplied; in conditional cases the complete supported causal graph is required.
+Its occurrence timestamp is not a deadline previously attached to the assertion.
+The earlier assertion's source-claimed end is unbounded. This transparently
+changes sources, source intervals, C/O gold, reason gold and semantic bank IDs
+for the affected fresh fixtures; the frozen question template is retained.
+The frozen public-operation policies are unchanged; no special P handling is
+added to improve outcomes on the replacement fixtures.
 
-**Uncalibrated engineering pilot — mechanical score bounds; no adjudication.**
+There are **48 fresh affected lineage specifications** among the original 310:
+five engineering, five pilot, eight development and thirty test. The original
+per-split lineage multiplicities, language totals, per-type causal counts and
+control totals remain intact. Held-out worlds stay unrendered; affected held-out
+IDs/bank aliases are fresh before later gated generation. Frozen weights remain
+1/30, 1/50, 1/200 overall; 1/6, 1/10, 1/40 within type; and 1/20, 1/30, 1/100
+for the multi-hop guard. Their original power-analysis allocation is unchanged.
 
-Joint endpoints are multiplied within families before frozen-weight aggregation.
-A pending pass never reopens a determined score. Unexecuted cases are listed and
-excluded from observed denominators; failed attempts remain scored. Partial
-groups explicitly condition on represented lineages, retaining relative frozen
-weights. No sampling CIs or advancement decisions are produced.
+**15 rendered families / 30 checkpoints are replaced**. For each family below,
+batches 2 and 4 change, and `-R3` is inserted immediately before `-Wn`:
+
+```text
+engineering-expiry-L02-W1
+engineering-expiry-L03-W1
+engineering-expiry-L04-W1
+engineering-expiry-L05-W1
+engineering-expiry-L06-W1
+pilot-expiry-L02-W1
+pilot-expiry-L02-W2
+pilot-expiry-L03-W1
+pilot-expiry-L03-W2
+pilot-expiry-L04-W1
+pilot-expiry-L04-W2
+pilot-expiry-L05-W1
+pilot-expiry-L05-W2
+pilot-expiry-L06-W1
+pilot-expiry-L06-W2
+```
+
+The direct L01 engineering/pilot cases retain supported expiry triggers. The
+three L02 families replace the six previously reported unstated-expiry cases
+with fresh genuinely unstated fixtures. Existing explicit deadline examples
+are preserved, not relabeled as lacking a supported cause.
+
+Earlier engineering/pilot datasets, manifests, README and freeze are retained
+byte-for-byte in `../generator/artifacts/previous-ff192c6b/`, with 18 archived
+payloads and an archive manifest. Previous integration records are retained in
+`../integration/artifacts/previous-ff192c6b/`. The prior revision report is
+[reports/REVISION-ff192c6b.md](reports/REVISION-ff192c6b.md), and the prior complete
+fake report remains [reports/a1-fake-pilot.json](reports/a1-fake-pilot.json).
+The prior harness freeze is [reports/freeze-ff192c6b.json](reports/freeze-ff192c6b.json).
+These are historical artifacts, not active R3 certifications. Current partial
+report: [reports/a1-r3-stopped-pilot.json](reports/a1-r3-stopped-pilot.json).
+Large deterministic JSONL datasets retain the repository's existing ignore policy;
+the archived bytes and their hashes remain available locally and are inventoried.
 
 ## Commands and actual exit codes
 
-Dependency directories below refer to the existing installations in this
-checkout; no dependencies were installed. Logs are local ignored files.
+Dependency arguments below are the existing `adapters/mcp/node_modules` and
+`adapters/openai/node_modules` in this checkout. No installation was performed.
+All statuses are captured process exit codes, never inferred from stdout tails.
 
 | Command/check | Exit | Result |
 | --- | ---: | --- |
-| `node --test --experimental-test-isolation=none evaluation/hr3/generator/test/generator.test.mjs` | 0 | 29/29 tests |
-| `emit({split:'engineering', out:'evaluation/hr3/generator/artifacts/engineering'})` and equivalent pilot emission through the generator module | 0 | 30 engineering and 60 pilot families; no rejections |
-| Independent generator regeneration, stored-byte comparison, inventory and SHA-256/byte readback | 0 | Deterministic engineering/pilot; 31 inventory files |
-| `node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs` | 0 | 18/18 tests, including all 120 self-scores and revised E-1 rejection cases |
-| `node evaluation/hr3/integration/cli.mjs mechanical --out evaluation/hr3/integration/artifacts/revised-e1-final` | 0 | 120 gold checkpoints and 1,984 challenge observations; no failures |
-| Integration repeat/readback and independent pass-payload hash/key/allowlist audit | 0 | Repeated outputs agree; 3,140 blinded bundles verified |
-| `node evaluation/hr3/integration/cli.mjs gate --index evaluation/hr3/integration/artifacts/revised-e1-final/private-index.json --judgments evaluation/hr3/integration/artifacts/empty-judgments.jsonl --out evaluation/hr3/integration/artifacts/revised-e1-final/gate-no-judgments.json` | 1 | Expected: calibration quota failure; absent judgments stay pending |
-| `node --test --experimental-test-isolation=none evaluation/hr3/harness/test/bounds.test.mjs` | 0 | 32/32: all 27 states plus aggregation/referral/failure/provenance coverage |
-| `node evaluation/hr3/harness/cli.mjs --stage pilot --inputs evaluation/hr3/generator/artifacts/pilot --out evaluation/hr3/harness/artifacts/revised-a1-pilot --mcp-dependencies adapters/mcp/node_modules --tokenizer-dependencies adapters/openai/node_modules` | 0 | 480 observations; 2,798 settled reservations; no failures |
-| `node evaluation/hr3/harness/cli.mjs --bound-report evaluation/hr3/harness/artifacts/revised-a1-pilot --inputs evaluation/hr3/generator/artifacts/pilot --out evaluation/hr3/harness/reports/a1-fake-pilot.json` | 0 | 48 aggregate rows; 480 per-family records; actual spend $0 |
-| `node evaluation/hr3/harness/test.mjs --mcp-dependencies adapters/mcp/node_modules --tokenizer-dependencies adapters/openai/node_modules --pilot-artifacts evaluation/hr3/harness/artifacts/revised-a1-pilot` | 0 | 67/67 tests; includes fake pilot report and independent smoke runs |
-| Final file inventories, hashes, whitespace, write-scope and absolute-path checks | 0 | Inventories, hashes, whitespace and write-scope checks pass |
+| `node --test --experimental-test-isolation=none evaluation/hr3/generator/test/generator.test.mjs` | 0 | 31/31 tests |
+| Archive previous outputs, then call generator `emit` for engineering and pilot at the active artifact paths | 0 | 30 engineering / 60 pilot, zero rejects; restored effective strata and E-2 paths |
+| Independent generator regeneration + stored-byte / archive SHA-256 comparison | 0 | Engineering/pilot byte-identical; all 18 prior generator payloads unchanged |
+| `node --test --experimental-test-isolation=none evaluation/hr3/integration/test/integration.test.mjs` | 0 | 19/19 tests; all 120 self-scores pass |
+| `node evaluation/hr3/integration/cli.mjs mechanical --out evaluation/hr3/integration/artifacts/audit-recheck-r3` | 0 | 120 gold checkpoints, 1,984 challenge observations, zero validation/execution failures |
+| Zero-judgment calibration gate on the regenerated index | 1 | Expected: 36/72 referral quotas; judgments remain pending |
+| `node --test --experimental-test-isolation=none evaluation/hr3/harness/test/bounds.test.mjs` | 0 | 32/32: all 27 states, aggregation, stopped accounting and provenance |
+| `node evaluation/hr3/harness/test.mjs --mcp-dependencies adapters/mcp/node_modules --tokenizer-dependencies adapters/openai/node_modules` | 0 | 67/67 tests; new complete fake pilot (480 observations, 2,786 reservations), both E-2 paths and interrupted CLI |
+| Injected fake transport run to `evaluation/hr3/harness/artifacts/audit-recheck-r3-stopped` | 0 | Expected three_transport_failures stop exercised and persisted; no real calls |
+| `node evaluation/hr3/harness/cli.mjs --bound-report evaluation/hr3/harness/artifacts/audit-recheck-r3-stopped --inputs evaluation/hr3/generator/artifacts/pilot --out evaluation/hr3/harness/reports/a1-r3-stopped-pilot.json` | 0 | 48 partial table rows, 2 attempted / 478 unexecuted; actual fake spend $0 |
+| Final independent inventories, hashes, write-scope, UTF-8/newline/whitespace and local-path checks | 0 | Git and independent filesystem/blob inventories, hashes, write scope, whitespace and path checks pass |
 
-An initial bound-only test run exited 1 due to floating-point accumulation
-(`0.49999999999999994` instead of `0.5`). Aggregation now averages the frozen
-equal-weight lineage means directly. The rerun passed all 32 tests, exit 0.
-Integration command provenance was also corrected to preserve the separator in
-repo-relative command paths; the final re-check records executable paths.
+An initial new integration assertion expected a mechanical zero for every
+incomplete multi-hop graph and exited 1. The frozen scorer can refer unknown
+semantic equivalences; a referral is not an accepted complete graph. The test
+now verifies that incomplete graphs never receive R=1 and that unresolved cases
+have a correctness referral. The unchanged scorer's complete gold still earns
+R=1. The rerun passed 19/19, exit 0. No scorer patch was made. A final whitespace check initially exited 2 for an extra
+blank line at the end of integration/REPORT.md; that line was removed and the
+check was rerun.
 
 ## Changed files
 
-**27 changed/new nonignored files** (the pre-existing protocol errata change is excluded):
+**36 changed/new nonignored paths**:
 
 ```text
 evaluation/hr3/generator/README.md
 evaluation/hr3/generator/artifacts/engineering/manifest.json
 evaluation/hr3/generator/artifacts/pilot/manifest.json
-evaluation/hr3/generator/artifacts/verification/tests.tap
+evaluation/hr3/generator/artifacts/previous-ff192c6b/README.md
+evaluation/hr3/generator/artifacts/previous-ff192c6b/archive-manifest.json
+evaluation/hr3/generator/artifacts/previous-ff192c6b/engineering/manifest.json
+evaluation/hr3/generator/artifacts/previous-ff192c6b/freeze.json
+evaluation/hr3/generator/artifacts/previous-ff192c6b/pilot/manifest.json
+evaluation/hr3/generator/artifacts/verification/r3-tests.tap
+evaluation/hr3/generator/bank.mjs
+evaluation/hr3/generator/controls.mjs
 evaluation/hr3/generator/deliver.mjs
 evaluation/hr3/generator/freeze.json
 evaluation/hr3/generator/generate.mjs
+evaluation/hr3/generator/inventory.mjs
+evaluation/hr3/generator/reason-strata.mjs
 evaluation/hr3/generator/test/generator.test.mjs
 evaluation/hr3/generator/validate.mjs
-evaluation/hr3/harness/.gitignore
 evaluation/hr3/harness/README.md
 evaluation/hr3/harness/REPORT.md
 evaluation/hr3/harness/REVISION-REPORT.md
 evaluation/hr3/harness/bounds.mjs
 evaluation/hr3/harness/cli.mjs
 evaluation/hr3/harness/freeze.json
-evaluation/hr3/harness/reports/a1-fake-pilot.json
-evaluation/hr3/harness/runner.mjs
-evaluation/hr3/harness/test.mjs
+evaluation/hr3/harness/product.mjs
+evaluation/hr3/harness/reports/REVISION-ff192c6b.md
+evaluation/hr3/harness/reports/a1-r3-stopped-pilot.json
+evaluation/hr3/harness/reports/freeze-ff192c6b.json
 evaluation/hr3/harness/test/bounds.test.mjs
+evaluation/hr3/harness/test/product.test.mjs
 evaluation/hr3/harness/test/runner.test.mjs
 evaluation/hr3/integration/REPORT.md
 evaluation/hr3/integration/delivery.json
 evaluation/hr3/integration/mechanical-results.json
 evaluation/hr3/integration/reconciliation-fields.json
-evaluation/hr3/integration/reproduce.mjs
 evaluation/hr3/integration/test/integration.test.mjs
 ```
 
-This list is cross-checked using (1) scoped `git diff --name-only HEAD` plus
-untracked nonignored files and (2) independent recursive filesystem discovery
-and blob hashing against the HEAD tree. Regenerated ignored datasets are
-inventoried separately by the generator manifests and integration/harness
-artifact manifests. Self-hashes are excluded from delivery manifests.
+Inventories are cross-checked using (1) scoped git diff plus untracked nonignored
+files and (2) an independent recursive filesystem inventory and Git-blob hashes
+against the HEAD tree. Regenerated ignored datasets and stage artifacts have
+separate explicit-output-map versus filesystem/hash checks. Delivery manifests
+exclude their own hashes.
 
-## Unresolved/external gates
+## Remaining external gates
 
-There is no known implementation blocker for revised E-1/A-1. Calibration v1
-still meets only **36/72** referral quotas; no adjudication was run. Non-author
-semantic review, independent calibration v2, measured resource capacity and the
-original continuation requirements remain required before development. The
-bounds are descriptive engineering outputs, with **actual spend $0** in this
-fake exercise. They cannot establish factual accuracy or authorize advancement.
-Generator E-2 fixture/control clarification status is outside this task; its
-existing control script is retained. The harness's existing separate-declaration
-path is unchanged. No long-running work is left unattended.
+The three accepted implementation findings are addressed. Non-author semantic
+review of fresh fixtures, independent calibration v2, maximal token-fit checks,
+resource capacity and original development-entry requirements remain pending.
+Calibration v1 still meets only 36/72 referral quotas. No adjudication, factual
+research-arm accuracy, Advance/Keep decision or continuation approval is produced.

@@ -74,7 +74,7 @@ graphs; edges within a graph are an AND; an edge's support is an OR of arrays
 whose spans are an AND. Both branches of alternative mediation are explicitly
 independently sufficient. Conjunctive mediation explicitly requires both
 conditions, and every required edge is retained. There are no implicit serial
-shortcuts. Unstated reasons have no nodes, edges or accepted graphs.
+shortcuts. Effective unstated reasons have no nodes, edges or accepted graphs. Direct expiry alone has the clock-trigger alternative; other expiry strata have no scheduled clock boundary.
 
 Spans identify source turn, half-open UTF-16 offsets, offset unit and exact
 quotation. These are **source offsets**, not delivered citation offsets.
@@ -127,7 +127,8 @@ original candidate once; it never silently substitutes a new world.
 Hashes are over canonical UTF-8 JSON (sorted object keys, deterministic array
 order, one final newline). Source and protocol hashes freeze implementation
 bytes. Manifests are checked by hashing bytes read back from disk and by an
-independent directory enumeration. `freeze.json` records the final delivery
+independent directory enumeration. `reason-strata.mjs` derives effective membership from gold; archived artifacts are historical and are not active freeze inputs.
+`freeze.json` records the final delivery
 inventory and hashes; it does not authorize paid work.
 
 ## Interpretation choices and unresolved audit items
@@ -153,51 +154,55 @@ inventory and hashes; it does not authorize paid work.
    notation does not prescribe JSON tags; `type` is frozen here. `G_correct`
    retains the Claim shape with empty citations and adds accepted graph
    structure. The separate support file is never projected into correctness.
-5. **Expiry — revised E-1 (2026-10-25).** R retains the frozen question:
-   why the change occurred. Every expiry source states that the explicit
-   deadline was reached and the decision expired. A complete supported
-   `deadline → decision` trigger graph is accepted alongside the existing
-   rationale graphs. A deadline mention without a causal edge earns no credit.
-   `not_stated` is retained only for changes with no supported cause; the expiry
-   sources no longer append the contradictory “no reason” sentence. The frozen
-   causal-class allocation still describes the authored rationale topology;
-   expiry's trigger is an additional accepted alternative, including in the
-   `unstated` rationale class. Questions and non-expiry gold are unchanged.
+5. **Expiry — audit re-check R3.** We chose the auditor's **rebalance fixtures**
+   alternative, preserving the protocol's allocation definitions, guard weights
+   and power-analysis allocation. The previous reinterpretation of causal labels
+   as merely authored rationale topology is withdrawn. Effective membership is
+   derived from gold: `not_stated`, and the minimum edge count across complete
+   accepted graphs. `family.reason_strata` publishes these results separately
+   from `authored_rationale_topology`; `multi_hop` is derived, never inferred
+   from the authored label. Validators reject any gold shortcut that would
+   dilute the frozen guard.
 
-   All **36 affected rendered checkpoints** (12 engineering, 24 pilot) are
-   disclosed below. The previously reported six are the two checkpoints of
-   the three L02 families, marked Yes. Held-out worlds remain unrendered.
+   Direct expiry retains the supported deadline-passed → expiry explanation.
+   Non-direct expiry is reauthored as an unscheduled lapse with **no
+   preannounced clock deadline**. Unstated lapse reports no cause; conditional
+   lapse requires the complete authored multi-hop explanation. The occurrence
+   time is not a previously stated deadline. Previous assertions have unbounded
+   source-claimed end times in these fresh cases. Questions still ask why the
+   change occurred; source intervals and C/O gold are rebuilt consistently.
+   We do not reject a supported clock trigger or change the frozen question.
 
-   | Family ID | Checkpoint batches | Previously reported six |
-   | --- | --- | --- |
-   | `engineering-expiry-L01-W1` | 2, 4 | No |
-   | `engineering-expiry-L02-W1` | 2, 4 | Yes |
-   | `engineering-expiry-L03-W1` | 2, 4 | No |
-   | `engineering-expiry-L04-W1` | 2, 4 | No |
-   | `engineering-expiry-L05-W1` | 2, 4 | No |
-   | `engineering-expiry-L06-W1` | 2, 4 | No |
-   | `pilot-expiry-L01-W1` | 2, 4 | No |
-   | `pilot-expiry-L01-W2` | 2, 4 | No |
-   | `pilot-expiry-L02-W1` | 2, 4 | Yes |
-   | `pilot-expiry-L02-W2` | 2, 4 | Yes |
-   | `pilot-expiry-L03-W1` | 2, 4 | No |
-   | `pilot-expiry-L03-W2` | 2, 4 | No |
-   | `pilot-expiry-L04-W1` | 2, 4 | No |
-   | `pilot-expiry-L04-W2` | 2, 4 | No |
-   | `pilot-expiry-L05-W1` | 2, 4 | No |
-   | `pilot-expiry-L05-W2` | 2, 4 | No |
-   | `pilot-expiry-L06-W1` | 2, 4 | No |
-   | `pilot-expiry-L06-W2` | 2, 4 | No |
-6. **Card confirmation/declaration — unresolved.** The literal §5 table confirms
-   with `currentDependencies`, then declares separately with a null dependency
-   expectation. In pinned product `core/private-card-storage.mjs:211`, that
-   confirmation already writes dependency revision 1; the declaration's null
-   expectation therefore fails the revision check in
-   `core/card-current-storage.mjs:65`. “Declare separately” may mean an alternative
-   confirmation path or another Card, but neither interpretation is explicit.
-   Scripts preserve the literal sequence and are labeled
-   `blocked_protocol_clarification`; they are not certified executable controls.
-   The question is reported instead of silently changing the frozen protocol.
+   These are explicit fixture changes: all five non-direct expiry lineages in
+   each split receive fresh `-R3` IDs and fresh semantic-bank aliases. No old
+   held-out lineage is reused for affected generation. Held-out conversations
+   and gold remain unrendered. The rendered change affects **30 checkpoints in 15 families**:
+   engineering L02–L06/W1 (10 checkpoints), pilot L02–L06/W1–W2 (20).
+   Old-to-new IDs append `-R3` to the lineage before `-Wn`, e.g.
+   `pilot-expiry-L02-W1` → `pilot-expiry-L02-R3-W1`; batches remain 2 and 4.
+   The three L02 families among these replace the six previously reported
+   unstated-expiry checkpoints. The direct L01 engineering/pilot families
+   retain their one-edge supported deadline-trigger alternatives.
+
+   Earlier datasets, manifests, README and freeze are retained byte-for-byte in
+   `artifacts/previous-ff192c6b/`. Current gold independently verifies effective
+   multi-hop/unstated totals **20/5 engineering; 40/10 pilot**, at both probes.
+   The prospective inventory retains **120/40 development; 800/400 test**, with
+   the original per-type class counts and 60/200/1,600 family totals unchanged.
+   Overall lineage weights stay 1/30, 1/50, 1/200; within-type 1/6, 1/10, 1/40;
+   multi-hop guard 1/20, 1/30, 1/100. Power assumptions/allocations are unchanged;
+   fresh affected held-out IDs are published before later gated rendering.
+   An explicit elapsed deadline cannot inhabit an unstated or multi-hop stratum.
+6. **Card confirmation/declaration — E-2 implemented.** Every fixture explicitly
+   chooses `confirm_with_dependencies` (no later standalone null declaration)
+   or `declare_separately` (confirmation omits dependencies, then declaration
+   expects null). Pilot fixtures cover both paths in all eight branches: 24
+   direct confirmations and 16 separate declarations. The public runner executes
+   the supplied path without stripping dependencies. Reviews use inspected
+   positive revisions. Superseded E-2 ambiguity/block flags are cleared.
+   `fixture_clarified_E-2` certifies this mechanical fixture clarification only;
+   non-author semantic audit, full token-fit and paid-readiness gates remain
+   pending. No broad product certification is claimed.
 7. **Audit and §13 gates.** Mechanical source/AST/gold checks are not non-author
    semantic review. The complete required 690 rendered-world audits cannot yet
    exist while development/test stay unrendered: 30 engineering + 60 pilot +

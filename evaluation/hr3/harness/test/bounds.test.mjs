@@ -99,7 +99,13 @@ test('completed-stage report requires execution hashes, checks artifact bytes, a
   const run={stage:'pilot',offline:true,families:families.map(f=>f.family_id),frozenArtifacts:{'protocol/errata.md':{sha256:'frozen-errata-hash'},'generator/pilot/manifest.json':{sha256:hash(inputManifest)}}};
   stageSave('run.json',run);stageSave('summary.json',{stage:'pilot',complete:true,attempted:1,ledger:{unsettled:[],stopped:null,total:1500000000}});
   stageSave('scored.jsonl',{...observation(families[0],{C:0,O:0,R:0,J:0},{valid:false}),version:'hr3-scorer-v1',protocol:'v0.3.4'});
-  stageSave('ledger.jsonl',{});
+  const journal = [
+    {type:'configuration',configuration:{}},
+    {type:'reserve',id:'settled',reserved:1500000000},
+    {type:'settle',id:'settled',charged:1500000000}
+  ];
+  const journalSave = () => {let prior='';writeFileSync(join(stage,'ledger.jsonl'),journal.map(e=>{const data={...e,prior};const row={...data,digest:hash(data)};prior=row.digest;return canonical(row);}).join('\n')+'\n');};
+  journalSave();
   const manifest=()=>stageSave('manifest.json',{files:Object.fromEntries(['run.json','summary.json','scored.jsonl','ledger.jsonl'].map(name=>{const bytes=readFileSync(join(stage,name));return [name,{sha256:hash(bytes),bytes:bytes.length}];}))});
   manifest();const out=join(root,'report.json');
   const report=writeBoundReport({stageDirectory:stage,inputs:root,out});
@@ -107,8 +113,24 @@ test('completed-stage report requires execution hashes, checks artifact bytes, a
   assert.equal(report.metadata.frozenArtifacts['protocol/errata.md'].sha256,'frozen-errata-hash');
   assert.ok(!readFileSync(out,'utf8').includes(root));
   assert.throws(()=>writeBoundReport({stageDirectory:stage,inputs:root,out}),/EEXIST/);
-  stageSave('summary.json',{stage:'pilot',complete:false,ledger:{}});
-  assert.throws(()=>writeBoundReport({stageDirectory:stage,inputs:root,out}),/completed_pilot_required/);
+  // Unknown final billing stays distinct from the already settled spend.
+  run.offline=false;stageSave('run.json',run);
+  journal.push({type:'reserve',id:'outstanding',reserved:2500000000},{type:'stop',reason:'cap_exceeded'});journalSave();
+  stageSave('summary.json',{stage:'pilot',complete:false,attempted:1,ledger:{unsettled:['outstanding'],stopped:'cap_exceeded',total:4000000000}});manifest();
+  const before=readFileSync(join(stage,'ledger.jsonl'),'utf8');
+  const partial=writeBoundReport({stageDirectory:stage,inputs:root,out:join(root,'partial.json')});
+  assert.equal(partial.stageStatus.complete,false);assert.equal(partial.stageStatus.stopReason,'cap_exceeded');
+  assert.equal(partial.metadata.actualSpendUSD,null);assert.equal(partial.metadata.actualSpendKnown,false);
+  assert.equal(partial.metadata.settledSpendUSD,1.5);assert.equal(partial.metadata.outstandingReservations.reservedUSD,2.5);
+  assert.deepEqual(partial.metadata.outstandingReservations.ids,['outstanding']);
+  assert.equal(partial.continuationApproval,false);assert.equal(partial.denominators.unexecuted,479);
+  assert.ok(partial.tables.every(t=>t.cohortLabel.startsWith('partial observed cohort')));
+  assert.equal(readFileSync(join(stage,'ledger.jsonl'),'utf8'),before);
+  // A stopped run with all reservations settled reports known spend.
+  journal.push({type:'settle',id:'outstanding',charged:500000000});journalSave();
+  stageSave('summary.json',{stage:'pilot',complete:false,attempted:1,ledger:{unsettled:[],stopped:'cap_exceeded',total:2000000000}});manifest();
+  const settled=writeBoundReport({stageDirectory:stage,inputs:root,out:join(root,'settled.json')});
+  assert.equal(settled.metadata.actualSpendUSD,2);assert.equal(settled.stageStatus.complete,false);
   stageSave('summary.json',{stage:'pilot',complete:true,attempted:1,ledger:{unsettled:[],stopped:null,total:0}});
   assert.throws(()=>writeBoundReport({stageDirectory:stage,inputs:root,out}),/artifact_hash_mismatch/);
   delete run.frozenArtifacts;stageSave('run.json',run);manifest();
