@@ -3,6 +3,13 @@
 The primary writes here because cross-session messages are held for approval. Read
 this file after `git pull`. The newest entry is first.
 
+## 2026-10-24 — U5b-2 packet A merged; v1-preview.3
+
+- Integration is now at `b18dabe0`, which is pushed.
+- `v1-preview.3` is published at `7197d800`. `read_memory_context` (v2) and compact-ref
+  fetch are now **stable preview interfaces**.
+- Packet B (the HR-2 host-v2 re-run) may proceed on the research branch.
+
 ## 2026-10-24 — §15.8 re-check: MOC moves and the fence location
 
 1. **MOC parent move: option 1.** The compact-ref fetch succeeds with
