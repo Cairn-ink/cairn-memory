@@ -1,7 +1,7 @@
 # V1 preview: product integration
 
 `v1-preview.4` is an opt-in cut from `release/v1-preview`, integration
-`ef38da4a` (preview HEAD `7fbbe838`). It stacks on the unmerged local V1
+`b096e043` (`ef38da4a` plus a role-guide wording fix). It stacks on the unmerged local V1
 chain (#453–#469, `feat/local-v1-closeout`). Default behaviour on stores without
 dependency declarations stays unchanged unless the feature options below are
 selected. This is not an npm release.
@@ -700,7 +700,7 @@ experimental features; see [upgrade and rollback](#upgrade-and-rollback).
 
 ## Release notes for GitHub pre-release: v1-preview.4
 
-Changes since `v1-preview.3`; integration `ef38da4a`, preview HEAD `7fbbe838`:
+Changes since `v1-preview.3`; integration `b096e043` (`ef38da4a` plus a role-guide wording fix):
 
 - Add experimental role profiles/task receipts: four tools, direct agent
   publication with dual CAS, five read modes and caller-held `task-receipt-v1`
