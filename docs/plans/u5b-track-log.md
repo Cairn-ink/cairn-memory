@@ -439,3 +439,8 @@
   facts／families／lexicon／coverage 相同，placementAllocation、plan、facts view（含干擾 coverage）皆不同、receipt max 4。兩個獨立
   否決理由；依 §9 與主控條件**前進到 candidate 1**，否決紀錄提交（含 W1 七檔與重渲染的 corpus）。派 W1 前進（resume，high＋fast；
   stage-1 失敗就依凍結順序繼續、不改生成器）。後果：facts view 改變，W2 要從新 view 重寫全部 160 題。已通知主控。
+- **`hr2b_tools` v1.1 修訂完成**（high＋fast，exit 0）：13 檔（`lib/pooled-coverage.mjs` 新增：`pooled-group-coverage-v1`、N 個貢獻家族
+  均勻重抽、分子分母逐抽重算、零分母抽樣→inconclusive、2.5/97.5 插值；profile 四格直方圖／maxSpans 4／新配額；`hr2b-report` 決策
+  用 pooled CI 與 pooled ceiling、逐類別描述表；pin `HR-2b v1.1`／`d3a6e24f`；calibrate 1–4 receipt）；worker 自報兩版 Node 各 49/49、
+  回歸 240/240、120/120。協調者只提交這 13 路徑：**`91d24a40`**（W1 同時在改 fixtures-hr2b）。審查 worktree 移到 `91d24a40`，
+  並行派 Spec／Standards 複審（resume，read-only，xhigh＋fast），並以 `cairn-heavy` 在兩版 Node 重跑五個相關測試檔（含兩個回歸）。
