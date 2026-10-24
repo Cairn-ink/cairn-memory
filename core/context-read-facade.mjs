@@ -494,7 +494,7 @@ function initializeContextFacade(path, options, { readOnly, database }) {
             embed: texts => {
               return dispatch(options.embedder, texts, { signal: controller.signal, deadlineAt,
                 guard: () => { access.check(); storage.assertState(projection, current, { checkpoint: false }); } });
-            } }, { signal: controller.signal,
+            } }, { signal: controller.signal, maxBatchDocuments: options.policy.maxBatchDocuments,
             isCurrent: () => { access.check(); return true; },
             onProgress: progress => { vectorProgress = progress; } });
           access.check();
