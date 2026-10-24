@@ -386,3 +386,11 @@
   需約 70 個 later 題家族，與 45／25／30 設計矛盾——配額本身是缺陷，換 seed 或加家族都救不了。提案 v1.1：guard 對比改為
   pooled（單一層、minimumFamilies 10）、test 層 ≥30 groups／≥12 families（已達：57／20、43／23）、dev 層 ≥4 families 無 group 下限、
   門檻與門不變。已送主控決定；派 W3（xhigh＋fast）同步稽核。
+- **W3 完成**（xhigh＋fast）：19 個覆寫（18 recategorize：C1 缺逐字詞 6、C2 缺嵌入詞 1、C3 成員語言不一致 7、C5 單一記憶
+  表達 4；1 add-member：foreign receipt 的時間蘊涵）；填充與非支持單元 **0 洩漏**（1,049 單元、7,113 詞）；78 個 later-receipt
+  群全部確認無 body／first 支持；結論「rebuild required」（配額與每類別 20 題都不符）。`apply-audit` 拒絕 q-110 的
+  add-member（W3 把成員寫成巢狀 `detail.member` 而工具要扁平 `{fact,memory,where,spans}`）。
+- **第二個協定缺陷**：審後驗證器的公開 admission 預檢（HR-1 繼承）拒絕全部 81 筆 5–6 receipt 的記憶——core `admit` 一次最多
+  4 筆 receipt（已重現：同一筆 1–4 筆 ok、5 筆 `invalid_input`）。凍結的 receipt 分布 {…5:10%, 6:5%} 不可存。提案 v1.1 第 4 項：
+  receipt 分布改 {1:20, 2:25, 3:25, 4:30}%，later＝2–4；其餘不變。已併入給主控的決定請求。W3 稽核檔提交（未套用、未凍結）。
+  後續：v1.1 → 稽核 → 凍結 → W1 以下一個候選 seed 重建（家族與事實不變，W2 題目可沿用、只補 18 題）→ labels → W3 複審 → 凍結。
