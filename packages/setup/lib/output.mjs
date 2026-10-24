@@ -33,7 +33,8 @@ export function terminalWriter(write) {
   writer.literal = write.literal ?? write;
   return writer;
 }
-export const technical = new Set(['authorization_shared','codex_hooks_dry','codex_startup_gate',
+export const technical = new Set(['engine_bundle_stale','engine_bundle_sha_drift',
+  'authorization_shared','codex_hooks_dry','codex_startup_gate',
   'claude_available','codex_available','marketplace_ready','marketplace_status','endpoint_flag',
   'endpoint_config','endpoint_default','endpoint_prompt_source','codex_user_status',
   'codex_connection','codex_enabled','codex_credential','codex_runtime_version',

@@ -1,3 +1,4 @@
+import './local-engine.test.mjs';
 import './review-fixes.test.mjs';
 import './approved-flows.test.mjs';
 import './device-ui.test.mjs';

@@ -2,6 +2,30 @@
 import { DEFAULT_ENDPOINT } from './constants.mjs';
 import { shellArgument } from './output.mjs';
 export const messages = {
+  "engine_bundle_invalid": {
+    "zh": "本機引擎套件損壞，請重新下載安裝程式。",
+    "en": "The local engine bundle is invalid. Download the installer again."
+  },
+  "engine_bundle_stale": {
+    "zh": "本機引擎套件已過期，請重新產生套件。",
+    "en": "The local engine bundle is stale. Rebuild the bundle."
+  },
+  "engine_bundle_sha_drift": {
+    "zh": "本機引擎封裝雜湊不同；所有檔案內容均已驗證相同。",
+    "en": "Engine archive hash changed; every file's content is identical."
+  },
+  "local_engine_installing": {
+    "zh": "正在安裝本機記憶引擎……",
+    "en": "Installing the local memory engine…"
+  },
+  "local_engine_install_failed": {
+    "zh": "本機引擎安裝失敗，已保留安裝檔案。請重跑 setup --local。",
+    "en": "Local engine installation failed. Files were kept. Rerun setup --local."
+  },
+  "local_engine_verification_failed": {
+    "zh": "本機引擎驗證失敗，已保留安裝檔案。請重跑 setup --local。",
+    "en": "Local engine verification failed. Files were kept. Rerun setup --local."
+  },
   "cap_pending": {
     "zh": "  新上限 {cap} 將於下次每日重置套用；Claude Code 不受影響。",
     "en": "  New limit {cap} takes effect at the next daily reset; Claude is unaffected."
