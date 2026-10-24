@@ -1,9 +1,9 @@
 # Installer local mode: contract for `@cairn-ink/memory` 0.6.0
 
-Status: v0.3 (setup session, 2026-10-25). v0.1 (`f053a18c`) was audited by a
+Status: v0.4 (setup session, 2026-10-25). v0.1 (`f053a18c`) was audited by a
 non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, fourteen P1,
-two P2. v0.2 (`4332b800`) adopted them; the re-check found no P0, ten P1 and
-three P2. v0.3 adopts those; the auditor re-checks v0.3.
+two P2. v0.2 (`4332b800`): no P0, ten P1, three P2. v0.3 (`3f337e9d`): no
+P0, six P1, two P2. v0.4 adopts those; the auditor re-checks v0.4.
 
 Base: `main` at `b2513501` (PR #469 local V1 Raw chain and PR #470 unified
 memory V1 are merged). Branch `feat/setup-local-mode`.
@@ -67,14 +67,14 @@ Completion:
 | S1 | **0.6.0 local mode is explicit MCP memory**: the five default tools (`remember_memory`, `recall_memory`, `inspect_memory`, `correct_memory`, `forget_memory`) over stdio, keyless. **Automatic capture and automatic prompt recall are not part of 0.6.0 local mode.** They stay cloud features; the `cairn-memory local …` foreground preview remains an operator path and is not wired by the installer. | The foreground capture host needs an OpenAI key, three consents, is Linux/WSL-only, and has a per-session rearm limitation (`integrations/client/raw/local-setup.mjs:199–214`). Local automatic recall does not exist (`integrations/client/raw/local-hook.mjs:67–69`). Follow-up: §11. |
 | S2 | The installer stays **dependency-free** for cloud users. The engine ships **inside the installer package** as the tarball built by `packaging/build.mjs` (`cairn-memory-local-preview-0.0.0-preview.1.tgz`) plus a manifest. Local setup installs it into a private per-user directory with `npm install --ignore-scripts` using the tarball's `npm-shrinkwrap.json` (pinned `@modelcontextprotocol/server` 2.0.0, `@modelcontextprotocol/core` 2.0.0, `zod` 4.5.4, `tiktoken` 1.0.22; the builder rejects `hasInstallScript`, `packaging/build.mjs:60–77`). | Cloud users' `npx` download grows from ~0.5 MB to ~1.2 MB only. Reuses the inspected build (`packaging/build.mjs:80–118`) and the install shape tested by `packaging/install-preview.mjs:44–77`, `packaging/test/install.test.mjs:704`. |
 | S3 | **One private installation root for both clients**: `$CAIRN_MEMORY_HOME` (absolute) or `~/.cairn-memory`, mode 0700, canonicalized once. Layout in §4. | Both clients share one store and one identity; one root makes `status` and `uninstall` exact. |
-| S4 | **Identity**: personal scope; owner ID generated once (`local-` + 16 lowercase hex) and persisted **before** any client registration; `--project ID` optional and **immutable** after the first local setup (changing it means `uninstall --local` then `setup --local --project …`; the database is kept). `--owner`/`--db`/`--project` are accepted only when no descriptor exists. Identifier values must satisfy the engine's `identifier()` (`core/validation.mjs:31–35`) **and** be expressible on the engine CLI: non-empty, no leading `-`, no control characters, ≤ 200 code units, trimmed. | The engine requires an owner (`adapters/mcp/cli.mjs:189`); CLI value parsing rejects values that look like flags (`adapters/mcp/cli.mjs:170–180`). |
+| S4 | **Identity**: personal scope; owner ID generated once (`local-` + 16 lowercase hex) and persisted **before** any client registration; `--project ID` optional and **immutable while a local installation is active or pending** (changing it means `uninstall --local` then `setup --local --project …`: in the `uninstalled` state `--project` is accepted and owner and database are kept). `--owner`/`--db` are accepted only when no descriptor exists (`uninstall --local --purge-config` first). Identifier values must satisfy the engine's `identifier()` (`core/validation.mjs:31–35`) **and** be expressible on the engine CLI: non-empty, no leading `-`, no control characters, ≤ 200 code units, trimmed. | The engine requires an owner (`adapters/mcp/cli.mjs:189`); CLI value parsing rejects values that look like flags (`adapters/mcp/cli.mjs:170–180`). |
 | S5 | **Client registration uses each client's own MCP commands**, never hand-edited files. Claude Code: `claude mcp add --transport stdio --scope user cairn-local -- <node> <executable> --db … --owner …`, replaced by `remove --scope user` then `add` with a durable journal (§7.1). Codex: `codex mcp add cairn-local -- …`, which overwrites in place, so no remove and no restore race. Server name **`cairn-local`** for both. A client whose CLI lacks these subcommands gets the manual snippet and is marked `manual`. | The hosted Claude flow treats a user-scope server named `cairn` as legacy (`packages/setup/lib/setup.mjs:134–145`, `404–412`); Codex's hosted entry is `[mcp_servers.cairn]` (`packages/setup/lib/codex-runtime.mjs:568`). |
 | S6 | **Node path**: the engine is registered with the absolute `process.execPath` of the setup run (`packaging/install-preview.mjs:63`). `status` reports a missing executable; rerunning `setup --local` rewrites the entries. | MCP hosts started from GUI contexts may lack the user's `PATH`. |
 | S7 | **One mode per client, no mixing.** Cloud (or unknown) present and local requested, or the reverse: refuse, write nothing, print ordered detach commands (§8). No automatic switch and no data migration in 0.6.0. | Cloud hooks capturing to cairn.ink beside `cairn-local` tools writing to SQLite would split memory silently. |
 | S8 | **Engine opt-ins** are not exposed. The registered argument vector is exactly `--db ABS --owner ID [--project ID]`. | O5. |
 | S9 | **Platforms**: Linux and WSL tested; macOS same code path, documented untested; Windows native refused (`local_windows_unsupported`). | No installed-MCP test on Windows in this track. |
-| S10 | **Engine directories are never pruned by `setup`.** Each installer version installs side by side under `engine/<engineId>/`; only `uninstall --local` removes `engine/`. A directory that a registration references is never renamed or removed by `setup`. | An unavailable or unselected client may still reference an older engine. |
-| S11 | **The installer never links `node:sqlite`, never imports engine or repository code, and never starts the MCP server itself.** It spawns only `npm`, `<node> <executable> --check-config`, `claude mcp …` and `codex mcp …`. Claude's own `mcp get` health check may spawn the server; that is Claude's behaviour, not the installer's. | TRAPS 1–3; keeps the hosted import graph unchanged. |
+| S10 | **Engine generations are immutable and never pruned by `setup`.** Each install creates a new generation directory `engine/<engineId>/`; a repair creates the next generation (`-r2`, `-r3`, …) and moves clients through the normal registration journal; only `uninstall --local` removes `engine/`. A generation that a **published registration** references (§4.1) is never renamed, repaired in place or removed by `setup`. | An unavailable or unselected client may still reference an older generation; moving a referenced tree before a verified replacement exists would break it. |
+| S11 | **The installer never links `node:sqlite`, never imports engine or repository code, and never starts the MCP server itself.** It spawns only `npm`, `<node> <executable> --check-config`, `claude mcp …` and `codex mcp …`. **`claude mcp get` health-checks the server, which starts the engine and can create the database**; it is therefore run only after consent, inside a registration or detachment step (§7.1), never during detection, `status` or `--dry-run`. Those report Claude's local registration as `unverified` from the descriptor. | TRAPS 1–3; a read-only command must not create or migrate the database (`adapters/mcp/server.mjs:159`, `core/database.mjs:388`). |
 | S12 | **Detection of Codex state uses Codex's own parser**: `codex mcp list --json` run against a private copy of `config.toml` in a temporary `CODEX_HOME` (the hosted inspection pattern, `packages/setup/lib/codex.mjs:167–185`). No textual TOML matching anywhere. | Quoted headers, dotted keys and multiline strings defeat text matching (re-check P1-3). |
 | S13 | **`storage_busy` is transient.** Two MCP servers (Claude and Codex) share one rollback-journal database; the engine's busy timeout handles overlap, and a `storage_busy` result is "retry", not "empty". Documented in the local README section; the installer itself never opens the database. | Coordination note from the primary session, 2026-10-25. |
 
@@ -101,9 +101,11 @@ MCP Registry workflow.
     memory.sqlite                   created by the engine on first use
 ```
 
-`engineId` = `<installerVersion>-<digest>`, digest = first 12 hex of the
-SHA-256 of `runtime/engine/manifest.json` (`packages/setup/lib/codex-runtime.mjs:86–92`
-convention). Pattern `^\d+\.\d+\.\d+(?:-[\w.]+)?-[0-9a-f]{12}$`.
+`engineId` = `<installerVersion>-<digest>[-r<n>]`, digest = first 12 hex of
+the SHA-256 of `runtime/engine/manifest.json` (`packages/setup/lib/codex-runtime.mjs:86–92`
+convention); `-r<n>` (n ≥ 2) names a repair generation of the same bundle.
+Pattern `^\d+\.\d+\.\d+(?:-[\w.]+)?-[0-9a-f]{12}(?:-r[2-9]\d*)?$`. A generation
+directory is immutable once a registration references it.
 
 ### 4.1 Descriptor
 
@@ -124,8 +126,9 @@ convention). Pattern `^\d+\.\d+\.\d+(?:-[\w.]+)?-[0-9a-f]{12}$`.
     "startedAt": "ISO",
     "checkpoints": {
       "claude": { "state": "planned" | "registering" | "done" | "manual" | "detaching" | "detached",
+                  "destination": "/abs/canonical/home",
                   "previous": <vector> | null, "desired": <vector> | null },
-      "codex":  { ... }
+      "codex":  { "state": "...", "destination": "/abs/canonical/.codex/config.toml", "previous": ..., "desired": ... }
     }
   },
   "clients": {
@@ -137,6 +140,12 @@ convention). Pattern `^\d+\.\d+\.\d+(?:-[\w.]+)?-[0-9a-f]{12}$`.
 ```
 
 `<vector>` = `{ "engineId", "node", "databasePath", "ownerId", "projectId" }`.
+
+**Published registration references**: the set of `engineId`s that may be
+registered in a client, namely every `clients.X.vector.engineId` plus, for
+every checkpoint in state `registering` or `done`, its `desired.engineId` and
+its `previous.engineId`. A checkpoint in state `planned` is **not** a reference
+(nothing has been written to a client yet). §5.2 and §5.3 use this set.
 
 Rules:
 
@@ -164,19 +173,25 @@ Rules:
 
 - **Deletion allowlist** (the only paths the installer ever removes or
   renames, each checked with `lstat` to be a non-symlink entry directly under
-  the canonical root): `root/engine/<engineId>` (rename only, §5.3),
-  `root/engine` (uninstall), `root/.setup.lock`, and with `--purge-config`
-  `root/installation.json` and `root/.npmrc`. `database.path` resolving inside
-  any allowlisted path is `local_recovery_required`.
-- **Client destinations are recorded**: Claude `home` = canonical `HOME` at
-  registration (the `user` scope lives in `~/.claude.json`); Codex
-  `configPath` = canonical `$CODEX_HOME/config.toml` (or `~/.codex/config.toml`),
-  resolved by the hosted path's function (`packages/setup/lib/codex.mjs:144–157`).
-  When the current environment resolves to a different destination than the
-  recorded one, registration and detachment for that client refuse with
-  `local_client_home_changed` (prints both paths through `write.literal` and
-  the rerun hint with the original environment); engine deletion is refused
-  until every recorded destination has been detached.
+  the canonical root or `root/engine`): `root/engine/<engineId>` (rename only,
+  §5.3, and only when `<engineId>` is not a published registration reference),
+  `root/engine` (uninstall, §9 step 5), `root/.setup.lock`, and with
+  `--purge-config` `root/installation.json` and `root/.npmrc`. Nothing nested
+  inside a generation is ever renamed or removed. `database.path` resolving
+  inside any allowlisted path is `local_recovery_required`.
+- **Client destinations are recorded before mutation**: each checkpoint
+  records `destination` when it is `planned` (Claude: canonical `HOME`, where
+  the `user` scope's `~/.claude.json` lives; Codex: canonical
+  `$CODEX_HOME/config.toml` or `~/.codex/config.toml`, resolved by the hosted
+  path's function, `packages/setup/lib/codex.mjs:144–157`); completion copies
+  it into `clients.X.home`/`configPath`. On every run the current environment's
+  destination is compared with the recorded one (checkpoint first, then
+  receipt); a difference refuses registration and detachment for that client
+  with `local_client_home_changed` (both paths through `write.literal`, plus
+  the rerun hint with the original environment). A client whose CLI is not
+  available, or whose recorded destination differs, is **unknown, not
+  detached**; engine deletion is refused while any such client has a receipt or
+  a non-`detached` checkpoint.
 - **Writes**: temp file + `fsync` + `rename` in the root, 0600, only while
   the lock is held.
 - **Lock**: `.setup.lock` with `wx`. On `EEXIST`, read it; if the recorded
@@ -189,11 +204,14 @@ Rules:
 ### 4.2 Transactions
 
 Every mutating run writes `operation` (kind, consented client set, per-client
-`previous` and `desired` vectors, all checkpoints `planned`) **before** the
-first external mutation, and clears it last. A rerun that finds an
-`operation` resumes it: it re-validates the recorded client set and vectors
-and continues from the first checkpoint that is not `done`/`manual`/`detached`,
-never asking consent again and never regenerating `ownerId`.
+`destination`, `previous` and `desired` vectors, all checkpoints `planned`)
+**before** the first external mutation, and clears it last. A rerun that finds
+an `operation` resumes it: it re-validates the recorded client set,
+destinations and vectors and continues from the first checkpoint that is not
+`done`/`manual`/`detached`, never asking consent again and never regenerating
+`ownerId`. A valid pending `kind: setup` operation makes **local** the
+effective mode of a no-flag `setup` run (so the O2 question is never asked
+twice), subject to §6.3 conflicts.
 
 | From | Action | To |
 | --- | --- | --- |
@@ -235,20 +253,23 @@ never asking consent again and never regenerating `ownerId`.
 
 ### 5.2 Setup time (`packages/setup/lib/local-engine.mjs`, dependency-free)
 
-`installEngine({ root, engineId, node, env, write, t, databasePath, ownerId, projectId })`:
+`installEngine({ root, engineId, node, env, write, t, databasePath, ownerId, projectId, references })`
+(`references` = the published registration reference set of §4.1; S1's tests pass an empty set):
 
 1. Verify the bundled tarball's SHA-256 and byte count against the shipped
    manifest and validate the manifest shape (`engine_bundle_invalid`).
-2. `root/engine/<engineId>/`:
+2. `root/engine/<engineId>/` (the caller passes the published registration
+   references, §4.1):
    - absent → create `…/app` 0700 and continue at step 3;
-   - present → **reuse check**: steps 5 **and** 6 must pass; if they do,
-     return without running npm; if they fail, the directory is
-     **quarantined** (§5.3) only when no recorded registration (any
-     `clients.*.vector.engineId` or any checkpoint vector) references this
-     `engineId`; when a registration references it, the installer repairs
-     **in place** (removes nothing; reruns npm into the same `app` after
-     renaming only `app/node_modules` to `app/node_modules.failed-<ms>`), so
-     the registered path keeps working after the repair.
+   - present and **unreferenced** → **reuse check**: steps 5 **and** 6 must
+     pass; if they do, return without running npm; if they fail, quarantine
+     (§5.3) and install afresh at the same `engineId`;
+   - present and **referenced** → reuse check; if it passes, return; if it
+     fails, the tree is left untouched and the installer installs the **next
+     repair generation** `<engineId>-r<n>` (smallest free n ≥ 2) as a fresh
+     directory, returns that `engineId`, and the caller moves clients to it
+     through the normal registration journal (`desired` = the new generation,
+     `previous` = the old one); the old generation stays until `uninstall`.
 3. Write `app/package.json` (0600, `wx`; `EEXIST` after an interrupted attempt
    is tolerated when the content is identical).
 4. Spawn `npm install --prefix <app> --ignore-scripts --no-audit --no-fund
@@ -284,11 +305,12 @@ never asking consent again and never regenerating `ownerId`.
   `local_engine_install_failed` (or the specific
   `local_engine_verification_failed`) and leaves the descriptor `pending` with
   `engine: null`. The next run installs afresh.
-- A process killed during step 4 leaves an incomplete directory at the final
-  `engineId`; the next run takes the reuse path (step 2), fails steps 5–6 and
-  quarantines or repairs as above. L10 tests SIGKILL during npm.
-- `.failed-*` directories and `node_modules.failed-*` are removed only by
-  `uninstall --local`; `status --verbose` lists them.
+- A process killed during step 4 of a fresh install leaves an incomplete
+  directory at the final `engineId`; because the checkpoint was still
+  `planned`, the generation is unreferenced, so the next run quarantines it
+  and installs afresh. L10 tests SIGKILL during npm.
+- `.failed-*` directories are removed only by `uninstall --local`;
+  `status --verbose` lists them.
 - Previous `engine/<id>` directories are never removed by `setup` (S10).
 
 ## 6. Mode selection and command surface (packet S2)
@@ -302,12 +324,15 @@ never asking consent again and never regenerating `ownerId`.
   `--reauthorize`, `--manual-token`, `--no-browser`, `--no-clipboard`,
   `--codex-daily-cap`, `--codex-capture-exec` are rejected before any write
   (`local_option_invalid`, exit 2).
-- `--owner ID`, `--db ABS`, `--project ID` only with `setup --local` and only
-  when no descriptor exists; otherwise `local_option_invalid`. Identifier
-  rules: S4.
+- `--owner ID` and `--db ABS` only with `setup --local` and only when no
+  descriptor exists; `--project ID` only with `setup --local` and only when no
+  descriptor exists or the descriptor is `uninstalled`; otherwise
+  `local_option_invalid`. Identifier rules: S4.
 - `uninstall --local [--yes] [--purge-config] [--client claude|codex]`: `--yes`
   skips the confirmation (required when non-interactive); `--purge-config`
-  also deletes `installation.json` and `.npmrc`. Data is never deleted.
+  also deletes `installation.json` and `.npmrc` and is rejected together with
+  `--client` (`local_option_invalid`) and while any registration receipt
+  remains (§9). Data is never deleted.
 - Controls `disable`, `pause`, `resume`, `prompt-recall-on|off`, `config`
   remain hosted Codex controls; when the detected union is `local` they print
   `local_control_unsupported` (exit 2).
@@ -322,18 +347,22 @@ coordinator runs:
 
 | Client | **cloud-owned** | **local-owned** | **unknown** |
 | --- | --- | --- | --- |
-| Claude Code | plugin `cairn-memory@cairn-memory` listed by `claude plugin list --json` in **any** scope and **any** enabled/configured state; **or** a user-scope MCP server `cairn` exists (`oldMCP`, `setup.mjs:134–145`) | `claude mcp get cairn-local` reports a `Scope: User config` entry (parsed privately, §7.1) | `plugin list` or `mcp get` fails other than with the specific absence output; or `get` reports `cairn-local` in a scope other than `user` (shadowed) |
-| Codex | native inspection (S12) lists `cairn` with transport `streamable_http`; **or** `$CODEX_HOME/cairn/installation.json` exists | native inspection lists `cairn-local` with transport `stdio` | `config.toml` unreadable other than `ENOENT`; native inspection fails or parses neither; both `cairn` and `cairn-local` present counts as **mixed** |
+| Claude Code | plugin `cairn-memory@cairn-memory` listed by `claude plugin list --json` in **any** scope and **any** enabled/configured state; **or** a user-scope MCP server `cairn` exists (`oldMCP`, `setup.mjs:134–145`, which the hosted `setup` and `status` already run) | the descriptor records `clients.claude` or a Claude checkpoint in state `registering`/`done` (reported as **unverified**; `claude mcp get cairn-local` is not run here, S11) | `plugin list` or the hosted `oldMCP` probe fails other than with the specific absence output; or the recorded Claude destination differs from the current one; or the Claude CLI is unavailable while a Claude receipt or non-`detached` checkpoint exists |
+| Codex | native inspection (S12) lists `cairn` with transport `streamable_http`; **or** `$CODEX_HOME/cairn/installation.json` exists | native inspection lists `cairn-local` with transport `stdio`; **or** the descriptor records `clients.codex` (then a listing without `cairn-local` is "registration missing", still local) | `config.toml` unreadable other than `ENOENT`; native inspection fails or returns malformed/unrecognized data (a valid empty list is **none**); the recorded Codex destination differs from the current one; the Codex CLI is unavailable while a Codex receipt or non-`detached` checkpoint exists. Both `cairn` and `cairn-local` present is **mixed** |
 
 Plus the descriptor: absent, valid (`state`), or `local_recovery_required`.
 
 Permitted writes during detection: the temporary `CODEX_HOME` copy for native
 inspection (removed afterwards; the hosted inspection already does this) and
-nothing else. `--dry-run` and `status` run the same probes.
+nothing else. `--dry-run` and `status` run the same probes. A Claude
+`cairn-local` entry without a descriptor is therefore not detectable
+read-only; `uninstall --local` (§9 orphan path) removes it idempotently.
 
 The **union** is: `none`; `cloud` (cloud somewhere, no local, no unknown);
 `local` (local somewhere, no cloud, no unknown); `mixed` (cloud and local
 anywhere); `unknown` (**any** unknown, regardless of local or cloud elsewhere).
+A valid pending `operation` of kind `setup` counts as local ownership for the
+union.
 
 ### 6.3 Routing (`setup`)
 
@@ -349,7 +378,8 @@ and exits without touching the root) → recovery/resume (`local_recovery_requir
 | cloud | existing cloud flow, no new question (O4) | existing cloud flow (its own TTY rules) | `mode_conflict_cloud` | existing cloud flow |
 | local | local repair of registered clients; ask for each detected unregistered client | local repair of registered clients only; unregistered clients are listed with the `--local` rerun command; exit 0 | local; interactive runs still ask consent for unregistered clients, non-interactive registers all detected clients | `mode_conflict_local` |
 | mixed | `mode_mixed` (exit 2) | `mode_mixed` | `mode_mixed` | `mode_mixed` |
-| unknown | existing cloud flow (it reports its own error) | existing cloud flow | `mode_unknown` (exit 2; names the client and the failing probe) | existing cloud flow |
+| unknown, no local ownership anywhere | existing cloud flow (it reports its own error) | existing cloud flow | `mode_unknown` (exit 2; names the client and the failing probe) | existing cloud flow |
+| unknown **with** local ownership or a pending local operation anywhere | `mode_unknown` | `mode_unknown` | `mode_unknown` | `mode_unknown` |
 
 A pending `operation` is resumed **only** when the requested action and mode
 match it (`setup --local`/effective local resumes `kind: setup`;
@@ -407,22 +437,25 @@ unchanged from 0.5.3 as defined by L06.
   `local_manual_claude` through `write.literal` (shell-quoted), mark `manual`,
   continue with Codex.
 - **Inspection** (`claude mcp get cairn-local`, output parsed privately,
-  never printed): exit 1 with `No MCP server named "cairn-local"` → absent;
+  never printed; run only inside a registration or detachment step after
+  consent, S11): exit 1 with `No MCP server named "cairn-local"` → absent;
   exit 0 with `Scope: User config` → present, and the `Command:`/`Args:`
-  lines are compared with the expected vector; exit 0 with another `Scope:` →
+  lines are parsed into an observed vector; exit 0 with another `Scope:` →
   **shadowed** (`claude_mcp_shadowed`, exit 2, names the scope and prints the
   `claude mcp remove --scope <scope> cairn-local` command; nothing written);
   anything else → `command_failed`.
 - **Registration** when absent: `claude mcp add --transport stdio --scope user
   cairn-local -- <node> <executable> --db <db> --owner <owner> [--project <id>]`,
   then inspect and require the user-scope entry with the desired vector.
-- **Replacement** when present with a different vector: the checkpoint already
-  holds `previous`; run `remove --scope user`, then `add` with `desired`,
-  then inspect. If `add` fails: `add` with `previous`; if that fails too,
-  `claude_mcp_restore_failed` with the manual command. A crash between
-  `remove` and `add` leaves checkpoint `registering` with both vectors; the
-  resume re-inspects and re-adds `desired`.
-- Present with the desired vector: no change, checkpoint `done`.
+- **Replacement** when present: inspect **immediately before** mutating. The
+  observed vector must equal the checkpoint's `desired` (→ nothing to do,
+  checkpoint `done`) or `previous`. If it equals neither, or `previous` is
+  null while an entry exists, refuse with `claude_mcp_drifted` (exit 2,
+  nothing removed, manual commands printed). Otherwise run `remove --scope
+  user`, then `add` with `desired`, then inspect. If `add` fails: `add` with
+  `previous`; if that fails too, `claude_mcp_restore_failed` with the manual
+  command. A crash between `remove` and `add` leaves checkpoint `registering`
+  with both vectors; the resume re-inspects (absent → add `desired`).
 - The hosted plugin and marketplace are not touched.
 
 ### 7.2 Codex (`packages/setup/lib/local-codex.mjs`)
@@ -451,11 +484,15 @@ unchanged from 0.5.3 as defined by L06.
 
 - Both clients receive the identical argument vector derived from the
   canonical root and the descriptor.
-- Manual snippets and copyable commands are printed with `write.literal`,
-  dynamic arguments quoted with `shellArgument`; the approved-flow snapshots
-  elide absolute paths and the 80-column check exempts literal lines
-  explicitly (a test still asserts that each literal line is a single
-  copyable command).
+- Manual snippets and copyable commands are printed with `write.literal`.
+  Serialization follows the output grammar: shell commands quote dynamic
+  arguments with `shellArgument`; the Codex TOML snippet uses TOML basic
+  strings (escape `\`, `"` and control characters; never shell quoting);
+  argv displays use JSON. The approved-flow snapshots elide absolute paths and
+  the 80-column check exempts literal lines explicitly; L23 verifies
+  copyability per grammar (shell lines round-trip through a POSIX shell
+  parser; the TOML snippet parses with native `codex mcp list --json` in a
+  temporary home).
 
 ## 8. Conflicts (S7)
 
@@ -483,13 +520,16 @@ Codex: 本機記憶（cairn-local）
   資料：~/.cairn-memory/data                     (--verbose: full paths, owner, engine id, .failed-* dirs)
 ```
 
-Local status reads the descriptor, runs the §6.2 probes (Claude `mcp get
-cairn-local`, Codex native inspection on a temporary copy) and reports
-`registered`, `missing`, `shadowed` or `unverified` per client; it starts no
-engine process itself, runs no hosted Codex qualification and repairs
+Local status reads the descriptor and runs the §6.2 probes (Codex native
+inspection on a temporary copy; for Claude only the hosted `plugin list` and
+`oldMCP` probes) and reports per client: Codex `registered`, `missing` or
+`unknown`; Claude `unverified` (descriptor-based, with the hint that
+`setup --local` verifies it) or `none`. It starts no engine process, runs no
+`claude mcp get cairn-local`, no hosted Codex qualification, and repairs
 nothing. Tests assert no filesystem change under `HOME`, `CODEX_HOME` and
-`CAIRN_MEMORY_HOME` other than the removed temporary inspection copy, and
-that the installer spawned only the allowlisted probe commands.
+`CAIRN_MEMORY_HOME` other than the removed temporary inspection copy, that a
+registered entry pointing at a nonexistent database leaves it nonexistent,
+and that the installer spawned only the allowlisted probe commands.
 
 `uninstall --local`:
 
@@ -498,11 +538,17 @@ that the installer spawned only the allowlisted probe commands.
      `operation.kind = uninstall` and the selected client set;
    - **orphan path** (no descriptor, or invalid descriptor, or `root/engine`
      present without a descriptor): no descriptor is read or written; the
-     installer detects `cairn-local` in both clients (§6.2), detaches what it
-     finds, and removes `root/engine` only when neither client lists
-     `cairn-local` afterwards. With `--purge-config` it also removes
-     `installation.json` and `.npmrc` (allowlist, §4.1). It prints a recovery
-     receipt line per removed item through `write.literal`.
+     installer detaches `cairn-local` from every **available** client
+     (Claude `mcp remove --scope user cairn-local`, Codex `mcp remove
+     cairn-local`, both idempotent) and removes `root/engine` only when
+     **both** CLIs are available and neither lists `cairn-local` afterwards
+     (Claude: `mcp get` is allowed here because the user confirmed the
+     uninstall). If a CLI is unavailable the engine is retained and
+     `local_uninstall_retained` names it. Historical destinations cannot be
+     known without a descriptor; the receipt line says so. With
+     `--purge-config` it also removes `installation.json` and `.npmrc`
+     (allowlist, §4.1). It prints a recovery receipt line per removed item
+     through `write.literal`.
 2. Confirmation `y` (or `--yes`), after printing what will be removed and that
    `data/` is kept.
 3. Take the lock (create the root only if missing, to hold the lock).
@@ -512,13 +558,16 @@ that the installer spawned only the allowlisted probe commands.
    failure stops before step 5; rerun resumes. A client whose recorded
    destination differs from the current environment is
    `local_client_home_changed` and stops the run.
-5. Engine removal only when **every** recorded client is null **and** the
-   current detection lists no `cairn-local`: remove `root/engine` (allowlist
-   checks), set `engine: null`, `node: null`, `state: uninstalled`,
+5. Engine removal only when **every** recorded client is null, no checkpoint
+   is other than `detached`, no client is unknown (§4.1 destinations), **and**
+   the current detection lists no `cairn-local`: remove `root/engine`
+   (allowlist checks), set `engine: null`, `node: null`, `state: uninstalled`,
    `operation: null`. A scoped run that leaves another client registered
    returns to `installed` instead.
-6. `--purge-config`: also remove `installation.json` and `.npmrc`; the root
-   directory stays when `data/` is non-empty.
+6. `--purge-config` (descriptor path): allowed only when the descriptor is
+   `uninstalled` after step 5 (it is rejected up front with `--client`, §6.1);
+   removes `installation.json` and `.npmrc`; the root directory stays when
+   `data/` is non-empty.
 7. Print the data path via `write.literal` and that the user may delete it.
 
 Existing hosted `uninstall --client codex` is unchanged.
@@ -577,21 +626,21 @@ after normalizing the version string and the runtime directory digest
 | L07 | each L06 state, `setup --local` | exit 2, `mode_conflict_cloud` (or `mode_unknown`), detach commands in §8 order, no writes |
 | L08 | existing local, `setup --cloud`; existing local with pending `operation`, `setup --cloud` | exit 2, `mode_conflict_local`, no writes, no resume |
 | L09 | existing local, `setup` no flag, Node path changed | engine dir unchanged; Claude remove+add recorded with `previous`/`desired`; Codex single `add`; descriptor `updatedAt` changed; non-interactive variant repairs registered clients only |
-| L10 | upgrade (manifest digest changes); SIGKILL during npm on a fresh id; npm exit 1 on a fresh id; verification failure on a **referenced** id | new dir beside the old one, entries moved, old dir intact; killed attempt is quarantined on the next run and the run completes; exit 1 leaves `<id>.failed-*`, old entries and old dir intact, descriptor `pending` with `engine: null`; referenced id repaired in place, path unchanged |
-| L11 | interrupted transaction: kill after Claude `done`, before Codex | descriptor `pending`, `operation` with Claude `done`; rerun resumes without consent prompts, same `ownerId`, Codex registered, `installed` |
-| L12 | Claude `add` failure after `remove`; kill between `remove` and `add` | previous vector re-added; `claude_mcp_restore_failed` only when the retry also fails; after kill the resume re-adds `desired` |
+| L10 | upgrade (manifest digest changes); SIGKILL during npm on a fresh id; npm exit 1 on a fresh id; verification failure on a **referenced** id | new dir beside the old one, entries moved, old dir intact; killed attempt is quarantined on the next run and the run completes; exit 1 leaves `<id>.failed-*`, old entries and old dir intact, descriptor `pending` with `engine: null`; referenced id left untouched, `<id>-r2` installed, clients moved via journal, old entries' executable still present until the move completes |
+| L11 | interrupted transaction: kill after Claude `done`, before Codex; kill after Codex `add` wrote home A but before its checkpoint `done`, resumed under `CODEX_HOME` B | first: descriptor `pending`, `operation` with Claude `done`; rerun resumes without consent prompts, same `ownerId`, Codex registered, `installed`. second: `local_client_home_changed`, nothing registered under B, home A's entry intact |
+| L12 | Claude `add` failure after `remove`; kill between `remove` and `add`; observed entry matching neither `previous` nor `desired` (drift) | previous vector re-added; `claude_mcp_restore_failed` only when the retry also fails; after kill the resume re-adds `desired`; drift → `claude_mcp_drifted`, nothing removed |
 | L13 | Codex `add` failure; verification mismatch injected | `config.toml` bytes unchanged after a failed `add`; `codex_mcp_unverified` with snippet |
-| L14 | `status` for none / cloud / local / mixed / unknown / missing Node / `.failed-*` present / shadowed Claude entry | lines per §9; snapshot; no filesystem change other than the removed inspection copy; only allowlisted probes spawned |
-| L15 | `uninstall --local`: interactive `y`; `--yes`; `--client codex` leaving Claude (returns to `installed`); orphan without descriptor; invalid descriptor with `--purge-config` (descriptor bytes never rewritten); Codex detach failure injected; changed `CODEX_HOME` | entries removed; `engine/` removed only when both clients detached and detection agrees; `data/` intact and printed; unrelated TOML preserved; after injected failure the descriptor is `uninstalling` and a rerun finishes; changed home → `local_client_home_changed`, nothing removed |
+| L14 | `status` for none / cloud / local / mixed / unknown / missing Node / `.failed-*` present / Claude registered with a nonexistent database path | lines per §9; snapshot; no filesystem change other than the removed inspection copy; the database stays nonexistent; no `claude mcp get cairn-local` call recorded; only allowlisted probes spawned |
+| L15 | `uninstall --local`: interactive `y`; `--yes`; `--client codex` leaving Claude (returns to `installed`); `--purge-config --client codex` (rejected); `--purge-config` while a receipt remains (rejected); orphan without descriptor with both CLIs available; orphan with Claude CLI unavailable (engine retained); invalid descriptor with `--purge-config` (descriptor bytes never rewritten); Codex detach failure injected; changed `CODEX_HOME` | entries removed; `engine/` removed only when both clients detached, no unknown client, and detection agrees; `data/` intact and printed; unrelated TOML preserved; after injected failure the descriptor is `uninstalling` and a rerun finishes; changed home → `local_client_home_changed`, nothing removed |
 | L16 | descriptor tampering: extra key, duplicate key, relative path, `external:false` with a foreign path, database under `engine/`, invalid `engineId` inside a vector, symlinked root, foreign uid (skipped when not root) | `local_recovery_required`, nothing written, purge command printed |
-| L17 | option errors: `--local --endpoint`; `--local --cloud`; `--owner` without `--local`; `--owner -x`; `--project` on an existing descriptor; `--cloud status`; `pause` on local-only; `--local` with existing descriptor plus `--db` | each exit 2 with its key, no writes |
+| L17 | option errors: `--local --endpoint`; `--local --cloud`; `--owner` without `--local`; `--owner -x`; `--project` on an `installed` descriptor (rejected) and on an `uninstalled` one (accepted, owner and database kept); `--cloud status`; `pause` on local-only; `--local` with existing descriptor plus `--db` | each exit 2 with its key, no writes (except the accepted `uninstalled` + `--project` case) |
 | L18 | Windows platform injected | `local_windows_unsupported`, exit 2, nothing written |
 | L19 | fake `claude` without `mcp add` | `claude_mcp_required`, manual snippet, Claude `manual`, Codex registered, exit 1 |
 | L20 | stale lock (dead pid) and live lock | `local_lock_stale` with the `rm` command / `lock_retry`; nothing written |
-| L21 | `--dry-run` with `--local` and effective local, with and without a pending `operation` | planned actions printed, pending operation described, no lock, no root, no child other than detection |
-| L22 | quoted Codex header `[mcp_servers."cairn"]` and a multiline string containing `[mcp_servers.cairn-local]` | first detected as cloud; second not detected as local |
-| L23 | literal output: paths with spaces in manual snippets and recovery commands | each literal line is one shell-quoted command that round-trips through a POSIX shell parser; width check exempts only literal lines |
-| E01 | real installed engine over stdio (as `packaging/test/qualified-install-mcp.test.mjs`), keyless, sanitized env | `tools/list` is exactly the five default tools; `remember_memory` → `inspect_memory` (by id and listing) → `correct_memory` → `inspect_memory` shows the correction → `forget_memory` → gone; `recall_memory` returns `model_not_configured` with zero provider connections (`packaging/test/preview-installer.test.mjs:133`); a second engine process on the same database sees the remembered item; with `OPENAI_API_KEY` set to a synthetic value and a fake provider endpoint, `recall_memory` contacts only that endpoint |
+| L21 | `--dry-run` with `--local` and effective local, with and without a pending `operation`; `--dry-run` with a Claude registration pointing at a nonexistent database | planned actions printed, pending operation described, no lock, no root, no child other than detection; database stays nonexistent |
+| L22 | quoted Codex header `[mcp_servers."cairn"]`; a multiline string containing `[mcp_servers.cairn-local]`; a valid empty `config.toml`; unknown + local (Codex registered, Claude `plugin list` failing) with no flag | first detected as cloud; second not detected as local; third is `none`; fourth refuses with `mode_unknown` and writes nothing |
+| L23 | literal output: paths containing spaces, `$`, backticks, `"`, `'` and `\` in manual snippets and recovery commands | shell lines round-trip through a POSIX shell parser; the TOML snippet parses with native `codex mcp list --json` in a temporary home to the exact vector; argv display is valid JSON; width check exempts only literal lines |
+| E01 | real installed engine over stdio (as `packaging/test/qualified-install-mcp.test.mjs`), keyless, sanitized env | `tools/list` is exactly the five default tools; `remember_memory` → `inspect_memory` (by id and listing) → `correct_memory` → `inspect_memory` shows the correction → `forget_memory` → gone; `recall_memory` returns `model_not_configured` with zero provider connections (`packaging/test/preview-installer.test.mjs:133`); a second engine process on the same database sees the remembered item; with `OPENAI_API_KEY` set to a synthetic value and the test-only fetch preload of `packaging/test/qualified-install-mcp.test.mjs:97` capturing provider traffic, `recall_memory` sends exactly one captured request and nothing reaches the network |
 | E02 | bundle inventory | `tar -tzf` equals `manifest.files`; `sourceHashes` equal the sources at the commit; `generatedHashes` equal the extracted generated files; cross-check with `packaging/artifact-files.json` + extras; counts printed |
 | E03 | packed installer inventory and prepack check | `npm pack --json` list equals `files` rules + `runtime/**` from disk; `tar -tzf` agrees; `--check` passes; passes with a drift warning for a re-gzipped identical archive whose manifest is updated; fails on a stale `sha256`, a stale `bytes`, and a stale `sourceHashes` entry |
 | M01 | manual, by the setup session, recorded in the PR: real Claude Code and real Codex in a temp `HOME`/`CODEX_HOME` with the packed 0.6.0, `setup --local`, `remember_memory` from one tool and `inspect_memory` from the other | both succeed; the same memory id is visible from both tools; `recall_memory` reports `model_not_configured` |
@@ -638,19 +687,20 @@ absolute local paths in committed files.
 `local_orphan`, `local_client_home_changed`, `local_engine_installing`,
 `local_engine_install_failed`, `local_engine_verification_failed`,
 `engine_bundle_invalid`, `engine_bundle_stale`, `engine_bundle_sha_drift`,
-`claude_mcp_required`, `claude_mcp_shadowed`, `claude_mcp_restore_failed`,
-`codex_mcp_required`, `codex_mcp_unverified`, `local_manual_claude`,
-`local_manual_codex`, `local_registered`, `local_done`,
+`claude_mcp_required`, `claude_mcp_shadowed`, `claude_mcp_drifted`,
+`claude_mcp_restore_failed`, `codex_mcp_required`, `codex_mcp_unverified`,
+`local_manual_claude`, `local_manual_codex`, `local_registered`, `local_done`,
 `local_status_client`, `local_status_engine`, `local_status_node_ok`,
-`local_status_node_missing`, `local_status_registration`, `local_status_data`,
-`local_status_failed_dirs`, `local_dry_run`, `local_uninstall_plan`,
-`local_uninstall_confirm`, `local_uninstall_done`, `local_uninstall_receipt`,
+`local_status_node_missing`, `local_status_registration`,
+`local_status_unverified`, `local_status_data`, `local_status_failed_dirs`,
+`local_dry_run`, `local_uninstall_plan`, `local_uninstall_confirm`,
+`local_uninstall_done`, `local_uninstall_receipt`, `local_uninstall_retained`,
 `local_data_kept`, `local_resume_hint`, `progress_local_engine`,
 `progress_local_claude`, `progress_local_codex`, `recovery_local_setup`.
 
-Copyable commands and TOML/argv snippets go through `write.literal` with
-`shellArgument` quoting; the approved-flow width test exempts literal lines
-and L23 checks their copyability.
+Copyable commands and TOML/argv snippets go through `write.literal`,
+serialized per grammar (§7.3); the approved-flow width test exempts literal
+lines and L23 checks their copyability.
 
 ## 14. Open questions put to the owner (answered by assumption until overridden)
 
