@@ -1,0 +1,41 @@
+{
+  "scope": "Pre-acceptance implementation diagnostics; no seed was rejected to improve distributions or query results.",
+  "attempts": [
+    {
+      "command": "node build/build-world.mjs",
+      "exitCode": 1,
+      "error": "ERR_UNKNOWN_FILE_EXTENSION: tiktoken_bg.wasm",
+      "resolution": "Import the installed tiktoken CommonJS entry directly through ESM; no createRequire and no dependency changes."
+    },
+    {
+      "command": "node build/check-world.mjs",
+      "candidateIndex": 0,
+      "exitCode": 1,
+      "errors": {
+        "expression:scope_time": 16
+      },
+      "memories": [
+        "m-688fb3230eb52279",
+        "m-e0f7a488da538819",
+        "m-6b64999278095d68",
+        "m-134ffc4696329469",
+        "m-9e11528eea38927b",
+        "m-51a6b6de82dcedfe",
+        "m-39f20c95d7cc5870",
+        "m-85a2be46ee3acbc8"
+      ],
+      "resolution": "Use the same family-day formula for distractor fabrication facts and their memories; the discrepancy affected only families d20 and d40 at modulo wraparound.",
+      "otherChecks": "Counts, token bands, receipt histograms, placement shares, lexicon scan, HR-1 exact-statement non-overlap and annotation checks passed."
+    },
+    {
+      "command": "node build/check-world.mjs --record --verify-builds -o W1-REPORT.md",
+      "candidateIndex": 0,
+      "exitCode": 1,
+      "classification": "sandbox-only child-process capture failure",
+      "error": "spawnSync git EPERM; piped child captures also reported EPERM alongside status 0",
+      "resolution": "Use inherited streams for builds and an anonymous open file descriptor for Git capture; fail whenever child.error is present regardless of status. Re-verify all three commands before reporting success.",
+      "followupExitCode": 1,
+      "followupError": "The first file-descriptor implementation enumerated its own temporary inventory capture; unlink the open scratch file before Git enumeration. Builds and deterministic checks in this follow-up both exited 0."
+    }
+  ]
+}
