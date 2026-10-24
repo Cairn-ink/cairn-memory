@@ -1,6 +1,6 @@
 # Installer local mode: contract for `@cairn-ink/memory` 0.6.0
 
-Status: v0.8 (setup session, 2026-10-25). v0.1 (`f053a18c`) was audited by a
+Status: v0.9 (setup session, 2026-10-25). v0.1 (`f053a18c`) was audited by a
 non-author Codex auditor (gpt-6.1-sol, xhigh, read-only): no P0, fourteen P1,
 two P2. v0.2 (`4332b800`): no P0, ten P1, three P2. v0.3 (`3f337e9d`): no
 P0, six P1, two P2. v0.4 (`e4462168`): no P0, three P1, one P2. v0.5
@@ -9,7 +9,10 @@ P0, six P1, two P2. v0.4 (`e4462168`): no P0, three P1, one P2. v0.5
 amendments the S1 reviewers asked for (§5.2 step 3, §5.3 child ownership).
 v0.8 resolves two inconsistencies the S2 implementer reported (L10/L11 after
 SIGKILL go through the stale-lock step; L16 symlinked root is
-`local_root_invalid`).
+`local_root_invalid`). v0.9 adopts the S2 reviewers' contract requests:
+scoped uninstall only from `installed` (§4.2, §9), the Codex setup lock
+carries the holder pid for stale recovery (§7.2), and `--cloud` with local
+ownership plus unknown is `mode_unknown` (§6.3).
 
 Base: `main` at `b2513501` (PR #469 local V1 Raw chain and PR #470 unified
 memory V1 are merged). Branch `feat/setup-local-mode`.
@@ -233,9 +236,11 @@ twice), subject to §6.3 conflicts.
 | `pending` | client registered | checkpoint `done`; `clients.X` set |
 | `pending` | all checkpoints `done`/`manual` | `installed`, `operation: null` |
 | `installed` | rerun (repair, upgrade, add a client) | `pending` with `operation.kind=setup` for the selected clients → … → `installed` |
-| `installed`/`pending` | `uninstall --local` confirmed | `uninstalling`, `operation.kind=uninstall` with the selected clients |
+| `installed` | `uninstall --local` confirmed (any `--client` selection) | `uninstalling`, `operation.kind=uninstall` with the selected clients |
+| `pending` | `uninstall --local` confirmed **without** `--client` | `uninstalling`; every checkpoint of the pending setup becomes a `detaching` checkpoint of the uninstall (destinations and vectors preserved); confirmation is required again (`--yes` or `y`), a pending setup never authorizes an uninstall |
+| `pending` | `uninstall --local --client X` | refused: `local_operation_pending` (exit 2), prints the unscoped command |
 | `uninstalling` | client detached | checkpoint `detached`; `clients.X = null` |
-| `uninstalling` | scoped operation complete, another client still registered | `installed`, `operation: null` (remaining registrations stay) |
+| `uninstalling` | scoped operation complete, another client still registered | `installed`, `operation: null` (remaining registrations stay; always valid because scoped uninstall starts only from `installed`, where `engine` is set) |
 | `uninstalling` | all clients null and `engine/` removed | `uninstalled` |
 | `uninstalled` | `setup --local` | `pending` (same owner, same database) |
 
@@ -406,7 +411,7 @@ and exits without touching the root) → recovery/resume (`local_recovery_requir
 | mixed | `mode_mixed` (exit 2) | `mode_mixed` | `mode_mixed` | `mode_mixed` |
 | unknown from a **hosted** probe (`plugin list`, `oldMCP`), no local ownership anywhere | existing cloud flow (it reports its own error) | existing cloud flow | `mode_unknown` (exit 2; names the client and the failing probe) | existing cloud flow |
 | unknown from a **local** probe (`~/.claude.json` unreadable or malformed, Codex inspection malformed), no local ownership | `mode_unknown` | `mode_unknown` | `mode_unknown` | `mode_unknown` |
-| unknown **with** local ownership or a pending local operation anywhere | `mode_unknown` | `mode_unknown` | `mode_unknown` | `mode_unknown` |
+| unknown **with** local ownership or a pending local operation anywhere | `mode_unknown` | `mode_unknown` | `mode_unknown` | `mode_unknown` (never `mode_conflict_local`) |
 
 A pending `operation` is resumed **only** when the requested action and mode
 match it (`setup --local`/effective local resumes `kind: setup`;
@@ -506,6 +511,12 @@ unchanged from 0.5.3 as defined by L06.
   with the manual snippet, nothing further written.
 - **Detachment**: `codex mcp remove cairn-local` (exit 0 even when absent),
   then native inspection must not list `cairn-local`.
+- **Codex lock content**: the local path writes `{"pid":N,"startedAt":ISO}`
+  into `$CODEX_HOME/.cairn-setup.lock` (the hosted path creates it empty and
+  only tests existence, so this is compatible). On `EEXIST` the local path
+  reads it: parseable with a dead pid → `codex_lock_stale` (prints the path
+  and the `rm` command, never auto-removes); empty, unparseable or alive →
+  `codex_lock` as today.
 
 ### 7.3 Shared
 
@@ -655,12 +666,12 @@ after normalizing the version string and the runtime directory digest
 | L12 | Claude `add` failure after `remove`; kill between `remove` and `add`; observed entry matching neither `previous` nor `desired` (drift) | previous vector re-added; `claude_mcp_restore_failed` only when the retry also fails; after kill the resume re-adds `desired`; drift → `claude_mcp_drifted`, nothing removed |
 | L13 | Codex `add` failure; verification mismatch injected | `config.toml` bytes unchanged after a failed `add`; `codex_mcp_unverified` with snippet |
 | L14 | `status` for none / cloud / local / mixed / unknown / missing Node / `.failed-*` present / Claude registered with a nonexistent database path | lines per §9; snapshot; no filesystem change other than the removed inspection copy; the database stays nonexistent; the only `claude mcp get` call recorded is the hosted `oldMCP` (`cairn`) call that 0.5.3 status also makes, never `cairn-local`; only allowlisted probes spawned |
-| L15 | `uninstall --local`: interactive `y`; `--yes`; `--client codex` leaving Claude (returns to `installed`); `--purge-config --client codex` (rejected); `--purge-config` while a receipt remains (rejected); orphan without descriptor (`cairn-local` detached from selected clients, engine retained with `local_uninstall_retained`); orphan `--client codex` (Claude untouched); orphan under an alternate `CODEX_HOME` (engine retained); invalid descriptor with `--purge-config` (descriptor bytes never rewritten); Codex detach failure injected; changed `CODEX_HOME` | entries removed; `engine/` removed only on the descriptor path when both clients detached, no unknown client, and detection agrees; never on the orphan path; `data/` intact and printed; unrelated TOML preserved; after injected failure the descriptor is `uninstalling` and a rerun finishes; changed home → `local_client_home_changed`, nothing removed |
+| L15 | `uninstall --local`: interactive `y`; `--yes`; `--client codex` leaving Claude (returns to `installed`); `--client codex` while a setup is `pending` (refused `local_operation_pending`); unscoped uninstall while a setup is `pending` with Claude `done` and Codex `registering` (both detached, confirmation asked again, non-interactive without `--yes` refused); `--purge-config --client codex` (rejected); `--purge-config` while a receipt remains (rejected); orphan without descriptor (`cairn-local` detached from selected clients, engine retained with `local_uninstall_retained`); orphan `--client codex` (Claude untouched); orphan under an alternate `CODEX_HOME` (engine retained); invalid descriptor with `--purge-config` (descriptor bytes never rewritten); Codex detach failure injected; changed `CODEX_HOME` | entries removed; `engine/` removed only on the descriptor path when both clients detached, no unknown client, and detection agrees; never on the orphan path; `data/` intact and printed; unrelated TOML preserved; after injected failure the descriptor is `uninstalling` and a rerun finishes; changed home → `local_client_home_changed`, nothing removed |
 | L16 | descriptor tampering: extra key, duplicate key, relative path, `external:false` with a foreign path, database under `engine/`, invalid `engineId` inside a vector, foreign uid (skipped when not root); separately a symlinked root | `local_recovery_required`, nothing written, purge command printed; the symlinked root is `local_root_invalid` (§6.4 step 4), nothing written |
 | L17 | option errors: `--local --endpoint`; `--local --cloud`; `--owner` without `--local`; `--owner -x`; `--project` on an `installed` descriptor (rejected) and on an `uninstalled` one (accepted, owner and database kept); `--cloud status`; `pause` on local-only; `--local` with existing descriptor plus `--db` | each exit 2 with its key, no writes (except the accepted `uninstalled` + `--project` case) |
 | L18 | Windows platform injected | `local_windows_unsupported`, exit 2, nothing written |
 | L19 | fake `claude` without `mcp add` | `claude_mcp_required`, manual snippet, Claude `manual`, Codex registered, exit 1 |
-| L20 | stale lock (both pids dead); live setup pid; dead setup pid but live child pid; lock without `child` field | `local_lock_stale` with the `rm` command / `lock_retry` / `lock_retry` / conservative `local_lock_stale` wording; nothing written in any case |
+| L20 | root lock: stale (both pids dead); live setup pid; dead setup pid but live child pid; lock without `child` field. Codex lock: stale with dead pid; empty (hosted holder); live pid | root: `local_lock_stale` with the `rm` command / `lock_retry` / `lock_retry` / conservative `local_lock_stale` wording; Codex: `codex_lock_stale` with `rm` command / `codex_lock` / `codex_lock`; nothing written in any case |
 | L21 | `--dry-run` with `--local` and effective local, with and without a pending `operation`; `--dry-run` with a Claude registration pointing at a nonexistent database | planned actions printed, pending operation described, no lock, no root, no child other than detection; database stays nonexistent |
 | L22 | quoted Codex header `[mcp_servers."cairn"]`; a multiline string containing `[mcp_servers.cairn-local]`; a valid empty `config.toml`; unknown + local (Codex registered, Claude `plugin list` failing) with no flag; Claude `~/.claude.json` with `cairn-local` but no descriptor, then `setup --cloud`; malformed `~/.claude.json`, then `setup --cloud` | first detected as cloud; second not detected as local; third is `none`; fourth refuses with `mode_unknown`; fifth refuses with `local_orphan`; sixth refuses with `mode_unknown`; `~/.claude.json` as `{}`, as unrelated settings only, with `mcpServers: null`, and with `mcpServers: []` → the first two are absent (cloud flow proceeds), the last two are `mode_unknown`; a sibling `mcpServers` entry carrying a synthetic secret header never appears in any output or error params; all refusals write nothing and run no hosted mutation |
 | L23 | literal output: paths containing spaces, `$`, backticks, `"`, `'` and `\` in manual snippets and recovery commands | shell lines round-trip through a POSIX shell parser; the TOML snippet parses with native `codex mcp list --json` in a temporary home to the exact vector; argv display is valid JSON; width check exempts only literal lines |
@@ -717,6 +728,7 @@ absolute local paths in committed files.
 `local_status_client`, `local_status_engine`, `local_status_node_ok`,
 `local_status_node_missing`, `local_status_registration`,
 `local_status_unverified`, `local_status_data`, `local_status_failed_dirs`,
+`local_operation_pending`, `codex_lock_stale`,
 `local_dry_run`, `local_uninstall_plan`, `local_uninstall_confirm`,
 `local_uninstall_done`, `local_uninstall_receipt`, `local_uninstall_retained`,
 `claude_mcp_unverified`,
