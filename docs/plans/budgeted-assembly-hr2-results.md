@@ -1,7 +1,8 @@
 # HR-2 results: budgeted assembly (synthetic, offline)
 
 Status: **completed under protocol v1.1 (`c863e9d6`), one test-split run, no
-deviation.** Direction only; not a product reliability claim. This answers the
+deviation; v1.1 of this document adds §7, the exploratory host-v2 replay of
+protocol §11 (v1.2.1, frozen at `4fb90832`), which changes nothing in §§1–6.** Direction only; not a product reliability claim. This answers the
 question for short, single-fact items whose evidence often sits in receipts
 (protocol §3); it says nothing about long memories or long receipts.
 
@@ -172,3 +173,120 @@ Output directories must be empty beforehand. Compare the regenerated files
 with `SHA256SUMS.uncompressed` after decompressing the committed archives;
 per-query admissions, costs and statistics are deterministic. Only the
 `environment` and identity `dirty` fields may differ.
+
+## 7. Exploratory addendum (v1.1): the `host-v2` overhead replay
+
+Status: **exploratory only, under protocol §11 v1.2.1 (`4fb90832`); harness
+`14fdacb5` (Spec yes, Standards yes after one fix round); one test-split run
+of 120 cells, every stage exit 0; the §1 confirmatory outcome is restated
+unchanged and no number here re-opens it.**
+
+Why: contract §15.8.1 measured that the shipped v1 representation cost about
+250 tokens per item on top of a 15-token body, and U5b-2 packet A's
+`representation-v2` (integration `b18dabe0`, `v1-preview.3`) published its
+measured constants (envelope 43, first item +58, further item +57, concrete
+receipt +7 beyond its text, body-equal receipt 10). The `O = 0` curves of §2
+therefore do not describe the host. §7 replays the §6 grid under those
+constants as a **fixed additive default-Memory calibration**: it is not a
+measurement of the shipped host, and it does not model UUID/text tokenization
+variation, later completeness transitions, cross-item `sameAs` dedup,
+non-default metadata or `sourceAccess`, or Cards (protocol §11.2).
+
+Provenance: constants `assembly/overhead-host-v2.json` (sha256
+`5eba1bd4…`, implementation commit `42627f60`), fixture and rankings as §1,
+clean checkout `14fdacb5`, Node 22.16.0, every stage through `cairn-heavy`
+with its command, log and exit code retained under
+[`results/hr2-host-v2/`](../../evaluation/retrieval-research/results/hr2-host-v2/)
+(`preflight.log`, `*.command`, `*.exit`, `*.log`; `cells.tar.xz`,
+`scores.json.xz`, `report.json.xz`, `report.md`, `SHA256SUMS.uncompressed`,
+`archive.sha256`). Run summary `cells:120, expectedCells:120`; report
+`comparisons:48`, `outcome: inconclusive (primary_cell_absent)` as a host-only
+report must. Body-equal spans in the fixture: 0 admitted, 0 ranked, so no
+alias charge occurred.
+
+### 7.1 Macro group coverage under host-v2 (test split, 160 queries)
+
+Ceilings are unchanged (A1 0.873, bge-m3 0.987, 3-small 0.978). Compare with
+the `O = 0` rows of §2.
+
+| Ranking | Arm | 128 | 192 | 256 | 384 | 512 | 768 | 1024 | 1536 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| A1 | P-top | 0.307 | 0.470 | 0.571 | 0.636 | 0.697 | 0.738 | 0.763 | 0.788 |
+| A1 | P-top-s1 | 0.307 | 0.470 | 0.581 | 0.652 | 0.697 | 0.748 | 0.768 | 0.810 |
+| A1 | P-top+tail | 0.307 | 0.470 | 0.571 | 0.623 | 0.697 | 0.738 | 0.763 | 0.788 |
+| A1 | P-cover | 0.307 | 0.391 | 0.536 | 0.597 | 0.618 | 0.548 | 0.592 | 0.651 |
+| A1 | P-cover-s1 | 0.307 | 0.391 | 0.536 | 0.602 | 0.618 | 0.557 | 0.592 | 0.651 |
+| bge-m3 + A3 | P-top | 0.364 | 0.571 | 0.665 | 0.744 | 0.814 | 0.884 | 0.921 | 0.977 |
+| bge-m3 + A3 | P-top-s1 | 0.364 | 0.571 | 0.682 | 0.748 | 0.814 | 0.887 | 0.933 | 0.977 |
+| bge-m3 + A3 | P-top+tail | 0.364 | 0.571 | 0.653 | 0.744 | 0.814 | 0.884 | 0.921 | 0.977 |
+| bge-m3 + A3 | P-cover | 0.364 | 0.421 | 0.580 | 0.689 | 0.697 | 0.693 | 0.724 | 0.859 |
+| bge-m3 + A3 | P-cover-s1 | 0.364 | 0.421 | 0.588 | 0.710 | 0.709 | 0.705 | 0.740 | 0.869 |
+| 3-small + F-RRF10 | P-top | 0.360 | 0.543 | 0.667 | 0.743 | 0.821 | 0.877 | 0.915 | 0.964 |
+| 3-small + F-RRF10 | P-top-s1 | 0.360 | 0.543 | 0.678 | 0.757 | 0.836 | 0.887 | 0.915 | 0.964 |
+| 3-small + F-RRF10 | P-top+tail | 0.360 | 0.543 | 0.659 | 0.743 | 0.821 | 0.877 | 0.915 | 0.964 |
+| 3-small + F-RRF10 | P-cover | 0.360 | 0.419 | 0.590 | 0.661 | 0.682 | 0.652 | 0.694 | 0.695 |
+| 3-small + F-RRF10 | P-cover-s1 | 0.360 | 0.419 | 0.596 | 0.678 | 0.682 | 0.658 | 0.706 | 0.715 |
+
+Token use p50 is 0.91–1.00 of the budget in every cell (P-cover 0.97–1.00
+from 192 up); at 128 tokens a single item (43 + 58 + body + receipts) is all
+that fits on every arm, so all arms coincide there.
+
+### 7.2 The 48 paired contrasts (pointwise, unadjusted, exploratory 95% CIs)
+
+Macro coverage, candidate − P-top, points, family bootstrap (29 families, §8
+settings unchanged). McNemar on all-required (one query per family) is in
+`report.md`; its two-sided p is below 0.05 only in three cells (P-cover at 768
+on A1 and bge-m3, and at 1,536 on 3-small, each 6 baseline-only vs 0).
+
+| Budget | P-cover − P-top: A1 | bge-m3 | 3-small | P-top-s1 − P-top: A1 | bge-m3 | 3-small |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 128 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| 192 | −7.8 [−14.9, −0.8] | −15.0 [−22.7, −7.5] | −12.4 [−20.0, −5.5] | 0.0 | 0.0 | 0.0 |
+| 256 | −3.6 [−6.8, −1.1] | −8.5 [−13.3, −4.4] | −7.7 [−12.8, −3.4] | +1.0 [0.0, +2.4] | +1.7 [+0.3, +3.4] | +1.1 [0.0, +2.9] |
+| 384 | −3.9 [−8.8, +0.8] | −5.4 [−12.1, +1.0] | −8.2 [−12.7, −4.2] | +1.7 [0.0, +4.5] | +0.5 [0.0, +1.6] | +1.4 [0.0, +3.7] |
+| 512 | −7.9 [−13.8, −2.2] | −11.7 [−18.1, −5.7] | −13.8 [−22.4, −6.0] | 0.0 | 0.0 | +1.5 [0.0, +4.0] |
+| 768 | −19.1 [−26.0, −12.9] | −19.0 [−26.3, −12.8] | −22.5 [−29.9, −15.1] | +1.0 [0.0, +3.2] | +0.3 [0.0, +1.1] | +1.0 [0.0, +2.5] |
+| 1024 | −17.1 [−23.7, −11.1] | −19.7 [−26.1, −13.3] | −22.1 [−29.2, −14.8] | +0.5 [0.0, +1.5] | +1.2 [0.0, +3.9] | 0.0 |
+| 1536 | −13.6 [−19.6, −7.8] | −11.8 [−18.3, −6.5] | −27.0 [−34.6, −19.8] | +2.3 [0.0, +5.2] | 0.0 | 0.0 |
+
+### 7.3 Saturation and budget pressure
+
+- **Saturation is not reached through 1,536 on any ranking** (protocol §11.4
+  definition: every query in every arm with zero assembly loss at that and
+  every larger tested budget). Under the host model a full 24-item horizon
+  costs about `43 + 58 + 23·57 + bodies + receipts`, well above 1,536, so the
+  budget binds everywhere in the grid; at `O = 0` every arm reached its
+  ceiling at 1,536 (§2).
+- In every cell, 89–94 of the 160 test queries have at least one
+  budget-rejected scheduled unit (`budgetRejectedQueryCount`); the count is
+  94 at every budget on bge-m3 and 3-small except P-top-s1/P-cover-s1 at
+  1,536 (92), and falls only to 89–90 on A1 at 1,536.
+- Where strategy matters moves up with the overhead: at `O = 0`
+  coverage-first trailed by 16–29 points at 128–384 and coincided at 768+;
+  under host-v2 it trails by 4–15 points at 192–512 and by **12–27 points at
+  768–1,536**, because the per-item overhead keeps the bodies-first pass from
+  ever leaving room for the receipts that carry 40% of the required groups.
+
+### 7.4 What this does and does not change
+
+- Nothing in §§1–6. The confirmatory decision (rank-first whole units stay
+  U5b's initial default; −2.5 points, 95% CI [−6.6, +1.5]) stands as frozen.
+- Direction: the host overhead **strengthens** the exploratory case against
+  coverage-first on this fixture and extends it to the whole tested range;
+  first-receipt-only deepening (now shipped as the non-default policy
+  `rank-first-first-source-v1`) is never worse and gains 0.3–2.3 points, with
+  only one CI excluding zero (bge-m3 at 256, +1.7 [+0.3, +3.4]).
+- Product budgets 1,500 and 4,000 remain numbers this research does not
+  choose; at the host model's cost a 1,500-token budget holds roughly 15–20
+  short Memories with one receipt each, not the full 24-item horizon.
+- Limits: everything in §4 plus the calibration caveats above; these are
+  replayed constants, not the shipped host's token counts.
+
+### 7.5 Reproduce
+
+From a clean checkout of `experiment/hr2-assembly` at `14fdacb5` or later, Node
+22.16.0, offline research dependencies installed: run the "Exact coordinator
+commands for the host-v2 test grid" in `evaluation/retrieval-research/assembly/README.md`
+into a fresh `results/hr2-host-v2` directory (the stages refuse protected
+destinations) and compare with `SHA256SUMS.uncompressed`; only `environment`
+and stage identities may differ.

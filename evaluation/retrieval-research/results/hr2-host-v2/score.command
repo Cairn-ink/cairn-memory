@@ -1,0 +1,1 @@
+/home/chichieh/.local/bin/cairn-heavy node evaluation/retrieval-research/assembly/score.mjs --fixture-dir evaluation/retrieval-research/fixtures --cells evaluation/retrieval-research/results/hr2-host-v2/cells --out evaluation/retrieval-research/results/hr2-host-v2/scores.json

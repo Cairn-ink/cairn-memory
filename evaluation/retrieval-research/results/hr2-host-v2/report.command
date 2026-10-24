@@ -1,0 +1,1 @@
+/home/chichieh/.local/bin/cairn-heavy node evaluation/retrieval-research/assembly/report.mjs --scores evaluation/retrieval-research/results/hr2-host-v2/scores.json --out evaluation/retrieval-research/results/hr2-host-v2/report.json --markdown evaluation/retrieval-research/results/hr2-host-v2/report.md
