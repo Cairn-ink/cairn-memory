@@ -1,4 +1,4 @@
-import { writeFileSync, readdirSync } from 'node:fs';
+import { writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { openMemoryCore, openContextReader } from '../index.mjs';
@@ -23,6 +23,14 @@ try {
     core = job.kind === 'read-only' ? openContextReader({ path, contextRead: configuration }) : openMemoryCore({ path,
       ...(job.card ? { privateCards: { version: 'private-cards-local-v1', source: 'submitted-note-v1', storage: 'local-plain-v1',
         disclosure: 'explicit-submitted-note-v1', authority } } : {}) });
+    if (job.rendezvous) {
+      writeFileSync(report + '.ready', 'ready', { flag: 'wx' });
+      const watchdog = Date.now() + 60000;
+      while (!existsSync(report + '.release')) {
+        if (Date.now() >= watchdog) throw Error('writer_rendezvous_timeout');
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
     const result = await core[job.method](job.input, token);
     if (job.kind === 'read-only') writeFileSync(report, JSON.stringify({ result, before, after: readdirSync(dirname(path)).sort() }));
     else writeFileSync(report, JSON.stringify({ ...result, sourceEnabled: 'findCandidates' in core }));

@@ -134,11 +134,11 @@ test('C10 a source deadline retains only a validated relation prefix with unknow
   t.after(() => { Array.prototype.push = originalPush; });
   Array.prototype.push = function (...values) {
     const result = originalPush.apply(this, values);
-    if (!stopped && values[0]?.ref?.memoryId === endpoints[0].id && values[0]?.via && Object.keys(values[0]).length === 2) { stopped = true; offset = 10000; }
+    if (!stopped && values[0]?.ref?.memoryId === endpoints[0].id && values[0]?.via && values[0]?.validationWork) { stopped = true; offset = 10000; }
     return result;
   };
   const result = ok(await f.find()); assert.equal(stopped, true);
   assert.deepEqual(result.items.map(i => i.ref.memoryId), [seed.id, endpoints[0].id]);
   const diagnostic = result.trace.sources['relations-one-hop-v1']; assert.deepEqual(diagnostic.reasons, ['deadline']);
-  assert.equal(diagnostic.added, 1); assert.equal(diagnostic.remaining, null); assert.equal(diagnostic.examined, 2);
+  assert.equal(diagnostic.added, 1); assert.equal(diagnostic.remaining, null); assert.equal(diagnostic.examined, 1);
 });

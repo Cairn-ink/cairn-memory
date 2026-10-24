@@ -1,9 +1,10 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { openSync, closeSync, readFileSync } from 'node:fs';
+import { openSync, closeSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { coreFixture, ns, ok, receipt } from './context-read-core-fixture.mjs';
 
+const watchdogSetTimeout = globalThis.setTimeout, watchdogClearTimeout = globalThis.clearTimeout;
 export { ns, ok, receipt };
 export const bothSources = ['relations-one-hop-v1', 'moc-v1'];
 export const sourceQuery = (patch = {}) => ({ readSet: [ns], query: 'needle', types: ['memory'], intent: 'current', deadlineMs: 5000, ...patch });
@@ -45,10 +46,10 @@ export function sourcesFixture(t, { sources = bothSources, counter = { id: 'synt
 
 // Regular files avoid the sandbox's anonymous-pipe restriction. Every real
 // process has a finite deadline, checked error/signal/exit status and report.
-export function sourceChild(f, job, { sync = false } = {}) {
+export function sourceChild(f, job, { sync = false, rendezvous = false } = {}) {
   const id = randomUUID(), out = join(f.workspace.path, id + '.out'), err = join(f.workspace.path, id + '.err'), report = join(f.workspace.path, id + '.json');
   const stdout = openSync(out, 'wx', 0o600), stderr = openSync(err, 'wx', 0o600);
-  const args = [new URL('./context-read-sources-worker.mjs', import.meta.url).pathname, f.path, JSON.stringify(job), report];
+  const args = [new URL('./context-read-sources-worker.mjs', import.meta.url).pathname, f.path, JSON.stringify({ ...job, ...(rendezvous ? { rendezvous: true } : {}) }), report];
   const checked = result => {
     if (result.error || result.signal || (result.status ?? result.code) !== 0) throw Error(JSON.stringify({ ...result, stderr: readFileSync(err, 'utf8') }));
     return JSON.parse(readFileSync(report, 'utf8'));
@@ -58,9 +59,22 @@ export function sourceChild(f, job, { sync = false } = {}) {
     finally { closeSync(stdout); closeSync(stderr); }
   }
   const child = spawn(process.execPath, args, { stdio: ['ignore', stdout, stderr] }); closeSync(stdout); closeSync(stderr);
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => child.kill('SIGKILL'), 30000);
-    child.once('error', error => { clearTimeout(timer); reject(error); });
-    child.once('close', (code, signal) => { clearTimeout(timer); try { resolve(checked({ code, signal })); } catch (error) { reject(error); } });
+  const completion = new Promise((resolve, reject) => {
+    const timer = watchdogSetTimeout(() => child.kill('SIGKILL'), 60000);
+    child.once('error', error => { watchdogClearTimeout(timer); reject(error); });
+    child.once('close', (code, signal) => { watchdogClearTimeout(timer); try { resolve(checked({ code, signal })); } catch (error) { reject(error); } });
   });
+  // Register before workspace removal; kill AND await close on every cleanup.
+  completion.catch(() => {});
+  f.workspace.defer(async () => { if (child.exitCode === null) child.kill('SIGKILL'); await completion.catch(() => {}); });
+  if (!rendezvous) return completion;
+  return { done: completion, release() { writeFileSync(report + '.release', 'release', { flag: 'wx' }); },
+    async ready() {
+      const watchdog = Date.now() + 60000;
+      while (!existsSync(report + '.ready')) {
+        if (child.exitCode !== null) { await completion; throw Error('writer_exited_before_ready'); }
+        if (Date.now() >= watchdog) throw Error('writer_ready_timeout');
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    } };
 }

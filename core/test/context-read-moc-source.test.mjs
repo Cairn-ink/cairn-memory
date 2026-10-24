@@ -77,7 +77,7 @@ test('C05 independent full-title corpus BM25/max-member/RRF oracle, zero channel
   const expectedCjk = titleOracle(documents, ['漢字']); assert.equal(cjk.items.length, 2);
   for (const row of expectedCjk) assert.ok(Math.abs(cjk.items.find(i => key(i.ref) === key(row.ref)).channels.moc.rawScore - row.score) < 1e-15);
 });
-test('C05 all original title bindings, projection exclusion, stale members and no second-map traversal', async t => {
+test('C05 all original title bindings and isolated projection omission', async t => {
   const f = sourcesFixture(t, { sources: ['moc-v1'] });
   const one = f.admit('First topic contributor'), two = f.admit('Second topic contributor');
   const result = ok(f.context.applyPlacement({ namespace: ns, expectedIndexRevision: ok(f.context.map({ namespace: ns, purpose: 'classification' })).indexRevision,
@@ -157,4 +157,64 @@ test('C05 a failed query embedding contributes zero and reports zero semantic sc
   assert.equal(value.channels.semantic.state, 'provider_error'); assert.equal(value.coverage.byType.memory.embedded, 2);
   assert.equal(value.coverage.byType.memory.scanned, 0); assert.equal(value.coverage.depths.semantic, 0); assert.equal(value.coverage.omitted.semantic, null);
   assert.equal(JSON.stringify(value).includes('private synthetic provider body'), false);
+});
+
+for (const type of ['memory', 'card']) test(`C05 isolated stale ${type} member and containment revisions never rank`, async t => {
+  const f = sourcesFixture(t, { cards: true, sources: ['moc-v1'] });
+  const placed = type === 'memory' ? f.topic(f.admit('Isolated member body'), 'childquery', 'rootquery') :
+    f.cardTopic(f.card('Isolated card body'), 'childquery', 'rootquery');
+  const memberTable = type === 'memory' ? 'moc_memory_refs' : 'card_moc_refs', edgeTable = type === 'memory' ? 'moc_edges' : 'card_moc_edges';
+  const writer = new DatabaseSync(f.path, { timeout: STORAGE_BUSY_TIMEOUT_MS }); t.after(() => writer.close());
+  const member = writer.prepare(`SELECT * FROM ${memberTable}`).get(), edge = writer.prepare(`SELECT * FROM ${edgeTable}`).get();
+  assert.ok(placed); assert.ok(member); assert.ok(edge);
+  for (const [table, original, field, query] of [
+    [memberTable, member, type === 'memory' ? 'memory_revision' : 'card_revision', 'childquery'],
+    [memberTable, member, 'moc_revision', 'childquery'],
+    ...(type === 'card' ? [[memberTable, member, 'body_revision', 'childquery']] : []),
+    [edgeTable, edge, 'parent_revision', 'rootquery'], [edgeTable, edge, 'child_revision', 'rootquery'],
+  ]) {
+    assert.equal(ok(await f.find({ query, types: [type] })).items.length, 1, 'baseline before ' + field);
+    writer.prepare(`UPDATE ${table} SET ${field}=?`).run(original[field] + 1);
+    const value = ok(await f.find({ query, types: [type] }));
+    assert.equal(value.items.length, 0, field); assert.equal(value.trace.sources['moc-v1'].topicsMatched, 1);
+    assert.equal(value.trace.sources['moc-v1'].membersRanked, 0); assert.equal(value.trace.sources['moc-v1'].complete, true);
+    writer.prepare(`UPDATE ${table} SET ${field}=?`).run(original[field]);
+  }
+});
+test('C05 an explicitly reviewed navigable cross-map mapping contributes no MOC members', async t => {
+  const f = sourcesFixture(t, { cards: true, sources: ['moc-v1'] });
+  const memoryTopic = f.topic(f.admit('Memory member'), 'needle memory title');
+  const card = f.card('Card mapped endpoint'), cardTopic = f.cardTopic(card, 'Other card title');
+  const pair = { memoryTopic: { mocId: memoryTopic.createdMocs[0].id, revision: memoryTopic.createdMocs[0].revision },
+    cardTopic: { mocId: cardTopic.createdMocRefs[0].mocId, revision: cardTopic.createdMocRefs[0].revision },
+    expectedMemoryIndexRevision: ok(f.host.call(f.core, 'mapEvidence', { namespace: ns, type: 'memory' })).indexRevision,
+    expectedCardIndexRevision: ok(f.host.call(f.core, 'mapEvidence', { namespace: ns, type: 'card' })).indexRevision };
+  const proposed = ok(f.host.call(f.core, 'proposeEvidenceMapping', { namespace: ns, actionId: 'propose-cross-map', ...pair }));
+  ok(f.host.call(f.core, 'reviewEvidenceMapping', { namespace: ns, actionId: 'review-cross-map', mappingId: proposed.id, expectedRevision: 1, state: 'active', ...pair }));
+  const mappings = ok(f.host.call(f.core, 'listEvidenceMappings', { namespace: ns, type: 'card', mocId: pair.cardTopic.mocId })).items;
+  assert.equal(mappings.length, 1); assert.equal(mappings[0].navigable, true);
+  const value = ok(await f.find({ types: ['memory', 'card'] }));
+  assert.deepEqual(value.items.map(i => i.ref), [memoryRef(memoryTopic.memories[0])]);
+  assert.equal(value.trace.sources['moc-v1'].membersRanked, 1);
+});
+test('C05 independent oracle observes depth twelve over eighteen ranked members and full nonmatching statistics', async t => {
+  const f = sourcesFixture(t, { sources: ['moc-v1'] }), documents = [], members = [];
+  for (let i = 0; i < 18; i++) {
+    const title = i < 9 ? 'apple apple ' + i : 'apple tea tea ' + i;
+    const placed = f.topic(f.admit('Filed endpoint ' + i), title), ref = memoryRef(placed.memories[0]); members.push(ref);
+    documents.push({ terms: i < 9 ? ['apple', 'apple', String(i)] : ['apple', 'tea', 'tea', String(i)], members: [ref] });
+  }
+  for (let i = 0; i < 7; i++) {
+    const placed = f.topic(f.admit('Unmatched endpoint ' + i), 'Other title ' + i);
+    documents.push({ terms: ['other', 'title', String(i)], members: [memoryRef(placed.memories[0])] });
+  }
+  const expected = titleOracle(documents, ['apple']), value = ok(await f.find({ query: 'apple', limit: 24 }));
+  assert.equal(members.length, 18); assert.equal(value.trace.sources['moc-v1'].membersRanked, 18);
+  assert.equal(value.trace.sources['moc-v1'].topicsMatched, 18); assert.equal(value.items.length, 12);
+  assert.deepEqual(value.items.map(i => i.ref), expected.map(r => r.ref));
+  for (let i = 0; i < 12; i++) {
+    assert.equal(value.items[i].channels.moc.rank, i + 1);
+    assert.ok(Math.abs(value.items[i].channels.moc.rawScore - expected[i].score) < 1e-15);
+    assert.ok(Math.abs(value.items[i].fusionScore - 0.10 / (60 + i + 1)) < 1e-15);
+  }
 });

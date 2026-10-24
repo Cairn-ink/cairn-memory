@@ -12,6 +12,8 @@ import { openMemoryCore } from '../../core/index.mjs';
 import { readTransaction } from '../../core/database.mjs';
 import { createTestWorkspace } from './workspace.mjs';
 import { host } from '../../core/testing/context-read-core-fixture.mjs';
+import { instrumentSourceWork } from './context-read-source-work.mjs';
+import { expandRelations } from '../../core/context-read-relations.mjs';
 import { rankMoc } from '../../core/context-read-moc.mjs';
 
 const args = process.argv.slice(2), value = (name, fallback) => args.find(a => a.startsWith('--' + name + '='))?.split('=').slice(1).join('=') ?? fallback;
@@ -25,7 +27,7 @@ else {
   if (sizes.some(n => !Number.isSafeInteger(n) || n < 1 || n > 100000) || !Number.isSafeInteger(iterations) || iterations < 1 || iterations > 100 ||
       !['balanced', 'topics', 'members'].includes(shape) || reuse && (sizes.length !== 1 || !reuse.startsWith('/tmp/'))) throw Error('invalid_measurement_arguments');
   console.log(JSON.stringify({ kind: 'environment', node: process.version, cpu: cpus()[0]?.model, logicalCpus: cpus().length, platform: platform(), release: release(),
-    provider: 'none', counter: 'none', iterations, shape, seedSynchronous: args.includes('--fast-seed') ? 'OFF; ANALYZE for fixture preparation only; measured handles use defaults' : 'default', cold: 'new handle; OS cache not flushed' }));
+    provider: 'none', counter: 'none', iterations, shape, seedSynchronous: args.includes('--fast-seed') ? 'OFF; ANALYZE for fixture preparation only; measured handles use defaults' : 'default', plannerStatistics: 'ANALYZEd fixture; ANALYZE statistics persist across handles', cold: 'new handle; OS cache not flushed' }));
   for (const size of sizes) {
     const workspace = createTestWorkspace(null, { prefix: 'u5c2-measure-' }), path = reuse ?? join(workspace.path, 'store.sqlite'), trusted = host();
     let writer, modelEdges = [];
@@ -74,26 +76,34 @@ else {
           modelEdges = [{ from: 1, to: 0, fromReceipt: 0, toReceipt: 0, relation: 'supports-decision' }];
           ok(await writer.reviewRationale({ namespace: ns, refs: [seed, endpoint].map(m => ({ memoryId: m.id, revision: m.revision })) }));
         }
+        // Persist final planner statistics, including on ordinary seed runs.
+        if (seedDb) seedDb.exec('ANALYZE');
         writer.close(); writer = null;
         console.log(JSON.stringify({ kind: 'seed_complete', size, shape, seedMs: performance.now() - start, path: args.includes('--keep') ? path : undefined }));
       }
+      const analyzer = new DatabaseSync(path); analyzer.exec('ANALYZE'); analyzer.close();
       // Large-source boundary instrumentation runs directly on the canonical
-      // adapter before lexical maintenance. Counts come from native SQLite calls,
-      // independently of the source's own ledger. Every get is a bounded seek.
+      // adapter before lexical maintenance. SQLite WHERE callbacks count visited
+      // records, including rejected rows, independently of returned cardinality.
       const db = new DatabaseSync(path, { readOnly: true });
       try {
-        const nativePrepare = db.prepare.bind(db); let lookups = 0, records = 0, maximumRows = 0;
-        const instrumented = { prepare(sql) {
-          const statement = nativePrepare(sql);
-          return { get(...parameters) { lookups++; const row = statement.get(...parameters); records += Number(Boolean(row)); maximumRows = Math.max(maximumRows, Number(Boolean(row))); return row; },
-            *iterate(...parameters) { lookups++; for (const row of statement.iterate(...parameters)) { records++; maximumRows = Math.max(maximumRows, 1); yield row; } } };
-        } };
+        const nativePrepare = db.prepare.bind(db), meter = instrumentSourceWork(db);
         const row = nativePrepare('SELECT store_id,cursor_secret FROM store_metadata').get();
-        const started = performance.now(), boundary = readTransaction(db, () => rankMoc(instrumented, { storeId: row.store_id, cursorSecret: row.cursor_secret }, {},
-          { readSet: [ns], types: ['memory'], intent: 'current', query: 'needle' }, Infinity));
-        if (maximumRows > 128 || boundary.diagnostic.work + boundary.diagnostic.reservedWork > 50000 || boundary.diagnostic.peakBytes > 8 * 1024 * 1024)
-          throw Error('source_boundary_exceeded');
-        console.log(JSON.stringify({ kind: 'source_boundary', size, shape, elapsedMs: performance.now() - started, independent: { lookups, records, maximumRows }, diagnostic: boundary.diagnostic }));
+        const identity = { storeId: row.store_id, cursorSecret: row.cursor_secret };
+        const direct = nativePrepare("SELECT id,revision FROM memories WHERE owner_id=? AND scope=? AND project_id=? AND content LIKE '%needle%' ORDER BY id LIMIT 4")
+          .all(ns.ownerId, ns.scope, ns.projectId).map(m => ({ ref: { type: 'memory', namespace: ns, memoryId: m.id, revision: m.revision } }));
+        for (const source of sources) {
+          const before = structuredClone(meter.counts), started = performance.now();
+          const boundary = readTransaction(db, () => source === 'moc-v1' ? rankMoc(meter.database, identity, {},
+            { readSet: [ns], types: ['memory'], intent: 'current', query: 'needle' }, Infinity) :
+            expandRelations(meter.database, identity, {}, { readSet: [ns], types: ['memory'], intent: 'current' }, direct, Infinity));
+          const d = boundary.diagnostic, independent = { lookups: meter.counts.lookups - before.lookups, visits: meter.counts.visits - before.visits };
+          if (d.records !== independent.visits || d.lookups !== independent.lookups || d.work + d.reservedWork > 50000 || d.peakBytes > 8 * 1024 * 1024)
+            throw Error('source_boundary_exceeded_or_work_mismatch: ' + JSON.stringify({ source, independent, diagnostic: d }));
+          console.log(JSON.stringify({ kind: 'source_boundary', size, shape, source, elapsedMs: performance.now() - started,
+            independent: { ...independent, databaseWork: independent.lookups + independent.visits, plansChecked: meter.counts.plansChecked - before.plansChecked },
+            chargedDatabaseWork: d.records + d.lookups, diagnostic: d }));
+        }
       } finally { db.close(); }
       // Build the complete lexical projection outside query timing; maintenance
       // is reported separately and remains bounded/resumable under U5a rules.

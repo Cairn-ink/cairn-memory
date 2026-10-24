@@ -49,7 +49,7 @@ for (const family of ['supports-decision', 'challenges-premise']) for (const dir
     await f.relate(second, other, 'challenges-premise');
     const value = ok(await f.find()); assert.deepEqual(ids(value), [seed.id, other.id]);
     assert.deepEqual(value.items[1].via, { seed: memoryRef(seed), family, direction });
-    assert.equal(value.trace.sources['relations-one-hop-v1'].examined, 1);
+    assert.equal(value.trace.sources['relations-one-hop-v1'].examined, direction === 'outgoing' ? 2 : 1);
     assert.equal(value.trace.sources['relations-one-hop-v1'].remaining, 0);
     const history = ok(await f.find({ intent: 'history' })); assert.deepEqual(ids(history), [seed.id]);
     assert.deepEqual(history.trace.sources['relations-one-hop-v1'].reasons, ['unsupported_intent']);

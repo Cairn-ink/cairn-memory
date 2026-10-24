@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHook } from 'node:async_hooks';
+import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
 import { sourcesFixture, ns, ok, memoryRef, sourceChild, sourceQuery } from '../testing/context-read-sources-fixture.mjs';
 import { denied } from '../testing/context-read-core-fixture.mjs';
@@ -82,10 +84,20 @@ test('C07 mutation after expansion but before first page publication; authoritat
   });
   denied(await f.find(), 'cursor_stale'); assert.equal(changed, true);
 });
-test('C07 final transaction is query_only and no counter/host callback follows it', async t => {
-  let counterCalls = 0, finalRead = false;
-  const f = sourcesFixture(t, { counter: { id: 'synthetic-final', countTokens() { assert.equal(finalRead, false); counterCalls++; return 1; } } });
-  f.topic(f.admit('Member body'), 'needle'); ok(await f.find());
+test('C07 final transaction is query_only; every host hook and any subsequent await are guarded', async t => {
+  let counterCalls = 0, finalRead = false; const called = new Set(), laterPromises = [];
+  const guard = (name, fn) => function (...args) { assert.equal(finalRead, false, name + ' after final read'); called.add(name); return fn.apply(this, args); };
+  const counter = { id: 'synthetic-final', countTokens: guard('counter', () => { counterCalls++; return 1; }) };
+  const f = sourcesFixture(t, { counter, model: { contextWindow: 32768, countTokens: guard('model.countTokens', () => 1), relate: guard('model.relate', () => ({ edges: [] })) } });
+  for (const method of ['authorize', 'isCurrent']) f.trusted.authority[method] = guard('authority.' + method, f.trusted.authority[method]);
+  const context = f.reopen({ sources: ['moc-v1'], counter,
+    embedder: { id: 'synthetic-final', revision: '1', dimensions: 2, normalization: 'l2', embed: guard('embedder', async texts => texts.map(() => [1, 0])) },
+    policy: { family: 'local', maxRequests: 100, maxUsd: 1, estimateUsd: guard('estimateUsd', () => 0) } });
+  const memory = f.admit('Member body');
+  const indexRevision = ok(context.map({ namespace: ns, purpose: 'classification' })).indexRevision;
+  ok(context.applyPlacement({ namespace: ns, expectedIndexRevision: indexRevision, expectedMemoryRevisions: [{ memoryId: memory.id, revision: memory.revision }],
+    proposal: { items: [{ memoryId: memory.id, parentIds: [], newL1: { title: 'needle', parentL2Ids: [] } }] } }));
+  ok(await f.trusted.call(context, 'refreshContextIndex', { readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }));
   const native = DatabaseSync.prototype.prepare;
   t.mock.method(DatabaseSync.prototype, 'prepare', function (sql) {
     const statement = native.call(this, sql), get = statement.get, db = this;
@@ -95,8 +107,13 @@ test('C07 final transaction is query_only and no counter/host callback follows i
     };
     return statement;
   });
-  const assembled = ok(await f.assemble()); assert.equal(finalRead, true); assert.ok(counterCalls > 0);
-  assert.equal(assembled.diagnostics.trace.counterCalls, counterCalls);
+  const hook = createHook({ init(id, type) { if (finalRead && type === 'PROMISE') laterPromises.push(id); } });
+  hook.enable(); let assembled;
+  try { assembled = await f.trusted.call(context, 'contextRead', sourceQuery({ semantic: true })); }
+  finally { hook.disable(); }
+  ok(assembled); assert.equal(finalRead, true); assert.ok(counterCalls > 0);
+  assert.equal(assembled.value.diagnostics.trace.counterCalls, counterCalls); assert.deepEqual(laterPromises, [], 'an await after final reading creates a PROMISE resource');
+  for (const name of ['authority.authorize', 'authority.isCurrent', 'embedder', 'estimateUsd', 'counter']) assert.ok(called.has(name), name + ' exercised');
 });
 
 test('C07 a paged addition revalidates its undelivered seed even without an epoch change', async t => {
@@ -122,19 +139,24 @@ test('C07 published Memory projection replacement and undelivered Card MOC epoch
     denied(await f.find({ types: ['memory', 'card'], limit: 1, cursor: first.nextCursor }), 'cursor_stale');
   }
 });
-test('C07/C10 a source-disabled writer progresses during the semantic await with no source read lock', async t => {
-  let armed = false, f, target, calls = 0;
-  f = sourcesFixture(t, { embedder: { id: 'synthetic-source-writer-progress', revision: '1', dimensions: 2, normalization: 'l2', async embed(texts) {
+test('C07/C10 rendezvoused source-disabled writer progresses during semantic await under a deterministic query clock', async t => {
+  let armed = false, target, calls = 0, writer;
+  const f = sourcesFixture(t, { embedder: { id: 'synthetic-source-writer-progress', revision: '1', dimensions: 2, normalization: 'l2', async embed(texts) {
     calls++;
-    if (armed) {
-      await Promise.resolve();
-      const changed = await sourceChild(f, { method: 'correct', input: { namespace: ns, memoryId: target.id, expectedRevision: target.revision,
-        content: 'Changed while embedding', kind: 'fact', receipt: { client: 'synthetic', sessionId: 'writer', eventId: 'await', role: 'user', excerpt: 'Changed while embedding' } } });
-      ok(changed); assert.equal(changed.sourceEnabled, false);
-    }
+    if (armed) { writer.release(); const changed = await writer.done; ok(changed); assert.equal(changed.sourceEnabled, false); }
     return texts.map(() => [1, 0]);
   } }, selectedPolicy: { family: 'local', maxRequests: 100, maxUsd: 1, estimateUsd: () => 0 } });
   const seed = f.admit('needle seed'); target = f.admit('Other relation endpoint'); await f.relate(target, seed);
   ok(await f.call('refreshContextIndex', { readSet: [ns], types: ['memory'], intent: 'current', budget: { maxItems: 1024, maxMs: 5000 } }));
-  armed = true; denied(await f.find({ semantic: true }), 'cursor_stale'); assert.equal(calls, 2);
+  writer = sourceChild(f, { method: 'correct', input: { namespace: ns, memoryId: target.id, expectedRevision: target.revision,
+    content: 'Changed while embedding', kind: 'fact', receipt: { client: 'synthetic', sessionId: 'writer', eventId: 'await', role: 'user', excerpt: 'Changed while embedding' } } }, { rendezvous: true });
+  // Child has opened its source-disabled core before query timing begins. Its
+  // independent 60-second real watchdog remains active while the query clock
+  // and only subsequently-created timers are controlled in this process.
+  await writer.ready();
+  t.mock.method(performance, 'now', () => 1000);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  armed = true;
+  try { denied(await f.find({ semantic: true }), 'cursor_stale'); assert.equal(calls, 2); }
+  finally { t.mock.timers.reset(); await writer.done; }
 });

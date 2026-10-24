@@ -18,19 +18,47 @@ test('C08 foreign public relations/topics change no names, counters, work, score
   await f.relate(foreignEndpoint, foreignSeed, 'supports-decision', foreign);
   f.topic(foreignSeed, 'FOREIGN_UNIQUE needle title', 'FOREIGN_UNIQUE root', foreign);
   const foreignCard = f.card('FOREIGN_UNIQUE card body', { namespace: foreign }); f.cardTopic(foreignCard, 'FOREIGN_UNIQUE needle cardtopic');
+  const entityTables = ['memories', 'private_cards', 'mocs', 'card_mocs'];
+  const authorizedIds = new Set(), foreignIds = new Set();
+  for (const table of entityTables) for (const row of f.db.prepare(`SELECT id,owner_id,scope,project_id FROM ${table}`).all()) {
+    (row.owner_id === ns.ownerId && row.scope === ns.scope && row.project_id === ns.projectId ? authorizedIds : foreignIds).add(row.id);
+  }
+  for (const row of f.db.prepare('SELECT id,memory_id FROM receipts').all())
+    (authorizedIds.has(row.memory_id) ? authorizedIds : foreignIds).add(row.id);
+  let iteratorRows = 0, identityRows = 0;
   const native = DatabaseSync.prototype.prepare;
   t.mock.method(DatabaseSync.prototype, 'prepare', function (sql) {
     const statement = native.call(this, sql);
+    const inspect = value => {
+      if (value === undefined) return;
+      const serialized = JSON.stringify(value);
+      assert.equal(serialized.includes('FOREIGN_UNIQUE'), false, 'foreign prose reached reader');
+      for (const id of foreignIds) assert.equal(serialized.includes(id), false, 'foreign metadata identity reached reader');
+      if (value && typeof value === 'object') {
+        if (value.owner_id !== undefined) assert.equal(value.owner_id, ns.ownerId, 'returned namespace must be authorized');
+        if (value.id && /FROM (?:memories|private_cards|mocs|card_mocs|receipts)\b/.test(sql)) {
+          assert.ok(authorizedIds.has(value.id), 'returned entity identity must be authorized'); identityRows++;
+        }
+      }
+    };
     for (const name of ['get', 'all']) {
       const original = statement[name]; statement[name] = function (...args) {
+        for (const arg of args) inspect(arg);
         const result = original.apply(this, args);
-        assert.equal(JSON.stringify(result)?.includes('FOREIGN_UNIQUE') ?? false, false, 'foreign data reached source/scoring/evidence reader'); return result;
+        if (Array.isArray(result)) result.forEach(inspect); else inspect(result);
+        return result;
       };
     }
+    const iterate = statement.iterate;
+    statement.iterate = function* (...args) {
+      for (const arg of args) inspect(arg);
+      for (const row of iterate.apply(this, args)) { inspect(row); iteratorRows++; yield row; }
+    };
     return statement;
   });
   const after = stable(ok(await f.find({ types: ['memory', 'card'] }))); assert.deepEqual(after, before);
   const assembled = ok(await f.assemble({ types: ['memory', 'card'] })); assert.equal(JSON.stringify(assembled).includes('FOREIGN_UNIQUE'), false);
+  assert.ok(iteratorRows > 0, 'charged support iterators observed'); assert.ok(identityRows > 0, 'authorized metadata identities observed');
 });
 for (const phase of ['query-await', 'before-transmission', 'search-await']) test(`C08 revocation at ${phase} refuses scope_changed`, async t => {
   let f, armed = false, calls = 0, queued = false, sourceRead = false;
