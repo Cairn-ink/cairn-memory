@@ -42,12 +42,15 @@ export function overviewInput(input, ownerId) {
 }
 
 export const readerFailure = code => ({ ok: false, error: { code } });
-const safeCodes = new Set(['invalid_input', 'invalid_cursor', 'cursor_stale', 'index_unavailable',
+const legacyCodes = new Set(['invalid_input', 'invalid_cursor', 'cursor_stale', 'index_unavailable',
   'unsafe_database_file', 'unsupported_database', 'database_not_found', 'storage_busy',
-  'state_limit', 'context_item_too_large', 'store_closed', 'moc_not_found', 'revision_conflict', 'invalid_ref', 'read_timeout']);
-export function safeReaderFailure(error) {
+  'state_limit', 'context_item_too_large', 'store_closed']);
+const safeCodes = new Set([...legacyCodes, 'moc_not_found', 'revision_conflict', 'invalid_ref', 'read_timeout']);
+function classifiedFailure(error, codes) {
   if (error?.code === 'ERR_SQLITE_ERROR' && Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 255)) {
     return readerFailure('storage_busy');
   }
-  return readerFailure(safeCodes.has(error?.code) ? error.code : 'reader_failed');
+  return readerFailure(codes.has(error?.code) ? error.code : 'reader_failed');
 }
+export const safeReaderFailure = error => classifiedFailure(error, safeCodes);
+export const safeLegacyReaderFailure = error => classifiedFailure(error, legacyCodes);

@@ -265,5 +265,6 @@
   "docs/topic-overview.md",
   "docs/plans/topic-overview-member-pages.md",
   "core/topic-members-opening.mjs",
+  "core/topic-members-primary.mjs",
   "core/topic-members-session.mjs"
 ]

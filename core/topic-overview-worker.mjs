@@ -1,5 +1,4 @@
 import { parentPort, workerData } from 'node:worker_threads';
-import { lstatSync } from 'node:fs';
 import { createTopicTokens } from './topic-snapshot.mjs';
 import { createTopicSession } from './topic-members-session.mjs';
 import { createTopicMemberReader } from './topic-members-reader.mjs';
@@ -8,44 +7,27 @@ import { performance } from 'node:perf_hooks';
 import { setImmediate as yieldTurn } from 'node:timers/promises';
 import { openReadDatabase } from './read-database.mjs';
 import { createTopicOverviewStorage } from './topic-overview-storage.mjs';
-import { safeReaderFailure } from './topic-overview-input.mjs';
+import { safeReaderFailure, safeLegacyReaderFailure } from './topic-overview-input.mjs';
 import { fail } from './validation.mjs';
 
-let connection, storage, traversal, openedSchema;
-const tokens = createTopicTokens();
-const topicSession = createTopicSession(workerData.path);
-const memberReader = createTopicMemberReader({ ...topicSession, tokens });
-function configuration(db) {
-  return { version: db.prepare('PRAGMA user_version').get().user_version,
-    cookie: db.prepare('PRAGMA schema_version').get().schema_version,
-    applicationId: db.prepare('PRAGMA application_id').get().application_id };
-}
-function originBinding(namespace, captured) {
-  connection.assertFile();
-  const stat = lstatSync(workerData.path);
-  const schema = configuration(connection.db);
-  if (JSON.stringify(schema) !== JSON.stringify(openedSchema)) fail('cursor_stale');
-  return { namespace, captured, file: [stat.dev, stat.ino],
-    schema, configuration: 'topic-snapshot-v1/topic-members-v1' };
+let connection, storage, traversal;
+let tokens, topicSession, memberReader;
+function prepareTopicReaders() {
+  if (memberReader) return;
+  const nextTokens = createTopicTokens(), nextSession = createTopicSession(workerData.path);
+  const nextReader = createTopicMemberReader({ ...nextSession, tokens: nextTokens });
+  tokens = nextTokens; topicSession = nextSession; memberReader = nextReader;
 }
 function publicSnapshot(state, request) {
   const value = { indexRevision: state.snapshot.indexRevision, generation: state.snapshot.generation };
   if (request.snapshotVersion) value.originToken = state.originToken;
   return value;
 }
-function validateOrigin(state, request) {
-  if (request.snapshotVersion) tokens.verifyOrigin(state.originToken, originBinding(request.namespace, state.snapshot));
-}
 const token = () => 'e1.' + randomBytes(32).toString('base64url');
 const success = value => ({ ok: true, value });
 function snapshot(request, expected) {
   connection.assertFile();
-  let current;
-  try { current = storage.snapshot(request.namespace); }
-  catch (error) {
-    if (expected && request.snapshotVersion && error.code === 'index_unavailable') fail('cursor_stale');
-    throw error;
-  }
+  const current = storage.snapshot(request.namespace);
   if (expected && JSON.stringify(current) !== JSON.stringify(expected)) fail('cursor_stale');
   return current;
 }
@@ -54,42 +36,33 @@ function transaction(work) {
   try { const value = work(); connection.db.exec('COMMIT'); return value; }
   catch (error) { connection.db.exec('ROLLBACK'); throw error; }
 }
-function open() {
-  if (connection) return;
-  const opened = openReadDatabase(workerData.path);
-  try { storage = createTopicOverviewStorage(opened.db); openedSchema = configuration(opened.db); connection = opened; }
-  catch (error) {
-    opened.db.close();
-    if (error?.code === 'ERR_SQLITE_ERROR' && [5, 6].includes(error.errcode & 255)) throw error;
-    fail('unsupported_database');
-  }
-}
 async function readLegacy(request) {
-  open();
+  if (!connection) {
+    const opened = openReadDatabase(workerData.path);
+    try { storage = createTopicOverviewStorage(opened.db); connection = opened; }
+    catch { opened.db.close(); fail('unsupported_database'); }
+  }
   const { cursor, ...bound } = request, binding = JSON.stringify(bound);
   if (cursor) {
     if (!traversal) fail('cursor_stale');
     if (binding !== traversal.binding) fail('invalid_cursor');
-    transaction(() => { snapshot(request, traversal.snapshot); validateOrigin(traversal, request); });
+    transaction(() => snapshot(request, traversal.snapshot));
     if (cursor === traversal.lastInput) return traversal.lastOutput;
     if (cursor !== traversal.nextCursor) fail('cursor_stale');
   } else {
     const captured = transaction(() => snapshot(request));
     traversal = { binding, snapshot: captured, data: storage.create(request.namespace, request, captured),
       offset: 0, nextCursor: null };
-    if (request.snapshotVersion) traversal.originToken = transaction(() => tokens.issueOrigin(originBinding(request.namespace, captured)));
   }
   const state = traversal;
-  let used = request.snapshotVersion ? 2 : 0;
+  let used = 0;
   try {
-    while (!state.items && used < request.workLimit - (request.snapshotVersion ? 2 : 0)) {
+    while (!state.items && used < request.workLimit) {
       const done = transaction(() => {
         snapshot(request, state.snapshot);
-        validateOrigin(state, request);
-        if (request.snapshotVersion) used += 2;
         const start = performance.now();
-        let quantum = request.snapshotVersion ? 2 : 0;
-        while (used < request.workLimit - (request.snapshotVersion ? 2 : 0) && quantum < 64 && performance.now() - start < 5) {
+        let quantum = 0;
+        while (used < request.workLimit && quantum < 64 && performance.now() - start < 5) {
           used++; quantum++;
           if (state.data.scan.next().done) return true;
         }
@@ -100,12 +73,11 @@ async function readLegacy(request) {
     }
   } catch (error) {
     if (error?.code !== 'state_limit') throw error;
-    if (request.snapshotVersion) transaction(() => { snapshot(request, state.snapshot); validateOrigin(state, request); });
     traversal = undefined;
-    return success({ snapshot: publicSnapshot(state, request),
+    return success({ snapshot: { indexRevision: state.snapshot.indexRevision, generation: state.snapshot.generation },
       items: [], totals: null, coverage: { complete: false, countsComplete: false, reason: 'state_limit' }, nextCursor: null });
   }
-  const value = { snapshot: publicSnapshot(state, request),
+  const value = { snapshot: { indexRevision: state.snapshot.indexRevision, generation: state.snapshot.generation },
     items: [], totals: state.items ? state.data.totals : null,
     coverage: { complete: false, countsComplete: Boolean(state.items), reason: 'work_limit' }, nextCursor: token() };
   if (state.items) {
@@ -121,7 +93,7 @@ async function readLegacy(request) {
     if (state.offset === state.items.length) { value.coverage.complete = true; value.coverage.reason = null; value.nextCursor = null; }
   }
   if (Buffer.byteLength(JSON.stringify(success(value))) > request.maxBytes) fail('context_item_too_large');
-  transaction(() => { snapshot(request, state.snapshot); validateOrigin(state, request); });
+  transaction(() => snapshot(request, state.snapshot));
   state.lastInput = cursor; state.lastOutput = success(value); state.nextCursor = value.nextCursor;
   return state.lastOutput;
 }
@@ -206,8 +178,13 @@ async function readOptin(request) {
 }
 parentPort.on('message', async request => {
   try {
+    if (request.method === 'members' || request.snapshotVersion) prepareTopicReaders();
     if (request.method === 'members') parentPort.postMessage(await memberReader.read(request.request, request.deadlineAt));
     else parentPort.postMessage(await (request.snapshotVersion ? readOptin(request) : readLegacy(request)));
   }
-  catch (error) { if (request.method !== 'members') traversal = undefined; parentPort.postMessage(safeReaderFailure(error)); }
+  catch (error) {
+    if (request.method !== 'members') traversal = undefined;
+    const failure = request.method === 'members' || request.snapshotVersion ? safeReaderFailure : safeLegacyReaderFailure;
+    parentPort.postMessage(failure(error));
+  }
 });

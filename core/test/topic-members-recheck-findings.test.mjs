@@ -145,10 +145,10 @@ test('spec/standards P2: Legacy overview malformed-layout error classification c
 });
 for (const [label, error, code] of [
   ['SQL error', { code: 'ERR_SQLITE_ERROR', errcode: 1 }, 'unsupported_database'],
-  ['busy', { code: 'ERR_SQLITE_ERROR', errcode: 5 }, 'storage_busy'],
-  ['locked', { code: 'ERR_SQLITE_ERROR', errcode: 6 }, 'storage_busy'],
-  ['extended busy', { code: 'ERR_SQLITE_ERROR', errcode: 261 }, 'storage_busy'],
-  ['extended locked', { code: 'ERR_SQLITE_ERROR', errcode: 262 }, 'storage_busy'],
+  ['busy', { code: 'ERR_SQLITE_ERROR', errcode: 5 }, 'unsupported_database'],
+  ['locked', { code: 'ERR_SQLITE_ERROR', errcode: 6 }, 'unsupported_database'],
+  ['extended busy', { code: 'ERR_SQLITE_ERROR', errcode: 261 }, 'unsupported_database'],
+  ['extended locked', { code: 'ERR_SQLITE_ERROR', errcode: 262 }, 'unsupported_database'],
   ...['invalid_input', 'invalid_cursor', 'cursor_stale', 'index_unavailable', 'unsafe_database_file',
     'unsupported_database', 'database_not_found', 'storage_busy', 'state_limit', 'context_item_too_large',
     'store_closed', 'moc_not_found', 'revision_conflict', 'invalid_ref', 'read_timeout', 'reader_failed']

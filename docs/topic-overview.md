@@ -254,6 +254,15 @@ bounded in-memory checks under `workLimit`. A work-only page can therefore
 represent initialization progress before member enumeration begins. It never
 implies an empty selection.
 
+Initialization also verifies the declared primary-key columns and order for
+every consumed table. It reads table declarations in indexed, 256-byte schema
+fragments and charges each read and bounded parser step. A UNIQUE constraint
+does not substitute for the required primary key.
+
+Default overview requests retain main's legacy error classification, including
+`unsupported_database` for statement-construction failures. Member and opt-in
+requests retain their specified error codes and storage-busy behavior.
+
 Cached member replay must finish its fence and delivery checks within the
 call deadline. A call that cannot advance a checkpoint before its deadline
 returns `read_timeout` instead of minting another unchanged deadline cursor.

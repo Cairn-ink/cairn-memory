@@ -1,7 +1,7 @@
 import { membersInput } from './topic-members-input.mjs';
 import { performance } from 'node:perf_hooks';
 import { Worker } from 'node:worker_threads';
-import { readerOptions, overviewInput, readerFailure, safeReaderFailure } from './topic-overview-input.mjs';
+import { readerOptions, overviewInput, readerFailure, safeReaderFailure, safeLegacyReaderFailure } from './topic-overview-input.mjs';
 
 /** The trusted host authenticates ownerId; this handle only enforces its boundary. */
 export function openMemoryReader(input) {
@@ -48,10 +48,10 @@ export function openMemoryReader(input) {
   }
   async function dispatch(input, members = false) {
     if (closed) return readerFailure('store_closed');
-    const started = performance.now();
+    const started = members ? performance.now() : undefined;
     let request;
     try { request = (members ? membersInput : overviewInput)(input, options.ownerId); }
-    catch (error) { return safeReaderFailure(error); }
+    catch (error) { return (members ? safeReaderFailure : safeLegacyReaderFailure)(error); }
     if (pending) return readerFailure('read_in_progress');
     clearTimeout(idle);
     return new Promise(resolve => {

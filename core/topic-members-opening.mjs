@@ -1,4 +1,5 @@
 import { fail } from './validation.mjs';
+import { createPrimaryCheck, scanPrimary } from './topic-members-primary.mjs';
 
 const boundary = ['owner_id', 'scope', 'project_id'];
 const primary = {
@@ -61,6 +62,7 @@ export function createTopicOpening(db, version) {
     [...primary[table], ...secondary.filter(([name]) => name === table).flatMap(([, , keys]) => keys)])]
     .map(name => ({ table, name, type: table === 'store_metadata' ? 'INTEGER' : 'TEXT' })));
   const indexColumns = db.prepare('SELECT substr(name,1,256) name,"desc",coll,"key",cid FROM pragma_index_xinfo(?) LIMIT ?');
+  const declaration = db.prepare('SELECT substr(CAST(sql AS BLOB),?,256) fragment FROM sqlite_master WHERE rowid=?');
   let ready = false;
   const cost = s => s.phase === 'indexes' && !s.rows ? s.indexes[s.position].columns.length + 1 : 1;
   function step(s) {
@@ -80,6 +82,7 @@ export function createTopicOpening(db, version) {
           if (tables.includes(row.name) || markers.some(([, name]) => name === row.name)) {
             if (row.type !== 'table') fail('unsupported_database');
             s.seen[row.name] = true;
+            if (tables.includes(row.name)) s.declarations.push({ table: row.name, rowid: row.rowid });
           } else {
             const spec = secondary.find(([, name]) => name === row.name);
             if (row.type !== 'index' || row.tbl_name !== spec[0] || partial(row.sql)) fail('unsupported_database');
@@ -95,7 +98,23 @@ export function createTopicOpening(db, version) {
       const { table, name, type } = columns[s.position];
       const [column] = db.prepare(`SELECT ${quote(name)} FROM ${quote(table)} LIMIT 0`).columns();
       if (column.column !== name || column.table !== table || column.type !== type) fail('unsupported_database');
-      if (++s.position === columns.length) { s.phase = 'indexes'; s.position = 0; s.offset = 0; }
+      if (++s.position === columns.length) { s.phase = 'primary'; s.position = 0; s.offset = 1; }
+    } else if (s.phase === 'primary') {
+      const { table, rowid } = s.declarations[s.position];
+      s.primary ??= createPrimaryCheck(table === 'store_metadata' ? ['singleton'] : primary[table]);
+      if (s.fragment === undefined) {
+        const row = declaration.get(s.offset, rowid);
+        if (!row || row.fragment === null) fail('unsupported_database');
+        s.fragment = Buffer.from(row.fragment).toString('latin1');
+        s.offset += row.fragment.length;
+      } else {
+        scanPrimary(s.primary, s.fragment, s.fragment.length === 0);
+        if (s.fragment.length === 0) {
+          s.primary = null; s.offset = 1;
+          if (++s.position === s.declarations.length) { s.phase = 'indexes'; s.position = 0; s.offset = 0; }
+        }
+        delete s.fragment;
+      }
     } else {
       const index = s.indexes[s.position];
       if (!s.rows) {
@@ -124,6 +143,6 @@ export function createTopicOpening(db, version) {
       }
     }
   }
-  return { get ready() { return ready; }, create: () => ({ phase: 'plans', position: 0, after: 0, seen: {}, indexes: [], done: ready }),
+  return { get ready() { return ready; }, create: () => ({ phase: 'plans', position: 0, after: 0, seen: {}, indexes: [], declarations: [], done: ready }),
     cost, step, accept: state => { if (state?.done) ready = true; } };
 }
