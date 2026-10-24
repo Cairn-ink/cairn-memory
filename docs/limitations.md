@@ -1542,3 +1542,90 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Source-selection memory is an offline evaluation candidate
+
+The [source-selection memory plan](plans/source-selection-memory.md) tests
+bounded selection of canonical source windows with labeled copied previews
+and full exact receipts. It is evaluation-only, with no production default,
+core, persisted schema or raw-archive change. Literal copying does not establish
+adequate selection, semantic fidelity, currentness, adoption or safe actions;
+an unselected qualifier remains lost. Actual local token counting can require
+a smaller preview tier to fit the unchanged output cap, hiding more context
+from normal filing or retrieval even when full receipts survive.
+
+Scripted real-core capture, normal filing, cold receipt reads and source-only
+recall passed offline checks on Node 22.16 and 24.15. These are integration and
+capacity observations, not measured QA improvement, autonomous classification
+quality, natural-session reliability or competitive parity. The plan retains
+the original capacity failure and later fixture/test corrections separately.
+No live two-session feasibility has executed, no paid result is established,
+and no new provider call or spend follows from these checks. Independent
+fixed-commit reviews and latest-head CI remain pending primary delivery.
+
+## Closed source-selection feasibility failed its semantic gate
+
+The later [two-session first-only result](plans/source-selection-feasibility-results.md)
+supersedes the preceding offline checkpoint's "not executed" status. All four
+scheduled arms completed (zero failed, zero not-run) and passed the mechanical
+checks, but the semantic gate failed and the candidate does not advance to the
+24-question study. Both independent masked reviewers agreed before mapping
+reveal on eight minimal-claim statuses and four full-answer flags; copied previews
+can reveal the mechanism, so reviewer blindness is not established.
+
+Baseline and candidate each satisfied both minimal claims in 1/2 answers.
+Answers both complete and fully supported were 0/2 versus 1/2; supported minimal
+claims were 3/4 versus 2/4. These are separate metrics, not an accuracy headline
+or evidence of parity. The Chinese baseline's extra `已經帶了轉接線` assertion was
+unsupported despite satisfying both minimal claims. The English candidate
+stored the latest failed-canopy/access-pending sources and exposed their memory
+reference plus a relevant label to select, but selected only the old memory.
+Rank and answer never received the update; answer packing omitted zero sources.
+This does not prove why selection failed or that label truncation caused it.
+
+The frozen public projection retains all sources, first answers, previews,
+ordinal receipts, select/rank/packing trace and both judgments. Exact copying is
+not semantic truth, and unanswered rejection information can still be omitted.
+The 56 HTTP requests reserved US$0.280000; the generation-only usage estimate
+was US$0.019681. Actual invoice and count billing remain unknown; reservation
+is not actual cost. Original US$400 cumulative / US$30 protected limits remain.
+
+Existing opt-in bounded-source-scan is available for a separately frozen fresh
+fixed-write/read-policy ablation; that planned ablation has no result here.
+Earlier manual/oracle 16/16 versus 12/16 source coverage was not QA. No new
+engine, vector store, product default, promotion or old-cohort retry follows.
+
+## Closed source-selection factorial shows no observed answer-input gain
+
+The later [fixed-write/read-policy factorial](plans/source-selection-factorial-results.md)
+supersedes the preceding "planned ablation has no result" checkpoint while
+preserving the original feasibility's failed gate unchanged. Four writes and
+eight first read/answers completed on two fresh synthetic sessions. Each cell
+has two answers, all 2/2 minimal-complete. Fully supported answers were
+baseline/default 2/2, baseline/scan 1/2, candidate/default 1/2 and candidate/scan
+2/2. Frozen candidate-scan feasibility passes; formal quality was not evaluated
+or passed, with no QA24 advance or default promotion.
+
+All four within-write full answer requests and packed evidence sets were
+identical across modes. More scan rank candidates produced no observed packed
+coverage or first-answer gain. Differing extras under identical inputs cannot
+establish causal routing improvement. Candidate/default's installed-sign claim
+lacked actual answer-input support despite confirmation in the full timeline;
+baseline/scan added an unsupported layout-simplicity choice rationale.
+Both issues, all 16 initial rating views and eight first answers are retained.
+
+Same-family AI reviews agreed before explicit unmasking; possible mechanism
+leakage, no human calibration, synthetic small sample and unmeasured variation
+remain. No LongMemEval, Mem0/parity, large-store, installed Hermes, full-archive
+or lightweight superiority claim. Next direction is bounded offline actual
+MOC L2/L1 routing; any paid study needs a separate frozen contract and realistic
+routing opportunity.
+
+The 72 physical requests (36 count/36 generation) reserve US$0.360000;
+generation usage-rate estimate is US$0.027968. Four shared writes count once.
+Invoice and count billing are unknown; reservation is not actual spend.
+Original US$400 cumulative/US$30 protected limits remain, with no new
+unknown/pending outcome. Bindings address existing NFKC/whitespace canonical
+text; authored originals and actual stored excerpts are both retained.
+The public projection excludes operational identities, local paths, credentials,
+headers and raw HTTP bodies.
