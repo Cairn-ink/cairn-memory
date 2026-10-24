@@ -433,3 +433,9 @@
   `hr2b-identity-check.mjs`（九項檢查：facts 位元／欄位／families／lexicon／coverage、placementAllocation、plan、receipt ≤4、
   facts view 重生位元比對；以 `git show e3fd8dba:` 為基線），在未改動的 candidate 0 樹上自測：除 `receipts_at_most_four`（max 6）外
   全部 true，行為符合預期。W1 完成後立刻跑，結果提交到 `fixtures-hr2b/build/candidate0-v11-identity/`。
+- **W1 重渲染 candidate 0 停在身分門**（exit 0；build 0、--check 0、check-world **1**）：facts 逐位元相同、目標 placement 不變，但目標
+  receipt 抽樣變少使共用 PRNG 串流位移，干擾 381／foreign 34 個事實 placement 改變，fact-to-memory plan 自第 160 筆起不同；
+  check-world 另報 `memory:duplicate_normalized_body`。協調者獨立檢查（`build/candidate0-v11-identity/`，命令／輸出／exit 1 進倉）：
+  facts／families／lexicon／coverage 相同，placementAllocation、plan、facts view（含干擾 coverage）皆不同、receipt max 4。兩個獨立
+  否決理由；依 §9 與主控條件**前進到 candidate 1**，否決紀錄提交（含 W1 七檔與重渲染的 corpus）。派 W1 前進（resume，high＋fast；
+  stage-1 失敗就依凍結順序繼續、不改生成器）。後果：facts view 改變，W2 要從新 view 重寫全部 160 題。已通知主控。
