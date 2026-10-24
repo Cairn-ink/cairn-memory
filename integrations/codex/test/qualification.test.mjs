@@ -127,16 +127,30 @@ test('live /proc ancestry selects the native app-server binary rather than a sep
   const {spawn}=await import('node:child_process');
   const script=join(f.ws.path,'host.mjs'),report=join(f.ws.path,'report.json');
   const moduleURL=new URL('../qualification.mjs',import.meta.url).href;
+  // The observer owns this fake parent, not the agent/CI host above it. Keep
+  // real /proc and binary identity checks without inspecting that outer host.
+  const observer=`import {detectRunningHost} from '${moduleURL}';
+    import {readFile,readlink}from'node:fs/promises';import {writeFileSync}from'node:fs';
+    const ownedPid=process.ppid,observations={reads:[],links:[],outside:0};
+    function leaf(path){const prefix='/proc/'+ownedPid+'/';
+      if(!path.startsWith(prefix)){observations.outside++;throw Error('owned_fake_host_boundary');}
+      const name=path.slice(prefix.length);if(!['exe','cmdline','stat'].includes(name))throw Error('unexpected_fake_host_read');return name;}
+    const read=async path=>{observations.reads.push(leaf(path));return readFile(path);};
+    const link=async path=>{observations.links.push(leaf(path));return readlink(path);};
+    const host=await detectRunningHost({pid:ownedPid,read,link});
+    writeFileSync(${JSON.stringify(report)},JSON.stringify({host,observations}));`;
   await writeFile(script,`import {spawn} from 'node:child_process';
-    const code=${JSON.stringify(`import {detectRunningHost} from '${moduleURL}';import {writeFileSync}from'node:fs';writeFileSync(${JSON.stringify(report)},JSON.stringify(await detectRunningHost()));`)};
+    const code=${JSON.stringify(observer)};
     const child=spawn(${JSON.stringify(process.execPath)},['--input-type=module','-e',code],{stdio:'inherit'});
     child.on('close',code=>process.exitCode=code);`);
   for(const kind of ['cli','app-server']) {
     const child=spawn(f.host.binaryPath,[script,...(kind==='app-server'?['app-server']:[])],{stdio:['ignore','ignore','pipe']});
     let errors='';child.stderr.on('data',chunk=>errors+=chunk);
     assert.equal(await new Promise((resolve,reject)=>{child.once('close',resolve);child.once('error',reject);}),0,errors);
-    const host=JSON.parse(await readFile(report));
+    const {host,observations}=JSON.parse(await readFile(report));
     assert.equal(host.kind,kind);assert.equal(host.identity,f.host.identity);assert.equal(host.binaryPath,f.host.binaryPath);
+    assert.equal(host.pid,child.pid);assert.equal(host.processPath,`/proc/${child.pid}/exe`);assert.equal(host.execSession,undefined);
+    assert.deepEqual(observations,{reads:['cmdline','stat'],links:['exe'],outside:1});
   }
 });
 

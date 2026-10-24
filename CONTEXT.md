@@ -5,6 +5,18 @@ claims from their evidence; they are not a statement of shipped capabilities.
 
 ## Language
 
+**Local capture authority**:
+A trusted host's durable exact-store, owner, namespace and client consent state
+for automatic interpretation. A frozen startup snapshot must match it; request
+fields, remembered instructions and Raw notice acknowledgement cannot grant it.
+_Avoid_: Model permission, authenticated transcript, automatic setup approval
+
+**Raw notice acknowledgement**:
+The separate recorded disclosure version permitting prospective Raw retention.
+Revocation stops saving pending suffixes, while separately authorized admitted
+Memory or episode interpretation may finish. It does not delete retained data.
+_Avoid_: Automatic interpretation consent, capture pause, transport EOF
+
 **Raw/Source**:
 Retained permitted source evidence, distinct from its interpretation.
 A receipt or episode excerpt does not establish full-source retention.

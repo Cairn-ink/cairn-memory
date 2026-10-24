@@ -1,5 +1,573 @@
 # Known limitations
 
+## Explicit local foreground setup preview
+
+The [operator path](raw-local-journal.md#explicit-standalone-foreground-setup-preview)
+is default-off Linux/WSL + Node >=22.16, not native macOS/Windows verification or
+complete semantic/product V1. Hooks run foreground for up to 160 seconds; there
+is no daemon, detached retry or long SessionEnd capture. Exact generated commands
+exercise quiet/keyless installed routing; provider-backed installed capture uses
+trusted test-only HTTP interception and synthetic Codex ancestry. A Codex command
+outside a qualified actual host is expected to refuse. Qualification proves
+schema/format evidence, not native hook execution or model meaning.
+
+Setup requires an existing private schema 29 store. Separate new-store-only init
+refuses every existing path; failure can leave its owned incomplete new file.
+Init does not persist an owner cap or fake event: first actual capture persists
+the setup-selected cap. Both clients must share the private usage descriptor,
+target and limits. Daily usage counts model-port invocations, not money. These
+cooperative locks do not attest against malicious same-user filesystem/SQL edits.
+The selected native settings parent must be private, and JSON conflicts refuse
+rather than erase unknown Cairn commands. Trust/global policy is never changed.
+
+Disable preserves data/identity and revokes SQL before config cleanup. Re-enable
+stays `rearm_required` until existing explicit admissible rearm; missing identity,
+zero-history or other unsupported recovery refuses rather than resetting it.
+Status is an observation, not repair. Activation/SQL/source checks are repeated,
+but there is no cross-filesystem/SQLite transaction against hostile same-owner
+races. No plaintext encryption or account-wide financial cap is implied.
+
+Retained author failures: the first decoder rejected real Codex required
+`turn_id`/optional agent metadata, and then official Claude session-title/task/
+cron fields; full native-shape red tests now constrain those inert fields.
+Installed fixture reds used a non-UUID rearm action and wrongly expected a killed
+provider's reservation to disappear immediately or through guard status. Existing
+guard recovery is reserve/resume-driven; uncertain usage is not refunded and a
+started dead-owner reservation is durable state, not a live child or unexpected
+scratch. Separate source-status and SIGHUP reds exposed transient status locking
+and a missing signal handler. Logs/actual exits remain recorded; no source or
+authority boundary, provider behavior or timeout budget was weakened for them.
+
+The v3 repeat-setup regression retained source 33/37 and installed 6/8 reds
+(actual exit 1): missing/changed owned commands now refuse without repair.
+Independent Spec review then found that an owned group matcher or hook modifier
+could still report active. The v4 pre-fix source 39/47 and installed 8/10 reds
+also exited 1 with cleanup verified. Active status, repeat setup and repeat
+activation now require the exact unconditional foreground owned group/hook keys;
+unrelated handlers and matched groups remain preserved. These are configuration
+observation corrections, not changed SQL consent, identity or capture algorithms.
+
+Actual pinned Claude Code 2.1.260 `--init-only` dispatches the unchanged installed
+SessionStart hook, but its transcript is absent and no EOF cursor is created.
+A separate normal interactive probe in a fresh keyless, network-isolated PTY
+exited 1 at `api.anthropic.com: ETIMEOUT`, before hook dispatch or transcript
+creation. Only loopback DNS connect syscalls were observed; no provider server
+or authentication workaround was used. Normal interactive source timing and
+complete native Stop capture remain unverified, not inferred from init-only.
+
+## Asynchronous Memory topic metadata
+
+The [asynchronous Memory topic reader](topic-overview.md) supplies bounded
+owner/namespace metadata over the same SQLite engine without model calls. It
+reports unknown counts until aggregation completes and refuses unavailable
+generations. Historical E1 synthetic Node 22 measurements at 1,112 Memories/four
+namespaces/71 MOCs and a larger 3,336-Memory/multifiling case showed responsive
+main-loop behavior; those are not schema 29 measurements. The combined candidate
+requires both supported
+runtimes, installed bytes, concurrency gates, independent review and latest-head
+CI. This is metadata mechanics, not semantic recall accuracy or the product
+team's exact old-map 33-second reproduction. Legacy `map` is unchanged; product
+integration and feature re-enablement remain separate.
+
+The store has no placement-added timestamps: `lastMemberAddedAt` is explicitly
+null with `addedAtCoverage:'not_recorded'`. `latestMemberCreatedAt` describes
+current members' creation times, not filing recency. Opt-in member refs are a
+first-K sample, not a complete member-page/location API; Card MOCs and episode
+headers are outside this port. Continuations are ephemeral, with finite work,
+state, byte and time caps; a changed snapshot requires restarting the read.
+
+Schema 29 compatibility preserves the old exact 18/20/21/22/23 layouts, while
+actual 24–28 layouts remain unsupported. New synthetic fixtures use public Raw
+capture and public placement, not SQL-seeded Memory/receipt relationships.
+Correction, forget, real conversation deletion, surviving independent-source
+support and published/staging generations test metadata mechanics, not source
+truth, semantic relevance, product integration or native-client activation.
+Consumed Memory/index access paths are validated; this is not full Raw-table
+integrity or local-authority attestation. Required archive closure remains
+complete; exact eager import traces are separate from actual installed Worker
+execution, rather than hiding lazy files behind broad exceptions.
+
+The port-only baseline retained expected schema 29 refusal and two installed
+one-shot failures per runtime: exactly three present-but-lazy Worker modules
+were absent from the old eager trace. The first new author source run exposed
+two invalid pagination preconditions and an overbroad all-SHM-byte assertion.
+Its binary failure dump exhausted the output buffer (ENOBUFS, runner exit 143,
+supervisor exit 1); scratch was removed. The cursor fixture now creates a real
+L2/L1 hierarchy. Minimized reader and bare native read-only controls both changed
+only SHM byte 104 after a fresh WAL commit, with DB/WAL hashes unchanged; warmed
+whole-file hashes stayed exact. SQLite documents read marks at offsets 100–119.
+The contract and bounded test now distinguish that coordination from data writes;
+reader runtime, journal mode and time/work bounds were not changed.
+
+The first new installed run passed its physical-layout case but failed both
+client lifecycle cases at an explicit correction missing required `kind`.
+Actual exit was 1 with cleanup verified; adding the required fixture field was
+the only correction. Original red logs and native-control diagnostics remain
+retained, rather than being replaced by subsequent passing runs.
+
+## Installed Raw / Memory / Card lifecycle evidence
+
+The six installed lifecycle cases select three independent synthetic scenarios
+for each supported client format. Foreground capture, not SQL seeding or
+remember_memory, creates the tested Memory/receipt/Raw lineage. Explicit resolved
+Raw references support authored drafts, generic MCP approval still refuses, and
+a synthetic controlling TTY supplies the exact confirmation phrase. Cold stdio
+reads, precise original-anchor exclusions, surviving independent-source support,
+private authored-body retention and pause/rearm replay are mechanical evidence.
+The matching-evidence policy is explicitly enabled only for the two-conversation
+scenario; duplicate receipts alone do not establish independent corroboration.
+
+Scenario B corrects a captured Memory and then forgets that corrected revision.
+It proves the original exclusions persist, not an independent standalone-forget
+case. Disjoint and future Raw controls use scripted empty extraction; there is
+no claim that model outputs are semantically accurate or that suppression bans
+newly entered text in a genuinely new session. Fresh coarse conversation revisions
+are inspected before testing original anchors. Re-extraction jobs are unavailable
+and are not simulated as a shipped API. Deletion uses the installed trusted core,
+not a nonexistent MCP deletion tool. These short fixtures do not replace the
+specialized long/multipart, quota, crypto, race, isolation or deletion-table suites.
+
+The first author run failed 0/6, actual exit 1, before capture: its new static
+closure looked for the archive's bin/cairn-memory.mjs target as a root source file.
+The build maps it from packaging/bin; archive/installed launcher bytes are now
+checked separately. A second 0/6 run and a minimized 0/1 run exited 1 at MCP
+startup because the new fixture's nested import-loader string expanded a newline
+inside quoted JavaScript. A direct syntax probe distinguished outer success from
+nested failure; only the test guard's trace-newline construction changed. Runtime
+files and dependency versions were untouched, and the red receipts remain retained.
+
+This installed subset does not complete all T01–T18 or RL-1–RL-3 rows. Semantic
+decision/rationale accuracy, generated summaries, automatic consolidation, vector
+retrieval, actual native-client setup/activation, product joint acceptance and
+production G1/G2/H6 remain separate. No real transcript, operational store/key,
+paid request, activation, release, deployment or new competitive score is claimed.
+
+## Explicit authority-only local rearm
+
+The [explicit rearm path](raw-local-journal.md#explicit-authority-only-rearm)
+adopts already-enabled authority for one established session. It does not enable
+controls, recover unknown identity, retry old interpretation, read retained Raw
+under capture permission, activate a native client or establish semantic quality.
+The same key/store/target/namespace/client/session and issued ordinal survive;
+one frozen complete EOF skips paused content. Only clean pending-null state or
+a proved SQL-closed continuation with completed/no-eligible first-part ownership
+qualifies. Incomplete, first-part, unknown/deleted, quota/exhausted and other
+blocked states refuse rather than reset.
+
+Rearm status reports action metadata, not fresh SQL permission or enabled controls.
+Status revision 0 observes an absent global action record; it cannot prove no
+historical rearm because there is no new sentinel or session enumeration. A
+selected session's positive revision/committed receipt refuses missing or older
+global history before publication. Only one predecessor authority pair is kept;
+sessions older than it cannot be implicitly adopted. Same-action replay retains
+its original EOF and never rewrites a cursor after terminal publication or later
+progress. Missing/contradictory receipt/revision pairs refuse, not repair.
+
+Actual rearm/recovery/replay also rechecks the exact selected session's deletion
+fence after awaited source proof and before subsequent publication. Deletion can
+leave general capture controls unchanged. A deleted session refuses even if its
+action was previously completed; pending recovery remains visibly pending, with
+no automatic cancellation, rollback or repair. Metadata status is not permission
+to resume it. These fresh SQL checks cannot make separate filesystem writes and
+deletion share a transaction or undo already-published state.
+
+Case A checks content-free SQL ownership, event/part/binding and completed
+admission consistency, not historical source-file attestation or semantic truth.
+Case B reconstructs only its already-authorized bounded original record. Existing
+32 MiB/128 MiB/scratch/deadline limits remain; a source inode plus 4 KiB anchor is
+not a complete historical checksum. Filesystem and SQL cannot share an atomic
+transaction. Later revocation cannot undo source reads or dispatched costs, and
+Raw-only controls do not retroactively cancel eligible admitted interpretation.
+Normal direct workers now reject revoked no-work permission before source
+access; eligible legacy cursor encoding and SQL-free transport fixtures remain.
+
+The first source run passed 2/14, actual exit 1: a new fixture supplied a trailing
+runtime-root slash, while reused bounded source helpers needed the host's private
+remaining-budget accessor. The fixture was normalized and that accessor added
+without changing timeout ceilings. The expanded run passed 38/40, exit 1, because
+two new incomplete/processing fixtures violated the existing pending-claim CHECK
+before reaching rearm; only those fixture fields changed. A separate source-close
+regression failed 0/1, exit 1: actual close rejection skipped key zeroing. Nested
+finally now guarantees zeroing while the outer fixed failure remains visible;
+durable ready state is not rolled back. All original reds remain retained.
+
+Independent review found a missing deletion recheck in the first committed rearm
+candidate despite its passing bounded matrix. A completed real capture followed
+by pending-intent interruption, real conversation deletion and same-action recovery
+incorrectly returned ready/replayed and published the remaining state. The tight
+repro failed 0/1 twice, exit 1. New focused source regressions initially passed 1/9,
+exit 1, and installed regressions 0/2, exit 1; two source cases and one installed
+case first stopped at an incorrect fixture count for Codex's excluded header.
+After correcting only that count, all eight failing source cases reached the
+intended deletion refusal assertion. The installed Codex fixture then stopped
+before interruption because its direct API call lacked the existing synthetic
+host-ancestry binding; the fixture now reuses that binding without changing
+runtime qualification. The first post-fix focused run passed 9/9 source cases
+and 1/2 installed cases (exits 0 and 1 respectively), retaining that fixture red.
+The correction reuses the existing exact-session SQL lookup in
+the shared publication proof without rechecking historical admission against
+terminal-progressed cursors. No deleted-content resurrection or core capture
+fence bypass was demonstrated; the defect was false successful rearm. All red
+receipts and the original candidate/review remain retained.
+
+Focused synthetic checks include actual SIGKILL, rename/fsync ambiguity and cold
+publication recovery. These do not promise cleanup after arbitrary SIGKILL/host
+crash or preemption of an uninterruptible kernel hang. Linux/WSL and the two
+supported Node runtimes are the tested boundary; no native macOS/Windows, provider,
+paid-call, installation activation, completed local V1 or new score is claimed.
+
+## Optional matching qualified duplicate evidence
+
+The explicit `captureQualifiedDuplicates:'append-matching-evidence-v1'` policy
+is a mechanical ordinary-capture exception, requiring source-bound-v2, exact
+canonical content, the same seven labels and valid incoming/intact original
+source bindings. It appends eligible receipts while preserving the original
+qualification and anchors. It is not semantic deduplication, truth, reaffirmation,
+new confidence/currentness promotion, automatic Cards or a benchmark improvement.
+The default remains strict, as do manual/explicit/ordered/episode paths; episode
+configuration cannot select this policy. Unknown/unqualified/corrupted originals
+cannot be silently repaired or replaced. See [the contract](capture.md#optional-matching-qualified-evidence).
+
+Existing suppression, correction/forgetting, source exclusions/session fences and
+deletion guards remain in force. Deleting a source can clear the surviving
+Memory's qualification; later duplicates can refuse instead of requalifying.
+Changing policy does not reopen old Raw events or implicitly rearm an established
+host. Updating both config and profile digest still refuses the old preparation.
+Installed checks use synthetic ancestry, sources and fake HTTP only, not an
+actual native host, provider, semantic score, activation or completed Raw V1.
+
+Retained author fixture reds used an invalid-shaped corrupted digest, counted
+Raw registration's independently committed epoch as admission mutation, confused
+covered completed-message overlap with incomplete interpretation, counted skipped
+part metadata as saved bytes, and used an empty legacy keep-source array forbidden
+by schema. Assertions/fixtures were corrected, not runtime boundaries. The first
+affected runs hit the author's insufficient 180-second outer cap (actual 143,
+ETIMEDOUT, owned cleanup verified); the identical 29 suites passed with a 600-second
+cap in about 392 seconds on each Node, consistent with prior full-core runs around
+425 seconds. A separate primary launch-order ENOENT preceded tests and was resolved
+by awaiting its freeze. The initial installed Codex fixture omitted required
+`history_mode:'paginated'`; the existing parser correctly refused it. Its synthetic
+header was corrected without changing qualification or host runtime.
+
+Both initial local affected runs passed 35/36 with actual exit 1: the existing
+deadline fixture expected process exit 124 but observed 0 without retaining its
+provider trace. A controlled synthetic planning delay reproduced exit 0 with
+503 `interpretation_incomplete`, planning only and a released slot without refund
+on both parent and candidate, on both Nodes. This proves the old assertion lacked
+a provider-entry precondition, not the exact cause of those two untraced reds.
+The corrected tests separately handshake actual pending provider work before
+asserting hard termination/no refund/dead-owner recovery, and planning-only work
+before asserting cooperative timeout. Only test windows and fake HTTP changed;
+production deadlines, guards and configuration remain unchanged.
+
+## Retained Raw MCP and authored Cards
+
+The [retained-profile path](private-card-terminal-review.md#retained-raw-profile)
+is a synthetic-tested installable private preview, not a newly published package,
+real-client qualification, semantic-quality result or completed Raw V1. It uses
+an already compatible schema 29 store; existing-only opening refuses creation
+and migration. Necessary metadata/structure validation is not a full SQL-hash
+manifest, historical-data scan or protection against malicious same-owner DDL.
+Linux/WSL with Node >=22.16 is the initial boundary; native macOS/Windows
+retained-profile verification is not claimed.
+
+The separate private profile freezes namespace/store authority across SDK
+negotiation fallback. Identity/permission checks detect file/parent replacement,
+not every same-inode content edit; restart to reconfigure. Capture consent and
+capture `readPolicy` are not retained-read authority. Fixed Raw off mode changes
+no consent, cap or permissions, enables no automatic capture and creates no
+provider. It decodes only valid UTF-8 `local-plain-v1` with null key version,
+preserving BOM/Unicode; encrypted/unknown formats have no guessed fallback.
+
+Discovery returns bounded indexed metadata, not proof of saving, interpretation
+or complete coverage. Reads expose pending/skipped regions and still compute
+conversation aggregates; bounded pages do not imply constant-time large-history
+latency. Resolve only inspected saved spans. Explicit author text and separate
+real-TTY exact-revision confirmation are required; a long message does not become
+a Card automatically, and source support is not truth or adoption. Source
+deletion cancels bound drafts while confirmed authored text can remain with
+support unavailable. Logical deletion does not erase SQLite/WAL/free pages/backups.
+
+Retained author reds were fixture issues: an SDK constant imported from the wrong
+export, a synthetic seed decoder stripping BOM, and missing expected revision.
+The packaging Node 22 run initially passed 12/13 with actual exit 1: invalid
+profile negotiation correctly closed, but the fixture expected a numeric JSON-RPC
+code rather than SDK `CONNECTION_CLOSED`; only its predicate changed, not runtime.
+Primary's initial wrong-store check used EOF without negotiation, so the lazy SDK
+factory never opened core; a real handshake corrected the harness. No runtime
+workaround was introduced. Syntax-only `--check-config` intentionally reads no
+profile/database/API key and cannot establish store readiness.
+
+## Explicit local host (B4c)
+
+The [foreground local host](raw-local-journal.md#explicit-local-host-b4c)
+checks current SQL capture authority before source/header access and before
+dispatching the existing worker. SQLite permission snapshots and filesystem
+reads are separate operations. A later revocation cannot unread bytes already
+opened; registration/publication fences still prevent stale Memory. Capture
+consent does not authorize retained Raw reads, which retain their own policy.
+
+The owner explicitly selects one source/session. Claude's private profile and
+installation binding are trusted caller configuration, not native-hook
+attestation. Codex requires actual host/binary/cache/header helpers; the bounded
+tests exercise them against synthetic ancestry and caches. No automatic hook,
+daemon, session discovery, qualification probe or background retry is installed.
+
+Preparation creates only a fresh key/state and an external durable intent/ready
+marker. Ordinary preparation refuses partial creation, missing established
+identity and authority drift without repair. The separate authority-only rearm
+above does not regenerate that identity. Deleting all owner state is outside that loss
+detection guarantee. Deadlines initiate cancellation with teardown reserve;
+actual child close remains required even if it exceeds the nominal155seconds.
+Confirmed worker ready/progress survives a late abort; waiting/blocked outcomes
+may carry an outer cancellation reason with the unchanged nested summary.
+
+Retained focused reds found a personal namespace normalization mismatch and a
+derived runtime trailing slash; corrections remain in the host. Ancestor aliases
+could place preparation under usage, while the Linux source opener already
+refused aliased source traversal; canonical host comparisons now refuse both
+before preparation/source dispatch. A held real child exposed missing outer
+deadline reporting, corrected without changing worker identity or progress.
+Separate fixture errors (missing home and treating an incomplete reply as saved
+acknowledgement progress) are retained as fixture failures. Installed evidence
+uses fake HTTP injected by a test-only exact-child spawn wrapper; production
+profiles cannot choose executables, runtime roots, environment or test seams.
+No real model calls, user sources, automatic Cards, source-to-Card lifecycle or
+completed V1 claim is made. Without the separate explicit policy above,
+identical-content/new-receipt qualification conflicts remain unchanged.
+
+## Durable local worker (B4b)
+
+The explicit [local worker](raw-local-journal.md#durable-local-worker-b4b)
+joins the real private-archive producer→transport→one-shot/core path using
+synthetic sources and fake HTTP. It is not automatic Claude/Codex hooks, setup,
+full conversation coverage, Card promotion or completed V1. The separate explicit
+host rearm above is not generic worker reset or failed-interpretation retry.
+Only Linux verified-source capture is implemented; Node20 smoke tests pure
+import, not capture. Normal process exit and saved Raw alone are not completion.
+Observed saved/skipped acknowledgements are not unique-row or quality scores.
+
+State continuity is fail-closed, not repair: lost claims/cursors/root/key,
+authority drift and confirmed interpretation/refusal keep visible failure and
+high-water identity. An invocation given the wrong inode/path refuses without
+rewriting an otherwise valid cursor; supplying the original inode with matching
+anchor/pending bytes can resume that same identity/cadence. A confirmed pending
+byte mutation during progress persists a block which later restoration does not
+clear. There is no silent epoch reset or new-session fallback. Historical bytes
+earlier than the bounded completed-offset anchor are not rehashed every time.
+
+Cooldown is not orphan-death proof. After parent death, safety relies on exact
+event registration/admission in the existing core: registered events cannot
+reacquire interpretation; never-registered events may acquire their first work.
+No wake-up polling or automatic retry exists inside a run. Confirmed incomplete,
+quota/authority/deletion refusals and exhausted recovery require later operator
+or host recovery, not a changed credential/config filename. Default qualified
+dedup still refuses different evidence bindings as qualification_conflict/incomplete;
+the separately selected matching-evidence policy is not automatic retry or rearm.
+Raw notice/saving and Memory consent remain separate. Plain Raw is not encryption,
+and deleting all owner state is not prevented. SIGKILL/kernel hangs cannot promise
+scratch/orphan cleanup; tests explicitly reap only their owned descendants.
+
+Retained M2 reds exposed stale corrective writes after uncertain cursor
+publication, hidden cancellation, malformed pending cadence combinations and
+wall-clock-based lock acquisition. Corrections preserve possibly published
+state without overwriting/refunding identity, retain fixed cancellation reasons,
+validate cross-field states and use monotonic acquisition time without changing
+ownership/reaping. Separate syntax/readback/fake-extraction fixture failures are
+retained, not presented as model or core regressions. Bounded source/read reserves
+can stop before dispatch; the finite ceilings do not guarantee throughput.
+
+The first final matrix stopped at generic634/635, actual exit1: retaining the
+old generated Claude lock conflicted with the unchanged bundle reproducibility
+map. The same monotonic three-line correction is synchronized into that generated
+copy and the setup copy, without changing capture/recall/pause algorithms,
+versions, schemas or module inventory. The original failed matrix is retained;
+its reproducibility check is not weakened or exempted.
+
+## Local process transport (B4a)
+
+The opt-in [local transport](raw-local-journal.md#local-process-transport-b4a)
+connects a trusted host to one fixed one-shot entrypoint. It is not wired into
+automatic host capture, setup or hooks. B4b separately supplies an explicit
+durable worker; neither packet completes local V1. Synthetic subprocess/fake-HTTP archive checks establish mechanisms,
+not real model quality or user transcript coverage. Full integration is tested
+only on Node22.16/24.15; the separate Node20 CI smoke tests pure import without
+SQLite, not Node20 capture. Exact stable runtimes >=22.16 are accepted without
+download or fallback; this is not a claim that every future runtime was tested.
+
+Configuration binding hashes the UTF-8 text returned by the existing bounded
+private reader, not arbitrary file bytes. It does not defend against a hostile
+same-user executable or filesystem replacement. HOME must be an explicit existing
+owned directory; ordinary0755 HOME is accepted without changing permissions or
+reading its contents. Config/store/usage retain their separate private checks.
+Only the configured own-data credential is read, once after the config identifies
+its name; no constructor-time snapshot of the whole environment is claimed.
+
+The one outer deadline reserves teardown time and awaits actual child close;
+Node timers cannot promise termination of an uninterruptible kernel hang. A
+capture PID makes failures conservatively uncertain, even if source was already
+saved. No-PID spawn failure is known not-started. Neither uncertainty nor a
+normal process exit alone permits cursor advancement. There is no retry policy
+or cursor persistence in this packet.
+
+The retained two-case actual-process red (exit1) exposed an overly strict HOME
+mode check and uncertainty set before a failed capture spawn. Corrections accept
+owned0755 directories and use actual launch evidence. A later27/29 focused red
+(exit1) was a fixture expectation error: a whitespace-only first part has no
+eligible interpretation projection, so its replay is not an admitted duplicate.
+The corrected fixture preserves exact Raw receipts, two exact Unicode parts and
+zero model usage; a separate admitted-duplicate case retains duplicate coverage.
+An earlier26/29 red used a non-normalized fixture runtime path. These retained
+reds did not require changing core replay, provider or admission semantics.
+
+A pre-matrix cleanup regression failed0/1 on both runtimes, actual exit1: a
+forged AbortSignal prototype passed `instanceof`, then listener registration
+threw after allocating the operation timer. Isolated `async_hooks` diagnostics
+on both runtimes identified one live timer originating in the process scope
+and zero other timers, excluding a test-owned timeout explanation. Native
+signal-brand validation now precedes timer allocation; native listener/getter
+methods avoid caller-owned overrides during checks and cleanup. Proxies/forged
+brands refuse without spawning or leaving an operation timer. The original
+source freeze and both red logs remain retained rather than overwritten.
+An additional public-boundary regression failed0/1 on both runtimes, actual
+exit1: the caller's earlier `instanceof` invoked a Proxy `getPrototypeOf` trap
+before the native helper refused it. The public boundary now rejects proxies
+before that reflection. This narrow caller correction and its tracked test
+follow the retained28-gate historical freeze; affected transport/import/archive
+checks are rerun on the corrected snapshot, not claimed from the older bytes.
+
+## Local one-shot adapter (B3)
+
+The [private POSIX one-shot CLI](raw-local-journal.md#local-one-shot-adapter-b3)
+handles an already selected/redacted capture-v2 request for a fixed store,
+namespace/client and frozen authority. Offline fake-HTTP and installed archive
+checks exercise the existing qualified engine, not real model quality, source
+truth, full transcript coverage or completed local V1. No hooks, setup, durable
+cursor, automatic Card promotion, hosted change or production enablement follows.
+Configuration cannot grant itself consent. Plain Raw is not encryption.
+
+Read-only private-file/store/cap preflight follows runtime loading and checks
+file identity across read-open; it is not a lock against same-user filesystem
+replacement after validation. `configureCap:false` prevents capture construction
+from overwriting durable owner caps. The usage root must remain the same across
+clients/restarts for a target. Daily accounting limits model-port invocations,
+not dollars; it has no protection against the local owner deleting the ledger.
+Dispatch consumption is not refunded. Slots remain owned until actual provider
+settlement or confirmed dead-process recovery, not just a core timeout race.
+Process deadline termination emits no successful completion, but is not proof
+of preempting an uninterruptible kernel hang or the future host's outer worker.
+Normal process exit can carry a non-2xx interpretation failure; retained Raw
+alone never establishes complete interpretation or authorizes cursor advancement.
+
+The first Phase-A combined run passed3/16, actual exit1: two cap-preservation
+checks awaited the explicitly deferred journal condition; other failures exposed
+an adapter public-namespace mismatch (internal empty project ID versus public
+null). Correcting only that adapter boundary made its subprocess cases pass.
+The primary's separate Phase-A roster retained16/17, exit1, solely because the
+not-yet-implemented cap condition reset50 to1000. These original reds remain
+evidence, not waived failures or semantic scores.
+
+The first full verification matrix stopped at the existing Codex live-ancestry
+fixture (197/198, actual exit1). A content-free guarded readlink diagnostic on
+both Nodes proved that, after observing its owned fake host, the fixture walked
+into the actual outer agent and correctly tripped `test_observed_real_codex_host`.
+Only that fixture now bounds its injected read/link callbacks to its owned fake
+parent before OS access. It still verifies real `/proc` executable/cmdline/stat
+and actual binary identity; separate synthetic ancestry cases retain outer-exec
+and closest-host coverage. Neither production detection nor the home guard is
+relaxed. The original failed matrix and diagnostic reds remain retained.
+
+## Durable local authority (B2b)
+
+The trusted programmatic local controls and frozen startup snapshot are bounded
+synthetic-local infrastructure. They do not implement installer/provider policy,
+filesystem/SQL setup coordination, hook transport, durable cursor recovery,
+MCP lifecycle, hosted controls or production enablement. Revocation fences new
+managed publication but does not cancel a dispatched provider cost or erase
+completed evidence. Raw notice acknowledgement and saving switches remain
+separate from automatic interpretation consent. Historical unmanaged Memory
+work keeps its legacy publication behavior; configuring local authority can
+still close existing saving tails in that exact namespace/client target.
+
+The independent20-case controls/episode oracle initially failed0/20 on the
+fixed parent because the APIs were absent (actual exit1). A first authored
+migration/episode run passed23/30 (exit1): seven migration fixtures incorrectly
+called a private-Card capability method that the feature-off facade correctly
+omits. The corrected fixtures assert method absence. These mechanism tests and
+fresh-process private-archive fixtures do not establish semantic model quality
+or compatibility with the separately frozen pre-Raw reader schemas18/20–23.
+
+A focused pre-correction race also failed0/2 (exit1): a trusted policy callback
+revoked consent and the prepared capture still invoked sealing once before
+refusal. Managed policy evaluation now rechecks the full snapshot immediately
+after the callback, preventing either client's first seal after that change.
+
+Independent Spec review found another dispatch gap in the first candidate:
+consent revoked during the first seal still allowed a second seal in the batch,
+although final registration refused and no Raw/admission/model writes occurred.
+Both clients with revoke and disable/re-enable failed the independent and
+author regressions before correction (0/8, actual exit1). Each sealing dispatch
+now checks the same frozen authority outside the crypto-error handler, retaining
+`capture_disabled`/`revision_conflict` and stopping after the already-started
+first seal. This does not cancel work already dispatched or refresh authority.
+
+## Public Raw constructor (P4b-B1)
+
+Explicit public construction and private-archive programmatic lifecycle do not
+complete installed Claude/Codex hooks, transport, controls, cursor recovery or
+MCP/terminal acceptance. A primary probe found a pre-existing skipped-tail
+barrier gap in both public construction and the internal factory: an incomplete
+first part skipped for quota, notice or Raw-off survived pause/resume and rejected
+the next ordinal with `raw_part_out_of_order`. Both six-case probes exited 1.
+The bounded [B2a correction](plans/raw-skipped-tail-barrier.md) closes these
+incomplete policy-skipped tails at an actual namespace/project capture barrier.
+Original part/event dispositions remain unchanged and late suffixes stay gaps.
+Without that barrier, the predecessor still blocks a higher ordinal; Raw-only
+off/on does not repair it. This covers known durable identities during ordinary
+pause/resume, not lost-client-state recovery or installed-hook acceptance.
+
+The first new combined public/installed run passed 17/18 (exit 1): its forget
+fixture expected `source_unavailable`, while existing exclusion enforcement
+correctly returned `source_excluded`. Only that expected code was corrected;
+both installed cases already passed. The original failure remains retained.
+
+## Internal Raw producer foundation (P4a)
+
+The [internal producer](raw-local-journal.md#internal-producer-foundation-p4a)
+prepares synthetic authorized records; B4b ships its required private primitives,
+but it is not automatic installed Claude/Codex Raw
+capture, an HTTP endpoint, a cursor writer or completed local V1. Privacy policy
+and best-effort secret redaction do not prove semantic truth, full transcript
+coverage or permission. Pending identities require the host's original trusted
+key/bindings; legacy Claude pending windows remain v1.
+
+The first bounded test run retained one resource failure: seven-byte buffers
+were applied to every scratch-stage copy, so a long native-redactor case exceeded
+the unchanged 30-second preparation deadline (9/10, actual exit 1). Fixed 16 KiB
+scratch buffers preserve the independent source-read bound; the same ten cases
+then passed, actual exit 0. Early primary checks also exposed caller-idle deadline
+charging, missing ordinal order checks, native errors/empty scratch residue
+before initialization completed, malformed pending fields classified as
+changed source, and binding property order changing replay identities. These
+failures remain in the primary evidence with focused regressions.
+A 20 MiB/32 MiB-heap run was an initial checkpoint, not proof against
+whole-string retention because V8 may store ASCII strings using one byte.
+
+The P4a Spec review exposed a missing complete-envelope byte check for quota
+acknowledgements: valid long fractional timestamps let 65,537/65,538-byte JSON
+responses pass. The independent boundary probe initially passed 2/4 (exit 1),
+and the tracked regression also failed before correction. Acknowledgement
+validation now checks the full serialized envelope after bounded shape checks;
+65,536 bytes remains accepted, and quota still does not authorize advancement.
+
+The final resource probe streams a 32 MiB assignment prefix with a bounded
+synthetic secret under a 32 MiB old-space limit, instrumenting actual I/O, live
+scratch bytes/files and cleanup. Its explicit 300-second allowance does not
+establish default 30-second fit. Filesystem calls cannot be forcibly preempted.
+Lost ownership proof or replaced paths retain/refuse rather than delete foreign
+data; logical unlink is not secure erasure. SIGKILL/host crashes cannot guarantee
+scratch cleanup.
+
 The opt-in [integrated local engine preview](private-engine-v1-local.md) owns
 submitted notes, retained Memory receipt excerpts, Memories and private authored
 Cards in one core. It includes exact-namespace common reads, explicitly reviewed
@@ -569,10 +1137,10 @@ or whether a source claim is true.
 The private observation retains at most 64 primitive-only rows per case, counts
 overflow and marks malformed response projections unavailable. It retains no
 source text or identifiers and does not enter ordinary comparison output,
-scoring, aggregates or the redacted report. Qualified deduplication attaches to
-an existing memory only for identical resolved source anchors. A changed source
-identity intentionally fails with `qualification_conflict`; the observer does
-not turn that immutable provenance boundary into a successful attach. No source
+scoring, aggregates or the redacted report. Default qualified deduplication attaches
+only for identical resolved source anchors; changed source identity still fails
+with `qualification_conflict`. The separate matching-evidence policy above is
+not enabled by this observer and does not rescore historical results. No source
 archive, staging default, retry or source-bound-v2 benchmark switch is added.
 
 ## Historical extraction rejection remains unattributed
@@ -1542,3 +2110,360 @@ Limits:
   `.paused-tripwire` or `codex-tripwire.json` by hand while paused is outside it.
 - A foreign symlink at `paused` that does not resolve is left in place, and
   Codex reads as paused until it is removed.
+
+## Internal Raw journal P1: synthetic foundation only
+
+The [internal local Raw journal](raw-local-journal.md) is a default-off storage
+and read foundation tested with synthetic local fixtures. It does not expose
+public Raw capture, installed hooks, Raw → Card support or source-deletion
+integration. It establishes no production readiness or semantic score, and does
+not authorize real transcript retention, operational migration or deployment.
+The remaining packets and final verification outcomes belong in the
+[local Raw V1 completion plan](plans/raw-local-v1-completion.md).
+
+Retained failures under simultaneous core, generic and package test load:
+
+- The first Node 24 MCP run reported 124 passed and 1 failed, exit code 1.
+- The first Node 22 artifact run reported 93 passed, 1 failed and 1 Windows-only
+  skip, exit code 1.
+
+An independent eight-case H4 matrix exercised real stdio on the baseline and
+candidate with Node 22 and 24 and controlled delay: four cases passed and four
+reproduced the exact failure. It establishes the shared 1,500 ms deadline as a
+sufficient cause, not the precise latency of the original failed runs. The H5
+evidence is only a family-level probe before model work; it is not a reproduction
+of the installed H5 failure. After the competing core load ended, serial MCP
+passed all 125 cases on each runtime, and artifact tests passed 94 with one
+native Windows-only skip on each runtime; all four commands exited 0. No runtime
+or fixture deadline was relaxed. These later results do not erase the initial
+failures or establish that concurrent execution will never hit those deadlines.
+
+## Internal Raw capture P2: registration mechanics only
+
+The [local Raw V1 plan](plans/raw-local-v1-completion.md) records the bounded,
+synthetic-only P2 integration and its final gates. It joins the existing capture
+engine internally; it exposes no installed Raw capability. D5 independent-source
+deletion, D6 forgotten-span exclusions, Raw → Card, arbitrary option-off control
+closure, client adoption and production enablement remain later work. The local
+fixtures establish lifecycle mechanics, not extraction quality or semantic truth.
+
+Retained development failures include legacy episode/source identity collisions
+that saved Raw without a new admission reservation (four red regressions), and
+an eager schema probe that broke two legacy cleanup/query-count tests in the
+first full Node 22 run (1,311 passed, two failed, actual exit 1). Narrow fixes
+refuse those collisions atomically and defer the optional schema probe; the
+first reviewed candidate subsequently passed 1,317 core tests on each supported
+runtime, actual exit 0. Those greens missed the replay issue below.
+
+Independent review of `05f4a94` found that staging failure/expiry could hide
+already saved Raw on an identical retry. The new replay regressions initially
+reported six passed and ten failed, actual exit 1. A further four-case red probe
+showed that untouched staging past wall-clock expiry or its persisted watermark
+could still be reported as processing. The correction observes durable replay
+without renewing leases, restaging, invoking models or mutating expiry; completed
+admission wins over staging expiry, while failed/expired jobs stay incomplete.
+Source identity, profile, namespace and session fences still apply. The final
+plan/PR records corrected verification and independent review; earlier green
+results do not substitute for those gates or erase these retained failures.
+
+Further scheduling probes retained six held-seal failures (two completed-winner
+controls passed) and two failed-winner cases in a separate process, each command
+exiting 1 before the atomic correction. Detecting replay only before an await
+was insufficient: the real claim/reservation transaction must observe an existing
+durable binding before acquiring any work. The correction also moves all nine
+secondary P2 test resources onto their owning workspace's deferred cleanup;
+Linux's ability to unlink open SQLite files was not evidence of correct teardown
+ordering. No independent-review or final-gate pass is inferred from these fixes.
+
+The atomic correction passed 1,350 core tests on each supported runtime, actual
+exit 0. Two later red cases (actual exit 1) showed that a same-event winner during
+sealing must also be selected as observation before model-budget preflight. The
+final internal-only correction adds that post-await selection recheck while
+retaining the transaction's authoritative check. Those full-core results precede
+this last correction; corrected focused tests, independent review and final-head
+CI are recorded separately in the plan/PR.
+
+A subsequent independent review found that a winner committed during token
+counting could still be hidden when that preflight then refused the slower
+attempt. The new 34-case probe retained 26 failures and eight passing controls,
+actual exit 1. A centralized final observation now requires an unaccepted
+interpretation attempt and an existing identical binding plus Raw receipt;
+it cannot create source, retry interpretation or bypass identity/control fences.
+The expanded regression coverage includes failed/completed winners, throwing
+counters, fresh zero-write refusals and corrupt orphan bindings. Earlier full
+suite greens precede this correction; the plan/PR records its separate final
+focused, full-suite and independent-review gates.
+
+The subsequent full-core runs retained 1,389 passes and one failure on each
+runtime, actual exit 1: the existing D3 journal-begin fixture expected admission
+to finish inside a 600 ms wall-clock budget before injecting a 900 ms delay.
+The unchanged selected case passed in isolation on both runtimes. Controlled
+clock probes on clean P1 and the candidate reproduced both outcomes: expiry
+before admission commits returns an outer timeout and rolls admission back;
+expiry after the journal UPDATE retains admission and rolls the journal back.
+The hook executed once when reached. This establishes a baseline-shared timing
+precondition, not the exact historical expiry site, which was not instrumented.
+The test-only correction keeps the 600 ms deadline, controls time only in an
+isolated child at the actual SQL boundary, checks cold state and cleanup, and
+requires a removed post-work-check mutant to fail. Runtime deadline behavior
+and production clocks are unchanged; the plan/PR records the new final gates.
+
+## Internal Raw lineage P3a: not complete source deletion
+
+The [local completion plan](plans/raw-local-v1-completion.md) separates P3a's
+lineage/exclusion mechanics from mandatory P3b deletion and P3c Raw-to-Card.
+The separately selected schema 26 records no synthetic historical text. Exact
+whitespace maps are supported; NFKC/redaction ambiguity falls back to the whole
+message, and equal windows conservatively cover every matching position.
+Legacy unknown receipt provenance is not evidence of independent support.
+These scripted fixtures establish source fences, not semantic model quality.
+Installed Raw capability, the D5 cascade (including old `forgetEpisode`), Raw
+Card resolution and real re-extraction remain unavailable.
+
+The primary independently reproduced missing D6 guards on the fixed P2 baseline in the expected-red P3a acceptance.
+Worker fixture-development runs also retained four failed commands: 24/26
+passed with an invalid indexed-profile setup, 30/32 passed when the disjoint
+fixture accidentally reused a suppressed assertion fingerprint, and 46/48
+passed when its purported unique Unicode prefix actually repeated across four
+windows. Those were corrected fixture premises, not weakened suppression or
+mapping rules. A later 269/271 run passed the expanded source-map assertions but
+its legacy resubmission incorrectly exceeded the unchanged normalized 4,000-unit
+input limit; the fixture now resubmits the actual bounded canonical projection.
+Primary inspection additionally caught missing-origin duplicate
+promotion and inferred legacy-receipt classification gaps during implementation;
+the regression suite distinguishes unknown from genuinely independent evidence.
+Final focused/full gates and independent reviews are recorded in the plan/PR;
+earlier greens do not substitute for final-source verification.
+
+Independent Spec review then found an episode-mode D6 gap on the frozen P3a
+candidate: ordinary capture refused an excluded source, but a later option-off
+episode capture could send it to the interpreter and publish a gist/passage
+before extraction refused. The checked-in regression first reproduced both
+clients (two positive controls passed, two exact leak assertions failed, exit 1).
+The correction applies existing lineage authority to prepared episode inputs and
+transactional publication, including zero-Memory prior passages, inherited
+origin identities, pinned fields and step closure. Existing durable attempt codes
+still record `episode_failed`; the immediate episode error may be
+`source_excluded`, and a closed failed replay remains `capture_evidence_closed`
+without another provider call. This does not implement P3b deletion of old prose.
+
+Retained correction-development failures were fixture issues: an initial 0/4
+run also reused an unqualified assertion in qualified positive controls; a
+16/30 run used the wrong strict correction/reservation shapes; a 28/30 run
+passed public-shaped namespaces directly to normalized internal runtime calls;
+and a 36/38 run incorrectly expected an open-job error on closed replay. Each
+command exited 1 and its evidence remains retained. These are distinct from the
+specific provider-leak red and do not justify weakening source guards or legacy
+validation. Final-source verification is recorded separately in the plan/PR.
+
+## Internal Raw deletion P3b: local cascade, not host delivery or Raw Cards
+
+The [bounded deletion plan](plans/raw-local-v1-delete.md) selects schema 27 only
+through the uninstalled internal factory. It shares preview/delete planning and
+legacy `forgetEpisode` mutation over actual retained receipt/source provenance,
+including historical Memory and source-only episode consumers. Unknown legacy
+support or unresolvable active/retained staged provenance fails closed and needs
+repair; no backfill, independence inference or broad cleanup is offered. New
+ordinary stores are not silently upgraded. The actual frozen v26 opener refuses
+27; current option-off writers honor selected rules, including late migration.
+
+Existing receipt-backed Card drafts/current evidence invalidate, but confirmed
+authored bodies and host records remain. The finite content-free Raw outbox is
+not evidence that a host withdrew an ask/preview, consumed an effect or received
+an acknowledgement. RawSourceRef resolution/bare Raw-to-Card remain P3c;
+installed Raw/client lifecycle and consumption remain P4. No paid-model,
+semantic-quality, production encryption or operational-data claim is made.
+
+Compatibility import closure adds exactly `core/raw-deletion-schema.mjs`,
+`core/raw-deletion-storage.mjs`, `core/raw-source-roots.mjs`,
+`core/raw-control-storage.mjs` and the already-existing `core/raw-input.mjs` to
+the artifact manifest. These DB-only dependencies let installed ordinary
+openers enforce selected-store rules. The usable Raw factory, journal/read
+engine, resolver and new public constructor/tool fields remain uninstalled.
+
+Two runtime failures are retained. The first integrated 17-case worker run
+passed 13 and failed four; the primary's independent original 35 passed 31 and
+failed the same pending-job deletion races, both commands exit 1. A minimal
+public-created pending-claim probe reproduced SQLite CHECK failure (errcode 275):
+clearing its token while keeping pending state was invalid. Deletion now expires
+the valid pending lease while a separate durable closed-job fence prevents retry
+and publication. The original four worker cases then passed on both runtimes
+(actual exit 0), and the original primary 35 passed unchanged (actual exit 0).
+The probe's first missing-lease setup error is retained separately.
+
+The later 17-case jobs run passed 16, actual exit 1, reproducing a support-only
+CAS gap: a trusted job could resolve an existing unknown duplicate receipt
+without a Raw append or receipt insertion. The correction compares only exact
+source receipts before/after binding and invalidates the reached Memory roots;
+it does not update every namespace conversation. The combined 34 cases then
+passed, actual exit 0. Final-source gates/reviews are recorded in the plan/PR.
+
+The same support-proof transition was then tested through episode reservation
+and Raw registration with zero extracted items and unchanged receipt rows.
+Both exposed why observing job insertion alone is insufficient: message ledgers
+can resolve a receipt earlier. Retained focused commands exited 1 (ordinary
+control green, episode red; then ordinary/episode green, Raw red). The shared
+DB-only authority-mutation guard now covers all three entrypoints. Its first
+Raw integration still failed because journal preparation intentionally removes
+the original session ID; using the journal's canonical session in the comparison
+resolved that integration error without retaining raw IDs or creating a guessed
+job binding. The three-entrypoint regression passed, actual exit 0. An initial
+episode fixture qualification conflict is retained separately from its CAS red.
+
+Fixture-development failures are not additional runtime hypotheses: the first
+jobs run passed 4/17 because async conversation reads were not awaited; the
+second passed 15/17 because registration legitimately purged staging that the
+fixture had already expired. Four two-case cross-client setup runs used, in
+turn, missing ledger timestamps, an extra view field, a public-shaped namespace
+at an internal seam, and an incorrect count of pruned uncited sources. The host
+suite first passed 6/10 because it assumed a suppressed assertion was admitted
+again and replaced a crypto callback after construction had bound it. A later
+47/49 run expected public Memory state `current` instead of `active`. All those
+commands exited 1; fixture corrections preserve strict validation, suppression,
+source pruning and callback binding. Worker logs, including these failures, are
+retained under `/tmp/cairn-raw-p3-evidence.67nhhd/worker-delete-*.log`; primary
+independent logs use `/tmp/cairn-raw-p3b-evidence.xOAiQk/` instead. Neither earlier
+green runs nor a setup failure substitute for final frozen-source verification.
+
+The first independent P3b Spec review found two further defects on candidate
+`6596b2e`: actual P2 keep receipts stamped with a cross-client consumer could be
+missed/misclassified during origin deletion, and zero-Memory episode-source
+changes did not stale origin deletion CAS. Four checked-in regressions failed
+on that candidate (0/4, actual exit 1). The correction shares exact retained
+receipt/link/keep-action/source-ID resolution between planning and cascade,
+and transactionally invalidates reached source-graph roots without a schema
+change or namespace-wide revision bump. Missing/ambiguous legacy keep proof
+requires repair and refuses before mutation; it is not independent support.
+
+An additional support-authority transition was reproduced (0/2, actual exit 1):
+removing recorded keep IDs changed a receipt from known A to unknown while the
+same Memory also had actual Raw C support. Receipt rows were unchanged, but C's
+old CAS was not invalidated. The episode-source mutation guard now retains exact
+keep-linked receipt authority and Memory roots before source IDs disappear and
+compares them after SQL, covering replacement and invalidation. The expanded
+23-case review suite then passed on Node 22.16 (actual exit 0); final frozen-source
+gates remain separately recorded in the plan/PR, not inherited from earlier runs.
+
+A narrow helper lifecycle regression also failed for both clients (0/2, actual
+exit 1): a failed preparation query before the mutation context's cleanup guard
+could preserve that context across rollback and suppress a later CAS flush.
+The direct DB-only helper test uses real source rows and a single injected read
+failure. Its existing cleanup guard now covers preparation too. Current episode
+callers normally establish an outer guarded context first; this test does not
+claim that the public facade reproduced that injected read failure. The selected
+regressions then passed (2/2, actual exit 0). The preceding six-suite 162/162 pass
+was before this last lifecycle correction, not final-source verification.
+
+The legacy fixture copies the actual `keepEpisodeCapture` function from P2
+`9a7bbe59` (1,930 function bytes after trailing-whitespace removal, SHA-256
+`b41fb629088170813a99b6232e3a80646da5f09bdd7cf974c585c034880ad926`), relocates
+imports, and uses the real shared engine with its old snapshot fallback. It is
+not a frozen copy of the entire P2 engine. Fixtures assert schema 25 and absence
+of lineage/origin/job tables before upgrade; the primary also independently
+exercises the actual old runtime. All fixture data is synthetic.
+
+Correction fixture errors are retained separately: the first two C-support runs
+stopped on qualification conflict and invalid profile setup before the real
+authority-loss red; a later expanded run passed 15/17 because history setup used
+ordinary supersede on a qualified Memory. History now uses real qualified
+binding/transition, preserving the existing refusal. Correction logs, including
+all reds and setup failures, are under
+`/tmp/cairn-raw-p3b-evidence.xOAiQk/review-correction-*.log`.
+
+## Internal Raw sources P3c: bounded local references, not installed Raw adoption
+
+The [source packet](plans/raw-local-v1-sources.md) opts into schema 28 through
+the uninstalled factory and existing trusted private-Card authority. Authored
+Cards reuse the current lifecycle, ledger, evidence and typed organization engine;
+no synthetic Memory/note, model call or retained Raw-text copy is required.
+Only canonical DB/schema/input modules enter installed static import closure:
+`core/raw-source-schema.mjs`, `core/raw-source-input.mjs`, and
+`core/card-raw-sources.mjs`. The async reader and usable factory stay uninstalled.
+Ordinary mixed-store browsing fails closed on required Raw-backed Cards while
+deletion/cancellation/content-free operation inspection remain available by ID.
+New source capability does not complete P4 clients, installed lifecycle, hosted
+crypto/notice/production gates or host effect consumption.
+
+Source budgets charge full enclosing parts shared across anchors, not selected
+substring bytes. Each page authenticates the entire selected reference within
+the caller's byte/row limits, even when returning one part. Large references
+require an explicit larger budget; there is no cheap-pagination or latency claim
+for an uncooperative crypto port. Re-encryption invalidates existing identities
+and requires re-resolution. Raw and note usage projections remain separate.
+
+Retained runtime reds include partially overlapping anchors: the first cached
+prefix was reread/charged while extending a later anchor, refusing a request
+whose actual distinct parts fit. The worker's two-client regression failed 0/2,
+actual exit 1; the shared indexed collector now seeks only uncovered intervals,
+including left/right extension and gaps between cached islands. Full bounds
+coverage then passed 15/15 on Node 22.16, actual exit 0, without raising limits.
+
+Independent P3c review exposed duplicate invalidation of a confirmed Card with
+overlapping Raw spans and receipts from two Memories of the same conversation:
+one deletion advanced its revision and effects twice (both clients, actual exit
+1). Schema 28 now queues affected Raw-bound Cards for one outer-transaction
+invalidation, including receipt loss when its Raw spans are disjoint. Its two
+content-free coordination tables remain empty outside the mutation; queue,
+source work, effects, indices and cleanup roll back together. Ordinary receipt-only
+Cards retain their prior per-Memory revision behavior. The union is capped at
+128 unique live Raw-bound Cards per outer source mutation, across direct Raw and
+receipt dependencies; a 129th fails `dependency_limit_reached` atomically even
+when each individual Memory/conversation fanout fits. This is a separate bounded
+mutation limit, not a promise to erase arbitrarily large dependency graphs in
+one call. Schema 28 is unpublished; no compatibility with earlier synthetic
+schema-28 candidates or operational-store migration is claimed.
+
+A real pre-P3a keep also exposed a D6 hole: its receipt contained consumer B's
+identity while exact keep metadata proved original already-saved Raw A. After
+upgrade, option-off forget succeeded but left zero A exclusions and an eligible
+source-only A Card (0/2, actual exit 1). The shared exclusion seam now reuses
+P3b's canonical keep-origin resolver before stamped-tuple fallback. Forget and
+correction exclude the proven origin with existing exact maps/conservative
+whole-message fallback; missing/ambiguous proof refuses before mutation instead
+of guessing. The six-case legacy regression then passed, actual exit 0. No source
+text matching, union of ambiguous roots or provenance backfill was introduced.
+
+A subsequent actual-P2 differential probe found an ordinary-memory regression:
+after consumer-source proof was removed, no-Raw legacy keep forget/correct still
+worked on P3b but failed on the initial P3c source (four baseline passes/four
+candidate failures, actual exit 1). The checked-in two-client regression also
+failed all 12 operation/foreign-namespace cases before correction, actual exit 1.
+The exclusion seam now first checks for Raw in the exact owner/scope/project
+namespace. With none, ordinary mutation keeps its previous behavior; foreign
+Raw is neither authority nor a mutation target. Missing keep proof still refuses
+atomically when target-namespace Raw exists. The retained differential and
+tracked-red logs are `worker-no-raw-legacy-first22.log` and
+`worker-no-raw-tracked-red22.log` in the evidence directory below.
+
+The frozen `compat-final` Node 22 full-core run retained one failure:
+1,613/1,614, actual exit 1. The unchanged serialization-deadline test returned
+the expected `model_timeout`, but its assumption that a 500 ms budget reached
+the 700 ms serialization hook failed (`serialized=0`, expected 1). Controlled
+probes on actual P3b and P3c, on both runtimes, reproduce that exact assertion
+with a 600 ms pre-output delay; controls reach serialization. No Memory,
+receipt, initial-classification or MOC rows are written, though the expected
+content-free pending claim remains. This demonstrates baseline-shared timing
+sensitivity, not the uninstrumented historical scheduler/expiration path.
+The first probe's nonexistent-table instrumentation error is retained separately.
+
+The first `compat-bounded` scheduling attempt put the concurrency option after
+file arguments and did not enforce the intended limit; it was deliberately
+stopped (core exit 143, matrix exit 1, empty owned scratch). The corrected
+`compat-scheduled` run keeps the same 104-file roster, assertions and product
+deadlines, placing `--test-concurrency=4` before the files. Its 22 Node 22
+commands all exit 0, including full core 1,614/1,614; Node 24 verification is
+still pending at this checkpoint. Neither that result nor an isolated green
+rerun erases the original failure. The earlier pre-correction candidate's
+intentional interruption is also retained in the [packet plan](plans/raw-local-v1-sources.md).
+The usable Raw factory/reader remain uninstalled; the product pin is unchanged.
+
+Fixture-development failures remain separate: a 50/52 run expected exclusion
+before the mandatory concurrent coarse-revision fence; a fresh-revision check
+now proves exclusion afterward. An 11/13 bounds run reused an event ID across
+different sessions and correctly conflicted. The initial legacy correction
+matrix passed 4/6 because its correction request used admission-shaped fields
+rather than the existing strict correction DTO. Those commands exited 1; fixture
+fixes did not relax runtime validation. Logs are retained under
+`/tmp/cairn-raw-p3c-evidence.n7PShP/worker-*.log`. Final frozen-source gates and
+independent reviews are recorded separately in the plan/PR; earlier green runs
+are not final-source evidence or measured semantic quality.

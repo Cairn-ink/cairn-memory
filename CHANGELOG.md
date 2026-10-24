@@ -1,5 +1,169 @@
 # Changelog
 
+## Unreleased — explicit local foreground setup preview
+
+- Add default-off `local init/setup/status/activate/disable` and bounded quiet
+  native hook routing over the existing host/worker/core, not another engine.
+- Bind separate consents, exact existing store/client/namespace, approved sources,
+  private runtime HOME and shared cross-client target/usage limits. Init is
+  brand-new-only; setup never migrates existing files. Daily limits count model
+  port calls, not USD; owner Raw cap becomes durable on first real capture.
+- Publish foreground 160-second hooks last and revoke SQL first on disable;
+  preserve identity and require existing explicit rearm after re-enabling.
+  Hosted defaults, trust, credentials and provider algorithms remain unchanged.
+- Separate exact generated-command keyless checks from installed synthetic
+  provider/ancestry instrumentation; native, semantic and product gates remain.
+
+## Unreleased — bounded asynchronous Memory topic metadata
+
+- Add owner-bound `openMemoryReader().readTopicOverview()` over the same local
+  store: exact deduplicated Memory MOC counts, guarded titles, bounded optional
+  member refs and opaque continuation through a fixed read-only Worker.
+- Bound physical work, response bytes and ephemeral state; report incomplete
+  counts explicitly and reject stale snapshots. Existing supported files open
+  without migration or reserving a writer. Model-facing `map` remains unchanged.
+- Expose the unavailable placement-added timestamp explicitly rather than
+  inferring it from edits. Product integration, member-list/location extensions
+  and episode headers remain separate. See the [reader guide](docs/topic-overview.md).
+- Integrate that reader with exact schema 29 compatibility while preserving
+  physical legacy 18/20/21/22/23 support and refusing 24–28. Add synthetic
+  capture/receipt/deletion and installed Worker coverage. Read-only WAL readers
+  may maintain SQLite SHM read marks; this is not an engine data write or a
+  semantic, native-client or product-enablement claim.
+
+## Unreleased — explicit local authority rearm
+
+- Add trusted rearm status/CAS actions for one established session after controls
+  were independently re-enabled. Preserve identity/ordinal and non-authority
+  configuration; skip only one frozen complete EOF without retrying old work.
+- Add bounded intent/terminal receipts, one retained predecessor and direct-worker
+  permission/receipt checks. Terminal replay never rewinds later cursor progress;
+  missing or older global history refuses when the selected session proves it.
+- Include synthetic source/crash and actual offline archive checks. Revision 0 is
+  absence observation, not historical proof. No controls are enabled, native
+  client activated, semantic score measured or full V1/release claimed.
+
+## Unreleased — optional matching qualified evidence
+
+- Add the trusted `append-matching-evidence-v1` capture policy for exact canonical
+  content, seven matching labels and eligible original/incoming sources. Append
+  receipts without replacing the original qualification; default/manual/ordered/
+  episode behavior remains strict.
+- Allow the same optional top-level B3 configuration field through the existing
+  local host. Preserve source/deletion/suppression/replay fences and exact
+  configuration/preparation bindings; no implicit requalification or rearm.
+- Add offline synthetic source and installed checks. No truth/reaffirmation,
+  semantic-score, real-client activation, full V1 or release claim is made.
+
+## Unreleased — retained Raw inspection and authored Cards
+
+- Add an exclusive keyless retained-profile MCP path for an existing private
+  schema 29/store, with indexed discovery, paged Raw reads and source resolution.
+- Allow explicitly authored Card drafts from resolved Raw without a Memory.
+  Keep ordinary receipt drafts and default rosters unchanged; confirmation still
+  requires the separate controlling-TTY exact revision review.
+- Include the shared runtime and synthetic installed lifecycle checks. No
+  automatic Cards, capture/consent/quota change, client activation, semantic
+  quality result, registry publication or release is added.
+
+## Unreleased — explicit local capture host
+
+- Add owner-operated foreground status, preparation, initialization and bounded
+  capture through the existing private worker/transport/core. Check durable
+  capture permission before source access; preserve lazy provider credentials
+  and exact-event keyless replay.
+- Bind private configuration and installation identity with an external durable
+  preparation marker. Interrupted/lost identity refuses without repair. Keep
+  pending progress through cancellation and await actual child teardown.
+- Include synthetic installed archive and permission checks. This host slice did
+  not include rearm or retained-source MCP/Card review; later explicit slices
+  above retain their separate authority boundaries. Automatic hooks and completed
+  local V1 remain separate.
+
+## Unreleased — durable opt-in local Raw worker
+
+- Add explicit initialization and bounded local-v2 worker progress through the
+  existing producer, supervised transport and qualified one-shot engine. Private
+  keyed claims/cursors preserve exact part identity, issued ordinals and bounded
+  recovery across fresh processes without storing transcript text or raw IDs.
+- Recheck selected and excluded source commitments before advancement; retain
+  incomplete/refused work rather than silently skipping or resetting identity.
+  Contended shared/generated-lock acquisition now uses monotonic time without
+  changing owner liveness/reaping or capture/recall/pause algorithms.
+- Include the required private-archive closure and synthetic installed checks.
+  No automatic hooks, setup/rearm, hosted/v1 rewrite, Card promotion, completed
+  local V1 or production enablement is included.
+
+## Unreleased — supervised opt-in local process transport
+
+- Add an explicit host API for fixed-runtime, authority-bound capture-v2
+  subprocesses, with a shared configuration-text digest and closed child
+  environment. The standalone two-argument one-shot CLI remains compatible.
+- Supervise probe, stdin, bounded output, cancellation and actual child close
+  under one deadline. Processing, quota, incomplete interpretation and uncertain
+  delivery never become completed admission. No automatic entrypoint, cursor,
+  hook, setup, hosted/v1 change or production enablement is included.
+
+## Unreleased — opt-in local one-shot capture
+
+- Include a private POSIX one-shot CLI accepting one selected/redacted v2 request
+  for a fixed managed local target. It reuses the existing qualified Memory/Raw
+  engine and OpenAI baseline, with lazy explicit environment-key lookup and
+  durable shared per-port count/concurrency accounting.
+- Check consent at dispatch and every HTTP request, await actual provider
+  settlement before releasing a slot, and report saved Raw with incomplete
+  interpretation as non-2xx. Deadline termination never fabricates completion.
+- Add optional trusted `configureCap:false` to preserve existing owner caps
+  during capture construction; omitted/default administrative behavior remains.
+  This is synthetic offline integration, not hooks, setup, cursor recovery,
+  completed local V1, production enablement or a release.
+
+## Unreleased — durable trusted local capture authority
+
+- Add exact-store/namespace/client local consent controls and an optional frozen
+  startup authority snapshot to explicit public Raw construction. CAS revisions
+  and consent generations fence registration, replay, Memory admission and
+  episode publication across revocation and disable/re-enable races.
+- Recheck the same frozen managed authority before every source-sealing
+  callback, so revocation during one part prevents later parts from dispatching.
+- Keep automatic interpretation consent, Raw notice acknowledgement and the
+  Raw saving switch separate. Notice revocation closes pending reservations
+  without discarding transport suffixes or cancelling admitted interpretation.
+- Explicit public Raw construction selects additive schema 29; ordinary
+  constructors preserve existing layouts and gain no controls or Card authority.
+  This is synthetic local programmatic infrastructure, not installed capture
+  setup, hooks, transport, production enablement or a release.
+
+## Unreleased — local Raw skipped-tail capture barrier
+
+- Let namespace pause/project stop close incomplete Raw tails previously skipped
+  for quota, notice or Raw-off, so a fresh higher ordinal can proceed after
+  resume. Historical part/event receipts stay unchanged; late suffixes remain
+  gaps and old-generation replay still refuses. Raw-only off/on adds no barrier.
+
+## Unreleased — explicit local Raw constructor
+
+- Add default-off `openMemoryCore({rawConversations})` using the existing shared
+  Raw/Memory/Card engine, with strict pre-open configuration, retained-read off
+  mode, lineage and revision-bound deletion. Raw source/Card operations still
+  require existing private-Card authority; no automatic Card creation.
+- Include the public composition's real closure in the private archive and
+  verify synthetic fresh-process multipart replay/read/authored-Card/deletion.
+  This is not installed Claude/Codex hook capture, MCP exposure, hosted Raw or
+  completed local V1. Lost-client-state recovery remains separate.
+
+## Unreleased — internal local Raw journal foundation
+
+- Add a default-off, model-free internal Raw journal in the existing SQLite
+  store: exact paged parts, immutable keyed replay identities, whole-message
+  owner reservations, usage snapshots and asynchronous seal/open fences.
+  Explicit internal opt-in upgrades compatible synthetic stores additively to
+  schema 24; current option-off openers preserve it and pre-Raw openers refuse it.
+- This P1 slice adds no public capture/MCP/hooks capability, Raw → Card source
+  support, public deletion integration or hosted encryption. Tests use synthetic
+  local plaintext fixtures only; no operational migration or production
+  enablement is authorized. See [the internal boundary](docs/raw-local-journal.md).
+
 ## Unreleased — integrated local private engine preview
 
 - Add exact-namespace `selectEvidence`, `fetchEvidence` and `revalidateEvidence`

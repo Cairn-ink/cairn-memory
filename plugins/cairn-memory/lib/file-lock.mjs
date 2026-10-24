@@ -2,6 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { performance } from "node:perf_hooks";
 
 const OWNER_PATTERN = /^([1-9][0-9]*)-([a-f0-9-]{36})$/;
 
@@ -97,10 +98,10 @@ export async function withFileLock(
     flag: "wx",
   });
 
-  const deadline = Date.now() + timeoutMs;
+  const deadline = performance.now() + timeoutMs;
   let acquired = false;
   try {
-    while (!acquired && Date.now() < deadline) {
+    while (!acquired && performance.now() < deadline) {
       try {
         await link(ownerPath, path);
         acquired = true;

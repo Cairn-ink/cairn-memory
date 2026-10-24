@@ -5,6 +5,31 @@ host. It does not publish to npm, deploy a service or create a second engine.
 The preview name/version is `cairn-memory-local-preview@0.0.0-preview.1`;
 a future registry release needs a separate naming/version/release decision.
 
+For explicit default-off Claude Code/Codex foreground capture, the installed
+binary has a separate `local --help` path. See the [closed request and operator
+sequence](raw-local-journal.md#explicit-standalone-foreground-setup-preview):
+new-store-only `local init`, existing-store-only `local setup`, read-only status,
+explicit activation and SQL-first disable. This does not change MCP startup or
+the released hosted setup helper. The foreground 160-second hook timeout,
+separate consents, explicit private HOME/source root and shared usage/target
+binding must be chosen before activation. No provider key is required for these
+setup actions, and no credential is copied to their files. Native-client and
+semantic/provider acceptance remain distinct from the offline synthetic chain.
+
+The archive includes the [asynchronous topic reader](topic-overview.md) and its
+fixed Worker closure. The installed regression independently walks imports and
+the Worker URL, compares the five reader modules with the archive allowlist and
+source hashes, and executes public reads from installed bytes in a separate
+synthetic process. It checks lazy startup, bounded continuation, counts, optional
+refs, unchanged database bytes and awaited close. No checkout runtime fallback
+or model service is used. Capture-flow tests retain complete required archive
+and source-hash coverage while distinguishing eagerly observed imports from
+literal Worker-only dependencies. Shared dependencies remain eager when any
+eager path reaches them; observed eager imports must match exactly, not merely
+form a subset. Separate installed reader cases actually start and close the
+fixed Worker with empty application environment and `execArgv`, and exercise
+physical legacy layouts plus schema 29 capture-derived Memory metadata.
+
 ## Build and inspect
 
 Use Node >=22.16, npm and `tar` from the repository root:
@@ -42,6 +67,24 @@ explicit db/owner/project startup, tool inspection/correction/forgetting, backup
 same-schema upgrade, uninstall and troubleshooting. Initialize a dedicated local
 installation project first and use `--prefix .`, so npm cannot walk up to an
 unrelated ancestor project. Keep the memory database outside node_modules.
+
+## Explicit programmatic Raw opt-in
+
+The private archive includes the public `openMemoryCore({rawConversations})`
+composition and its actual import/asset closure. The internal `raw-capture.mjs`
+compatibility factory stays uninstalled. See the [constructor contract and
+threat boundary](raw-local-journal.md#explicit-public-constructor-p4b-b1).
+Omission preserves the existing ordinary facade; existing MCP startup, CLI
+configuration and installed hooks do not enable Raw automatically.
+
+Synthetic installed tests run both client identities through fresh-process
+first-part replay, exact multipart reads, a bare Raw-backed explicitly authored
+Card, revision-bound deletion and cold invalidation/action replay. They import
+only installed engine bytes and verify those bytes against the archive/source
+hashes, with an independent source graph and actual Node import/asset trace.
+This is programmatic lifecycle evidence, not completed installed-client/MCP
+capture or semantic-quality evidence. The [skipped-tail barrier recovery gap](limitations.md#public-raw-constructor-p4b-b1)
+remains a later correction before full installed-hook acceptance.
 
 ## Verification and compatibility
 

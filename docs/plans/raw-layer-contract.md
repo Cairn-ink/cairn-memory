@@ -49,6 +49,20 @@ erasure/restore fixtures, RL-6 UI, RL-7 copy and cap enforcement. Only chichi
 authorizes the production flag at the time. No backfill from before launch,
 before notice or across pause/resume barriers.
 
+### Local-development exception approved 2026-10-21
+
+The owner subsequently approved pure-local, synthetic-data Raw development,
+tests and PRs before the G1/G2 evidence is complete. This supersedes **only**
+the preceding pre-code dependency for that bounded work. Raw stays default-off;
+no real-user transcript retention, production database migration, publication,
+deployment or flag activation is authorized by this exception. G1/G2, H6,
+encryption, privacy/notice and production launch gates remain unchanged and
+must not be reported as passed because local tests pass.
+
+The implementation sequence and partial-packet acceptance are tracked in
+[local Raw V1 completion](raw-local-v1-completion.md). A storage foundation is
+not the completed capture, source-deletion, installed-client or product V1.
+
 ## Continuation protocol: `raw-conversation-v1`
 
 RL-3 publishes a **new capture request `version:2`** and the
@@ -261,7 +275,7 @@ its saved bytes and reservations once, in the delete transaction.
 | `quota_reached` | Entire new message could not be reserved under the owner cap. |
 | `raw_disabled` | Core raw option was off for this new submission. |
 | `before_launch` | Legacy evidence predates raw support; no reconstruction/backfill. |
-| `capture_barrier` | An already pending assembly was closed by pause/project stop; rejected paused batches themselves are not registered. |
+| `capture_barrier` | A pending assembly or an incomplete quota/notice/Raw-disabled tail was closed by pause/project stop; original part/event dispositions stay unchanged and rejected paused batches themselves are not registered. |
 
 Conversation `rawState` is `saved` (all submitted messages complete and saved),
 `partial` (some saved parts plus gaps/pending messages), or `not_saved` (no saved
@@ -373,7 +387,11 @@ change client allowlists, transmission or memory-model quotas.
 The committed off setter closes pending raw assemblies for that owner/client
 and releases their unused reservations while preserving accepted parts. Existing
 core pause/project-stop setters likewise close affected pending raw assemblies
-in their control transaction, using `capture_barrier`; they do not rely on a
+and incomplete `quota_reached`/`notice_required`/`raw_disabled` tails in their
+control transaction, using `capture_barrier`. Completed messages and already
+tool-off/capture-barrier tails stay unchanged; historical part/event receipts
+keep their original dispositions. Raw-only off/on does not establish this
+barrier for policy-skipped tails. These setters do not rely on a
 later rejected batch to release capacity. In-flight registration rechecks these
 fences. Resuming/enabling cannot reopen a closed assembly; new messages in the
 same surviving conversation can still be saved.
@@ -560,8 +578,10 @@ in place or reconstructs previously clipped messages. Existing response/quota/
 processing parsers remain exact for legacy; v2 acknowledgements require strict
 version/part disposition validation before any cursor advance.
 
-RL-1 reserves the next transactional additive core schema revision, **v19 from
-current v18**, with empty raw records/counters and no inferred backfill. RL-2
+RL-0 originally reserved v19 from v18, but that reservation was never applied.
+The local private engine has since reached v23. RL-1 uses the next actual
+transactional additive revision, **v24 from the compatible current schema**,
+with empty raw records/counters and no inferred backfill. RL-2
 must add lineage/exclusion upgrades atomically (choose its next available revision
 at implementation time, do not overwrite an intervening migration). Stop/drain
 old connections first; older openers refuse unsupported versions. Option-off

@@ -34,21 +34,21 @@ function decisions(output, items, candidates, messages) {
   }).filter(decision => decision !== null);
 }
 
-export async function reconcileCapture({ model, snapshot, items, discovery, deadline }) {
+export async function reconcileCapture({ model, snapshot, items, discovery, deadline, validateFresh, sourceView }) {
   deadline?.check();
   const { candidates } = discovery;
   if (discovery.reason || !items.length || !candidates.length) {
     return { decisions: [], reason: discovery.reason };
   }
   const input = {
-    messages: snapshot.messages.map(({ role, content }, index) => ({ index, role, content })),
+    messages: sourceView ?? snapshot.messages.map(({ role, content }, index) => ({ index, role, content })),
     items: items.map(({ content, kind, sourceIndices }, index) => ({ index, content, kind, sourceIndices })),
     candidates: candidates.map(({ row, receipts }, index) => ({ index, content: row.content,
       kind: row.kind, receipts: receipts.map(({ role, excerpt }) => ({ role, excerpt })) })),
   };
   let output;
   try { output = await callModel(model, 'reconcile', system, input,
-    { failureCode: 'reconciliation_failed', deadline }); }
+    { failureCode: 'reconciliation_failed', deadline, validateFresh }); }
   catch (error) {
     if (error.code === 'context_budget_exceeded') return { decisions: [], reason: 'context_budget' };
     throw error;

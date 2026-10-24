@@ -20,31 +20,36 @@ import { createRationaleStorage } from './rationale-storage.mjs';
 import { fail, object } from "./validation.mjs";
 import { privateCardOptions } from './private-card-input.mjs';
 import { createPrivateCardStorage } from './private-card-storage.mjs';
+import { createRawCardInvalidation } from './card-raw-sources.mjs';
+import { createRawSourceRoots } from './raw-source-roots.mjs';
+import { createRawDeletionStorage } from './raw-deletion-storage.mjs';
+import { createRawLineageStorage } from './raw-lineage-storage.mjs';
 
 const where = "owner_id = ? AND scope = ? AND project_id = ?";
 const boundary = (ns) => [ns.ownerId, ns.scope, ns.projectId];
 
 /** Shared persistence runtime used by both the legacy and envelope facades. */
-export function createMemoryRuntime(input) {
-  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards"]);
+export function createMemoryRuntime(input, internal) {
+  object(input, ["path", "sessionEpisodes", "decisionReview", "privateCards", "existingStore"]);
   const privateCards = privateCardOptions(input.privateCards);
   const sessionEpisodes = input.sessionEpisodes === undefined ? undefined : episodeOptions(input.sessionEpisodes);
   const decisionReview = decisionReviewOption(input);
-  const db = openDatabase(input.path, { privateCards: Boolean(privateCards) });
-  let identity;
+  const db = openDatabase(input.path, { privateCards: Boolean(privateCards), rawCapture: Boolean(internal?.rawCapture),
+    rawLineage: Boolean(internal?.rawLineage), rawDeletion: Boolean(internal?.rawDeletion), rawSources: Boolean(internal?.rawSources), localControls: Boolean(internal?.localControls), existingStore: input.existingStore });
   try {
-    identity = db.prepare(`SELECT store_id AS storeId, cursor_secret AS cursorSecret
+  const rawLineage = createRawLineageStorage(db);
+  const sourceRoots = createRawSourceRoots(db);
+  const rawCards = createRawCardInvalidation(db);
+  let deletion;
+  let identity;
+  identity = db.prepare(`SELECT store_id AS storeId, cursor_secret AS cursorSecret
       FROM store_metadata WHERE singleton = 1`).get();
-    if (!identity) fail("unsupported_database");
-  } catch (error) {
-    db.close();
-    throw error;
-  }
+  if (!identity) fail("unsupported_database");
   let closed = false;
   let mocStorage;
   const ready = () => { if (closed) fail("store_closed"); };
   const internalNamespace = ns => ({ ...ns, projectId: ns.projectId ?? '' });
-  const cardStorage = privateCards ? createPrivateCardStorage({ db, identity, ready,
+  const cardStorage = privateCards ? createPrivateCardStorage({ db, identity, ready, rawSources: Boolean(internal?.rawSources),
     memoryMapInside: (ns, request) => mocStorage.mapRowsInside(internalNamespace(ns), request),
     memoryTopicInside: (ns, ref) => mocStorage.topicInside(internalNamespace(ns), ref) }) : undefined;
 
@@ -92,7 +97,7 @@ export function createMemoryRuntime(input) {
 
   const receiptKey = receipt => createHash("sha256").update(JSON.stringify(receipt)).digest("hex");
 
-  function attach(id, receipt, now, inserted = []) {
+  function attach(id, receipt, now, inserted = [], origin = 'independent') {
     const key = receiptKey(receipt);
     const receiptId = randomUUID();
     const changes = db.prepare(`INSERT OR IGNORE INTO receipts
@@ -100,6 +105,17 @@ export function createMemoryRuntime(input) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(receiptId, id, key, receipt.client,
       receipt.sessionId, receipt.eventId, receipt.role, receipt.excerpt, now).changes;
     if (changes) inserted.push(receiptId);
+    let provenanceChanged = false;
+    if (rawLineage.enabled()) {
+      const memory = db.prepare('SELECT owner_id,scope,project_id FROM memories WHERE id=?').get(id);
+      const actual = changes ? receiptId : db.prepare('SELECT id FROM receipts WHERE memory_id=? AND receipt_key=?').get(id, key).id;
+      provenanceChanged = rawLineage.attach({ ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id }, actual, receipt,
+        changes ? origin : 'unknown');
+    }
+    if (changes || provenanceChanged) {
+      const memory = db.prepare('SELECT owner_id,scope,project_id FROM memories WHERE id=?').get(id);
+      sourceRoots.touchMemory({ ownerId: memory.owner_id, scope: memory.scope, projectId: memory.project_id }, id, receipt);
+    }
     return changes;
   }
 
@@ -152,6 +168,7 @@ export function createMemoryRuntime(input) {
   function admit(ns, value, projection = {}) {
     ready();
     return transaction(db, () => {
+      rawLineage.assertReceipts(ns, value.receipts);
       assertNotSuppressed(ns, value.fingerprint);
       conflictStorage.validateTargets(ns, value.conflictHints);
       const result = admitMutation(ns, value, projection);
@@ -165,7 +182,9 @@ export function createMemoryRuntime(input) {
   // Caller owns the transaction, including admission-claim completion when used
   // in a batch. Explicit and inferred writes share all mutation/invalidation rules.
   function admitMutation(ns, value, projection = {}) {
+    rawLineage.assertReceipts(ns, value.receipts);
     assertNotSuppressed(ns, value.fingerprint);
+    const receiptOrigin = !projection.automatic && value.origin === 'explicit' ? 'independent' : 'unknown';
     const insertedReceiptIds = [];
     const existing = db.prepare(`SELECT * FROM memories WHERE ${where}
       AND fingerprint = ? AND deleted = 0`).get(...boundary(ns), value.fingerprint);
@@ -173,8 +192,9 @@ export function createMemoryRuntime(input) {
     if (existing) {
       if (value.qualification !== undefined && value.content !== existing.content) fail('qualification_conflict');
       let changed = false;
-      for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now, insertedReceiptIds)) || changed;
-      qualificationStorage.bind(existing, value.qualification, value.receipts, true, value.content);
+      for (const receipt of value.receipts) changed = Boolean(attach(existing.id, receipt, now, insertedReceiptIds, receiptOrigin)) || changed;
+      qualificationStorage.bind(existing, value.qualification, value.receipts, true, value.content,
+        projection.captureQualifiedDuplicates);
       const explicit = value.origin === "explicit";
       const reviewState = explicit && existing.review_state === 'awaiting' ? 'none' : existing.review_state;
       const kind = explicit ? value.kind : existing.kind;
@@ -207,7 +227,7 @@ export function createMemoryRuntime(input) {
       (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?)`).run(id, ...boundary(ns),
       value.fingerprint, value.content, value.kind, value.origin, value.confidence, now, now,
       decisionReview && projection.automatic && value.origin === 'agent-inferred' && value.kind === 'decision' ? 'awaiting' : 'none');
-    for (const receipt of value.receipts) attach(id, receipt, now, insertedReceiptIds);
+    for (const receipt of value.receipts) attach(id, receipt, now, insertedReceiptIds, receiptOrigin);
     const memory = activeRow(ns, id);
     qualificationStorage.bind(memory, value.qualification, value.receipts, false, value.content);
     return { memory, ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}), deduplicated: false,
@@ -216,7 +236,7 @@ export function createMemoryRuntime(input) {
 
   function correct(ns, id, value, expectedRevision, projection = {}) {
     ready();
-    return transaction(db, () => {
+    return transaction(db, () => rawCards.mutate(ns,'memory-correct-'+id+'-'+expectedRevision,() => {
       const current = visibleRow(ns, id);
       if (!current) fail("memory_not_found");
       if (current.revision !== expectedRevision) fail("revision_conflict");
@@ -226,6 +246,8 @@ export function createMemoryRuntime(input) {
         AND fingerprint = ? AND deleted = 0 AND id != ?`)
         .get(...boundary(ns), value.fingerprint, id);
       if (other) fail("memory_conflict");
+      sourceRoots.touchMemory(ns, id);
+      rawLineage.excludeMemory(ns, id);
       stagedEvidence.purgeNamespace(ns);
       if (current.fingerprint !== value.fingerprint) suppress(ns, current.fingerprint);
       const now = new Date().toISOString();
@@ -244,14 +266,19 @@ export function createMemoryRuntime(input) {
         ...(projection.legacy ? { legacyMemory: legacyDto(memory) } : {}),
         ...(projection.detail ? { detail: detailDto(memory) } : {}),
         indexRevision: advanceEpoch(ns) };
-    });
+    }));
   }
 
   function forgetMutation(ns, id, expectedRevision, reason = 'forgotten') {
+    return rawCards.mutate(ns,'memory-forget-'+id,() => forgetMutationInside(ns,id,expectedRevision,reason));
+  }
+  function forgetMutationInside(ns, id, expectedRevision, reason) {
       const current = activeRow(ns, id);
       if (!current) return { forgotten: false, indexRevision: epoch(ns) };
       if (expectedRevision !== undefined && current.revision !== expectedRevision) fail("revision_conflict");
+      sourceRoots.touchMemory(ns, id);
       suppress(ns, current.fingerprint);
+      rawLineage.excludeMemory(ns, id);
       stagedEvidence.purgeNamespace(ns);
       const now = new Date().toISOString();
       const effects = conflictStorage.invalidateMemory(id, { reason });
@@ -269,6 +296,18 @@ export function createMemoryRuntime(input) {
   function forget(ns, id, expectedRevision) {
     ready();
     return transaction(db, () => forgetMutation(ns, id, expectedRevision));
+  }
+  function removeReceipts(ns, id, receiptIds) {
+    const current = activeRow(ns, id); if (!current) fail('memory_not_found');
+    sourceRoots.touchMemory(ns, id);
+    const now = new Date().toISOString();
+    conflictStorage.invalidateMemory(id);
+    mocStorage.invalidateMemory(ns, id, now);
+    qualificationStorage.clear(id); proceduralStorage.clear(id);
+    episodes.invalidateMemory(ns, id, current.review_state === 'awaiting');
+    db.prepare('UPDATE memories SET revision=revision+1,updated_at=? WHERE id=?').run(now, id);
+    for (const receiptId of receiptIds) db.prepare('DELETE FROM receipts WHERE memory_id=? AND id=?').run(id, receiptId);
+    advanceEpoch(ns);
   }
 
   function supersede(ns, id, value, expectedRevision) {
@@ -525,7 +564,8 @@ export function createMemoryRuntime(input) {
   const conflictStorage = createConflictStorage({ db, activeRow: currentRow, rawRow: activeRow, advanceEpoch,
     dropHeldWork: (id, reason) => dropHeldWork(db, id, reason) });
   const rationaleStorage = createRationaleStorage({ db, currentRow, readSourceEvidence, epoch, advanceEpoch });
-  const qualificationStorage = createQualificationStorage({ db, receiptKey });
+  const qualificationStorage = createQualificationStorage({ db, receiptKey,
+    assertStoredReceipts: rawLineage.assertStoredReceipts });
   const qualifiedTransitionStorage = createQualifiedTransitionStorage({ db, qualificationStorage, advanceEpoch, epoch });
   const indexStorage = createIndexStorage({ db, epoch, advanceEpoch });
   const classificationJournal = createClassificationJournalStorage({ db });
@@ -538,16 +578,20 @@ export function createMemoryRuntime(input) {
     evaluateQualifiedSet: qualifiedTransitionStorage.evaluateSet, epoch,
     recordHeldRetirement: (previous, replacement, linked) => recordHeldRetirement(db, previous, replacement, linked) });
   const stagedEvidence = createStagedEvidenceStorage({ db });
+  let rawCapture;
+  rawCapture = internal?.attachRaw?.(db);
   const episodeReads = createEpisodeReads({ db, epoch, decisionReview });
   const proceduralStorage = createProceduralStorage({ db, activeRow: visibleRow, advanceEpoch, epoch });
   const sessionContextStorage = createSessionContextStorage({ db, epoch, indexStorage, readSourceEvidence, proceduralStorage, decisionReview });
   let episodes;
-  try { episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch, forgetMutation }); }
-  catch (error) { db.close(); throw error; }
+  episodes = createEpisodeStorage({ db, options: sessionEpisodes, stagedEvidence, advanceEpoch, epoch,
+    forgetMutation, rawCapture, sourceAuthority: rawLineage, sourceRoots,
+    deleteEpisode: (ns, input) => sourceRoots.enabled() ? deletion.forgetEpisode(ns, input) : undefined });
   stagedEvidence.setEpisodes(episodes);
+  deletion = createRawDeletionStorage({ db, roots: sourceRoots, episodes, forgetMutation, removeReceipts, advanceEpoch });
   const admissionStorage = createAdmissionStorage({
     db, admitMutation, isSuppressed, activeRow, epoch, conflictStorage, stagedEvidence,
-    classificationJournal, episodes, proceduralStorage,
+    classificationJournal, episodes, proceduralStorage, assertSources: rawLineage.assertReceipts, sourceRoots,
   });
   const orderedStorage = createOrderedCaptureStorage({ db, admissionStorage, epoch, activeRow,
     supersessionStorage, receiptKey, isSuppressed });
@@ -596,7 +640,7 @@ export function createMemoryRuntime(input) {
     startEpisodeAttempt(ns, input) { ready(); return episodes.startAttempt(ns, input); },
     settleEpisodeAttempt(ns, input) { ready(); return episodes.settleAttempt(ns, input); },
     episodeSessionKey(ns, client, sessionId) { ready(); return episodes.sessionKey(ns, client, sessionId); },
-    reserveEpisodeBatch(ns, input) { ready(); return episodes.reserveBatch(ns, input); },
+    reserveEpisodeBatch(ns, input, registration) { ready(); return episodes.reserveBatch(ns, input, registration); },
     setEpisodePolicy(ns,input) { ready(); return episodes.setPolicy(ns,input); },
     claimEpisodeWriter(ns, input) { ready(); return episodes.claimWriter(ns, input); },
     releaseEpisodeWriter(ns, input) { ready(); return episodes.releaseWriter(ns, input); },
@@ -616,6 +660,10 @@ export function createMemoryRuntime(input) {
     sessionContextSnapshot(ns, groups, expected) { ready(); return sessionContextStorage(ns, groups, expected); },
     episodeRange(ns, operation, filter, cursor) { ready(); return episodeReads(ns, operation, filter, cursor); },
     privateCards: cardStorage,
+    rawSourceReader: internal?.rawSources ? rawCapture?.sourceReader : undefined,
+    previewDeleteConversation(input) { ready(); return deletion.preview(input); },
+    deleteConversation(input) { ready(); return deletion.remove(input); },
+    listRawEffects(input) { ready(); return deletion.list(input); },
     identity, ready, admit, correct, forget, supersede, bindQualifiedClaim, transitionQualified, transitionQualifiedSet,
     legacyGet, legacyList, legacySearch,
     listPage, getPage, fetchPage, recentReceipts, recallSnapshot, sourceSnapshot,
@@ -624,7 +672,7 @@ export function createMemoryRuntime(input) {
       ready(); return rationaleStorage.commit(ns, refs, snapshot, proposals, deadline);
     },
     getRationale(ns, ref, view) { ready(); return rationaleStorage.inspect(ns, ref, view); },
-    claimOrdered(ns, snapshot, deadline) { ready(); return orderedStorage.claim(ns, snapshot, deadline); },
+    claimOrdered(ns, snapshot, deadline, registration, sources) { ready(); return orderedStorage.claim(ns, snapshot, deadline, registration, sources); },
     discoverOrdered(ns, snapshot, order, items) {
       ready(); return orderedStorage.discover(ns, snapshot, order, items);
     },
@@ -635,20 +683,23 @@ export function createMemoryRuntime(input) {
     rebuildIndex(ns, input) { ready(); return indexStorage.rebuildIndex(ns, input); },
     inspectAdmission(ns, input) { ready(); return admissionStorage.inspectAdmission(ns, input); },
     claimAdmission(ns, input) { ready(); return admissionStorage.claimAdmission(ns, input); },
-    claimCapturedAdmission(ns, input, deadline) {
-      ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline);
+    filterCaptureSources(ns, sources) { ready(); return rawLineage.filter(ns, sources); },
+    assertCaptureSources(ns, sources) { ready(); rawLineage.assertReceipts(ns, sources); },
+    claimCapturedAdmission(ns, input, deadline, registration, sources) {
+      ready(); return admissionStorage.claimAdmission(ns, input, undefined, undefined, deadline, registration, sources);
     },
-    claimCaptureEvidence(ns, input, deadline) {
+    claimCaptureEvidence(ns, input, deadline, registration, sources) {
       ready();
       if (input.view === undefined) fail('invalid_input');
-      return admissionStorage.claimAdmission(ns, input, undefined, input.view, deadline);
+      return admissionStorage.claimAdmission(ns, input, undefined, input.view, deadline, registration, sources);
     },
     inspectCaptureEvidence(ns, input) { ready(); return stagedEvidence.inspect(ns, input); },
     discardCaptureEvidence(ns, input) { ready(); return stagedEvidence.discard(ns, input); },
     assertCaptureEvidence(ns, input) { ready(); return admissionStorage.assertCaptureEvidence(ns, input); },
     finishAdmission(ns, input) { ready(); return admissionStorage.finishAdmission(ns, input); },
-    finishCapturedAdmission(ns, input, deadline) {
-      ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true }, deadline);
+    finishCapturedAdmission(ns, input, deadline, captureQualifiedDuplicates) {
+      ready(); return admissionStorage.finishAdmission(ns, input, { initialClassification: true,
+        ...(captureQualifiedDuplicates ? { captureQualifiedDuplicates } : {}) }, deadline);
     },
     beginInitialClassification(ns, input, admitted, selected, deadline) {
       ready(); return classificationJournal.begin(ns, input, admitted, selected, deadline);
@@ -674,4 +725,8 @@ export function createMemoryRuntime(input) {
     epoch(ns) { ready(); return epoch(ns); },
     close() { if (!closed) { db.close(); closed = true; } },
   });
+  } catch (error) {
+    try { db.close(); } catch { /* Preserve the construction failure. */ }
+    throw error;
+  }
 }

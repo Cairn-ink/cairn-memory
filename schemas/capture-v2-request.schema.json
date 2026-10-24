@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Cairn-ink/cairn-memory/schemas/capture-v2-request.schema.json",
+  "title": "Internal Raw producer v2 request (uninstalled)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "client", "event_id", "session_id", "messages"],
+  "properties": {
+    "version": { "const": 2 },
+    "client": { "enum": ["claude-code", "codex"] },
+    "event_id": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "session_id": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "project_id": { "type": "string", "minLength": 16, "maxLength": 128 },
+    "messages": {
+      "type": "array", "minItems": 1, "maxItems": 24,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "role", "occurred_at", "message_ordinal", "content", "part"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "role": { "enum": ["user", "assistant"] },
+          "occurred_at": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$", "format": "date-time" },
+          "message_ordinal": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+          "content": { "type": "string", "minLength": 1, "maxLength": 4000 },
+          "part": {
+            "type": "object", "additionalProperties": false,
+            "required": ["index", "start", "totalUnits", "totalBytes"],
+            "properties": {
+              "index": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "start": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+              "totalUnits": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+              "totalBytes": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -3,7 +3,7 @@ import { isStorageBusy } from './database.mjs';
 import { captureSnapshot, extractedItems, retainedSourceView } from './capture-input.mjs';
 import { callModel } from './model-call.mjs';
 import { fittingCap, prefixUnits, requestFits } from './model-packing.mjs';
-import { fail, MemoryStoreError } from './validation.mjs';
+import { boundedText, fail, MemoryStoreError } from './validation.mjs';
 import { emitDiagnostic } from './model-diagnostics.mjs';
 import { reconcileCapture } from './ordered-capture.mjs';
 import { qualifyExtractedItems } from './automatic-qualification.mjs';
@@ -118,7 +118,8 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const snapshot = episodeRun?.snapshot ?? captureSnapshot(input, captureQualification, captureSourcePolicy);
   deadline?.check();
   let request = extractionRequest(snapshot, { captureQualification, captureSourcePolicy, episode: Boolean(episodeRun) });
-  const { catalog, retained, sourceMessages } = request;
+  let { catalog, retained, sourceMessages } = request;
+  sourceMessages = catalog?.messages ?? sourceMessages;
   deadline?.check();
   if (!episodeRun) checkExtractionFits(model, request);
   let extractionTruncated;
@@ -133,9 +134,15 @@ export async function captureMessages({ model, input, operations, captureQualifi
     ...(captureSourcePolicy === 'indexed-evidence-v1' ? { qualificationStatus: 'not-requested' } : {}) };
   const key = { namespace: snapshot.namespace, client: snapshot.client,
     eventId: snapshot.eventId, payloadDigest: snapshot.payloadDigest };
-  const claim = episodeRun ? episodeRun.claim : snapshot.causal ? unwrap(operations.ordered.claim(snapshot))
-    : captureEvidence ? unwrap(operations.claimCaptureEvidence({ ...key, view: retained }))
-      : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }));
+  const identities = sourceMessages.map((message, index) => ({
+    client: snapshot.sourceReceipts?.[index]?.client ?? snapshot.client,
+    sessionId: snapshot.sourceReceipts?.[index]?.sessionId ?? snapshot.sessionId,
+    eventId: message.id, role: message.role, excerpt: message.content,
+  }));
+  const claim = episodeRun ? episodeRun.claim : snapshot.causal ? unwrap(operations.ordered.claim(snapshot, identities))
+    : captureEvidence ? unwrap(operations.claimCaptureEvidence({ ...key, view: retained }, identities))
+      : unwrap(operations.claimAdmission({ ...key, leaseMs: 125000 }, identities));
+  if (claim.rawReplay) return claim.rawReplay;
   if (claim.processing || claim.duplicate) return { ...claim, ...coverage,
     ...(captureRationale ? { rationale: { status: 'not-run', reason: claim.processing ? 'processing' : 'duplicate',
       previousOutcome: 'unavailable' } } : {}) };
@@ -143,28 +150,46 @@ export async function captureMessages({ model, input, operations, captureQualifi
   const qualificationReport = {};
   let finished;
   try {
+    const allowed = operations.filterCaptureSources?.(identities) ?? identities.map((_, index) => index);
+    if (!allowed.length && !episodeRun?.skip) fail('source_excluded');
+    const selected = allowed.map(index => identities[index]);
+    const assertSources = () => operations.assertCaptureSources?.(selected);
+    const sourceView = allowed.length === identities.length ? undefined : allowed.map(index => ({
+      index: catalog ? catalog.entries[index].messageIndex : index,
+      role: sourceMessages[index].role, content: sourceMessages[index].content,
+    }));
+    sourceMessages = allowed.map(index => sourceMessages[index]);
+    if (catalog) {
+      catalog = { ...catalog, entries: allowed.map((index, position) => ({ ...catalog.entries[index], index: position })),
+        messages: sourceMessages };
+      request = { ...request, input: { ...request.input,
+        messages: allowed.map((index, position) => ({ ...request.input.messages[index], index: position })) } };
+    } else request = { ...request, input: { ...request.input,
+      messages: allowed.map((index, position) => ({ ...request.input.messages[index], index: position })) } };
     deadline?.check();
     const output = episodeRun?.skip ? { items: [] } : await callModel(model, 'extract', request.system, request.input,
-      { failureCode: 'extraction_failed', deadline });
+      { failureCode: 'extraction_failed', deadline, validateFresh: assertSources });
     let items = catalog ? extractedWindowItems(output, snapshot, catalog,
-      reason => emitDiagnostic(model, 'extract', 'core_validation', reason)) : extractedItems(output, snapshot, retained?.messages,
-      reason => emitDiagnostic(model, 'extract', 'core_validation', reason));
+      reason => emitDiagnostic(model, 'extract', 'core_validation', reason)) : extractedItems(output, snapshot,
+      retained ? sourceMessages : sourceMessages.map(message => ({ ...message, content: boundedText(message.content, 800, true) })),
+      reason => emitDiagnostic(model, 'extract', 'core_validation', reason), selected);
+    if (!catalog && snapshot.causal) for (const item of items) item.sourceIndices = item.sourceIndices.map(index => allowed[index]);
     deadline?.check();
     // Do not start another interpretation stage after explicit discard/forget.
     // A provider request already in flight cannot be recalled by local deletion.
     if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned));
     if (captureQualification && items.length) items = captureQualification === 'source-bound-v2'
       ? await qualifyCandidateItems(model, items, deadline,
-        captureEvidence ? () => unwrap(operations.assertCaptureEvidence(owned)) : undefined, Boolean(episodeRun),
+        () => { assertSources(); if (captureEvidence) unwrap(operations.assertCaptureEvidence(owned)); }, Boolean(episodeRun),
         qualificationReport)
-      : await qualifyExtractedItems(model, items, deadline, qualificationReport);
+      : await qualifyExtractedItems(model, items, deadline, qualificationReport, assertSources);
     deadline?.check();
     if (snapshot.causal) {
       const prepared = unwrap(operations.ordered.prepare(snapshot, claim.order, items));
       deadline?.check();
       const judged = captureQualification
         ? { decisions: [], reason: items.length ? 'qualification_requires_identity' : null }
-        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline });
+        : await reconcileCapture({ model, snapshot, items, discovery: prepared.discovery, deadline, validateFresh: assertSources, sourceView });
       deadline?.check();
       finished = unwrap(operations.ordered.finish(snapshot, claim.token, claim.order, prepared, judged));
     } else finished = unwrap(operations.finishAdmission({ ...owned, items }));

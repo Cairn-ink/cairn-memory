@@ -1,7 +1,11 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { installRawDeletion, RAW_DELETION_SCHEMA_VERSION } from './raw-deletion-schema.mjs';
+import { installRawSources, RAW_SOURCE_SCHEMA_VERSION } from './raw-source-schema.mjs';
+import { assertNoLocalAuthority, installLocalAuthority, validateLocalAuthority, validateRawSourcePrerequisites, LOCAL_AUTHORITY_SCHEMA_VERSION } from './local-authority-schema.mjs';
 import { closeSync, lstatSync, mkdirSync, openSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { existingStoreOption, existingStorePath, validateExistingStore } from './existing-store.mjs';
 import { migrateVersion17, CONFIRMATION_SCHEMA_VERSION } from './confirmation-schema.mjs';
 import { fail } from "./validation.mjs";
 import { installPrivateCards, installCardMemorySources, PRIVATE_CARD_SCHEMA_VERSION } from './private-card-schema.mjs';
@@ -14,6 +18,8 @@ import { migrateVersion10 } from './qualified-transition-schema.mjs';
 import { migrateVersion11 } from './rationale-schema.mjs';
 import { migrateVersion12 } from './staged-evidence-schema.mjs';
 import { migrateVersion13 } from './classification-journal-schema.mjs';
+import { installRawJournal, RAW_SCHEMA_VERSION, installRawCapture, RAW_CAPTURE_SCHEMA_VERSION } from './raw-schema.mjs';
+import { installRawLineage, RAW_LINEAGE_SCHEMA_VERSION } from './raw-lineage-schema.mjs';
 
 import { migrateVersion14, migrateVersion15, migrateVersion16 } from './episode-schema.mjs';
 
@@ -21,8 +27,11 @@ export const STORAGE_BUSY_TIMEOUT_MS = 5_000;
 export const isStorageBusy = error => error?.code === 'ERR_SQLITE_ERROR' &&
   Number.isInteger(error.errcode) && [5, 6].includes(error.errcode & 0xff);
 
-const APPLICATION_ID = 0x43414952;
+export const APPLICATION_ID = 0x43414952;
 const VERSION = CONFIRMATION_SCHEMA_VERSION;
+// Existing layouts accepted without an upgrade by the ordinary opener.
+export const READ_SCHEMA_VERSIONS = Object.freeze([VERSION, 20, PRIVATE_CARD_SCHEMA_VERSION,
+  PRIVATE_EVIDENCE_SCHEMA_VERSION, PRIVATE_ORGANIZATION_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION]);
 
 function createVersion3(db) {
   db.exec(`
@@ -265,7 +274,26 @@ export function transaction(db, work, check) {
   }
 }
 
-export function openDatabase(path, { privateCards = false } = {}) {
+export function openDatabase(path, { privateCards = false, rawConversations = false, rawCapture = false, rawLineage = false, rawDeletion = false, rawSources = false, localControls = false, existingStore } = {}) {
+  if ([rawConversations, rawCapture, rawLineage, rawDeletion, rawSources, localControls].some(value => typeof value !== 'boolean')) fail('invalid_input');
+  rawDeletion ||= rawSources || localControls;
+  rawLineage ||= rawDeletion;
+  rawCapture ||= rawLineage;
+  rawConversations ||= rawCapture;
+  if (existingStore !== undefined) {
+    const option = existingStoreOption(existingStore), location = existingStorePath(path);
+    const db = new DatabaseSync(location.uri, { timeout: STORAGE_BUSY_TIMEOUT_MS });
+    try {
+      location.check();
+      db.exec('PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;');
+      validateExistingStore(db, option);
+      location.check();
+      return db;
+    } catch (error) {
+      try { db.close(); } catch { /* Preserve the construction failure. */ }
+      throw error;
+    }
+  }
   if (typeof path !== "string" || !path.trim() || path.includes("\0")) fail("invalid_path");
   if (path !== ":memory:") {
     path = resolve(path);
@@ -286,16 +314,60 @@ export function openDatabase(path, { privateCards = false } = {}) {
     transaction(db, () => {
       const appId = db.prepare("PRAGMA application_id").get().application_id;
       const version = db.prepare("PRAGMA user_version").get().user_version;
+      if (appId === APPLICATION_ID && [RAW_SCHEMA_VERSION, RAW_CAPTURE_SCHEMA_VERSION, RAW_LINEAGE_SCHEMA_VERSION, RAW_DELETION_SCHEMA_VERSION, RAW_SOURCE_SCHEMA_VERSION, LOCAL_AUTHORITY_SCHEMA_VERSION].includes(version)) {
+        if (version < LOCAL_AUTHORITY_SCHEMA_VERSION) assertNoLocalAuthority(db);
+        for (const name of ['raw_conversations','raw_messages','raw_parts','raw_events','raw_owner_usage','raw_capture_controls',
+          'private_cards','card_notes','card_applicability_reviews','evidence_mappings']) {
+          if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
+        }
+        if (version >= RAW_CAPTURE_SCHEMA_VERSION) {
+          for (const name of ['raw_capture_events', 'raw_session_fences']) {
+            if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
+          }
+        } else if (rawCapture) {
+          installRawCapture(db);
+          db.exec(`PRAGMA user_version = ${RAW_CAPTURE_SCHEMA_VERSION};`);
+        }
+        if (version >= RAW_LINEAGE_SCHEMA_VERSION) {
+          for (const name of ['raw_source_maps','raw_receipt_lineage','raw_receipt_origins','raw_exclusion_clocks','raw_source_exclusions']) {
+            if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
+          }
+        } else if (rawLineage) {
+          installRawLineage(db);
+          db.exec(`PRAGMA user_version = ${RAW_LINEAGE_SCHEMA_VERSION};`);
+        }
+        if (version >= RAW_DELETION_SCHEMA_VERSION) {
+          for (const name of ['raw_deletion_actions','raw_job_sources','raw_closed_jobs','raw_deletion_effects']) {
+            if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)) fail('unsupported_database');
+          }
+        } else if (rawDeletion) {
+          installRawDeletion(db);
+          db.exec(`PRAGMA user_version = ${RAW_DELETION_SCHEMA_VERSION};`);
+        }
+        if (version >= RAW_SOURCE_SCHEMA_VERSION) {
+          validateRawSourcePrerequisites(db);
+        } else if (rawSources || localControls) {
+          installRawSources(db);
+          db.exec(`PRAGMA user_version = ${RAW_SOURCE_SCHEMA_VERSION};`);
+        }
+        if (version === LOCAL_AUTHORITY_SCHEMA_VERSION) validateLocalAuthority(db);
+        else if (localControls) {
+          installLocalAuthority(db);
+          db.exec(`PRAGMA user_version = ${LOCAL_AUTHORITY_SCHEMA_VERSION};`);
+        }
+        return;
+      }
+      function upgrade() {
       if (appId === APPLICATION_ID && version === PRIVATE_ORGANIZATION_SCHEMA_VERSION) return;
       if (appId === APPLICATION_ID && version === PRIVATE_EVIDENCE_SCHEMA_VERSION) {
-        if (privateCards) {
+        if (privateCards || rawConversations) {
           installPrivateOrganization(db);
           db.exec(`PRAGMA user_version = ${PRIVATE_ORGANIZATION_SCHEMA_VERSION};`);
         }
         return;
       }
       if (appId === APPLICATION_ID && version === PRIVATE_CARD_SCHEMA_VERSION) {
-        if (privateCards) {
+        if (privateCards || rawConversations) {
           installPrivateEvidence(db);
           installPrivateOrganization(db);
           db.exec(`PRAGMA user_version = ${PRIVATE_ORGANIZATION_SCHEMA_VERSION};`);
@@ -303,7 +375,7 @@ export function openDatabase(path, { privateCards = false } = {}) {
         return;
       }
       if (appId === APPLICATION_ID && version === 20) {
-        if (privateCards) {
+        if (privateCards || rawConversations) {
           installCardMemorySources(db);
           installPrivateEvidence(db);
           installPrivateOrganization(db);
@@ -312,7 +384,7 @@ export function openDatabase(path, { privateCards = false } = {}) {
         return;
       }
       if (appId === APPLICATION_ID && version === VERSION) {
-        if (privateCards) {
+        if (privateCards || rawConversations) {
           installPrivateCards(db);
           installCardMemorySources(db);
           installPrivateEvidence(db);
@@ -464,12 +536,38 @@ export function openDatabase(path, { privateCards = false } = {}) {
       }
       migrateVersion17(db);
       db.exec(`PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${VERSION};`);
-      if (privateCards) {
+      if (privateCards || rawConversations) {
         installPrivateCards(db);
         installCardMemorySources(db);
         installPrivateEvidence(db);
         installPrivateOrganization(db);
         db.exec(`PRAGMA user_version = ${PRIVATE_ORGANIZATION_SCHEMA_VERSION};`);
+      }
+      }
+      upgrade();
+      if (rawConversations) {
+        installRawJournal(db);
+        db.exec(`PRAGMA user_version = ${RAW_SCHEMA_VERSION};`);
+        if (rawCapture) {
+          installRawCapture(db);
+          db.exec(`PRAGMA user_version = ${RAW_CAPTURE_SCHEMA_VERSION};`);
+          if (rawLineage) {
+            installRawLineage(db);
+            db.exec(`PRAGMA user_version = ${RAW_LINEAGE_SCHEMA_VERSION};`);
+            if (rawDeletion) {
+              installRawDeletion(db);
+              db.exec(`PRAGMA user_version = ${RAW_DELETION_SCHEMA_VERSION};`);
+              if (rawSources || localControls) {
+                installRawSources(db);
+                db.exec(`PRAGMA user_version = ${RAW_SOURCE_SCHEMA_VERSION};`);
+                if (localControls) {
+                  installLocalAuthority(db);
+                  db.exec(`PRAGMA user_version = ${LOCAL_AUTHORITY_SCHEMA_VERSION};`);
+                }
+              }
+            }
+          }
+        }
       }
     });
     return db;

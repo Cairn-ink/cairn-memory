@@ -20,7 +20,7 @@ const errorCode = error => isStorageBusy(error) ? 'storage_busy'
 export function episodeRequest(model, snapshot) {
   const target = snapshot.events.find(event => event.eventId === snapshot.targetEventId);
   if (!target) fail(snapshot.missingReason ?? 'missing_evidence');
-  const sources = [], refs = [], counts = new Map();
+  const sources = [], refs = [], receipts = [], counts = new Map();
   let prior = {};
   const request = () => ({
     sources: sources.map((source, sourceIndex) => ({ sourceIndex, ...source })),
@@ -31,16 +31,21 @@ export function episodeRequest(model, snapshot) {
   const add = (event, message) => {
     sources.push({ role: message.role, text: message.content });
     refs.push({ eventId: event.eventId, messageId: message.id });
+    receipts.push({ client: snapshot.client, sessionId: snapshot.sessionKey,
+      eventId: message.id, role: message.role, excerpt: message.content });
   };
-  for (const message of target.view.messages) add(target, message);
+  const eligibleMessages = event => event.sourceIndices === undefined ? event.view.messages
+    : event.sourceIndices.map(index => event.view.messages[index]);
+  for (const message of eligibleMessages(target)) add(target, message);
+  if (!sources.length) fail('source_excluded');
   if (!fits()) fail('context_budget_exceeded');
-  counts.set(target.eventId, target.view.messages.length);
+  counts.set(target.eventId, sources.length);
   for (const event of snapshot.events) {
     if (event === target) continue;
     let count = 0;
-    for (const message of [...event.view.messages].reverse()) {
+    for (const message of [...eligibleMessages(event)].reverse()) {
       add(event, message);
-      if (!fits()) { sources.pop(); refs.pop(); } else count++;
+      if (!fits()) { sources.pop(); refs.pop(); receipts.pop(); } else count++;
     }
     counts.set(event.eventId, count);
   }
@@ -48,7 +53,8 @@ export function episodeRequest(model, snapshot) {
   // Newest first is equivalent to dropping the oldest prefix until whole sources fit.
   for (const source of [...snapshot.sources].reverse()) {
     sources.push({ role: source.role, text: source.text }); refs.push({ sourceId: source.id });
-    if (!fits()) { sources.pop(); refs.pop(); break; } else included.set(source.id, refs.length - 1);
+    receipts.push(source.receipt);
+    if (!fits()) { sources.pop(); refs.pop(); receipts.pop(); break; } else included.set(source.id, refs.length - 1);
   }
   for (const field of ['type','gist','outcome','nextStep']) {
     const value = snapshot.record[field];
@@ -62,9 +68,9 @@ export function episodeRequest(model, snapshot) {
         start: anchor.start, end: anchor.end })) };
     if (!fits()) delete prior[field];
   }
-  return { input: request(), refs,
+  return { input: request(), refs, receipts,
     stepGuard: prior.nextStep?.stepRef ? { stepId: snapshot.record.nextStep.id, expectedRevision: snapshot.revision } : null,
-    priorOmitted: snapshot.sources.length - included.size,
+    priorOmitted: (snapshot.priorSourceCount ?? snapshot.sources.length) - included.size,
     dispositions: snapshot.events.map(event => ({ eventId: event.eventId,
       omitted: event.view.messages.length - counts.get(event.eventId),
       omittedIndices: event.view.messages.flatMap((message, index) =>
@@ -98,6 +104,8 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
     let checks = 0;
     const output = await callModel(model, 'interpretEpisode', system, planned.input, {
       failureCode: 'episode_failed', validateFresh: () => {
+        // Check the actual prepared request, not a freshly filtered replacement.
+        runtime.assertCaptureSources(ns, planned.receipts);
         runtime.episodeDraftSnapshot(ns, owned);
         // callModel checks once during preparation and again immediately before
         // invoking the port. Consume only at that second check, with no await.
@@ -159,7 +167,7 @@ async function interpret({ runtime, ns, model, episodeId, generation, writerToke
     if (pendingFailure) onPendingFailure?.({ ...owned, code: outcome });
     return { id: episodeId, status: 'failed', error: pendingFailure
       ? { code: 'episode_outcome_pending', retryable: false }
-      : { code: reportedCode, retryable } };
+      : { code: error.code === 'source_excluded' ? 'source_excluded' : reportedCode, retryable } };
   } finally {
     try { if (owned && retryable) runtime.settleEpisodeAttempt(ns, { ...owned, retryable }); }
     catch (error) { if (!isStorageBusy(error)) throw error; }
@@ -204,7 +212,12 @@ export async function captureEpisodeMessages(options) {
     messages: snapshot.messages, eventStart: snapshot.eventStart, eventEnd: snapshot.eventEnd,
     eventTimeCoverage: snapshot.eventTimeCoverage };
   delete batch.origin;
-  const checked = runtime.validateEpisodeBatch(ns, batch);
+  // Raw registration and the existing episode/admission reservation precede
+  // every duplicate/processing return and any lazy provider work.
+  let registered = options.rawRegistration
+    ? runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true }, options.rawRegistration) : undefined;
+  if (registered?.rawReplay) return registered.rawReplay;
+  const checked = registered ?? runtime.validateEpisodeBatch(ns, batch);
   if (checked.processing) return { processing: true,
     episode: { status: 'processing' }, admission: { status: 'processing' } };
   if (checked.overlap) return { duplicate: true, overlap: true,
@@ -216,7 +229,7 @@ export async function captureEpisodeMessages(options) {
     if (pending) lazy = await auxiliary({ runtime, ns, model, episodeId: pending,
       generation: batch.generation, trigger: 'lazy' });
   }
-  const registered = runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
+  registered ??= runtime.reserveEpisodeBatch(ns, { ...batch, acquireWriter: true });
   const episodeId = registered.episodeId;
   if (registered.processing) return { processing: true,
     episode: { id: episodeId, status: 'processing' }, admission: { status: 'processing' } };
@@ -278,6 +291,7 @@ export async function keepEpisodeCapture(options) {
     payloadDigest: kept.key.payloadDigest, sessionId: kept.sessionKey,
     messages: kept.sources.map(source =>
       ({ id: source.message_id, role: source.role, content: source.text })),
+    sourceReceipts: kept.sources.map(source => ({ client: source.originClient, sessionId: source.originSessionKey })),
     captureQualification: 'source-bound-v2', sessionEpisodes: 'episode-v1' };
   const operations = { ...options.operations,
     assertCaptureEvidence: value => {

@@ -1,5 +1,32 @@
 # Local MCP source preview
 
+An already retained schema 29 store can instead use the separate keyless
+[`--retained-raw-profile` path](private-card-terminal-review.md#retained-raw-profile).
+It fixes store/namespace through a private profile, keeps the existing 22 Card
+tools and adds `list_raw_conversations({client,limit?,cursor?})`,
+`read_raw_conversation({conversationId,limit?,cursor?})`, and
+`resolve_source_references({anchors,budgets?})`: 25 tools in total. Optional
+`budgets` contains `sourceByteLimit`, `scanRowLimit`, `deadlineMs` and/or
+`responseByteLimit`. This exclusive
+option cannot be combined with ordinary flags. Explicit Raw-backed authored
+drafts need no Memory intermediary and still require separate terminal review.
+
+On Linux/WSL with Node >=22.16, use the documented existing-store profile:
+
+```sh
+node adapters/mcp/cli.mjs --check-config --retained-raw-profile /absolute/private/retained.json
+node adapters/mcp/cli.mjs --retained-raw-profile /absolute/private/retained.json
+```
+
+This syntax/runtime check reads no profile, database or API key. Actual MCP
+negotiation constructs and validates the core; empty stdin can exit without
+invoking that lazy factory and is not a store-readiness probe. Discovery returns
+bounded metadata, not saved/completed coverage. Conversation reads still compute
+aggregates, without a constant-time large-history guarantee. The linked guide
+shows public IDs, source resolution, drafting and cold inspection. No provider,
+Raw capture, consent or quota changes are enabled by this path. Ordinary
+configuration and receipt-only draft behavior remain as documented below.
+
 Private Cards are an explicit local opt-in: add `--private-cards local-v1` (or
 `privateCards: 'local-v1'` to `createCairnServer`). This adds bounded keyless
 inspection, receipt-backed authored drafts, draft cancellation and typed common

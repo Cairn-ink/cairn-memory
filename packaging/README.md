@@ -94,6 +94,26 @@ registry installation command is provided.
 
 ## Manual archive install and start
 
+The private archive also contains an explicit Linux local capture host. Its
+owner-operated profile, status/prepare/initialize/run grammar and refusal codes
+are documented in [the local Raw guide](../docs/raw-local-journal.md#explicit-local-host-b4c).
+This entry requires an existing schema29 store and separately recorded current
+capture consent. That host entry itself does not install Claude/Codex hooks, create a
+database, grant consent or configure an MCP Raw/Card review interface. The
+bounded evidence uses synthetic sources and fake HTTP; no real-client activation
+or semantic-quality claim follows from the archive checks.
+
+The separate explicit `cairn-memory local` preview can initialize a brand-new
+schema 29 store, prepare consent-bound installation state and activate foreground
+native JSON hooks only after distinct consents and finite limits. Defaults stay
+off; ordinary MCP/host startup does none of that. Inside an installed package,
+read `docs/raw-local-journal.md` relative to that package's root; the guide is
+included in the archive and `cairn-memory local --help` identifies the same path.
+The [repository operator-guide link](../docs/raw-local-journal.md#explicit-standalone-foreground-setup-preview)
+is for source-checkout readers. The guide covers the closed request, qualified
+Codex prerequisite, 160-second foreground
+latency, shared usage root, SQL-first disable and explicit rearm limitations.
+
 Use Node >=22.16 and npm, with the downloaded local archive's SHA-256 verified
 against its accompanying build report. Create a local installation directory,
 then run there:
@@ -116,7 +136,8 @@ scope. The process waits for MCP JSON-RPC on stdin; stdout is protocol-only.
 Configure an MCP client's local command to use that executable and those args.
 This does not certify a specific named client or remote connector.
 
-`--check-config` must be the first argument. It checks argument and key syntax,
+For the ordinary arguments above, `--check-config` must be the first argument.
+It checks argument and key syntax,
 prints a JSON report and exits without opening a database or making network
 requests. It does not verify database readiness, credential validity or model
 availability. Paths, owner/project IDs and keys are not printed in its report.
@@ -131,6 +152,42 @@ but model recall is not offline. MCP does not capture conversations automaticall
 The recall adapter uses the pinned default model `gpt-4.1-mini-2025-04-14`.
 Explicit remember bypasses model extraction. The experimental extraction profile
 is only a programmatic adapter option, not a CLI switch or a recall quality promise.
+
+## Keyless retained Raw inspection and authored Cards
+
+The same private archive has a separate Linux/WSL, Node >=22.16 path for an
+already existing compatible schema 29 store. It is not the capture host above
+or an installer-generated profile; it grants no capture consent, provider access,
+permission change or quota reconfiguration. Keep the database outside `app/`.
+
+Create the exact owner-selected profile described in the
+[retained Raw/TTY walkthrough](../docs/private-card-terminal-review.md#retained-raw-profile):
+own-UID regular profile/database files 0600 and immediate directories 0700,
+canonical host ancestors, exact store ID obtained from trusted already-opened
+host/SDK inspection, and an existing namespace. No store ID guessing or migration
+for discovery is supported. Then configure the installed executable:
+
+```sh
+./node_modules/.bin/cairn-memory --check-config --retained-raw-profile /absolute/private/retained.json
+./node_modules/.bin/cairn-memory --retained-raw-profile /absolute/private/retained.json
+```
+
+Do not combine this exclusive option with ordinary database/owner/model/capture
+flags. Its syntax/runtime check reads no profile, database or API key. Actual
+MCP negotiation validates readiness; an empty-stdin exit is not such a probe.
+Default startup remains five tools, ordinary private Cards remain 22, and this
+profile exposes 25. Public discovery/read/resolve supplies actual Raw references
+for explicit authored drafts without a fake Memory. MCP confirmation refuses;
+the separate `review-card --retained-raw-profile ...` controlling-TTY command
+reinspects and confirms only the exact displayed revision and bindings.
+
+Only local-plain UTF-8 sources are decoded; gaps/skips remain visible, with no
+provider fallback. A cold restart can inspect the same Card/source; deleting a
+source cancels drafts and leaves confirmed text unsupported rather than erasing
+that authored body. See the linked guide for exact arguments, limits and logical
+deletion caveats. These offline synthetic archive checks do not establish
+semantic quality, real-client activation, native macOS/Windows support or a
+public registry release.
 
 ## Inspect, correct and delete
 
@@ -176,7 +233,9 @@ decision; uninstall is not a secure-data-erasure operation.
 - No terminal output: normal for a stdio server waiting for a client request.
 
 Incoming messages are capped at 64 KiB; tool output at 256 KiB. The host has no
-HTTP listener, telemetry, authentication service, automatic hooks, or hosted UI.
+HTTP listener, telemetry, authentication service, default-on automatic hooks, or
+hosted UI. Native foreground hooks require the separate explicit `local setup`
+and `local activate` consent flow; ordinary MCP startup does not install them.
 Local process/database access is trusted; owner labels are not OS access control.
 General semantic quality and actual named-client compatibility remain separate
 gates. See THIRD_PARTY_NOTICES.md and npm-shrinkwrap.json for dependency provenance.

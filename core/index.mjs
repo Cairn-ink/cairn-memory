@@ -5,6 +5,7 @@ import {
 
 export { MemoryStoreError } from "./validation.mjs";
 export { openMemoryCore } from "./contract.mjs";
+export { openMemoryReader } from './memory-reader.mjs';
 
 /** Embedded storage only. The caller, not this library, authenticates owners. */
 export function openMemoryStore(input) {

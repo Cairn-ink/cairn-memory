@@ -3,6 +3,8 @@ import { transaction, isStorageBusy } from './database.mjs';
 import { ADMISSION_LEASE_MS, HEX_DIGEST } from './episode-schema.mjs';
 import { boundedText, denseArray, fail, identifier, object, revision } from './validation.mjs';
 import { sourceDigest, sourceSpan } from './procedural-storage.mjs';
+import { createRawControlStorage } from './raw-control-storage.mjs';
+import { localAuthorityGuard } from './local-authority-guard.mjs';
 
 const GAP_CODES = new Set(['forgotten', 'discarded', 'expired', 'capacity', 'omitted',
   'episode_failed', 'episode_timeout', 'invalid_model_output', 'context_budget_exceeded',
@@ -54,7 +56,12 @@ export function episodeMetadata(ns, row) {
 }
 
 /** All write seams are model-free. SE-2 owns scheduling and provider calls. */
-export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation }) {
+export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch, epoch, forgetMutation, rawCapture, sourceAuthority, sourceRoots, deleteEpisode }) {
+  const rawControls = createRawControlStorage(db);
+  // Cleanup-only callers need only exec; defer the optional schema probe until
+  // a real episode publication attempt, preserving that legacy failure seam.
+  let rawCaptureAvailable;
+  const hasRawCapture = () => rawCaptureAvailable ||= Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE name='raw_capture_events'").get());
   const read = (ns, id) => db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND id=?`)
     .get(...boundary(ns), id);
   const event = (ns, input) => input.keepActionId ? null : db.prepare(`SELECT * FROM episode_events WHERE ${eventWhere}`)
@@ -140,7 +147,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const previous = JSON.parse(row.record);
       for (const key of ['eventStart', 'eventEnd', 'eventTimeCoverage']) record[key] = previous[key];
     }
-    db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(id);
+    mutateSources(ns, id, () => db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(id));
     db.prepare('UPDATE session_episodes SET source_fence=source_fence+1,writer_token=NULL,writer_expires_at=NULL WHERE id=?').run(id);
     save(ns, row, record);
   }
@@ -149,6 +156,12 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     for (const { episode_id: id } of roots) invalidateSources(ns, id, preserveInterval);
   }
   function invalidateSources(ns, id, preserveInterval = false) {
+    return mutateSources(ns, null, () => invalidateSourceConsumers(ns, id, preserveInterval));
+  }
+  function mutateSources(ns, id, work) {
+    return sourceRoots?.mutateEpisodeSources ? sourceRoots.mutateEpisodeSources(ns, id, work) : work();
+  }
+  function invalidateSourceConsumers(ns, id, preserveInterval = false) {
     // Capture consumers before deleting passages, including zero-memory episodes.
     const pending = [id], seen = new Set();
     while (pending.length) {
@@ -160,7 +173,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     for (const current of seen) invalidate(ns, current, preserveInterval);
   }
   function setControl(ns, input, project = false) {
-    if (!options) fail('episode_mode_required');
+    if (!options && !rawCapture && !sourceRoots?.enabled()) fail('episode_mode_required');
     if (project && ns.scope !== 'project') fail('invalid_input');
     return transaction(db, () => {
       if (getControl(ns).generation !== input.expectedGeneration) fail('generation_conflict');
@@ -171,6 +184,10 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       db.prepare(`INSERT INTO episode_controls(owner_id,scope,project_id,generation,paused,enabled) VALUES(?,?,?,?,?,?)
         ON CONFLICT(owner_id,scope,project_id) DO UPDATE SET generation=excluded.generation,paused=excluded.paused,enabled=excluded.enabled`)
         .run(...boundary(ns), next.generation, +next.paused, +next.enabled);
+      if (next.paused || !next.enabled) {
+        if (sourceRoots?.enabled()) rawControls.closePendingInside({ ownerId: ns.ownerId, namespace: ns, reason: 'capture_barrier' });
+        else rawCapture?.closePending({ ownerId: ns.ownerId, namespace: ns, reason: 'capture_barrier' });
+      }
       if (project && !flag) {
         for (const registered of db.prepare(`SELECT client,event_id FROM episode_events WHERE ${where}
           AND (admission!='completed' OR disposition=0)`).all(...boundary(ns))) {
@@ -205,7 +222,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     db.prepare(`UPDATE episode_events SET admission='pending' WHERE ${eventWhere}`).run(...eventKey(ns,input));
     return registered.policy;
   }
-  function reserveBatch(ns, input) {
+  function reserveBatch(ns, input, registration) {
     if (!options) fail('episode_mode_required');
     object(input, ['client','clientLabel','sessionId','eventId','payloadDigest','generation','view',
       'eventStart','eventEnd','eventTimeCoverage','writerToken','messages','acquireWriter']);
@@ -219,12 +236,16 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     const ledger = messageLedger(input.messages);
     stagedEvidence.serializeView(input.view, true); // Validate before registration, including overlaps.
     const identity = sessionKey(ns, input.client, input.sessionId);
-    return transaction(db, () => {
+    const reserve = () => {
+      sourceRoots?.assertSession(ns, input.client, input.sessionId);
+      const registeredRaw = registration?.commit();
+      if (registeredRaw?.observation) return { rawReplay: registeredRaw.observation };
       let row = db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND client=? AND session_key=?`)
         .get(...boundary(ns), input.client, identity);
       if (row?.deleted) fail('capture_evidence_closed');
       const prior = event(ns, input);
       if (prior) {
+        if (registration && !registration.replay) fail('event_payload_conflict');
         if (prior.episode_id !== row?.id || prior.payload_digest !== input.payloadDigest) fail('event_payload_conflict');
         const denied = guard(ns, input); if (denied) fail(denied);
         return { episodeId: row.id, sessionKey: identity, position: prior.position, staging: prior.staging, duplicate: true,
@@ -234,6 +255,9 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       assertControl(ns, input.generation);
       if (db.prepare(`SELECT 1 FROM admission_claims WHERE ${eventWhere}`).get(...eventKey(ns, input))) fail('event_payload_conflict');
       const { fresh, unfinished } = messageCoverage(ns, row, input.client, ledger);
+      // A legacy covered message cannot be silently archived as a new Raw
+      // first part without its own atomic admission reservation. No backfill.
+      if (registration && fresh.length !== ledger.length) fail('event_payload_conflict');
       if (!fresh.length) return { episodeId: row.id, sessionKey: identity, position: row.observed, overlap: true, processing: unfinished };
       const now = stagedEvidence.touch(ns, true), received = new Date(now).toISOString();
       db.prepare(`INSERT OR IGNORE INTO episode_controls(owner_id,scope,project_id,generation,paused,enabled) VALUES(?,?,?,'initial',0,1)`).run(...boundary(ns));
@@ -279,6 +303,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
           staged ? 'staged' : 'not-staged', staged ? null : 'capacity', staged ? '[]' : '["capacity"]', received);
       db.prepare(`UPDATE episode_events SET message_ids=? WHERE ${eventWhere}`).run(JSON.stringify(messageIds), ...eventKey(ns, input));
       if (staged) stagedEvidence.insert(ns, input, serialized, now, 'episode-v1');
+      sourceRoots?.bindJob(ns, input, selected.map(({ message }) => ({ client: input.client,
+        sessionId: input.sessionId, eventId: message.id, role: message.role, excerpt: message.content })));
       row = read(ns, row.id);
       const record = JSON.parse(row.record);
       record.eventStart = record.eventStart && start ? [record.eventStart,start].sort()[0] : record.eventStart ?? start;
@@ -289,7 +315,11 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       save(ns, row, record);
       return { episodeId: row.id, sessionKey: identity, position, staging: staged ? 'staged' : 'not-staged', duplicate: false, messageIds,
         ...(input.acquireWriter ? captureWriter(read(ns, row.id)) : {}) };
-    });
+    };
+    const result = transaction(db, () => sourceRoots ? sourceRoots.mutateSources(ns,
+      input.view.messages.map(message => ({ client: input.client, sessionId: input.sessionId, eventId: message.id })), reserve) : reserve());
+    registration?.accept();
+    return result;
   }
   // Preserve all reasons and keep terminal fences stronger than diagnostic failures.
   function mergeGap(ns, input, reason) {
@@ -390,6 +420,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
   }
   function validateBatch(ns, input) {
     return transaction(db, () => {
+      sourceRoots?.assertSession(ns, input.client, input.sessionId);
       const identity = sessionKey(ns, input.client, input.sessionId);
       const row = db.prepare(`SELECT * FROM session_episodes WHERE ${where} AND client=? AND session_key=?`)
         .get(...boundary(ns), input.client, identity);
@@ -444,6 +475,17 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     if (!claim || claim.finished || claim.expires_at <= Date.now() || claim.revision !== row.revision || claim.source_fence !== row.source_fence) fail('stale_episode');
     // A pre-pause attempt can finish; project stop increments its source fence.
     if (control(ns)?.enabled === 0) fail('capture_disabled');
+    const rawWatermark = hasRawCapture() && db.prepare(`SELECT r.* FROM episode_events e JOIN raw_capture_events r
+      USING(owner_id,scope,project_id,client,event_id) WHERE e.episode_id=? AND e.position=?`)
+      .get(row.id, claim.watermark);
+    if (rawWatermark) {
+      const localDenied = localAuthorityGuard(db,rawWatermark);
+      if (localDenied) fail(localDenied);
+      const current = getControl(ns);
+      if (current.paused || current.generation !== claim.generation) fail('capture_disabled');
+      if (db.prepare(`SELECT 1 FROM raw_session_fences WHERE ${where} AND client=? AND session_key=?`)
+        .get(...boundary(ns), row.client, row.session_key)) fail('capture_evidence_closed');
+    }
     return { row, claim };
   }
   function startAttempt(ns, input) {
@@ -497,7 +539,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     } finally { db.exec(`PRAGMA busy_timeout=${timeout}`); }
   }
   function commitDraft(ns, input) {
-    return transaction(db, () => {
+    return transaction(db, () => mutateSources(ns, null, () => {
       stagedEvidence.touch(ns);
       const { row, claim } = attempt(ns, input), old = JSON.parse(row.record);
       object(input.result, ['type','language','gist','outcome','nextStep','disposition']);
@@ -526,6 +568,7 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       });
       const selected = new Set(sources.map(s => `${s.origin_episode_id}:${s.event_id}:${s.message_id}`));
       if (selected.size !== sources.length) fail('invalid_input');
+      assertDraftSources(ns, sources);
       const anchors = value => denseArray(value, 1, 4).map(anchor => {
         object(anchor, ['sourceIndex','start','end']);
         if (!Number.isSafeInteger(anchor.sourceIndex)) fail('invalid_input');
@@ -623,6 +666,9 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const cited = new Set(Object.values(record.anchors).flat().map(anchor => anchor.sourceId));
       sources = sources.filter(source => cited.has(source.id));
       if (sources.length > 16) fail('invalid_input');
+      // Pinned fields and step closure can reattach sources not in this request.
+      // Validate those original identities too, before any publication mutation.
+      assertDraftSources(ns, sources);
       object(input.modelMetadata, ['adapter','model','profile','promptVersion','digest','portVersion']);
       record.modelMetadata = {};
       for (const field of ['adapter','model','profile']) record.modelMetadata[field] = input.modelMetadata[field] == null ? null : episodeText(input.modelMetadata[field], 100);
@@ -645,9 +691,11 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       const consumers = db.prepare('SELECT DISTINCT episode_id FROM episode_sources WHERE origin_episode_id=? AND episode_id!=?').all(row.id,row.id);
       for (const consumer of consumers) invalidateSources(ns,consumer.episode_id);
       if (read(ns,row.id).revision !== row.revision) fail('stale_episode');
-      db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(row.id);
-      const insert = db.prepare('INSERT INTO episode_sources VALUES(?,?,?,?,?,?,?,?,?,?)');
-      for (const source of sources) insert.run(source.id,row.id,source.origin_episode_id,source.event_id,source.message_id,source.digest,source.role,source.text,source.truncated,source.ordinal);
+      mutateSources(ns, row.id, () => {
+        db.prepare('DELETE FROM episode_sources WHERE episode_id=?').run(row.id);
+        const insert = db.prepare('INSERT INTO episode_sources VALUES(?,?,?,?,?,?,?,?,?,?)');
+        for (const source of sources) insert.run(source.id,row.id,source.origin_episode_id,source.event_id,source.message_id,source.digest,source.role,source.text,source.truncated,source.ordinal);
+      });
       for (const item of disposed) {
         if (item.omitted) {
           mergeGap(ns, { client: row.client, eventId: item.eventId }, 'omitted');
@@ -678,7 +726,15 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
             input.classificationEventId, Date.now());
       }
       return { revision: row.revision+1 };
-    });
+    }));
+  }
+  function draftReceipt(ns, source) {
+    const origin = live(ns, source.origin_episode_id);
+    return { client: origin.client, sessionId: origin.session_key,
+      eventId: source.message_id, role: source.role, excerpt: source.text };
+  }
+  function assertDraftSources(ns, sources) {
+    if (sourceAuthority?.enabled()) sourceAuthority.assertReceipts(ns, sources.map(source => draftReceipt(ns, source)));
   }
   // Bounded live staging, plus at most 16 durable passages. No source read drafts.
   function draftSnapshot(ns, input) {
@@ -689,11 +745,19 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         JOIN staged_capture_evidence s USING(owner_id,scope,project_id,client,event_id)
         WHERE e.episode_id=? AND e.position<=? AND e.disposition=0 AND s.payload IS NOT NULL
         AND e.generation=? ORDER BY e.position DESC LIMIT 64`).all(row.id, claim.watermark, claim.generation);
-      const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? ORDER BY ordinal,id').all(row.id);
+      const priorSources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? ORDER BY ordinal,id').all(row.id);
+      const eligible = receipts => sourceAuthority?.filter(ns, receipts) ?? receipts.map((_, index) => index);
+      const priorReceipts = priorSources.map(source => draftReceipt(ns, source));
+      const sources = eligible(priorReceipts).map(index => ({ ...priorSources[index], receipt: priorReceipts[index] }));
       const target = db.prepare('SELECT event_id,staging,gap FROM episode_events WHERE episode_id=? AND position=?').get(row.id, claim.watermark);
-      return { episodeId: row.id, client: row.client, revision: row.revision, sourceFence: row.source_fence,
-        targetEventId: target.event_id, missingReason: target.staging === 'not-staged' ? 'capacity' : target.gap ?? 'missing_evidence', events: events.map(event => ({ eventId: event.event_id,
-          position: event.position, view: JSON.parse(event.payload) })), sources, record: JSON.parse(row.record) };
+      return { episodeId: row.id, client: row.client, sessionKey: row.session_key, revision: row.revision, sourceFence: row.source_fence,
+        targetEventId: target.event_id, missingReason: target.staging === 'not-staged' ? 'capacity' : target.gap ?? 'missing_evidence', events: events.map(event => {
+          const view = JSON.parse(event.payload);
+          return { eventId: event.event_id, position: event.position, view,
+            sourceIndices: eligible(view.messages.map(message => ({ client: row.client,
+              sessionId: row.session_key, eventId: message.id, role: message.role, excerpt: message.content }))) };
+        }),
+        sources, priorSourceCount: priorSources.length, record: JSON.parse(row.record) };
     });
   }
   function captureState(ns, input) {
@@ -791,7 +855,10 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       if (!getControl(ns).enabled) fail('capture_disabled');
       if (row.revision !== input.expectedRevision) fail('revision_conflict');
       const denied = keepGuard(ns, key); if (denied) fail(denied);
-      const sources = db.prepare('SELECT * FROM episode_sources WHERE episode_id=? ORDER BY ordinal,id LIMIT 17').all(row.id);
+      const sources = db.prepare(`SELECT s.*,e.client AS originClient,e.session_key AS originSessionKey
+        FROM episode_sources s JOIN session_episodes e ON e.id=s.origin_episode_id
+        WHERE s.episode_id=? AND e.owner_id=? AND e.scope=? AND e.project_id=? ORDER BY s.ordinal,s.id LIMIT 17`)
+        .all(row.id, ...boundary(ns));
       if (!sources.length || sources.length > 16) fail('episode_sources_unavailable');
       if (!prior) {
         // Independent, transactionally allocated per-episode action ordinal.
@@ -805,6 +872,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
         advanceEpoch(ns);
       } else db.prepare("UPDATE episode_keep_actions SET keep_state='pending',keep_error_code=NULL WHERE episode_id=? AND admission_key=?")
         .run(row.id, eventId);
+      sourceRoots?.bindJob(ns, key, sources.map(source => ({ client: source.originClient,
+        sessionId: source.originSessionKey, eventId: source.message_id, role: source.role, excerpt: source.text })));
       return { key, client: row.client, sessionKey: row.session_key, sources, episodeId: row.id,
         coverage: coverage ?? { sourceIds: sources.map(source => source.id), revision: row.revision, sourceFence: row.source_fence } };
     });
@@ -917,6 +986,8 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
     });
   }
   function forget(ns, input) {
+    const selected = deleteEpisode?.(ns, input);
+    if (selected !== undefined) return selected;
     return transaction(db, () => {
       revision(input.expectedRevision);
       const row = live(ns, input.episodeId, input.expectedRevision);
@@ -935,6 +1006,14 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
       advanceEpoch(ns);
       return { forgotten: true };
     });
+  }
+  function deleteSourceEpisode(ns, id) {
+    const row = live(ns, id), record = blank(null); record.processing.state = 'invalidated';
+    db.prepare(`UPDATE session_episodes SET deleted=1,record=?,writer_token=NULL,writer_expires_at=NULL,
+      revision=revision+1,source_fence=source_fence+1,updated_at=? WHERE id=?`).run(JSON.stringify(record), iso(), row.id);
+    db.prepare("UPDATE episode_events SET policy='normal',policy_revision=NULL,policy_type=NULL,policy_at=NULL WHERE episode_id=?").run(id);
+    for (const item of db.prepare('SELECT client,event_id FROM episode_events WHERE episode_id=?').all(id)) mergeGap(ns,
+      { client: item.client, eventId: item.event_id }, 'forgotten');
   }
   function inspect(ns, input, pages) {
     return transaction(db, () => {
@@ -968,6 +1047,6 @@ export function createEpisodeStorage({ db, options, stagedEvidence, advanceEpoch
               revision: action.revision, sourceFence: action.source_fence } })), epoch: currentEpoch };
     });
   }
-  return { draftOutcome, prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, startAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,
+  return { invalidateSources, deleteSourceEpisode, draftOutcome, prepareKeep, failKeep, assertKeep, validateBatch, draftSnapshot, captureState, pendingSession, settleAttempt, startAttempt, sessionKey, setPolicy, reserveBatch, event, guard, admissionStarted, mergeGap, gap, admitted, invalidateMemory, getControl, setControl,
     closeNextStep, claimWriter, releaseWriter, claimDraft, failDraft, commitDraft, correct, releaseCorrection, forget, inspect };
 }
