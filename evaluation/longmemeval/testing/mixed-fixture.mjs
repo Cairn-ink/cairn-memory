@@ -1,8 +1,6 @@
 // Synthetic-only X grant and fake HTTP for mixed runner tests. No live keys or corpus.
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createExperimentBudget, inspectEmbeddingExperimentBudgetSnapshot,
@@ -16,6 +14,7 @@ import { benchmarkStagePolicy } from '../../live/public-pilot.mjs';
 import { experimentPolicy } from '../../live/session.mjs';
 import { prepareMixedComparison } from '../mixed-generation.mjs';
 import { opaqueQuestionId } from '../prepare.mjs';
+import { createTestWorkspace } from '../../../tools/testing/workspace.mjs';
 
 const caps = (requests, reservedMicroUsd) => ({ requests, reservedMicroUsd });
 
@@ -109,13 +108,14 @@ function add(configuration, amount, outcome, actual) {
 }
 
 export function syntheticMixedFixture(t, { artifact, configuration, sourceCases,
-  armOrders, fetchImpl, httpTimeoutMs = 10_000, comparisonProfile }) {
-  const root = mkdtempSync(join(tmpdir(), 'cairn-mixed-runner-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  armOrders, fetchImpl, httpTimeoutMs = 10_000, comparisonProfile, sourceHistoryPolicy }) {
+  const workspace = createTestWorkspace(t, { prefix: 'cairn-mixed-runner-' });
+  const root = workspace.path;
   const prepared = prepareMixedComparison({ sourceCases, armOrders,
     nativeArtifact: artifact, nativeConfiguration: configuration,
     cairnRuntimeArtifactSha256: '5'.repeat(64),
-    ...(comparisonProfile === undefined ? {} : { comparisonProfile }) });
+    ...(comparisonProfile === undefined ? {} : { comparisonProfile }),
+    ...(sourceHistoryPolicy === undefined ? {} : { sourceHistoryPolicy }) });
   const first = { directory: join(root, 'ledger'), runId: randomUUID(),
     limitMicroUsd: 50_000_000, requestCap: 5 };
   createExperimentBudget(first).close();
@@ -157,5 +157,6 @@ export function syntheticMixedFixture(t, { artifact, configuration, sourceCases,
     manifest: prepared.manifest, roster: prepared.roster, limits });
   const guard = createMixedSourcePairExperimentRequestGuard({ ledger, policy,
     benchmarkExtension, mixedSourcePairCapability: capability, fetchImpl });
+  workspace.defer(() => guard.close());
   return { root, guard, capability, prepared, snapshot };
 }
