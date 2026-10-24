@@ -5,7 +5,7 @@
       "id": "q-001",
       "family": "hr2b-t01",
       "category": "C1",
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
       "split": "test",
       "groups": [
@@ -49,8 +49,8 @@
           "where": "span",
           "T1": {
             "count": 6,
-            "queryCount": 17,
-            "ratio": 0.35294117647058826,
+            "queryCount": 15,
+            "ratio": 0.4,
             "shared": [
               "的簽",
               "砂這",
@@ -61,9 +61,9 @@
             ]
           },
           "T1Plus": {
-            "count": 17,
-            "queryCount": 36,
-            "ratio": 0.4722222222222222,
+            "count": 16,
+            "queryCount": 32,
+            "ratio": 0.5,
             "shared": [
               "引",
               "我",
@@ -77,7 +77,6 @@
               "簽章",
               "索",
               "索引",
-              "補",
               "要",
               "這",
               "鎏",
@@ -90,16 +89,20 @@
           "memory": "m-5d462e97c435b112",
           "where": "span",
           "T1": {
-            "count": 0,
-            "queryCount": 17,
-            "ratio": 0,
-            "shared": []
+            "count": 1,
+            "queryCount": 15,
+            "ratio": 0.06666666666666667,
+            "shared": [
+              "backfill"
+            ]
           },
           "T1Plus": {
-            "count": 0,
-            "queryCount": 36,
-            "ratio": 0,
-            "shared": []
+            "count": 1,
+            "queryCount": 32,
+            "ratio": 0.03125,
+            "shared": [
+              "backfil"
+            ]
           }
         }
       ],
@@ -120,7 +123,7 @@
           ]
         },
         "C2": {
-          "pass": true,
+          "pass": false,
           "witnesses": [
             {
               "fact": "B-hr2b-t01-05",
@@ -138,7 +141,7 @@
           "pass": false
         },
         "C4": {
-          "pass": false
+          "pass": true
         },
         "C5": {
           "pass": false
@@ -164,7 +167,7 @@
       "id": "q-002",
       "family": "hr2b-t03",
       "category": "C1",
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
       "split": "test",
       "groups": [
@@ -208,8 +211,8 @@
           "where": "span",
           "T1": {
             "count": 3,
-            "queryCount": 14,
-            "ratio": 0.21428571428571427,
+            "queryCount": 13,
+            "ratio": 0.23076923076923078,
             "shared": [
               "字典",
               "工時",
@@ -217,9 +220,9 @@
             ]
           },
           "T1Plus": {
-            "count": 11,
-            "queryCount": 29,
-            "ratio": 0.3793103448275862,
+            "count": 10,
+            "queryCount": 26,
+            "ratio": 0.38461538461538464,
             "shared": [
               "典",
               "字",
@@ -228,7 +231,6 @@
               "工時",
               "時",
               "燈",
-              "理",
               "砌",
               "砌燈",
               "這"
@@ -241,8 +243,8 @@
           "where": "span",
           "T1": {
             "count": 3,
-            "queryCount": 14,
-            "ratio": 0.21428571428571427,
+            "queryCount": 13,
+            "ratio": 0.23076923076923078,
             "shared": [
               "字典",
               "工時",
@@ -250,9 +252,9 @@
             ]
           },
           "T1Plus": {
-            "count": 11,
-            "queryCount": 29,
-            "ratio": 0.3793103448275862,
+            "count": 10,
+            "queryCount": 26,
+            "ratio": 0.38461538461538464,
             "shared": [
               "典",
               "字",
@@ -261,7 +263,6 @@
               "工時",
               "時",
               "燈",
-              "理",
               "砌",
               "砌燈",
               "這"
@@ -291,7 +292,7 @@
           ]
         },
         "C2": {
-          "pass": true,
+          "pass": false,
           "witnesses": [
             {
               "fact": "B-hr2b-t03-04",
@@ -311,10 +312,10 @@
           ]
         },
         "C3": {
-          "pass": true
+          "pass": false
         },
         "C4": {
-          "pass": false
+          "pass": true
         },
         "C5": {
           "pass": false
@@ -818,22 +819,28 @@
       ],
       "checks": {
         "C1": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t19-04",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-9fa1cb19037b1be8",
+                  "where": "span",
+                  "span": "m-9fa1cb19037b1be8#s1"
+                },
+                {
+                  "memory": "m-ea89fc4a777ffec6",
+                  "where": "span",
+                  "span": "m-ea89fc4a777ffec6#s1"
+                }
+              ]
             }
           ]
         },
         "C2": {
           "pass": false,
-          "witnesses": [
-            {
-              "fact": "B-hr2b-t19-04",
-              "members": []
-            }
-          ]
+          "witnesses": []
         },
         "C3": {
           "pass": false
@@ -2229,20 +2236,32 @@
       ],
       "checks": {
         "C1": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t14-05",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-a6b9986f70fe4705",
+                  "where": "span",
+                  "span": "m-a6b9986f70fe4705#s2"
+                }
+              ]
             }
           ]
         },
         "C2": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t14-05",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-a6b9986f70fe4705",
+                  "where": "span",
+                  "span": "m-a6b9986f70fe4705#s2"
+                }
+              ]
             }
           ]
         },
@@ -2534,20 +2553,32 @@
       ],
       "checks": {
         "C1": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t21-06",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-3187b024e7f073c4",
+                  "where": "span",
+                  "span": "m-3187b024e7f073c4#s4"
+                }
+              ]
             }
           ]
         },
         "C2": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t21-06",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-3187b024e7f073c4",
+                  "where": "span",
+                  "span": "m-3187b024e7f073c4#s4"
+                }
+              ]
             }
           ]
         },
@@ -3678,7 +3709,7 @@
       "id": "q-101",
       "family": "hr2b-t01",
       "category": "C6",
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
       "split": "test",
       "groups": [
@@ -3727,15 +3758,17 @@
           "where": "span",
           "T1": {
             "count": 0,
-            "queryCount": 23,
+            "queryCount": 21,
             "ratio": 0,
             "shared": []
           },
           "T1Plus": {
-            "count": 0,
-            "queryCount": 47,
-            "ratio": 0,
-            "shared": []
+            "count": 1,
+            "queryCount": 41,
+            "ratio": 0.024390243902439025,
+            "shared": [
+              "write"
+            ]
           }
         },
         {
@@ -3744,13 +3777,13 @@
           "where": "body",
           "T1": {
             "count": 0,
-            "queryCount": 23,
+            "queryCount": 21,
             "ratio": 0,
             "shared": []
           },
           "T1Plus": {
             "count": 0,
-            "queryCount": 47,
+            "queryCount": 41,
             "ratio": 0,
             "shared": []
           }
@@ -3799,7 +3832,7 @@
       "id": "q-102",
       "family": "hr2b-t03",
       "category": "C6",
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "history",
       "split": "test",
       "groups": [
@@ -3863,25 +3896,21 @@
           "memory": "m-34cd5511ccfff2b0",
           "where": "span",
           "T1": {
-            "count": 3,
-            "queryCount": 26,
-            "ratio": 0.11538461538461539,
+            "count": 2,
+            "queryCount": 24,
+            "ratio": 0.08333333333333333,
             "shared": [
-              "字典",
               "砌燈",
               "載入"
             ]
           },
           "T1Plus": {
-            "count": 13,
-            "queryCount": 54,
-            "ratio": 0.24074074074074073,
+            "count": 10,
+            "queryCount": 50,
+            "ratio": 0.2,
             "shared": [
               "入",
-              "典",
               "在",
-              "字",
-              "字典",
               "整",
               "燈",
               "的",
@@ -3898,27 +3927,23 @@
           "memory": "m-82fa82ee3affe422",
           "where": "body",
           "T1": {
-            "count": 4,
-            "queryCount": 26,
-            "ratio": 0.15384615384615385,
+            "count": 3,
+            "queryCount": 24,
+            "ratio": 0.125,
             "shared": [
-              "字典",
               "怎麼",
               "砌燈",
               "載入"
             ]
           },
           "T1Plus": {
-            "count": 20,
-            "queryCount": 54,
-            "ratio": 0.37037037037037035,
+            "count": 17,
+            "queryCount": 50,
+            "ratio": 0.34,
             "shared": [
               "入",
-              "典",
               "到",
               "在",
-              "字",
-              "字典",
               "怎",
               "怎麼",
               "改",
@@ -3941,16 +3966,20 @@
           "memory": "m-a7f1901ea6b97dc3",
           "where": "body",
           "T1": {
-            "count": 0,
-            "queryCount": 26,
-            "ratio": 0,
-            "shared": []
+            "count": 1,
+            "queryCount": 24,
+            "ratio": 0.041666666666666664,
+            "shared": [
+              "dictionary"
+            ]
           },
           "T1Plus": {
-            "count": 0,
-            "queryCount": 54,
-            "ratio": 0,
-            "shared": []
+            "count": 1,
+            "queryCount": 50,
+            "ratio": 0.02,
+            "shared": [
+              "dictionari"
+            ]
           }
         }
       ],
@@ -3967,7 +3996,7 @@
           "pass": false
         },
         "C4": {
-          "pass": false
+          "pass": true
         },
         "C5": {
           "pass": true
@@ -6830,7 +6859,7 @@
       "id": "q-122",
       "family": "hr2b-t04",
       "category": "C7",
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
       "split": "test",
       "groups": [
@@ -6873,19 +6902,23 @@
           "memory": "m-e847956986e787d4",
           "where": "span",
           "T1": {
-            "count": 2,
+            "count": 4,
             "queryCount": 18,
-            "ratio": 0.1111111111111111,
+            "ratio": 0.2222222222222222,
             "shared": [
+              "replay",
+              "script",
               "犢紙",
               "紙弧"
             ]
           },
           "T1Plus": {
-            "count": 5,
-            "queryCount": 38,
-            "ratio": 0.13157894736842105,
+            "count": 7,
+            "queryCount": 36,
+            "ratio": 0.19444444444444445,
             "shared": [
+              "replai",
+              "script",
               "弧",
               "犢",
               "犢紙",
@@ -6899,28 +6932,24 @@
           "memory": "m-eee0a628caa14e0d",
           "where": "span",
           "T1": {
-            "count": 4,
+            "count": 3,
             "queryCount": 18,
-            "ratio": 0.2222222222222222,
+            "ratio": 0.16666666666666666,
             "shared": [
               "簽收",
-              "腳本",
               "負責",
               "重播"
             ]
           },
           "T1Plus": {
-            "count": 13,
-            "queryCount": 38,
-            "ratio": 0.34210526315789475,
+            "count": 10,
+            "queryCount": 36,
+            "ratio": 0.2777777777777778,
             "shared": [
               "播",
               "收",
-              "本",
               "簽",
               "簽收",
-              "腳",
-              "腳本",
               "負",
               "負責",
               "責",
@@ -6944,7 +6973,7 @@
           "pass": false
         },
         "C4": {
-          "pass": false
+          "pass": true
         },
         "C5": {
           "pass": false
@@ -7069,7 +7098,7 @@
       "id": "q-125",
       "family": "hr2b-t10",
       "category": "C7",
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
       "split": "test",
       "groups": [
@@ -7102,19 +7131,21 @@
           "memory": "m-2427af872c2c6179",
           "where": "span",
           "T1": {
-            "count": 2,
-            "queryCount": 17,
-            "ratio": 0.11764705882352941,
+            "count": 3,
+            "queryCount": 15,
+            "ratio": 0.2,
             "shared": [
+              "setup",
               "層雲",
               "雲閂"
             ]
           },
           "T1Plus": {
-            "count": 5,
-            "queryCount": 36,
-            "ratio": 0.1388888888888889,
+            "count": 6,
+            "queryCount": 29,
+            "ratio": 0.20689655172413793,
             "shared": [
+              "setup",
               "層",
               "層雲",
               "閂",
@@ -8002,7 +8033,7 @@
       "id": "q-141",
       "family": "hr2b-t04",
       "category": "C8",
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
       "split": "test",
       "groups": [
@@ -8562,7 +8593,7 @@
       "id": "q-151",
       "family": "hr2b-f01",
       "category": "FOREIGN",
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
       "split": "test",
       "groups": [
@@ -8596,16 +8627,22 @@
           "memory": "m-0fa4eca9eec26776",
           "where": "body",
           "T1": {
-            "count": 0,
-            "queryCount": 14,
-            "ratio": 0,
-            "shared": []
+            "count": 2,
+            "queryCount": 13,
+            "ratio": 0.15384615384615385,
+            "shared": [
+              "box",
+              "prop"
+            ]
           },
           "T1Plus": {
-            "count": 0,
-            "queryCount": 30,
-            "ratio": 0,
-            "shared": []
+            "count": 2,
+            "queryCount": 26,
+            "ratio": 0.07692307692307693,
+            "shared": [
+              "box",
+              "prop"
+            ]
           }
         }
       ],
@@ -10055,7 +10092,7 @@
       "id": "q-177",
       "family": "hr2b-t04",
       "category": "C5",
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "history",
       "split": "test",
       "groups": [
@@ -10117,8 +10154,8 @@
           "where": "span",
           "T1": {
             "count": 7,
-            "queryCount": 26,
-            "ratio": 0.2692307692307692,
+            "queryCount": 23,
+            "ratio": 0.30434782608695654,
             "shared": [
               "失敗",
               "敗的",
@@ -10131,8 +10168,8 @@
           },
           "T1Plus": {
             "count": 17,
-            "queryCount": 52,
-            "ratio": 0.3269230769230769,
+            "queryCount": 46,
+            "ratio": 0.3695652173913043,
             "shared": [
               "以",
               "失",
@@ -10159,19 +10196,23 @@
           "memory": "m-e847956986e787d4",
           "where": "span",
           "T1": {
-            "count": 2,
-            "queryCount": 26,
-            "ratio": 0.07692307692307693,
+            "count": 4,
+            "queryCount": 23,
+            "ratio": 0.17391304347826086,
             "shared": [
+              "replay",
+              "script",
               "犢紙",
               "紙弧"
             ]
           },
           "T1Plus": {
-            "count": 5,
-            "queryCount": 52,
-            "ratio": 0.09615384615384616,
+            "count": 7,
+            "queryCount": 46,
+            "ratio": 0.15217391304347827,
             "shared": [
+              "replai",
+              "script",
               "弧",
               "犢",
               "犢紙",
@@ -10185,39 +10226,30 @@
           "memory": "m-eee0a628caa14e0d",
           "where": "span",
           "T1": {
-            "count": 6,
-            "queryCount": 26,
-            "ratio": 0.23076923076923078,
+            "count": 3,
+            "queryCount": 23,
+            "ratio": 0.13043478260869565,
             "shared": [
-              "播腳",
               "的簽",
               "簽收",
-              "腳本",
-              "負責",
-              "重播"
+              "負責"
             ]
           },
           "T1Plus": {
-            "count": 16,
-            "queryCount": 52,
-            "ratio": 0.3076923076923077,
+            "count": 10,
+            "queryCount": 46,
+            "ratio": 0.21739130434782608,
             "shared": [
               "以",
-              "播",
-              "播腳",
               "收",
-              "本",
               "的",
               "的簽",
               "簽",
               "簽收",
-              "腳",
-              "腳本",
               "負",
               "負責",
               "責",
-              "重",
-              "重播"
+              "重"
             ]
           }
         }
@@ -10235,7 +10267,7 @@
           "pass": false
         },
         "C4": {
-          "pass": false
+          "pass": true
         },
         "C5": {
           "pass": true
@@ -10263,7 +10295,7 @@
       "id": "q-178",
       "family": "hr2b-t08",
       "category": "C5",
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "history",
       "split": "dev",
       "groups": [
@@ -10324,19 +10356,22 @@
           "memory": "m-440383cf98451adf",
           "where": "span",
           "T1": {
-            "count": 0,
-            "queryCount": 24,
-            "ratio": 0,
-            "shared": []
+            "count": 2,
+            "queryCount": 19,
+            "ratio": 0.10526315789473684,
+            "shared": [
+              "clock",
+              "test"
+            ]
           },
           "T1Plus": {
             "count": 3,
-            "queryCount": 47,
-            "ratio": 0.06382978723404255,
+            "queryCount": 37,
+            "ratio": 0.08108108108108109,
             "shared": [
-              "時",
-              "的",
-              "間"
+              "clock",
+              "test",
+              "用"
             ]
           }
         },
@@ -10345,22 +10380,18 @@
           "memory": "m-1ce52fce40303d15",
           "where": "span",
           "T1": {
-            "count": 1,
-            "queryCount": 24,
-            "ratio": 0.041666666666666664,
-            "shared": [
-              "時間"
-            ]
+            "count": 0,
+            "queryCount": 19,
+            "ratio": 0,
+            "shared": []
           },
           "T1Plus": {
-            "count": 4,
-            "queryCount": 47,
-            "ratio": 0.0851063829787234,
+            "count": 2,
+            "queryCount": 37,
+            "ratio": 0.05405405405405406,
             "shared": [
-              "時",
-              "時間",
-              "的",
-              "間"
+              "test",
+              "用"
             ]
           }
         },
@@ -10369,36 +10400,31 @@
           "memory": "m-24d375f0171d327d",
           "where": "span",
           "T1": {
-            "count": 5,
-            "queryCount": 24,
-            "ratio": 0.20833333333333334,
+            "count": 4,
+            "queryCount": 19,
+            "ratio": 0.21052631578947367,
             "shared": [
               "日測",
-              "時間",
               "測試",
               "負責",
               "跨日"
             ]
           },
           "T1Plus": {
-            "count": 14,
-            "queryCount": 47,
-            "ratio": 0.2978723404255319,
+            "count": 10,
+            "queryCount": 37,
+            "ratio": 0.2702702702702703,
             "shared": [
               "日",
               "日測",
-              "時",
-              "時間",
               "測",
               "測試",
-              "的",
               "試",
               "負",
               "負責",
               "責",
               "跨",
-              "跨日",
-              "間"
+              "跨日"
             ]
           }
         }
@@ -11908,7 +11934,7 @@
       "family": "hr2b-t37",
       "category": "C2",
       "lang": "zh",
-      "intent": "current",
+      "intent": "history",
       "split": "test",
       "groups": [
         {
@@ -11923,6 +11949,17 @@
               "scale": "S300",
               "namespace": "target",
               "lang": "en",
+              "spanCount": 3
+            },
+            {
+              "memory": "m-1ac2107366d5613a",
+              "where": "span",
+              "spans": [
+                "m-1ac2107366d5613a#s1"
+              ],
+              "scale": "S300",
+              "namespace": "target",
+              "lang": "zh",
               "spanCount": 3
             }
           ],
@@ -11941,34 +11978,99 @@
           "where": "span",
           "T1": {
             "count": 0,
-            "queryCount": 18,
+            "queryCount": 20,
             "ratio": 0,
             "shared": []
           },
           "T1Plus": {
             "count": 0,
-            "queryCount": 38,
+            "queryCount": 42,
             "ratio": 0,
             "shared": []
+          }
+        },
+        {
+          "fact": "B-hr2b-t37-06",
+          "memory": "m-1ac2107366d5613a",
+          "where": "span",
+          "T1": {
+            "count": 10,
+            "queryCount": 20,
+            "ratio": 0.5,
+            "shared": [
+              "偏好",
+              "圖卡",
+              "在芍",
+              "好圖",
+              "沐在",
+              "當時",
+              "的偏",
+              "窗的",
+              "芍窗",
+              "袁沐"
+            ]
+          },
+          "T1Plus": {
+            "count": 24,
+            "queryCount": 42,
+            "ratio": 0.5714285714285714,
+            "shared": [
+              "偏",
+              "偏好",
+              "卡",
+              "只",
+              "圖",
+              "圖卡",
+              "在",
+              "在芍",
+              "好",
+              "好圖",
+              "時",
+              "沐",
+              "沐在",
+              "當",
+              "當時",
+              "的",
+              "的偏",
+              "窗",
+              "窗的",
+              "芍",
+              "芍窗",
+              "袁",
+              "袁沐",
+              "要"
+            ]
           }
         }
       ],
       "checks": {
         "C1": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t37-06",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-1ac2107366d5613a",
+                  "where": "span",
+                  "span": "m-1ac2107366d5613a#s1"
+                }
+              ]
             }
           ]
         },
         "C2": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t37-06",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-1ac2107366d5613a",
+                  "where": "span",
+                  "span": "m-1ac2107366d5613a#s1"
+                }
+              ]
             }
           ]
         },
@@ -11976,7 +12078,7 @@
           "pass": false
         },
         "C4": {
-          "pass": true
+          "pass": false
         },
         "C5": {
           "pass": false
@@ -13342,20 +13444,26 @@
               "fact": "B-hr2b-t04-05",
               "members": [
                 {
-                  "memory": "m-e847956986e787d4",
+                  "memory": "m-eee0a628caa14e0d",
                   "where": "span",
-                  "span": "m-e847956986e787d4#s2"
+                  "span": "m-eee0a628caa14e0d#s4"
                 }
               ]
             }
           ]
         },
         "C2": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t04-05",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-eee0a628caa14e0d",
+                  "where": "span",
+                  "span": "m-eee0a628caa14e0d#s4"
+                }
+              ]
             }
           ]
         },
@@ -13703,20 +13811,42 @@
       ],
       "checks": {
         "C1": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t08-04",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-1ce52fce40303d15",
+                  "where": "span",
+                  "span": "m-1ce52fce40303d15#s2"
+                },
+                {
+                  "memory": "m-24d375f0171d327d",
+                  "where": "span",
+                  "span": "m-24d375f0171d327d#s2"
+                }
+              ]
             }
           ]
         },
         "C2": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t08-04",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-1ce52fce40303d15",
+                  "where": "span",
+                  "span": "m-1ce52fce40303d15#s2"
+                },
+                {
+                  "memory": "m-24d375f0171d327d",
+                  "where": "span",
+                  "span": "m-24d375f0171d327d#s2"
+                }
+              ]
             }
           ]
         },
@@ -13822,11 +13952,17 @@
           ]
         },
         "C2": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t10-06",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-2427af872c2c6179",
+                  "where": "span",
+                  "span": "m-2427af872c2c6179#s1"
+                }
+              ]
             }
           ]
         },
@@ -13918,20 +14054,32 @@
       ],
       "checks": {
         "C1": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t12-03",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-2d1b45b496157585",
+                  "where": "span",
+                  "span": "m-2d1b45b496157585#s2"
+                }
+              ]
             }
           ]
         },
         "C2": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t12-03",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-2d1b45b496157585",
+                  "where": "span",
+                  "span": "m-2d1b45b496157585#s2"
+                }
+              ]
             }
           ]
         },
@@ -14501,20 +14649,32 @@
       ],
       "checks": {
         "C1": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t30-06",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-996faf00322f58ce",
+                  "where": "span",
+                  "span": "m-996faf00322f58ce#s1"
+                }
+              ]
             }
           ]
         },
         "C2": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t30-06",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-996faf00322f58ce",
+                  "where": "span",
+                  "span": "m-996faf00322f58ce#s1"
+                }
+              ]
             }
           ]
         },
@@ -14641,20 +14801,42 @@
       ],
       "checks": {
         "C1": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t34-05",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-36afc4f85bdbd9e5",
+                  "where": "span",
+                  "span": "m-36afc4f85bdbd9e5#s2"
+                },
+                {
+                  "memory": "m-4467aacc4a7b1fa7",
+                  "where": "span",
+                  "span": "m-4467aacc4a7b1fa7#s2"
+                }
+              ]
             }
           ]
         },
         "C2": {
-          "pass": false,
+          "pass": true,
           "witnesses": [
             {
               "fact": "B-hr2b-t34-05",
-              "members": []
+              "members": [
+                {
+                  "memory": "m-36afc4f85bdbd9e5",
+                  "where": "span",
+                  "span": "m-36afc4f85bdbd9e5#s2"
+                },
+                {
+                  "memory": "m-4467aacc4a7b1fa7",
+                  "where": "span",
+                  "span": "m-4467aacc4a7b1fa7#s2"
+                }
+              ]
             }
           ]
         },

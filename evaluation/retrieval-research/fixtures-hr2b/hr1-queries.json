@@ -8,9 +8,9 @@
       "secondaryTags": [
         "C7"
       ],
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
-      "text": "鎏砂這邊要補齊漏掉的簽章索引，我應該找誰？",
+      "text": "鎏砂這邊要 backfill 漏掉的簽章索引，我應該找誰？",
       "requiredFacts": [
         "B-hr2b-t01-05"
       ],
@@ -22,9 +22,9 @@
       "family": "hr2b-t03",
       "category": "C1",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
-      "text": "砌燈字典這輪清理，最多能排多少工時？",
+      "text": "砌燈字典這輪 cleanup，最多能排多少工時？",
       "requiredFacts": [
         "B-hr2b-t03-04"
       ],
@@ -146,7 +146,7 @@
       "requiredFacts": [
         "B-hr2b-t19-04"
       ],
-      "keyTerm": "銅碼頭",
+      "keyTerm": "CopperQuay",
       "note": "The quarterly supplies cap answers the budget question."
     },
     {
@@ -342,7 +342,7 @@
       "requiredFacts": [
         "B-hr2b-t04-05"
       ],
-      "keyTerm": "犢紙弧",
+      "keyTerm": "簽收",
       "note": "The replay-script assignment identifies its owner; the exact Han family entity is the embedded anchor."
     },
     {
@@ -372,7 +372,7 @@
       "requiredFacts": [
         "B-hr2b-t08-04"
       ],
-      "keyTerm": "寓線軸",
+      "keyTerm": "時間",
       "note": "The time-case maintenance cap supplies the effort limit; the exact Han family entity is the embedded anchor."
     },
     {
@@ -388,7 +388,7 @@
       "requiredFacts": [
         "B-hr2b-t10-06"
       ],
-      "keyTerm": "層雲閂",
+      "keyTerm": "層雲",
       "note": "The setup-guide assignment gives the limited responsibility; the exact Han family entity is the embedded anchor."
     },
     {
@@ -402,7 +402,7 @@
       "requiredFacts": [
         "B-hr2b-t12-03"
       ],
-      "keyTerm": "紫菀邊",
+      "keyTerm": "作者",
       "note": "The linked reason explains the feedback change; the exact Han family entity is the embedded anchor."
     },
     {
@@ -418,7 +418,7 @@
       "requiredFacts": [
         "B-hr2b-t14-05"
       ],
-      "keyTerm": "燼簡",
+      "keyTerm": "依賴",
       "note": "The dependency assignment supplies the owner."
     },
     {
@@ -478,7 +478,7 @@
       "requiredFacts": [
         "B-hr2b-t21-06"
       ],
-      "keyTerm": "瓣鑄坊",
+      "keyTerm": "桌牌",
       "note": "The desk-sign assignment specifies the limited task."
     },
     {
@@ -540,7 +540,7 @@
       "requiredFacts": [
         "B-hr2b-t30-06"
       ],
-      "keyTerm": "鈷匣",
+      "keyTerm": "租約",
       "note": "The lease-index assignment specifies the limited responsibility; the exact Han family entity is the embedded anchor."
     },
     {
@@ -572,7 +572,7 @@
       "requiredFacts": [
         "B-hr2b-t34-05"
       ],
-      "keyTerm": "餘燼圖",
+      "keyTerm": "側欄",
       "note": "The sidebar-interaction assignment identifies its owner; the exact Han family entity is the embedded anchor."
     },
     {
@@ -583,8 +583,8 @@
         "C7"
       ],
       "lang": "zh",
-      "intent": "current",
-      "text": "袁沐在芍窗的偏好圖卡上，只需要處理哪個部分？",
+      "intent": "history",
+      "text": "當時袁沐在芍窗的偏好圖卡上，只需要處理哪個部分？",
       "requiredFacts": [
         "B-hr2b-t37-06"
       ],
@@ -1159,9 +1159,9 @@
       "family": "hr2b-t04",
       "category": "C5",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "history",
-      "text": "犢紙弧以前由哪一端重試失敗的簽收？現在的重播腳本要找誰負責？",
+      "text": "犢紙弧以前由哪一端重試失敗的簽收？現在的 replay script 要找誰負責？",
       "requiredFacts": [
         "B-hr2b-t04-01",
         "B-hr2b-t04-05"
@@ -1187,9 +1187,9 @@
       "family": "hr2b-t08",
       "category": "C5",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "history",
-      "text": "寓線軸改動前的測試時間跟哪個時鐘走？跨日測試目前由誰負責？",
+      "text": "寓線軸改動前用哪個 test clock？跨日測試目前由誰負責？",
       "requiredFacts": [
         "B-hr2b-t08-01",
         "B-hr2b-t08-05"
@@ -1428,9 +1428,9 @@
       "secondaryTags": [
         "C5"
       ],
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
-      "text": "鎏砂的簽章索引目前採取什麼寫入方式？當初為什麼改成這樣？",
+      "text": "鎏砂的簽章索引目前採取什麼 write strategy？當初為什麼改成這樣？",
       "requiredFacts": [
         "B-hr2b-t01-02",
         "B-hr2b-t01-03"
@@ -1444,9 +1444,9 @@
       "secondaryTags": [
         "C5"
       ],
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "history",
-      "text": "砌燈的字典載入方式，從最早到現在怎麼改？是什麼問題促成這次調整？",
+      "text": "砌燈的 dictionary 載入方式，從最早到現在怎麼改？是什麼問題促成這次調整？",
       "requiredFacts": [
         "B-hr2b-t03-01",
         "B-hr2b-t03-02",
@@ -1770,9 +1770,9 @@
       "family": "hr2b-t04",
       "category": "C7",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
-      "text": "犢紙弧要重播簽收時，腳本這一項應該找誰負責？",
+      "text": "犢紙弧要重播簽收時，replay script 這一項應該找誰負責？",
       "requiredFacts": [
         "B-hr2b-t04-05"
       ],
@@ -1809,9 +1809,9 @@
       "family": "hr2b-t10",
       "category": "C7",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
-      "text": "溫蘅在層雲閂的設定導覽裡，只負責哪一部分？",
+      "text": "溫蘅在層雲閂的 setup guide 裡，只負責哪一部分？",
       "requiredFacts": [
         "B-hr2b-t10-06"
       ],
@@ -2017,9 +2017,9 @@
       "family": "hr2b-t04",
       "category": "C8",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
-      "text": "犢紙弧那次災備演習的代號是什麼？",
+      "text": "犢紙弧那次 disaster recovery drill 的代號是什麼？",
       "requiredFacts": [
         "B-hr2b-t04-08"
       ],
@@ -2147,9 +2147,9 @@
       "family": "hr2b-f01",
       "category": "FOREIGN",
       "secondaryTags": [],
-      "lang": "zh",
+      "lang": "mixed",
       "intent": "current",
-      "text": "絮潮組自己的道具盒，保管碼要填什麼？",
+      "text": "絮潮組自己的 prop box，保管碼要填什麼？",
       "requiredFacts": [
         "B-hr2b-f01-03"
       ],
