@@ -428,3 +428,8 @@
   四格直方圖、新配額、pooled bootstrap、描述表、pin `d3a6e24f`）、稽核者凍結確認（read-only，xhigh＋fast）。凍結 commit 送主控。
 - 稽核者**凍結確認 yes**（`d3a6e24f`，1 檔變更、§§3–7 除該句外無變動）。凍結 commit 已送主控（含四條件的落實與 §9 從 candidate 0
   重啟的說明）。W1 重建與 `hr2b_tools` v1.1 修訂仍在跑。
+- **主控接受 candidate 0 重啟**，兩條件：(1) 身分檢查（facts view、fact-to-memory plan、placement allocation 與 candidate 0 v1 逐位元相同）
+  要在任何下游使用重渲染前跑，命令／輸出／exit code 進倉放在驗證輸出旁；(2) 失敗就依 §9 前進 seed 並記錄。協調者已寫獨立的
+  `hr2b-identity-check.mjs`（九項檢查：facts 位元／欄位／families／lexicon／coverage、placementAllocation、plan、receipt ≤4、
+  facts view 重生位元比對；以 `git show e3fd8dba:` 為基線），在未改動的 candidate 0 樹上自測：除 `receipts_at_most_four`（max 6）外
+  全部 true，行為符合預期。W1 完成後立刻跑，結果提交到 `fixtures-hr2b/build/candidate0-v11-identity/`。
