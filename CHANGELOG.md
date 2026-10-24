@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — bounded topic member pages (E1-M)
+
+- Add `openMemoryReader(...).readTopicMembers(...)` for complete, bounded member lists of an L1/L2 MOC or the unfiled region. The reader is read-only and asynchronous, takes no writer slot, and returns refs only, with no bodies.
+- Results are ordered by `id_asc`, de-duplicated across L1, and carry an opaque cursor bound to a snapshot. The opt-in `topic-snapshot-v1` overview snapshot adds an `originToken`, so overview counts and member lists come from the same snapshot. `cursor_stale` and `storage_busy` are typed outcomes, and `storage_busy` never means empty.
+- Reads schema 18 and current stores without migrating them, under both DELETE and WAL. Legacy `readTopicOverview` output is unchanged; a differential test against `b2513501` covers every error class. Contract: `docs/plans/topic-overview-member-pages.md`.
+
 ## Unreleased — local role profiles (U5c-1)
 
 - Add explicit current-method dependency review for private Cards, canonical v33 guards, and read-time invalidation across evidence, retrieval, organization and role guidance.
