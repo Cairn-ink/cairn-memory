@@ -444,3 +444,8 @@
   用 pooled CI 與 pooled ceiling、逐類別描述表；pin `HR-2b v1.1`／`d3a6e24f`；calibrate 1–4 receipt）；worker 自報兩版 Node 各 49/49、
   回歸 240/240、120/120。協調者只提交這 13 路徑：**`91d24a40`**（W1 同時在改 fixtures-hr2b）。審查 worktree 移到 `91d24a40`，
   並行派 Spec／Standards 複審（resume，read-only，xhigh＋fast），並以 `cairn-heavy` 在兩版 Node 重跑五個相關測試檔（含兩個回歸）。
+- **W1 前進完成**（high＋fast，exit 0）：candidate 1、seed 500613191，stage 1 pass（build／--check／check-world 0/0/0，首次嘗試即過）；
+  receipt 直方圖 32/40/40/48（目標）＝20/25/25/30% 精確，placement 126/70/84＝45/25/30% 精確，填充 1,080 句／3,676 範圍、
+  18,297 詞 0 命中；生成器七檔與 HEAD 逐位元相同，只改候選索引；歷史（v1 候選 0 stage-2 否決、v1.1 候選 0 重複本文＋身分失敗）
+  保留在 world-stats。協調者獨立重跑 `--candidate 1 --check` 與 `check-world --candidate 1` 皆 0；重生 facts view
+  （coverage 126 body／154 span-only／100 無＝40 absent＋60 foreign，與候選 0 的分布相同）。
