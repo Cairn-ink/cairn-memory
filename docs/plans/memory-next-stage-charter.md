@@ -90,13 +90,14 @@
 | 2026-10-23 | **加速方案**（使用者批准方案一與方案二）：(1) 從 `389512d` 打 **v1 預覽版**：穩定介面是 context-read-v1 與方法包；素材標為實驗中。用 git tag 加 GitHub pre-release，不上 npm，說明裡寫明它含尚未合併的 #453–#469；(2) 開 4 條並行工作線：U4a 修正／補測、U4b、預覽版打包與文件、U5b；長時間的工作一律用 `setsid` 脫離 session 執行；(3) **U5b 線（含 HR-2）交給第二個協調 session**，交接說明見 `docs/plans/u5b-track-brief.md`。主控仍是整合分支唯一的合併者 |
 | 2026-10-23 | **HR-2 偏離核可**（U5b 協調 session 提出）：凍結的 HR-1 語料每筆記憶本文最長只有 82 字、一個事實，所以 1,500／2,000／4,000 的預算都不會發生作用。核可 D1–D6：確認性預算改為 256／512／768（探索性 128–1,536）；用完整排名（≤24 筆）；不做 span 標註；P-prefix 與 P-window 記錄為退化、不跑；新增 P-top-s1、P-cover-s1、P-top+tail；主要比較與決策規則照提案。附三個條件：(1) 預先寫明結論只適用短、單一事實的項目，只用來決定 U5b 的**初始**預設；(2) U5b 契約不等 HR-2，先以「依名次放整筆」為暫定預設，組裝策略做成可替換的版本化 policy；(3) 可選做不阻塞的「長度壓力」探索組 |
 | 2026-10-24 | **U5b 預設與後續**：依 HR-2 的結果，`read_memory_context` 預設採 `rank-first-whole-v1`，`coverage-first-v1` 留作可選 policy。主控對已安裝的 tgz 做實測時發現：HR-2 的預算是在**零表示開銷（O=0）**下量的，但實際 host 輸出每筆記憶的開銷約 300 tokens（JSON ref、metadata，以及和內文重複的來源摘錄）。一則 19 tokens 的記憶，在 256／384 的預算下都放不進去。→ 把**縮小表示開銷**列為 U5b 的後續優化（候選做法：直接寫入的記憶不重複放來源摘錄、縮短 ref／metadata），並用 O≠0 重跑 HR-2 的探索性預算曲線。P-top-s1 列為下一個候選 policy |
+| 2026-10-24 | **HR-2 v1.1 收錄**（U5b session 的 packet B，`experiment/hr2-assembly` `8ed4dadb`）：用 representation-v2 公布的常數（envelope 43、第一筆 +58、之後每筆 +57）重跑探索性曲線。確認性結論不變，`rank-first-whole-v1` 仍是預設；`rank-first-first-source-v1` 繼續當非預設候選。要不要改預設，等長項目 fixture 的研究再說 |
 
 ## 6. 研究問題與順序
 
 | ID | 問題 | 狀態 |
 | --- | --- | --- |
 | HR-1 | 向量加中文字面融合，能否比強中文字面檢索找回更多必要證據，且精確詞不倒退？另附 A5 原文片段對照 | **已完成**（[結果](hybrid-retrieval-hr1-results.md)）：本機 bge-m3＋A3 +18.9（CI 11.6–26.6）、產品端 openai-3-small＋F-RRF10 +16.9（CI 10.2–23.5），兩者都判「繼續」，可列為預設開啟的候選；A5 未達門檻；現行 `selectEvidence` 在 S1000 只有 0.03 |
-| HR-2 | 在固定 token 預算下，「分層表示＋先覆蓋再加深」能否比 top-k 全文放進更多必要證據？不需要模型 | **已完成**（協議 v1.1 `c863e9d6`；[結果](https://github.com/Cairn-ink/cairn-memory/blob/experiment/hr2-assembly/docs/plans/budgeted-assembly-hr2-results.md)，`experiment/hr2-assembly` `14ff5dc7`）：主要比較 P-cover − P-top（bge-m3＋A3、512 tokens、O=0）＝ **−2.5 分，CI [−6.6, +1.5]**，29 個題組 → **依名次放整筆仍是 U5b 的初始預設**。探索性結果：預算 128–384 時，先覆蓋落後 16–29 分；只加深第一筆來源（P-top-s1）從沒輸過，128 時 +3–4。只適用於短的單一事實項目 |
+| HR-2 | 在固定 token 預算下，「分層表示＋先覆蓋再加深」能否比 top-k 全文放進更多必要證據？不需要模型 | **已完成**（協議 v1.1 `c863e9d6`；[結果](https://github.com/Cairn-ink/cairn-memory/blob/experiment/hr2-assembly/docs/plans/budgeted-assembly-hr2-results.md)，`experiment/hr2-assembly` `14ff5dc7`）：主要比較 P-cover − P-top（bge-m3＋A3、512 tokens、O=0）＝ **−2.5 分，CI [−6.6, +1.5]**，29 個題組 → **依名次放整筆仍是 U5b 的初始預設**。探索性結果：預算 128–384 時，先覆蓋落後 16–29 分；只加深第一筆來源（P-top-s1）從沒輸過，128 時 +3–4。只適用於短的單一事實項目。**v1.1 探索性補充**（`8ed4dadb`，§7）：在已出貨的 representation-v2 開銷下，反對先覆蓋的證據更強，而且延伸到 192–1,536 tokens 全段（先覆蓋 − 依名次：192–512 落後 4–15 分，768–1,536 落後 12–27 分，768 以上每個 CI 都不含零）；只加深第一筆來源從沒變差（+0.3 到 +2.3，bge-m3＠256 為 +1.7 [+0.3, +3.4]）。預算低於完整 24 筆的成本（約 1,800 tokens）時一定會卡住；1,500 tokens 約放得下 15–20 則短記憶各帶一筆來源。下一步研究仍是長項目 fixture |
 | HR-3 | 分類型更新政策能否提高「目前決定、舊決定、改變原因」的正確率？需要真模型抽取，付費 | 候選，需另批預算 |
 | 之後 | 一跳 typed 關聯、MOC 通路的名次定義、LLM 或 cross-encoder rerank | 未排 |
 
@@ -169,18 +170,18 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 
 ## 8. 進度與下一步（2026-10-24 更新）
 
-- **已完成並併入整合分支**（`integration/unified-memory-v1` `1d32bf75`，已推；draft PR #470）：
+- **已完成並併入整合分支**（`integration/unified-memory-v1` `b18dabe0`，已推；draft PR #470）：
   - U2／U3／U2c 方法包；
-  - U4a 素材 core，含 U4a-1 修正與 U4a-2 驗收補強；
-  - U4b 素材 CLI／MCP；
+  - U4a 素材 core（含 U4a-1 修正與 U4a-2 驗收補強）、U4b 素材 CLI／MCP；
   - U5a 檢索（候選與證據）；
+  - U5b 組裝（`read_memory_context`）與 U5b-2 packet A（representation-v2、精簡 ref 帶 fence 前綴）；
   - 契約 §16（rollback-journal 的並行門檻）。
 
-  每一包都經雙審查判 Yes。整體 CI 等效矩陣 100/100。
-- **已發布**：`v1-preview.0`（`80daca28`）、**`v1-preview.1`**（`924d7658`），都是 GitHub pre-release，附 tgz 與 sha256。
-- **進行中**：U5b（第二個 session）。part 2 已在 `aeae00e8` 通過雙審查，並把整合分支合併進來，成為 `0a38a991`。它那邊在跑完整 CI；主控另派一位非作者審查合併處理，並做了 tgz 實測（13 個工具，`read_memory_context` 正常）。都通過後，✅ 整合分支已 fast-forward 到 `0a38a991`（U5b 那邊 CI 100/100）。**`v1-preview.2`**（`4e53d1dc`）已發布，`read_memory_context` 標為實驗性。U5b-2 的契約 §15.8 寫在 `integration/unified-memory-v1-u5b2`，審查找到 3 個 P0；其中精簡 ref 的一致性，主控選了選項 1（ref 帶 fence 前綴）。
+  每一包都經雙審查判 Yes。
+- **已發布**（都是 GitHub pre-release，附 tgz 與 sha256，不上 npm）：`v1-preview.0`（`80daca28`）、`v1-preview.1`（`924d7658`，素材）、`v1-preview.2`（`4e53d1dc`，`read_memory_context` 實驗性）、**`v1-preview.3`**（`7197d800`，`read_memory_context` v2 列為穩定；每筆開銷約 250 → 82 tokens）。
+- **研究**：HR-1 完成；HR-2 v1.0 與 v1.1（host-v2 探索性補充，`8ed4dadb`）完成，見 §6。
 - **下一步候選**：
-  1. 縮小 U5b 的表示開銷，並用 O≠0 重跑 HR-2 的預算曲線（見 §5，2026-10-24）。
+  1. 長項目 fixture，用來決定 `rank-first-first-source-v1` 要不要變成預設。
   2. WAL 模式評估（§16，全庫決策）。
   3. HR-3（分類型更新政策），需付費，要另外批預算。
 - **等使用者決定**：
@@ -298,3 +299,4 @@ P0 盤點已完成（2026-10-23，Codex `p0_inventory`；完整報告在
 | `umv1_u2_impl`（U4a-1 修正）＋主控量測 | 5 項（含 P1：刪除後復活） | gpt-6.1-sol/xhigh → 同 | workspace-write | `71377c9` | 至 00:xx | 16 個檔案，新增 28 個 v31 防護觸發器。沙箱外量測：有節奏的情境全數通過；**不放慢的寫入者會讓讀取者餓死**（讀取者 94 秒只讀了 157 頁，之後 storage_busy），這是 rollback-journal 本身的特性 → 契約新增 **§16**：門檻只套用在有節奏的情境，不放慢的情境改為壓力觀察；把限制寫進文件；WAL 模式列為之後的全庫決策。腳本調整已交 worker |
 | 主控 | U4a-2 驗收補強＋整合＋**v1-preview.1** | gpt-6.1-sol/xhigh | — | `ce472f25` | 至 04:xx | U4a-2（K13 混合讀取、K04、K09）：主控驗收 146/146，measure 兩版本都 exit 0，規格軸審查 Yes，提交 `1d32bf75`。合併後整體 CI 100/100 → 整合分支在 `1d32bf75`，已推。預覽分支在 `924d7658`，已打 tag `v1-preview.1` 並發 pre-release（tgz sha256 `23f18229…ee55`）。從 tgz 安裝實測：素材＋檢索 12 個工具都正常 |
 | 主控＋U5b session | U5b-2 packet A 合併＋**v1-preview.3** | gpt-6.1-sol/xhigh | — | `0a38a991` | 至 10/24 | §15.8 v0.10→v0.10.4，經四輪非作者審查，確認版是 `ccc9602a`。實作經兩輪修正後雙審查 Yes（`7a3ad58e`），CI 100/100，在 `b18dabe0` 刪掉 worker 報告。主控補跑檢查：validate、import guards、test:artifact 兩個 Node 版本都是 253/253 → 整合分支 fast-forward 到 `b18dabe0`。預覽分支在 `7197d800`，打 tag **v1-preview.3**：`read_memory_context` 的 v2 格式和精簡 ref 取回列為**穩定介面**。每筆開銷約 250→82 tokens，一筆記憶 488→126 tokens。tgz 實測：256 tokens 的預算放得下 2 筆；f 錯一個字元回 snapshot_stale；修正後用舊 ref 取回回 revision_conflict。主控的決定：精簡 ref 帶 fence 前綴 f；MOC 換分類只在 snapshot 取回時報錯，並寫進文件 |
+| U5b session＋主控 | U5b-2 packet B：**HR-2 v1.1**（host-v2 重跑） | gpt-6.1-sol/xhigh → 同 | workspace-write | `14ff5dc7` | 10/24 | 協議 v1.2 §11 → 非作者稽核（0 P0、4 P1、2 P2）→ v1.2.1 凍結 `4fb90832`；harness `5d0a344b`＋修正 `14fdacb5`（雙審 yes）；120 格一次跑完，各階段 exit 0；轉錄檢查修 4 項 P1 → `8ed4dadb`。主控抽查 bge-m3＠256 的 P-top-s1 − P-top（+1.6667 [+0.3401, +3.4091]）與 report.md 一致 |
