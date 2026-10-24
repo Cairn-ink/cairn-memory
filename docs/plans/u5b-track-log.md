@@ -264,3 +264,8 @@
   檢查）→ 成功後以 `Reflect.ownKeys` 查保留的精簡鍵名（含非 enumerable）拒 hybrid → 失敗才走 `ownData()` 描述子驗證與精簡
   schema → 整個 preprocess try/catch 轉 `invalid_input`（唯一的舊輸入行為變更：原本會崩潰的 throwing trap 改為乾淨拒絕，
   需記錄）。`bd6e3880` 的矩陣停掉（跑了 3 工作全 0）。
+- **fix3 完成**（折衷分派照設計實作：原舊 union `safeParse` 零前置檢查先跑；成功後 `Reflect.ownKeys` 查保留精簡鍵名拒
+  hybrid；失敗才 `ownData()` 描述子驗證＋精簡 schema；整個 preprocess try/catch 轉 `invalid_input`；差異化 SDK 測試涵蓋兩位審查
+  的案例與 trap 錯誤文字不外洩）。MCP 43／43 兩版本；協調者沙箱外六個測試檔兩版本全 exit 0、whitespace 0。
+- **提交 `42627f60`（fix）＋`7a3ad58e`（常數檔記 commit）＝新候選 `7a3ad58e`**，已推送。審查／CI worktree 移到 `7a3ad58e`；
+  Spec／Standards 第二次複查（resume）；完整矩陣以 `cairn-heavy` 排隊。派出時負載 1.6。
