@@ -457,3 +457,11 @@
   不需修）。**Standards：無 P0／P1、三個 P2 要修**：`ceilingGroups` 的 1e-9 絕對容忍會接受 1e-10 這種非整群比率；聚合（總和、家族、
   逐抽累加）未檢查安全整數；`invalid_bootstrap_draw` 分支在合法輸入下不可達、無測試。兩位審查者沙箱 `/tmp` EROFS 無法跑測試，
   以 worker 與協調者的測試為證據。派 `hr2b_tools` fix1（high＋fast）。
+- **W2 修題完成**（high＋fast）：160 題（140 計分），91 保留／36 修改／33 換新 id（q-161–q-193）；每類別 20 題、20 家族；
+  88/140（62.9%）需 span-only 事實、38 家族；C1/C2/C3/C5 規則自檢 20/20 全過。協調者移除候選 0 的 W3 稽核檔（留在歷史
+  `c73e2e56`），跑 split／labels 皆 0，**審前驗證器 exit 1**：`audit:overrides`（預期）、11 個 `category:check_failed`（交 W3）、
+  **`hr2b:placement_quota`：test first-receipt 20 群 <30**（families 12 達標；test later 46／22、dev first 22／11、dev later 11／6 皆達標）。
+  分析：全部 first-receipt 群 42、later 57，比例合理（事實層 70：84），但 dev 家族恰好吃掉 22 個 first 群，test 只剩 20；配額 30
+  正好落在期望值附近（約 42×70%≈29），這是凍結設計的弱點，單靠 W2 提高 span-only 份額也救不了這個 split 的家族組成。
+  依 §3.1 兩階段驗收與 §9：**stage-2 配額失敗 → 候選 1 否決、前進候選 2**，紀錄提交到 `build/candidate1-v11-validation/`，
+  派 W1（resume，high＋fast）。若候選 2 再失敗，向主控報告統計並提選項，不再無限重擲。
